@@ -26,6 +26,7 @@ import {
   type StyleSetField,
 } from '@/lib/styleSets/editorFields'
 import { PRESERVE, PRESERVE_ALL_SETTINGS, type StyleSetSettings } from '@/lib/styleSets/schema'
+import { StyleSetPreview } from './StyleSetPreview'
 
 /**
  * The style set editor.
@@ -424,36 +425,54 @@ function Editor({
         </section>
       )}
 
-      <p className="text-sm text-muted-foreground">
-        {overrides === 0
-          ? 'Nothing is overridden yet, so this style set would leave every document exactly as its template is.'
-          : `${overrides} setting${overrides === 1 ? '' : 's'} overridden. Everything else is left as the template has it.`}
-      </p>
-
       {/*
-        A fieldset rather than a section: "Font", "Size" and "Alignment" each
-        appear five times on this page, and without a grouping element their
-        accessible names are identical. The legend is what tells a screen-reader
-        user which font they are editing.
+        The preview sits beside the form and sticks, so a change to a field near
+        the bottom of a long form can still be seen landing on the page. Below
+        the breakpoint it stacks above the fields rather than being pushed out of
+        sight underneath them.
       */}
-      {STYLE_SET_FIELD_GROUPS.map(group => (
-        <fieldset key={group.key} className="min-w-0 rounded-lg border border-border p-4">
-          <legend className="px-1 text-sm font-medium">{group.title}</legend>
-          <p className="mt-0.5 text-xs text-muted-foreground">{group.description}</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {group.fields.map(field => (
-              <FieldControl
-                key={field.path}
-                field={field}
-                value={readField(draft.settings, field.path)}
-                onChange={value =>
-                  onChange({ ...draft, settings: writeField(draft.settings, field.path, value) })
-                }
-              />
-            ))}
-          </div>
-        </fieldset>
-      ))}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+        <div className="order-2 min-w-0 space-y-5 xl:order-1">
+          <p className="text-sm text-muted-foreground">
+            {overrides === 0
+              ? 'Nothing is overridden yet, so this style set would leave every document exactly as its template is.'
+              : `${overrides} setting${overrides === 1 ? '' : 's'} overridden. Everything else is left as the template has it.`}
+          </p>
+
+          {/*
+            A fieldset rather than a section: "Font", "Size" and "Alignment" each
+            appear five times on this page, and without a grouping element their
+            accessible names are identical. The legend is what tells a
+            screen-reader user which font they are editing.
+
+            Container queries, not viewport ones: this column narrows when the
+            preview appears beside it, so how much room the fields have is a
+            question about the column and not about the window.
+          */}
+          {STYLE_SET_FIELD_GROUPS.map(group => (
+            <fieldset key={group.key} className="@container min-w-0 rounded-lg border border-border p-4">
+              <legend className="px-1 text-sm font-medium">{group.title}</legend>
+              <p className="mt-0.5 text-xs text-muted-foreground">{group.description}</p>
+              <div className="mt-3 grid gap-3 @md:grid-cols-2">
+                {group.fields.map(field => (
+                  <FieldControl
+                    key={field.path}
+                    field={field}
+                    value={readField(draft.settings, field.path)}
+                    onChange={value =>
+                      onChange({ ...draft, settings: writeField(draft.settings, field.path, value) })
+                    }
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+
+        <aside className="order-1 min-w-0 xl:order-2 xl:sticky xl:top-4">
+          <StyleSetPreview settings={draft.settings} />
+        </aside>
+      </div>
 
       <div className="flex items-center gap-2">
         <Button onClick={onSave} disabled={busy || !draft.name.trim()}>
