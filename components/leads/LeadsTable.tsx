@@ -85,11 +85,6 @@ interface LeadsTableProps {
   allSelected: boolean
   busyLeadId: string | null
   esignEnabled: boolean
-  /** Row whose record side panel is open. */
-  activeLeadId?: string | null
-  onActivate?: (lead: LeadListRow) => void
-  openMenuLeadId?: string | null
-  onMenuOpenChange?: (leadId: string, open: boolean) => void
   onToggleAll: (selected: boolean) => void
   onToggleSelected: (leadId: string, selected: boolean) => void
   onEdit: (lead: LeadListRow) => void
@@ -107,10 +102,6 @@ export function LeadsTable({
   allSelected,
   busyLeadId,
   esignEnabled,
-  activeLeadId = null,
-  onActivate,
-  openMenuLeadId = null,
-  onMenuOpenChange,
   onToggleAll,
   onToggleSelected,
   onEdit,
@@ -164,7 +155,7 @@ export function LeadsTable({
             }
 
             return (
-              <TableRow key={lead.id} data-active={activeLeadId === lead.id || undefined} className={activeLeadId === lead.id ? 'bg-muted/60' : undefined}>
+              <TableRow key={lead.id}>
                 <TableCell>
                   <Checkbox
                     checked={Boolean(selected[lead.id])}
@@ -173,16 +164,8 @@ export function LeadsTable({
                   />
                 </TableCell>
                 <TableCell className="font-medium">
-                  {/* Plain clicks open the record side panel; modified clicks keep the link. */}
-                  <Link
-                    href={`/admin/crm/opportunities/${lead.id}`}
-                    className="hover:underline"
-                    onClick={event => {
-                      if (!onActivate || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                      event.preventDefault()
-                      onActivate(lead)
-                    }}
-                  >
+                  {/* The name opens the full record — the row has no smaller view of it. */}
+                  <Link href={`/admin/crm/opportunities/${lead.id}`} className="hover:underline">
                     {leadListName(lead)}
                   </Link>
                   <div className="text-[11px] font-normal text-muted-foreground">
@@ -231,12 +214,6 @@ export function LeadsTable({
                     lead={lead}
                     esignEnabled={esignEnabled}
                     busy={busy}
-                    {...(onMenuOpenChange
-                      ? {
-                          open: openMenuLeadId === lead.id,
-                          onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open),
-                        }
-                      : {})}
                     onEdit={onEdit}
                     onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}

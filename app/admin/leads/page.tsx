@@ -1,8 +1,5 @@
 import { Suspense } from 'react'
-import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isEsignConfigured } from '@/lib/esign/firma'
-import type { LeadSpouseRecord } from '@/lib/leads/viewTypes'
-import { loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
 import { fetchLeadListPage } from '@/lib/queries/leadList'
 import {
   clampShow,
@@ -69,33 +66,6 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Promi
     )
   }
 
-  // Spouses come from the join (step 3 of docs/matter-contacts-migration.md),
-  // batched across the page's matters so the flip does not turn one query into
-  // one per lead. Lead URLs stay intake-based, so the result is keyed back to
-  // the lead id the list renders with.
-  const spousesByLead = new Map<string, LeadSpouseRecord>()
-  const leadIdByMatterId = new Map<string, string>()
-  for (const lead of rows) {
-    if (lead.matter_id) leadIdByMatterId.set(lead.matter_id, lead.id)
-  }
-  if (leadIdByMatterId.size > 0) {
-    try {
-      const byMatter = await loadMatterContactsForMatters(
-        getAdminClient(),
-        [...leadIdByMatterId.keys()],
-        'id, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth',
-      )
-      for (const [matterId, contacts] of byMatter) {
-        const leadId = leadIdByMatterId.get(matterId)
-        if (!leadId || spousesByLead.has(leadId)) continue
-        const spouse = contacts.find(row => row.relationship_type === 'spouse')
-        if (spouse) spousesByLead.set(leadId, spouse as unknown as LeadSpouseRecord)
-      }
-    } catch (spouseError) {
-      console.error('Could not load lead spouses', { error: spouseError })
-    }
-  }
-
   return (
     <div className="space-y-4">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
@@ -105,7 +75,6 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Promi
           total={total}
           hasMore={hasMore}
           summary={summary}
-          spouses={Object.fromEntries(spousesByLead)}
           esignEnabled={isEsignConfigured()}
         />
       </Suspense>

@@ -20,7 +20,7 @@ export interface LeadListRow {
   lead_urgency: string | null
   taxable_estate: number | null
   last_activity_at: string | null
-  // Loaded so the index record side panel can edit the same fields as the lead
+  // Loaded so the index rows can render the same fields as the lead
   // detail rail. Optional because narrower callers still build LeadListRow.
   middle_name?: string | null
   preferred_name?: string | null

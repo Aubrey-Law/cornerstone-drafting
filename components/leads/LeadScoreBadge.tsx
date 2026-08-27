@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * The lead score pill, shared by the leads table, the board cards and the
- * record side panel. Tones follow the billing badge vocabulary so a hot lead
+ * record page. Tones follow the billing badge vocabulary so a hot lead
  * reads like an overdue invoice does — the eye is meant to land on it.
  */
 const bandClasses = {
