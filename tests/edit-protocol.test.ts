@@ -156,7 +156,11 @@ describe('the pane copy of the contract', () => {
   })
 
   it('agrees on the format vocabulary the prompt advertises', () => {
-    const formats = paneSource.match(/export const EDIT_FORMATS = \[(.*?)\]/s)?.[1] ?? ''
+    // `[\s\S]` rather than `.` with the `s` flag: this file is type-checked
+    // under the app's tsconfig, which targets ES6, and dotAll needs ES2018.
+    // The word add-in's own tsconfig targets ES2022, which is why the same
+    // flag is fine over there and not here.
+    const formats = paneSource.match(/export const EDIT_FORMATS = \[([\s\S]*?)\]/)?.[1] ?? ''
     for (const format of ['bold', 'italic', 'underline', 'heading1', 'heading2', 'heading3']) {
       expect(formats).toContain(`'${format}'`)
       expect(buildEditProtocolInstructions()).toContain(`"${format}"`)
