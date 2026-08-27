@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   HANDOFF_TYPE,
   SignInError,
+  beginOAuth,
+  completeOAuth,
+  completeOAuthSignIn,
   fetchProfile,
   readSupabaseConfig,
   requestToken,
@@ -227,5 +230,142 @@ describe('signIn', () => {
 
     expect(result.handedOff).toBe(false)
     expect(result.session.accessToken).toBe('access-123')
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * OAuth
+ * ------------------------------------------------------------------ */
+
+/** A localStorage stand-in; the real one does not exist under `environment: 'node'`. */
+function fakeStore(initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial))
+  return {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => void map.set(k, v),
+    removeItem: (k: string) => void map.delete(k),
+    size: () => map.size,
+    only: () => [...map.values()][0],
+  }
+}
+
+const REDIRECT = 'https://localhost:3100/dialog.html'
+
+describe('beginOAuth', () => {
+  it('builds the authorize URL GoTrue expects', async () => {
+    const storage = fakeStore()
+    const url = new URL(
+      await beginOAuth('azure', { config, storage, redirectTo: REDIRECT }),
+    )
+
+    expect(url.origin + url.pathname).toBe('https://project.supabase.co/auth/v1/authorize')
+    expect(url.searchParams.get('provider')).toBe('azure')
+    expect(url.searchParams.get('redirect_to')).toBe(REDIRECT)
+    expect(url.searchParams.get('scopes')).toBe('email openid profile')
+    expect(url.searchParams.get('code_challenge_method')).toBe('s256')
+    expect(url.searchParams.get('code_challenge')).toBeTruthy()
+  })
+
+  it('stores the verifier before handing back the URL', async () => {
+    // The caller's next act is to navigate away. Anything not persisted by the
+    // time this resolves is gone when the provider sends the dialog back.
+    const storage = fakeStore()
+    await beginOAuth('azure', { config, storage, redirectTo: REDIRECT })
+    expect(storage.size()).toBe(1)
+    expect(storage.only()).toMatch(/^[0-9a-f]{112}$/)
+  })
+
+  it('sends the challenge as base64url SHA-256 of the verifier', async () => {
+    // Computed here from first principles rather than by calling the same
+    // helper, so this fails if the hashing or the encoding drifts from what
+    // GoTrue verifies against.
+    const storage = fakeStore()
+    const url = new URL(
+      await beginOAuth('google', { config, storage, redirectTo: REDIRECT }),
+    )
+
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(storage.only()),
+    )
+    const expected = Buffer.from(digest).toString('base64url')
+
+    expect(url.searchParams.get('code_challenge')).toBe(expected)
+    expect(url.searchParams.get('scopes')).toBe('email')
+  })
+})
+
+describe('completeOAuth', () => {
+  const pkceFetch = (response?: Response) =>
+    vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain('grant_type=pkce')
+      return response ?? jsonResponse(TOKEN_OK)
+    }) as unknown as typeof fetch
+
+  it('redeems the code with the stored verifier', async () => {
+    const storage = fakeStore({ 'cornerstone.addin.pkce-verifier.v1': 'verifier-abc' })
+    const fetchMock = pkceFetch()
+
+    const session = await completeOAuth('auth-code-1', { config, storage, fetch: fetchMock })
+
+    expect(session.accessToken).toBe('access-123')
+    const [, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      auth_code: 'auth-code-1',
+      code_verifier: 'verifier-abc',
+    })
+  })
+
+  it('explains a missing verifier instead of surfacing the raw PKCE error', async () => {
+    await expect(
+      completeOAuth('auth-code-1', { config, storage: fakeStore(), fetch: pkceFetch() }),
+    ).rejects.toThrow(/lost track of the sign-in/)
+  })
+
+  it('clears the verifier even when the exchange fails', async () => {
+    // A verifier outliving its code is a replayable credential left in
+    // localStorage, and a stale one matched against a fresh code is exactly the
+    // confusing failure this message exists to avoid.
+    const storage = fakeStore({ 'cornerstone.addin.pkce-verifier.v1': 'verifier-abc' })
+
+    await expect(
+      completeOAuth('bad-code', {
+        config,
+        storage,
+        fetch: pkceFetch(jsonResponse({ error_description: 'invalid flow state' }, 403)),
+      }),
+    ).rejects.toThrow(/invalid flow state/)
+
+    expect(storage.size()).toBe(0)
+  })
+})
+
+describe('completeOAuthSignIn', () => {
+  it('runs the same tail as a password sign-in', async () => {
+    const messageParent = vi.fn()
+    const storage = fakeStore({ 'cornerstone.addin.pkce-verifier.v1': 'verifier-abc' })
+    const seen: [StepId, StepState][] = []
+
+    const result = await completeOAuthSignIn('auth-code-1', {
+      config,
+      storage,
+      fetch: stubFetch(),
+      getOffice: officeWith(messageParent),
+      onStep: (id, state) => seen.push([id, state]),
+    })
+
+    expect(result.handedOff).toBe(true)
+    expect(seen).toEqual([
+      ['credentials', 'running'],
+      ['credentials', 'done'],
+      ['access', 'running'],
+      ['access', 'done'],
+      ['handoff', 'running'],
+      ['handoff', 'done'],
+    ])
+    expect(JSON.parse(messageParent.mock.calls[0][0] as string)).toMatchObject({
+      type: HANDOFF_TYPE,
+      accessToken: 'access-123',
+    })
   })
 })

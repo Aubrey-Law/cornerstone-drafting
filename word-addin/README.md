@@ -183,10 +183,41 @@ token lives in `localStorage`, deliberately not in
 `.docx`, so a token stored there would travel with the file to whoever received
 it.
 
+It offers **Continue with Microsoft** and **Continue with Google** above an
+email and password form, matching `app/auth/login/page.tsx`. Most of the firm
+signs in with Microsoft and has no password at all, so a password-only dialog
+asks for a credential that does not exist.
+
 The dialog reads `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 from the **repository root** `.env` — `vite.config.ts` sets `envDir` and widens
 `envPrefix` to pick them up, so there is nothing to configure here. Both are
 public values the Next app already ships to every browser.
+
+### The OAuth round trip
+
+`beginOAuth` mints a PKCE verifier, parks it in `localStorage`, and returns
+`{SUPABASE_URL}/auth/v1/authorize?provider=azure&…`. The dialog navigates there;
+the provider returns to Supabase's `/auth/v1/callback`, which redirects back to
+`https://localhost:3100/dialog.html?code=…`. The reloaded page finds the code,
+reads the verifier back out of storage, and POSTs `{auth_code, code_verifier}`
+to `?grant_type=pkce`.
+
+That is hand-rolled rather than delegated to `supabase-js`, whose auth calls
+wrap everything in `navigator.locks` and an `initializePromise` — neither
+bounded. The values match `@supabase/auth-js/lib/helpers.js` exactly, and a test
+recomputes the challenge from first principles so the encoding cannot drift.
+
+**Two one-time settings this repo cannot make for you:**
+
+1. **Supabase → Authentication → URL Configuration → Redirect URLs** must include
+   `https://localhost:3100/**`. Without it GoTrue ignores `redirect_to` and sends
+   the browser to the project's Site URL, which lands outside the dialog.
+2. Nothing on the Azure side — Microsoft still redirects to Supabase's own
+   `/auth/v1/callback`, which is already registered.
+
+`manifest.xml` lists the provider and Supabase domains under `AppDomains`: an
+Office dialog may only navigate to domains declared there. Changing that file
+means a re-sideload (`npm start`).
 
 ### Why it is not a Next page
 
@@ -293,3 +324,22 @@ Architecturally informed by [Mike](https://github.com/open-legal-products/mike)
 (MikeOSS), which is **AGPL-3.0**. Ideas only — the edit-protocol shape, the
 failure vocabulary, the apply sequence. No Mike code is copied, and none should
 be: the AGPL's network clause would apply to the whole Cornerstone service.
+
+## Ribbon icon
+
+`public/assets/icon.svg` is the source; `icon-16/32/80.png` are rendered from it
+and are what `manifest.xml` points at. Regenerate from the repo root:
+
+```bash
+node -e "const s=require('sharp');for(const n of [16,32,80])s('word-addin/public/assets/icon.svg',{density:600}).resize(n,n,{fit:'contain',background:{r:0,g:0,b:0,alpha:0}}).png().toFile(\`word-addin/public/assets/icon-\${n}.png\`)"
+```
+
+The mark is a laid cornerstone in the firm's navy and teal — deliberately not a
+letterform, because Word's ribbon is already full of "A" icons for font size,
+colour and style and a monogram there reads as a text control; and deliberately
+not the firm wordmark, because "AUBREY | LAW" plus a tagline is 480×56 and at
+16px it is an unreadable smear. Drop a square logo in and re-run the command
+above if one turns up.
+
+Word caches ribbon icons hard. After changing them, quit Word and run
+`npm run clear-cache`.

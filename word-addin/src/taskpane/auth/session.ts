@@ -77,7 +77,9 @@ export function signIn(): Promise<StoredSession> {
 
     Office.context.ui.displayDialogAsync(
       url,
-      { height: 60, width: 40, displayInIframe: false },
+      // Wider than a password form needs: this window also has to show
+      // Microsoft's sign-in page, which is cramped below about half the screen.
+      { height: 65, width: 50, displayInIframe: false },
       (result) => {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
           reject(new Error(result.error?.message ?? 'Could not open the sign-in window.'))

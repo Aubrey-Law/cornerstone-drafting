@@ -45,6 +45,29 @@ export const STEPS = [
   { id: 'handoff', label: 'Returning to Word' },
 ] as const
 
+/** Providers the firm actually uses, matching `app/auth/login/page.tsx`. */
+export type OAuthProvider = 'azure' | 'google'
+
+/**
+ * Scopes per provider, copied from the web login page so the consent screen the
+ * attorney sees in the dialog is the one they have already agreed to.
+ */
+const OAUTH_SCOPES: Record<OAuthProvider, string> = {
+  azure: 'email openid profile',
+  google: 'email',
+}
+
+/**
+ * Where the PKCE code verifier waits while the browser is away at Microsoft.
+ *
+ * `localStorage`, not `sessionStorage`: the dialog navigates right out of this
+ * origin and back, and sessionStorage is the flakier of the two to survive that
+ * in an embedded WebView. Deleted the moment it is redeemed — see
+ * `completeOAuth`, which clears it even when the exchange fails, so a verifier
+ * can never be replayed against a second code.
+ */
+const VERIFIER_KEY = 'cornerstone.addin.pkce-verifier.v1'
+
 export type StepId = (typeof STEPS)[number]['id']
 export type StepState = 'pending' | 'running' | 'done' | 'failed'
 
@@ -118,8 +141,139 @@ export interface SignInDeps {
   config?: SupabaseConfig
   /** Overridable so tests do not sit through the real Office deadline. */
   officeTimeoutMs?: number
+  /** Where the PKCE verifier is parked across the redirect. */
+  storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+  /** Absolute URL the provider should send the dialog back to. */
+  redirectTo?: string
   /** Called as each step changes state, so the dialog can show its progress. */
   onStep?: (id: StepId, state: StepState) => void
+}
+
+function verifierStore(deps: SignInDeps) {
+  return deps.storage ?? globalThis.localStorage
+}
+
+/* ------------------------------------------------------------------ *
+ * PKCE
+ *
+ * Deliberately hand-rolled rather than pulled in with supabase-js, whose
+ * auth calls wrap everything in `navigator.locks` and an `initializePromise`
+ * — neither bounded, and unbounded waits in a window with no console is the
+ * failure mode this whole dialog exists to escape.
+ *
+ * The algorithm is not invented here: it matches
+ * `@supabase/auth-js/dist/main/lib/helpers.js` byte for byte, so the values
+ * this produces are the values GoTrue already expects.
+ * ------------------------------------------------------------------ */
+
+/** auth-js `dec2hex`: last two hex digits of each 32-bit word. */
+const dec2hex = (dec: number) => `0${dec.toString(16)}`.slice(-2)
+
+/** auth-js `generatePKCEVerifier`: 56 random words → 112 hex characters. */
+function generateVerifier(): string {
+  const words = new Uint32Array(56)
+  crypto.getRandomValues(words)
+  return Array.from(words, dec2hex).join('')
+}
+
+/** auth-js `generatePKCEChallenge`: base64url(SHA-256(verifier)), unpadded. */
+async function generateChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  const binary = Array.from(new Uint8Array(digest), byte => String.fromCharCode(byte)).join('')
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/**
+ * Start an OAuth sign-in: returns the URL the dialog should navigate to.
+ *
+ * The verifier is stored before the URL is returned, because the caller's very
+ * next act is to leave this page. Anything not persisted by then is gone.
+ */
+export async function beginOAuth(
+  provider: OAuthProvider,
+  deps: SignInDeps = {},
+): Promise<string> {
+  const config = deps.config ?? readSupabaseConfig()
+  const redirectTo = deps.redirectTo ?? `${globalThis.location.origin}/dialog.html`
+
+  const verifier = generateVerifier()
+  const challenge = await generateChallenge(verifier)
+  verifierStore(deps).setItem(VERIFIER_KEY, verifier)
+
+  const params = new URLSearchParams({
+    provider,
+    redirect_to: redirectTo,
+    scopes: OAUTH_SCOPES[provider],
+    code_challenge: challenge,
+    code_challenge_method: 's256',
+  })
+  return `${config.url}/auth/v1/authorize?${params.toString()}`
+}
+
+/**
+ * Redeem the `?code` the provider sent us back with.
+ *
+ * The verifier is cleared unconditionally. A verifier that outlives its code is
+ * a replayable credential sitting in localStorage, and the failure it would
+ * paper over — a stale verifier matched against a fresh code — is precisely the
+ * confusing "PKCE code verifier not found" class of error.
+ */
+export async function completeOAuth(
+  code: string,
+  deps: SignInDeps = {},
+): Promise<DialogSession> {
+  const config = deps.config ?? readSupabaseConfig()
+  const doFetch = deps.fetch ?? globalThis.fetch
+  const store = verifierStore(deps)
+
+  const verifier = store.getItem(VERIFIER_KEY)
+  store.removeItem(VERIFIER_KEY)
+
+  if (!verifier) {
+    throw new SignInError(
+      'This window lost track of the sign-in it started. Close it and choose Sign in again.',
+    )
+  }
+
+  let res: Response
+  try {
+    res = await doFetch(`${config.url}/auth/v1/token?grant_type=pkce`, {
+      method: 'POST',
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch (err) {
+    describeAbort(err, 'Supabase')
+  }
+
+  let body: TokenResponse
+  try {
+    body = (await res.json()) as TokenResponse
+  } catch {
+    throw new SignInError(`Supabase returned an unreadable response (${res.status}).`)
+  }
+
+  if (!res.ok || !body.access_token) {
+    throw new SignInError(
+      body.error_description ||
+        body.msg ||
+        body.message ||
+        body.error ||
+        `Could not finish the sign-in (${res.status}).`,
+    )
+  }
+
+  return {
+    accessToken: body.access_token,
+    refreshToken: body.refresh_token ?? null,
+    expiresAt: body.expires_at ?? null,
+    email: body.user?.email ?? null,
+  }
 }
 
 /**
@@ -325,11 +479,35 @@ export async function signIn(
   }
 
   const session = await run('credentials', () => requestToken(email, password, deps))
-  const profile = await run('access', () => fetchProfile(session.accessToken, deps))
+  return finishSignIn(session, deps)
+}
 
-  // Not wrapped in `run`: a missing Office is a failed handoff but a successful
-  // sign-in, so this step reports 'failed' while the call still resolves and
-  // the caller falls back to showing the token.
+/**
+ * Everything after a session exists, whichever door produced it.
+ *
+ * Shared by the password path and the OAuth return, so the role gate and the
+ * handoff cannot drift apart between the two. `credentials` is already done by
+ * the time this runs; it picks up at `access`.
+ */
+export async function finishSignIn(
+  session: DialogSession,
+  deps: SignInDeps = {},
+): Promise<SignInResult> {
+  const step = deps.onStep ?? (() => {})
+
+  step('access', 'running')
+  let profile: ProfileInfo
+  try {
+    profile = await fetchProfile(session.accessToken, deps)
+    step('access', 'done')
+  } catch (err) {
+    step('access', 'failed')
+    throw err
+  }
+
+  // A missing Office is a failed handoff but a successful sign-in, so this
+  // reports 'failed' while the call still resolves and the caller falls back to
+  // showing the token.
   step('handoff', 'running')
   const messageParent = await resolveMessageParent(
     deps.officeTimeoutMs ?? OFFICE_TIMEOUT_MS,
@@ -351,4 +529,29 @@ export async function signIn(
   )
   step('handoff', 'done')
   return { session, profile, handedOff: true }
+}
+
+/**
+ * The OAuth return leg: redeem the code, then the same tail as a password login.
+ *
+ * `credentials` covers the token exchange here. The label still fits — it is
+ * the step that turns something the attorney presented into a session.
+ */
+export async function completeOAuthSignIn(
+  code: string,
+  deps: SignInDeps = {},
+): Promise<SignInResult> {
+  const step = deps.onStep ?? (() => {})
+
+  step('credentials', 'running')
+  let session: DialogSession
+  try {
+    session = await completeOAuth(code, deps)
+    step('credentials', 'done')
+  } catch (err) {
+    step('credentials', 'failed')
+    throw err
+  }
+
+  return finishSignIn(session, deps)
 }
