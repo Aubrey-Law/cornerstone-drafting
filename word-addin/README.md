@@ -27,6 +27,24 @@ Order matters: `npm start` does not serve anything, it only copies `manifest.xml
 into Word's sideload folder. If the pane is not already being served from
 terminal 2, Word opens an empty frame.
 
+**First run only:** macOS protects Word's add-in folder from other processes, so
+`npm start` is refused until you grant the terminal access.
+
+1. **System Settings → Privacy & Security → Full Disk Access** → add the terminal
+   you run this from (Terminal, iTerm, VS Code…) and switch it on.
+2. **Quit that terminal completely (⌘Q) and reopen it.** The permission is read
+   when a process starts, so a running shell keeps the old denial. This is the
+   step people skip.
+3. On macOS 14 or newer, if it still fails, add it under **Privacy & Security →
+   App Management** too.
+
+Check it without involving Word:
+
+```bash
+WEF=~/Library/Containers/com.microsoft.Word/Data/Documents/wef
+touch "$WEF/.permtest" && echo WRITABLE && rm "$WEF/.permtest" || echo DENIED
+```
+
 Then **quit Word completely (⌘Q) and reopen it** — a running Word does not
 rescan the sideload folder. Open a document and pick **Cornerstone** from the
 Home ribbon, or **Insert → My Add-ins → Cornerstone**.
@@ -54,8 +72,14 @@ volume, since hard links cannot cross filesystems:
 Error: EPERM: operation not permitted, link 'manifest.xml' -> '…/wef/<GUID>.manifest.xml'
 ```
 
-A copy has neither problem. The file keeps Microsoft's `<GUID>.manifest.xml`
-naming so their tooling and these scripts clean up after each other.
+A copy avoids both. It does **not** avoid the permission above: writing into
+Word's container is protected whichever call you use, which is why granting the
+terminal access is a prerequisite rather than a troubleshooting step. The
+give-away is which syscall the error names — `link` is the tool's bug, `copyfile`
+is the permission.
+
+The file keeps Microsoft's `<GUID>.manifest.xml` naming so their tooling and
+these scripts clean up after each other.
 
 A copy specifically, never a symlink: the uninstall path in
 `office-addin-dev-settings` resolves entries with `realpathSync` before deleting
@@ -66,11 +90,24 @@ and from 36 reported vulnerabilities to none.
 
 ### Troubleshooting
 
+**`EPERM ... copyfile`.** The permission grant above has not taken effect. Most
+often the terminal was not quit and reopened after switching it on.
+
+**Sideload without granting anything.** Finder is exempt from that restriction,
+so a drag works where the terminal cannot:
+
+```bash
+open ~/Library/Containers/com.microsoft.Word/Data/Documents/wef
+open word-addin
+```
+
+Drag `manifest.xml` across and rename it `<GUID>.manifest.xml` — the GUID is the
+`<Id>` in the manifest. A plain `cp` from the terminal is **not** a workaround;
+it hits the identical wall.
+
 **Word never shows the add-in.** Confirm the manifest landed:
-`ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/`. Then check
-Terminal has **Full Disk Access** (System Settings → Privacy & Security) — it is
-needed to write under `~/Library/Containers`. And quit Word fully; ⌘W is not
-enough.
+`ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/`. Then quit Word
+fully; ⌘W is not enough.
 
 **Keep that folder free of anything but manifests.** Word parses every file in
 it, and so does the Office tooling — a stray file makes both throw.

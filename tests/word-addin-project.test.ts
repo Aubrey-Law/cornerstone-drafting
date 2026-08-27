@@ -72,6 +72,25 @@ describe('word-addin sideload scripts', () => {
     expect(code).not.toMatch(/linkSync\s*\(|symlink\s*\(/)
   })
 
+  it('handle the permission denial instead of throwing a stack trace', () => {
+    const sideload = read('word-addin/scripts/sideload.mjs')
+
+    // macOS protects Word's container under ~/Library/Containers, so the copy
+    // is refused even when reading the source and stat-ing the folder both
+    // work. It is the likeliest way this script fails, and the fix is one
+    // setting — a raw Node stack trace names neither.
+    expect(sideload).toMatch(/catch\s*\(/)
+    expect(sideload).toContain("'EPERM'")
+    expect(sideload).toContain("'EACCES'")
+    expect(sideload).toContain('Full Disk Access')
+    // Anything that is not a permission problem must still surface as itself.
+    expect(sideload).toContain('throw error')
+  })
+
+  it('verify the copy landed rather than trusting a silent success', () => {
+    expect(read('word-addin/scripts/sideload.mjs')).toContain('statSync(destination)')
+  })
+
   it('no longer depend on office-addin-debugging', () => {
     const pkg = JSON.parse(read('word-addin/package.json'))
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }

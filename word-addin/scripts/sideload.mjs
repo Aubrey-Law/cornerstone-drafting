@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,11 +48,53 @@ const sideloadDirectory = wordSideloadDirectory(homedir())
 const destination = join(sideloadDirectory, sideloadFilename(id))
 
 mkdirSync(sideloadDirectory, { recursive: true })
-copyFileSync(manifestPath, destination)
+
+try {
+  copyFileSync(manifestPath, destination)
+} catch (error) {
+  // macOS protects another app's container under ~/Library/Containers, so the
+  // terminal is refused even though it can read the source and stat the
+  // directory. This is the likeliest way this script fails, and a raw stack
+  // trace tells the reader nothing about the one setting that fixes it.
+  if (error?.code !== 'EPERM' && error?.code !== 'EACCES') throw error
+
+  console.error(
+    [
+      `macOS refused to write into Word's add-in folder:`,
+      `  ${destination}`,
+      '',
+      'Reading the manifest and finding the folder both worked, so this is the',
+      "system withholding access to another app's container, not a bad path.",
+      '',
+      'To fix it, once:',
+      '  1. System Settings > Privacy & Security > Full Disk Access',
+      '  2. Add the terminal you run this from (Terminal, iTerm, VS Code…) and',
+      '     switch it on.',
+      '  3. Quit that terminal completely (Cmd+Q) and reopen it. The permission',
+      '     is read when a process starts, so a running shell keeps the old',
+      '     denial — this step is the one people skip.',
+      '  4. On macOS 14 or newer, if it still fails, add it under',
+      '     Privacy & Security > App Management as well.',
+      '',
+      'Check it took, without involving Word:',
+      `  touch "${sideloadDirectory}/.permtest" && echo WRITABLE && rm "${sideloadDirectory}/.permtest"`,
+      '',
+      'Or sideload without granting anything — Finder is exempt, so dragging',
+      'works where the terminal cannot:',
+      `  open "${sideloadDirectory}"`,
+      `  open "${addinRoot}"`,
+      `  then drag manifest.xml across and rename it ${sideloadFilename(id)}`,
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+
+// Prove the copy landed rather than trusting a silent success.
+const { size } = statSync(destination)
 
 console.log(
   [
-    `Sideloaded ${id}`,
+    `Sideloaded ${id} (${size} bytes)`,
     `  → ${destination}`,
     '',
     'Next:',
