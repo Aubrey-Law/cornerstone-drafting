@@ -43,6 +43,55 @@ describe('word-addin build isolation', () => {
   })
 })
 
+/**
+ * Sideloading is hand-rolled because `office-addin-debugging` cannot do it on
+ * macOS: it hard-links the manifest into Word's app container, and `link(2)`
+ * fails there with EPERM. These pin the copy-based replacement.
+ */
+describe('word-addin sideload scripts', () => {
+  const scripts = JSON.parse(read('word-addin/package.json')).scripts as Record<string, string>
+
+  it('are what npm start and npm run stop invoke', () => {
+    expect(scripts.start).toBe('node scripts/sideload.mjs')
+    expect(scripts.stop).toBe('node scripts/unsideload.mjs')
+    expect(fs.existsSync(path.join(root, 'word-addin/scripts/sideload.mjs'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'word-addin/scripts/unsideload.mjs'))).toBe(true)
+  })
+
+  it('copy the manifest rather than linking it', () => {
+    const sideload = read('word-addin/scripts/sideload.mjs')
+    expect(sideload).toContain('copyFileSync')
+
+    // Comments stripped first: the script explains at length why it does NOT
+    // link, and that prose is not a call site.
+    const code = sideload.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+
+    // A hard link is the bug being fixed. A symlink is worse: the Office
+    // tooling's uninstall path resolves entries with realpathSync before
+    // deleting them, so a symlink here would delete the repo's own manifest.
+    expect(code).not.toMatch(/linkSync\s*\(|symlink\s*\(/)
+  })
+
+  it('no longer depend on office-addin-debugging', () => {
+    const pkg = JSON.parse(read('word-addin/package.json'))
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+    expect(deps['office-addin-debugging']).toBeUndefined()
+    // office-addin-dev-certs stays: it mints the HTTPS cert Office requires.
+    expect(deps['office-addin-dev-certs']).toBeDefined()
+  })
+
+  it('derive the sideload filename from the manifest GUID', () => {
+    const id = read('word-addin/manifest.xml').match(/<Id>\s*([0-9a-fA-F-]{36})\s*<\/Id>/)?.[1]
+    expect(id).toBeTruthy()
+
+    const helper = read('word-addin/scripts/manifestId.mjs')
+    // Microsoft's own convention: their uninstall matches on startsWith(id),
+    // so keeping it means their tooling and ours clean up after each other.
+    expect(helper).toContain('${id}.manifest.xml')
+    expect(helper).toContain('Library/Containers/com.microsoft.Word/Data/Documents/wef')
+  })
+})
+
 describe('word-addin manifest', () => {
   const manifest = new XMLParser({ ignoreAttributes: false }).parse(read('word-addin/manifest.xml'))
   const app = manifest.OfficeApp

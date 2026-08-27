@@ -9,8 +9,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "start": "office-addin-debugging start manifest.xml desktop",
-    "stop": "office-addin-debugging stop manifest.xml",
+    "start": "node scripts/sideload.mjs",
+    "stop": "node scripts/unsideload.mjs",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -27,7 +27,6 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "office-addin-debugging": "^6.0.4",
     "office-addin-dev-certs": "^2.0.9",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.7.3",
