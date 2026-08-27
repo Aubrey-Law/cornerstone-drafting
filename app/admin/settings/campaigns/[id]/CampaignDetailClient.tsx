@@ -259,7 +259,7 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
         description={campaign.subject ?? 'No subject set'}
         actions={
           <Button asChild variant="secondary" size="sm">
-            <Link href="/admin/crm/campaigns">
+            <Link href="/admin/settings/campaigns">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Link>

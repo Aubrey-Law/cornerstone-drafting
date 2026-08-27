@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ContactRound, LayoutDashboard, Mail, RefreshCw, Target } from 'lucide-react'
+import { Activity, ContactRound, LayoutDashboard, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /** The overview sits at the CRM root, so it only lights up on an exact match. */
@@ -13,8 +13,8 @@ const ITEMS = [
   { href: '/admin/crm/people', label: 'People', icon: ContactRound },
   { href: '/admin/crm/opportunities', label: 'Opportunities', icon: Target },
   { href: '/admin/crm/activities', label: 'Activities', icon: Activity },
-  { href: '/admin/crm/campaigns', label: 'Campaigns', icon: Mail },
-  { href: '/admin/crm/sync', label: 'Sync', icon: RefreshCw },
+  // Campaigns and Sync moved to Settings — they are firm configuration, not a
+  // CRM workspace. Old URLs are redirected in next.config.mjs.
 ] as const
 
 export function CrmSubnav() {
