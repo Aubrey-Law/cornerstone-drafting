@@ -5,15 +5,41 @@ import { describe, expect, it } from 'vitest'
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8')
 
 describe('unified CRM hub', () => {
-  it('exposes one CRM navigation entry and the five CRM workspaces', () => {
+  it('exposes one CRM navigation entry and the three CRM workspaces', () => {
     const adminLayout = read('app/admin/AdminLayoutClient.tsx')
     const subnav = read('app/admin/crm/CrmSubnav.tsx')
 
     expect(adminLayout).toContain("{ href: '/admin/crm', label: 'CRM'")
     expect(adminLayout).not.toMatch(/label: '(Leads|People|Contacts|Campaigns)'/)
-    for (const route of ['people', 'opportunities', 'activities', 'campaigns', 'sync']) {
+    for (const route of ['people', 'opportunities', 'activities']) {
       expect(subnav).toContain(`/admin/crm/${route}`)
     }
+  })
+
+  it('moves campaigns and sync into Settings without touching their API routes', () => {
+    const subnav = read('app/admin/crm/CrmSubnav.tsx')
+    // They are firm configuration, not a CRM workspace, so the CRM subnav no
+    // longer offers them.
+    expect(subnav).not.toContain('/admin/crm/campaigns')
+    expect(subnav).not.toContain('/admin/crm/sync')
+
+    for (const page of [
+      'app/admin/settings/campaigns/page.tsx',
+      'app/admin/settings/campaigns/[id]/page.tsx',
+      'app/admin/settings/sync/page.tsx',
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), page))).toBe(true)
+    }
+
+    // The tab strip links to them so they stay reachable from Settings.
+    const settings = read('app/admin/settings/StaffSettingsClient.tsx')
+    expect(settings).toContain('/admin/settings/campaigns')
+    expect(settings).toContain('/admin/settings/sync')
+
+    // The API never moved — the cron job, unsubscribe route and Mailgun webhook
+    // all still call it.
+    expect(fs.existsSync(path.join(process.cwd(), 'app/api/admin/crm/campaigns/route.ts'))).toBe(true)
+    expect(read('app/admin/settings/campaigns/CampaignsClient.tsx')).toContain('/api/admin/crm/campaigns')
   })
 
   it('preserves legacy lead and contact URLs with framework redirects', async () => {
@@ -26,6 +52,9 @@ describe('unified CRM hub', () => {
       expect.objectContaining({ source: '/admin/leads', destination: '/admin/crm/opportunities' }),
       expect.objectContaining({ source: '/admin/leads/:path*', destination: '/admin/crm/opportunities/:path*' }),
       expect.objectContaining({ source: '/admin/contacts', destination: '/admin/crm/people' }),
+      expect.objectContaining({ source: '/admin/crm/campaigns', destination: '/admin/settings/campaigns' }),
+      expect.objectContaining({ source: '/admin/crm/campaigns/:path*', destination: '/admin/settings/campaigns/:path*' }),
+      expect.objectContaining({ source: '/admin/crm/sync', destination: '/admin/settings/sync' }),
     ]))
   })
 

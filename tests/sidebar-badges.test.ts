@@ -51,13 +51,20 @@ describe('sidebar badges', () => {
     )
     const layout = fs.readFileSync(path.join(process.cwd(), 'app/admin/AdminLayoutClient.tsx'), 'utf8')
     const counts = fs.readFileSync(path.join(process.cwd(), 'lib/queries/sidebarCounts.ts'), 'utf8')
+    // The shell fetches the counts; the sidebar it renders attaches them to nav
+    // items. They were one file until the sidebar was extracted so the desktop
+    // column and the mobile sheet could stop duplicating it.
+    const sidebar = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/components/AdminSidebar.tsx'),
+      'utf8',
+    )
 
     expect(route).toContain("tags: [SIDEBAR_COUNTS_TAG]")
     expect(route).toContain('fetchSidebarCounts')
     expect(counts).toContain("eq('stage', 'intake_review')")
     expect(counts).toContain('fetchMatterAgingTiles')
     expect(layout).toContain('/api/admin/sidebar-counts')
-    expect(layout).toContain('getNavBadge(item.href, badgeCounts)')
+    expect(sidebar).toContain('getNavBadge(item.href, badgeCounts)')
     expect(layout).toContain('@/lib/sidebarCountsClient')
     expect(layout).not.toContain('@/lib/sidebarCountsInvalidation')
   })

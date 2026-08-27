@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -37,6 +38,16 @@ type Tab =
   | 'sla'
   | 'ai-usage'
   | 'templates'
+
+/**
+ * Settings surfaces that are real routes rather than tabs. They render server-side
+ * with their own data fetching, so they cannot live in this client component's tab
+ * switch — but they belong to Settings, so the tab strip links to them.
+ */
+const SETTINGS_SUBROUTES = [
+  { href: '/admin/settings/campaigns', label: 'Campaigns' },
+  { href: '/admin/settings/sync', label: 'Sync' },
+] as const
 
 interface ApiKeyStatus {
   provider: string
@@ -352,6 +363,20 @@ export function StaffSettingsClient({
           >
             {label}
           </button>
+        ))}
+        {/*
+          Campaigns and Sync are their own routes rather than tabs — they are server
+          components with their own data fetching. They sit in the strip so they stay
+          discoverable, but they navigate instead of setting tab state.
+        */}
+        {SETTINGS_SUBROUTES.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            {label}
+          </Link>
         ))}
       </div>
 

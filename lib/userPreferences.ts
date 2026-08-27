@@ -113,9 +113,21 @@ export interface ModelsUserPreferences {
   geminiModel?: string
 }
 
+/**
+ * The sidebar reads this on every admin page load, so the pinned list is capped.
+ * Fifty is far more than anyone navigates by pin and still bounds the column.
+ */
+export const MAX_PINNED_MATTERS = 50
+
+export interface NavUserPreferences {
+  /** Ordered. Replaced wholesale on write, which is what reordering needs. */
+  pinnedMatterIds?: string[]
+}
+
 export interface UserPreferences {
   drafting?: DraftingUserPreferences
   models?: ModelsUserPreferences
+  nav?: NavUserPreferences
 }
 
 function parseLlmProvider(value: unknown): LlmProvider | undefined {
@@ -185,6 +197,16 @@ function parseAttorneyPreset(raw: unknown): AttorneyDesignPreset | undefined {
   }
 }
 
+function parseNav(raw: unknown): NavUserPreferences | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const nav = raw as NavUserPreferences
+  if (!Array.isArray(nav.pinnedMatterIds)) return {}
+  // Deduped because the pinned list is an ordered set: a duplicate would render
+  // the same matter twice and make reordering ambiguous.
+  const ids = [...new Set(nav.pinnedMatterIds.filter((id): id is string => typeof id === 'string'))]
+  return { pinnedMatterIds: ids.slice(0, MAX_PINNED_MATTERS) }
+}
+
 export function parseUserPreferences(raw: unknown): UserPreferences {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const obj = raw as UserPreferences
@@ -204,6 +226,7 @@ export function parseUserPreferences(raw: unknown): UserPreferences {
             attorneyPreset: parseAttorneyPreset(drafting.attorneyPreset),
           },
     models: parseModels(obj.models),
+    nav: parseNav(obj.nav),
   }
 }
 
@@ -220,6 +243,13 @@ export function mergeUserPreferences(
     models: {
       ...existing.models,
       ...patch.models,
+    },
+    // Section-level spread like the two above. `pinnedMatterIds` is an ordered
+    // list, so a patch replaces it wholesale rather than merging element-wise —
+    // which is exactly what reordering and unpinning need.
+    nav: {
+      ...existing.nav,
+      ...patch.nav,
     },
   }
 }

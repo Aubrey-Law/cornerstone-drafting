@@ -526,7 +526,7 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => router.push(`/admin/crm/campaigns/${campaign.id}`)}
+                          onClick={() => router.push(`/admin/settings/campaigns/${campaign.id}`)}
                           type="button"
                         >
                           Open
