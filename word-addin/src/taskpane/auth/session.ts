@@ -55,6 +55,16 @@ export function clearSession(): void {
  * login page, which sets cookies and may redirect, and an iframed dialog is
  * both origin-restricted and blocked from doing that.
  */
+/**
+ * How long to wait for the dialog to say anything at all.
+ *
+ * `displayDialogAsync` succeeding only means the dialog opened. If it is then
+ * blocked, or closed by something that fires no event, neither handler below
+ * ever runs — and without this the promise stays pending forever, taking
+ * whatever awaited it down with it.
+ */
+const DIALOG_TIMEOUT_MS = 180_000
+
 export function signIn(): Promise<StoredSession> {
   return new Promise((resolve, reject) => {
     // Same origin as the pane — the dev server proxies /auth through to
@@ -73,6 +83,24 @@ export function signIn(): Promise<StoredSession> {
         const dialog = result.value
         let settled = false
 
+        const timer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          try {
+            dialog.close()
+          } catch {
+            // Already gone; nothing to close.
+          }
+          reject(new Error('The sign-in window did not respond. Try again.'))
+        }, DIALOG_TIMEOUT_MS)
+
+        const finish = (outcome: () => void) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          outcome()
+        }
+
         dialog.addEventHandler(Office.EventType.DialogMessageReceived, (event) => {
           const message = (event as { message?: string }).message
           let payload: Partial<StoredSession> & { type?: string }
@@ -83,22 +111,24 @@ export function signIn(): Promise<StoredSession> {
           }
           if (payload.type !== HANDOFF_TYPE || !payload.accessToken) return
 
-          settled = true
-          const session: StoredSession = {
-            accessToken: payload.accessToken,
-            refreshToken: payload.refreshToken ?? null,
-            expiresAt: payload.expiresAt ?? null,
-            email: payload.email ?? null,
-          }
-          storeSession(session)
-          dialog.close()
-          resolve(session)
+          finish(() => {
+            const session: StoredSession = {
+              accessToken: payload.accessToken!,
+              refreshToken: payload.refreshToken ?? null,
+              expiresAt: payload.expiresAt ?? null,
+              email: payload.email ?? null,
+            }
+            storeSession(session)
+            dialog.close()
+            resolve(session)
+          })
         })
 
         dialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
           // Fires when the attorney closes the dialog themselves. Only an
-          // error if they closed it before signing in.
-          if (!settled) reject(new Error('Sign-in was cancelled.'))
+          // error if they closed it before signing in — the guard in `finish`
+          // keeps a late event from rejecting an already-resolved promise.
+          finish(() => reject(new Error('Sign-in was cancelled.')))
         })
       },
     )
