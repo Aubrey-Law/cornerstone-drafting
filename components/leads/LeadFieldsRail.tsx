@@ -8,6 +8,7 @@ import { isSettledDateEntry } from '@/lib/firmDate'
 import { formatPhoneInput } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { LeadReadinessDial } from '@/components/leads/LeadReadinessDial'
+import { LeadEstateTaxCard } from '@/components/leads/LeadEstateTaxCard'
 import type { LeadEditableField } from '@/lib/leads/details'
 import {
   isNameField,
@@ -549,6 +550,8 @@ export function LeadFieldsRail({
         })}
       </div>
 
+      <LeadEstateTaxCard className="mt-4" lead={lead} onOpenField={onActiveFieldChange} />
+
       {statusLabel && (
         <span aria-label={`${statusLabel} save status`} aria-live="polite" className="mt-2 block text-[11px] text-muted-foreground" role="status">
           {savingField ? 'Saving' : 'Saved'}
@@ -561,11 +564,11 @@ export function LeadFieldsRail({
         </p>
       )}
 
-      <footer className="mt-auto pt-4">
+      <footer className="pt-2">
         <p className="text-[11px] text-muted-foreground">
           Intake answers land here automatically — you rarely need to type these.
         </p>
-        <MatterAssistantQuickPrompts className="mt-2 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />
+        <MatterAssistantQuickPrompts className="mt-1.5 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />
       </footer>
     </div>
   )

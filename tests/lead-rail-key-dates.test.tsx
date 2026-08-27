@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react'
 import fs from 'node:fs'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -247,5 +247,44 @@ describe('the opportunity rail stage control', () => {
 
     expect(screen.queryByLabelText('Stage')).toBeNull()
     expect(screen.getByText('Hired')).toBeTruthy()
+  })
+})
+
+describe('the opportunity rail estate tax read', () => {
+  it('measures the estate against the MA threshold beside the fields', () => {
+    render(
+      <LeadFieldsRail
+        lead={{ ...lead, taxable_estate: 3_000_000 } as never}
+        spouse={null}
+        activeField={null}
+        onActiveFieldChange={vi.fn()}
+        onSaveField={vi.fn()}
+        onRemoveSpouse={vi.fn()}
+      />,
+    )
+
+    const card = screen.getByLabelText('Estate tax at a glance')
+    expect(within(card).getByText('$3,000,000')).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Run tax worksheet' })).toBeTruthy()
+  })
+
+  it('offers the estate value field when the lead has no estimate yet', async () => {
+    const user = userEvent.setup()
+    const onActiveFieldChange = vi.fn()
+    render(
+      <LeadFieldsRail
+        lead={{ ...lead, taxable_estate: null } as never}
+        spouse={null}
+        activeField={null}
+        onActiveFieldChange={onActiveFieldChange}
+        onSaveField={vi.fn()}
+        onRemoveSpouse={vi.fn()}
+      />,
+    )
+
+    const card = screen.getByLabelText('Estate tax at a glance')
+    expect(within(card).getByText('Unknown')).toBeTruthy()
+    await user.click(within(card).getByRole('button', { name: 'Add estate value' }))
+    expect(onActiveFieldChange).toHaveBeenCalledWith('estimatedEstateValue')
   })
 })
