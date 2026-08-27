@@ -27,8 +27,14 @@ import {
   type AddChargeInput,
 } from '@/components/billing/AddChargeDialog'
 import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
+import { FeeScheduleCard } from '@/components/billing/FeeScheduleCard'
+import {
+  AttachFeeScheduleDialog,
+  type AttachFeeScheduleInput,
+} from '@/components/billing/AttachFeeScheduleDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingMoney } from '@/lib/billing/metrics'
+import type { MatterFeeScheduleView, ServicePackageOption } from '@/lib/billing/schedules'
 import type {
   BillingLedgerRow,
   BillingPaymentMethod,
@@ -61,6 +67,9 @@ interface MatterBillingView {
   rows: BillingLedgerRow[]
   legalPlan: BillingPlan | null
   hasClaim: boolean
+  feeSchedule: MatterFeeScheduleView | null
+  milestonesEnabled: boolean
+  servicePackages: ServicePackageOption[]
 }
 
 function dayOf(iso: string | null): string {
@@ -317,9 +326,12 @@ export function MatterBillingTab({
   const [selectedCharges, setSelectedCharges] = useState<Record<string, boolean>>({})
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const chargeOpenerRef = useRef<HTMLElement | null>(null)
   const deleteOpenerRef = useRef<HTMLElement | null>(null)
+  const scheduleOpenerRef = useRef<HTMLElement | null>(null)
 
   const authHeaders = useMemo(
     () => ({
@@ -345,6 +357,9 @@ export function MatterBillingTab({
         rows: json.rows ?? [],
         legalPlan: json.legalPlan ?? null,
         hasClaim: json.hasClaim ?? false,
+        feeSchedule: json.feeSchedule ?? null,
+        milestonesEnabled: json.milestonesEnabled ?? false,
+        servicePackages: json.servicePackages ?? [],
       })
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load billing')
@@ -426,6 +441,28 @@ export function MatterBillingTab({
       )
     } finally {
       setChargeSaving(false)
+    }
+  }
+
+  function openSchedule() {
+    scheduleOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setScheduleOpen(true)
+  }
+
+  async function attachSchedule(input: AttachFeeScheduleInput) {
+    setScheduleSaving(true)
+    try {
+      await post(`/api/admin/matters/${matterId}/billing-schedule`, input)
+      setScheduleOpen(false)
+      toast.success('Fee schedule set')
+      await load()
+    } catch (saveError) {
+      toast.error(
+        saveError instanceof Error ? saveError.message : 'Could not set fee schedule',
+      )
+    } finally {
+      setScheduleSaving(false)
     }
   }
 
@@ -539,6 +576,13 @@ export function MatterBillingTab({
               hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
               onStartClaim={() => openCharge('plan_claim')}
             />
+            {view?.milestonesEnabled && (
+              <FeeScheduleCard
+                schedule={view.feeSchedule}
+                packageCount={view.servicePackages.length}
+                onAttach={openSchedule}
+              />
+            )}
             <FeesChargesCard
               rows={rows}
               selected={selectedCharges}
@@ -643,6 +687,15 @@ export function MatterBillingTab({
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}
+      />
+
+      <AttachFeeScheduleDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        packages={view?.servicePackages ?? []}
+        saving={scheduleSaving}
+        returnFocusRef={scheduleOpenerRef}
+        onSave={attachSchedule}
       />
 
       <DeleteChargesDialog

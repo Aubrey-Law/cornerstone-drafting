@@ -9,6 +9,13 @@ import type {
   BillingSnapshot,
   UnpreparedClaim,
 } from '@/lib/billing/types'
+import {
+  billingMilestonesEnabled,
+  fetchAttachableServicePackages,
+  fetchMatterFeeSchedule,
+  type MatterFeeScheduleView,
+  type ServicePackageOption,
+} from '@/lib/billing/schedules'
 import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -163,6 +170,12 @@ export interface MatterBillingView {
   legalPlan: BillingPlan | null
   /** True once a plan claim exists, so the nudge stays hidden. */
   hasClaim: boolean
+  /** The matter's agreed fee split into milestones, once one is attached. */
+  feeSchedule: MatterFeeScheduleView | null
+  /** False while milestone billing is off, which hides the whole card. */
+  milestonesEnabled: boolean
+  /** Packages offered to attach. Empty unless one can be attached right now. */
+  servicePackages: ServicePackageOption[]
 }
 
 /**
@@ -174,7 +187,17 @@ export async function fetchMatterBilling(
   now?: Date,
 ): Promise<MatterBillingView> {
   const admin = getAdminClient()
-  const [itemResult, matterResult, pipelineResult, detailResult, invoiceResult] = await Promise.all([
+  // The schedule rides along with the ledger reads rather than following them,
+  // so the tab still loads in one round trip.
+  const [
+    [milestonesEnabled, feeSchedule],
+    itemResult,
+    matterResult,
+    pipelineResult,
+    detailResult,
+    invoiceResult,
+  ] = await Promise.all([
+    Promise.all([billingMilestonesEnabled(), fetchMatterFeeSchedule(matterId)]),
     admin
       .from('billing_items')
       .select('*')
@@ -238,10 +261,18 @@ export async function fetchMatterBilling(
     invoiceNumber: row.invoice_id ? invoiceById.get(row.invoice_id)?.number ?? null : null,
   }))
 
+  // `create_matter_fee_schedule` refuses a matter that already carries billing,
+  // so packages are only worth offering when a schedule could actually attach.
+  const canAttach = milestonesEnabled && !feeSchedule && items.length === 0
+  const servicePackages = canAttach ? await fetchAttachableServicePackages() : []
+
   return {
     rows: buildRows(items, payments, firmTodayKey(now)),
     legalPlan: billingPlan(details?.legal_plan ?? null),
     hasClaim: items.some(item => item.kind === 'plan_claim'),
+    feeSchedule,
+    milestonesEnabled,
+    servicePackages,
   }
 }
 

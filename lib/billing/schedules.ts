@@ -59,3 +59,122 @@ export async function releaseMatterFeeMilestone(milestoneId: string, actorId: st
   if (error) throw new Error(error.message)
   return data
 }
+
+/** A milestone as the matter Billing tab renders it. */
+export interface FeeMilestoneRow {
+  id: string
+  milestoneKey: string
+  label: string
+  triggerKey: string
+  terms: string
+  position: number
+  amountCents: number
+  state: 'scheduled' | 'ready' | 'invoiced' | 'paid' | 'waived'
+  releasedAt: string | null
+  billingItemId: string | null
+}
+
+/** A matter's agreed fee, split into the milestones that bill it. */
+export interface MatterFeeScheduleView {
+  id: string
+  agreedTotalCents: number
+  state: 'active' | 'completed' | 'cancelled'
+  packageName: string | null
+  billingStrategy: string | null
+  createdAt: string
+  milestones: FeeMilestoneRow[]
+}
+
+/** An active package the attach dialog can offer. */
+export interface ServicePackageOption {
+  id: string
+  name: string
+  practiceArea: string
+  billingStrategy: string
+  milestones: { label: string; percentageBps: number | null; position: number }[]
+}
+
+/**
+ * Milestone billing ships dark: the schema, RPCs and stage triggers are all in
+ * place, but nothing offers a schedule until the firm turns this on. Mirrors
+ * `durableWorkflowJobsEnabled` in lib/workflowJobs.ts.
+ */
+export async function billingMilestonesEnabled(): Promise<boolean> {
+  const { data, error } = await getAdminClient().from('firm_settings')
+    .select('billing_milestones_enabled').eq('id', 1).maybeSingle()
+  return !error && data?.billing_milestones_enabled === true
+}
+
+/** One matter's fee schedule with its milestones in billing order, or null. */
+export async function fetchMatterFeeSchedule(
+  matterId: string,
+): Promise<MatterFeeScheduleView | null> {
+  const admin = generatedAdmin()
+  const { data: schedule, error } = await admin
+    .from('matter_fee_schedules')
+    .select('id, agreed_total_cents, state, package_snapshot, created_at')
+    .eq('matter_id', matterId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!schedule) return null
+
+  const { data: milestones, error: milestoneError } = await admin
+    .from('matter_fee_milestones')
+    .select('id, milestone_key, label, trigger_key, terms, position, amount_cents, state, released_at, billing_item_id')
+    .eq('schedule_id', schedule.id)
+    .order('position', { ascending: true })
+  if (milestoneError) throw new Error(milestoneError.message)
+
+  // The snapshot is the package as it stood when the matter signed, so a later
+  // package edit never restates an agreed fee.
+  const snapshot = (schedule.package_snapshot ?? {}) as Record<string, unknown>
+  return {
+    id: schedule.id,
+    agreedTotalCents: schedule.agreed_total_cents,
+    state: schedule.state as MatterFeeScheduleView['state'],
+    packageName: typeof snapshot.name === 'string' ? snapshot.name : null,
+    billingStrategy: typeof snapshot.billing_strategy === 'string' ? snapshot.billing_strategy : null,
+    createdAt: schedule.created_at,
+    milestones: (milestones ?? []).map((row): FeeMilestoneRow => ({
+      id: row.id,
+      milestoneKey: row.milestone_key,
+      label: row.label,
+      triggerKey: row.trigger_key,
+      terms: row.terms,
+      position: row.position,
+      amountCents: row.amount_cents,
+      state: row.state as FeeMilestoneRow['state'],
+      releasedAt: row.released_at,
+      billingItemId: row.billing_item_id,
+    })),
+  }
+}
+
+/**
+ * Packages offered when attaching a schedule. Only `fixed_milestones` is
+ * offered: `legal_plan` is rejected by `create_matter_fee_schedule`, and
+ * `manual_phases` (probate) needs per-phase amounts that no UI collects yet.
+ */
+export async function fetchAttachableServicePackages(): Promise<ServicePackageOption[]> {
+  const admin = generatedAdmin()
+  const { data, error } = await admin
+    .from('service_packages')
+    .select('id, name, practice_area, billing_strategy, service_package_milestones(label, percentage_bps, position)')
+    .eq('is_active', true)
+    .eq('billing_strategy', 'fixed_milestones')
+    .order('practice_area', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((row): ServicePackageOption => ({
+    id: row.id,
+    name: row.name,
+    practiceArea: row.practice_area,
+    billingStrategy: row.billing_strategy,
+    milestones: [...(row.service_package_milestones ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map(milestone => ({
+        label: milestone.label,
+        percentageBps: milestone.percentage_bps,
+        position: milestone.position,
+      })),
+  }))
+}
