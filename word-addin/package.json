@@ -11,6 +11,7 @@
     "dev": "vite",
     "start": "node scripts/sideload.mjs",
     "stop": "node scripts/unsideload.mjs",
+    "clear-cache": "node scripts/clear-cache.mjs",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
