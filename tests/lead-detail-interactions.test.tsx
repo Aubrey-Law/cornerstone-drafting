@@ -20,6 +20,24 @@ vi.mock('@/components/crm/MarketingProfileCard', () => ({ MarketingProfileCard: 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
 import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
 
+/**
+ * Loaded eagerly on purpose, though nothing here references it.
+ *
+ * `LeadDetailClient` pulls the intake sheet in with `next/dynamic`, and under
+ * Vitest that import is 1,240 lines and 21 transitive modules transformed on
+ * demand — measured at ~2.1s, against the 1s that `findBy*` waits by default.
+ * The sheet therefore could not appear before the assertion gave up, and the
+ * test failed on almost every run for a reason that had nothing to do with the
+ * behaviour it was checking. (Its sibling `ImportIntakeDialog` loads in ~19ms,
+ * which is why only the intake-sheet tests were affected.)
+ *
+ * In a browser that chunk is a prebuilt bundle, so this is a cost of the test
+ * environment rather than a defect in the component. Paying it once here, at
+ * module load, leaves the assertions timing the interaction rather than the
+ * transform.
+ */
+import '@/components/AdminIntakeSheet'
+
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500, created_at:'2026-07-21T12:00:00Z', updated_at:'2026-07-25T10:00:00Z', intake_sent_at:null, intake_completed_at:null, lead_next_action_snoozed_until:null }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
 
