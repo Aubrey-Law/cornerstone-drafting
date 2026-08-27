@@ -7,28 +7,80 @@ Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
 ## Running it
 
-Two terminals.
+Three terminals. The first two stay running; the third is a one-shot.
 
 ```bash
-# 1 — Cornerstone
+# 1 — Cornerstone, from the repo root
 npm run dev                      # http://localhost:3002
 
 # 2 — the pane
 cd word-addin
 npm install
 npm run dev                      # https://localhost:3100
-npm start                        # sideloads into Word desktop
+
+# 3 — register the add-in with Word
+cd word-addin
+npm start
 ```
 
-`npm start` registers `manifest.xml` with Word and opens it. Run `npm run stop`
-before editing the manifest — Word caches manifests aggressively, and a stale
-one looks exactly like a change that did not take.
+Order matters: `npm start` does not serve anything, it only copies `manifest.xml`
+into Word's sideload folder. If the pane is not already being served from
+terminal 2, Word opens an empty frame.
+
+Then **quit Word completely (⌘Q) and reopen it** — a running Word does not
+rescan the sideload folder. Open a document and pick **Cornerstone** from the
+Home ribbon, or **Insert → My Add-ins → Cornerstone**.
+
+`npm run stop` unregisters it. The sideloaded manifest is a *copy*, so re-run
+`npm start` after editing `manifest.xml`.
 
 The first `npm run dev` mints a local HTTPS certificate and asks for your
-keychain password. Set `DEV_HTTPS_CERT` and `DEV_HTTPS_KEY` to serve existing
-cert files instead, which is the only way through in a headless environment.
+keychain password; Office refuses to load a task pane over plain HTTP. Set
+`DEV_HTTPS_CERT` and `DEV_HTTPS_KEY` to serve existing cert files instead, which
+is the only way through in a headless environment.
 
 Point the pane at a different backend with `CORNERSTONE_ORIGIN`.
+
+### Why sideloading is hand-rolled
+
+`scripts/sideload.mjs` copies the manifest into
+`~/Library/Containers/com.microsoft.Word/Data/Documents/wef/` itself rather than
+using `office-addin-debugging`, because that tool cannot do it on macOS. Its
+`ensureLinkSync` call creates a **hard link**, and `link(2)` fails with `EPERM`
+into an app container — and again if the repo sits on a synced or external
+volume, since hard links cannot cross filesystems:
+
+```
+Error: EPERM: operation not permitted, link 'manifest.xml' -> '…/wef/<GUID>.manifest.xml'
+```
+
+A copy has neither problem. The file keeps Microsoft's `<GUID>.manifest.xml`
+naming so their tooling and these scripts clean up after each other.
+
+A copy specifically, never a symlink: the uninstall path in
+`office-addin-dev-settings` resolves entries with `realpathSync` before deleting
+them, so a symlink there would delete this repo's own `manifest.xml`.
+
+Dropping that dependency also took the add-in from 438 installed packages to 91,
+and from 36 reported vulnerabilities to none.
+
+### Troubleshooting
+
+**Word never shows the add-in.** Confirm the manifest landed:
+`ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/`. Then check
+Terminal has **Full Disk Access** (System Settings → Privacy & Security) — it is
+needed to write under `~/Library/Containers`. And quit Word fully; ⌘W is not
+enough.
+
+**Keep that folder free of anything but manifests.** Word parses every file in
+it, and so does the Office tooling — a stray file makes both throw.
+
+**Keep the repo off iCloud Drive, OneDrive, and Dropbox.** Synced paths break
+Office add-in tooling in several ways beyond this one. `pwd -P` tells you where
+you actually are.
+
+**The pane loads but every request 401s.** The token expired or you signed in as
+a non-staff user. Sign out and back in from the pane.
 
 ## How it reaches Cornerstone
 

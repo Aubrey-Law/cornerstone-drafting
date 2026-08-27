@@ -156,7 +156,9 @@ describe('the pane copy of the contract', () => {
   })
 
   it('agrees on the format vocabulary the prompt advertises', () => {
-    const formats = paneSource.match(/export const EDIT_FORMATS = \[(.*?)\]/s)?.[1] ?? ''
+    // [\s\S] rather than the dotAll `s` flag: the root tsconfig targets ES6,
+    // where that flag is a compile error.
+    const formats = paneSource.match(/export const EDIT_FORMATS = \[([\s\S]*?)\]/)?.[1] ?? ''
     for (const format of ['bold', 'italic', 'underline', 'heading1', 'heading2', 'heading3']) {
       expect(formats).toContain(`'${format}'`)
       expect(buildEditProtocolInstructions()).toContain(`"${format}"`)
