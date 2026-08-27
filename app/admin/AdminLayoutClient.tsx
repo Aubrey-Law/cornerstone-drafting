@@ -52,7 +52,9 @@ const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
  * horizontal budget. `/admin/matters/[id]` only — the design sub-route and the
  * matters list keep the user's own sidebar preference.
  */
-const ICON_RAIL_ROUTES = [/^\/admin\/matters\/(?!new$)[^/]+$/]
+// The matter detail page only. `new` and `list` are ordinary full-width pages —
+// `list` in particular is the matters list, which needs the expanded sidebar.
+const ICON_RAIL_ROUTES = [/^\/admin\/matters\/(?!new$|list$)[^/]+$/]
 
 function isIconRailRoute(pathname: string): boolean {
   return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))

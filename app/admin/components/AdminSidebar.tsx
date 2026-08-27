@@ -129,7 +129,9 @@ export function AdminSidebar({
   navGroups,
   onNavigate,
 }: AdminSidebarProps) {
-  const activeMatterId = pathname.match(/^\/admin\/matters\/([^/]+)/)?.[1]
+  // `new` and `list` are sibling routes, not matter ids — without excluding them
+  // visiting the list would highlight a row called "list" that does not exist.
+  const activeMatterId = pathname.match(/^\/admin\/matters\/(?!new$|list$)([^/]+)/)?.[1]
 
   return (
     <nav className="flex min-h-0 flex-1 flex-col p-2">

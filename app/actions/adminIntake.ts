@@ -637,6 +637,7 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
 
     revalidatePath(`/admin/matters/${matter.id}`)
     revalidatePath('/admin/matters')
+    revalidatePath('/admin/matters/list')
     revalidatePath('/admin/dashboard')
   }
 
@@ -756,6 +757,7 @@ export async function markIntakeUploadsReviewed(args: MarkUploadsReviewedArgs): 
   await persistIntakeUploadsReviewed(admin, args.intakeId)
   revalidatePath(`/admin/matters/${args.matterId}`)
   revalidatePath('/admin/matters')
+  revalidatePath('/admin/matters/list')
 }
 
 interface MarkPortalUploadsReviewedArgs {
@@ -789,4 +791,5 @@ export async function markPortalUploadsReviewed(args: MarkPortalUploadsReviewedA
   await persistPortalUploadsReviewed(admin, args.matterId)
   revalidatePath(`/admin/matters/${args.matterId}`)
   revalidatePath('/admin/matters')
+  revalidatePath('/admin/matters/list')
 }

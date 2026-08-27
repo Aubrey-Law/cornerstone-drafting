@@ -152,7 +152,7 @@ export default async function AdminTodayPage() {
 
           <p className="px-1">
             <Link
-              href="/admin/matters"
+              href="/admin/matters/list"
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <Inbox className="h-3.5 w-3.5" aria-hidden />

@@ -1,5 +1,5 @@
 import { fetchMattersList } from '@/lib/queries/matters'
-import MattersClient from './MattersClient'
+import MattersClient from '../../MattersClient'
 
 export const dynamic = 'force-dynamic'
 

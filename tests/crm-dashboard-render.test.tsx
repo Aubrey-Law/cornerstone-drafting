@@ -10,7 +10,7 @@ import { taskFixture } from './fixtures/task'
 
 import { CrmStatCards } from '@/app/admin/crm/CrmStatCards'
 import { CrmPipelineCard } from '@/app/admin/crm/CrmPipelineCard'
-import { CrmTasksCard } from '@/app/admin/crm/CrmTasksCard'
+import { OpenTasksCard } from '@/components/tasks/OpenTasksCard'
 import { LeadSourcesCard } from '@/app/admin/crm/LeadSourcesCard'
 import { RecentPeopleTable } from '@/app/admin/crm/RecentPeopleTable'
 
@@ -130,12 +130,12 @@ describe('crm dashboard cards', () => {
   })
 
   it('renders an open task with its priority and falls back when empty', () => {
-    const { unmount } = render(<CrmTasksCard tasks={[task]} />)
+    const { unmount } = render(<OpenTasksCard tasks={[task]} />)
     expect(screen.getByText('Follow up with Chen')).toBeTruthy()
     expect(screen.getByText('High priority')).toBeTruthy()
     unmount()
 
-    render(<CrmTasksCard tasks={[]} />)
+    render(<OpenTasksCard tasks={[]} />)
     expect(screen.getByText('Nothing open right now.')).toBeTruthy()
   })
 
