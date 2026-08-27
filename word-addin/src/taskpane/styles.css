@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/*
+ * Task panes are narrow and resizable but never change "device" — viewport
+ * breakpoints effectively never fire, so sizing keys off the container.
+ */
+@theme {
+  --color-ink: #172033;
+  --color-ink-muted: #5b6678;
+  --color-line: #e2e6ec;
+  --color-accent: #1f5f8b;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f6f8fa;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}

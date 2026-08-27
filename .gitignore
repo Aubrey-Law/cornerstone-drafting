@@ -31,3 +31,6 @@ supabase/.temp/
 .firma-poc/
 firma-webhook-captures/
 .env*
+
+# Word add-in build output (its own npm project; node_modules already matched above)
+word-addin/dist/
