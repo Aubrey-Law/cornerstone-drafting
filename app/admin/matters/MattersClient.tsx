@@ -11,7 +11,6 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   EMPTY_MATTER_TABLE_FILTERS,
   filterAndSortMatters,
-  matterLastActivityAt,
   readMatterListView,
   writeMatterListView,
   type MatterListView,
@@ -32,6 +31,15 @@ import { isMobileDetailViewport } from '@/components/layout/ResponsiveDetailRail
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
+import {
+  formatLastMilestone,
+  matterIntakeBadge,
+  matterLastMilestoneAt,
+  matterMetaFacts,
+  matterQuietDays,
+  matterSubtitle,
+  matterTitle,
+} from '@/lib/matters/cardFacts'
 import { formatPhoneInput } from '@/lib/phone'
 import { GROUP_COLORS, stageInfo, stageLabel, type MatterStage, type StageGroup } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
@@ -72,25 +80,9 @@ interface MattersClientProps {
   loadError?: string | null
 }
 
-function intakeStatusLabel(status: string | null | undefined) {
-  return status?.replace(/_/g, ' ') || '—'
-}
-
 const INTAKE_BADGE_CLASS: Record<string, string> = {
   submitted: 'border-green/40 bg-green-bg text-green',
   in_progress: 'border-blue-strong-border bg-blue-bg text-blue',
-}
-
-function daysSince(ms: number): number {
-  return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000))
-}
-
-function formatLastActivity(ms: number | null): string {
-  if (ms === null) return '—'
-  const days = daysSince(ms)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  return `${days}d ago`
 }
 
 export default function MattersClient(props: MattersClientProps) {
@@ -210,31 +202,16 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     setCardFilter(current => (current === next ? null : next))
   }
 
-  const boardCards = useMemo<StageBoardCard[]>(() => filtered.map(m => {
-    const unreviewed = mergeUnreviewedCounts(
-      m.unreviewed_intake_upload_count ?? 0,
-      m.unreviewed_portal_upload_count ?? 0,
-    )
-    const activity = matterLastActivityAt(m)
-    const intake = m.intake_status ?? ''
-
-    return {
-      id: m.matter_id,
-      stage: m.stage,
-      title: m.client_name || m.matter_name || 'Untitled',
-      subtitle: [m.matter_number, practiceAreaLabel(m.practice_area)].filter(Boolean).join(' · '),
-      badge: {
-        label: intakeStatusLabel(intake),
-        tone: intake === 'submitted' ? ('success' as const) : intake ? ('warning' as const) : ('muted' as const),
-      },
-      quietDays: activity === null ? null : daysSince(activity),
-      href: `/admin/matters/${m.matter_id}`,
-      meta: [
-        formatLastActivity(activity),
-        ...(unreviewed.total > 0 ? [formatUnreviewedUploadLabel(unreviewed)] : []),
-      ],
-    }
-  }), [filtered])
+  const boardCards = useMemo<StageBoardCard[]>(() => filtered.map(m => ({
+    id: m.matter_id,
+    stage: m.stage,
+    title: matterTitle(m),
+    subtitle: matterSubtitle(m),
+    badge: matterIntakeBadge(m),
+    quietDays: matterQuietDays(m),
+    href: `/admin/matters/${m.matter_id}`,
+    meta: matterMetaFacts(m),
+  })), [filtered])
 
   const handleStageChange = (matterId: string, stage: MatterStage) => {
     setMatters(current =>
@@ -606,8 +583,8 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                     m.unreviewed_intake_upload_count ?? 0,
                     m.unreviewed_portal_upload_count ?? 0,
                   )
-                  const activity = matterLastActivityAt(m)
-                  const quietDays = activity === null ? null : daysSince(activity)
+                  const activity = matterLastMilestoneAt(m)
+                  const quietDays = matterQuietDays(m)
                   return (
                     <TableRow key={m.matter_id}>
                       <TableCell>
@@ -652,11 +629,11 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                             INTAKE_BADGE_CLASS[m.intake_status ?? ''] ?? 'text-muted-foreground'
                           }`}
                         >
-                          {intakeStatusLabel(m.intake_status)}
+                          {matterIntakeBadge(m).label}
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatLastActivity(activity)}
+                        {formatLastMilestone(activity)}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
