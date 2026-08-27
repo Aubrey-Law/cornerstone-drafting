@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiGet, ApiError } from './api/client'
+import { apiGet, ApiError, NotSignedInError } from './api/client'
 import { clearSession, loadSession, signIn, type StoredSession } from './auth/session'
 import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
@@ -26,7 +26,13 @@ export default function App() {
     try {
       setInfo(await apiGet<SessionInfo>('/api/addin/session'))
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      // A stored token the server rejects, or none at all, both mean the same
+      // thing here: show the sign-in button. This call is non-interactive, so
+      // it can never answer a 401 by opening a dialog.
+      if (err instanceof NotSignedInError) {
+        setSession(null)
+        setInfo(null)
+      } else if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         clearSession()
         setSession(null)
         setInfo(null)
@@ -54,7 +60,7 @@ export default function App() {
   }
 
   if (checking) {
-    return <Centered>Checking your session…</Centered>
+    return <Waiting onSignIn={handleSignIn} onRetry={verify} />
   }
 
   if (!info) {
@@ -143,4 +149,52 @@ function TabButton({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="grid h-full place-items-center p-4 text-sm">{children}</div>
+}
+
+/**
+ * The waiting state, which must never be a dead end.
+ *
+ * Requests are time-boxed now, so this resolves on its own. The escape hatches
+ * appear anyway: when this pane hangs it is usually the dev server, and a
+ * spinner with no way out gives the attorney nothing to try.
+ */
+function Waiting({ onSignIn, onRetry }: { onSignIn: () => void; onRetry: () => void }) {
+  const [stalled, setStalled] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setStalled(true), 4000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return (
+    <Centered>
+      <div className="space-y-3 text-center">
+        <p>Checking your session…</p>
+        {stalled && (
+          <>
+            <p className="text-[color:var(--color-ink-muted)]">
+              Taking longer than expected. Cornerstone should be running at{' '}
+              <code>{window.location.origin}</code>.
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded border border-[color:var(--color-line)] px-3 py-1"
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={onSignIn}
+                className="rounded bg-[color:var(--color-accent)] px-3 py-1 font-medium text-white"
+              >
+                Sign in
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Centered>
+  )
 }

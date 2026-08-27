@@ -18,10 +18,53 @@ export class ApiError extends Error {
   }
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
+/**
+ * No token is stored at all — distinct from the server rejecting one.
+ *
+ * These were the same 401 once, and conflating them meant a pane with no
+ * session answered its own startup probe by opening a sign-in dialog. There is
+ * nothing to refresh here, so this must never trigger a re-authenticate.
+ */
+export class NotSignedInError extends Error {
+  constructor() {
+    super('Not signed in')
+    this.name = 'NotSignedInError'
+  }
+}
+
+/** The probe is a background call; it must fail fast rather than hang the pane. */
+const PROBE_TIMEOUT_MS = 10_000
+/** Matches `maxDuration` on /api/addin/chat. */
+const CHAT_TIMEOUT_MS = 120_000
+const STYLE_SWEEP_TIMEOUT_MS = 60_000
+
+function authHeaders(): Record<string, string> {
   const session = loadSession()
-  if (!session) throw new ApiError('Not signed in', 401)
+  if (!session) throw new NotSignedInError()
   return { Authorization: `Bearer ${session.accessToken}` }
+}
+
+/**
+ * Every request gets a deadline.
+ *
+ * Without one, a stalled dev server or proxy leaves the pane waiting forever
+ * with nothing on screen to explain it — which is exactly how the startup probe
+ * used to hang.
+ */
+function deadline(ms: number, caller?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(ms)
+  return caller ? AbortSignal.any([caller, timeout]) : timeout
+}
+
+/** Turn an abort into something that names the likely cause. */
+function describeAbort(err: unknown, seconds: number): never {
+  if (err instanceof DOMException && err.name === 'TimeoutError') {
+    throw new ApiError(
+      `Cornerstone did not respond within ${seconds}s. Is the dev server running at ${window.location.origin}?`,
+      504,
+    )
+  }
+  throw err
 }
 
 async function describeFailure(res: Response): Promise<string> {
@@ -35,13 +78,21 @@ async function describeFailure(res: Response): Promise<string> {
 }
 
 /**
- * A 401 means the access token expired. Re-open the sign-in dialog once and
- * retry; a second 401 is a real failure worth surfacing.
+ * Re-authenticate once on a 401, but only when a person is waiting on the call.
+ *
+ * `interactive` is off by default, and that default is the point. Opening the
+ * sign-in dialog is a modal, blocking act: correct when the attorney just hit
+ * Send and their token had expired, wrong when a background probe finds a stale
+ * token at startup. Doing it there put a dialog on screen nobody asked for and
+ * parked the whole pane on it — if that dialog was blocked or landed behind
+ * Word, the pane never moved again.
  */
-async function withAuthRetry<T>(call: () => Promise<T>): Promise<T> {
+async function withAuthRetry<T>(call: () => Promise<T>, interactive = false): Promise<T> {
   try {
     return await call()
   } catch (err) {
+    if (!interactive) throw err
+    // A missing token cannot be refreshed, so it is never a retry candidate.
     if (!(err instanceof ApiError) || err.status !== 401) throw err
     clearSession()
     await signIn()
@@ -49,12 +100,24 @@ async function withAuthRetry<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Ask Cornerstone who we are.
+ *
+ * Deliberately non-interactive: a 401 propagates so the caller can render a
+ * sign-in button. Nothing here may open a dialog.
+ */
 export async function apiGet<T>(path: string): Promise<T> {
   return withAuthRetry(async () => {
-    const res = await fetch(path, {
-      headers: await authHeaders(),
-      cache: 'no-store',
-    })
+    let res: Response
+    try {
+      res = await fetch(path, {
+        headers: authHeaders(),
+        cache: 'no-store',
+        signal: deadline(PROBE_TIMEOUT_MS),
+      })
+    } catch (err) {
+      describeAbort(err, PROBE_TIMEOUT_MS / 1000)
+    }
     if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
     return (await res.json()) as T
   })
@@ -81,17 +144,24 @@ export interface StreamChatArgs {
  * in the document, at the wrong boundary.
  */
 export async function streamChat(args: StreamChatArgs): Promise<string> {
+  // Interactive: the attorney is watching this one, so re-authenticating in
+  // place beats sending them back to a sign-in button mid-sentence.
   return withAuthRetry(async () => {
-    const res = await fetch('/api/addin/chat', {
-      method: 'POST',
-      headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: args.messages,
-        documentText: args.documentText,
-        documentName: args.documentName,
-      }),
-      signal: args.signal,
-    })
+    let res: Response
+    try {
+      res = await fetch('/api/addin/chat', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: args.messages,
+          documentText: args.documentText,
+          documentName: args.documentName,
+        }),
+        signal: deadline(CHAT_TIMEOUT_MS, args.signal),
+      })
+    } catch (err) {
+      describeAbort(err, CHAT_TIMEOUT_MS / 1000)
+    }
 
     if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
     if (!res.body) throw new ApiError('The server returned an empty stream.', 502)
@@ -141,7 +211,7 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
       throw new ApiError('The connection dropped before the reply finished.', 502)
     }
     return reply
-  })
+  }, true)
 }
 
 export interface StyleSweepResponse {
@@ -152,13 +222,20 @@ export interface StyleSweepResponse {
 
 /** Send the open document up for the firm style sweep and get the bytes back. */
 export async function postStyleSweep(fileBase64: string): Promise<StyleSweepResponse> {
+  // Interactive: the attorney clicked Apply and is waiting.
   return withAuthRetry(async () => {
-    const res = await fetch('/api/addin/style-set/apply', {
-      method: 'POST',
-      headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileBase64 }),
-    })
+    let res: Response
+    try {
+      res = await fetch('/api/addin/style-set/apply', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileBase64 }),
+        signal: deadline(STYLE_SWEEP_TIMEOUT_MS),
+      })
+    } catch (err) {
+      describeAbort(err, STYLE_SWEEP_TIMEOUT_MS / 1000)
+    }
     if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
     return (await res.json()) as StyleSweepResponse
-  })
+  }, true)
 }
