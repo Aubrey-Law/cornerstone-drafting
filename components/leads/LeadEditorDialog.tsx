@@ -19,7 +19,7 @@ import {
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
 
 /**
- * Creating a lead only. Editing one lives in the record side panel and the
+ * Creating a lead only. Editing one lives on the record page and the
  * detail rail, which patch a field at a time through the validated lead-field
  * endpoint. This dialog collects a single "Client name", while an edit has to
  * write first and last name separately — the two shapes never reconciled, and

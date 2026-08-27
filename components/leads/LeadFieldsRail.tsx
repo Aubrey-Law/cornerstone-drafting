@@ -81,8 +81,6 @@ export type LeadFieldsRailProps = {
   onRemoveSpouse: () => void
   spouseRemovalError?: string | null
   className?: string
-  /** Hidden inside the index side panel, where the rail is already narrow. */
-  showAssistantPrompts?: boolean
 }
 
 const ASSISTANT_PROMPTS = [
@@ -120,7 +118,6 @@ export function LeadFieldsRail({
   onRemoveSpouse,
   spouseRemovalError = null,
   className,
-  showAssistantPrompts = true,
 }: LeadFieldsRailProps) {
   const [draft, setDraft] = useState<unknown>(null)
   const [savingField, setSavingField] = useState<LeadEditableField | null>(null)
@@ -649,9 +646,7 @@ export function LeadFieldsRail({
         <p className="text-[11px] text-muted-foreground">
           Intake answers land here automatically — you rarely need to type these.
         </p>
-        {showAssistantPrompts && (
-          <MatterAssistantQuickPrompts className="mt-2 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />
-        )}
+        <MatterAssistantQuickPrompts className="mt-2 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />
       </footer>
     </div>
   )

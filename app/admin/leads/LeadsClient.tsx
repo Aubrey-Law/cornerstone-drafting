@@ -33,13 +33,11 @@ import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
 import { PageHeader } from '@/components/PageHeader'
 import { FilterChip } from '@/components/FilterChip'
-import type { LeadListRow, LeadSpouseRecord, MutableLeadStatus } from '@/lib/leads/viewTypes'
+import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { computeLeadScore, leadScoreInputFromRow, type LeadScore } from '@/lib/leads/score'
-import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 import { apiRequest } from '@/lib/clientApi'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
 import { LeadsBoard } from '@/components/leads/LeadsBoard'
-import { groupLeadsByBoardColumn, LEAD_BOARD_COLUMNS } from '@/lib/leads/board'
 import { cn } from '@/lib/utils'
 import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
 import {
@@ -104,7 +102,6 @@ export function LeadsClient({
   total,
   hasMore,
   summary,
-  spouses = {},
   esignEnabled,
 }: {
   /** One page of the server's ordering — already filtered, sorted and ranked. */
@@ -113,7 +110,6 @@ export function LeadsClient({
   total: number
   hasMore: boolean
   summary: LeadListSummary
-  spouses?: Record<string, LeadSpouseRecord>
   esignEnabled: boolean
 }) {
   const token = useAccessToken()
@@ -149,17 +145,6 @@ export function LeadsClient({
       return { ...lead, score: scoreDetail.score, scoreDetail }
     }),
     [initialLeads],
-  )
-
-  const [openMenuLeadId, setOpenMenuLeadId] = useState<string | null>(null)
-  // Selection lives in the URL so the panel survives a refresh; local state
-  // mirrors it so a click opens the panel without a router round trip.
-  const urlLeadId = searchParams?.get('lead') ?? null
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(urlLeadId)
-  useEffect(() => { setSelectedLeadId(urlLeadId) }, [urlLeadId])
-  const selectedLead = useMemo(
-    () => filteredLeads.find(lead => lead.id === selectedLeadId) ?? null,
-    [filteredLeads, selectedLeadId],
   )
 
   const writeParams = useCallback((changes: Record<string, string | null>) => {
@@ -222,13 +207,8 @@ export function LeadsClient({
    */
   const atRequestCeiling = initialLeads.length >= MAX_LEAD_PAGE_SIZE
 
-  const selectLead = useCallback((leadId: string | null) => {
-    setSelectedLeadId(leadId)
-    writeParam('lead', leadId)
-  }, [writeParam])
-
-  // The view lives in the URL alongside the selection so a refresh or a shared
-  // link lands on the same board or table.
+  // The view lives in the URL so a refresh or a shared link lands on the same
+  // board or table.
   const urlView: LeadView = searchParams?.get('view') === 'board' ? 'board' : 'table'
   const [view, setView] = useState<LeadView>(urlView)
   useEffect(() => { setView(urlView) }, [urlView])
@@ -238,36 +218,6 @@ export function LeadsClient({
     setSelected({})
     writeParam('view', next === 'board' ? 'board' : null)
   }, [writeParam])
-
-  const openFullRecord = useCallback(() => {
-    if (selectedLeadId) router.push(`/admin/crm/opportunities/${selectedLeadId}`)
-  }, [router, selectedLeadId])
-
-  /** Arrow keys walk the reading order, which the board groups by column. */
-  const navigationOrder = useMemo(() => {
-    if (view !== 'board') return filteredLeads
-    const grouped = groupLeadsByBoardColumn(filteredLeads)
-    return LEAD_BOARD_COLUMNS.flatMap(column => grouped.get(column.key) ?? [])
-  }, [filteredLeads, view])
-
-  useEffect(() => {
-    if (!selectedLead) return
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-      const target = event.target
-      if (target instanceof HTMLElement
-        && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
-      const index = navigationOrder.findIndex(lead => lead.id === selectedLead!.id)
-      if (index === -1) return
-      const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1
-      const next = navigationOrder[nextIndex]
-      if (!next) return
-      event.preventDefault()
-      selectLead(next.id)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [navigationOrder, selectLead, selectedLead])
 
   const hasTableFilters = Boolean(
     params.search.trim() || params.practice !== 'all' || params.progress !== 'all',
@@ -336,8 +286,8 @@ export function LeadsClient({
     setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
     setDialogOpen(true)
   }
-  /** Editing happens in the record panel, which patches one validated field at a time. */
-  const openEdit = (lead: LeadRow) => selectLead(lead.id)
+  /** Editing happens on the record, which patches one validated field at a time. */
+  const openEdit = (lead: LeadRow) => router.push(`/admin/crm/opportunities/${lead.id}`)
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.email.trim()) {
@@ -637,84 +587,63 @@ export function LeadsClient({
         </p>
       )}
 
-      <div className="flex items-start gap-3">
-        <div className={cn('min-w-0 flex-1 space-y-3', pending && 'opacity-60 transition-opacity')}>
-          {view === 'board' ? (
-            <LeadsBoard
-              leads={filteredLeads}
-              hasAnyLeads={initialLeads.length > 0}
-              busyLeadId={busyLeadId}
-              esignEnabled={esignEnabled}
-              activeLeadId={selectedLead?.id ?? null}
-              onActivate={lead => selectLead(lead.id)}
-              openMenuLeadId={openMenuLeadId}
-              onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
-              onEdit={openEdit}
-              onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
-              onSendIntake={lead => void handleSendIntake(lead)}
-              onSendEngagement={setEngagementLead}
-              onHire={setConvertTarget}
-              onArchive={setDeleteTarget}
-              onMarkLost={lead => void handleStatusChange(lead, 'lost')}
-              onMarkDeclined={lead => void handleStatusChange(lead, 'declined')}
-              onReopen={lead => void handleStatusChange(lead, 'lead')}
-            />
-          ) : (
-            <LeadsTable
-              leads={filteredLeads}
-              hasAnyLeads={initialLeads.length > 0}
-              selected={selected}
-              allSelected={allSelected}
-              busyLeadId={busyLeadId}
-              esignEnabled={esignEnabled}
-              activeLeadId={selectedLead?.id ?? null}
-              onActivate={lead => selectLead(lead.id)}
-              openMenuLeadId={openMenuLeadId}
-              onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
-              onToggleAll={toggleAll}
-              onToggleSelected={toggleSelected}
-              onEdit={openEdit}
-              onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
-              onSendIntake={lead => void handleSendIntake(lead)}
-              onSendEngagement={setEngagementLead}
-              onHire={setConvertTarget}
-              onArchive={setDeleteTarget}
-            />
-          )}
-          {/*
-            The list is a page of the server's ordering, so it has to say so.
-            The old list truncated at 200 silently, which meant a ranked
-            subset read exactly like the whole pipeline.
-          */}
-          {total > 0 && (
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <p className="text-[11px] text-muted-foreground" aria-live="polite">
-                Showing {filteredLeads.length} of {total} {total === 1 ? 'lead' : 'leads'}
-                {hasTableFilters || cardFilter ? ' matching these filters' : ''}
-                {sortKey === 'score_desc' ? ' — highest score first' : ''}
-              </p>
-              {hasMore && (atRequestCeiling ? (
-                <span className="text-[11px] text-muted-foreground">
-                  Search or filter to reach the rest
-                </span>
-              ) : (
-                <Button type="button" variant="outline" size="sm" onClick={loadMore} disabled={pending}>
-                  {pending ? 'Loading…' : `Load ${Math.min(LEAD_PAGE_SIZE, total - filteredLeads.length)} more`}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
-        {selectedLead && (
-          <LeadSidePanel
-            key={selectedLead.id}
-            lead={selectedLead}
-            spouse={spouses[selectedLead.id] ?? null}
-            onClose={() => selectLead(null)}
-            onOpenFullRecord={openFullRecord}
-            onOpenRowMenu={() => setOpenMenuLeadId(selectedLead.id)}
-            onLeadSaved={() => router.refresh()}
+      <div className={cn('min-w-0 space-y-3', pending && 'opacity-60 transition-opacity')}>
+        {view === 'board' ? (
+          <LeadsBoard
+            leads={filteredLeads}
+            hasAnyLeads={initialLeads.length > 0}
+            busyLeadId={busyLeadId}
+            esignEnabled={esignEnabled}
+            onEdit={openEdit}
+            onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
+            onSendIntake={lead => void handleSendIntake(lead)}
+            onSendEngagement={setEngagementLead}
+            onHire={setConvertTarget}
+            onArchive={setDeleteTarget}
+            onMarkLost={lead => void handleStatusChange(lead, 'lost')}
+            onMarkDeclined={lead => void handleStatusChange(lead, 'declined')}
+            onReopen={lead => void handleStatusChange(lead, 'lead')}
           />
+        ) : (
+          <LeadsTable
+            leads={filteredLeads}
+            hasAnyLeads={initialLeads.length > 0}
+            selected={selected}
+            allSelected={allSelected}
+            busyLeadId={busyLeadId}
+            esignEnabled={esignEnabled}
+            onToggleAll={toggleAll}
+            onToggleSelected={toggleSelected}
+            onEdit={openEdit}
+            onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
+            onSendIntake={lead => void handleSendIntake(lead)}
+            onSendEngagement={setEngagementLead}
+            onHire={setConvertTarget}
+            onArchive={setDeleteTarget}
+          />
+        )}
+        {/*
+          The list is a page of the server's ordering, so it has to say so.
+          The old list truncated at 200 silently, which meant a ranked
+          subset read exactly like the whole pipeline.
+        */}
+        {total > 0 && (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] text-muted-foreground" aria-live="polite">
+              Showing {filteredLeads.length} of {total} {total === 1 ? 'lead' : 'leads'}
+              {hasTableFilters || cardFilter ? ' matching these filters' : ''}
+              {sortKey === 'score_desc' ? ' — highest score first' : ''}
+            </p>
+            {hasMore && (atRequestCeiling ? (
+              <span className="text-[11px] text-muted-foreground">
+                Search or filter to reach the rest
+              </span>
+            ) : (
+              <Button type="button" variant="outline" size="sm" onClick={loadMore} disabled={pending}>
+                {pending ? 'Loading…' : `Load ${Math.min(LEAD_PAGE_SIZE, total - filteredLeads.length)} more`}
+              </Button>
+            ))}
+          </div>
         )}
       </div>
 

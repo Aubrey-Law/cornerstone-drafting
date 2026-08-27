@@ -453,7 +453,8 @@ describe('lead editing surfaces', () => {
 
     const client = source('app/admin/leads/LeadsClient.tsx')
     expect(client).not.toContain('payload.leadStatus')
-    expect(client).toContain('const openEdit = (lead: LeadRow) => selectLead(lead.id)')
+    // Edit opens the record itself, which patches one validated field at a time.
+    expect(client).toContain('const openEdit = (lead: LeadRow) => router.push(`/admin/crm/opportunities/${lead.id}`)')
   })
 
   it('offers the status actions from the row menu', () => {

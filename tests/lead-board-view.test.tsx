@@ -6,7 +6,6 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeadsClient, type LeadRow } from '@/app/admin/leads/LeadsClient'
 import { LeadsBoard } from '@/components/leads/LeadsBoard'
-import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 
 const replace = vi.fn()
 let searchParams = new URLSearchParams()
@@ -102,6 +101,30 @@ describe('lead board view', () => {
   })
 })
 
+describe('what a click on an opportunity opens', () => {
+  // Clicking used to open a side panel that only offered a "Full record"
+  // button, so reading one lead took two clicks and showed less than the
+  // record it linked to.
+  it('links a table row straight to the full record', () => {
+    renderLeads(leads)
+    expect(screen.getByRole('link', { name: 'Fresh Lead' }).getAttribute('href'))
+      .toBe('/admin/crm/opportunities/fresh')
+  })
+
+  it('links a board card straight to the full record', () => {
+    searchParams = new URLSearchParams('view=board')
+    renderLeads(leads)
+    const card = screen.getByText('Fresh Lead').closest('a')
+    expect(card?.getAttribute('href')).toBe('/admin/crm/opportunities/fresh')
+  })
+
+  it('leaves no record side panel behind to open', () => {
+    renderLeads(leads)
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(screen.queryByRole('button', { name: /full record/i })).toBeNull()
+  })
+})
+
 describe('lead board drag and drop', () => {
   function renderBoard(handlers: Partial<Record<'onSendIntake' | 'onHire' | 'onMarkLost', () => void>> = {}) {
     const spies = {
@@ -116,7 +139,6 @@ describe('lead board drag and drop', () => {
         hasAnyLeads
         busyLeadId={null}
         esignEnabled
-        onActivate={vi.fn()}
         onEdit={vi.fn()}
         {...spies}
       />,
@@ -162,34 +184,6 @@ describe('lead board drag and drop', () => {
     dragCardOnto('Fresh Lead', 'Intake complete')
     expect(spies.onSendIntake).not.toHaveBeenCalled()
     expect(spies.onHire).not.toHaveBeenCalled()
-  })
-})
-
-describe('lead record panel width', () => {
-  it('expands and collapses from the header toggle and remembers the choice', async () => {
-    const user = userEvent.setup()
-    const panel = (
-      <LeadSidePanel
-        lead={leads[0]!}
-        spouse={null}
-        onClose={vi.fn()}
-        onOpenFullRecord={vi.fn()}
-        onOpenRowMenu={vi.fn()}
-        onLeadSaved={vi.fn()}
-      />
-    )
-    const { unmount } = render(panel)
-
-    const record = screen.getByRole('complementary', { name: 'Fresh Lead record' })
-    expect(record.className).toContain('w-[440px]')
-
-    await user.click(screen.getByRole('button', { name: 'Expand record panel' }))
-    expect(record.className).toContain('w-[min(60rem,58vw)]')
-    expect(window.localStorage.getItem('cornerstone.leadPanelWide')).toBe('1')
-
-    unmount()
-    render(panel)
-    expect(screen.getByRole('button', { name: 'Collapse record panel' })).toBeTruthy()
   })
 })
 

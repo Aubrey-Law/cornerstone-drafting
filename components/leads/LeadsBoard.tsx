@@ -30,11 +30,6 @@ interface LeadsBoardProps {
   hasAnyLeads: boolean
   busyLeadId: string | null
   esignEnabled: boolean
-  /** Card whose record side panel is open. */
-  activeLeadId?: string | null
-  onActivate: (lead: LeadListRow) => void
-  openMenuLeadId?: string | null
-  onMenuOpenChange?: (leadId: string, open: boolean) => void
   onEdit: (lead: LeadListRow) => void
   onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
@@ -84,10 +79,6 @@ export function LeadsBoard({
   hasAnyLeads,
   busyLeadId,
   esignEnabled,
-  activeLeadId = null,
-  onActivate,
-  openMenuLeadId = null,
-  onMenuOpenChange,
   onEdit,
   onStatusChange,
   onSendIntake,
@@ -172,13 +163,9 @@ export function LeadsBoard({
                   <BoardCard
                     key={lead.id}
                     lead={lead}
-                    active={activeLeadId === lead.id}
                     busy={busyLeadId === lead.id}
                     dragging={draggingId === lead.id}
                     esignEnabled={esignEnabled}
-                    menuOpen={openMenuLeadId === lead.id}
-                    onMenuOpenChange={onMenuOpenChange}
-                    onActivate={onActivate}
                     onEdit={onEdit}
                     onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}
@@ -200,13 +187,9 @@ export function LeadsBoard({
 
 function BoardCard({
   lead,
-  active,
   busy,
   dragging,
   esignEnabled,
-  menuOpen,
-  onMenuOpenChange,
-  onActivate,
   onEdit,
   onStatusChange,
   onSendIntake,
@@ -217,13 +200,9 @@ function BoardCard({
   onDragEnd,
 }: {
   lead: ScorableLeadRow
-  active: boolean
   busy: boolean
   dragging: boolean
   esignEnabled: boolean
-  menuOpen: boolean
-  onMenuOpenChange?: (leadId: string, open: boolean) => void
-  onActivate: (lead: LeadListRow) => void
   onEdit: (lead: LeadListRow) => void
   onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
@@ -261,20 +240,12 @@ function BoardCard({
           'rounded-md border bg-card p-2.5 shadow-sm transition-opacity',
           dragging && 'opacity-50',
           busy && 'pointer-events-none opacity-60',
-          active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/40',
+          'border-border hover:border-primary/40',
         )}
       >
         <div className="flex items-start justify-between gap-1">
-          {/* Plain clicks open the record side panel; modified clicks keep the link. */}
-          <Link
-            href={`/admin/crm/opportunities/${lead.id}`}
-            className="min-w-0 flex-1"
-            onClick={event => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-              event.preventDefault()
-              onActivate(lead)
-            }}
-          >
+          {/* The card opens the full record — there is no smaller view of it. */}
+          <Link href={`/admin/crm/opportunities/${lead.id}`} className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold hover:underline">{leadListName(lead)}</p>
             {/*
               This line used to carry the provisional lead number — a derived
@@ -293,9 +264,6 @@ function BoardCard({
             lead={lead}
             esignEnabled={esignEnabled}
             busy={busy}
-            {...(onMenuOpenChange
-              ? { open: menuOpen, onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open) }
-              : {})}
             onEdit={onEdit}
             onStatusChange={onStatusChange}
             onSendIntake={onSendIntake}
