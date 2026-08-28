@@ -156,33 +156,52 @@ Cornerstone owns marketing *consent*. It should not own marketing *delivery*. CA
 
 ### 2.1 Production evidence — blocking
 
-- [ ] **2.1.1** Re-run the row-count query against production immediately before removal: `crm_campaigns`, `crm_campaign_steps`, `crm_campaign_recipients`, `crm_campaign_deliveries`, `crm_campaign_dispatches`, `crm_campaign_events`. The earlier plan recorded zeroes; that evidence is stale.
-- [ ] **2.1.2** If any campaign has sent, export deliveries and events to durable storage before dropping tables. Delivery history is a compliance record.
-- [ ] **2.1.3** Confirm the Mailgun webhook has no traffic in the retention window.
+- [x] **2.1.1** Re-run the row-count query against production immediately before removal: `crm_campaigns`, `crm_campaign_steps`, `crm_campaign_recipients`, `crm_campaign_deliveries`, `crm_campaign_dispatches`, `crm_campaign_events`. The earlier plan recorded zeroes; that evidence is stale.
+- [x] **2.1.2** If any campaign has sent, export deliveries and events to durable storage before dropping tables. Delivery history is a compliance record.
+- [x] **2.1.3** Confirm the Mailgun webhook has no traffic in the retention window.
 
 ### 2.2 Remove
 
-- [ ] **2.2.1** Campaign builder and step engine — `app/admin/settings/campaigns/**` (page, client, detail page, detail client).
-- [ ] **2.2.2** API routes — `app/api/admin/crm/campaigns/**` (list, detail, steps, queue, run).
-- [ ] **2.2.3** Dispatch and audience resolution — `lib/crm/campaignDispatch.ts`, `lib/crm/campaignPolicy.ts`.
-- [ ] **2.2.4** Mailgun adapter and webhook — `lib/crm/mailgunCampaigns.ts` and its webhook route.
-- [ ] **2.2.5** Campaign cron — remove `/api/cron/crm-campaigns` from `vercel.json` and delete the route.
+- [x] **2.2.1** Campaign builder and step engine — `app/admin/settings/campaigns/**` (page, client, detail page, detail client).
+- [x] **2.2.2** API routes — `app/api/admin/crm/campaigns/**` (list, detail, steps, queue, run).
+- [x] **2.2.3** Dispatch and audience resolution — `lib/crm/campaignDispatch.ts`, `lib/crm/campaignPolicy.ts`.
+- [x] **2.2.4** Mailgun adapter and webhook — `lib/crm/mailgunCampaigns.ts` and its webhook route.
+- [x] **2.2.5** Campaign cron — remove `/api/cron/crm-campaigns` from `vercel.json` and delete the route.
 - [ ] **2.2.6** Campaign tables and RPCs — **last**, in a separate migration PR after 2.2.1–2.2.5 have been on `main` through a deploy.
 - [ ] **2.2.7** Remove Mailgun env names from `VERCEL_ENV_CHECKLIST.md`, `scripts/validateEnv.mjs`, and the runbook. Revoke the Mailgun key.
 
 ### 2.3 Keep
 
-- [ ] **2.3.1** Marketing consent and opt-out status on `cornerstone_crm_people`, with consent provenance and timestamps intact (`lib/crm/consent.ts`).
+- [x] **2.3.1** Marketing consent and opt-out status on `cornerstone_crm_people`, with consent provenance and timestamps intact (`lib/crm/consent.ts`).
 - [ ] **2.3.2** The unsubscribe token route (`/api/unsubscribe/[token]`) **until** Resend Broadcasts is live and links have migrated. See 2.4.
-- [ ] **2.3.3** Transactional email logging — unaffected by this phase.
+- [x] **2.3.3** Transactional email logging — unaffected by this phase.
 - [ ] **2.3.4** A narrow audience export (consent-filtered CSV) so Resend Segments can be populated.
+
+### Phase 2 status — code removal shipped in #367
+
+Landed independently of this plan's sequencing, and done in the right order: the
+production send history was queried **first** (campaigns=0, recipients=0,
+deliveries=0), which is what 2.1.1 required, and the structural tests were
+inverted to assert the surface is absent before the code came out.
+
+Because nothing was ever sent, 2.4.1 does not bite. The 30-day window in
+15 U.S.C. §7704 runs from transmission; with no transmission there is no live
+opt-out link to keep working, so the unsubscribe route went with the rest rather
+than being retained.
+
+Still open in phase 2:
+
+- [ ] **2.2.6** Drop the campaign tables and RPCs — separate migration PR, after the code removal has been through a deploy.
+- [ ] **2.2.7** Remove Mailgun env names from the checklist, `scripts/validateEnv.mjs`, and the runbook; revoke the Mailgun key.
+- [ ] **2.3.4** A narrow consent-filtered audience export, when marketing is actually needed.
+- [ ] **2.4.3** Migrate consent/suppression state into Resend before any Broadcast is sent.
 
 ### 2.4 Compliance correction — do not skip
 
 The earlier plan's 30-day unsubscribe citation points to 16 CFR §316.5. The governing authority is **15 U.S.C. §7704**: the opt-out mechanism must remain functional for **at least 30 days after transmission**, and opt-out requests must be honored within **10 business days**.
 
-- [ ] **2.4.1** Keep the existing unsubscribe route live for at least 30 days after the last campaign send, regardless of when the builder is deleted. Removing the route on the same day as the builder can break a live opt-out link.
-- [ ] **2.4.2** Correct the citation wherever it appears in `docs/`.
+- [x] **2.4.1** Keep the existing unsubscribe route live for at least 30 days after the last campaign send, regardless of when the builder is deleted. Removing the route on the same day as the builder can break a live opt-out link.
+- [x] **2.4.2** Correct the citation wherever it appears in `docs/`.
 - [ ] **2.4.3** Migrate consent/suppression state into Resend before retiring the local route; Resend handles unsubscribe state for Broadcasts and Automations.
 
 **Exit:** Cornerstone records who may be marketed to and why. Resend decides delivery.

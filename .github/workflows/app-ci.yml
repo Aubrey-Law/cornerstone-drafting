@@ -78,9 +78,12 @@ jobs:
       # lowered as warnings are fixed. Six of the current 19 are the unused
       # symbols scheduled for deletion in phase 7 of the scope-reduction plan,
       # which is why they are baselined here rather than fixed on the way past.
+      # It has already come down once: removing the campaign system took the two
+      # unused CRM campaign constants with it. Lower it again whenever that
+      # happens rather than leaving headroom behind.
       - name: Lint
         if: '!cancelled()'
-        run: npm run lint -- --max-warnings=19
+        run: npm run lint -- --max-warnings=17
 
       - name: Typecheck
         if: '!cancelled()'
