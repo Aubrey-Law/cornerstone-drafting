@@ -45,7 +45,6 @@ type Tab =
  * switch — but they belong to Settings, so the tab strip links to them.
  */
 const SETTINGS_SUBROUTES = [
-  { href: '/admin/settings/campaigns', label: 'Campaigns' },
   { href: '/admin/settings/style-sets', label: 'Style sets' },
   { href: '/admin/settings/sync', label: 'Sync' },
 ] as const
@@ -366,7 +365,7 @@ export function StaffSettingsClient({
           </button>
         ))}
         {/*
-          Campaigns and Sync are their own routes rather than tabs — they are server
+          Style sets and Sync are their own routes rather than tabs — they are server
           components with their own data fetching. They sit in the strip so they stay
           discoverable, but they navigate instead of setting tab state.
         */}

@@ -13,8 +13,8 @@ const ITEMS = [
   { href: '/admin/crm/people', label: 'People', icon: ContactRound },
   { href: '/admin/crm/opportunities', label: 'Opportunities', icon: Target },
   { href: '/admin/crm/activities', label: 'Activities', icon: Activity },
-  // Campaigns and Sync moved to Settings — they are firm configuration, not a
-  // CRM workspace. Old URLs are redirected in next.config.mjs.
+  // Sync moved to Settings — it is firm configuration, not a CRM workspace.
+  // The old URL is redirected in next.config.mjs.
 ] as const
 
 export function CrmSubnav() {

@@ -49,7 +49,7 @@ export function ActivitiesClient({ rows }: { rows: CrmActivityListRow[] }) {
         title="Activities"
         eyebrow="CRM timeline"
         icon={Activity}
-        description="Calls, messages, meetings, notes, tasks, campaign touches, and pipeline changes across the firm."
+        description="Calls, messages, meetings, notes, tasks, and pipeline changes across the firm."
       />
       <div className="flex flex-wrap gap-2">
         <SearchField value={search} onValueChange={setSearch} placeholder="Search activities…" aria-label="Search CRM activities" containerClassName="w-full sm:w-80" />
