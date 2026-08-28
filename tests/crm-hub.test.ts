@@ -16,30 +16,37 @@ describe('unified CRM hub', () => {
     }
   })
 
-  it('moves campaigns and sync into Settings without touching their API routes', () => {
+  it('has no campaign UI or API surface', () => {
     const subnav = read('app/admin/crm/CrmSubnav.tsx')
-    // They are firm configuration, not a CRM workspace, so the CRM subnav no
-    // longer offers them.
     expect(subnav).not.toContain('/admin/crm/campaigns')
     expect(subnav).not.toContain('/admin/crm/sync')
 
-    for (const page of [
-      'app/admin/settings/campaigns/page.tsx',
-      'app/admin/settings/campaigns/[id]/page.tsx',
-      'app/admin/settings/sync/page.tsx',
-    ]) {
-      expect(fs.existsSync(path.join(process.cwd(), page))).toBe(true)
-    }
-
-    // The tab strip links to them so they stay reachable from Settings.
+    // Sync stays in Settings; campaigns are gone entirely.
+    expect(fs.existsSync(path.join(process.cwd(), 'app/admin/settings/sync/page.tsx'))).toBe(true)
     const settings = read('app/admin/settings/StaffSettingsClient.tsx')
-    expect(settings).toContain('/admin/settings/campaigns')
     expect(settings).toContain('/admin/settings/sync')
+    expect(settings).not.toContain('/admin/settings/campaigns')
 
-    // The API never moved — the cron job, unsubscribe route and Mailgun webhook
-    // all still call it.
-    expect(fs.existsSync(path.join(process.cwd(), 'app/api/admin/crm/campaigns/route.ts'))).toBe(true)
-    expect(read('app/admin/settings/campaigns/CampaignsClient.tsx')).toContain('/api/admin/crm/campaigns')
+    for (const gone of [
+      'app/admin/settings/campaigns',
+      'app/api/admin/crm/campaigns',
+      'app/api/cron/crm-campaigns',
+      'app/api/webhooks/mailgun',
+      'app/api/unsubscribe',
+      'lib/crm/campaignDispatch.ts',
+      'lib/crm/campaignPolicy.ts',
+      'lib/crm/mailgunCampaigns.ts',
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), gone))).toBe(false)
+    }
+  })
+
+  it('keeps the marketing consent record that outlives campaigns', () => {
+    // Consent is a compliance record, not campaign machinery: the matter page
+    // and messages tab read it to gate nurture email.
+    expect(fs.existsSync(path.join(process.cwd(), 'lib/crm/consent.ts'))).toBe(true)
+    expect(fs.existsSync(path.join(process.cwd(), 'components/crm/MarketingProfileCard.tsx'))).toBe(true)
+    expect(read('app/admin/matters/[id]/page.tsx')).toContain('normalizeMarketingConsent')
   })
 
   it('preserves legacy lead and contact URLs with framework redirects', async () => {
@@ -52,16 +59,12 @@ describe('unified CRM hub', () => {
       expect.objectContaining({ source: '/admin/leads', destination: '/admin/crm/opportunities' }),
       expect.objectContaining({ source: '/admin/leads/:path*', destination: '/admin/crm/opportunities/:path*' }),
       expect.objectContaining({ source: '/admin/contacts', destination: '/admin/crm/people' }),
-      expect.objectContaining({ source: '/admin/crm/campaigns', destination: '/admin/settings/campaigns' }),
-      expect.objectContaining({ source: '/admin/crm/campaigns/:path*', destination: '/admin/settings/campaigns/:path*' }),
       expect.objectContaining({ source: '/admin/crm/sync', destination: '/admin/settings/sync' }),
     ]))
   })
 
-  it('uses authoritative source views for People and campaign eligibility', () => {
+  it('uses the authoritative source view for People', () => {
     expect(read('app/admin/crm/people/page.tsx')).toContain('fetchContactsDirectory')
-    expect(read('app/api/admin/crm/campaigns/[id]/queue/route.ts')).toContain(".from('v_cornerstone_crm_people')")
-    expect(read('lib/crm/campaignDispatch.ts')).toContain(".from('v_cornerstone_crm_people')")
     expect(fs.existsSync(path.join(process.cwd(), 'app/api/admin/crm/import-leads/route.ts'))).toBe(false)
   })
 
@@ -75,13 +78,8 @@ describe('unified CRM hub', () => {
     expect(migration).toContain('cornerstone_crm_opportunities_intake_idx')
     expect(migration).toContain('cornerstone_crm_activities_source_key_idx')
     expect(migration).toContain('cornerstone_crm_sync_events_idempotency_idx')
-    expect(migration).toContain("('public.cornerstone_crm_campaign_steps'::regclass, 'campaign steps', false)")
     expect(migration).toContain("'Cornerstone CRM staff read ' || policy_row.label")
     expect(migration).toContain('crm_current_user_is_staff')
-    expect(migration).toContain('cornerstone_crm_campaign_deliveries_step_idx')
-    expect(migration).toContain('Campaign recipient snapshots are immutable')
-    expect(read('app/api/admin/crm/campaigns/[id]/queue/route.ts')).toContain('snapshot_email: person.email')
-    expect(read('lib/crm/campaignDispatch.ts')).toContain('email: snapshotEmail')
     expect(migration).toContain("'needs_review'")
     expect(migration).toContain("'opportunity_created'")
     expect(migration).toContain('sync_crm_person_from_intake')
