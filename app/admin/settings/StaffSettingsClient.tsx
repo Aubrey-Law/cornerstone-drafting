@@ -365,7 +365,7 @@ export function StaffSettingsClient({
           </button>
         ))}
         {/*
-          Campaigns and Sync are their own routes rather than tabs — they are server
+          Style sets and Sync are their own routes rather than tabs — they are server
           components with their own data fetching. They sit in the strip so they stay
           discoverable, but they navigate instead of setting tab state.
         */}
