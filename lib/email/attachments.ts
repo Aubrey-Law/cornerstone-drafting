@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { GetObjectCommand } from '@aws-sdk/client-s3'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import type { getAdminClient } from '@/lib/supabaseAdmin'
 
 /**
@@ -63,7 +63,7 @@ export async function loadMatterDocumentAttachments(
   for (const row of data ?? []) {
     const key = row.r2_key as string | null
     if (!key) continue
-    const object = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }))
+    const object = await r2.send(new GetObjectCommand({ Bucket: r2Bucket(), Key: key }))
     const bytes = await object.Body?.transformToByteArray()
     if (!bytes) continue
     attachments.push({

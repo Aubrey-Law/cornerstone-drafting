@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getBearerUser } from '@/lib/apiAuth'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const uploadUrl = await getSignedUrl(
       r2,
       new PutObjectCommand({
-        Bucket: R2_BUCKET,
+        Bucket: r2Bucket(),
         Key: r2Key,
         ContentType: resolvedType,
         ContentLength: size,

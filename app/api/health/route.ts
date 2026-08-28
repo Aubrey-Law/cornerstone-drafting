@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { HeadBucketCommand } from '@aws-sdk/client-s3'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 
@@ -45,7 +45,7 @@ async function checkR2(): Promise<Check> {
   const start = Date.now()
   try {
     const client = getR2Client()
-    await withTimeout('r2', client.send(new HeadBucketCommand({ Bucket: R2_BUCKET })))
+    await withTimeout('r2', client.send(new HeadBucketCommand({ Bucket: r2Bucket() })))
     return { status: 'ok', latencyMs: Date.now() - start }
   } catch (e) {
     return { status: 'fail', latencyMs: Date.now() - start, detail: (e as Error).message }

@@ -15,6 +15,7 @@ import {
   syncEngagementSignedAnchor,
   syncEngagementSignedDetails,
 } from '@/lib/engagement/signedDate'
+import { describeValue } from '@/lib/log/redact'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -207,7 +208,7 @@ export async function PATCH(req: Request) {
       .select()
       .single()
     if (statusError) {
-      console.error('matter-details engagement status update failed', { matterId, value, statusError })
+      console.error('matter-details engagement status update failed', { matterId, value: describeValue(value), statusError })
       return NextResponse.json({ error: statusError.message }, { status: 500 })
     }
     const leadError = await mirrorEngagementToLead(admin, matterId, {
@@ -273,7 +274,7 @@ export async function PATCH(req: Request) {
       .select()
       .single()
     if (billingError) {
-      console.error('matter-details billing type update failed', { matterId, value, billingError })
+      console.error('matter-details billing type update failed', { matterId, value: describeValue(value), billingError })
       return NextResponse.json({ error: billingError.message }, { status: 500 })
     }
     await reconcilePlanGates(admin, matterId)
@@ -304,7 +305,7 @@ export async function PATCH(req: Request) {
     .single()
 
   if (error) {
-    console.error('matter-details upsert failed', { matterId, field, value, error })
+    console.error('matter-details upsert failed', { matterId, field, value: describeValue(value), error })
     const detail = [error.message, error.details, error.hint, error.code]
       .filter(Boolean)
       .join(' — ')

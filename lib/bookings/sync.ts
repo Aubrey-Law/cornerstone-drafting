@@ -12,6 +12,7 @@ import {
 import { formatAppointmentDate, splitAttendeeName } from '@/lib/bookings/normalize'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { formatPhoneForStorage } from '@/lib/phone'
+import { redactIdentifier } from '@/lib/log/redact'
 
 type AdminClient = ReturnType<typeof getAdminClient>
 
@@ -380,7 +381,7 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
       })
     }
   } catch (err) {
-    console.error(`[${provider}] error matching lead for`, attendeeEmail, err)
+    console.error(`[${provider}] error matching lead for`, redactIdentifier(attendeeEmail), err)
     // A new Calendly booking must not be acknowledged until its CRM contact and
     // opportunity have been created/updated. Releasing the webhook claim lets
     // Calendly retry a transient database failure.
@@ -391,7 +392,7 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
     if (metadataMatterId && await matterExists(admin, metadataMatterId)) matterId = metadataMatterId
     if (!matterId && attendeeEmail) matterId = await findMatterIdByEmail(admin, attendeeEmail)
   } catch (err) {
-    console.error(`[${provider}] error matching matter for`, attendeeEmail, err)
+    console.error(`[${provider}] error matching matter for`, redactIdentifier(attendeeEmail), err)
   }
 
   const now = new Date().toISOString()

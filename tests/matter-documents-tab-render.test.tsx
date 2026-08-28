@@ -15,7 +15,7 @@ vi.mock('@/lib/documents', async importOriginal => ({
   downloadDocumentsZip: vi.fn(),
   getDocumentAuditEvents: vi.fn(async () => []),
   getDocumentUrl: vi.fn(),
-  getDocumentViewerUrl: vi.fn(),
+  getDocumentPreview: vi.fn(async () => ({ html: '' })),
   renameDocument: vi.fn(),
   setDocumentReviewed: vi.fn(),
   setDocumentShared: vi.fn(),

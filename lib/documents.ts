@@ -28,10 +28,6 @@ export function isPdfDocument(name: string, contentType?: string | null): boolea
   return contentType === 'application/pdf' || name.toLowerCase().endsWith('.pdf')
 }
 
-export function toMicrosoftOfficeViewerUrl(url: string, mode: 'view' | 'embed' = 'view'): string {
-  return `https://view.officeapps.live.com/op/${mode}.aspx?src=${encodeURIComponent(url)}`
-}
-
 /** Upload a file via the app proxy (R2 + DB). Returns the new MatterDocument. */
 export async function uploadDocument(
   file: File,
@@ -164,20 +160,16 @@ export async function combineWordDocuments(docIds: string[], filename?: string):
   }
 }
 
-/** Get a URL suitable for a browser preview. Word files use Microsoft's renderer. */
-export async function getDocumentViewerUrl(
-  docId: string,
-  name: string,
-  contentType?: string | null,
-  options: { embed?: boolean } = {},
-): Promise<string> {
-  const url = await getDocumentUrl(docId, 'view')
-  return isWordDocument(name, contentType)
-    ? toMicrosoftOfficeViewerUrl(url, options.embed ? 'embed' : 'view')
-    : url
-}
-
-/** Render a DOCX document to HTML for in-app viewing. */
+/**
+ * Render a DOCX document to HTML for in-app viewing.
+ *
+ * This is the ONLY supported way to preview a Word document. Word previews used
+ * to be handed to Microsoft's public Office Online viewer, which meant a signed
+ * R2 URL for a client's will or trust was disclosed to a third party; callers
+ * that hold a Word document must route through here (or
+ * `DocumentPreviewDialog`, which does it for them) rather than opening a
+ * signed URL in a tab.
+ */
 export async function getDocumentPreview(docId: string): Promise<{ html: string }> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')

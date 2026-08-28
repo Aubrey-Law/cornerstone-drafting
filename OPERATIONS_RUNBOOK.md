@@ -80,6 +80,11 @@ Re-verify quarterly.
 3. Confirm the configured Node generator or Supabase Storage templates are available.
 4. Test health: `curl -s "$HOST/api/health?check=full" | jq .`
 5. Fallback: set `ESTATE_GENERATOR_ENGINE=supabase` if Node packages fail but Storage templates exist.
+6. If template rendering fails outright, the run now returns the error rather than drafting the
+   documents with the model. That fallback is opt-in via `ESTATE_DRAFT_LLM_FALLBACK_ENABLED=true`
+   and should stay off: it writes model-authored text into a client's will or trust, and the
+   drafts it produces are labelled `llm_fallback` and badged "AI-drafted" in Review. Prefer
+   fixing the template.
 
 ---
 

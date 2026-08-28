@@ -2,16 +2,18 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { ensureUserProfile } from '@/lib/auth/ensureUserProfile'
 import {
   MIN_CLIENT_PASSWORD_LENGTH,
   isExistingAccountAuthError,
-  validateNewClientPassword,
 } from '@/lib/auth/clientPassword'
+import { intakeSignupSchema, type IntakeSignupValues } from '@/lib/validation/clientAccountForms'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
+import { FieldError } from '@/components/forms/FieldError'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -26,63 +28,69 @@ export default function IntakeAuthForm({
   invitedEmail?: string
 }) {
   const router = useRouter()
-  const [email, setEmail] = useState(invitedEmail ?? '')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<IntakeSignupValues>({
+    resolver: zodResolver(intakeSignupSchema),
+    defaultValues: {
+      email: invitedEmail ?? '',
+      password: '',
+      confirmPassword: '',
+    },
+  })
+
+  const [email, password, confirmPassword] = useWatch({
+    control,
+    name: ['email', 'password', 'confirmPassword'],
+  })
 
   const signInHref = `/auth/login?redirectTo=${encodeURIComponent('/intake')}`
+  const rootError = errors.root?.message
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-
-    const passwordError = validateNewClientPassword(password, confirmPassword)
-    if (passwordError) {
-      setError(passwordError)
-      return
-    }
-
-    setLoading(true)
+  async function onSubmit(values: IntakeSignupValues) {
+    clearErrors('root')
 
     const signupRes = await fetch('/api/intake/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         inviteToken,
-        email: email.trim(),
-        password,
+        email: values.email.trim(),
+        password: values.password,
       }),
     })
 
     if (!signupRes.ok) {
       const body = await signupRes.json().catch(() => ({}))
       const msg = typeof body.error === 'string' ? body.error : 'Could not create your account.'
-      if (isExistingAccountAuthError(msg) || signupRes.status === 409) {
-        setError('An account with this email already exists. Sign in to continue.')
-      } else {
-        setError(msg)
-      }
-      setLoading(false)
+      setError('root', {
+        message:
+          isExistingAccountAuthError(msg) || signupRes.status === 409
+            ? 'An account with this email already exists. Sign in to continue.'
+            : msg,
+      })
       return
     }
 
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+      email: values.email.trim(),
+      password: values.password,
     })
 
     if (!signInError && signInData.user) {
       await ensureUserProfile(supabase, signInData.user)
     }
 
-    setLoading(false)
-
     if (signInError) {
-      setError(
-        'Your account was created, but we could not sign you in automatically. Use the sign-in link below.',
-      )
+      setError('root', {
+        message:
+          'Your account was created, but we could not sign you in automatically. Use the sign-in link below.',
+      })
       return
     }
 
@@ -92,19 +100,20 @@ export default function IntakeAuthForm({
   }
 
   return (
-    <form onSubmit={e => void handleSubmit(e)} className="space-y-4">
+    <form noValidate onSubmit={e => void handleSubmit(onSubmit)(e)} className="space-y-4">
       <div>
         <Label htmlFor="intake-email">Email address</Label>
         <Input
           id="intake-email"
           type="email"
-          required
           autoComplete="email"
           readOnly={Boolean(invitedEmail)}
-          value={email}
-          onChange={e => setEmail(e.target.value)}
           className={inputCls}
+          aria-invalid={Boolean(errors.email)}
+          aria-describedby={errors.email ? 'intake-email-error' : undefined}
+          {...register('email')}
         />
+        <FieldError id="intake-email-error" message={errors.email?.message} />
         {invitedEmail ? (
           <p className="mt-1 text-xs text-muted-foreground">
             This invitation is tied to the email on your matter.
@@ -117,14 +126,14 @@ export default function IntakeAuthForm({
         <Input
           id="intake-password"
           type="password"
-          required
           autoComplete="new-password"
-          minLength={MIN_CLIENT_PASSWORD_LENGTH}
-          value={password}
-          onChange={e => setPassword(e.target.value)}
           className={inputCls}
           placeholder={`At least ${MIN_CLIENT_PASSWORD_LENGTH} characters`}
+          aria-invalid={Boolean(errors.password)}
+          aria-describedby={errors.password ? 'intake-password-error' : undefined}
+          {...register('password')}
         />
+        <FieldError id="intake-password-error" message={errors.password?.message} />
       </div>
 
       <div>
@@ -132,19 +141,25 @@ export default function IntakeAuthForm({
         <Input
           id="intake-confirm-password"
           type="password"
-          required
           autoComplete="new-password"
-          minLength={MIN_CLIENT_PASSWORD_LENGTH}
-          value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
           className={inputCls}
+          aria-invalid={Boolean(errors.confirmPassword)}
+          aria-describedby={errors.confirmPassword ? 'intake-confirm-password-error' : undefined}
+          {...register('confirmPassword')}
+        />
+        <FieldError
+          id="intake-confirm-password-error"
+          message={errors.confirmPassword?.message}
         />
       </div>
 
-      {error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-          {error.includes('already exists') ? (
+      {rootError ? (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {rootError}
+          {rootError.includes('already exists') ? (
             <>
               {' '}
               <Link href={signInHref} className="font-medium underline">
@@ -155,8 +170,12 @@ export default function IntakeAuthForm({
         </p>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={loading || !email || !password || !confirmPassword}>
-        {loading ? 'Creating account…' : 'Create account & continue'}
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={isSubmitting || !email || !password || !confirmPassword}
+      >
+        {isSubmitting ? 'Creating account…' : 'Create account & continue'}
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
