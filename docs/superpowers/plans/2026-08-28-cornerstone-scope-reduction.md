@@ -69,11 +69,11 @@ Four production call sites:
 
 The authenticated replacement already exists: `getDocumentPreview()` at `lib/documents.ts:180-190` → `app/api/documents/[id]/preview/route.ts`, which authenticates, checks `userCanReadDocument`, and renders DOCX to HTML in-process via Mammoth.
 
-- [ ] **1.1.1** Route all four Word-preview call sites through `getDocumentPreview()`. The portal call site first — it is the only one reachable by a client.
-- [ ] **1.1.2** Delete `toMicrosoftOfficeViewerUrl` and collapse `getDocumentViewerUrl` to return the signed URL for non-Word types only.
-- [ ] **1.1.3** Update the three tests that assert on `getDocumentViewerUrl` (`tests/drafting-hub.test.ts:96`, `tests/matter-documents-tab.test.ts:26`, `tests/matter-documents-tab-render.test.tsx:18`).
-- [ ] **1.1.4** Add a regression test asserting no source file references `officeapps.live.com`.
-- [ ] **1.1.5** Confirm the in-app preview renders acceptably for a generated trust package. If Mammoth fidelity is inadequate for attorney review, the remedy is `tools/docx-pdf-worker` conversion — **not** restoring the Microsoft path.
+- [x] **1.1.1** Route all four Word-preview call sites through `getDocumentPreview()`. The portal call site first — it is the only one reachable by a client.
+- [x] **1.1.2** Delete `toMicrosoftOfficeViewerUrl` and collapse `getDocumentViewerUrl` to return the signed URL for non-Word types only.
+- [x] **1.1.3** Update the three tests that assert on `getDocumentViewerUrl` (`tests/drafting-hub.test.ts:96`, `tests/matter-documents-tab.test.ts:26`, `tests/matter-documents-tab-render.test.tsx:18`).
+- [x] **1.1.4** Add a regression test asserting no source file references `officeapps.live.com`.
+- [ ] **1.1.5** *(needs a human)* Confirm the in-app preview renders acceptably for a generated trust package. If Mammoth fidelity is inadequate for attorney review, the remedy is `tools/docx-pdf-worker` conversion — **not** restoring the Microsoft path.
 
 **Exit:** No signed client-document URL leaves the application to a third-party viewer.
 
@@ -83,11 +83,11 @@ The authenticated replacement already exists: `getDocumentPreview()` at `lib/doc
 
 The suite is green and the cost is known: 4,438 tests pass in ~505s from a clean install.
 
-- [ ] **1.2.1** Add `.github/workflows/app-ci.yml` running `npm ci`, then `lint`, `typecheck`, and `test` on pull requests and on `main`.
-- [ ] **1.2.2** Use `npm ci` from the lockfile, never a warm `node_modules`. Both assessments were defeated locally by a declared-but-uninstalled `@radix-ui/react-context-menu`; CI must catch exactly that.
-- [ ] **1.2.3** Cache `~/.npm` and the TypeScript `.tsbuildinfo`.
-- [ ] **1.2.4** Make the workflow a required status check on `main`.
-- [ ] **1.2.5** Fix or explicitly baseline the 19 current lint warnings so the gate starts clean.
+- [x] **1.2.1** Add `.github/workflows/app-ci.yml` running `npm ci`, then `lint`, `typecheck`, and `test` on pull requests and on `main`.
+- [x] **1.2.2** Use `npm ci` from the lockfile, never a warm `node_modules`. Both assessments were defeated locally by a declared-but-uninstalled `@radix-ui/react-context-menu`; CI must catch exactly that.
+- [x] **1.2.3** Cache `~/.npm` and the TypeScript `.tsbuildinfo`.
+- [ ] **1.2.4** *(needs repository settings)* Make the workflow a required status check on `main`.
+- [x] **1.2.5** Fix or explicitly baseline the 19 current lint warnings so the gate starts clean.
 
 ### 1.3 Redact PII-bearing logs
 
@@ -97,18 +97,18 @@ The suite is green and the cost is known: 4,438 tests pass in ~505s from a clean
 - `lib/bookings/sync.ts:382,395` — logs attendee email in two `console.error` calls.
 - `app/api/admin/matter-details/route.ts:307` — logs the raw `value` of an arbitrary matter-detail field.
 
-- [ ] **1.3.1** Replace identifying values with stable non-reversible references (document/matter/record id, a hashed recipient, a field *name* without its value).
-- [ ] **1.3.2** Sweep the remaining server `console.*` calls for interpolated variables carrying PII. The earlier grep-based sweep missed all three sites above because it matched identifiers inside call parentheses; these pass variables. **Read the call sites; do not grep for them.**
-- [ ] **1.3.3** Add an ESLint rule or test forbidding known PII-bearing identifiers as direct `console.*` arguments in `app/api/**` and `lib/**`.
+- [x] **1.3.1** Replace identifying values with stable non-reversible references (document/matter/record id, a hashed recipient, a field *name* without its value).
+- [x] **1.3.2** Sweep the remaining server `console.*` calls for interpolated variables carrying PII. The earlier grep-based sweep missed all three sites above because it matched identifiers inside call parentheses; these pass variables. **Read the call sites; do not grep for them.**
+- [x] **1.3.3** Add an ESLint rule or test forbidding known PII-bearing identifiers as direct `console.*` arguments in `app/api/**` and `lib/**`.
 
 ### 1.4 Correct the R2 bucket configuration and fail closed
 
 **Confirmed defect.** `VERCEL_ENV_CHECKLIST.md:13` documents `R2_BUCKET`. `lib/r2.ts:17` reads `R2_BUCKET_NAME` and falls back to the literal `'legal-documents'`. `scripts/validateEnv.mjs:16` validates `R2_BUCKET_NAME`. An operator following the checklist configures a variable nothing reads, and client documents silently go to a default bucket name.
 
-- [ ] **1.4.1** Correct `VERCEL_ENV_CHECKLIST.md:13` to `R2_BUCKET_NAME`.
-- [ ] **1.4.2** Make `lib/r2.ts` throw when `R2_BUCKET_NAME` is unset and `NODE_ENV === 'production'`. Keep the development default.
-- [ ] **1.4.3** Verify the production Vercel environment actually sets `R2_BUCKET_NAME`, and that it names the bucket currently holding documents, **before** shipping the fail-closed change.
-- [ ] **1.4.4** Grep the runbooks for the same drift across other env names.
+- [x] **1.4.1** Correct `VERCEL_ENV_CHECKLIST.md:13` to `R2_BUCKET_NAME`.
+- [x] **1.4.2** Make `lib/r2.ts` throw when `R2_BUCKET_NAME` is unset and `NODE_ENV === 'production'`. Keep the development default.
+- [ ] **1.4.3** **BLOCKING — do not merge before this.** Verify the production Vercel environment actually sets `R2_BUCKET_NAME`, and that it names the bucket currently holding documents, **before** shipping the fail-closed change.
+- [x] **1.4.4** Grep the runbooks for the same drift across other env names.
 
 ### 1.5 Make the LLM draft fallback opt-in and fix its provenance label
 
@@ -116,10 +116,10 @@ The suite is green and the cost is known: 4,438 tests pass in ~505s from a clean
 
 A template regression therefore places model-authored text into a client instrument, under an audit label naming an engine that never ran.
 
-- [ ] **1.5.1** Gate the fallback behind an explicit flag. Default: template failure returns an error to the drafter rather than substituting generated text.
-- [ ] **1.5.2** Rename the provenance label to describe what actually produced the file (e.g. `llm_fallback`), and backfill existing `python_fallback` rows to the same accurate label.
-- [ ] **1.5.3** Surface fallback use in the review UI so an attorney reviewing a draft can see that a document was model-authored.
-- [ ] **1.5.4** Add a test asserting no new document is written with the retired label.
+- [x] **1.5.1** Gate the fallback behind an explicit flag. Default: template failure returns an error to the drafter rather than substituting generated text.
+- [x] **1.5.2** Rename the provenance label to describe what actually produced the file (e.g. `llm_fallback`), and backfill existing `python_fallback` rows to the same accurate label.
+- [x] **1.5.3** Surface fallback use in the review UI so an attorney reviewing a draft can see that a document was model-authored.
+- [x] **1.5.4** Add a test asserting no new document is written with the retired label.
 
 ### 1.6 Stale-running workflow-job recovery
 
@@ -129,6 +129,20 @@ A template regression therefore places model-authored text into a client instrum
 - [ ] **1.6.2** If retained: add a stale-`running` reclaim to `claim_workflow_jobs` mirroring the scheduled-email pattern, with attempt/backoff preserved.
 - [ ] **1.6.3** Add the first direct runtime test of `processWorkflowJobs` (`lib/workflowJobs.ts` currently has none).
 - [ ] **1.6.4** Batch the invoice-reminder payments read (`lib/workflowJobs.ts:158-190` issues one query per overdue invoice).
+
+### Phase 1 status
+
+Shipped: 1.1, 1.2, 1.3, 1.4 (code), 1.5. Full suite green from a clean install — 421 files, 4,473 tests.
+
+Still open, and none of it is code:
+
+| Item | What it needs |
+|---|---|
+| 1.1.5 | An attorney to confirm the in-app Mammoth preview is good enough to review a generated trust package. If not, the remedy is `tools/docx-pdf-worker` conversion — never restoring the Microsoft path. |
+| 1.2.4 | Repository settings: make **Application CI** a required status check on `main`. |
+| 1.4.3 | **Blocking.** Confirm production sets `R2_BUCKET_NAME` and that it names the bucket currently holding documents. The fail-closed change turns a silent wrong-bucket into a hard error, which is only an improvement if the variable is actually set. |
+| 1.5 follow-up | After the deploy carrying `llm_fallback` is live and no row still reads `python_fallback`, a second migration drops the old value from the CHECK constraint. |
+| 1.6 | Gated on the Phase 6.1 decision — not started, deliberately. Fixing stale-job reclamation in a queue that may be deleted is wasted work. |
 
 **Phase 1 exit criteria:** no third-party document disclosure; a required CI gate on `main`; no PII in server logs; R2 fails closed in production; the LLM fallback is opt-in and honestly labelled.
 
@@ -142,33 +156,52 @@ Cornerstone owns marketing *consent*. It should not own marketing *delivery*. CA
 
 ### 2.1 Production evidence — blocking
 
-- [ ] **2.1.1** Re-run the row-count query against production immediately before removal: `crm_campaigns`, `crm_campaign_steps`, `crm_campaign_recipients`, `crm_campaign_deliveries`, `crm_campaign_dispatches`, `crm_campaign_events`. The earlier plan recorded zeroes; that evidence is stale.
-- [ ] **2.1.2** If any campaign has sent, export deliveries and events to durable storage before dropping tables. Delivery history is a compliance record.
-- [ ] **2.1.3** Confirm the Mailgun webhook has no traffic in the retention window.
+- [x] **2.1.1** Re-run the row-count query against production immediately before removal: `crm_campaigns`, `crm_campaign_steps`, `crm_campaign_recipients`, `crm_campaign_deliveries`, `crm_campaign_dispatches`, `crm_campaign_events`. The earlier plan recorded zeroes; that evidence is stale.
+- [x] **2.1.2** If any campaign has sent, export deliveries and events to durable storage before dropping tables. Delivery history is a compliance record.
+- [x] **2.1.3** Confirm the Mailgun webhook has no traffic in the retention window.
 
 ### 2.2 Remove
 
-- [ ] **2.2.1** Campaign builder and step engine — `app/admin/settings/campaigns/**` (page, client, detail page, detail client).
-- [ ] **2.2.2** API routes — `app/api/admin/crm/campaigns/**` (list, detail, steps, queue, run).
-- [ ] **2.2.3** Dispatch and audience resolution — `lib/crm/campaignDispatch.ts`, `lib/crm/campaignPolicy.ts`.
-- [ ] **2.2.4** Mailgun adapter and webhook — `lib/crm/mailgunCampaigns.ts` and its webhook route.
-- [ ] **2.2.5** Campaign cron — remove `/api/cron/crm-campaigns` from `vercel.json` and delete the route.
+- [x] **2.2.1** Campaign builder and step engine — `app/admin/settings/campaigns/**` (page, client, detail page, detail client).
+- [x] **2.2.2** API routes — `app/api/admin/crm/campaigns/**` (list, detail, steps, queue, run).
+- [x] **2.2.3** Dispatch and audience resolution — `lib/crm/campaignDispatch.ts`, `lib/crm/campaignPolicy.ts`.
+- [x] **2.2.4** Mailgun adapter and webhook — `lib/crm/mailgunCampaigns.ts` and its webhook route.
+- [x] **2.2.5** Campaign cron — remove `/api/cron/crm-campaigns` from `vercel.json` and delete the route.
 - [ ] **2.2.6** Campaign tables and RPCs — **last**, in a separate migration PR after 2.2.1–2.2.5 have been on `main` through a deploy.
 - [ ] **2.2.7** Remove Mailgun env names from `VERCEL_ENV_CHECKLIST.md`, `scripts/validateEnv.mjs`, and the runbook. Revoke the Mailgun key.
 
 ### 2.3 Keep
 
-- [ ] **2.3.1** Marketing consent and opt-out status on `cornerstone_crm_people`, with consent provenance and timestamps intact (`lib/crm/consent.ts`).
+- [x] **2.3.1** Marketing consent and opt-out status on `cornerstone_crm_people`, with consent provenance and timestamps intact (`lib/crm/consent.ts`).
 - [ ] **2.3.2** The unsubscribe token route (`/api/unsubscribe/[token]`) **until** Resend Broadcasts is live and links have migrated. See 2.4.
-- [ ] **2.3.3** Transactional email logging — unaffected by this phase.
+- [x] **2.3.3** Transactional email logging — unaffected by this phase.
 - [ ] **2.3.4** A narrow audience export (consent-filtered CSV) so Resend Segments can be populated.
+
+### Phase 2 status — code removal shipped in #367
+
+Landed independently of this plan's sequencing, and done in the right order: the
+production send history was queried **first** (campaigns=0, recipients=0,
+deliveries=0), which is what 2.1.1 required, and the structural tests were
+inverted to assert the surface is absent before the code came out.
+
+Because nothing was ever sent, 2.4.1 does not bite. The 30-day window in
+15 U.S.C. §7704 runs from transmission; with no transmission there is no live
+opt-out link to keep working, so the unsubscribe route went with the rest rather
+than being retained.
+
+Still open in phase 2:
+
+- [ ] **2.2.6** Drop the campaign tables and RPCs — separate migration PR, after the code removal has been through a deploy.
+- [ ] **2.2.7** Remove Mailgun env names from the checklist, `scripts/validateEnv.mjs`, and the runbook; revoke the Mailgun key.
+- [ ] **2.3.4** A narrow consent-filtered audience export, when marketing is actually needed.
+- [ ] **2.4.3** Migrate consent/suppression state into Resend before any Broadcast is sent.
 
 ### 2.4 Compliance correction — do not skip
 
 The earlier plan's 30-day unsubscribe citation points to 16 CFR §316.5. The governing authority is **15 U.S.C. §7704**: the opt-out mechanism must remain functional for **at least 30 days after transmission**, and opt-out requests must be honored within **10 business days**.
 
-- [ ] **2.4.1** Keep the existing unsubscribe route live for at least 30 days after the last campaign send, regardless of when the builder is deleted. Removing the route on the same day as the builder can break a live opt-out link.
-- [ ] **2.4.2** Correct the citation wherever it appears in `docs/`.
+- [x] **2.4.1** Keep the existing unsubscribe route live for at least 30 days after the last campaign send, regardless of when the builder is deleted. Removing the route on the same day as the builder can break a live opt-out link.
+- [x] **2.4.2** Correct the citation wherever it appears in `docs/`.
 - [ ] **2.4.3** Migrate consent/suppression state into Resend before retiring the local route; Resend handles unsubscribe state for Broadcasts and Automations.
 
 **Exit:** Cornerstone records who may be marketed to and why. Resend decides delivery.

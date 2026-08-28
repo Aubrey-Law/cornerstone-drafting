@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server'
 import { getBearerUser } from '@/lib/apiAuth'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const r2 = getR2Client()
   const url = await getSignedUrl(
     r2,
-    new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.r2_key }),
+    new GetObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }),
     { expiresIn: 300 },
   )
   return NextResponse.json({ url, document: doc })
@@ -188,7 +188,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const r2 = getR2Client()
   try {
-    await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: doc.r2_key }))
+    await r2.send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }))
   } catch (e) {
     console.error('R2 delete error (object orphaned, will need GC):', e)
   }

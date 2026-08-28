@@ -3,7 +3,7 @@ import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { INTAKE_DOCUMENT_COLUMNS } from '@/lib/intake/intakeDocumentColumns'
 
 type Params = { params: Promise<{ id: string }> }
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   try {
     const url = await getSignedUrl(
       getR2Client(),
-      new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.r2_key }),
+      new GetObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }),
       { expiresIn: 300 },
     )
     return NextResponse.json({ url, document: doc })

@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getBearerToken, requireAdmin } from '@/lib/apiAuth'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { generateDocuments } from '@/lib/drafting/generateDocuments'
@@ -19,7 +19,8 @@ import {
 import { selectSupersededDraftIds } from '@/lib/drafting/supersede'
 import { registerDraftDocumentRow } from '@/lib/drafting/persistGeneratedDocument'
 import {
-  pythonFallbackEngineLabel,
+  llmDraftFallbackEnabled,
+  llmFallbackEngineLabel,
   resolveEstateGeneratorEngine,
   type EstateGeneratorEngine,
 } from '@/lib/estateGenerator/engine'
@@ -302,10 +303,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     let generateResult
     // Which generator actually produced the files, recorded per document for
     // provenance. Starts at the configured engine and is corrected when the run
-    // falls back to per-document drafting. (The legacy Python subprocess that
-    // used to back the 501-unsupported-package path has been retired; the Node
-    // engine supports every package the design sheet can derive.)
-    let generationEngine: EstateGeneratorEngine | 'python_fallback' = engine
+    // falls back to per-document LLM drafting. (The legacy Python subprocess
+    // that used to back the 501-unsupported-package path has been retired; the
+    // Node engine supports every package the design sheet can derive. The
+    // fallback label was named after that subprocess long after it stopped
+    // existing — it now says what actually ran.)
+    let generationEngine: EstateGeneratorEngine | 'llm_fallback' = engine
     if (engine === 'node') {
       const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))
       if (
@@ -383,6 +386,22 @@ export async function POST(req: NextRequest, { params }: Params) {
       // Bulk generate failed — fall back to per-doc drafting only if the
       // payload itself has docs to draft. Otherwise propagate the error.
       const derivedDocTypes = deriveDocTypes(payload)
+      if (derivedDocTypes.length > 0 && !llmDraftFallbackEnabled()) {
+        // Template rendering failed and drafting these documents with the model
+        // instead has not been enabled. Surface the real failure rather than
+        // substituting generated text into a client instrument.
+        return NextResponse.json(
+          {
+            error: generateResult.error ?? 'Document generation failed',
+            detail:
+              'Template generation failed. LLM draft fallback is disabled, so no document was produced. '
+              + 'Fix the template, or set ESTATE_DRAFT_LLM_FALLBACK_ENABLED=true to draft this run with the model.',
+            missing: draftMissing,
+            warnings: draftWarnings,
+          },
+          { status: generateResult.status }
+        )
+      }
       if (derivedDocTypes.length > 0) {
         const authHeaders = fallbackAuthHeaders(req, token)
         if (!authHeaders.Authorization && !authHeaders.Cookie) {
@@ -391,7 +410,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             { status: 401 }
           )
         }
-        generationEngine = pythonFallbackEngineLabel()
+        generationEngine = llmFallbackEngineLabel()
         generatedFiles = await generateFallbackFiles(req, canonicalMatterId, authHeaders, payload)
       } else if (assetTransferDocTypes.length === 0) {
         return NextResponse.json(
@@ -543,7 +562,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const uploadUrl = await getSignedUrl(
         r2,
         new PutObjectCommand({
-          Bucket: R2_BUCKET,
+          Bucket: r2Bucket(),
           Key: r2Key,
           ContentType: DOCX_CONTENT_TYPE,
         }),
@@ -591,7 +610,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           documentRefs.push({ id: persisted.documentId, name: documentName })
         } catch (persistenceError) {
           try {
-            await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
+            await r2.send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: r2Key }))
           } catch (cleanupError) {
             console.error('[draft route] failed to clean up unregistered R2 object', r2Key, cleanupError)
           }

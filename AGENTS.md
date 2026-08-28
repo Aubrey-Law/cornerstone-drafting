@@ -45,7 +45,7 @@ that a fresh VM needs and must be done manually (kept out of the update script o
    `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_AUTH_SITE_URL=http://localhost:3002`. R2
    vars can be placeholders locally. `.env.local` is git-ignored; the required shape is
-   in `VERCEL_ENV_CHECKLIST.md` (note the code reads `R2_BUCKET_NAME`, not `R2_BUCKET`).
+   in `VERCEL_ENV_CHECKLIST.md`.
 3. Seed a staff user, a client portal user, a lead, and a hired matter
    (Supabase auth has no UI signup for staff here):
    ```bash

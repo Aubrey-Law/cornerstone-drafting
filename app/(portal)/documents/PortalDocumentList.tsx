@@ -3,7 +3,8 @@
 import { Download, Eye, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { getDocumentUrl, getDocumentViewerUrl } from '@/lib/documents'
+import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
+import { getDocumentUrl, isWordDocument } from '@/lib/documents'
 import type { MatterDocument } from '@/types/database'
 
 type DocumentAction = 'view' | 'download'
@@ -82,6 +83,7 @@ function DocumentRow({
 
 export default function PortalDocumentList({ documents }: { documents: MatterDocument[] }) {
   const [pending, setPending] = useState<{ id: string; action: DocumentAction } | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<MatterDocument | null>(null)
 
   const documentSummary = useMemo(() => {
     const count = documents.length
@@ -105,11 +107,16 @@ export default function PortalDocumentList({ documents }: { documents: MatterDoc
   }
 
   async function handleDocumentAction(doc: MatterDocument, action: DocumentAction) {
+    // Word documents are previewed in-app. This path used to open Microsoft's
+    // Office Online viewer with a signed R2 URL, which disclosed a client's own
+    // will or trust to a third party to render it.
+    if (action === 'view' && isWordDocument(doc.name, doc.content_type)) {
+      setPreviewTarget(doc)
+      return
+    }
     setPending({ id: doc.id, action })
     try {
-      const url = action === 'view'
-        ? await getDocumentViewerUrl(doc.id, doc.name, doc.content_type)
-        : await getDocumentUrl(doc.id, action)
+      const url = await getDocumentUrl(doc.id, action)
 
       if (action === 'view') {
         const opened = window.open(url, '_blank', 'noopener,noreferrer')
@@ -167,6 +174,12 @@ export default function PortalDocumentList({ documents }: { documents: MatterDoc
           />
         ))}
       </section>
+
+      <DocumentPreviewDialog
+        document={previewTarget}
+        open={previewTarget !== null}
+        onOpenChange={open => !open && setPreviewTarget(null)}
+      />
     </div>
   )
 }

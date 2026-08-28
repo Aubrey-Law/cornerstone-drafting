@@ -1,7 +1,7 @@
 /** Shared helpers for document API routes. */
 import { createClient } from '@supabase/supabase-js'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -28,7 +28,7 @@ export async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buf
 
 export async function loadR2Bytes(r2Key: string): Promise<Buffer> {
   const r2 = getR2Client()
-  const object = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
+  const object = await r2.send(new GetObjectCommand({ Bucket: r2Bucket(), Key: r2Key }))
   if (!object.Body) throw new Error('Document body not found')
   return streamToBuffer(object.Body as NodeJS.ReadableStream)
 }

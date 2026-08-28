@@ -662,9 +662,9 @@ export async function readMatterDocumentText(
   const contentType = (row.content_type as string | null) ?? ''
 
   const { GetObjectCommand } = await import('@aws-sdk/client-s3')
-  const { getR2Client, R2_BUCKET } = await import('@/lib/r2')
+  const { getR2Client, r2Bucket } = await import('@/lib/r2')
   const object = await getR2Client().send(
-    new GetObjectCommand({ Bucket: R2_BUCKET, Key: String(row.r2_key) }),
+    new GetObjectCommand({ Bucket: r2Bucket(), Key: String(row.r2_key) }),
   )
   if (!object.Body) throw new Error('Document body not found in storage')
 

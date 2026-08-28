@@ -18,7 +18,7 @@ vi.mock('@/lib/documentSecurity', () => ({
   userCanReadDocument: vi.fn().mockResolvedValue(true),
   auditDocumentAccess: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('@/lib/r2', () => ({ getR2Client: () => ({ send: vi.fn() }), R2_BUCKET: 'bucket' }))
+vi.mock('@/lib/r2', () => ({ getR2Client: () => ({ send: vi.fn() }), r2Bucket: () => 'bucket' }))
 vi.mock('@/lib/portalNotifications', () => ({ notifyClientOfSharedDocument: vi.fn() }))
 
 import { GET as listFolders, POST as createFolder } from '@/app/api/documents/folders/route'

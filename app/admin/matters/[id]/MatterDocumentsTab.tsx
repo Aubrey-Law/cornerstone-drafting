@@ -84,7 +84,7 @@ import {
   downloadDocumentsZip,
   getDocumentAuditEvents,
   getDocumentUrl,
-  getDocumentViewerUrl,
+  isWordDocument,
   moveDocumentToFolder,
   renameDocument,
   renameDocumentFolder,
@@ -313,10 +313,18 @@ export function MatterDocumentsTab({
   }
 
   const openDocument = async (doc: MatterDocument, action: 'view' | 'download') => {
+    // Word documents are previewed in-app. Opening a signed R2 URL in a tab is
+    // fine for a PDF the browser renders itself, but a Word file would need an
+    // external viewer to display it — which is how client instruments used to
+    // reach Microsoft's Office Online service.
+    if (action === 'view' && isWordDocument(doc.name, doc.content_type)) {
+      setPreviewTarget(doc)
+      return
+    }
     setBusy(`${action}:${doc.id}`)
     try {
       const url = action === 'view'
-        ? await getDocumentViewerUrl(doc.id, doc.name, doc.content_type)
+        ? await getDocumentUrl(doc.id, 'view')
         : await getDocumentUrl(doc.id, 'download')
       if (action === 'view') {
         window.open(url, '_blank', 'noopener,noreferrer')

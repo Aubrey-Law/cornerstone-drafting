@@ -1,0 +1,94 @@
+name: Application CI
+
+# Lint, typecheck, and the test suite — the merge gate the repository did not
+# have.
+#
+# The four existing workflows all check the database: migration deployment,
+# migration-history drift, RPC resolvability, and generated-type drift. None of
+# them runs vitest, eslint, or tsc, and neither does a deploy: vercel.json sets
+# buildCommand to `npm run build:next` (plain `next build`), not the `npm run
+# build` wrapper that typechecks, and scripts/vercel-should-build.sh disables
+# deployments for every branch except main, so there are no preview builds to
+# catch anything either. 4,400-odd tests only ran when someone remembered.
+#
+# WHY `npm ci` AND NOT A WARM node_modules. Two separate architecture reviews of
+# this repository were each defeated by @radix-ui/react-context-menu: declared in
+# package.json and present in the lock file, absent from the checkout's
+# node_modules. Typecheck stopped and one test file failed to load, and the
+# conclusion drawn was "the environment is broken" rather than "nothing verifies
+# this". A clean install from the lock file is the whole point of the gate.
+#
+# WHY ONE JOB. Three jobs would each pay for their own install, and the suite is
+# serial anyway (fileParallelism is off in vitest.config.ts because the RLS
+# tests talk to a real database). The steps use `if: '!cancelled()'` so a lint
+# failure still reports the typecheck and test results in the same run, rather
+# than making the next push a guessing game.
+#
+# NO SECRETS. Tests run with no .env file present (they are all gitignored), so
+# this workflow deliberately has no environment. If a test ever starts needing a
+# credential, that test is talking to something real and belongs on a schedule
+# with the database workflows, not on the merge path.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck, and tests
+    runs-on: ubuntu-latest
+    # The suite runs serially and takes about eight and a half minutes; the
+    # install and the typecheck account for most of the rest.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Incremental typecheck state. `npm run typecheck` writes
+      # tsconfig.typecheck.tsbuildinfo; restoring it lets tsc skip unchanged
+      # files. Keyed on the lock file and the tsconfig so a dependency or
+      # compiler-option change starts from a clean build.
+      - name: Restore typecheck cache
+        uses: actions/cache@v4
+        with:
+          path: tsconfig.typecheck.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig*.json') }}-
+
+      # `npm run lint` exits 0 on warnings, so the gate would start green and
+      # stay green while warnings piled up. The ceiling is the count on the
+      # commit that introduced this workflow: it cannot grow, and it should be
+      # lowered as warnings are fixed. Six of the current 19 are the unused
+      # symbols scheduled for deletion in phase 7 of the scope-reduction plan,
+      # which is why they are baselined here rather than fixed on the way past.
+      # It has already come down once: removing the campaign system took the two
+      # unused CRM campaign constants with it. Lower it again whenever that
+      # happens rather than leaving headroom behind.
+      - name: Lint
+        if: '!cancelled()'
+        run: npm run lint -- --max-warnings=17
+
+      - name: Typecheck
+        if: '!cancelled()'
+        run: npm run typecheck
+
+      - name: Test
+        if: '!cancelled()'
+        run: npm test -- --reporter=dot
