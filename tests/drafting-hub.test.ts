@@ -93,7 +93,7 @@ describe('drafting hub and workspace', () => {
     const review = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/ReviewStep.tsx'), 'utf8')
 
     expect(review).toContain('deleteDocument')
-    expect(review).toContain('getDocumentViewerUrl')
+    expect(review).toContain('DocumentPreviewDialog')
     expect(review).toContain('const confirmDelete = async')
     expect(review).toContain('await deleteDocument(doc.id)')
     expect(review).toContain('setDeletedIds')

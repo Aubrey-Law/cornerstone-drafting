@@ -46,11 +46,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   deleteDocument,
   getDocumentUrl,
-  getDocumentViewerUrl,
   isPdfDocument,
   isWordDocument,
   setDocumentReviewed,
@@ -102,6 +102,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string; quote?: string | null } | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(true)
+  const [previewTarget, setPreviewTarget] = useState<{ id: string; name: string } | null>(null)
   const [maximized, setMaximized] = useState(false)
   const [assistantWidth, setAssistantWidth] = useState(340)
   const [scrollToViewer, setScrollToViewer] = useState(false)
@@ -264,10 +265,14 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   }, [supersededDrafts.length])
 
   const openDocument = async (id: string, action: 'view' | 'download', name?: string) => {
+    // Drafts are Word documents; preview them in-app rather than handing a
+    // signed R2 URL to an external viewer.
+    if (action === 'view' && isWordDocument(name ?? 'document')) {
+      setPreviewTarget({ id, name: name ?? 'document' })
+      return
+    }
     try {
-      const url = action === 'view'
-        ? await getDocumentViewerUrl(id, name ?? 'document')
-        : await getDocumentUrl(id, action)
+      const url = await getDocumentUrl(id, action)
       if (action === 'view') {
         window.open(url, '_blank')
         return
@@ -819,6 +824,12 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DocumentPreviewDialog
+        document={previewTarget}
+        open={previewTarget !== null}
+        onOpenChange={open => !open && setPreviewTarget(null)}
+      />
     </div>
   )
 }

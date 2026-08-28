@@ -23,7 +23,7 @@ describe('matter documents tab', () => {
       'deleteDocument',
       'downloadDocumentsZip',
       'getDocumentAuditEvents',
-      'getDocumentViewerUrl',
+      'isWordDocument',
       'getDocumentUrl',
       'renameDocument',
       'uploadDocument',
