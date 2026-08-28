@@ -14,6 +14,7 @@ import {
 import { GraphSendError, sendViaGraph } from './graphSend'
 import type { EmailAttachment } from './attachments'
 import { assembleManualEmail } from './manualAssembly'
+import { redactIdentifier } from '@/lib/log/redact'
 
 export interface SendEmailArgs {
   category: EmailCategory
@@ -347,11 +348,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   }
 
   if (providerUsed === 'resend' && result.error === 'RESEND_API_KEY not configured') {
+    // Recipient and subject are client data; the send is already recorded in
+    // full in email_log, which lives inside the confidentiality boundary.
     console.info(`[email] no RESEND_API_KEY — would send (${category}):`, {
-      to: actualTo,
-      subject: finalSubject,
+      to: redactIdentifier(actualTo),
       from: resendFrom,
-      replyTo,
+      replyTo: redactIdentifier(replyTo),
     })
     const logId = await logSend({
       ...recordLink,
