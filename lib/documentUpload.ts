@@ -1,5 +1,5 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024 // 50 MB
 
@@ -53,7 +53,7 @@ export async function putFileToR2(
   const r2 = getR2Client()
   await r2.send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: r2Bucket(),
       Key: r2Key,
       Body: body,
       ContentType: contentType,

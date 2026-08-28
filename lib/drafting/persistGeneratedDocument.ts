@@ -1,6 +1,6 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -34,7 +34,7 @@ export async function uploadDraftBufferToR2(args: UploadDraftBufferArgs): Promis
   const uploadUrl = await getSignedUrl(
     r2,
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: r2Bucket(),
       Key: r2Key,
       ContentType: contentType,
     }),

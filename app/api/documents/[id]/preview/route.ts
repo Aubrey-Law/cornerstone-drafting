@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getBearerUser } from '@/lib/apiAuth'
 import { userCanReadDocument } from '@/lib/documentSecurity'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -42,7 +42,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   try {
     const r2 = getR2Client()
-    const object = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.r2_key }))
+    const object = await r2.send(new GetObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }))
     if (!object.Body) return NextResponse.json({ error: 'Document body not found' }, { status: 404 })
 
     const buffer = await streamToBuffer(object.Body as NodeJS.ReadableStream)

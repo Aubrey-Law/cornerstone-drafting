@@ -3,7 +3,7 @@ import { getBearerUser } from '@/lib/apiAuth'
 import archiver from 'archiver'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { Readable } from 'node:stream'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { userCanReadDocument } from '@/lib/documentSecurity'
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         try {
           const seen = new Map<string, number>()
           for (const doc of docs) {
-            const obj = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.r2_key }))
+            const obj = await r2.send(new GetObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }))
             const body = obj.Body
             if (!body) continue
             const nodeStream = body instanceof Readable

@@ -10,7 +10,7 @@
 | `R2_ACCOUNT_ID` | Cloudflare R2 account |
 | `R2_ACCESS_KEY_ID` | R2 API key |
 | `R2_SECRET_ACCESS_KEY` | R2 API secret |
-| `R2_BUCKET` | Private documents bucket name |
+| `R2_BUCKET_NAME` | Private documents bucket name. Required in production — the app refuses to fall back to a default bucket. |
 
 ## Estate generator
 

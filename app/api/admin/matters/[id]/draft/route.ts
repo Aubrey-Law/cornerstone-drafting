@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getBearerToken, requireAdmin } from '@/lib/apiAuth'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { getR2Client, r2Bucket } from '@/lib/r2'
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { generateDocuments } from '@/lib/drafting/generateDocuments'
@@ -543,7 +543,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const uploadUrl = await getSignedUrl(
         r2,
         new PutObjectCommand({
-          Bucket: R2_BUCKET,
+          Bucket: r2Bucket(),
           Key: r2Key,
           ContentType: DOCX_CONTENT_TYPE,
         }),
@@ -591,7 +591,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           documentRefs.push({ id: persisted.documentId, name: documentName })
         } catch (persistenceError) {
           try {
-            await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
+            await r2.send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: r2Key }))
           } catch (cleanupError) {
             console.error('[draft route] failed to clean up unregistered R2 object', r2Key, cleanupError)
           }

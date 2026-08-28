@@ -159,7 +159,7 @@ describe('matter draft generation route', () => {
     expect(source).toContain('clauseManifest: meta.clauseManifest')
     expect(source).toContain("if (file.clauseSource === 'database')")
     expect(source).toContain('await persistGeneratedEstateDocument({')
-    expect(source).toContain('new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key })')
+    expect(source).toContain('new DeleteObjectCommand({ Bucket: r2Bucket(), Key: r2Key })')
 
     const branchStart = source.indexOf("if (file.clauseSource === 'database')")
     const databaseBranch = source.slice(branchStart, source.indexOf('} else {', branchStart))
