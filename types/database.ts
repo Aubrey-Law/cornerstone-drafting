@@ -650,7 +650,7 @@ export interface MatterDocument {
   // Generation-run provenance + review state (nullable; absent on uploads and
   // pre-migration rows). See 20260612140000_matter_documents_generation_runs.
   generation_id?: string | null
-  generation_engine?: 'node' | 'supabase' | 'python_fallback' | null
+  generation_engine?: 'node' | 'supabase' | 'llm_fallback' | 'python_fallback' | null
   marker_count?: number | null
   missing_count?: number | null
   superseded_at?: string | null

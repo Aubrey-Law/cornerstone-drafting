@@ -52,7 +52,7 @@ describe('matter draft generation route', () => {
     const engineSource = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/engine.ts'), 'utf8')
 
     expect(source).toContain('resolveEstateGeneratorEngine')
-    expect(source).toContain('pythonFallbackEngineLabel')
+    expect(source).toContain('llmFallbackEngineLabel')
     expect(source).toContain('@/lib/estateGenerator/engine')
     expect(source).toContain('const engine: EstateGeneratorEngine = resolveEstateGeneratorEngine()')
     expect(engineSource).toContain("process.env.ESTATE_GENERATOR_ENGINE?.trim().toLowerCase()")

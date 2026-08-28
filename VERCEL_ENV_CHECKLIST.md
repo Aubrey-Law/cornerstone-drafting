@@ -16,7 +16,8 @@
 
 | Variable | Purpose |
 |----------|---------|
-| `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. Bulk runs use node → supabase → per-doc fallback. |
+| `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. |
+| `ESTATE_DRAFT_LLM_FALLBACK_ENABLED` | Off unless set to `true`. Allows a failed template render to fall back to drafting the document with the model. Leave unset: with it off a template failure surfaces as an error instead of producing AI-written text in a client instrument. |
 | `ESTATE_CLAUSE_SOURCE` | `file` (default and rollback setting) or `database`. Keep production on `file` until the estate-clause release gate in `OPERATIONS_RUNBOOK.md` is green in preview. This is server-only; never prefix it with `NEXT_PUBLIC_`. |
 
 ## Shared fields package

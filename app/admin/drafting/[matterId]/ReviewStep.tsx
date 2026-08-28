@@ -74,6 +74,18 @@ const CombineWordDraftsDialog = dynamic(
   { ssr: false },
 )
 
+/**
+ * A draft whose text the model wrote, rather than a template render.
+ *
+ * 'python_fallback' is the same thing under its old name: the label was
+ * inherited from a Python subprocess engine retired long before, and rows
+ * written before migration 20261021000000 still carry it. Both are matched so a
+ * legacy draft is not shown as though a template produced it.
+ */
+function isModelDrafted(generationEngine: string | null | undefined): boolean {
+  return generationEngine === 'llm_fallback' || generationEngine === 'python_fallback'
+}
+
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
@@ -496,6 +508,15 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                       {reviewedAt ? ` · Reviewed ${formatDateTime(reviewedAt)}` : ''}
                     </p>
                   </div>
+                  {isModelDrafted(doc.generationEngine) && (
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-amber-border bg-amber-bg text-[11px] text-amber"
+                      title="Template generation failed for this document, so its text was drafted by the model. Read it in full before approving."
+                    >
+                      <Sparkles className="h-3 w-3" /> AI-drafted
+                    </Badge>
+                  )}
                   {doc.markerCount === 0 ? (
                     <Badge variant="outline" className="gap-1 border-success/30 text-[11px] text-success">
                       <CheckCircle2 className="h-3 w-3" /> Clean
