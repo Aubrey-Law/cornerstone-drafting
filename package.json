@@ -6,7 +6,7 @@
     "node": ">=22 <26"
   },
   "scripts": {
-    "dev": "next dev --webpack -p 3002",
+    "dev": "next dev --webpack -p 3002 -H 127.0.0.1",
     "build": "node -e \"const fs=require('fs'),s=fs.statSync('tsconfig.typecheck.tsbuildinfo',{throwIfNoEntry:false});if(!s||Date.now()-s.mtimeMs>3600000){process.exit(1)}\" && echo 'TypeScript OK (incremental cache fresh)' || node --max-old-space-size=2048 ./node_modules/typescript/bin/tsc --noEmit --skipLibCheck -p tsconfig.typecheck.json",
     "build:next": "next build --webpack",
     "build:analyze": "ANALYZE=true next build --webpack",
