@@ -45,7 +45,6 @@ type Tab =
  * switch — but they belong to Settings, so the tab strip links to them.
  */
 const SETTINGS_SUBROUTES = [
-  { href: '/admin/settings/campaigns', label: 'Campaigns' },
   { href: '/admin/settings/style-sets', label: 'Style sets' },
   { href: '/admin/settings/sync', label: 'Sync' },
 ] as const

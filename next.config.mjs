@@ -21,10 +21,7 @@ const nextConfig = {
       { source: '/admin/leads', destination: '/admin/crm/opportunities', permanent: true },
       { source: '/admin/leads/:path*', destination: '/admin/crm/opportunities/:path*', permanent: true },
       { source: '/admin/contacts', destination: '/admin/crm/people', permanent: true },
-      // Campaigns and Sync moved out of the CRM workspace into Settings. Campaigns
-      // keeps a :path* entry because it has an [id] child; Sync has no children.
-      { source: '/admin/crm/campaigns', destination: '/admin/settings/campaigns', permanent: true },
-      { source: '/admin/crm/campaigns/:path*', destination: '/admin/settings/campaigns/:path*', permanent: true },
+      // Sync moved out of the CRM workspace into Settings; it has no children.
       { source: '/admin/crm/sync', destination: '/admin/settings/sync', permanent: true },
     ];
   },
