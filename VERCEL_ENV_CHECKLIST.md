@@ -161,12 +161,6 @@ methods in `lib/payments/lawpay.ts` and flipping `PAYMENTS_PROVIDER`.
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Transactional email (message alerts, intake complete) |
-| `MAILGUN_API_KEY` | Mailgun API key for CRM campaign delivery only |
-| `MAILGUN_DOMAIN` | Verified Mailgun sending domain for campaigns |
-| `MAILGUN_API_BASE` | Optional regional API base; use `https://api.eu.mailgun.net` for EU |
-| `MAILGUN_WEBHOOK_SIGNING_KEY` | Mailgun webhook signing key |
-| `MAILGUN_FROM_EMAIL` | Verified Mailgun campaign sender |
-| `CAMPAIGN_UNSUBSCRIBE_SECRET` | Reserved campaign unsubscribe secret |
 | `EMAILS_ENABLED` | Hard kill switch (`false` / `0` / `off` suppresses all sends) |
 
 Categories used: `message_alert`, `portal_message_notice`, `intake_complete_alert`, `intake_invite`, `manual`. No full portal email-settings matrix.
