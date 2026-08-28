@@ -2,45 +2,67 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { FieldError } from '@/components/forms/FieldError'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { MIN_CLIENT_PASSWORD_LENGTH, validateNewClientPassword } from '@/lib/auth/clientPassword'
-import { formatPhoneInput } from '@/lib/phone'
+import { MIN_CLIENT_PASSWORD_LENGTH } from '@/lib/auth/clientPassword'
+import {
+  publicIntakeStartSchema,
+  type PublicIntakeStartValues,
+} from '@/lib/validation/clientAccountForms'
 import { supabase } from '@/lib/supabaseClient'
 import { TurnstileWidget } from './TurnstileWidget'
 
 export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
   const router = useRouter()
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [turnstileToken, setTurnstileToken] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [existing, setExisting] = useState(false)
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault()
-    setError(null)
-    setExisting(false)
-    const passwordError = validateNewClientPassword(password, confirmPassword)
-    if (passwordError) return setError(passwordError)
-    if (!turnstileToken && siteKey) return setError('Complete the security check.')
+  const schema = useMemo(() => publicIntakeStartSchema(Boolean(siteKey)), [siteKey])
 
-    setLoading(true)
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm<PublicIntakeStartValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+      turnstileToken: '',
+    },
+  })
+
+  const describedBy = (base: string | null, errorId: string, invalid: boolean) =>
+    [base, invalid ? errorId : null].filter(Boolean).join(' ') || undefined
+
+  async function submit(values: PublicIntakeStartValues) {
+    clearErrors('root')
+    setExisting(false)
     try {
       const response = await fetch('/api/intake/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, phone, password, turnstileToken }),
+        body: JSON.stringify({
+          fullName: values.fullName,
+          email: values.email,
+          phone: values.phone,
+          password: values.password,
+          turnstileToken: values.turnstileToken,
+        }),
       })
       const body = await response.json().catch(() => ({})) as {
         error?: string
@@ -52,33 +74,58 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
         throw new Error(body.error || body.message || 'Could not start intake')
       }
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+        email: values.email.trim().toLowerCase(),
+        password: values.password,
       })
       if (signInError) throw new Error('Your account was created. Sign in to continue.')
       toast.success('Welcome — starting your intake')
       router.replace('/intake')
       router.refresh()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not start intake')
-    } finally {
-      setLoading(false)
+      setError('root', {
+        message: caught instanceof Error ? caught.message : 'Could not start intake',
+      })
     }
   }
 
   return (
-    <form onSubmit={event => void submit(event)} className="space-y-4">
+    <form noValidate onSubmit={event => void handleSubmit(submit)(event)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="public-intake-name">Full name</Label>
-        <Input className="h-11" id="public-intake-name" required autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} />
+        <Input
+          className="h-11"
+          id="public-intake-name"
+          autoComplete="name"
+          aria-invalid={Boolean(errors.fullName)}
+          aria-describedby={describedBy(null, 'public-intake-name-error', Boolean(errors.fullName))}
+          {...register('fullName')}
+        />
+        <FieldError id="public-intake-name-error" message={errors.fullName?.message} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="public-intake-email">Email address</Label>
-        <Input className="h-11" id="public-intake-email" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} />
+        <Input
+          className="h-11"
+          id="public-intake-email"
+          type="email"
+          autoComplete="email"
+          aria-invalid={Boolean(errors.email)}
+          aria-describedby={describedBy(null, 'public-intake-email-error', Boolean(errors.email))}
+          {...register('email')}
+        />
+        <FieldError id="public-intake-email-error" message={errors.email?.message} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="public-intake-phone">Phone number</Label>
-        <Input className="h-11" id="public-intake-phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} placeholder="(555) 555-5555" />
+        {/* Input formats type="tel" values through formatPhoneInput before onChange. */}
+        <Input
+          className="h-11"
+          id="public-intake-phone"
+          type="tel"
+          autoComplete="tel"
+          placeholder="(555) 555-5555"
+          {...register('phone')}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -88,12 +135,14 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
               className="h-11 pr-11"
               id="public-intake-password"
               type={showPassword ? 'text' : 'password'}
-              required
-              minLength={MIN_CLIENT_PASSWORD_LENGTH}
               autoComplete="new-password"
-              aria-describedby="public-intake-password-help"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={describedBy(
+                'public-intake-password-help',
+                'public-intake-password-error',
+                Boolean(errors.password),
+              )}
+              {...register('password')}
             />
             <button
               type="button"
@@ -105,6 +154,7 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
               {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
             </button>
           </div>
+          <FieldError id="public-intake-password-error" message={errors.password?.message} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="public-intake-confirm">Confirm password</Label>
@@ -113,11 +163,14 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
               className="h-11 pr-11"
               id="public-intake-confirm"
               type={showConfirmPassword ? 'text' : 'password'}
-              required
-              minLength={MIN_CLIENT_PASSWORD_LENGTH}
               autoComplete="new-password"
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              aria-invalid={Boolean(errors.confirmPassword)}
+              aria-describedby={describedBy(
+                null,
+                'public-intake-confirm-error',
+                Boolean(errors.confirmPassword),
+              )}
+              {...register('confirmPassword')}
             />
             <button
               type="button"
@@ -129,19 +182,28 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
               {showConfirmPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
             </button>
           </div>
+          <FieldError id="public-intake-confirm-error" message={errors.confirmPassword?.message} />
         </div>
       </div>
       <p id="public-intake-password-help" className="text-xs text-muted-foreground">
         Use at least {MIN_CLIENT_PASSWORD_LENGTH} characters.
       </p>
       {siteKey ? (
-        <TurnstileWidget siteKey={siteKey} onToken={setTurnstileToken} />
+        <div>
+          <TurnstileWidget
+            siteKey={siteKey}
+            onToken={token => setValue('turnstileToken', token, { shouldValidate: true })}
+          />
+          <FieldError message={errors.turnstileToken?.message} />
+        </div>
       ) : (
         <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           Public intake registration is not configured.
         </p>
       )}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {errors.root?.message && (
+        <p role="alert" className="text-sm text-destructive">{errors.root.message}</p>
+      )}
       {existing && (
         <p className="text-sm">
           <Link className="font-medium text-accent underline" href="/auth/login?redirectTo=/intake">Sign in</Link>
@@ -149,8 +211,8 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
           use “Forgot password?” on the sign-in page.
         </p>
       )}
-      <Button type="submit" className="h-11 w-full" disabled={loading || !siteKey}>
-        {loading ? 'Creating your secure intake…' : 'Start secure intake'}
+      <Button type="submit" className="h-11 w-full" disabled={isSubmitting || !siteKey}>
+        {isSubmitting ? 'Creating your secure intake…' : 'Start secure intake'}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         Already have an account? <Link className="font-medium text-accent hover:underline" href="/auth/login?redirectTo=/intake">Sign in</Link>

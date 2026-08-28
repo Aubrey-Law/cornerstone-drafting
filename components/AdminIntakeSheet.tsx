@@ -1,6 +1,15 @@
 'use client'
 
-import React, { useId, useState, useEffect, useRef, useCallback } from 'react'
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldPath,
+} from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { getAdminIntakeData, saveAdminIntakeDraft, submitAdminIntake, resolveMatterIntake } from '@/app/actions/adminIntake'
@@ -11,6 +20,7 @@ import ContactCombobox, { type ContactSuggestion } from '@/components/intake/Con
 import { AdminIntakeUploadsList } from '@/components/admin/AdminIntakeUploadsList'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { FieldError } from '@/components/forms/FieldError'
 import { Input } from '@/components/ui/input'
 import {
   Sheet,
@@ -25,6 +35,7 @@ import { formatPhoneInput } from '@/lib/phone'
 import { parsePlanningObjectives, PLANNING_OBJECTIVES_NOTES_KEY } from '@/lib/intakePlanningObjectives'
 import { DEFAULT_INTAKE_TRACK, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
 import { isCollegePrepPracticeArea } from '@/lib/practiceArea'
+import { adminIntakeSubmitSchema } from '@/lib/validation/adminIntake'
 import {
   MA_COUNTY_OPTIONS,
   MARITAL_STATUS_OPTIONS,
@@ -55,6 +66,9 @@ interface AdminIntakeSheetProps {
   onIntakeIdChange?: (intakeId: string) => void
 }
 
+type AdminIntakeControl = Control<AdminIntakeFormData>
+type AdminIntakeField = FieldPath<AdminIntakeFormData>
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const isEP = (pa: string) => pa.toLowerCase().includes('estate planning') || pa === ''
@@ -62,6 +76,10 @@ const isProbate = (pa: string) => pa.toLowerCase().includes('probate')
 
 function uid() {
   return Math.random().toString(36).slice(2)
+}
+
+function emptyChild(): AdminIntakeChild {
+  return { id: uid(), first_name: '', middle_name: '', last_name: '', date_of_birth: '', preferred_pronoun: '' }
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -82,14 +100,10 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   )
 }
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null
-  return <div className="mt-1 text-[11px] text-destructive">{message}</div>
-}
-
 // Compact variants of the shared Input/Textarea density for this dense sheet.
 const inputCls = 'h-[34px] px-2.5 text-[13px] md:text-[13px]'
 const textareaCls = 'min-h-20 px-2.5 py-2 text-[13px] md:text-[13px]'
+const errorCls = 'text-[11px]'
 
 // Native <select> (platform picker) styled with the Input primitive's tokens.
 const selectCls =
@@ -113,28 +127,85 @@ function SegmentedYesNo({
   )
 }
 
+/** Yes/No segment bound to a boolean field, with an optional side effect. */
+function YesNoField({
+  control, name, onAfterChange,
+}: {
+  control: AdminIntakeControl
+  name: AdminIntakeField
+  onAfterChange?: (value: boolean) => void
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <SegmentedYesNo
+          value={Boolean(field.value)}
+          onChange={value => {
+            field.onChange(value)
+            onAfterChange?.(value)
+          }}
+        />
+      )}
+    />
+  )
+}
+
 /** Pronoun picker. Documents are generated with these, so every person the
  *  sheet captures — client, spouse, children, fiduciaries — gets one. */
-function PronounSelect({
-  value, onChange, title,
+function PronounField({
+  control, name, title,
 }: {
-  value: string
-  onChange: (v: string) => void
+  control: AdminIntakeControl
+  name: AdminIntakeField
   title?: string
 }) {
   return (
-    <select
-      className={selectCls}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      title={title}
-      aria-label={title}
-    >
-      <option value="">Pronouns…</option>
-      {PRONOUN_OPTIONS.map(o => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <select
+          className={selectCls}
+          value={String(field.value ?? '')}
+          onChange={e => field.onChange(e.target.value)}
+          onBlur={field.onBlur}
+          title={title}
+          aria-label={title}
+        >
+          <option value="">Pronouns…</option>
+          {PRONOUN_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      )}
+    />
+  )
+}
+
+/** Fiduciary / agent name picker backed by the intake's known contacts. */
+function ContactField({
+  control, name, suggestions, placeholder,
+}: {
+  control: AdminIntakeControl
+  name: AdminIntakeField
+  suggestions: ContactSuggestion[]
+  placeholder: string
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <ContactCombobox
+          value={String(field.value ?? '')}
+          onChange={field.onChange}
+          suggestions={suggestions}
+          placeholder={placeholder}
+        />
+      )}
+    />
   )
 }
 
@@ -166,26 +237,17 @@ export default function AdminIntakeSheet({
   onSubmitted,
   onIntakeIdChange,
 }: AdminIntakeSheetProps) {
-  const [form, setForm] = useState<AdminIntakeFormData>(() =>
-    emptyAdminIntakeFormData()
-  )
-  const [initialForm, setInitialForm] = useState<AdminIntakeFormData>(() =>
-    emptyAdminIntakeFormData()
-  )
   const [currentIntakeId, setCurrentIntakeId] = useState<string | null>(clientIntakeId)
   const [intakeStatus, setIntakeStatus] = useState<string | null>(null)
   const [intakeTrack, setIntakeTrack] = useState<IntakeTrack>(DEFAULT_INTAKE_TRACK)
   const [intakeContacts, setIntakeContacts] = useState<ContactSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [errors, setErrors] = useState<Partial<Record<keyof AdminIntakeFormData, string>>>({})
   const [footerError, setFooterError] = useState('')
   const [showDiscard, setShowDiscard] = useState(false)
   const [manualAddress, setManualAddress] = useState(false)
   const [addressSearch, setAddressSearch] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
-  const firstErrorRef = useRef<HTMLDivElement>(null)
   const checkboxId = useId()
 
   // The College Preparation Plan track never asks about assets, a spouse, or a
@@ -198,14 +260,69 @@ export default function AdminIntakeSheet({
   // put an estate questionnaire in front of a College Preparation Plan — and
   // then demanded marital status and assets it never showed.
   const isCollegePrep = intakeTrack === 'college_prep' || isCollegePrepPracticeArea(practiceArea)
+
+  // The submit rules differ by track, so the resolver is rebuilt when it flips.
+  // useForm re-reads its options on every render, so the new one takes effect.
+  const resolver = useMemo(
+    () => zodResolver(adminIntakeSubmitSchema({ isCollegePrep })),
+    [isCollegePrep],
+  )
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    reset,
+    getValues,
+    setValue,
+    formState: { errors, isDirty, isSubmitting },
+  } = useForm<AdminIntakeFormData>({
+    defaultValues: emptyAdminIntakeFormData(),
+    resolver,
+  })
+
+  const { fields: childFields, append: appendChild, remove: removeChild } = useFieldArray({
+    control,
+    name: 'children',
+  })
+
+  // Only the fields that gate a section are watched, so typing in the ~90 plain
+  // inputs re-renders nothing but the input itself.
+  const [
+    maritalStatus,
+    hasChildren,
+    hasMinorChildren,
+    hasRealProperty,
+    hasRetirement,
+    hasLifeInsurance,
+    hasBusiness,
+  ] = useWatch({
+    control,
+    name: [
+      'marital_status',
+      'has_children',
+      'has_minor_children',
+      'has_real_property',
+      'has_retirement',
+      'has_life_insurance',
+      'has_business',
+    ],
+  })
+
   const showEP = isEP(practiceArea) && !isCollegePrep
   const showProbate = isProbate(practiceArea) && !isCollegePrep
-  const showSpouse = form.marital_status === 'married'
-  const showGuardian = form.has_minor_children
+  const showSpouse = maritalStatus === 'married'
+  const showGuardian = hasMinorChildren
   const clientLocked = intakeStatus === 'submitted' || intakeStatus === 'approved'
 
-  // ── Derive dirty state ──────────────────────────────────────────────────────
-  const isDirty = JSON.stringify(form) !== JSON.stringify(initialForm)
+  const setField = useCallback(
+    (name: AdminIntakeField, value: unknown) => {
+      // shouldDirty keeps the footer's save button and the close guard honest
+      // for the fields that are written programmatically rather than typed.
+      setValue(name, value as never, { shouldDirty: true })
+    },
+    [setValue],
+  )
 
   // ── Load initial data when sheet opens ────────────────────────────────────
   useEffect(() => {
@@ -218,9 +335,7 @@ export default function AdminIntakeSheet({
       try {
         const raw = await getAdminIntakeData(idToLoad)
         if (cancelled || !raw) return
-        const mapped = mapRawToForm(raw)
-        setForm(mapped)
-        setInitialForm(mapped)
+        reset(mapRawToForm(raw))
         setCurrentIntakeId(idToLoad)
         onIntakeIdChange?.(idToLoad)
         setIntakeStatus(typeof raw.status === 'string' ? raw.status : null)
@@ -267,17 +382,13 @@ export default function AdminIntakeSheet({
         const parts = clientName.trim().split(' ')
         const first = parts[0] ?? ''
         const last = parts.slice(1).join(' ') ?? ''
-        const pre = { ...emptyAdminIntakeFormData(), first_name: first, last_name: last }
-        setForm(pre)
-        setInitialForm(pre)
+        reset({ ...emptyAdminIntakeFormData(), first_name: first, last_name: last })
         setCurrentIntakeId(null)
         setIntakeStatus(null)
         return
       }
 
-      const blank = emptyAdminIntakeFormData()
-      setForm(blank)
-      setInitialForm(blank)
+      reset(emptyAdminIntakeFormData())
       setCurrentIntakeId(null)
       setIntakeStatus(null)
     }
@@ -287,21 +398,12 @@ export default function AdminIntakeSheet({
     return () => {
       cancelled = true
     }
-  }, [open, clientIntakeId, clientName, matterId, onIntakeIdChange])
+  }, [open, clientIntakeId, clientName, matterId, onIntakeIdChange, reset])
 
   // Sync currentIntakeId if prop changes
   useEffect(() => {
     setCurrentIntakeId(clientIntakeId)
   }, [clientIntakeId])
-
-  // ── Form helpers ──────────────────────────────────────────────────────────
-  const set = useCallback(<K extends keyof AdminIntakeFormData>(key: K, value: AdminIntakeFormData[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }))
-    setErrors(prev => { const n = { ...prev }; delete n[key]; return n })
-  }, [])
-
-  const str = (key: keyof AdminIntakeFormData) => (form[key] as string) ?? ''
-  const bool = (key: keyof AdminIntakeFormData) => Boolean(form[key])
 
   // ── Close guard ──────────────────────────────────────────────────────────
   function requestClose() {
@@ -314,49 +416,26 @@ export default function AdminIntakeSheet({
 
   function doClose() {
     setShowDiscard(false)
-    setErrors({})
     setFooterError('')
-    const blank = emptyAdminIntakeFormData()
-    setForm(blank)
-    setInitialForm(blank)
+    reset(emptyAdminIntakeFormData())
     setCurrentIntakeId(null)
     setIntakeStatus(null)
     setIntakeTrack(DEFAULT_INTAKE_TRACK)
     onClose()
   }
 
-  // ── Validation ────────────────────────────────────────────────────────────
-  function validate(): boolean {
-    const e: Partial<Record<keyof AdminIntakeFormData, string>> = {}
-    if (!form.first_name.trim()) e.first_name = 'Required'
-    if (!form.last_name.trim()) e.last_name = 'Required'
-    if (!form.email.trim()) e.email = 'Required'
-    // Marital status and assets are estate-track questions. The College
-    // Preparation Plan hides both, so requiring them here would leave the
-    // attorney with errors pointing at fields that are not on screen.
-    if (!isCollegePrep) {
-      if (!form.marital_status) e.marital_status = 'Required'
-      const hasAsset = form.has_real_property || form.has_retirement || form.has_investments ||
-        form.has_business || form.has_life_insurance || form.estate_value
-      if (!hasAsset) e.estate_value = 'At least one asset field is required'
-    }
-    setErrors(e)
-    if (Object.keys(e).length > 0) {
-      setTimeout(() => firstErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
-      return false
-    }
-    return true
-  }
-
   // ── Save draft ─────────────────────────────────────────────────────────────
+  // Deliberately unvalidated: a draft is a partial intake by definition.
   async function handleSaveDraft() {
     setSaving(true)
     setFooterError('')
+    const data = getValues()
     try {
-      const result = await saveAdminIntakeDraft({ leadId, matterId, clientIntakeId: currentIntakeId, clientUserId, data: form })
+      const result = await saveAdminIntakeDraft({ leadId, matterId, clientIntakeId: currentIntakeId, clientUserId, data })
       setCurrentIntakeId(result.id)
       onIntakeIdChange?.(result.id)
-      setInitialForm({ ...form })
+      // Re-baseline so the saved values are no longer "unsaved changes".
+      reset(data)
       setIntakeStatus(prev => (prev === 'submitted' || prev === 'approved' ? prev : 'draft'))
       toast.success(clientLocked ? 'Attorney edits saved' : 'Draft saved')
     } catch (err) {
@@ -367,12 +446,10 @@ export default function AdminIntakeSheet({
   }
 
   // ── Submit intake ──────────────────────────────────────────────────────────
-  async function handleSubmit() {
-    if (!validate()) return
-    setSubmitting(true)
+  async function onSubmit(data: AdminIntakeFormData) {
     setFooterError('')
     try {
-      const result = await submitAdminIntake({ leadId, matterId, clientIntakeId: currentIntakeId, clientUserId, data: form })
+      const result = await submitAdminIntake({ leadId, matterId, clientIntakeId: currentIntakeId, clientUserId, data })
       setCurrentIntakeId(result.id)
       onIntakeIdChange?.(result.id)
       toast.success('Intake submitted')
@@ -380,33 +457,7 @@ export default function AdminIntakeSheet({
       onSubmitted()
     } catch (err) {
       setFooterError((err as Error).message)
-    } finally {
-      setSubmitting(false)
     }
-  }
-
-  // ── Children list helpers ──────────────────────────────────────────────────
-  function addChild() {
-    set('children', [
-      ...form.children,
-      { id: uid(), first_name: '', middle_name: '', last_name: '', date_of_birth: '', preferred_pronoun: '' },
-    ])
-  }
-
-  function removeChild(id: string) {
-    set('children', form.children.filter(c => c.id !== id))
-  }
-
-  function updateChild(id: string, field: keyof AdminIntakeChild, value: string) {
-    set('children', form.children.map(c => c.id === id ? { ...c, [field]: value } : c))
-  }
-
-  // ── Special circumstances toggle ────────────────────────────────────────────
-  function toggleCircumstance(val: string) {
-    const current = form.special_circumstances
-    set('special_circumstances',
-      current.includes(val) ? current.filter(c => c !== val) : [...current, val]
-    )
   }
 
   return (
@@ -441,80 +492,84 @@ export default function AdminIntakeSheet({
               {/* ── Section: Client information ── */}
               <GroupLabel>Client Information</GroupLabel>
 
-              {/* first/last error anchor */}
-              {(errors.first_name || errors.last_name) && <div ref={firstErrorRef} />}
-
               <Row2>
                 <Field>
                   <FieldLabel required>First Name</FieldLabel>
                   <Input
-                    className={inputCls} aria-invalid={Boolean(errors.first_name)}
-                    value={str('first_name')}
-                    onChange={e => set('first_name', e.target.value)}
+                    className={inputCls}
+                    aria-invalid={Boolean(errors.first_name)}
+                    {...register('first_name')}
                   />
-                  <FieldError message={errors.first_name} />
+                  <FieldError className={errorCls} message={errors.first_name?.message} />
                 </Field>
                 <Field>
                   <FieldLabel>Middle Name</FieldLabel>
-                  <Input className={inputCls} value={str('middle_name')} onChange={e => set('middle_name', e.target.value)} />
+                  <Input className={inputCls} {...register('middle_name')} />
                 </Field>
                 <Field>
                   <FieldLabel required>Last Name</FieldLabel>
                   <Input
-                    className={inputCls} aria-invalid={Boolean(errors.last_name)}
-                    value={str('last_name')}
-                    onChange={e => set('last_name', e.target.value)}
+                    className={inputCls}
+                    aria-invalid={Boolean(errors.last_name)}
+                    {...register('last_name')}
                   />
-                  <FieldError message={errors.last_name} />
+                  <FieldError className={errorCls} message={errors.last_name?.message} />
                 </Field>
                 <Field>
                   <FieldLabel>Suffix</FieldLabel>
-                  <select className={selectCls} value={str('suffix')} onChange={e => set('suffix', e.target.value)}>
+                  <select className={selectCls} {...register('suffix')}>
                     <option value="">—</option>
                     {['Jr.', 'Sr.', 'II', 'III', 'IV', 'Esq.'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
                 <Field>
                   <FieldLabel>Date of Birth</FieldLabel>
-                  <Input className={inputCls} type="date" value={str('date_of_birth')} onChange={e => set('date_of_birth', e.target.value)} />
+                  <Input className={inputCls} type="date" {...register('date_of_birth')} />
                 </Field>
                 <Field>
                   <FieldLabel>Citizenship / immigration status</FieldLabel>
-                  <select className={selectCls} value={form.citizenship_status} onChange={e => {
-                    const status = normalizeCitizenshipStatus(e.target.value)
-                    set('citizenship_status', status)
-                    set('is_us_citizen', citizenshipStatusToLegacyBoolean(status))
-                  }}>
-                    {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
+                  <Controller
+                    control={control}
+                    name="citizenship_status"
+                    render={({ field }) => (
+                      <select
+                        className={selectCls}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={e => {
+                          const status = normalizeCitizenshipStatus(e.target.value)
+                          field.onChange(status)
+                          setField('is_us_citizen', citizenshipStatusToLegacyBoolean(status))
+                        }}
+                      >
+                        {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    )}
+                  />
                 </Field>
                 <Field>
                   <FieldLabel>Pronouns</FieldLabel>
-                  <PronounSelect
-                    value={str('preferred_pronoun')}
-                    onChange={v => set('preferred_pronoun', v)}
-                    title="Client pronouns"
-                  />
+                  <PronounField control={control} name="preferred_pronoun" title="Client pronouns" />
                 </Field>
                 <Field>
                   <FieldLabel required>Email</FieldLabel>
                   <Input
-                    className={inputCls} aria-invalid={Boolean(errors.email)}
+                    className={inputCls}
                     type="email"
-                    value={str('email')}
-                    onChange={e => set('email', e.target.value)}
+                    aria-invalid={Boolean(errors.email)}
+                    {...register('email')}
                   />
-                  <FieldError message={errors.email} />
+                  <FieldError className={errorCls} message={errors.email?.message} />
                 </Field>
                 <Field>
                   <FieldLabel>Phone</FieldLabel>
+                  {/* Input runs formatPhoneInput on type="tel" before onChange. */}
                   <Input
                     className={inputCls}
                     type="tel"
                     autoComplete="tel"
-                    value={str('phone')}
-                    onChange={e => set('phone', formatPhoneInput(e.target.value))}
                     placeholder="(555) 555-5555"
+                    {...register('phone')}
                   />
                 </Field>
               </Row2>
@@ -536,11 +591,11 @@ export default function AdminIntakeSheet({
                     value={addressSearch}
                     onChange={setAddressSearch}
                     onPlaceSelected={(parsed: ParsedAddress) => {
-                      set('address_line1', parsed.address_line1)
-                      set('city', parsed.city)
-                      set('state', parsed.state || 'MA')
-                      set('zip', parsed.zip)
-                      if (parsed.county) set('county', parsed.county)
+                      setField('address_line1', parsed.address_line1)
+                      setField('city', parsed.city)
+                      setField('state', parsed.state || 'MA')
+                      setField('zip', parsed.zip)
+                      if (parsed.county) setField('county', parsed.county)
                     }}
                     className="mb-2"
                   />
@@ -548,37 +603,33 @@ export default function AdminIntakeSheet({
                 <FieldLabel>Street Address</FieldLabel>
                 <Input
                   className={cn(inputCls, 'mb-2')}
-                  name="address-line1"
                   autoComplete="address-line1"
-                  value={str('address_line1')}
-                  onChange={e => set('address_line1', e.target.value)}
                   placeholder="Street address"
+                  {...register('address_line1')}
                 />
                 <Input
                   className={inputCls}
-                  name="address-line2"
                   autoComplete="address-line2"
-                  value={str('address_line2')}
-                  onChange={e => set('address_line2', e.target.value)}
                   placeholder="Apt, unit, etc. (optional)"
+                  {...register('address_line2')}
                 />
               </div>
               <Row2 className="mt-2">
                 <Field>
                   <FieldLabel>City</FieldLabel>
-                  <Input className={inputCls} name="address-level2" autoComplete="address-level2" value={str('city')} onChange={e => set('city', e.target.value)} />
+                  <Input className={inputCls} autoComplete="address-level2" {...register('city')} />
                 </Field>
                 <Field>
                   <FieldLabel>State</FieldLabel>
-                  <Input className={inputCls} name="address-level1" autoComplete="address-level1" value={str('state')} onChange={e => set('state', e.target.value)} />
+                  <Input className={inputCls} autoComplete="address-level1" {...register('state')} />
                 </Field>
                 <Field>
                   <FieldLabel>ZIP</FieldLabel>
-                  <Input className={inputCls} name="postal-code" autoComplete="postal-code" value={str('zip')} onChange={e => set('zip', e.target.value)} />
+                  <Input className={inputCls} autoComplete="postal-code" {...register('zip')} />
                 </Field>
                 <Field>
                   <FieldLabel>County</FieldLabel>
-                  <select className={selectCls} value={str('county')} onChange={e => set('county', e.target.value)}>
+                  <select className={selectCls} {...register('county')}>
                     <option value="">Select county</option>
                     {MA_COUNTY_OPTIONS.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -589,19 +640,18 @@ export default function AdminIntakeSheet({
 
               {/* Marital status */}
               <div className="mt-3">
-                {errors.marital_status && <div ref={firstErrorRef} />}
                 <FieldLabel required>Marital Status</FieldLabel>
                 <select
-                  className={selectCls} aria-invalid={Boolean(errors.marital_status)}
-                  value={str('marital_status')}
-                  onChange={e => set('marital_status', e.target.value)}
+                  className={selectCls}
+                  aria-invalid={Boolean(errors.marital_status)}
+                  {...register('marital_status')}
                 >
                   <option value="">Select…</option>
                   {MARITAL_STATUS_OPTIONS.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>
-                <FieldError message={errors.marital_status} />
+                <FieldError className={errorCls} message={errors.marital_status?.message} />
               </div>
 
               {/* ── Section: Spouse ── */}
@@ -611,54 +661,60 @@ export default function AdminIntakeSheet({
                   <Row2>
                     <Field>
                       <FieldLabel>First Name</FieldLabel>
-                      <Input className={inputCls} value={str('spouse_first_name')} onChange={e => set('spouse_first_name', e.target.value)} />
+                      <Input className={inputCls} {...register('spouse_first_name')} />
                     </Field>
                     <Field>
                       <FieldLabel>Middle Name</FieldLabel>
-                      <Input className={inputCls} value={str('spouse_middle_name')} onChange={e => set('spouse_middle_name', e.target.value)} />
+                      <Input className={inputCls} {...register('spouse_middle_name')} />
                     </Field>
                     <Field>
                       <FieldLabel>Last Name</FieldLabel>
-                      <Input className={inputCls} value={str('spouse_last_name')} onChange={e => set('spouse_last_name', e.target.value)} />
+                      <Input className={inputCls} {...register('spouse_last_name')} />
                     </Field>
                     <Field>
                       <FieldLabel>Date of Birth</FieldLabel>
-                      <Input className={inputCls} type="date" value={str('spouse_date_of_birth')} onChange={e => set('spouse_date_of_birth', e.target.value)} />
+                      <Input className={inputCls} type="date" {...register('spouse_date_of_birth')} />
                     </Field>
                     <Field>
                       <FieldLabel>Citizenship / immigration status</FieldLabel>
-                      <select className={selectCls} value={form.spouse_citizenship_status} onChange={e => {
-                        const status = normalizeCitizenshipStatus(e.target.value)
-                        set('spouse_citizenship_status', status)
-                        set('spouse_is_us_citizen', citizenshipStatusToLegacyBoolean(status))
-                      }}>
-                        {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </Field>
-                    <Field>
-                      <FieldLabel>Pronouns</FieldLabel>
-                      <PronounSelect
-                        value={str('spouse_preferred_pronoun')}
-                        onChange={v => set('spouse_preferred_pronoun', v)}
-                        title="Spouse pronouns"
+                      <Controller
+                        control={control}
+                        name="spouse_citizenship_status"
+                        render={({ field }) => (
+                          <select
+                            className={selectCls}
+                            value={field.value}
+                            onBlur={field.onBlur}
+                            onChange={e => {
+                              const status = normalizeCitizenshipStatus(e.target.value)
+                              field.onChange(status)
+                              setField('spouse_is_us_citizen', citizenshipStatusToLegacyBoolean(status))
+                            }}
+                          >
+                            {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </select>
+                        )}
                       />
                     </Field>
                     <Field>
+                      <FieldLabel>Pronouns</FieldLabel>
+                      <PronounField control={control} name="spouse_preferred_pronoun" title="Spouse pronouns" />
+                    </Field>
+                    <Field>
                       <FieldLabel>Date of Marriage</FieldLabel>
-                      <Input className={inputCls} type="date" value={str('date_of_marriage')} onChange={e => set('date_of_marriage', e.target.value)} />
+                      <Input className={inputCls} type="date" {...register('date_of_marriage')} />
                     </Field>
                     <Field>
                       <FieldLabel>Email</FieldLabel>
-                      <Input className={inputCls} type="email" value={str('spouse_email')} onChange={e => set('spouse_email', e.target.value)} />
+                      <Input className={inputCls} type="email" {...register('spouse_email')} />
                     </Field>
                     <Field>
                       <FieldLabel>Phone</FieldLabel>
                       <Input
                         className={inputCls}
                         type="tel"
-                        value={str('spouse_phone')}
-                        onChange={e => set('spouse_phone', formatPhoneInput(e.target.value))}
                         placeholder="(555) 555-5555"
+                        {...register('spouse_phone')}
                       />
                     </Field>
                   </Row2>
@@ -673,53 +729,58 @@ export default function AdminIntakeSheet({
                     <Field>
                       <FieldLabel>Children?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_children')} onChange={v => { set('has_children', v); if (!v) { set('has_minor_children', false); set('children', []) } }} />
+                        <YesNoField
+                          control={control}
+                          name="has_children"
+                          onAfterChange={value => {
+                            if (!value) {
+                              setField('has_minor_children', false)
+                              setField('children', [])
+                            }
+                          }}
+                        />
                       </div>
                     </Field>
-                    {form.has_children && (
+                    {hasChildren && (
                       <Field>
                         <FieldLabel>Minor children (under 18)?</FieldLabel>
                         <div className="mt-1">
-                          <SegmentedYesNo value={bool('has_minor_children')} onChange={v => set('has_minor_children', v)} />
+                          <YesNoField control={control} name="has_minor_children" />
                         </div>
                       </Field>
                     )}
                   </Row2>
 
-                  {form.has_children && (
+                  {hasChildren && (
                     <div className="mt-3">
                       <FieldLabel>Children</FieldLabel>
-                      {form.children.map((child, idx) => (
+                      {childFields.map((child, idx) => (
                         <div key={child.id} className="mb-2 flex items-center gap-2">
                           <Input
                             className={cn(inputCls, 'flex-1')}
                             placeholder="First name"
-                            value={child.first_name}
-                            onChange={e => updateChild(child.id, 'first_name', e.target.value)}
+                            {...register(`children.${idx}.first_name`)}
                           />
                           <Input
                             className={cn(inputCls, 'flex-1')}
                             placeholder="Middle name"
-                            value={child.middle_name}
-                            onChange={e => updateChild(child.id, 'middle_name', e.target.value)}
+                            {...register(`children.${idx}.middle_name`)}
                           />
                           <Input
                             className={cn(inputCls, 'flex-1')}
                             placeholder="Last name"
-                            value={child.last_name}
-                            onChange={e => updateChild(child.id, 'last_name', e.target.value)}
+                            {...register(`children.${idx}.last_name`)}
                           />
                           <Input
                             className={cn(inputCls, 'w-[130px] flex-none')}
                             type="date"
-                            value={child.date_of_birth}
-                            onChange={e => updateChild(child.id, 'date_of_birth', e.target.value)}
                             title={`Child ${idx + 1} date of birth`}
+                            {...register(`children.${idx}.date_of_birth`)}
                           />
                           <div className="w-[120px] flex-none">
-                            <PronounSelect
-                              value={child.preferred_pronoun ?? ''}
-                              onChange={v => updateChild(child.id, 'preferred_pronoun', v)}
+                            <PronounField
+                              control={control}
+                              name={`children.${idx}.preferred_pronoun`}
                               title={`Child ${idx + 1} pronouns`}
                             />
                           </div>
@@ -729,7 +790,7 @@ export default function AdminIntakeSheet({
                             size="icon-sm"
                             className="shrink-0 text-muted-foreground"
                             aria-label={`Remove child ${idx + 1}`}
-                            onClick={() => removeChild(child.id)}
+                            onClick={() => removeChild(idx)}
                           >
                             <X className="size-3.5" />
                           </Button>
@@ -740,7 +801,7 @@ export default function AdminIntakeSheet({
                         variant="ghost"
                         size="sm"
                         className="mt-1 px-0 text-xs text-primary hover:bg-transparent hover:text-primary"
-                        onClick={addChild}
+                        onClick={() => appendChild(emptyChild())}
                       >
                         + Add child
                       </Button>
@@ -751,10 +812,9 @@ export default function AdminIntakeSheet({
                     <FieldLabel>Family notes</FieldLabel>
                     <Textarea
                       className={textareaCls}
-                      value={str('family_notes')}
-                      onChange={e => set('family_notes', e.target.value)}
                       placeholder="Notes about dependents, blended family, or other family complexity…"
                       rows={3}
+                      {...register('family_notes')}
                     />
                   </div>
                 </>
@@ -765,39 +825,38 @@ export default function AdminIntakeSheet({
                 <>
                   <GroupLabel>Assets</GroupLabel>
                   <div className="mb-3">
-                    {errors.estate_value && <div ref={firstErrorRef} />}
                     <FieldLabel>Approximate estate value</FieldLabel>
                     <select
-                      className={selectCls} aria-invalid={Boolean(errors.estate_value)}
-                      value={str('estate_value')}
-                      onChange={e => set('estate_value', e.target.value)}
+                      className={selectCls}
+                      aria-invalid={Boolean(errors.estate_value)}
+                      {...register('estate_value')}
                     >
                       <option value="">Select range…</option>
                       {ESTATE_VALUE_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                    <FieldError message={errors.estate_value} />
+                    <FieldError className={errorCls} message={errors.estate_value?.message} />
                   </div>
 
                   <Row2>
                     <Field>
                       <FieldLabel>Real property?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_real_property')} onChange={v => set('has_real_property', v)} />
+                        <YesNoField control={control} name="has_real_property" />
                       </div>
                     </Field>
-                    {form.has_real_property && (
+                    {hasRealProperty && (
                       <Field>
                         <FieldLabel>Approx. property value</FieldLabel>
-                        <Input className={inputCls} value={str('real_property_value')} onChange={e => set('real_property_value', e.target.value)} placeholder="e.g. $650K" />
+                        <Input className={inputCls} placeholder="e.g. $650K" {...register('real_property_value')} />
                       </Field>
                     )}
                   </Row2>
-                  {form.has_real_property && (
+                  {hasRealProperty && (
                     <div className="mt-2">
                       <FieldLabel>Property address</FieldLabel>
-                      <Input className={inputCls} value={str('real_property_address')} onChange={e => set('real_property_address', e.target.value)} />
+                      <Input className={inputCls} {...register('real_property_address')} />
                     </div>
                   )}
 
@@ -805,43 +864,43 @@ export default function AdminIntakeSheet({
                     <Field>
                       <FieldLabel>Retirement accounts?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_retirement')} onChange={v => set('has_retirement', v)} />
+                        <YesNoField control={control} name="has_retirement" />
                       </div>
                     </Field>
-                    {form.has_retirement && (
+                    {hasRetirement && (
                       <Field>
                         <FieldLabel>Approx. value</FieldLabel>
-                        <Input className={inputCls} value={str('retirement_value')} onChange={e => set('retirement_value', e.target.value)} placeholder="e.g. $400K" />
+                        <Input className={inputCls} placeholder="e.g. $400K" {...register('retirement_value')} />
                       </Field>
                     )}
                     <Field>
                       <FieldLabel>Life insurance?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_life_insurance')} onChange={v => set('has_life_insurance', v)} />
+                        <YesNoField control={control} name="has_life_insurance" />
                       </div>
                     </Field>
-                    {form.has_life_insurance && (
+                    {hasLifeInsurance && (
                       <Field>
                         <FieldLabel>Death benefit</FieldLabel>
-                        <Input className={inputCls} value={str('life_insurance_value')} onChange={e => set('life_insurance_value', e.target.value)} placeholder="e.g. $500K" />
+                        <Input className={inputCls} placeholder="e.g. $500K" {...register('life_insurance_value')} />
                       </Field>
                     )}
                     <Field>
                       <FieldLabel>Business interests?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_business')} onChange={v => set('has_business', v)} />
+                        <YesNoField control={control} name="has_business" />
                       </div>
                     </Field>
-                    {form.has_business && (
+                    {hasBusiness && (
                       <Field>
                         <FieldLabel>Description</FieldLabel>
-                        <Input className={inputCls} value={str('business_description')} onChange={e => set('business_description', e.target.value)} placeholder="e.g. 50% LLC, plumbing company" />
+                        <Input className={inputCls} placeholder="e.g. 50% LLC, plumbing company" {...register('business_description')} />
                       </Field>
                     )}
                     <Field>
                       <FieldLabel>Investment accounts?</FieldLabel>
                       <div className="mt-1">
-                        <SegmentedYesNo value={bool('has_investments')} onChange={v => set('has_investments', v)} />
+                        <YesNoField control={control} name="has_investments" />
                       </div>
                     </Field>
                   </Row2>
@@ -856,10 +915,9 @@ export default function AdminIntakeSheet({
                     <FieldLabel>Goals &amp; wishes</FieldLabel>
                     <Textarea
                       className={textareaCls}
-                      value={str('planning_objectives')}
-                      onChange={e => set('planning_objectives', e.target.value)}
                       placeholder="What does the client want to accomplish with their estate plan?"
                       rows={4}
+                      {...register('planning_objectives')}
                     />
                   </div>
 
@@ -873,10 +931,16 @@ export default function AdminIntakeSheet({
                         { key: 'has_hcp' as const, label: 'Healthcare Proxy' },
                       ].map(({ key, label }) => (
                         <label key={key} htmlFor={`${checkboxId}-${key}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
-                          <Checkbox
-                            id={`${checkboxId}-${key}`}
-                            checked={bool(key)}
-                            onCheckedChange={checked => set(key, checked === true)}
+                          <Controller
+                            control={control}
+                            name={key}
+                            render={({ field }) => (
+                              <Checkbox
+                                id={`${checkboxId}-${key}`}
+                                checked={Boolean(field.value)}
+                                onCheckedChange={checked => field.onChange(checked === true)}
+                              />
+                            )}
                           />
                           {label}
                         </label>
@@ -886,25 +950,37 @@ export default function AdminIntakeSheet({
 
                   <div className="mt-3">
                     <FieldLabel>Special circumstances</FieldLabel>
-                    <div className="mt-1.5 grid grid-cols-2 gap-2">
-                      {[
-                        'Blended family',
-                        'Disabled beneficiary',
-                        'Business succession',
-                        'Charitable intent',
-                        'Tax planning',
-                        'Medicaid planning',
-                      ].map(val => (
-                        <label key={val} htmlFor={`${checkboxId}-${val}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
-                          <Checkbox
-                            id={`${checkboxId}-${val}`}
-                            checked={form.special_circumstances.includes(val)}
-                            onCheckedChange={() => toggleCircumstance(val)}
-                          />
-                          {val}
-                        </label>
-                      ))}
-                    </div>
+                    <Controller
+                      control={control}
+                      name="special_circumstances"
+                      render={({ field }) => (
+                        <div className="mt-1.5 grid grid-cols-2 gap-2">
+                          {[
+                            'Blended family',
+                            'Disabled beneficiary',
+                            'Business succession',
+                            'Charitable intent',
+                            'Tax planning',
+                            'Medicaid planning',
+                          ].map(val => (
+                            <label key={val} htmlFor={`${checkboxId}-${val}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                              <Checkbox
+                                id={`${checkboxId}-${val}`}
+                                checked={field.value.includes(val)}
+                                onCheckedChange={() =>
+                                  field.onChange(
+                                    field.value.includes(val)
+                                      ? field.value.filter(c => c !== val)
+                                      : [...field.value, val],
+                                  )
+                                }
+                              />
+                              {val}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    />
                   </div>
                 </>
               )}
@@ -929,31 +1005,31 @@ export default function AdminIntakeSheet({
                       <FieldLabel>{label}</FieldLabel>
                       <Row2>
                         <Field>
-                          <ContactCombobox
-                            value={str(primary)}
-                            onChange={(v) => set(primary, v)}
+                          <ContactField
+                            control={control}
+                            name={primary}
                             suggestions={intakeContacts}
                             placeholder="Primary (name)"
                           />
                           <div className="mt-1.5">
-                            <PronounSelect
-                              value={str(primaryPronouns)}
-                              onChange={(v) => set(primaryPronouns, v)}
+                            <PronounField
+                              control={control}
+                              name={primaryPronouns}
                               title={`${label} — primary pronouns`}
                             />
                           </div>
                         </Field>
                         <Field>
-                          <ContactCombobox
-                            value={str(alt)}
-                            onChange={(v) => set(alt, v)}
+                          <ContactField
+                            control={control}
+                            name={alt}
                             suggestions={intakeContacts}
                             placeholder="Successor / alternate"
                           />
                           <div className="mt-1.5">
-                            <PronounSelect
-                              value={str(altPronouns)}
-                              onChange={(v) => set(altPronouns, v)}
+                            <PronounField
+                              control={control}
+                              name={altPronouns}
                               title={`${label} — alternate pronouns`}
                             />
                           </div>
@@ -967,31 +1043,31 @@ export default function AdminIntakeSheet({
                       <FieldLabel>Guardian for minor children</FieldLabel>
                       <Row2>
                         <Field>
-                          <ContactCombobox
-                            value={str('guardian_primary')}
-                            onChange={(v) => set('guardian_primary', v)}
+                          <ContactField
+                            control={control}
+                            name="guardian_primary"
                             suggestions={intakeContacts}
                             placeholder="Primary (name)"
                           />
                           <div className="mt-1.5">
-                            <PronounSelect
-                              value={str('guardian_primary_pronouns')}
-                              onChange={(v) => set('guardian_primary_pronouns', v)}
+                            <PronounField
+                              control={control}
+                              name="guardian_primary_pronouns"
                               title="Guardian — primary pronouns"
                             />
                           </div>
                         </Field>
                         <Field>
-                          <ContactCombobox
-                            value={str('guardian_alternate')}
-                            onChange={(v) => set('guardian_alternate', v)}
+                          <ContactField
+                            control={control}
+                            name="guardian_alternate"
                             suggestions={intakeContacts}
                             placeholder="Successor / alternate"
                           />
                           <div className="mt-1.5">
-                            <PronounSelect
-                              value={str('guardian_alternate_pronouns')}
-                              onChange={(v) => set('guardian_alternate_pronouns', v)}
+                            <PronounField
+                              control={control}
+                              name="guardian_alternate_pronouns"
                               title="Guardian — alternate pronouns"
                             />
                           </div>
@@ -1009,36 +1085,36 @@ export default function AdminIntakeSheet({
                   <Row2>
                     <Field>
                       <FieldLabel>Decedent name</FieldLabel>
-                      <Input className={inputCls} value={str('pb_decedent_name')} onChange={e => set('pb_decedent_name', e.target.value)} />
+                      <Input className={inputCls} {...register('pb_decedent_name')} />
                     </Field>
                     <Field>
                       <FieldLabel>Date of death</FieldLabel>
-                      <Input className={inputCls} type="date" value={str('pb_date_of_death')} onChange={e => set('pb_date_of_death', e.target.value)} />
+                      <Input className={inputCls} type="date" {...register('pb_date_of_death')} />
                     </Field>
                     <Field>
                       <FieldLabel>Domicile at death</FieldLabel>
-                      <Input className={inputCls} value={str('pb_domicile')} onChange={e => set('pb_domicile', e.target.value)} placeholder="City, State" />
+                      <Input className={inputCls} placeholder="City, State" {...register('pb_domicile')} />
                     </Field>
                     <Field>
                       <FieldLabel>Approx. estate value</FieldLabel>
-                      <Input className={inputCls} value={str('pb_estate_value')} onChange={e => set('pb_estate_value', e.target.value)} placeholder="e.g. $450K" />
+                      <Input className={inputCls} placeholder="e.g. $450K" {...register('pb_estate_value')} />
                     </Field>
                     <Field span2>
                       <FieldLabel>Known assets</FieldLabel>
-                      <Textarea className={textareaCls} value={str('pb_known_assets')} onChange={e => set('pb_known_assets', e.target.value)} rows={2} />
+                      <Textarea className={textareaCls} rows={2} {...register('pb_known_assets')} />
                     </Field>
                     <Field span2>
                       <FieldLabel>Known debts / liabilities</FieldLabel>
-                      <Textarea className={textareaCls} value={str('pb_known_debts')} onChange={e => set('pb_known_debts', e.target.value)} rows={2} />
+                      <Textarea className={textareaCls} rows={2} {...register('pb_known_debts')} />
                     </Field>
                     <Field>
                       <FieldLabel>Petitioner relationship to decedent</FieldLabel>
-                      <Input className={inputCls} value={str('pb_petitioner_relationship')} onChange={e => set('pb_petitioner_relationship', e.target.value)} placeholder="e.g. spouse, child" />
+                      <Input className={inputCls} placeholder="e.g. spouse, child" {...register('pb_petitioner_relationship')} />
                     </Field>
                   </Row2>
                   <div className="mt-2">
                     <FieldLabel>Goals / timeline notes</FieldLabel>
-                    <Textarea className={textareaCls} value={str('pb_goals_timeline')} onChange={e => set('pb_goals_timeline', e.target.value)} rows={3} />
+                    <Textarea className={textareaCls} rows={3} {...register('pb_goals_timeline')} />
                   </div>
                 </>
               )}
@@ -1049,10 +1125,9 @@ export default function AdminIntakeSheet({
               <GroupLabel>Internal Notes</GroupLabel>
               <Textarea
                 className={textareaCls}
-                value={str('special_notes')}
-                onChange={e => set('special_notes', e.target.value)}
                 placeholder="Notes from the consultation — anything not captured above."
                 rows={4}
+                {...register('special_notes')}
               />
             </>
           )}
@@ -1086,7 +1161,7 @@ export default function AdminIntakeSheet({
                   type="button"
                   variant="outline"
                   disabled={!isDirty || saving}
-                  onClick={handleSaveDraft}
+                  onClick={() => void handleSaveDraft()}
                 >
                   {saving ? 'Saving…' : clientLocked ? 'Save attorney edits' : 'Save draft'}
                 </Button>
@@ -1096,10 +1171,10 @@ export default function AdminIntakeSheet({
                 {!clientLocked && (
                   <Button
                     type="button"
-                    disabled={submitting}
-                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    onClick={() => void handleSubmit(onSubmit)()}
                   >
-                    {submitting ? 'Submitting…' : 'Submit intake'}
+                    {isSubmitting ? 'Submitting…' : 'Submit intake'}
                   </Button>
                 )}
               </div>
