@@ -19,6 +19,9 @@ import {
 } from '@/lib/adminTables/matterTable'
 import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
+import { matterExportCsv, matterExportFilename, toMatterExportRow } from '@/lib/matters/exportRows'
+import { downloadCsv } from '@/lib/browserDownload'
+import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { MatterStageBoard, type StageBoardCard } from '@/components/matter/MatterStageBoard'
 import {
   MatterPipelineInsights,
@@ -191,6 +194,22 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     () => filterAndSortMatters(carded, filters, sortKey),
     [carded, filters, sortKey],
   )
+
+  /**
+   * Export what is on screen.
+   *
+   * The list is filtered and sorted in the browser over every open matter the
+   * page loaded, so the rows the table is rendering are already the answer —
+   * asking the server again would mean restating the search, the chips and the
+   * insight cards in SQL, and the two definitions would drift.
+   */
+  const exportCsv = () => {
+    const label = cardFilter ?? (filters.stageGroup === 'all' ? 'all' : filters.stageGroup)
+    downloadCsv(
+      matterExportCsv(filtered.map(toMatterExportRow)),
+      matterExportFilename(label),
+    )
+  }
 
   /** "Open matters" is the unfiltered list, so it clears rather than narrows. */
   const toggleCardFilter = (next: MatterCardFilter) => {
@@ -409,6 +428,11 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
             containerClassName="max-w-md min-w-[14rem] flex-1"
           />
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <ExportCsvButton
+              disabled={filtered.length === 0}
+              title="Download the matters currently listed as a CSV"
+              onExport={exportCsv}
+            />
             <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
               <Database className="h-3.5 w-3.5" />
               Import from Lawmatics

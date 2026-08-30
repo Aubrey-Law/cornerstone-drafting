@@ -119,6 +119,8 @@ export function buildLeadSearchFilter(term: string): string | null {
 
 export const LEAD_STATUS_FILTERS: LeadStatusFilter[] = ['open', 'lost', 'declined', 'all']
 
+export const LEAD_CARD_FILTERS: LeadCardFilterKey[] = ['attention', 'agreements']
+
 export const LEAD_PROGRESS_FILTERS: LeadProgressFilter[] = [
   'all',
   'intake_not_sent',
@@ -151,6 +153,7 @@ function pick<T extends string>(allowed: T[], value: unknown, fallback: T): T {
 export function leadListParamsFrom(
   input: {
     status?: unknown
+    card?: unknown
     search?: unknown
     practice?: unknown
     progress?: unknown
@@ -162,6 +165,11 @@ export function leadListParamsFrom(
   return {
     ...base,
     status: pick(LEAD_STATUS_FILTERS, input.status, base.status),
+    // An insight card ("needs attention", "agreements out") narrows the list on
+    // screen, so an export taken with one active has to narrow the same way.
+    card: typeof input.card === 'string' && (LEAD_CARD_FILTERS as string[]).includes(input.card)
+      ? (input.card as LeadCardFilterKey)
+      : base.card,
     progress: pick(LEAD_PROGRESS_FILTERS, input.progress, base.progress),
     sort: pick(LEAD_SORT_KEYS, input.sort, base.sort),
     search: typeof input.search === 'string' ? input.search.trim() : base.search,

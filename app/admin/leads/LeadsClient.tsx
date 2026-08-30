@@ -13,6 +13,9 @@ import {
   type LeadListParams,
   type LeadListSummary,
 } from '@/lib/leads/listParams'
+import { leadExportFilename, leadExportUrl } from '@/lib/leads/exportRows'
+import { downloadCsvFromRoute } from '@/lib/browserDownload'
+import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
 import {
@@ -437,6 +440,14 @@ export function LeadsClient({
         description="Prospective and historical client opportunities — manage intake, engagement, follow-up, and conversion from one pipeline."
         actions={
           <>
+            <ExportCsvButton
+              title="Download the leads matching the current filters as a CSV (name, email, phone)"
+              onExport={() => downloadCsvFromRoute(
+                leadExportUrl(params),
+                leadExportFilename(params.status),
+                token,
+              )}
+            />
             <Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>
               Import from Lawmatics
             </Button>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, ClipboardList, Copy, Download, Eye, FilePenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { downloadCsvFromRoute } from '@/lib/browserDownload'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
   DesignSheetImportPreviewRow,
@@ -193,19 +194,7 @@ function LeadExportToolEventCard({ event }: { event: ToolEvent }) {
     setFailed(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch(url, {
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-      })
-      if (!response.ok) {
-        const json = await response.json().catch(() => null) as { error?: string } | null
-        throw new Error(json?.error ?? 'Export failed')
-      }
-      const objectUrl = URL.createObjectURL(await response.blob())
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = filename
-      link.click()
-      URL.revokeObjectURL(objectUrl)
+      await downloadCsvFromRoute(url, filename, session?.access_token ?? null)
     } catch (error) {
       setFailed(error instanceof Error ? error.message : 'Could not download the lead export')
     } finally {

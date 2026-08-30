@@ -6,7 +6,7 @@ import {
   LEAD_STATUS_FILTERS,
   leadListParamsFrom,
 } from '@/lib/leads/listParams'
-import { clampLeadExportLimit, leadExportFilename } from '@/lib/leads/exportRows'
+import { clampLeadExportLimit, leadExportFilename, leadExportUrl } from '@/lib/leads/exportRows'
 
 export const EXPORT_LEADS_TOOL_NAME = 'export_leads'
 
@@ -87,13 +87,7 @@ export const exportLeadsToolExecutor: AdminChatToolExecutor = {
 
     try {
       const page = await fetchLeadExportRows(params, { limit })
-      const downloadUrl = `/api/admin/leads/export?${new URLSearchParams({
-        status: params.status,
-        ...(params.search ? { search: params.search } : {}),
-        ...(params.practice && params.practice !== 'all' ? { practice: params.practice } : {}),
-        ...(params.progress !== 'all' ? { progress: params.progress } : {}),
-        sort: params.sort,
-      }).toString()}`
+      const downloadUrl = leadExportUrl(params)
       const filename = leadExportFilename(params.status)
 
       emit({

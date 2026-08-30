@@ -1,3 +1,6 @@
+import { csvFilename, toCsvText } from '@/lib/csvFile'
+import type { LeadListParams } from '@/lib/leads/listParams'
+
 /**
  * The shape of a lead export — the contact fields the attorney asks for when
  * they want "a list of leads": name, email, phone.
@@ -64,23 +67,27 @@ export function clampLeadExportLimit(value: unknown): number {
   return Math.max(1, Math.min(LEAD_EXPORT_MAX_ROWS, Math.floor(numeric)))
 }
 
-function cell(value: string): string {
-  // A leading =, +, - or @ makes a spreadsheet read the cell as a formula, so
-  // quote-and-prefix those: a phone number like +1 617 555 0100 is text.
-  const escaped = /^[=+\-@]/.test(value) ? `'${value}` : value
-  return /[",\n\r]/.test(escaped) ? `"${escaped.replaceAll('"', '""')}"` : escaped
-}
+export const LEAD_EXPORT_HEADERS = ['Name', 'Email', 'Phone']
 
 export function leadExportCsv(rows: LeadExportRow[]): string {
-  const lines = [['Name', 'Email', 'Phone'].join(',')]
-  for (const row of rows) {
-    lines.push([cell(row.name), cell(row.email), cell(row.phone)].join(','))
-  }
-  return lines.join('\n')
+  return toCsvText(LEAD_EXPORT_HEADERS, rows.map(row => [row.name, row.email, row.phone]))
 }
 
 export function leadExportFilename(status: string, today = new Date()): string {
-  const date = today.toISOString().slice(0, 10)
-  const label = status && status !== 'all' ? status : 'all'
-  return `cornerstone-leads-${label}-${date}.csv`
+  return csvFilename('leads', status, today)
+}
+
+/**
+ * The export route's URL for a given selection.
+ *
+ * One definition, so the leads page's Export button and the assistant's
+ * `export_leads` tool hand back the same link for the same filters.
+ */
+export function leadExportUrl(params: LeadListParams): string {
+  const query = new URLSearchParams({ status: params.status, sort: params.sort })
+  if (params.card) query.set('card', params.card)
+  if (params.search) query.set('search', params.search)
+  if (params.practice && params.practice !== 'all') query.set('practice', params.practice)
+  if (params.progress !== 'all') query.set('progress', params.progress)
+  return `/api/admin/leads/export?${query.toString()}`
 }

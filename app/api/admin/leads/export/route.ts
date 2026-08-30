@@ -25,6 +25,7 @@ export async function GET(req: Request) {
   const params = leadListParamsFrom(
     {
       status: query.get('status'),
+      card: query.get('card'),
       search: query.get('search'),
       practice: query.get('practice'),
       progress: query.get('progress'),
