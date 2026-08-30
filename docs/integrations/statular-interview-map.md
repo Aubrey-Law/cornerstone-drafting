@@ -1,22 +1,26 @@
 # Statular Interview — Complete Question & Decision Map
 
-> Captured from Statular's 25-page interview by the firm, and the source of the
-> verbatim question and option wording in `lib/designSheet/statularInterviewMap.ts`.
-> The design sheet exports to Statular's file import in this vocabulary — see
-> "Exporting to Statular" in `docs/design-sheet-sections/trust-details.md`.
+> Captured from Statular's 25-page interview by the firm, with every conditional
+> branch opened in the live interview. Source of the verbatim question and option
+> wording in `lib/designSheet/statularInterviewMap.ts`; the design sheet exports
+> to Statular's file import in this vocabulary — see "Exporting to Statular" in
+> `docs/design-sheet-sections/trust-details.md`.
 >
-> **Still being extracted, and expected to grow.** A question here that the map
-> module does not yet cover is not a bug: unmapped answers still export, under
-> "Additional answers" with our own labels, and move up to verbatim as entries
-> are added. Nothing is lost by a gap here.
-
-
+> A question here that the map module does not cover is not a bug: many of the
+> branches below (the per-child distribution builders, the Dementia Directive,
+> Visitation Authorization, POA gifting sub-options) have no design-sheet field
+> behind them at all, so there is nothing to export. Unmapped answers that *do*
+> have a field still export, under "Additional answers" with our own labels.
+>
+> **The "Changes Made to Matter 8312" section at the end is an operational
+> warning, not documentation.** It records live-matter toggles left switched on
+> during capture. Read it before generating documents on that matter.
 
 **Legend**
 - `( )` single-select (radio) · `[ ]` toggle/checkbox · `___` free text · `▤` repeating list (add rows) · `👤` contact picker
 - `*` required
 - **⟶ unlocks:** selecting/checking this reveals additional questions
-- **⚠ hidden branch** — sub-questions exist but are collapsed in the current matter because the parent option is off. Noted so nothing is missed.
+- Every conditional branch below was opened in the live interview and its revealed fields recorded. Nothing is inferred.
 
 ---
 
@@ -172,9 +176,14 @@
 > Shown because the clients have one or more minor children.
 
 - `[ ]` **Nominate guardians in will**
-  - ⚠ **hidden branch:** checking this reveals guardian nomination pickers (guardian of the person / of the estate, first nominee, alternates, co-guardian handling, and any special instructions)
 - `[ ]` **Include a Standby Guardian Designation** — separate document; authority activates on incapacity, debilitation, or death
-  - ⚠ **hidden branch:** checking this reveals standby guardian nominees and effective-event options
+
+**⟶ Either checkbox opens one shared GUARDIAN DESIGNATIONS block** (there is no separate standby nominee set — the same nominees serve both):
+> "The clients are each the guardian. Please select the option(s) to serve as first backup guardian and additional backup guardians."
+
+- 👤* **First Guardian** — multi-select (co-guardians allowed)
+- 👤 **Backup Guardian(s)** — *appears only once a First Guardian is selected*; multi-select; blank = none
+- `___` Additional Guardian Instructions (optional custom paragraph after the standard nomination language) — Clause Library / Draft with AI
 
 ---
 
@@ -208,7 +217,13 @@
 
 ### Trust Protector
 - `[ ]` **Include provisions for a Trust Protector** — appointment, vacancy, powers, compensation, liability
-  - ⚠ **hidden branch:** checking this may reveal Trust Protector identity/appointment and power-scope selections
+  - `[ ]` **Include summary of trust protector provisions for client** — plain-language client-facing summary
+  - `[ ]` **Include a Trust Protector Appointer** — names a separate person who may appoint, remove, replace, and designate Trust Protectors
+    > The Appointer may act only after the settlor(s) are deceased or incapacitated, and is not the same person as the Trust Protector. **The attorney is commonly the Trust Protector Appointer.**
+    - 👤* **Trust Protector Appointer** — incl. **"Designate my law firm as the Trust Protector Appointer"**
+    - 👤 **Successor Trust Protector Appointer** — backup
+    - `( )*` **May the Appointer appoint themselves as Trust Protector?** — Yes / No / Omit (silent)
+  - 👤 **Initial Trust Protector** — incl. **"Designate my law firm as the Trust Protector"**; leave blank and the office starts vacant, with the settlor(s) able to appoint later
 
 ### Retirement Accounts
 - `[ ]` **Include provisions for distributing retirement accounts**
@@ -228,7 +243,7 @@
   - Spouse or Partner → issue → heirs at law
   - Issue (by right of representation) → heirs at law
   - Heirs at Law
-  - Named Beneficiaries ⟶ 👤 select individuals
+  - **Named Beneficiaries** ⟶ **Select Beneficiaries for Retirement Accounts*** — multi-select. Groups and organizations are deliberately excluded, since only individuals qualify for see-through trust treatment. A validation warning appears if the option is selected with nobody picked: the generated documents leave the selection blank.
 
 ### Special Distributions
 - `___*` **Special Distributions Age** (years) — under this age, inheritance may be applied for benefit rather than paid directly
@@ -245,8 +260,8 @@
 
 ### Administrative Provisions
 - `[ ]` **Include a no-contest clause in the trust and pour-over will**
-  - `[ ]` Name specific people in Settlor 1's no-contest clause ⟶ 👤 select people
-  - `[ ]` Name specific people in Settlor 2's no-contest clause ⟶ 👤 select people
+  - `[ ]` **Name specific people in Settlor 1's no-contest clause** ⟶ 👤 **People who will be specifically named** — multi-select from all beneficiaries and children; "These individuals will be named in the no-contest clause and disinherited if they contest the trust."
+  - `[ ]` **Name specific people in Settlor 2's no-contest clause** ⟶ same picker, scoped to Settlor 2
 - `[ ]` Require mandatory arbitration for trust disputes — *unavailable in Massachusetts*
 - `( )*` **Estate tax payment**
   - Apportion among beneficiaries
@@ -337,15 +352,38 @@
 ### Revocable Living Trust Information
 - `___*` **Trust Name**
 - `[ ]` **Is this a restatement of an existing trust?**
-  - ⚠ **hidden branch:** checking this reveals original trust name, original execution date, prior amendment history, and original settlor/trustee fields
+  - `[ ]` **Import trust details from original trust**
+  - `___*` **Original Trust Name**
+  - `___*` **Original Trust Date** (date the original trust was established; "Today" shortcut)
+  - `( )*` **Restatement Recitals** — how the document describes the trust's history and the authority for the restatement
+    - Use Statular's standard recitals (built from the structured answers above)
+    - Draft custom trust-history and authority recitals (for more complicated histories)
+  - `___` **Original Amendment Clause** (optional) — clause/section number granting authority to restate or amend. *Supplying it makes the next field required.*
+  - `___*` **Original Amendment Text** — the actual text of that clause; **Extract from File** available
 
 ### Care of Pets
 - `[ ]` **Include a pet trust** — pet care as part of HEMS during life, plus a pet trust on death or incapacity
-  - ⚠ **hidden branch:** checking this reveals caretaker designation, funding amount, remainder on the pet's death, and care instructions
+  - `▤*` **Pets Covered by the Pet Trust** — add specific pets, classes of pets, and optionally all other pets owned at the relevant death or incapacity
+  - `( )` **Include offspring in gestation** — Pets alive during the settlor's lifetime *and* offspring in gestation / Only pets alive during the settlor's lifetime
+    > **Disabled in Massachusetts** — the matter state's animal-trust law expressly limits coverage to animals alive during the settlor's lifetime.
+  - `( )*` **Pet Trust Funding** — Dollar amount / Percentage / Custom
+  - `___*` **Pet Trust Amount** ($ total placed in the Pet Trust)
+  - `___*` **Pet Trust Stipend** ($ the trustee may pay the caretaker monthly)
+  - `[ ]` Request that pets be kept together in the same home
+  - `[ ]` Require pets to live in the same home as the caretaker
+  - `[ ]` Require that pets not be euthanized unless necessary for their health and well-being
+  - 👤* **First Caretaker**
+  - 👤 **Second Caretaker**
+  - `___*` **Contingent Placement** — person, shelter, rescue, or adoption organization if no named caretaker is available
+  - 👤* **Contingent Beneficiary** — receives any assets remaining when the Pet Trust terminates
 
 ### Gifts, Debts & Advancements
 - `[ ]` **Does the client wish to make a gift upon their death?**
-  - ⚠ **hidden branch:** checking this reveals the specific-gift builder (recipient, gift type — cash / percentage / specific asset / real property, survivorship and lapse handling, contingent recipient)
+  - `▤` **Gifts on Settlor's Death** — **+ New Gift** opens an **Add Gift** dialog:
+    - `( )*` **Gift Type** — Tangible Property / Cash / Real Property / Business Interest / Other
+    - 👤* **Beneficiary** — multi-select from all beneficiaries
+    - `( )` **If gift cannot be made** — Gift lapses (no fallback, default) / Beneficiary's issue (per stirpes) / Beneficiary's heirs at law / Specific beneficiary / Settlor's heirs at law / Trustee discretion among trust beneficiaries / Trustee full discretion / Custom fallback clause
+    > A gift that can't reach the primary beneficiary or the fallback lapses and is added back to the residue.
 - `[ ]` Forgive all debts owed by any beneficiary (blanket clause)
 - `▤` **Individual Debts & Advancements** — add specific debts to forgive or lifetime advancements to account for (debtor, amount, treatment)
 
@@ -392,22 +430,79 @@
 > If the spouse receives outright, distribution to children only occurs if the spouse fails to survive. If the spouse's share is in trust, these provisions run on the surviving spouse's death.
 
 - `[ ]` **Use Family Pot Trust** — shared pot until the youngest child reaches a specified age
-  - ⚠ **hidden branch:** checking this reveals the pot-trust termination age and distribution standard
-- `( )*` **How should the estate be distributed on the settlor's death?**
-  - **Children Only – Outright in Equal Shares** (deceased child's share → their issue)
-  - **Children Only – Equal Division into Separate Share Trusts** ⟶ unlocks **Children Trust Settings** (income/principal standards, staggered distribution ages, withdrawal rights, termination) ⚠ hidden until selected
-  - **Children Only – Custom Distributions per Child** ⟶ unlocks per-child builder: unequal shares, outright vs. in trust, SNT, per-child contingent options, custom provisions for a deceased child's issue ⚠ hidden until selected
-  - **Children and/or Other Beneficiaries – Custom Distributions per Beneficiary** ⟶ unlocks the full beneficiary builder (grandchildren, siblings, nieces/nephews, friends; unequal shares, distinct provisions, SNTs) ⚠ hidden until selected
-- ⚠ **Distribution to Children's Issue** — a sub-section referenced by the options above; appears with the selected distribution mode
-- ⚠ **Contingent Distribution** option — appears with separate-share trusts, for a child who dies with no living issue
+  - `___*` **Family Pot Termination Age** — the age of the *youngest* child at which the pot terminates (defaults to 18)
+  - `[ ]` **Allow advancements from the Family Pot Trust?** — trustee may advance principal for weddings, a house, starting a business; advancements are deducted from that child's share when the pot splits
+- `( )*` **How should the estate be distributed on the settlor's death?** — the four options open very different builders:
+
+#### ⟶ A. Children Only – Outright in Equal Shares
+No trust settings. A deceased child's share passes to their issue per the **Distribution to Children's Issue** section below.
+
+#### ⟶ B. Children Only – Equal Division into Separate Share Trusts
+Opens **CHILDREN TRUST SETTINGS**, applied uniformly to every child:
+- **QUICK FILL:** one-click **Divorce Protection Trust** preset
+- `( )*` **Share Trust Trustee** — Then-Serving Trustee / Beneficiary / **Bifurcated Trusteeship** (independent trustee holds sole distribution authority; the beneficiary becomes Administrative Co-Trustee for investments at the trustee age) / Other Fiduciary / Custom Trustee Provisions
+- `( )*` **Trust Income** — Mandatory / Unitrust / HEMS (Support Trust) / Discretionary Trust / Discretionary Support (Hybrid) / Discretionary if Independent Trustee
+- `( )*` **Trust Principal Option** — Specified Ages / Lifetime
+- `( )*` **Distribution Timing** — By Age / Years After Death
+- `[ ]` **Allow Trust to Continue** — trust may continue after fully vesting (retains spendthrift protection); otherwise it terminates and distributes outright
+- `▤` **Tiered Distributions** — ages and fractions, must total 1. Quick fill: 100% at 25 · 100% at 21 · 100% at 18 · ½ at 25, ½ at 30 · ⅓ at 25/30/35 · ⅓ at 21/25/30 · ⅓ at 18/25/30
+- `( )*` **Contingent Distribution on Child's Death** (child dies with no living issue) — Other Children / Settlor's Issue / Child's Estate / Child's Spouse / Residue / Heirs at Law / Charity / Specific Individual/Group / Other-Terms Specified
+- `( )*` **Power of Appointment** — No appointment power / Limited testamentary power ⟶ select permitted appointees
+- `___` Additional Distribution Instructions — Clause Library / Draft with AI
+
+#### ⟶ C. Children Only – Custom Distributions per Child
+Opens a **Custom Distributions** list; **+ New Distribution** opens an **Add Distribution** dialog *per child*:
+- 👤* **Select Child**
+- `___*` **Share Percentage** (%)
+- `( )*` **Distribution Type** — Outright / Separate Share Trust / **Special Needs Trust** / Custom Provisions / **Existing Trust**
+- **QUICK FILL:** Divorce Protection Trust
+- `( )*` **Share Trust Trustee** — same five options as B
+- `( )*` **Income Distribution** — same six options as B
+- `( )*` **Trust Principal Option** — Specified Ages / Lifetime
+- `[ ]` **Allow Trust to Continue?**
+- `▤` **Trust Distributions** — tiered ages/fractions with the same seven quick fills
+- `( )*` **Power of Appointment** — No appointment power / Limited testamentary power
+- `( )*` **Contingent Distribution** (on the beneficiary's death) — Other Shares (Pro Rata) / Beneficiary's Issue / Beneficiary's Issue (Trust) / Beneficiary's Issue, Fallback to Settlor's Issue or Heirs / Beneficiary's Estate / Beneficiary's Spouse / Settlor's Issue / Heirs at Law / Residue *(flagged **NOT RECOMMENDED**)* / Other-Terms Specified
+- `( )` **If the Beneficiary Has No Living Issue** — optional second-order fallback: Other Shares (Pro Rata) / Settlor's Issue / Settlor's Children / Heirs at Law / Beneficiary's Estate / Beneficiary's Spouse / Residue / Other-Terms Specified
+  > Without a selection here, the share passes to the beneficiary's issue with no further direction.
+
+#### ⟶ D. Children and/or Other Beneficiaries – Custom Distributions per Beneficiary
+Suppresses the children-only trust settings entirely and routes all drafting into the **Distribution to Specific Beneficiaries** section below, so children, grandchildren, siblings, nieces/nephews, and friends are all built the same way.
+
+### Distribution to Children's Issue
+*(present with options A, B, and C)*
+- `( )*` **If a child is deceased, how should that child's issue receive their share?**
+  - Distribute Outright
+  - **Distribute in Trust** ⟶ opens **TRUST SETTINGS FOR ISSUE OF DECEASED CHILDREN** (below)
+  - Use the Same Trust Terms as Living Children
+  - Do Not Distribute to Children's Issue
+
+#### ⟶ Trust Settings for Issue of Deceased Children
+- `( )*` **Share Trust Trustee** — Then-Serving Trustee / Beneficiary / Bifurcated Trusteeship / Other Fiduciary / Custom Trustee Provisions
+- `( )*` **Trust Income** — Mandatory / Unitrust / HEMS / Discretionary / Discretionary Support (Hybrid) / Discretionary if Independent Trustee
+- `( )*` **Trust Principal Option** — Lifetime / Tiered
+- `( )*` **Distribution Timing** — By Age / Years After Death
+- `[ ]` **Allow Trust to Continue?** — continues after all principal vests, until the beneficiary requests distribution
+- `▤` **Tiered Distributions** — same seven quick fills
+- `( )*` **Contingent Distribution on Beneficiary Death** — Settlor's Children / Settlor's Issue / Beneficiary's Estate / Beneficiary's Spouse / Residue
+- `( )*` **Power of Appointment** — No appointment power / Limited testamentary power
 
 ### Distribution to Specific Beneficiaries
 - `[ ]` **Distribute to Specific Beneficiaries** (residue to named individuals if no spouse/children provisions or none survive)
-  - ⚠ **hidden branch:** checking this reveals the per-beneficiary share builder (drawn from the Contacts page)
+  - `▤` **Custom Distribution** — **+ New Distribution** per beneficiary; percentages must total 100
+  - `___` Additional Beneficiary Distribution Instructions — Clause Library / Draft with AI
 
 ### Secondary Named Beneficiaries
 - `[ ]` **Add Secondary Beneficiaries** — a second fallback layer before the default provision
-  - ⚠ **hidden branch:** checking this reveals the secondary beneficiary selection and shares
+  - `▤` **Secondary Beneficiary Distributions** — percentages must total 100; these beneficiaries take only if **all** primary named beneficiaries predecease the settlor
+  - `___` Additional Secondary Beneficiary Distribution Instructions
+
+### Tertiary Named Beneficiaries
+> This entire section is itself hidden until **Add Secondary Beneficiaries** is checked — a third fallback layer that is easy to miss.
+
+- `[ ]` **Add Tertiary Beneficiaries** — takes only if all primary *and* secondary beneficiaries predecease the settlor
+  - `▤` **Tertiary Beneficiary Distributions** — percentages must total 100
+  - `___` Additional Tertiary Beneficiary Distribution Instructions
 
 ### Default Provision
 - `( )*` **Default Provision** (residue not disposed of by any preceding provision)
@@ -427,7 +522,9 @@
 - `[ ]` Include signature block on each settlor's Schedule A
 - `[ ]` Include general catchall language on each settlor's Schedule A ("All real property owned by me…")
 - `[ ]` **Include a schedule of non-trust assets for each settlor**
-  - ⚠ **hidden branch:** checking this reveals a non-trust asset table per settlor
+  - `[ ]` **Include explanation of schedule of non-trust assets in the trust** — the non-trust schedule (typically Schedule "B" or "D") is *not* referenced in the trust body by default; this adds a brief reference
+  - Adds three further tables: **Joint Non-Trust Property**, **Settlor 1's Non-Trust Property**, **Settlor 2's Non-Trust Property**
+  > Reciprocal trusts get two separate Schedule Bs. Assets under Joint Non-Trust Property appear on **both** settlors' Schedule B.
 - `( )` **Format for asset schedules**
   - Assets in table format (compact, scannable)
   - Assets in paragraph format (narrative, grouped by asset type)
@@ -437,7 +534,9 @@
   - **Jointly-Owned Property**
   - **Settlor 1's Property**
   - **Settlor 2's Property**
-  - Per asset: **Type**, Name/description, Additional Info (e.g. county for real property), Value *(value is for internal reference only — never printed on the Schedule)*
+  - **Add Asset** dialog: **Import asset from file**; `( )*` **Asset Type** — Real Property / Bank Account / Life Insurance / Retirement Account / Investment Account / Personal Property / Business Interest / Annuity / Vehicle / Digital Asset / Mineral Interest / Firearms / Other; then Name/description, Additional Info (e.g. county), Value
+  - `( )*` **Schedule** — which table the asset lands in: Jointly-Owned / Settlor 1's / Settlor 2's / Joint Non-Trust / Settlor 1's Non-Trust / Settlor 2's Non-Trust
+  - *Value is captured for internal reference only and is never printed on the Schedule.*
 - ⚠ Reciprocal-trust warning: jointly-owned assets appear on **both** settlors' individual trust schedules — confirm this is intended and describe assets precisely
 
 ---
@@ -462,7 +561,13 @@
 ### Long-Form POA Provisions
 **Gifting Powers**
 - `[ ]` **Allow gifts**
-  - ⚠ **hidden branch:** checking this reveals gift limits (annual exclusion vs. unlimited), permitted donees, and self-gifting restrictions
+  > Warning shown if enabled with no recipient category selected: the generated POA prints a `[PERMITTED RECIPIENTS]` placeholder.
+  - `[ ]` Allow gifts to dependents
+  - `[ ]` Allow gifts to charity
+  - `[ ]` **Allow gifts to other specific individuals** ⟶ adds a **Permitted Beneficiaries for Gifts from Attorney-in-Fact** picker on each principal's own POA page
+  - `[ ]` Limit gifts to annual exclusion amount (annual federal gift tax exclusion, as adjusted by the IRS)
+  - `( )` **Allow Self-Gifting** — None / Only with an ascertainable standard (HEMS) / Other ⟶ `___` completes the sentence "My agent may make gifts in favor of themselves only…"
+  - `( )` **Additional Limitations on Gifting** — Full Discretion / **Equal Gifts to Same Generation** (a gift to one person requires equal-value gifts to all other permissible donees in that generation) / **Established Pattern** (only per the principal's pattern of giving over the prior 5 years, or the 5 years before incapacity)
 
 **Trust Powers** *(unusual; typically granted for a specific purpose such as Medicaid planning)*
 - `[ ]` Agent may create trusts (revocable and/or irrevocable) for the principal's benefit
@@ -512,6 +617,7 @@
 - `___` **Additional Powers** (Clause Library / Draft with AI)
 - `▤` **Name Specific Businesses** the agent may manage (named in the "Operate Business" section)
 - `___` **Additional Limitations** (Clause Library / Draft with AI)
+- 👤 **Permitted Beneficiaries for Gifts from Attorney-in-Fact** — *appears only when "Allow gifts to other specific individuals" is enabled on the PoA Provisions page*
 
 ---
 
@@ -557,9 +663,28 @@
 ---
 
 ## Pages 15 & 16 — Dementia Directive (Settlor 1) / (Settlor 2)
-> **Currently skipped** — the Dementia Directive is not selected on Page 1. The page reads: "If you are not including the dementia directive, proceed to the next page."
+> Collapses to a one-line skip notice unless **Dementia Directive** is selected on Page 1. Enabled, it asks the same two questions at each of three stages, each with a plain-language description of that stage.
 
-⚠ **hidden branch:** enabling the Dementia Directive on Page 1 opens a full stage-based questionnaire — typically care and treatment preferences at mild, moderate, and severe stages of dementia (hospitalization, antibiotics, artificial nutrition and hydration, CPR, comfort-focused care), plus living-situation and caregiving wishes.
+### Mild Dementia
+> Frequent memory lapses, especially recent events. Cooking gets harder; driving may be unsafe. Can still communicate, recognize loved ones, and enjoy activities.
+
+- `( )` **Medical treatment at this stage** — Prolong Life / Prolong life, but no CPR or mechanical ventilation / Comfort Care Only / Clear selection
+- `( )` **Assisted feeding preference** — Receive assisted feeding *(only while the client appears receptive; withheld if they are unwilling, spit out food, or choke)* / Do not receive assisted feeding *(even if they appear receptive)* / Clear selection
+
+### Moderate Dementia
+> Struggles to communicate and understand surroundings. Needs daily help dressing and using the bathroom. May be confused, upset, or paranoid; may also seem calm and content.
+
+- `( )` **Medical treatment at this stage** — same three options
+- `( )` **Assisted feeding preference** — same two options
+
+### Severe Dementia
+> No longer recognizes family. May be agitated, disruptive, or awake at night. Needs 24/7 care for all daily activities.
+
+- `( )` **Medical treatment at this stage** — same three options
+- `( )` **Assisted feeding preference** — same two options
+
+### Additional Instructions
+- `___` Any further wishes regarding medical care in dementia — Clause Library / Draft with AI
 
 ---
 
@@ -576,18 +701,36 @@
 - 👤 **Additional HIPAA Agents** — extra people who may access medical information (trustees, healthcare agents, and attorneys-in-fact are already covered if checked above)
 
 ### Visitation Authorization
-> **Currently excluded** — not selected on Page 1.
+> Hidden unless **Visitation Authorization** is selected on Page 1.
+> Purpose, per the form: gives people not traditionally recognized as family priority visitation rights — "especially important for same-sex, polyamorous, or other non-traditional couples, whose wishes about visitation rights may not always be respected by family members or hospital staff."
 
-⚠ **hidden branch:** enabling Visitation Authorization opens designation of permitted visitors, optionally excluded visitors, and any visitation instructions.
+- 👤 **Priority Visitors** — multi-select. *Include the form without selecting anyone and the visitor list prints blank.*
+- `___` **Prohibited Visitors** — anyone who should NOT be allowed to visit; the form asks for names in uppercase for consistency
 
 ---
 
 ## Pages 19 & 20 — Post-Death Choices (Settlor 1) / (Settlor 2)
+> Collapses to a skip notice unless **Final Disposition** is selected on Page 1.
 
 ### Disposition of Remains
-> **Currently excluded** — Final Disposition is not selected on Page 1.
+- `( )` **How should the remains be handled?**
+  - Cremation
+  - **Chemical Cremation (alkaline hydrolysis)**
+  - Burial
+  - No specific wishes *(lets the designated agent decide)*
+  - Leave blank in document *(prints a blank to fill in later)*
+  - Other ⟶ `___` custom disposition instructions (Clause Library / Draft with AI)
+- `___` **Funeral Instructions** — funeral or burial arrangements
+- `___` **Pre-Need/Post-Death Arrangements** — arrangements already made (burial plot, funeral home contract)
+- `___` **Other Disposition Instructions** — ashes, soil, other remains, family or cultural traditions
+- `[ ]` **Special Wishes** (multi-select)
+  - Preference for donations — charitable donations in lieu of flowers
+  - **Prohibit AI replicas or digital recreations** — expressly bars AI replicas, digital recreations, or virtual representations of the deceased
 
-⚠ **hidden branch:** enabling Final Disposition opens the disposition questionnaire — typically: disposition agent designation and alternates; burial vs. cremation vs. donation; cemetery/plot or disposition of ashes; funeral, memorial, or religious service preferences; casket/urn and marker instructions; prepaid arrangements; and any custom instructions.
+### Disposition Agent Designations
+- `[ ]` **Make disposition agents the same as healthcare agents** — same people, same order
+  - **⟶ unchecking reveals** 👤 **First Agent** and 👤 **Second Agent** pickers
+- `[ ]` **Include disposition agent acceptance** — adds a written acceptance section for the agents to sign
 
 ---
 
@@ -597,7 +740,9 @@
 ### Executor Information
 - `[ ]` **Name spouse/partner as first executor** — spouse is first nominee; other selections serve if unavailable
 - `[ ]` **Make executors the same as the trustees** (same people, same order)
-  - ⚠ **unchecking this ⟶ executor selection pickers** for the Pour-Over Will (first executor, alternates, co-executor handling)
+  - **⟶ unchecking reveals:**
+    - 👤* **First Executor** — multi-select for co-executors
+    - 👤 **Backup Executor(s)** — multi-select; blank = none
 
 ### Executor Powers *(Settlor 1's page only — governs both wills)*
 - `[ ]` Allow executor to pay taxes, debts, and expenses from the probate estate if not paid by the trust
@@ -606,7 +751,7 @@
 
 ### Testamentary Power of Appointment
 - `[ ]` **Exercise a testamentary power of appointment** — replaces the will's standard non-exercise provision
-  - ⚠ **hidden branch:** checking this reveals the source power (creating instrument and date) and the custom exercise language
+  - `___*` **Exercise Provision** — the complete operative language to appear under the will's "Testamentary Power of Appointment" heading (Clause Library / Draft with AI). *Free text only — the form does not ask separately for the creating instrument or its date.*
 
 ---
 
@@ -673,3 +818,47 @@
 
 ---
 
+## Coverage Note
+
+Complete. Every page was walked and every conditional branch was opened in the live interview, so the options above are recorded as the software actually renders them — nothing is inferred from labels.
+
+### Branches opened during this pass
+
+Guardian nominations · standby guardian · Trust Protector (plus Appointer and self-appointment) · retirement Named Beneficiaries · no-contest naming · trust restatement · pet trust · gifts on death (with the Add Gift dialog) · Family Pot Trust · all four distribution modes (with the per-child Add Distribution dialog) · Distribution to Children's Issue and its trust settings · specific / secondary / **tertiary** beneficiaries · non-trust asset schedules (with the Add Asset dialog) · POA gifting powers · Dementia Directive · Visitation Authorization · Final Disposition · executor selection · testamentary power of appointment · disposition agents.
+
+### Things worth knowing that only surfaced by opening the branches
+
+- **A third fallback layer exists.** Tertiary Named Beneficiaries is invisible until Secondary is checked. A plan drafted without checking Secondary never reveals that a third layer was available.
+- **Massachusetts disables the pet-trust gestation option.** The control renders but is locked, with an explanation — state law limits coverage to animals alive during the settlor's lifetime.
+- **Two silent-placeholder traps.** Enabling POA gifting without picking a recipient category prints a literal `[PERMITTED RECIPIENTS]` placeholder into the document. Selecting Named Beneficiaries for retirement accounts without picking anyone leaves the selection blank. Both warn on screen; neither blocks generation.
+- **"Residue" is flagged NOT RECOMMENDED** as a contingent distribution inside the per-child Add Distribution dialog — the only place in the interview where an option carries an explicit recommendation against it.
+- **The firm can be named as its own fiduciary.** "Designate my law firm as the Trust Protector" and "…as the Trust Protector Appointer" are built-in options, and the form notes the attorney is commonly the Appointer.
+- **The custom per-child dialog has a two-level fallback** — Contingent Distribution, then a separate "If the Beneficiary Has No Living Issue" question. Skip the second and the share passes to the beneficiary's issue with no further direction.
+- **Final Disposition includes an AI-replica prohibition** — an option to expressly bar AI replicas, digital recreations, or virtual representations of the deceased.
+- **Executor Powers is a package-level block**, appearing only on Settlor 1's page and governing both wills, unlike every other per-settlor section.
+
+---
+
+## Changes Made to Matter 8312 During Capture
+
+Reaching the branches required turning options on in the live interview. **These were left ON, not reverted.** Review and reset before generating documents.
+
+**Page 1 — Document Selection:** enabled Dementia Directive, Visitation Authorization, Final Disposition.
+
+**Page 4 — Guardians:** enabled Nominate guardians in will, Standby Guardian Designation; selected Settlor 1 as First Guardian.
+
+**Page 5 — Living Trust Details:** enabled Trust Protector, client summary, Trust Protector Appointer; set retirement Default Beneficiary to Named Beneficiaries; enabled naming specific people in Settlor 1's no-contest clause.
+
+**Page 7 — Trust for Settlor 1:** enabled restatement, pet trust, gifts on death, Family Pot Trust, Distribute to Specific Beneficiaries, Secondary Beneficiaries, Tertiary Beneficiaries; changed the distribution mode to *Children and/or Other Beneficiaries – Custom Distributions per Beneficiary*.
+
+**Page 9 — Asset Schedules:** enabled the non-trust asset schedule.
+
+**Page 10 — PoA Provisions:** enabled Allow gifts and Allow gifts to other specific individuals.
+
+**Page 19 — Post-Death Choices (Settlor 1):** unchecked "Make disposition agents the same as healthcare agents."
+
+**Page 21 — Will & Executors (Settlor 1):** unchecked "Make executors the same as the trustees"; enabled testamentary power of appointment.
+
+No dialog was saved — the Add Gift, Add Distribution, and Add Asset dialogs were all cancelled, so no gifts, distributions, or assets were added. Nothing on Settlor 2's pages was touched, and no existing data was deleted or overwritten.
+
+**The distribution mode change on Page 7 is the one to look at first** — it moved Settlor 1's trust off its original setting, and that drives how the whole estate is divided.

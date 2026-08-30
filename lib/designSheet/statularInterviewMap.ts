@@ -72,6 +72,36 @@ const REMAINDER_POWER: Record<string, string> = {
   limited_testamentary: 'Limited testamentary power',
 }
 
+const ADVANCE_DIRECTIVE: Record<string, string> = {
+  prolong_life: 'Prolong life',
+  do_not_resuscitate: 'Prolong life, but no CPR or mechanical ventilation',
+  do_not_prolong_life: 'Do Not Prolong Life (comfort care only)',
+  other: 'Other / Custom Instructions',
+}
+
+const ANATOMICAL_GIFT: Record<string, string> = {
+  yes: 'Yes, make anatomical gifts',
+  defer: 'Defer to healthcare agent or donor registry',
+  no: 'No, do not make anatomical gifts',
+}
+
+const COAGENT_DISAGREEMENT: Record<string, string> = {
+  omit: 'Do not include (silent)',
+  majority: 'Majority rules',
+  unanimous: 'Unanimous agreement required',
+  first_named: 'First-named agent has final authority',
+}
+
+/** Statular's Page 19 list, including the alkaline-hydrolysis option. */
+const DISPOSITION_OF_REMAINS: Record<string, string> = {
+  cremation: 'Cremation',
+  chemical_cremation: 'Chemical Cremation (alkaline hydrolysis)',
+  burial: 'Burial',
+  no_specific_wishes: 'No specific wishes',
+  leave_blank: 'Leave blank in document',
+  other: 'Other',
+}
+
 const ACKNOWLEDGMENT: Record<string, string> = {
   notary: 'Notary',
   witnesses: 'Two witnesses',
@@ -171,12 +201,14 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
     ],
   },
   {
+    // Both "Nominate guardians in will" and the Standby Guardian Designation
+    // open the same nominee block — there is no separate standby nominee set.
     page: 'Page 4 — Guardian Designations',
     questions: [
-      { question: 'Guardian — first nominee', field: 'guardian_primary' },
-      { question: 'Guardian — co-guardian', field: 'guardian_co' },
-      { question: 'Guardian — alternate', field: 'guardian_alt1' },
-      { question: 'Guardian — alternate co-guardian', field: 'guardian_alt1_co' },
+      { question: 'First Guardian', field: 'guardian_primary' },
+      { question: 'First Guardian — co-guardian', field: 'guardian_co' },
+      { question: 'Backup Guardian(s)', field: 'guardian_alt1' },
+      { question: 'Backup Guardian(s) — co-guardian', field: 'guardian_alt1_co' },
     ],
   },
   {
@@ -214,7 +246,7 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
     group: 'Trust Protector',
     questions: [
       { question: 'Include provisions for a Trust Protector', field: 'trust_protector' },
-      { question: 'Trust Protector', field: 'trust_protector_name' },
+      { question: 'Initial Trust Protector', field: 'trust_protector_name' },
     ],
   },
   {
@@ -690,7 +722,7 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
     ],
   },
   {
-    page: 'Pages 13 & 14 — Health Care Proxy',
+    page: 'Pages 13 & 14 — Health Care Proxy (Settlor 1)',
     questions: [
       { question: 'Include Notice Page', field: 'healthcare_provisions.include_hcp_notice_page' },
       {
@@ -700,12 +732,7 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
       {
         question: 'Medical Treatment for Advanced Illness',
         field: 'healthcare_provisions.client_advance_directive',
-        options: {
-          prolong_life: 'Prolong life',
-          do_not_resuscitate: 'Prolong life, but no CPR or mechanical ventilation',
-          do_not_prolong_life: 'Do Not Prolong Life (comfort care only)',
-          other: 'Other / Custom Instructions',
-        },
+        options: ADVANCE_DIRECTIVE,
       },
       { question: 'Other / Custom Instructions', field: 'healthcare_provisions.client_advance_directive_other' },
       { question: 'Receive hygiene and comfort care', field: 'healthcare_provisions.client_receive_comfort_care' },
@@ -717,12 +744,12 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
       {
         question: 'Anatomical gifts preference',
         field: 'healthcare_provisions.client_anatomical_gift',
-        options: {
-          yes: 'Yes, make anatomical gifts',
-          defer: 'Defer to healthcare agent or donor registry',
-          no: 'No, do not make anatomical gifts',
-        },
+        options: ANATOMICAL_GIFT,
       },
+      // Statular asks "Restrictions on anatomical gifts" of both settlors, but the
+      // design sheet only has `spouse_anatomical_restrictions` — there is no client
+      // equivalent in the healthcare namespace at all. Nothing to export here until
+      // that field exists; the Settlor 2 group below does carry it.
       { question: 'Other Healthcare Wishes', field: 'healthcare_provisions.client_other_healthcare_wishes' },
       {
         question: "Should the agent's authority be effective immediately?",
@@ -747,12 +774,133 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
       {
         question: 'How should co-agents resolve disagreements?',
         field: 'healthcare_provisions.client_coagent_disagreement_resolution',
-        options: {
-          omit: 'Do not include (silent)',
-          majority: 'Majority rules',
-          unanimous: 'Unanimous agreement required',
-          first_named: 'First-named agent has final authority',
-        },
+        options: COAGENT_DISAGREEMENT,
+      },
+    ],
+  },
+  {
+    // Statular asks every settlor-specific page twice, once per settlor, and the
+    // answers are independent. Our healthcare namespace already mirrors that with
+    // `client_*` / `spouse_*` pairs, so the second settlor gets its own group
+    // rather than sharing Settlor 1's.
+    page: 'Pages 13 & 14 — Health Care Proxy (Settlor 2)',
+    questions: [
+      {
+        question: 'Leave health care instructions blank',
+        field: 'healthcare_provisions.spouse_leave_instructions_blank',
+      },
+      {
+        question: 'Medical Treatment for Advanced Illness',
+        field: 'healthcare_provisions.spouse_advance_directive',
+        options: ADVANCE_DIRECTIVE,
+      },
+      { question: 'Other / Custom Instructions', field: 'healthcare_provisions.spouse_advance_directive_other' },
+      { question: 'Receive hygiene and comfort care', field: 'healthcare_provisions.spouse_receive_comfort_care' },
+      {
+        question: 'Wish to die at home rather than in a hospital or nursing home',
+        field: 'healthcare_provisions.spouse_wish_to_die_at_home',
+      },
+      { question: 'Decline autopsy if not legally required', field: 'healthcare_provisions.spouse_decline_autopsy' },
+      {
+        question: 'Anatomical gifts preference',
+        field: 'healthcare_provisions.spouse_anatomical_gift',
+        options: ANATOMICAL_GIFT,
+      },
+      {
+        question: 'Restrictions on anatomical gifts',
+        field: 'healthcare_provisions.spouse_anatomical_restrictions',
+      },
+      { question: 'Other Healthcare Wishes', field: 'healthcare_provisions.spouse_other_healthcare_wishes' },
+      {
+        question: "Should the agent's authority be effective immediately?",
+        field: 'healthcare_provisions.spouse_agent_effective_immediately',
+      },
+      {
+        question: 'Include post-death authority and instructions for final disposition',
+        field: 'healthcare_provisions.spouse_include_post_death_authority',
+      },
+      {
+        question: "Limitations on agent's authority while living",
+        field: 'healthcare_provisions.spouse_agent_limits_while_living',
+      },
+      {
+        question: "Limitations on agent's authority after death",
+        field: 'healthcare_provisions.spouse_agent_limits_after_death',
+      },
+      {
+        question: 'How should co-agents resolve disagreements?',
+        field: 'healthcare_provisions.spouse_coagent_disagreement_resolution',
+        options: COAGENT_DISAGREEMENT,
+      },
+    ],
+  },
+  {
+    page: 'Pages 19 & 20 — Post-Death Choices (Settlor 1)',
+    questions: [
+      {
+        question: 'How should the remains be handled?',
+        field: 'healthcare_provisions.client_disposition_of_remains',
+        options: DISPOSITION_OF_REMAINS,
+      },
+      { question: 'Funeral Instructions', field: 'healthcare_provisions.client_funeral_instructions' },
+      {
+        question: 'Pre-Need/Post-Death Arrangements',
+        field: 'healthcare_provisions.client_preneed_arrangements',
+      },
+      {
+        question: 'Other Disposition Instructions',
+        field: 'healthcare_provisions.client_other_disposition_instructions',
+      },
+      {
+        question: 'Special Wishes — Preference for donations',
+        field: 'healthcare_provisions.client_preference_for_donations',
+      },
+      {
+        question: 'Special Wishes — Prohibit AI replicas or digital recreations',
+        field: 'healthcare_provisions.client_prohibit_ai_replicas',
+      },
+      {
+        question: 'Make disposition agents the same as healthcare agents',
+        field: 'healthcare_provisions.client_disposition_agents_same_as_healthcare',
+      },
+      {
+        question: 'Include disposition agent acceptance',
+        field: 'healthcare_provisions.client_include_disposition_agent_acceptance',
+      },
+    ],
+  },
+  {
+    page: 'Pages 19 & 20 — Post-Death Choices (Settlor 2)',
+    questions: [
+      {
+        question: 'How should the remains be handled?',
+        field: 'healthcare_provisions.spouse_disposition_of_remains',
+        options: DISPOSITION_OF_REMAINS,
+      },
+      { question: 'Funeral Instructions', field: 'healthcare_provisions.spouse_funeral_instructions' },
+      {
+        question: 'Pre-Need/Post-Death Arrangements',
+        field: 'healthcare_provisions.spouse_preneed_arrangements',
+      },
+      {
+        question: 'Other Disposition Instructions',
+        field: 'healthcare_provisions.spouse_other_disposition_instructions',
+      },
+      {
+        question: 'Special Wishes — Preference for donations',
+        field: 'healthcare_provisions.spouse_preference_for_donations',
+      },
+      {
+        question: 'Special Wishes — Prohibit AI replicas or digital recreations',
+        field: 'healthcare_provisions.spouse_prohibit_ai_replicas',
+      },
+      {
+        question: 'Make disposition agents the same as healthcare agents',
+        field: 'healthcare_provisions.spouse_disposition_agents_same_as_healthcare',
+      },
+      {
+        question: 'Include disposition agent acceptance',
+        field: 'healthcare_provisions.spouse_include_disposition_agent_acceptance',
       },
     ],
   },

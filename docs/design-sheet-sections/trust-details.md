@@ -221,9 +221,14 @@ Two rules that are easy to break:
   leftover answer from an earlier structure must not reach Statular.
 
 Question wording comes from `lib/designSheet/statularInterviewMap.ts`, the
-machine-readable half of `docs/integrations/statular-interview-map.md`. 212 of the
-295 registry fields are mapped to a verbatim Statular question across 12 of its
+machine-readable half of `docs/integrations/statular-interview-map.md`. 242 of the
+295 registry fields are mapped to a verbatim Statular question across 15 of its
 25 pages; the rest still export under **Additional answers** with our own labels.
+
+Statular asks every settlor-specific page twice, once per settlor, and the answers
+are independent. The healthcare namespace already mirrors that with `client_*` /
+`spouse_*` pairs, so those pages carry a group per settlor — mapping only the
+client half would drop the second settlor's answers into the fallback.
 
 **The map is meant to be supplemented.** Adding an entry is one object — the
 question text, the design-sheet field, and Statular's wording per stored value —
