@@ -416,6 +416,8 @@ export function ChatPanel({
               result?: {
                 filename?: string
                 signed_url?: string
+                download_url?: string
+                lead_count?: number
                 total_claim?: number
                 matter_id?: string
                 preview?: unknown
@@ -442,6 +444,8 @@ export function ChatPanel({
                 status: parsed.status,
                 filename: parsed.result?.filename,
                 signedUrl: parsed.result?.signed_url,
+                downloadUrl: parsed.result?.download_url,
+                leadCount: parsed.result?.lead_count,
                 totalClaim: parsed.result?.total_claim,
                 matterId: parsed.result?.matter_id,
                 taskId: parsed.result?.task_id,

@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, ClipboardList, Copy, Eye, FilePenLine } from 'lucide-react'
+import { Check, ClipboardList, Copy, Download, Eye, FilePenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabaseClient'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
   DesignSheetImportPreviewRow,
@@ -18,6 +19,9 @@ export interface ToolEvent {
   status: ToolStatus
   filename?: string
   signedUrl?: string
+  /** CSV export the attorney can download (lead export). */
+  downloadUrl?: string
+  leadCount?: number
   totalClaim?: number
   matterId?: string
   taskId?: string
@@ -156,6 +160,87 @@ function DesignSheetImportToolEventCard({
   )
 }
 
+/**
+ * The lead export's download.
+ *
+ * The CSV route is admin-only, so the file is fetched with the session token
+ * and handed to the browser as a blob rather than linked to directly — a bare
+ * link would download an "Unauthorized" JSON body whenever the cookie session
+ * is not the one carrying the admin role.
+ */
+function LeadExportToolEventCard({ event }: { event: ToolEvent }) {
+  const [downloading, setDownloading] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+
+  if (event.status === 'running') {
+    return (
+      <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        Building lead export…
+      </div>
+    )
+  }
+
+  if (event.status === 'error') {
+    return (
+      <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        Lead export failed: {event.error ?? 'Unknown error'}
+      </div>
+    )
+  }
+
+  async function download(url: string, filename: string) {
+    setDownloading(true)
+    setFailed(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch(url, {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+      if (!response.ok) {
+        const json = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(json?.error ?? 'Export failed')
+      }
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      setFailed(error instanceof Error ? error.message : 'Could not download the lead export')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const count = event.leadCount
+  const url = event.downloadUrl
+  const filename = event.filename ?? 'cornerstone-leads.csv'
+
+  return (
+    <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-foreground">
+      <div className="font-semibold text-foreground">Lead export ready</div>
+      <div className="mt-0.5 text-muted-foreground">
+        {typeof count === 'number'
+          ? `${count} lead${count === 1 ? '' : 's'} — name, email and phone`
+          : 'Name, email and phone'}
+      </div>
+      {url && (
+        <button
+          type="button"
+          disabled={downloading}
+          onClick={() => void download(url, filename)}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {downloading ? 'Preparing…' : 'Download CSV'}
+        </button>
+      )}
+      {failed && <div className="mt-1 text-destructive">{failed}</div>}
+    </div>
+  )
+}
+
 function ToolEventCard({
   event,
   onReviewDesignSheetImport,
@@ -170,6 +255,10 @@ function ToolEventCard({
         onReviewDesignSheetImport={onReviewDesignSheetImport}
       />
     )
+  }
+
+  if (event.tool === 'export_leads') {
+    return <LeadExportToolEventCard event={event} />
   }
 
   if (event.tool === 'create_hold' || event.tool === 'propose_reschedule') {

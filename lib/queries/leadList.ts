@@ -4,6 +4,13 @@ import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { LeadListRow } from '@/lib/leads/viewTypes'
 import type { LeadSortKey } from '@/lib/adminTables/leadTable'
 import {
+  clampLeadExportLimit,
+  LEAD_EXPORT_DEFAULT_ROWS,
+  toLeadExportRow,
+  type LeadExportRow,
+  type LeadExportSourceRow,
+} from '@/lib/leads/exportRows'
+import {
   buildLeadSearchFilter,
   clampShow,
   EMPTY_LEAD_LIST_SUMMARY,
@@ -58,8 +65,13 @@ function selectLeads(columns: string, withCount: boolean) {
 
 type LeadQuery = ReturnType<typeof selectLeads>
 
-/** Everything except paging and ordering. */
-function applyFilters(query: LeadQuery, params: LeadListParams): LeadQuery {
+/**
+ * Everything except paging and ordering.
+ *
+ * Exported so the CSV export reads exactly the selection the reader is looking
+ * at: one filter vocabulary, not two that drift apart.
+ */
+export function applyLeadListFilters(query: LeadQuery, params: LeadListParams): LeadQuery {
   let next = query
   if (params.status === 'open') next = next.eq('lead_status', 'lead')
   else if (params.status !== 'all') next = next.eq('lead_status', params.status)
@@ -104,7 +116,7 @@ export async function fetchLeadListPage(params: LeadListParams): Promise<LeadLis
   const show = clampShow(params.show)
   const order = SORT_ORDER[params.sort] ?? SORT_ORDER.newest
 
-  const { data, error, count } = await applyFilters(selectLeads(LEAD_SELECT, true), params)
+  const { data, error, count } = await applyLeadListFilters(selectLeads(LEAD_SELECT, true), params)
     .order(order.column, { ascending: order.ascending, nullsFirst: false })
     // A stable tiebreak, so two leads with the same score or fee do not swap
     // places between one page and the next.
@@ -156,4 +168,40 @@ export async function fetchLeadListSummary(): Promise<LeadListSummary> {
     summary.quotedPipeline += row.engagement_fee_quoted ?? 0
   }
   return summary
+}
+
+/**
+ * The contact list behind a lead export: name, email and phone for every lead
+ * matching the current filters, up to `limit`.
+ *
+ * Filtered and ordered in the database like the list itself, so an export is
+ * the selection the reader sees rather than whatever a page happened to hold.
+ */
+export interface LeadExportPage {
+  rows: LeadExportRow[]
+  /** Leads matching the filters, before `limit` is applied. */
+  total: number
+  /** True when the cap kept rows out of `rows`. */
+  truncated: boolean
+}
+
+const LEAD_EXPORT_SELECT = 'id, display_name, full_name, first_name, last_name, email, phone'
+
+export async function fetchLeadExportRows(
+  params: LeadListParams,
+  options: { limit?: number } = {},
+): Promise<LeadExportPage> {
+  const limit = clampLeadExportLimit(options.limit ?? LEAD_EXPORT_DEFAULT_ROWS)
+  const order = SORT_ORDER[params.sort] ?? SORT_ORDER.name_asc
+
+  const { data, error, count } = await applyLeadListFilters(selectLeads(LEAD_EXPORT_SELECT, true), params)
+    .order(order.column, { ascending: order.ascending, nullsFirst: false })
+    .order('id', { ascending: true })
+    .range(0, limit - 1)
+
+  if (error) throw new Error(error.message)
+
+  const rows = ((data ?? []) as unknown as LeadExportSourceRow[]).map(toLeadExportRow)
+  const total = count ?? rows.length
+  return { rows, total, truncated: total > rows.length }
 }
