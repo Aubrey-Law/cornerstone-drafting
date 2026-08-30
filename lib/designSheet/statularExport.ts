@@ -29,7 +29,10 @@ import {
   DESIGN_SHEET_IMPORT_FIELDS,
   getDesignSheetImportFieldMeta,
 } from '@/lib/designSheetImport/shared'
-import { getTrustPlanningType } from '@/lib/designSheetDocumentInclusions'
+import {
+  STATULAR_INTERVIEW,
+  STATULAR_MAPPED_FIELDS,
+} from '@/lib/designSheet/statularInterviewMap'
 import type { DesignSheet } from '@/types/database'
 
 export interface StatularExportContext {
@@ -41,104 +44,38 @@ export interface StatularExportContext {
 }
 
 /**
- * Our section names in the order Statular's interview asks for them, each
- * annotated with the pages it feeds.
- *
- * The mapping is section-to-page, not field-to-page: our `Trust` section spans
- * four Statular pages and splitting it would mean inventing a per-field
- * assignment we cannot verify. Naming the pages a section feeds gives the
- * extractor the routing hint without that guesswork.
+ * Sections the map does not yet place on a Statular question, in a sensible
+ * reading order. They print under "Additional answers" with our own labels, so
+ * an answer is never dropped just because the map has not reached it.
  */
-const SECTION_ORDER: Array<{ section: string; statularPages: string }> = [
-  { section: 'Plan Design', statularPages: 'Document Selection' },
-  { section: 'Client Information', statularPages: 'Family Information' },
-  { section: 'Personal', statularPages: 'Family Information' },
-  { section: 'Family', statularPages: 'Family Information, Guardian Designations' },
-  { section: 'Trust', statularPages: 'Living Trust Details, Successor Trustees, Death of Deceased Settlor, Death of Surviving Settlor' },
-  { section: 'Will', statularPages: 'Will & Executors' },
-  { section: 'Durable Power of Attorney', statularPages: 'PoA Provisions, Power of Attorney' },
-  { section: 'Health Care Documents', statularPages: 'Health Care Proxy, Dementia Directive, Healthcare Forms, Post-Death Choices' },
-  { section: 'Assets', statularPages: 'Asset Schedules' },
-  { section: 'Signing and Execution', statularPages: 'Signing Information' },
-  { section: 'Goals & Notes', statularPages: '—' },
-]
-
-/**
- * Statular's own wording for the marital and bypass answers, taken from its
- * interview screens. Keyed by our stored value, so a value that gains a label
- * here stops falling through to the generic humaniser.
- */
-const STATULAR_OPTION_LABELS: Record<string, Record<string, string>> = {
-  marital_trust: {
-    none: 'None — do not create a separate marital deduction trust',
-    general_power_of_appointment: 'General Power of Appointment Trust',
-    qtip: 'Qualified Terminable Interest Property Trust (QTIP)',
-  },
-  marital_trust_invasion: {
-    no_invasion: 'No Invasion',
-    hems: 'Invasion for HEMS',
-    five_by_five: '"5 by 5" Invasion Power',
-    complete: 'Complete Invasion Power',
-  },
-  marital_trust_remainder_power: {
-    none: 'No appointment power',
-    limited_testamentary: 'Limited testamentary power',
-  },
-  bypass_trust: {
-    none: 'None — do not create a bypass trust',
-    bypass: 'Bypass/Credit-Shelter Trust (A/B)',
-    disclaimer: 'Disclaimer Trust (contingent, funded only by a disclaimer)',
-  },
-  bypass_trust_formula: {
-    all_assets: 'All Assets',
-    formula: 'Formula',
-    fixed_amount: 'Fixed Amount',
-    percentage: 'Percentage',
-    clayton_election: 'Clayton Election',
-  },
-  bypass_trust_remainder_power: {
-    none: 'No appointment power',
-    limited_testamentary: 'Limited testamentary power',
-  },
-}
-
-/**
- * The marital and bypass keys, in interview order, with Statular's question
- * wording. Hoisted out of the generic `Trust` dump into their own section, and
- * excluded from it, so each appears exactly once and under the label Statular
- * would recognise.
- */
-const MARITAL_BYPASS_QUESTIONS: Array<{ key: string; question: string }> = [
-  { key: 'marital_trust', question: 'Marital Trust' },
-  { key: 'marital_trust_invasion', question: 'Marital Trust Invasion Powers' },
-  { key: 'marital_trust_remainder_power', question: 'QTIP Remainder Power of Appointment' },
-  { key: 'marital_trust_include_qdot', question: 'Include QDOT Language' },
-  { key: 'bypass_trust', question: 'Bypass Trust' },
-  { key: 'bypass_trust_formula', question: 'Bypass Trust Formula' },
-  { key: 'bypass_trust_fixed_amount', question: 'Fixed Amount' },
-  { key: 'bypass_trust_percentage', question: 'Percentage' },
-  { key: 'bypass_trust_remainder_power', question: 'Bypass Trust Power of Appointment' },
-  { key: 'bypass_trust_allow_sprinkling', question: 'Allow Discretionary Sprinkling' },
-]
+const FALLBACK_SECTION_ORDER = [
+  'Plan Design',
+  'Personal',
+  'Client Information',
+  'Family',
+  'Trust',
+  'Will',
+  'Durable Power of Attorney',
+  'Health Care Documents',
+  'Assets',
+  'Signing and Execution',
+  'Goals & Notes',
+] as const
 
 /**
  * Columns Statular's Signing Information page asks for that the import registry
  * does not name. Their absence there is deliberate — the document importer must
  * not propose an execution date or a notary commission — but exporting them is
- * the opposite direction and perfectly safe, so they are listed explicitly
- * rather than left out of the file Statular is meant to read.
+ * the opposite direction and perfectly safe. The map places them; this list is
+ * what lets `formatValue` and the fallback know they exist.
  */
-const EXECUTION_FIELDS: Array<{ field: keyof DesignSheet; label: string }> = [
-  { field: 'signing_date', label: 'Signing date' },
-  { field: 'signing_month', label: 'Signing month' },
-  { field: 'signing_year', label: 'Signing year' },
-  { field: 'signing_county', label: 'Signing county' },
-  { field: 'notary_commission_expiration', label: 'Notary commission expiration' },
-]
-
-const MARITAL_BYPASS_FIELDS = new Set(
-  MARITAL_BYPASS_QUESTIONS.map(entry => `trust_details.${entry.key}`),
-)
+const EXTRA_COLUMNS: Record<string, string> = {
+  signing_date: 'Signing date',
+  signing_month: 'Signing month',
+  signing_year: 'Signing year',
+  signing_county: 'Signing county',
+  notary_commission_expiration: 'Notary commission expiration',
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -154,24 +91,34 @@ function formatCurrency(value: number): string {
   return `$${value.toLocaleString('en-US')}`
 }
 
-/** A single answer, or null when the field is unanswered and should be omitted. */
-function formatValue(field: string, value: unknown): string | null {
+/**
+ * A single answer, or null when the field is unanswered and should be omitted.
+ * `options` is the map's wording for this question's values, when it has any.
+ */
+function formatValue(
+  field: string,
+  value: unknown,
+  options?: Record<string, string>,
+): string | null {
   if (value === null || value === undefined || value === '') return null
 
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'boolean') {
+    // A boolean question can still carry Statular wording — "Estate tax payment"
+    // is a two-option radio for us and for them, stored as a boolean here.
+    return options?.[String(value)] ?? (value ? 'Yes' : 'No')
+  }
 
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null
     if (field.endsWith('fixed_amount')) return formatCurrency(value)
-    if (field.endsWith('percentage')) return `${value}%`
+    if (field.endsWith('percentage') || field.startsWith('stagger_pct')) return `${value}%`
     return String(value)
   }
 
   if (typeof value === 'string') {
     const trimmed = value.trim()
     if (!trimmed) return null
-    const bare = field.includes('.') ? field.slice(field.indexOf('.') + 1) : field
-    return STATULAR_OPTION_LABELS[bare]?.[trimmed] ?? humanize(trimmed)
+    return options?.[trimmed] ?? humanize(trimmed)
   }
 
   if (Array.isArray(value)) {
@@ -179,10 +126,7 @@ function formatValue(field: string, value: unknown): string | null {
     return value.map(entry => formatArrayEntry(entry)).filter(Boolean).join('; ') || null
   }
 
-  if (isRecord(value)) {
-    const inner = formatArrayEntry(value)
-    return inner || null
-  }
+  if (isRecord(value)) return formatArrayEntry(value) || null
 
   return null
 }
@@ -201,8 +145,21 @@ function formatArrayEntry(entry: unknown): string {
     .join(', ')
 }
 
-/** Current value of any registry field, column-backed or `decisions`-backed. */
+/**
+ * Current value of any field the map or the registry may name.
+ *
+ * Decision fields read the RAW blob, never a typed getter: the getters
+ * substitute defaults for unset keys, so `getTrustDetails` reports `false` for a
+ * boolean nobody has touched. Exporting that would tell Statular the attorney
+ * declined a question they never saw — the one thing this file promises not to
+ * do. `decisions.<key>` addresses a flat decisions key, which is where
+ * `trust_planning_type` lives.
+ */
 function readFieldValue(sheet: DesignSheet, field: string): unknown {
+  if (field.startsWith('decisions.')) {
+    const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
+    return decisions[field.slice('decisions.'.length)]
+  }
   if (field.includes('.')) return readDecisionFieldRaw(sheet, field)
   return (sheet as unknown as Record<string, unknown>)[field]
 }
@@ -211,68 +168,86 @@ function line(label: string, value: string): string {
   return `- ${label}: ${value}`
 }
 
+/** The mapped pages, rendered in Statular's own words and page order. */
+function mappedBlocks(sheet: DesignSheet): string[] {
+  const blocks: string[] = []
+  let currentPage = ''
+
+  for (const group of STATULAR_INTERVIEW) {
+    if (group.appliesTo && !group.appliesTo(sheet)) continue
+
+    const lines: string[] = []
+    for (const question of group.questions) {
+      const formatted = formatValue(
+        question.field,
+        readFieldValue(sheet, question.field),
+        question.options,
+      )
+      if (formatted === null) continue
+      lines.push(line(question.question, formatted))
+    }
+    if (!lines.length) continue
+
+    // The page heading prints once, however many of its groups have answers.
+    const parts: string[] = []
+    if (group.page !== currentPage) {
+      parts.push(`## ${group.page}`)
+      currentPage = group.page
+    }
+    if (group.group) parts.push(`### ${group.group}`)
+    parts.push(lines.join('\n'))
+    blocks.push(parts.join('\n\n'))
+  }
+
+  return blocks
+}
+
 /**
- * Every registry field belonging to `section`, in registry order, skipping the
- * marital and bypass keys the dedicated section already carries.
+ * Answered fields the map has not reached yet, grouped by our own section.
+ *
+ * This is the safety net that lets the map stay incomplete: an answer with no
+ * Statular question yet still reaches Statular, just under our label instead of
+ * theirs. The section shrinks as the map grows.
  */
-function sectionLines(sheet: DesignSheet, section: string): string[] {
+function fallbackBlocks(sheet: DesignSheet): string[] {
   const fields = [
     ...Object.keys(DESIGN_SHEET_IMPORT_FIELDS),
     ...Object.keys(DESIGN_SHEET_DECISION_FIELDS),
-  ]
+  ].filter(field => !STATULAR_MAPPED_FIELDS.has(field))
 
-  const lines: string[] = []
+  const bySection = new Map<string, string[]>()
   for (const field of fields) {
-    if (MARITAL_BYPASS_FIELDS.has(field)) continue
     const meta = getDesignSheetImportFieldMeta(field)
-    if (!meta || meta.section !== section) continue
+    if (!meta) continue
     const formatted = formatValue(field, readFieldValue(sheet, field))
     if (formatted === null) continue
-    lines.push(line(meta.label, formatted))
+    const existing = bySection.get(meta.section) ?? []
+    existing.push(line(meta.label, formatted))
+    bySection.set(meta.section, existing)
   }
 
-  if (section === 'Signing and Execution') {
-    for (const { field, label } of EXECUTION_FIELDS) {
-      const formatted = formatValue(field, sheet[field])
-      if (formatted === null) continue
-      lines.push(line(label, formatted))
-    }
-  }
-
-  return lines
-}
-
-/**
- * The marital and bypass block, in Statular's wording.
- *
- * Only rendered for a plan that actually divides at the first death: a joint
- * trust, or a separate trust whose residuary is held in trust for the spouse.
- * Anywhere else these keys are leftovers from an earlier answer, and printing
- * them would tell Statular to build a trust this plan does not have.
- */
-function maritalBypassLines(sheet: DesignSheet): string[] {
-  const planningType = getTrustPlanningType(sheet)
-  const dividesAtFirstDeath = sheet.is_joint === true
-    || (planningType !== 'outright_to_spouse' && planningType !== 'not_to_spouse')
-  if (!dividesAtFirstDeath) return []
-
-  const lines: string[] = []
-  for (const { key, question } of MARITAL_BYPASS_QUESTIONS) {
-    const field = `trust_details.${key}`
-    // Raw, never getTrustDetails: the getter substitutes `false` for an unset
-    // boolean, which would print "Include QDOT Language: No" for a question
-    // nobody answered — the one thing this file promises not to do.
-    const formatted = formatValue(field, readDecisionFieldRaw(sheet, field))
+  for (const [field, label] of Object.entries(EXTRA_COLUMNS)) {
+    if (STATULAR_MAPPED_FIELDS.has(field)) continue
+    const formatted = formatValue(field, readFieldValue(sheet, field))
     if (formatted === null) continue
-    lines.push(line(question, formatted))
+    const existing = bySection.get('Signing and Execution') ?? []
+    existing.push(line(label, formatted))
+    bySection.set('Signing and Execution', existing)
   }
-  return lines
-}
 
-function heading(title: string, statularPages: string): string {
-  return statularPages === '—'
-    ? `## ${title}`
-    : `## ${title}\n\n_Statular: ${statularPages}_`
+  const ordered = [
+    ...FALLBACK_SECTION_ORDER.filter(section => bySection.has(section)),
+    ...[...bySection.keys()].filter(section => !FALLBACK_SECTION_ORDER.includes(section as never)),
+  ]
+
+  const blocks = ordered.map(section => `### ${section}\n\n${bySection.get(section)!.join('\n')}`)
+  if (!blocks.length) return []
+
+  return [
+    '## Additional answers\n\n_Not yet matched to a Statular question; labels are the'
+    + " design sheet's own._",
+    ...blocks,
+  ]
 }
 
 export function buildStatularExportMarkdown(
@@ -280,22 +255,20 @@ export function buildStatularExportMarkdown(
   context: StatularExportContext,
 ): string {
   const client = context.clientName?.trim() || 'Client'
-  const blocks: string[] = []
-
-  const identity = [
-    `# Estate Plan Design Sheet — ${client}`,
-    '',
+  const blocks: string[] = [
     [
-      'Exported from the Cornerstone design sheet',
-      context.matterNumber ? ` for matter ${context.matterNumber}` : '',
-      ` on ${context.exportedOn}, for import into Statular.`,
-    ].join(''),
-    '',
-    'Every line below is an answer the attorney has already decided. Fields left'
-    + ' undecided are omitted rather than shown blank, so nothing here should be'
-    + ' read as a choice that was made.',
-  ].join('\n')
-  blocks.push(identity)
+      `# Estate Plan Design Sheet — ${client}`,
+      '',
+      'Exported from the Cornerstone design sheet'
+        + (context.matterNumber ? ` for matter ${context.matterNumber}` : '')
+        + ` on ${context.exportedOn}, for import into Statular. Headings and question`
+        + " wording follow Statular's own interview.",
+      '',
+      'Every line below is an answer the attorney has already decided. Fields left'
+      + ' undecided are omitted rather than shown blank, so nothing here should be'
+      + ' read as a choice that was made.',
+    ].join('\n'),
+  ]
 
   const facts: string[] = []
   if (context.clientName) facts.push(line('Client', context.clientName))
@@ -305,28 +278,8 @@ export function buildStatularExportMarkdown(
   }
   if (facts.length) blocks.push(`## Matter\n\n${facts.join('\n')}`)
 
-  for (const { section, statularPages } of SECTION_ORDER) {
-    const lines = sectionLines(sheet, section)
-
-    if (section === 'Trust') {
-      // The marital and bypass questions sit on their own Statular page, so
-      // they get their own section rather than trailing the trust dump.
-      const marital = maritalBypassLines(sheet)
-      if (lines.length) blocks.push(`${heading(section, statularPages)}\n\n${lines.join('\n')}`)
-      if (marital.length) {
-        blocks.push(
-          `${heading(
-            'Trusts for Survivor — Marital and Bypass',
-            'Death of Deceased Settlor (Trusts for Survivor, Bypass Trust Options)',
-          )}\n\n${marital.join('\n')}`,
-        )
-      }
-      continue
-    }
-
-    if (!lines.length) continue
-    blocks.push(`${heading(section, statularPages)}\n\n${lines.join('\n')}`)
-  }
+  blocks.push(...mappedBlocks(sheet))
+  blocks.push(...fallbackBlocks(sheet))
 
   return `${blocks.join('\n\n')}\n`
 }

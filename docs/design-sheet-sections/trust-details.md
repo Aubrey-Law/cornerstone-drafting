@@ -220,10 +220,17 @@ Two rules that are easy to break:
   first death (joint, or a separate trust holding the residuary in trust). A
   leftover answer from an earlier structure must not reach Statular.
 
-Labels come from the import registry (`lib/designSheetImport/`), so a field added
-there exports for free. The registry deliberately omits execution details — the
-document importer must not propose a signing date — so `EXECUTION_FIELDS` in the
-export module lists those columns explicitly.
+Question wording comes from `lib/designSheet/statularInterviewMap.ts`, the
+machine-readable half of `docs/integrations/statular-interview-map.md`. 212 of the
+295 registry fields are mapped to a verbatim Statular question across 12 of its
+25 pages; the rest still export under **Additional answers** with our own labels.
+
+**The map is meant to be supplemented.** Adding an entry is one object — the
+question text, the design-sheet field, and Statular's wording per stored value —
+and it upgrades a line from our wording to theirs rather than rescuing it from
+omission, because the fallback already carries everything. `tests/statular-export.test.ts`
+fails if an entry names a field the design sheet does not have, asks the same
+field twice, or maps an option set without wording for every stored value.
 
 ## Adding a field here
 

@@ -3,6 +3,12 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { buildStatularExportMarkdown } from '@/lib/designSheet/statularExport'
+import {
+  STATULAR_INTERVIEW,
+  STATULAR_MAPPED_FIELDS,
+} from '@/lib/designSheet/statularInterviewMap'
+import { DESIGN_SHEET_DECISION_FIELDS } from '@/lib/designSheetImport/decisionFields'
+import { getDesignSheetImportFieldMeta } from '@/lib/designSheetImport/shared'
 import type { DesignSheet } from '@/types/database'
 
 const CONTEXT = {
@@ -44,18 +50,18 @@ describe('statular export', () => {
       }),
     }), CONTEXT)
 
-    expect(md).toContain('- Marital Trust: Qualified Terminable Interest Property Trust (QTIP)')
+    expect(md).toContain('- Type of Marital Trust: QTIP (Qualified Terminable Interest Property Trust)')
     expect(md).toContain('- Marital Trust Invasion Powers: "5 by 5" Invasion Power')
     expect(md).toContain('- QTIP Remainder Power of Appointment: Limited testamentary power')
-    expect(md).toContain('- Include QDOT Language: Yes')
-    expect(md).toContain('- Bypass Trust: Bypass/Credit-Shelter Trust (A/B)')
+    expect(md).toContain('- Include QDOT language: Yes')
+    expect(md).toContain('- Type of Bypass Trust: Bypass/Credit-Shelter Trust')
     expect(md).toContain('- Bypass Trust Formula: Fixed Amount')
     expect(md).toContain('- Bypass Trust Power of Appointment: No appointment power')
-    expect(md).toContain('- Allow Discretionary Sprinkling: Yes')
+    expect(md).toContain('- Should the Bypass Trust sprinkle to children/grandchildren?: Yes')
     // Money and percentages carry their unit, so the extractor cannot read
     // 2000000 as a percentage or 40 as dollars.
-    expect(md).toContain('- Fixed Amount: $2,000,000')
-    expect(md).toContain('- Percentage: 40%')
+    expect(md).toContain('- Bypass Trust — Fixed Amount: $2,000,000')
+    expect(md).toContain('- Bypass Trust — Percentage: 40%')
   })
 
   it('omits questions nobody answered rather than printing a default', () => {
@@ -65,9 +71,9 @@ describe('statular export', () => {
       decisions: trustDetails({ marital_trust: 'qtip' }),
     }), CONTEXT)
 
-    expect(md).toContain('- Marital Trust: Qualified Terminable Interest Property Trust (QTIP)')
+    expect(md).toContain('- Type of Marital Trust: QTIP (Qualified Terminable Interest Property Trust)')
     expect(md).not.toContain('Include QDOT Language')
-    expect(md).not.toContain('Allow Discretionary Sprinkling')
+    expect(md).not.toContain('sprinkle to children/grandchildren')
     expect(md).not.toContain('Bypass Trust Formula')
   })
 
@@ -79,7 +85,7 @@ describe('statular export', () => {
       decisions: trustDetails({ marital_trust: 'qtip' }, 'outright_to_spouse'),
     }), CONTEXT)
 
-    expect(md).not.toContain('Trusts for Survivor')
+    expect(md).not.toContain('Trust(s) for Spouse')
     expect(md).not.toContain('Qualified Terminable Interest Property Trust')
   })
 
@@ -89,7 +95,7 @@ describe('statular export', () => {
       decisions: trustDetails({ bypass_trust: 'disclaimer' }, 'outright_to_spouse'),
     }), CONTEXT)
 
-    expect(md).toContain('- Bypass Trust: Disclaimer Trust (contingent, funded only by a disclaimer)')
+    expect(md).toContain('- Type of Bypass Trust: Disclaimer Trust')
   })
 
   it('carries the signing details the import registry deliberately omits', () => {
@@ -99,9 +105,9 @@ describe('statular export', () => {
       notary_commission_expiration: '2029-03-01',
     }), CONTEXT)
 
-    expect(md).toContain('_Statular: Signing Information_')
-    expect(md).toContain('- Signing date: 2026-09-15')
-    expect(md).toContain('- Signing county: Middlesex')
+    expect(md).toContain('## Page 25 — Signing Information')
+    expect(md).toContain('- Signing Date: 2026-09-15')
+    expect(md).toContain('- Signing County: Middlesex')
     expect(md).toContain('- Notary commission expiration: 2029-03-01')
   })
 
@@ -120,10 +126,10 @@ describe('statular export', () => {
       decisions: { trust_details: { co_trustee_decision: 'independent' } },
     }), CONTEXT)
 
-    expect(md).toContain('- Restatement: Yes')
-    expect(md).toContain('- Co-trustee decision standard: Independent')
+    expect(md).toContain('- Is this a restatement of an existing trust?: Yes')
+    expect(md).toContain('- If either trust ever has co-trustees, how should they decide?: Co-trustees may act separately (single signature sufficient)')
     // Database ids mean nothing to a reader or an extractor.
-    expect(md).toContain('- Children: Name: Lily Chen, Dob: 2012-04-02')
+    expect(md).toContain('- Children list: Name: Lily Chen, Dob: 2012-04-02')
     expect(md).not.toContain('row-1')
   })
 
@@ -133,8 +139,66 @@ describe('statular export', () => {
       { clientName: null, spouseName: null, matterNumber: null, exportedOn: '2026-08-30' },
     )
     expect(md).toContain('# Estate Plan Design Sheet — Client')
-    expect(md).not.toContain('## Trust\n')
-    expect(md).not.toContain('## Signing and Execution')
+    expect(md).not.toContain('## Page 5')
+    expect(md).not.toContain('## Page 25')
+    expect(md).not.toContain('## Additional answers')
+  })
+})
+
+describe('statular interview map', () => {
+  it('names only design-sheet fields that exist', () => {
+    // The map is meant to be supplemented by hand from
+    // docs/integrations/statular-interview-map.md. A typo'd or renamed field
+    // would silently export nothing, so it fails here instead.
+    const extraColumns = new Set([
+      'signing_date', 'signing_month', 'signing_year', 'signing_county',
+      'notary_commission_expiration', 'decisions.trust_planning_type',
+    ])
+    const unknown = [...STATULAR_MAPPED_FIELDS].filter(field => (
+      !extraColumns.has(field) && getDesignSheetImportFieldMeta(field) === null
+    ))
+    expect(unknown, 'map entries naming fields the design sheet does not have').toEqual([])
+  })
+
+  it('asks each question once', () => {
+    const seen = new Map<string, number>()
+    for (const group of STATULAR_INTERVIEW) {
+      for (const question of group.questions) {
+        seen.set(question.field, (seen.get(question.field) ?? 0) + 1)
+      }
+    }
+    // `state` is deliberately asked twice — Family Information and Signing
+    // Information both want it. Everything else appearing twice is a mistake.
+    const duplicated = [...seen.entries()].filter(([field, count]) => count > 1 && field !== 'state')
+    expect(duplicated).toEqual([])
+  })
+
+  it('offers Statular wording for every value of the options it maps', () => {
+    for (const group of STATULAR_INTERVIEW) {
+      for (const question of group.questions) {
+        if (!question.options) continue
+        const meta = getDesignSheetImportFieldMeta(question.field)
+        const registryOptions = meta?.options
+        if (!registryOptions) continue
+        const missing = registryOptions.filter(value => !(value in question.options!))
+        expect(missing, `${question.question} is missing wording for some stored values`).toEqual([])
+      }
+    }
+  })
+
+  it('carries an unmapped answer through the fallback rather than dropping it', () => {
+    // Pick a real registry field the map has not reached, and prove it exports.
+    const unmapped = Object.keys(DESIGN_SHEET_DECISION_FIELDS)
+      .find(field => !STATULAR_MAPPED_FIELDS.has(field) && field.startsWith('trust_details.'))
+    expect(unmapped).toBeDefined()
+
+    const key = unmapped!.slice('trust_details.'.length)
+    const md = buildStatularExportMarkdown(
+      sheet({ decisions: { trust_details: { [key]: true } } }),
+      CONTEXT,
+    )
+    expect(md).toContain('## Additional answers')
+    expect(md).toContain(getDesignSheetImportFieldMeta(unmapped!)!.label)
   })
 })
 
@@ -148,6 +212,8 @@ describe('statular export wiring', () => {
       .toContain("exportDesignSheet('statular')")
     expect(read('components/guided/DesignToolbarActions.tsx'))
       .toContain('Export for Statular (.md)')
+    expect(fs.existsSync(path.join(process.cwd(), 'docs/integrations/statular-interview-map.md')))
+      .toBe(true)
     expect(read('app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'))
       .toContain('onExportStatular={handleExportStatular}')
   })
