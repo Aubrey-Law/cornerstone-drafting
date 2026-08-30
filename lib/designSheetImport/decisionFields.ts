@@ -434,6 +434,7 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'healthcare_provisions.spouse_disposition_of_remains': healthcareField('spouse_disposition_of_remains', 'Spouse — Disposition of remains', 'string', DISPOSITIONS_OF_REMAINS),
   'healthcare_provisions.client_anatomical_gift': healthcareField('client_anatomical_gift', 'Client anatomical gift', 'string', ANATOMICAL_GIFTS),
   'healthcare_provisions.spouse_anatomical_gift': healthcareField('spouse_anatomical_gift', 'Spouse anatomical gift', 'string', ANATOMICAL_GIFTS),
+  'healthcare_provisions.client_anatomical_restrictions': healthcareField('client_anatomical_restrictions', 'Client anatomical gift restrictions', 'string'),
   'healthcare_provisions.spouse_anatomical_restrictions': healthcareField('spouse_anatomical_restrictions', 'Spouse anatomical gift restrictions', 'string'),
   'healthcare_provisions.client_advance_directive': healthcareField('client_advance_directive', 'Client advance directive', 'string', ADVANCE_DIRECTIVES),
   'healthcare_provisions.spouse_advance_directive': healthcareField('spouse_advance_directive', 'Spouse advance directive', 'string', ADVANCE_DIRECTIVES),

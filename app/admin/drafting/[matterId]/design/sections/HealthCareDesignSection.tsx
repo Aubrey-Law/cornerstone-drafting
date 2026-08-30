@@ -405,13 +405,19 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
       <AnatomicalGiftBlock
         title={`${clientFirst || 'Client'}'s Anatomical gifts preference`}
         preference={provisions.client_anatomical_gift}
-        restrictions={sheet.hcp_anatomical_specified}
+        restrictions={provisions.client_anatomical_restrictions}
         onPreferenceChange={value => {
           updateProvisions({ client_anatomical_gift: value })
           const legacy = anatomicalGiftToLegacy(value)
           if (legacy) onChange('hcp_anatomical_gift', legacy)
         }}
-        onRestrictionsChange={value => onChange('hcp_anatomical_specified', value)}
+        onRestrictionsChange={value => {
+          // Dual-write: the namespace is the field of record and matches the
+          // spouse's, while the legacy column still feeds the drafted templates
+          // through `healthcare.anatomical_specified`.
+          updateProvisions({ client_anatomical_restrictions: value })
+          onChange('hcp_anatomical_specified', value)
+        }}
       />
 
       {spouseDocs && (

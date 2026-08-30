@@ -295,6 +295,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.client_agent_limits_after_death` | Client Agent Limits After Death | Health Care & Directives | (section) |
 | `healthcare.client_agent_limits_while_living` | Client Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.client_anatomical_gift` | Client Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.client_anatomical_restrictions` | Client Anatomical Restrictions | Health Care & Directives | (section) |
 | `healthcare.client_coagent_disagreement_resolution` | Client Coagent Disagreement Resolution | Health Care & Directives | (section) |
 | `healthcare.client_decline_autopsy` | Client Decline Autopsy | Health Care & Directives | (section) |
 | `healthcare.client_disposition_agents_same_as_healthcare` | Client Disposition Agents Same As Healthcare | Health Care & Directives | (section) |

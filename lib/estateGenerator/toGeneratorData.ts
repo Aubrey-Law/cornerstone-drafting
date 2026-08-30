@@ -1010,6 +1010,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       anatomical_gift: hcpProvisions.anatomical_gift,
       anatomical_specified: hcpProvisions.anatomical_specified ?? '',
       client_anatomical_gift: hcpProvisions.client_anatomical_gift,
+      client_anatomical_restrictions: hcpProvisions.client_anatomical_restrictions,
       spouse_anatomical_gift: hcpProvisions.spouse_anatomical_gift,
       spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
       client_advance_directive: hcpProvisions.client_advance_directive,

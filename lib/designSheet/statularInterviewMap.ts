@@ -746,10 +746,10 @@ export const STATULAR_INTERVIEW: StatularPageGroup[] = [
         field: 'healthcare_provisions.client_anatomical_gift',
         options: ANATOMICAL_GIFT,
       },
-      // Statular asks "Restrictions on anatomical gifts" of both settlors, but the
-      // design sheet only has `spouse_anatomical_restrictions` — there is no client
-      // equivalent in the healthcare namespace at all. Nothing to export here until
-      // that field exists; the Settlor 2 group below does carry it.
+      {
+        question: 'Restrictions on anatomical gifts',
+        field: 'healthcare_provisions.client_anatomical_restrictions',
+      },
       { question: 'Other Healthcare Wishes', field: 'healthcare_provisions.client_other_healthcare_wishes' },
       {
         question: "Should the agent's authority be effective immediately?",

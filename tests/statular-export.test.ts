@@ -186,6 +186,24 @@ describe('statular interview map', () => {
     }
   })
 
+  it("maps both settlors' anatomical gift restrictions", () => {
+    // The client half used to be absent from the healthcare namespace, so this
+    // question could only be asked of the spouse.
+    const md = buildStatularExportMarkdown(sheet({
+      decisions: {
+        healthcare_provisions: {
+          client_anatomical_restrictions: 'No skin or bone.',
+          spouse_anatomical_restrictions: 'Corneas only.',
+        },
+      },
+    }), CONTEXT)
+
+    expect(md).toContain('## Pages 13 & 14 — Health Care Proxy (Settlor 1)')
+    expect(md).toContain('## Pages 13 & 14 — Health Care Proxy (Settlor 2)')
+    expect(md).toContain('- Restrictions on anatomical gifts: No skin or bone.')
+    expect(md).toContain('- Restrictions on anatomical gifts: Corneas only.')
+  })
+
   it('carries an unmapped answer through the fallback rather than dropping it', () => {
     // Pick a real registry field the map has not reached, and prove it exports.
     const unmapped = Object.keys(DESIGN_SHEET_DECISION_FIELDS)

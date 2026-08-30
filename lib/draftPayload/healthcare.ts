@@ -18,6 +18,7 @@ export interface DraftPayloadHcpProvisions {
   anatomical_gift: 'all' | 'specified' | 'none' | null
   anatomical_specified: string | null
   client_anatomical_gift?: AnatomicalGiftPreference | null
+  client_anatomical_restrictions?: string | null
   spouse_anatomical_gift?: AnatomicalGiftPreference | null
   spouse_anatomical_restrictions?: string | null
   client_advance_directive?: AdvanceDirectiveChoice | null
@@ -67,6 +68,9 @@ export function draftPayloadHealthcare(
       || designSheet.hcp_anatomical_gift === 'none'
         ? designSheet.hcp_anatomical_gift
         : null,
+    // Lets `client_anatomical_restrictions` read through to the legacy column
+    // for a sheet saved before the namespace carried it.
+    hcp_anatomical_specified: designSheet.hcp_anatomical_specified ?? null,
   })
   const clientHipaaAgents = resolveContactDetails(
     provisions.client_hipaa_additional_agent_contact_ids,
@@ -81,7 +85,11 @@ export function draftPayloadHealthcare(
     'spouse',
   )
 
-  const anatomicalSpecified = designSheet.hcp_anatomical_specified?.trim() || null
+  // The templates read `healthcare.anatomical_specified`; the namespace field is
+  // the same answer under its proper name, so it wins and the column backs it up.
+  const anatomicalSpecified = provisions.client_anatomical_restrictions?.trim()
+    || designSheet.hcp_anatomical_specified?.trim()
+    || null
 
   return {
     healthcare_provisions: {
@@ -97,6 +105,7 @@ export function draftPayloadHealthcare(
       ),
       anatomical_specified: anatomicalSpecified,
       client_anatomical_gift: provisions.client_anatomical_gift,
+      client_anatomical_restrictions: provisions.client_anatomical_restrictions,
       spouse_anatomical_gift: provisions.spouse_anatomical_gift,
       spouse_anatomical_restrictions: provisions.spouse_anatomical_restrictions,
       client_advance_directive: provisions.client_advance_directive,

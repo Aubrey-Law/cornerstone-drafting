@@ -1905,6 +1905,11 @@
     "required": false,
     "description": "Spouse's anatomical gift preference: yes, defer, or no."
   },
+  "healthcare.client_anatomical_restrictions": {
+    "type": "string",
+    "required": false,
+    "description": "Organs, tissues or parts the client will not donate. Same answer as the legacy healthcare.anatomical_specified, under the name that matches the spouse's field; the legacy path stays populated for the templates that already read it."
+  },
   "healthcare.spouse_anatomical_restrictions": {
     "type": "string",
     "required": false,

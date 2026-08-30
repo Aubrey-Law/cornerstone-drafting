@@ -295,6 +295,7 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `healthcare.client_agent_limits_after_death` | string | no | Limits on the health care agent's authority after the principal's death (the client). |
 | `healthcare.client_agent_limits_while_living` | string | no | Limits on the health care agent's authority while the principal is living (the client). |
 | `healthcare.client_anatomical_gift` | string | no | Client's anatomical gift preference: yes, defer, or no. |
+| `healthcare.client_anatomical_restrictions` | string | no | Organs, tissues or parts the client will not donate. Same answer as the legacy healthcare.anatomical_specified, under the name that matches the spouse's field; the legacy path stays populated for the templates that already read it. |
 | `healthcare.client_coagent_disagreement_resolution` | string | no | How the client’s co-agents settle a disagreement: omit, majority, unanimous, or first_named. |
 | `healthcare.client_decline_autopsy` | boolean | no | Whether, for the client, an objection to autopsy is recorded, except where the law requires one. |
 | `healthcare.client_disposition_agents_same_as_healthcare` | boolean | no | Whether, for the client, the disposition agents are the health care agents. |
