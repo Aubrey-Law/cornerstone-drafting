@@ -295,6 +295,7 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `healthcare.client_agent_limits_after_death` | string | no | Limits on the health care agent's authority after the principal's death (the client). |
 | `healthcare.client_agent_limits_while_living` | string | no | Limits on the health care agent's authority while the principal is living (the client). |
 | `healthcare.client_anatomical_gift` | string | no | Client's anatomical gift preference: yes, defer, or no. |
+| `healthcare.client_anatomical_restrictions` | string | no | Organs, tissues or parts the client will not donate. Same answer as the legacy healthcare.anatomical_specified, under the name that matches the spouse's field; the legacy path stays populated for the templates that already read it. |
 | `healthcare.client_coagent_disagreement_resolution` | string | no | How the client’s co-agents settle a disagreement: omit, majority, unanimous, or first_named. |
 | `healthcare.client_decline_autopsy` | boolean | no | Whether, for the client, an objection to autopsy is recorded, except where the law requires one. |
 | `healthcare.client_disposition_agents_same_as_healthcare` | boolean | no | Whether, for the client, the disposition agents are the health care agents. |
@@ -439,6 +440,12 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `trust.blended_family.client_children[]` | array | no | Children of the client grantor treated as children of both grantors in a joint trust. |
 | `trust.blended_family.spouse_children` | array | no | Children of the spouse grantor in a blended family. Reference the container directly in {% for %} and {% if %}; see trust.blended_family.spouse_children[] for member fields. |
 | `trust.blended_family.spouse_children[]` | array | no | Children of the spouse grantor treated as children of both grantors in a joint trust. |
+| `trust.bypass_trust.allow_discretionary_sprinkling` | boolean | no | Whether the trustee may sprinkle from the Bypass or Disclaimer Trust to children and grandchildren during the survivor's lifetime. |
+| `trust.bypass_trust.fixed_amount` | number | no | Dollar amount funding the bypass trust when the formula is fixed_amount. |
+| `trust.bypass_trust.formula` | string | no | Credit-shelter bypass trusts only. How the bypass share is set: all_assets, formula (largest amount passing free of federal estate tax), fixed_amount, percentage, or clayton_election. |
+| `trust.bypass_trust.percentage` | number | no | Percentage of the remaining assets funding the bypass trust when the formula is percentage. |
+| `trust.bypass_trust.remainder_power_of_appointment` | string | no | Credit-shelter bypass trusts only. Whether the surviving spouse may redirect the Bypass Trust remainder at death: none or limited_testamentary. |
+| `trust.bypass_trust.type` | string | no | Bypass trust created at the first death: none, bypass (a credit-shelter trust holding a predetermined share), or disclaimer (funded only by what the survivor disclaims). |
 | `trust.contingent_beneficiary.full_name` | string | conditional | Contingent beneficiary for the residuary trust fund if no descendant survives. |
 | `trust.date` | string | no | Date of the trust agreement, formatted as Month Day, Year when known. |
 | `trust.descendants_distribution.distribution_age` | string | conditional | Age for outright descendant distribution if retained in trust until a stated age. |
@@ -451,6 +458,10 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `trust.display_date` | string | no | Generated display value for the trust date; renders a blank date line when trust.date is unknown. |
 | `trust.display_name` | string | conditional | Trust name formatted for display in the document body, e.g. "JANE EXAMPLE REVOCABLE TRUST, U/A dated May 21, 2026". Prefer this over trust.name in running text. |
 | `trust.include_common_trust_for_children` | boolean | no | Whether the trust holds children's shares in a single common trust before splitting them. |
+| `trust.marital_trust.include_qdot` | boolean | no | Whether the Marital Trust carries QDOT language deferring estate tax for a non-citizen spouse. |
+| `trust.marital_trust.invasion_powers` | string | no | Surviving spouse's reach into Marital Trust principal: no_invasion, hems, five_by_five, or complete. |
+| `trust.marital_trust.remainder_power_of_appointment` | string | no | QTIP marital trusts only. Whether the surviving spouse may redirect the Marital Trust remainder at death: none or limited_testamentary. |
+| `trust.marital_trust.type` | string | no | Marital deduction trust created from the deceased spouse's share at the first death: none, general_power_of_appointment, or qtip. Set by a joint trust or by a separate trust that distributes in trust for the spouse. |
 | `trust.name` | string | conditional | Name of the revocable trust. |
 | `trust.provisions.allow_charitable_giving_during_incapacity` | boolean | no | Whether the trustee may continue a settlor's customary charitable giving during incapacity. |
 | `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | boolean | no | Whether the trustee may pay a young or incapacitated beneficiary through a parent, guardian, or custodian. |
@@ -508,7 +519,7 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `trust.residuary_after_death` | string | no | How the residue passes after the settlor's death. |
 | `trust.restatement` | boolean | no | Whether the trust restates an existing trust. |
 | `trust.special_distributions_age` | number | no | Age at which the common trust for children ends and shares are split out. |
-| `trust.spousal_funding` | string | no | How the residuary reaches the surviving spouse: outright_to_spouse, disclaimer, clayton_election, or not_to_spouse (the residuary skips the spouse). Only disclaimer changes package selection. |
+| `trust.spousal_funding` | string | no | How the residuary reaches the surviving spouse: outright_to_spouse, in_trust_for_spouse, disclaimer, clayton_election, or not_to_spouse (the residuary skips the spouse). The trust.marital_trust and trust.bypass_trust groups carry the shape of the in-trust structures. Only disclaimer changes package selection. |
 | `trust.spouse_name` | string | no | Name of the spouse's own trust. Separate-trusts matters only. |
 | `trust.successor_trustee_vacancy` | string | no | How a trustee vacancy is filled: income_beneficiaries_any, income_beneficiaries_professional, resigning_neutral, resigning_professional, or settlor_or_court. |
 | `trust.survivorship_requirement_days` | string | no | Days a beneficiary must survive the settlor to take. |

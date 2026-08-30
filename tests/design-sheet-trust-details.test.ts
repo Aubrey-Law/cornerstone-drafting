@@ -3,9 +3,14 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
+  BYPASS_TRUST_FORMULAS,
+  BYPASS_TRUST_TYPES,
+  MARITAL_TRUST_TYPES,
   buildSpouseTrustNameSuggestions,
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
+  createsBypassTrust,
+  createsMaritalTrust,
   getTrustDetails,
   normalizeResidualBeneficiaryMethod,
   resolveResidualBeneficiaryMethod,
@@ -22,8 +27,17 @@ describe('trust details design section', () => {
   it('exposes spousal trust funding options in Trust Structure', () => {
     expect(trustDetailsSource).toContain('Spousal Trust Funding')
     expect(trustDetailsSource).toContain('Outright to Spouse')
+    expect(trustDetailsSource).toContain('Distribute in Trust')
     expect(trustDetailsSource).toContain('Clayton Election')
     expect(trustDetailsSource).toContain("setTrustPlanningType(prevSheet, value)")
+  })
+
+  it('renders the marital and bypass options for joint and separate trusts alike', () => {
+    // A joint trust always shows them; a separate trust only once the residuary
+    // is actually held in trust for the spouse.
+    expect(trustDetailsSource).toContain('{jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}')
+    expect(trustDetailsSource).toContain('{spouseTrustsFromResiduary && (')
+    expect(trustDetailsSource).toContain("spousalFunding !== 'outright_to_spouse' && spousalFunding !== 'not_to_spouse'")
   })
 
   it('includes trust name quick-fill suggestions and format controls', () => {
@@ -205,5 +219,77 @@ describe('trust details — Phase 0 defects', () => {
         decisions: { trust_details: { include_marital_deduction_savings_language: true } },
       }).include_marital_deduction_savings_language,
     ).toBe(true)
+  })
+})
+
+describe('marital and bypass trust options', () => {
+  const optionsSource = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/MaritalBypassTrustOptions.tsx'),
+    'utf8',
+  )
+
+  it('offers both variants of every question', () => {
+    expect(optionsSource).toContain('Qualified Terminable Interest Property Trust (QTIP)')
+    expect(optionsSource).toContain('General Power of Appointment Trust')
+    expect(optionsSource).toContain('Marital Trust Invasion Powers')
+    expect(optionsSource).toContain('QTIP Remainder Power of Appointment')
+    expect(optionsSource).toContain('Include QDOT Language')
+    // Joint wording and separate wording for the same two stored values.
+    expect(optionsSource).toContain('Bypass Trust (A/B)')
+    expect(optionsSource).toContain('Bypass/Credit-Shelter Trust')
+    expect(optionsSource).toContain('Contingent Disclaimer Trust')
+    expect(optionsSource).toContain('Bypass Trust Formula')
+    expect(optionsSource).toContain('Bypass Trust Power of Appointment')
+  })
+
+  it('defaults every marital and bypass answer to undecided', () => {
+    const details = getTrustDetails({ decisions: null })
+    expect(details.marital_trust).toBeNull()
+    expect(details.marital_trust_invasion).toBeNull()
+    expect(details.marital_trust_remainder_power).toBeNull()
+    expect(details.marital_trust_include_qdot).toBe(false)
+    expect(details.bypass_trust).toBeNull()
+    expect(details.bypass_trust_formula).toBeNull()
+    expect(details.bypass_trust_fixed_amount).toBeNull()
+    expect(details.bypass_trust_percentage).toBeNull()
+    expect(details.bypass_trust_remainder_power).toBeNull()
+    expect(details.bypass_trust_allow_sprinkling).toBe(false)
+  })
+
+  it('reads stored answers back and rejects values outside the option lists', () => {
+    const stored = getTrustDetails({
+      decisions: {
+        trust_details: {
+          marital_trust: 'qtip',
+          bypass_trust: 'disclaimer',
+          bypass_trust_percentage: 45,
+        },
+      },
+    })
+    expect(stored.marital_trust).toBe('qtip')
+    expect(stored.bypass_trust).toBe('disclaimer')
+    expect(stored.bypass_trust_percentage).toBe(45)
+
+    // A renamed or hand-edited option reads as undecided rather than smuggling
+    // a bogus enum into a template comparison that would never match.
+    const bogus = getTrustDetails({
+      decisions: { trust_details: { marital_trust: 'bypass_ab', bypass_trust_formula: 'whatever' } },
+    })
+    expect(bogus.marital_trust).toBeNull()
+    expect(bogus.bypass_trust_formula).toBeNull()
+  })
+
+  it('tells which answers actually create a trust', () => {
+    expect(MARITAL_TRUST_TYPES.filter(createsMaritalTrust))
+      .toEqual(['general_power_of_appointment', 'qtip'])
+    expect(BYPASS_TRUST_TYPES.filter(createsBypassTrust)).toEqual(['bypass', 'disclaimer'])
+    expect(createsMaritalTrust(null)).toBe(false)
+    expect(createsBypassTrust(null)).toBe(false)
+  })
+
+  it('keeps every formula option reachable from the option map', () => {
+    for (const value of BYPASS_TRUST_FORMULAS) {
+      expect(optionsSource).toContain(`${value}: {`)
+    }
   })
 })

@@ -48,3 +48,50 @@ describe('designSheetHealthcareProvisions additional HIPAA', () => {
     expect(raw.hipaa_additional_agent_contact_ids).toEqual(['c9'])
   })
 })
+
+describe('client anatomical gift restrictions', () => {
+  it('reads through to the legacy column for a sheet saved before the field existed', () => {
+    const provisions = getDesignSheetHealthcareProvisions({
+      decisions: {},
+      hcp_anatomical_gift: 'specified',
+      hcp_anatomical_specified: 'Corneas and skin only.',
+    })
+    expect(provisions.client_anatomical_restrictions).toBe('Corneas and skin only.')
+  })
+
+  it('prefers the namespace value once one is stored', () => {
+    const provisions = getDesignSheetHealthcareProvisions({
+      decisions: { healthcare_provisions: { client_anatomical_restrictions: 'No skin or bone.' } },
+      hcp_anatomical_gift: 'specified',
+      hcp_anatomical_specified: 'Corneas and skin only.',
+    })
+    expect(provisions.client_anatomical_restrictions).toBe('No skin or bone.')
+  })
+
+  it('is null when neither carries a value, and ignores a blank column', () => {
+    expect(getDesignSheetHealthcareProvisions({
+      decisions: {},
+      hcp_anatomical_gift: null,
+    }).client_anatomical_restrictions).toBeNull()
+
+    expect(getDesignSheetHealthcareProvisions({
+      decisions: {},
+      hcp_anatomical_gift: null,
+      hcp_anatomical_specified: '   ',
+    }).client_anatomical_restrictions).toBeNull()
+  })
+
+  it('matches the spouse field, which is the asymmetry this closed', () => {
+    const provisions = getDesignSheetHealthcareProvisions({
+      decisions: {
+        healthcare_provisions: {
+          client_anatomical_restrictions: 'Client restriction.',
+          spouse_anatomical_restrictions: 'Spouse restriction.',
+        },
+      },
+      hcp_anatomical_gift: null,
+    })
+    expect(provisions.client_anatomical_restrictions).toBe('Client restriction.')
+    expect(provisions.spouse_anatomical_restrictions).toBe('Spouse restriction.')
+  })
+})

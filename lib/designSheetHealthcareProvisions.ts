@@ -43,6 +43,14 @@ export const DISPOSITIONS_OF_REMAINS: readonly DispositionOfRemains[] =
 
 export interface DesignSheetHealthcareProvisions {
   client_anatomical_gift: AnatomicalGiftPreference | null
+  /**
+   * Organs, tissues or parts the settlor will not donate. The client's answer
+   * predates the namespace and still dual-writes the `hcp_anatomical_specified`
+   * column, which the drafted templates read as `healthcare.anatomical_specified`;
+   * the spouse's has only ever lived here. Read through the getter, which falls
+   * back to the column, so a sheet saved before this field existed keeps its text.
+   */
+  client_anatomical_restrictions: string | null
   spouse_anatomical_gift: AnatomicalGiftPreference | null
   spouse_anatomical_restrictions: string | null
   client_advance_directive: AdvanceDirectiveChoice | null
@@ -100,6 +108,7 @@ export interface DesignSheetHealthcareProvisions {
 
 const DEFAULT_HEALTHCARE_PROVISIONS: DesignSheetHealthcareProvisions = {
   client_anatomical_gift: null,
+  client_anatomical_restrictions: null,
   spouse_anatomical_gift: null,
   spouse_anatomical_restrictions: null,
   client_advance_directive: null,
@@ -210,13 +219,18 @@ export function anatomicalGiftToLegacy(value: AnatomicalGiftPreference | null): 
 }
 
 export function getDesignSheetHealthcareProvisions(
-  sheet: Pick<DesignSheet, 'decisions' | 'hcp_anatomical_gift'>,
+  // The legacy column is a read-through fallback, not a requirement: callers
+  // that only hold `decisions` still get every other provision.
+  sheet: Pick<DesignSheet, 'decisions' | 'hcp_anatomical_gift'>
+    & Partial<Pick<DesignSheet, 'hcp_anatomical_specified'>>,
 ): DesignSheetHealthcareProvisions {
   const raw = healthcareProvisionsRaw(sheet)
 
   return {
     client_anatomical_gift: readAnatomicalGift(raw, 'client_anatomical_gift')
       ?? anatomicalGiftFromLegacy(sheet.hcp_anatomical_gift),
+    client_anatomical_restrictions: readString(raw, 'client_anatomical_restrictions')
+      ?? (sheet.hcp_anatomical_specified?.trim() || null),
     spouse_anatomical_gift: readAnatomicalGift(raw, 'spouse_anatomical_gift'),
     spouse_anatomical_restrictions: readString(raw, 'spouse_anatomical_restrictions'),
     client_advance_directive: readAdvanceDirective(raw, 'client_advance_directive'),
@@ -271,7 +285,10 @@ export function getDesignSheetHealthcareProvisions(
 }
 
 export function setDesignSheetHealthcareProvisions(
-  sheet: Pick<DesignSheet, 'decisions' | 'hcp_anatomical_gift'>,
+  // The legacy column is a read-through fallback, not a requirement: callers
+  // that only hold `decisions` still get every other provision.
+  sheet: Pick<DesignSheet, 'decisions' | 'hcp_anatomical_gift'>
+    & Partial<Pick<DesignSheet, 'hcp_anatomical_specified'>>,
   patch: Partial<DesignSheetHealthcareProvisions>,
 ) {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}

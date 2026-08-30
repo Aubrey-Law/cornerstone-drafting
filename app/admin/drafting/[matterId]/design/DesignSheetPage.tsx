@@ -162,6 +162,7 @@ function DesignSheetPageContent({
     handleExportDesignSheet,
     handleExportGeneratorData,
     handleExportGeneratorDataDocx,
+    handleExportStatular,
     applyPlanStructurePatch,
     documentInclusions,
     blockingCount,
@@ -538,6 +539,7 @@ function DesignSheetPageContent({
                     onExport={handleExportDesignSheet}
                     onExportJson={handleExportGeneratorData}
                     onExportJsonDocx={handleExportGeneratorDataDocx}
+                    onExportStatular={handleExportStatular}
                     saveLabel={saveStatus === 'dirty' ? 'Save Changes' : 'Saved'}
                     saving={saveStatus === 'saving'}
                     exporting={exporting}

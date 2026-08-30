@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Document, Packer, Paragraph, TextRun } from 'docx'
 import PizZip from 'pizzip'
 import { requireAdmin } from '@/lib/apiAuth'
+import { loadCurrentDesignSheet } from '@/lib/designSheetImport/server'
+import { buildStatularExportMarkdown } from '@/lib/designSheet/statularExport'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
@@ -9,6 +11,7 @@ import type { NodeEstateData } from '@/lib/estateGenerator/node/types'
 
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 const ZIP_CONTENT_TYPE = 'application/zip'
+const MARKDOWN_CONTENT_TYPE = 'text/markdown; charset=utf-8'
 
 // Both client-facing summaries (detailed plan summary + pre-meeting worksheet)
 // live in this generator package. See packages/design-summary.json.
@@ -72,6 +75,41 @@ export async function GET(req: NextRequest, { params }: Params) {
       return NextResponse.json(data, {
         status: 200,
         headers: {
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    // ?format=statular renders the answers as Markdown in Statular's own
+    // question wording. Statular's import extracts from uploaded files rather
+    // than parsing a schema, and .md is on its accepted list, so this is the
+    // upload that needs the least guessing at the other end. It reads the
+    // design-sheet row directly — the generator payload above has already
+    // reshaped the answers into template paths, which is the vocabulary this
+    // export exists to avoid.
+    if (format === 'statular') {
+      const sheet = await loadCurrentDesignSheet(matterId)
+      if (!sheet) {
+        return NextResponse.json(
+          { error: 'No design sheet found for this matter. Complete the design sheet before exporting.' },
+          { status: 422 },
+        )
+      }
+
+      const markdown = buildStatularExportMarkdown(sheet, {
+        clientName: payload.client.full_name ?? null,
+        spouseName: payload.spouse?.full_name ?? null,
+        matterNumber: payload.matter.matter_number ?? null,
+        exportedOn: new Date().toISOString().slice(0, 10),
+      })
+      const filename = safeHeaderFilename(
+        `Statular-Import-${clientSlug(payload.client.full_name)}-${new Date().toISOString().slice(0, 10)}.md`,
+      )
+      return new NextResponse(markdown, {
+        status: 200,
+        headers: {
+          'Content-Type': MARKDOWN_CONTENT_TYPE,
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'no-store',
         },

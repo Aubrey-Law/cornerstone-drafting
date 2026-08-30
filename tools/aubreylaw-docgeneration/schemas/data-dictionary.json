@@ -1905,6 +1905,11 @@
     "required": false,
     "description": "Spouse's anatomical gift preference: yes, defer, or no."
   },
+  "healthcare.client_anatomical_restrictions": {
+    "type": "string",
+    "required": false,
+    "description": "Organs, tissues or parts the client will not donate. Same answer as the legacy healthcare.anatomical_specified, under the name that matches the spouse's field; the legacy path stays populated for the templates that already read it."
+  },
   "healthcare.spouse_anatomical_restrictions": {
     "type": "string",
     "required": false,
@@ -2303,7 +2308,57 @@
   "trust.spousal_funding": {
     "type": "string",
     "required": false,
-    "description": "How the residuary reaches the surviving spouse: outright_to_spouse, disclaimer, clayton_election, or not_to_spouse (the residuary skips the spouse). Only disclaimer changes package selection."
+    "description": "How the residuary reaches the surviving spouse: outright_to_spouse, in_trust_for_spouse, disclaimer, clayton_election, or not_to_spouse (the residuary skips the spouse). The trust.marital_trust and trust.bypass_trust groups carry the shape of the in-trust structures. Only disclaimer changes package selection."
+  },
+  "trust.marital_trust.type": {
+    "type": "string",
+    "required": false,
+    "description": "Marital deduction trust created from the deceased spouse's share at the first death: none, general_power_of_appointment, or qtip. Set by a joint trust or by a separate trust that distributes in trust for the spouse."
+  },
+  "trust.marital_trust.invasion_powers": {
+    "type": "string",
+    "required": false,
+    "description": "Surviving spouse's reach into Marital Trust principal: no_invasion, hems, five_by_five, or complete."
+  },
+  "trust.marital_trust.remainder_power_of_appointment": {
+    "type": "string",
+    "required": false,
+    "description": "QTIP marital trusts only. Whether the surviving spouse may redirect the Marital Trust remainder at death: none or limited_testamentary."
+  },
+  "trust.marital_trust.include_qdot": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the Marital Trust carries QDOT language deferring estate tax for a non-citizen spouse."
+  },
+  "trust.bypass_trust.type": {
+    "type": "string",
+    "required": false,
+    "description": "Bypass trust created at the first death: none, bypass (a credit-shelter trust holding a predetermined share), or disclaimer (funded only by what the survivor disclaims)."
+  },
+  "trust.bypass_trust.formula": {
+    "type": "string",
+    "required": false,
+    "description": "Credit-shelter bypass trusts only. How the bypass share is set: all_assets, formula (largest amount passing free of federal estate tax), fixed_amount, percentage, or clayton_election."
+  },
+  "trust.bypass_trust.fixed_amount": {
+    "type": "number",
+    "required": false,
+    "description": "Dollar amount funding the bypass trust when the formula is fixed_amount."
+  },
+  "trust.bypass_trust.percentage": {
+    "type": "number",
+    "required": false,
+    "description": "Percentage of the remaining assets funding the bypass trust when the formula is percentage."
+  },
+  "trust.bypass_trust.remainder_power_of_appointment": {
+    "type": "string",
+    "required": false,
+    "description": "Credit-shelter bypass trusts only. Whether the surviving spouse may redirect the Bypass Trust remainder at death: none or limited_testamentary."
+  },
+  "trust.bypass_trust.allow_discretionary_sprinkling": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may sprinkle from the Bypass or Disclaimer Trust to children and grandchildren during the survivor's lifetime."
   },
   "healthcare.include_hcp_notice_page": {
     "type": "boolean",

@@ -295,6 +295,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.client_agent_limits_after_death` | Client Agent Limits After Death | Health Care & Directives | (section) |
 | `healthcare.client_agent_limits_while_living` | Client Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.client_anatomical_gift` | Client Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.client_anatomical_restrictions` | Client Anatomical Restrictions | Health Care & Directives | (section) |
 | `healthcare.client_coagent_disagreement_resolution` | Client Coagent Disagreement Resolution | Health Care & Directives | (section) |
 | `healthcare.client_decline_autopsy` | Client Decline Autopsy | Health Care & Directives | (section) |
 | `healthcare.client_disposition_agents_same_as_healthcare` | Client Disposition Agents Same As Healthcare | Health Care & Directives | (section) |
@@ -439,6 +440,12 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.blended_family.client_children[]` | Client Children | Trust Details | (section) |
 | `trust.blended_family.spouse_children` | Spouse Children | Trust Details | (section) |
 | `trust.blended_family.spouse_children[]` | Spouse Children | Trust Details | (section) |
+| `trust.bypass_trust.allow_discretionary_sprinkling` | Allow Discretionary Sprinkling | Trust Details | (section) |
+| `trust.bypass_trust.fixed_amount` | Fixed Amount | Trust Details | (section) |
+| `trust.bypass_trust.formula` | Formula | Trust Details | (section) |
+| `trust.bypass_trust.percentage` | Percentage | Trust Details | (section) |
+| `trust.bypass_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust Details | (section) |
+| `trust.bypass_trust.type` | Type | Trust Details | (section) |
 | `trust.contingent_beneficiary.full_name` | Contingent beneficiary | Will Details | `single_beneficiary_remainder` |
 | `trust.date` | Trust date | Trust Details | `trust_date` |
 | `trust.descendants_distribution.distribution_age` | Distribution Age | Trust Details | (section) |
@@ -451,6 +458,10 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.display_date` | Display Date | Trust Details | (section) |
 | `trust.display_name` | Trust name | Trust Details | `trust_name` |
 | `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust Details | (section) |
+| `trust.marital_trust.include_qdot` | Include Qdot | Trust Details | (section) |
+| `trust.marital_trust.invasion_powers` | Invasion Powers | Trust Details | (section) |
+| `trust.marital_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust Details | (section) |
+| `trust.marital_trust.type` | Type | Trust Details | (section) |
 | `trust.name` | Trust name | Trust Details | `trust_name` |
 | `trust.provisions.allow_charitable_giving_during_incapacity` | Allow Charitable Giving During Incapacity | Trust Details | (section) |
 | `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | Allow Direct Distributions To Young Or Incapacitated | Trust Details | (section) |
