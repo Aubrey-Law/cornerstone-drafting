@@ -110,3 +110,34 @@ function matterNumber(matter: MatterListRow): string | null {
 function normalize(value: string | null | undefined): string {
   return normalizeSearchText(value)
 }
+
+export const MATTER_STAGE_GROUPS: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
+
+export const MATTER_SORT_KEYS: MatterSortKey[] = [
+  'last_activity', 'newest', 'oldest', 'client_asc', 'client_desc', 'matter_number',
+]
+
+/**
+ * Loose input (a URL query string, or a tool call's arguments) read as list
+ * filters, so an export and the matters list it mirrors narrow by the same
+ * vocabulary. Anything unrecognized falls back rather than throwing: a request
+ * for `stage: "somewhere"` returns every stage, not an error.
+ */
+export function matterTableFiltersFrom(input: {
+  search?: unknown
+  practice?: unknown
+  stage?: unknown
+}): MatterTableFilters {
+  const stage = typeof input.stage === 'string' ? input.stage : ''
+  return {
+    search: typeof input.search === 'string' ? input.search.trim() : '',
+    practice: typeof input.practice === 'string' && input.practice.trim() ? input.practice.trim() : 'all',
+    stageGroup: (MATTER_STAGE_GROUPS as string[]).includes(stage) ? (stage as StageGroup) : 'all',
+  }
+}
+
+export function matterSortKeyFrom(value: unknown, fallback: MatterSortKey = 'client_asc'): MatterSortKey {
+  return typeof value === 'string' && (MATTER_SORT_KEYS as string[]).includes(value)
+    ? (value as MatterSortKey)
+    : fallback
+}

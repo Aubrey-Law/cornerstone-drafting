@@ -17,13 +17,13 @@ import { ChatMessage } from '@/app/admin/components/ChatMessage'
  * and a download that carries their session — the CSV route is admin-only.
  */
 
-function messageWith(toolEvent: Record<string, unknown>) {
+function messageWith(toolEvent: Record<string, unknown>, tool = 'export_leads') {
   return {
     id: 'm1',
     role: 'assistant' as const,
     content: 'Here are your open leads.',
     timestamp: '2026-08-30T12:00:00Z',
-    toolEvents: [{ toolUseId: 't1', tool: 'export_leads', status: 'done' as const, ...toolEvent }],
+    toolEvents: [{ toolUseId: 't1', tool, status: 'done' as const, ...toolEvent }],
   }
 }
 
@@ -34,8 +34,19 @@ afterEach(() => {
 
 describe('the lead export chat card', () => {
   it('reports how many leads the export holds', () => {
-    render(<ChatMessage message={messageWith({ leadCount: 12, downloadUrl: '/api/admin/leads/export?status=open' })} />)
+    render(<ChatMessage message={messageWith({ exportCount: 12, downloadUrl: '/api/admin/leads/export?status=open' })} />)
+    expect(screen.getByText('Lead export ready')).toBeTruthy()
     expect(screen.getByText(/12 leads — name, email and phone/)).toBeTruthy()
+  })
+
+  it('names matters as matters when the matter export ran', () => {
+    render(<ChatMessage message={messageWith(
+      { exportCount: 1, downloadUrl: '/api/admin/matters/export' },
+      'export_matters',
+    )} />)
+    expect(screen.getByText('Matter export ready')).toBeTruthy()
+    // Singular, so a one-row export does not read "1 matters".
+    expect(screen.getByText(/^1 matter —/)).toBeTruthy()
   })
 
   it('downloads the CSV with the admin session token rather than a bare link', async () => {
@@ -48,7 +59,7 @@ describe('the lead export chat card', () => {
     URL.revokeObjectURL = vi.fn()
 
     render(<ChatMessage message={messageWith({
-      leadCount: 1,
+      exportCount: 1,
       filename: 'cornerstone-leads-open-2026-08-30.csv',
       downloadUrl: '/api/admin/leads/export?status=open',
     })} />)

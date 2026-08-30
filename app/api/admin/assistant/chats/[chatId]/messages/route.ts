@@ -17,6 +17,7 @@ import {
 import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { exportLeadsToolExecutor, leadExportSystemPromptNote } from '@/lib/adminChat/leadExportTool'
+import { exportMattersToolExecutor, matterExportSystemPromptNote } from '@/lib/adminChat/matterExportTool'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
 import { templateBuilderSystemPromptNote, templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
 import {
@@ -84,6 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
   const contextMatterId = chat.context_type === 'matter' ? chat.context_id : null
   const tools: AdminChatToolExecutor[] = [
     exportLeadsToolExecutor,
+    exportMattersToolExecutor,
     ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, auth.userId)] : []),
     ...workflowToolExecutors({ userId: auth.userId, email: auth.user?.email ?? null }),
     ...calendarPlanningToolExecutors(),
@@ -107,7 +109,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
 
   return createAdminChatStream({
     system: context.systemPrompt + workflowSystemPromptNote() + leadExportSystemPromptNote()
-      + calendarPlanningSystemPromptNote() + templateBuilderSystemPromptNote()
+      + matterExportSystemPromptNote() + calendarPlanningSystemPromptNote() + templateBuilderSystemPromptNote()
       + matterKnowledgeSystemPromptNote(),
     messages,
     tools,

@@ -62,6 +62,11 @@ describe('the leads contact export route', () => {
     expect(options.limit).toBe(LEAD_EXPORT_MAX_ROWS)
   })
 
+  it('narrows by an insight card, so a page export matches the list under one', async () => {
+    await GET(new Request('https://app.test/api/admin/leads/export?card=attention'))
+    expect((mocks.fetchLeadExportRows.mock.calls[0][0] as LeadListParams).card).toBe('attention')
+  })
+
   it('answers format=json with the same three fields', async () => {
     const response = await GET(new Request('https://app.test/api/admin/leads/export?format=json'))
     expect(await response.json()).toEqual({

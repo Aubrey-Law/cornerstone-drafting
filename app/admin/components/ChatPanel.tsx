@@ -417,7 +417,7 @@ export function ChatPanel({
                 filename?: string
                 signed_url?: string
                 download_url?: string
-                lead_count?: number
+                row_count?: number
                 total_claim?: number
                 matter_id?: string
                 preview?: unknown
@@ -445,7 +445,7 @@ export function ChatPanel({
                 filename: parsed.result?.filename,
                 signedUrl: parsed.result?.signed_url,
                 downloadUrl: parsed.result?.download_url,
-                leadCount: parsed.result?.lead_count,
+                exportCount: parsed.result?.row_count,
                 totalClaim: parsed.result?.total_claim,
                 matterId: parsed.result?.matter_id,
                 taskId: parsed.result?.task_id,

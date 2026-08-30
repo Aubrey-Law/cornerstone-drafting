@@ -7,6 +7,7 @@ import {
   leadExportName,
   toLeadExportRow,
 } from '@/lib/leads/exportRows'
+import { leadExportUrl } from '@/lib/leads/exportRows'
 import { leadListParamsFrom } from '@/lib/leads/listParams'
 
 /**
@@ -106,6 +107,43 @@ describe('leadListParamsFrom', () => {
       .toMatchObject({ status: 'lost', progress: 'intake_complete', search: 'Doe' })
     expect(leadListParamsFrom({ status: 'everything' })).toMatchObject({ status: 'open' })
     expect(leadListParamsFrom({}, { sort: 'name_asc' })).toMatchObject({ sort: 'name_asc' })
+  })
+
+  it('carries the insight card, which narrows the list on screen', () => {
+    expect(leadListParamsFrom({ card: 'attention' })).toMatchObject({ card: 'attention' })
+    expect(leadListParamsFrom({ card: 'nonsense' })).toMatchObject({ card: null })
+  })
+})
+
+describe('leadExportUrl', () => {
+  it('carries every filter that narrows the list, so an export matches it', () => {
+    const url = leadExportUrl(leadListParamsFrom({
+      status: 'all',
+      card: 'agreements',
+      search: 'Doe',
+      practice: 'Probate',
+      progress: 'intake_complete',
+      sort: 'name_asc',
+    }))
+    expect(url.startsWith('/api/admin/leads/export?')).toBe(true)
+    const query = new URLSearchParams(url.split('?')[1])
+    expect(Object.fromEntries(query)).toEqual({
+      status: 'all',
+      card: 'agreements',
+      search: 'Doe',
+      practice: 'Probate',
+      progress: 'intake_complete',
+      sort: 'name_asc',
+    })
+  })
+
+  it('leaves out the filters that are not narrowing anything', () => {
+    const query = new URLSearchParams(leadExportUrl(leadListParamsFrom({})).split('?')[1])
+    expect(query.has('search')).toBe(false)
+    expect(query.has('practice')).toBe(false)
+    expect(query.has('progress')).toBe(false)
+    expect(query.has('card')).toBe(false)
+    expect(query.get('status')).toBe('open')
   })
 })
 

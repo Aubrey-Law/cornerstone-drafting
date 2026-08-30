@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, ClipboardList, Copy, Download, Eye, FilePenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { downloadCsvFromRoute } from '@/lib/browserDownload'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
   DesignSheetImportPreviewRow,
@@ -19,9 +20,9 @@ export interface ToolEvent {
   status: ToolStatus
   filename?: string
   signedUrl?: string
-  /** CSV export the attorney can download (lead export). */
+  /** CSV export the attorney can download (lead or matter export). */
   downloadUrl?: string
-  leadCount?: number
+  exportCount?: number
   totalClaim?: number
   matterId?: string
   taskId?: string
@@ -160,22 +161,51 @@ function DesignSheetImportToolEventCard({
   )
 }
 
+interface ExportNoun {
+  singular: string
+  plural: string
+  /** What the export is called, e.g. "Lead export". */
+  label: string
+  /** What the file holds, so the reader knows before downloading it. */
+  columns: string
+}
+
+const EXPORT_TOOL_NOUNS: Record<string, ExportNoun> = {
+  export_leads: {
+    singular: 'lead',
+    plural: 'leads',
+    label: 'Lead export',
+    columns: 'name, email and phone',
+  },
+  export_matters: {
+    singular: 'matter',
+    plural: 'matters',
+    label: 'Matter export',
+    columns: 'client, contact, stage and fee',
+  },
+}
+
+const FALLBACK_EXPORT_NOUN: ExportNoun = {
+  singular: 'row', plural: 'rows', label: 'Export', columns: 'the listed columns',
+}
+
 /**
- * The lead export's download.
+ * A list export's download.
  *
- * The CSV route is admin-only, so the file is fetched with the session token
+ * The CSV routes are admin-only, so the file is fetched with the session token
  * and handed to the browser as a blob rather than linked to directly — a bare
  * link would download an "Unauthorized" JSON body whenever the cookie session
  * is not the one carrying the admin role.
  */
-function LeadExportToolEventCard({ event }: { event: ToolEvent }) {
+function ExportToolEventCard({ event }: { event: ToolEvent }) {
+  const noun = EXPORT_TOOL_NOUNS[event.tool] ?? FALLBACK_EXPORT_NOUN
   const [downloading, setDownloading] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
 
   if (event.status === 'running') {
     return (
       <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-        Building lead export…
+        Building {noun.singular} export…
       </div>
     )
   }
@@ -183,7 +213,7 @@ function LeadExportToolEventCard({ event }: { event: ToolEvent }) {
   if (event.status === 'error') {
     return (
       <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-        Lead export failed: {event.error ?? 'Unknown error'}
+        {noun.label} failed: {event.error ?? 'Unknown error'}
       </div>
     )
   }
@@ -193,37 +223,25 @@ function LeadExportToolEventCard({ event }: { event: ToolEvent }) {
     setFailed(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch(url, {
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-      })
-      if (!response.ok) {
-        const json = await response.json().catch(() => null) as { error?: string } | null
-        throw new Error(json?.error ?? 'Export failed')
-      }
-      const objectUrl = URL.createObjectURL(await response.blob())
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = filename
-      link.click()
-      URL.revokeObjectURL(objectUrl)
+      await downloadCsvFromRoute(url, filename, session?.access_token ?? null)
     } catch (error) {
-      setFailed(error instanceof Error ? error.message : 'Could not download the lead export')
+      setFailed(error instanceof Error ? error.message : `Could not download the ${noun.singular} export`)
     } finally {
       setDownloading(false)
     }
   }
 
-  const count = event.leadCount
+  const count = event.exportCount
   const url = event.downloadUrl
-  const filename = event.filename ?? 'cornerstone-leads.csv'
+  const filename = event.filename ?? `cornerstone-${noun.plural}.csv`
 
   return (
     <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-foreground">
-      <div className="font-semibold text-foreground">Lead export ready</div>
+      <div className="font-semibold text-foreground">{noun.label} ready</div>
       <div className="mt-0.5 text-muted-foreground">
         {typeof count === 'number'
-          ? `${count} lead${count === 1 ? '' : 's'} — name, email and phone`
-          : 'Name, email and phone'}
+          ? `${count} ${count === 1 ? noun.singular : noun.plural} — ${noun.columns}`
+          : noun.columns}
       </div>
       {url && (
         <button
@@ -257,8 +275,8 @@ function ToolEventCard({
     )
   }
 
-  if (event.tool === 'export_leads') {
-    return <LeadExportToolEventCard event={event} />
+  if (event.tool === 'export_leads' || event.tool === 'export_matters') {
+    return <ExportToolEventCard event={event} />
   }
 
   if (event.tool === 'create_hold' || event.tool === 'propose_reschedule') {

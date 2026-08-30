@@ -62,7 +62,7 @@ describe('assistant lead export tool', () => {
     expect(events).toContainEqual(expect.objectContaining({
       tool: EXPORT_LEADS_TOOL_NAME,
       status: 'done',
-      result: expect.objectContaining({ lead_count: 2, download_url: payload.download_url }),
+      result: expect.objectContaining({ row_count: 2, download_url: payload.download_url }),
     }))
   })
 
