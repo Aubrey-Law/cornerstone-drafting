@@ -107,6 +107,17 @@ function compactObject<T extends Record<string, unknown>>(input: T): T {
   ) as T
 }
 
+/**
+ * `compactObject` for a nested group, collapsing an all-empty group to
+ * `undefined` so the enclosing `compactObject` drops the key entirely. Without
+ * this a plan that answered none of the group's questions still emits an empty
+ * object, and `{% if trust.marital_trust %}` in a template is truthy for `{}`.
+ */
+function optionalGroup<T extends Record<string, unknown>>(input: T): T | undefined {
+  const compacted = compactObject(input)
+  return Object.keys(compacted).length > 0 ? compacted : undefined
+}
+
 type PronounSet = {
   subject: string
   object: string
@@ -723,6 +734,24 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       date: trustDate,
       restatement: trustProvisions.restatement,
       spousal_funding: trustProvisions.spousal_funding,
+      // Structure at the first spouse's death, for a joint trust and for a
+      // separate trust that distributes in trust for the spouse alike.
+      // `optionalGroup` drops the whole group when nothing is chosen, so a plan
+      // that divides nothing carries no empty marital/bypass keys downstream.
+      marital_trust: optionalGroup({
+        type: trustProvisions.marital_trust ?? undefined,
+        invasion_powers: trustProvisions.marital_trust_invasion ?? undefined,
+        remainder_power_of_appointment: trustProvisions.marital_trust_remainder_power ?? undefined,
+        include_qdot: trustProvisions.marital_trust_include_qdot || undefined,
+      }),
+      bypass_trust: optionalGroup({
+        type: trustProvisions.bypass_trust ?? undefined,
+        formula: trustProvisions.bypass_trust_formula ?? undefined,
+        fixed_amount: trustProvisions.bypass_trust_fixed_amount ?? undefined,
+        percentage: trustProvisions.bypass_trust_percentage ?? undefined,
+        remainder_power_of_appointment: trustProvisions.bypass_trust_remainder_power ?? undefined,
+        allow_discretionary_sprinkling: trustProvisions.bypass_trust_allow_sprinkling || undefined,
+      }),
       initial_trustee_nomination: trustProvisions.initial_trustee_nomination,
       trustee_compensation: trustProvisions.trustee_compensation,
       successor_trustee_vacancy: trustProvisions.successor_trustee_vacancy,

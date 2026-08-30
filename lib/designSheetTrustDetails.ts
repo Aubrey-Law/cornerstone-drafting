@@ -145,6 +145,98 @@ export const PARENT_CHILD_RELATIONSHIP_DEFINITIONS: readonly ParentChildRelation
   ['state_probate_code', 'custom'] as const
 
 /** How each settlor's Schedule A lists the trust's assets. */
+/**
+ * Marital and bypass trust structure at the first spouse's death.
+ *
+ * One set of fields serves both plan shapes, because they answer the same
+ * questions: a joint trust divides the deceased settlor's share before the
+ * remainder joins the Survivor's Trust, and a separate trust that distributes
+ * in trust for the spouse divides the residuary the same way. `is_joint`
+ * decides which wording and which option subset the design sheet shows —
+ * see MaritalBypassTrustOptions.tsx — so the two can never both be answered.
+ *
+ * The marital and bypass choices are independent: a plan may create either,
+ * both, or neither. That is why they are two fields rather than one combined
+ * structure enum.
+ */
+export type MaritalTrustType =
+  | 'none'
+  | 'general_power_of_appointment'
+  | 'qtip'
+
+export const MARITAL_TRUST_TYPES: readonly MaritalTrustType[] = [
+  'none',
+  'general_power_of_appointment',
+  'qtip',
+] as const
+
+/** How far the surviving spouse may reach the Marital Trust principal. */
+export type MaritalTrustInvasion =
+  | 'no_invasion'
+  | 'hems'
+  | 'five_by_five'
+  | 'complete'
+
+export const MARITAL_TRUST_INVASIONS: readonly MaritalTrustInvasion[] = [
+  'no_invasion',
+  'hems',
+  'five_by_five',
+  'complete',
+] as const
+
+/**
+ * Whether the surviving spouse may redirect what is left in a trust at their
+ * death. Shared by the marital (QTIP) and bypass trusts — the two questions have
+ * the same two answers — but stored separately so one may be granted alone.
+ */
+export type TrustRemainderPowerOfAppointment = 'none' | 'limited_testamentary'
+
+export const TRUST_REMAINDER_POWERS_OF_APPOINTMENT:
+  readonly TrustRemainderPowerOfAppointment[] = ['none', 'limited_testamentary'] as const
+
+/**
+ * `bypass` is the mandatory credit-shelter trust — the joint sheet calls it
+ * "Bypass Trust (A/B)", the separate sheet "Bypass/Credit-Shelter Trust".
+ * `disclaimer` funds only from what the survivor disclaims.
+ */
+export type BypassTrustType = 'none' | 'bypass' | 'disclaimer'
+
+export const BYPASS_TRUST_TYPES: readonly BypassTrustType[] = [
+  'none',
+  'bypass',
+  'disclaimer',
+] as const
+
+/** How much of the deceased spouse's share funds the bypass trust. */
+export type BypassTrustFormula =
+  | 'all_assets'
+  | 'formula'
+  | 'fixed_amount'
+  | 'percentage'
+  | 'clayton_election'
+
+export const BYPASS_TRUST_FORMULAS: readonly BypassTrustFormula[] = [
+  'all_assets',
+  'formula',
+  'fixed_amount',
+  'percentage',
+  'clayton_election',
+] as const
+
+/**
+ * True when the selected marital trust actually creates one — the invasion,
+ * QDOT and (for a QTIP) remainder-appointment questions only mean something
+ * then, and the marital deduction savings language becomes mandatory.
+ */
+export function createsMaritalTrust(value: MaritalTrustType | null): boolean {
+  return value === 'general_power_of_appointment' || value === 'qtip'
+}
+
+/** True when the selected bypass option creates a trust of any kind. */
+export function createsBypassTrust(value: BypassTrustType | null): boolean {
+  return value === 'bypass' || value === 'disclaimer'
+}
+
 export type AssetScheduleFormat = 'table' | 'paragraph'
 
 export const ASSET_SCHEDULE_FORMATS: readonly AssetScheduleFormat[] = ['table', 'paragraph'] as const
@@ -169,6 +261,18 @@ export interface TrustDetailsProvisions {
   subchapter_s_provisions: boolean
   allow_trustee_change_situs: boolean
   successor_trustee_vacancy: SuccessorTrusteeVacancy | null
+
+  /** Marital and bypass structure at the first spouse's death. */
+  marital_trust: MaritalTrustType | null
+  marital_trust_invasion: MaritalTrustInvasion | null
+  marital_trust_remainder_power: TrustRemainderPowerOfAppointment | null
+  marital_trust_include_qdot: boolean
+  bypass_trust: BypassTrustType | null
+  bypass_trust_formula: BypassTrustFormula | null
+  bypass_trust_fixed_amount: number | null
+  bypass_trust_percentage: number | null
+  bypass_trust_remainder_power: TrustRemainderPowerOfAppointment | null
+  bypass_trust_allow_sprinkling: boolean
   residual_beneficiary_method: ResidualBeneficiaryMethod | null
   residuary_after_death: ResiduaryAfterDeath | null
   include_common_trust_for_children: boolean
@@ -244,6 +348,19 @@ const DEFAULT_TRUST_DETAILS: TrustDetailsProvisions = {
   subchapter_s_provisions: false,
   allow_trustee_change_situs: false,
   successor_trustee_vacancy: null,
+  // Null, not 'none': "no marital trust" is a decision the attorney makes, and
+  // defaulting it to an answer would let a joint trust draft a structure nobody
+  // chose. The UI shows nothing selected until one is.
+  marital_trust: null,
+  marital_trust_invasion: null,
+  marital_trust_remainder_power: null,
+  marital_trust_include_qdot: false,
+  bypass_trust: null,
+  bypass_trust_formula: null,
+  bypass_trust_fixed_amount: null,
+  bypass_trust_percentage: null,
+  bypass_trust_remainder_power: null,
+  bypass_trust_allow_sprinkling: false,
   residual_beneficiary_method: null,
   residuary_after_death: null,
   include_common_trust_for_children: false,
@@ -372,6 +489,20 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     subchapter_s_provisions: readBoolean(raw, 'subchapter_s_provisions', DEFAULT_TRUST_DETAILS.subchapter_s_provisions),
     allow_trustee_change_situs: readBoolean(raw, 'allow_trustee_change_situs', DEFAULT_TRUST_DETAILS.allow_trustee_change_situs),
     successor_trustee_vacancy: readString(raw, 'successor_trustee_vacancy', DEFAULT_TRUST_DETAILS.successor_trustee_vacancy),
+    marital_trust: readAllowedValue(raw, 'marital_trust', MARITAL_TRUST_TYPES),
+    marital_trust_invasion: readAllowedValue(raw, 'marital_trust_invasion', MARITAL_TRUST_INVASIONS),
+    marital_trust_remainder_power: readAllowedValue(
+      raw, 'marital_trust_remainder_power', TRUST_REMAINDER_POWERS_OF_APPOINTMENT,
+    ),
+    marital_trust_include_qdot: readBoolean(raw, 'marital_trust_include_qdot', DEFAULT_TRUST_DETAILS.marital_trust_include_qdot),
+    bypass_trust: readAllowedValue(raw, 'bypass_trust', BYPASS_TRUST_TYPES),
+    bypass_trust_formula: readAllowedValue(raw, 'bypass_trust_formula', BYPASS_TRUST_FORMULAS),
+    bypass_trust_fixed_amount: readNumber(raw, 'bypass_trust_fixed_amount', DEFAULT_TRUST_DETAILS.bypass_trust_fixed_amount),
+    bypass_trust_percentage: readNumber(raw, 'bypass_trust_percentage', DEFAULT_TRUST_DETAILS.bypass_trust_percentage),
+    bypass_trust_remainder_power: readAllowedValue(
+      raw, 'bypass_trust_remainder_power', TRUST_REMAINDER_POWERS_OF_APPOINTMENT,
+    ),
+    bypass_trust_allow_sprinkling: readBoolean(raw, 'bypass_trust_allow_sprinkling', DEFAULT_TRUST_DETAILS.bypass_trust_allow_sprinkling),
     // Normalised on read so sheets written before the option value was corrected
     // (they stored `trust-for-life`) come back as the canonical union member.
     residual_beneficiary_method: normalizeResidualBeneficiaryMethod(raw.residual_beneficiary_method)

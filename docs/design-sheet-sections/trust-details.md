@@ -58,6 +58,31 @@ Key provisions from `lib/designSheetTrustDetails.ts`:
 | `include_common_trust_for_children` | boolean |
 | Business/529 powers, definition toggles | booleans |
 
+**Marital and bypass trusts (first spouse's death)**
+
+One set of fields serves both plan shapes — a joint trust dividing the deceased
+settlor's share, and a separate trust distributing in trust for the spouse — so a
+matter that switches `is_joint` keeps its answers. `MaritalBypassTrustOptions.tsx`
+picks the wording and the option subset from a `variant` prop; storage is the same
+either way.
+
+| Field | Values / type |
+| --- | --- |
+| `marital_trust` | `none`, `general_power_of_appointment`, `qtip` — nullable |
+| `marital_trust_invasion` | `no_invasion`, `hems`, `five_by_five`, `complete` — nullable |
+| `marital_trust_remainder_power` | `none`, `limited_testamentary` — QTIP only, nullable |
+| `marital_trust_include_qdot` | boolean (non-citizen spouse) |
+| `bypass_trust` | `none`, `bypass` (credit-shelter / "A/B"), `disclaimer` — nullable |
+| `bypass_trust_formula` | `all_assets`, `formula`, `fixed_amount`, `percentage`, `clayton_election` — `bypass` only, nullable |
+| `bypass_trust_fixed_amount`, `bypass_trust_percentage` | number, nullable |
+| `bypass_trust_remainder_power` | `none`, `limited_testamentary` — `bypass` only, nullable |
+| `bypass_trust_allow_sprinkling` | boolean (sprinkle to issue during the survivor's lifetime) |
+
+`all_assets` is offered on the separate variant only, and is disabled there once a
+marital trust is created — there is then no "all" left to fund the bypass with.
+A `disclaimer` bypass trust has no formula, remainder power or fixed share: what
+the survivor disclaims decides its funding.
+
 **Trustee administration**
 
 | Field | Type |
@@ -77,7 +102,7 @@ Key provisions from `lib/designSheetTrustDetails.ts`:
 | `include_slayer_provision` | boolean |
 | `allow_charitable_giving_during_incapacity` | boolean |
 | `forgive_all_debts` | boolean |
-| `include_marital_deduction_savings_language` | boolean — forced on by some trust structures; the checkbox was previously hardcoded dead |
+| `include_marital_deduction_savings_language` | boolean — the checkbox is replaced by a fixed notice whenever the structure requires it (any created marital trust, or a separate-trust `disclaimer` / `clayton_election`) |
 
 **Incapacity**
 
@@ -114,7 +139,8 @@ party (`client` / `spouse`):
 | `trust_name` + date + format | `trust.name`, `trust.display_name`, `trust.date` |
 | `spouse_trust_name` + format | `trust.spouse_name`, `trust.spouse_display_name` |
 | `restatement` | `trust.restatement` |
-| `trust_planning_type` | `trust.spousal_funding` — `outright_to_spouse`, `disclaimer`, `clayton_election`, or `not_to_spouse` (the residuary skips the surviving spouse). Only `disclaimer` changes package selection. |
+| `trust_planning_type` | `trust.spousal_funding` — `outright_to_spouse`, `in_trust_for_spouse`, `disclaimer`, `clayton_election`, or `not_to_spouse` (the residuary skips the surviving spouse). Only `disclaimer` changes package selection. |
+| `marital_trust*`, `bypass_trust*` | `trust.marital_trust.*`, `trust.bypass_trust.*` — each group is omitted entirely when nothing in it is answered |
 | `trust_details.*` | `trust.initial_trustee_nomination`, `trust.provisions.*`, etc. |
 | `co_trustee_decision` | `fiduciaries.trustee.co_trustees_action` |
 | Distribution fields | `trust.descendants_distribution.method`, `stage_*_age` |
@@ -156,6 +182,8 @@ SMITH FAMILY REVOCABLE LIVING TRUST dated January 15, 2026, and any amendments t
 | `has_blended_family` | parentage split | Joint trust blended-family articles |
 | `trust.restatement` | boolean | Restatement opening language |
 | `trust.spousal_funding == "disclaimer"` | planning type | `indv-disclaimer-trust` package structure |
+| `trust.marital_trust` | a marital trust is created | Marital/QTIP articles, QDOT language, invasion powers |
+| `trust.bypass_trust` | a bypass or disclaimer trust is created | Bypass/credit-shelter or disclaimer articles, sprinkling |
 | `descendants_distribution.method` | outright / staged / trust_for_life | Distribution article branches |
 | `include_no_contest_clause` | trust or will flag | No-contest clause (will flag can override) |
 
@@ -196,6 +224,7 @@ namespace-only.
 | Many `trust_details` booleans | In `trust.provisions.*` but few clause `condition` hooks — templates may ignore new toggles |
 | `remote_beneficiary_individuals` | Contact IDs resolved in `assemble.ts` — templates should use `trust.remote_beneficiaries.individuals[]` |
 | `residuary_after_death` enum | Mapped to payload; verify joint-trust clauses cover all four values |
+| `trust.marital_trust.*`, `trust.bypass_trust.*` | Captured and carried into the generator context, but no template branches on them yet — the marital, bypass and disclaimer articles still need authoring |
 | `special_trustee_instructions` | Free text in provisions — needs template placeholder |
 | `TrustDetailsSpouseSection` | Exported from `TrustDetailsSection.tsx` but **not wired into `designSectionCatalog.tsx`** — `tests/design-sheet-contacts-section.test.ts` asserts the catalog does not reference it. Spouse trust name and format come from the same section, scoped `spouse`. |
 | UI density | `TrustDetailsSection.tsx` is past 1,000 lines. Prefer a new `SectionBlock` over appending, and consider splitting the file. |

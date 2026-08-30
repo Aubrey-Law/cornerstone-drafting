@@ -9,10 +9,10 @@
 | Field | Storage | Notes |
 | --- | --- | --- |
 | `plan_type` | column | `pour_over` \| `outright_will` \| `testamentary_trust` |
-| `is_joint` | column | Joint vs separate trusts (married) |
+| `is_joint` | column | Joint vs separate trusts (married). Also picks which wording the shared marital/bypass trust options use in Trust Details. |
 | `decisions.document_inclusions` | jsonb | Per-document toggles |
 | `decisions.estate_plan_design` | jsonb | Core setup, will title, signing type, ancillary docs |
-| `decisions.trust_planning_type` | jsonb | `outright_to_spouse` \| `disclaimer` \| `clayton_election` |
+| `decisions.trust_planning_type` | jsonb | `outright_to_spouse` \| `in_trust_for_spouse` \| `disclaimer` \| `clayton_election` \| `not_to_spouse`. The three in-trust values reveal the marital/bypass group in `decisions.trust_details` — see the Trust Details guide. |
 | `signing_date`, `signing_month`, `signing_year` | column | Execution block |
 | `signing_county` | column | Execution + client county fallback |
 | `notary_commission_expiration` | column | Notary block |
@@ -169,3 +169,4 @@ Nav items for Trust, Will, DPOA, Healthcare, Assets, Transfers are gated by `doc
 | **Asset transfer doc selection** | `deed` inclusion toggle vs `real_estate_transfer.selectedDocs` — both must align; draft route uses payload flags |
 | Practice area null | Normalizes to EP so packages still generate |
 | **Clayton election** / `trust_planning_type` | Stored as `trust.spousal_funding` — verify joint-trust templates branch on `disclaimer` vs `outright_to_spouse` |
+| **Marital / bypass trust structure** | Captured in `decisions.trust_details` and carried to `trust.marital_trust.*` / `trust.bypass_trust.*`; no package or template branches on it yet |

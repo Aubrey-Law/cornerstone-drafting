@@ -173,15 +173,27 @@ export function getDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'ma
 }
 
 /**
- * Trust structure for an individual (non-joint) revocable trust. `disclaimer`
- * selects the married-individual disclaimer trust (outright to spouse with a
- * Marital/Family split on disclaimer); `standard` is the plain individual RLT.
- * Stored in `decisions` JSONB alongside `document_inclusions` — no dedicated
- * column.
+ * Trust structure for an individual (non-joint) revocable trust: how the
+ * residuary reaches the surviving spouse, if at all. `disclaimer` selects the
+ * married-individual disclaimer trust (outright to spouse with a Marital/Family
+ * split on disclaimer); `standard` is the plain individual RLT. Stored in
+ * `decisions` JSONB alongside `document_inclusions` — no dedicated column.
+ *
+ * The joint-trust counterpart of this question is `is_joint` plus the
+ * `marital_trust` / `bypass_trust` group in `decisions.trust_details`.
  */
 export type TrustPlanningType =
   | 'standard'
   | 'outright_to_spouse'
+  /**
+   * The residuary is held in one or more trusts for the surviving spouse. The
+   * shape of those trusts — marital, bypass, or both — is the `marital_trust`
+   * and `bypass_trust` group in `decisions.trust_details`, which the design
+   * sheet reveals once this is selected. `disclaimer` and `clayton_election`
+   * below name particular in-trust structures and predate that group; they
+   * still reveal it, so a plan stored either way can be refined.
+   */
+  | 'in_trust_for_spouse'
   | 'disclaimer'
   | 'clayton_election'
   /**
@@ -199,6 +211,7 @@ export function getTrustPlanningType(sheet: Pick<DesignSheet, 'decisions'>): Tru
   const value = decisions.trust_planning_type
   if (value === 'disclaimer') return 'disclaimer'
   if (value === 'clayton_election') return 'clayton_election'
+  if (value === 'in_trust_for_spouse') return 'in_trust_for_spouse'
   if (value === 'not_to_spouse') return 'not_to_spouse'
   // Legacy persisted value before spousal funding options expanded.
   if (value === 'standard') return 'outright_to_spouse'

@@ -217,6 +217,65 @@ describe('draft payload trust provisions wiring', () => {
     expect(provisions.remote_beneficiary_charity_names).toEqual(['Example Charity'])
   })
 
+  it('carries the marital and bypass trust structure through to the generator', () => {
+    const provisions = draftPayloadTrustProvisions({
+      decisions: {
+        trust_planning_type: 'in_trust_for_spouse',
+        trust_details: {
+          marital_trust: 'qtip',
+          marital_trust_invasion: 'five_by_five',
+          marital_trust_remainder_power: 'limited_testamentary',
+          marital_trust_include_qdot: true,
+          bypass_trust: 'bypass',
+          bypass_trust_formula: 'fixed_amount',
+          bypass_trust_fixed_amount: 2000000,
+          bypass_trust_remainder_power: 'none',
+          bypass_trust_allow_sprinkling: true,
+        },
+      },
+      restatement: false,
+      trust_protector: false,
+      trust_protector_name: null,
+      residual_beneficiary: null,
+      distribution_age: null,
+      staggered_distributions: [],
+      remote_beneficiary: 'heirs_at_law',
+      remote_beneficiary_charities: [],
+      provision_substance_abuse: 'no',
+      provision_married_beneficiary: 'no',
+      no_contest_clause: 'omit',
+    })
+
+    expect(provisions.spousal_funding).toBe('in_trust_for_spouse')
+
+    const data = toEstateGeneratorData(basePayload({ trust_provisions: provisions }))
+
+    expect(data.trust.marital_trust).toEqual({
+      type: 'qtip',
+      invasion_powers: 'five_by_five',
+      remainder_power_of_appointment: 'limited_testamentary',
+      include_qdot: true,
+    })
+    // `none` is a real answer and survives; `false` sprinkling and an unset
+    // percentage do not, so a template can test the keys it cares about.
+    expect(data.trust.bypass_trust).toEqual({
+      type: 'bypass',
+      formula: 'fixed_amount',
+      fixed_amount: 2000000,
+      remainder_power_of_appointment: 'none',
+      allow_discretionary_sprinkling: true,
+    })
+  })
+
+  it('omits the marital and bypass groups entirely when nothing is chosen', () => {
+    const data = toEstateGeneratorData(basePayload({
+      trust_provisions: defaultDraftPayloadTrustProvisions(),
+    }))
+
+    expect(data.trust.marital_trust).toBeUndefined()
+    expect(data.trust.bypass_trust).toBeUndefined()
+  })
+
   it('maps trust provisions into estate generator trust data', () => {
     const data = toEstateGeneratorData(basePayload({
       trust_provisions: defaultDraftPayloadTrustProvisions({

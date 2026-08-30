@@ -16,6 +16,7 @@ import {
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
+  createsMaritalTrust,
   getTrustNameFormat,
   resolveResidualBeneficiaryMethod,
   setTrustDetails,
@@ -52,6 +53,7 @@ import {
   readDualWriteProvision,
 } from '@/lib/designSheet/dualWriteProvisions'
 import { isMarriedSheet as isMarried } from './fiduciary-blocks'
+import { MaritalBypassTrustOptions } from './MaritalBypassTrustOptions'
 import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 
 /**
@@ -88,6 +90,11 @@ const SPOUSAL_TRUST_FUNDING_OPTIONS: { value: TrustPlanningType; label: string; 
     value: 'outright_to_spouse',
     label: 'Outright to Spouse',
     description: 'Distributes the residuary estate outright to the surviving spouse.',
+  },
+  {
+    value: 'in_trust_for_spouse',
+    label: 'Distribute in Trust',
+    description: "Creates one or more trusts for the spouse, which may then distribute to children or other individuals on the spouse's death without probate.",
   },
   {
     value: 'disclaimer',
@@ -210,14 +217,23 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
   const married = isMarried(sheet)
   const separate = married && sheet.is_joint === false
+  const jointTrust = married && sheet.is_joint === true
   const trustDetails = getTrustDetails(sheet)
   const spousalFunding = getTrustPlanningType(sheet)
+  // Mirrors the Spousal Trust Funding row, which renders for any not-joint
+  // married plan: the spouse's trusts only need shaping once the residuary is
+  // actually held in trust for them.
+  const spouseTrustsFromResiduary = married && !sheet.is_joint
+    && spousalFunding !== 'outright_to_spouse' && spousalFunding !== 'not_to_spouse'
   const trustNameSuggestions = buildTrustNameSuggestions(sheet, matter)
   const spouseTrustNameSuggestions = buildSpouseTrustNameSuggestions(sheet, matter)
   const [specialTrusteeInstructions, setSpecialTrusteeInstructions] = useState(
     trustDetails.special_trustee_instructions ?? '',
   )
-  const autoMaritalDeductionSavings = spousalFunding === 'disclaimer' || spousalFunding === 'clayton_election'
+  // A marital trust needs the savings language whichever shape creates it; the
+  // two legacy separate-trust structures imply one without naming it.
+  const autoMaritalDeductionSavings = createsMaritalTrust(trustDetails.marital_trust)
+    || (!jointTrust && (spousalFunding === 'disclaimer' || spousalFunding === 'clayton_election'))
 
   const updateTrustDetails = (patch: Parameters<typeof setTrustDetails>[1]) =>
     onChange('decisions', prevSheet => setTrustDetails(prevSheet, patch))
@@ -305,6 +321,11 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           />
         )}
       </SectionBlock>
+
+      {jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}
+      {spouseTrustsFromResiduary && (
+        <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="separate" />
+      )}
 
       <SectionBlock title="Trust Name">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -849,7 +870,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           ) : (
             <DesignSheetCheckboxOption
               label="Include marital deduction savings language in spendthrift clause"
-              description="Adds marital deduction savings language to the spendthrift clause. Disclaimer and Clayton-election structures include it automatically."
+              description="Adds marital deduction savings language to the spendthrift clause. Disclaimer, Clayton-election and joint marital trust structures include it automatically."
               checked={trustDetails.include_marital_deduction_savings_language}
               onChange={checked => updateTrustDetails({ include_marital_deduction_savings_language: checked })}
             />
