@@ -3,6 +3,7 @@ import { practiceAreaLabel } from '@/lib/practiceArea'
 import { stageLabel } from '@/types/database'
 import { matterLastMilestoneAt } from '@/lib/matters/cardFacts'
 import type { MatterListRow } from '@/lib/queries/matters'
+import type { MatterSortKey, MatterTableFilters } from '@/lib/adminTables/matterTable'
 
 /**
  * The matters list as a spreadsheet.
@@ -94,4 +95,25 @@ export function matterExportCsv(rows: MatterExportRow[]): string {
  */
 export function matterExportFilename(label: string, today = new Date()): string {
   return csvFilename('matters', label, today)
+}
+
+/**
+ * The export route's URL for a given selection.
+ *
+ * One definition, so the assistant's `export_matters` tool and anything else
+ * that links to the download describe the same filters the same way.
+ */
+export function matterExportUrl(filters: MatterTableFilters, sort?: MatterSortKey): string {
+  const query = new URLSearchParams()
+  if (filters.search) query.set('search', filters.search)
+  if (filters.practice && filters.practice !== 'all') query.set('practice', filters.practice)
+  if (filters.stageGroup !== 'all') query.set('stage', filters.stageGroup)
+  if (sort) query.set('sort', sort)
+  const qs = query.toString()
+  return `/api/admin/matters/export${qs ? `?${qs}` : ''}`
+}
+
+/** The filename's label: the stage group exported, else "all". */
+export function matterExportLabel(filters: MatterTableFilters): string {
+  return filters.stageGroup === 'all' ? 'all' : filters.stageGroup
 }

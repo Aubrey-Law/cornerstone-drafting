@@ -94,11 +94,7 @@ export const exportLeadsToolExecutor: AdminChatToolExecutor = {
         tool: EXPORT_LEADS_TOOL_NAME,
         tool_use_id: toolUseId,
         status: 'done',
-        result: {
-          lead_count: page.total,
-          filename,
-          download_url: downloadUrl,
-        },
+        result: { row_count: page.total, filename, download_url: downloadUrl },
       })
 
       return {

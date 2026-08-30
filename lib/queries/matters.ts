@@ -3,6 +3,12 @@ import { formatPhoneDisplay } from '@/lib/phone'
 import type { PipelineMatter } from '@/types/database'
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { fetchUnreviewedUploadCountsForMatters } from '@/lib/matter/unreviewedUploads'
+import {
+  filterAndSortMatters,
+  type MatterSortKey,
+  type MatterTableFilters,
+} from '@/lib/adminTables/matterTable'
+import { toMatterExportRow, type MatterExportRow } from '@/lib/matters/exportRows'
 
 export type MatterListRow = PipelineMatter & {
   matter_number: string | null
@@ -64,5 +70,46 @@ export async function fetchMattersList(): Promise<{
   } catch (countError) {
     console.error('fetchMattersList upload counts error:', countError)
     return { matters: matters.map(enrich), error: null }
+  }
+}
+
+/**
+ * The matters list as export rows: the same set the page shows, narrowed by
+ * the same filters.
+ *
+ * The list is filtered and sorted in the browser over every open matter, so
+ * the export runs that same pure function here rather than restating the
+ * search, the practice filter and the stage chips in SQL — one definition of
+ * "the matters you are looking at", for the page and the assistant alike.
+ */
+export interface MatterExportPage {
+  rows: MatterExportRow[]
+  /** Matters matching the filters, before `limit` is applied. */
+  total: number
+  truncated: boolean
+}
+
+export const MATTER_EXPORT_MAX_ROWS = 2000
+export const MATTER_EXPORT_DEFAULT_ROWS = 500
+
+export function clampMatterExportLimit(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return MATTER_EXPORT_DEFAULT_ROWS
+  return Math.max(1, Math.min(MATTER_EXPORT_MAX_ROWS, Math.floor(numeric)))
+}
+
+export async function fetchMatterExportRows(
+  filters: MatterTableFilters,
+  options: { sort?: MatterSortKey; limit?: number } = {},
+): Promise<MatterExportPage> {
+  const { matters, error } = await fetchMattersList()
+  if (error) throw new Error(error)
+
+  const limit = clampMatterExportLimit(options.limit ?? MATTER_EXPORT_DEFAULT_ROWS)
+  const selected = filterAndSortMatters(matters, filters, options.sort ?? 'client_asc')
+  return {
+    rows: selected.slice(0, limit).map(toMatterExportRow),
+    total: selected.length,
+    truncated: selected.length > limit,
   }
 }
