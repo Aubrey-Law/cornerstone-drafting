@@ -577,7 +577,7 @@ export function useDesignSheetState({
     router.refresh()
   }, [commitSheet, router])
 
-  const exportDesignSheet = useCallback(async (format?: 'json' | 'json-docx') => {
+  const exportDesignSheet = useCallback(async (format?: 'json' | 'json-docx' | 'statular') => {
     setExporting(true)
     try {
       const saved = await persistSheet()
@@ -591,7 +591,10 @@ export function useDesignSheetState({
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition') ?? ''
       const filenameMatch = disposition.match(/filename="([^"]+)"/)
-      const filename = filenameMatch?.[1] ?? (format === 'json' ? 'generator-data.json' : 'design-sheet.docx')
+      const fallbackName = format === 'json'
+        ? 'generator-data.json'
+        : format === 'statular' ? 'statular-import.md' : 'design-sheet.docx'
+      const filename = filenameMatch?.[1] ?? fallbackName
       // json-docx also falls back to .docx above, which matches its payload.
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
@@ -601,7 +604,11 @@ export function useDesignSheetState({
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      toast.success(format ? 'Generator data exported' : 'Design sheet exported')
+      toast.success(
+        format === 'statular' ? 'Statular import file exported'
+          : format ? 'Generator data exported'
+          : 'Design sheet exported',
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to export design sheet'
       toast.error(message)
@@ -615,6 +622,9 @@ export function useDesignSheetState({
   // The Word-wrapped variant exists because Mike's uploads only accept office
   // file types; the body is the same JSON, ready to attach to a Mike chat.
   const handleExportGeneratorDataDocx = useCallback(() => exportDesignSheet('json-docx'), [exportDesignSheet])
+  // Statular ingests uploaded files and extracts from them, so the export is
+  // Markdown in its own question wording rather than our generator paths.
+  const handleExportStatular = useCallback(() => exportDesignSheet('statular'), [exportDesignSheet])
 
   return {
     isLP,
@@ -646,6 +656,7 @@ export function useDesignSheetState({
     handleExportDesignSheet,
     handleExportGeneratorData,
     handleExportGeneratorDataDocx,
+    handleExportStatular,
     applyPlanStructurePatch,
     // readiness
     readiness,

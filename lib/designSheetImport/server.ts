@@ -31,7 +31,8 @@ function parseJsonFromModelText(raw: string): unknown {
   return JSON.parse(raw.slice(jsonStart, jsonEnd + 1))
 }
 
-async function loadCurrentDesignSheet(matterId: string) {
+/** Latest version of the matter's design sheet, inflated to the app-side shape. */
+export async function loadCurrentDesignSheet(matterId: string) {
   const { data, error } = await getAdminClient()
     .from('design_sheets')
     .select('*')

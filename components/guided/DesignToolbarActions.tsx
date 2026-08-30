@@ -1,6 +1,6 @@
 'use client'
 
-import { Braces, ChevronDown, Copy, Download, Loader2, Upload } from 'lucide-react'
+import { Braces, ChevronDown, Copy, Download, FileText, Loader2, Upload } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,8 @@ interface DesignToolbarActionsProps {
   onExportJson?: () => void
   /** Downloads the generator data wrapped in a .docx, the envelope Mike's uploads accept. */
   onExportJsonDocx?: () => void
+  /** Downloads the answers as Markdown in Statular's question wording, for its file import. */
+  onExportStatular?: () => void
   saveLabel: string
   saving: boolean
   exporting: boolean
@@ -40,6 +42,7 @@ export function DesignToolbarActions({
   onExport,
   onExportJson,
   onExportJsonDocx,
+  onExportStatular,
   saveLabel,
   saving,
   exporting,
@@ -94,6 +97,12 @@ export function DesignToolbarActions({
             <DropdownMenuItem onSelect={onExportJsonDocx} disabled={exporting} className="text-xs">
               <Braces size={14} />
               Export generator data for Mike (.docx)
+            </DropdownMenuItem>
+          )}
+          {onExportStatular && (
+            <DropdownMenuItem onSelect={onExportStatular} disabled={exporting} className="text-xs">
+              <FileText size={14} />
+              Export for Statular (.md)
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

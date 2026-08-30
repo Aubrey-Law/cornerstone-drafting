@@ -200,6 +200,31 @@ Inline clause examples in `trust.trustee_appointment.json` branch on `fiduciarie
 
 Placeholder maps: `tools/aubreylaw-docgeneration/docs/joint-trust-placeholder-map.md`, `trust-individual-single-placeholder-map.md`, `indv-disclaimer-trust-placeholder-map.md`, `certificate-of-trust-placeholder-map.md`, `assignment-of-personal-property-placeholder-map.md`.
 
+## Exporting to Statular
+
+`GET /api/admin/matters/[id]/design-sheet/export?format=statular` renders the
+answers as Markdown in Statular's own question wording
+(`lib/designSheet/statularExport.ts`), for Statular's file import.
+
+Statular extracts from uploaded files rather than parsing a schema, so the export
+optimises for legibility to an extraction model: Markdown (on its accepted list),
+Statular's exact question and option labels where we know them, and **answers
+only** — an unanswered field is omitted, never printed blank or defaulted.
+
+Two rules that are easy to break:
+
+- Read the **raw** decision blob, not `getTrustDetails`. The getter substitutes
+  `false` for an unset boolean, and "Include QDOT Language: No" for a question
+  nobody answered is a decision the file invents.
+- The marital/bypass block renders only when the plan actually divides at the
+  first death (joint, or a separate trust holding the residuary in trust). A
+  leftover answer from an earlier structure must not reach Statular.
+
+Labels come from the import registry (`lib/designSheetImport/`), so a field added
+there exports for free. The registry deliberately omits execution details — the
+document importer must not propose a signing date — so `EXECUTION_FIELDS` in the
+export module lists those columns explicitly.
+
 ## Adding a field here
 
 `setTrustDetails` spreads `...raw` first, so an unrecognised stored key survives a
