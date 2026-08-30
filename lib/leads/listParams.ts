@@ -116,3 +116,57 @@ export function buildLeadSearchFilter(term: string): string | null {
   for (const code of codes) clauses.push(`practice_area.eq.${escapeForOr(code)}`)
   return clauses.join(',')
 }
+
+export const LEAD_STATUS_FILTERS: LeadStatusFilter[] = ['open', 'lost', 'declined', 'all']
+
+export const LEAD_PROGRESS_FILTERS: LeadProgressFilter[] = [
+  'all',
+  'intake_not_sent',
+  'intake_pending',
+  'intake_complete',
+  'engagement_pending',
+  'engagement_signed',
+]
+
+export const LEAD_SORT_KEYS: LeadSortKey[] = [
+  'newest',
+  'oldest',
+  'name_asc',
+  'name_desc',
+  'fee_desc',
+  'last_activity',
+  'score_desc',
+]
+
+function pick<T extends string>(allowed: T[], value: unknown, fallback: T): T {
+  return typeof value === 'string' && (allowed as string[]).includes(value) ? (value as T) : fallback
+}
+
+/**
+ * Loose input (a URL query string, or a tool call's arguments) read as list
+ * params, so an export and the list it mirrors are filtered by the same
+ * vocabulary. Anything unrecognized falls back rather than throwing: an
+ * assistant asking for `status: "everything"` gets every lead, not an error.
+ */
+export function leadListParamsFrom(
+  input: {
+    status?: unknown
+    search?: unknown
+    practice?: unknown
+    progress?: unknown
+    sort?: unknown
+  },
+  defaults: Partial<LeadListParams> = {},
+): LeadListParams {
+  const base = { ...EMPTY_LEAD_LIST_PARAMS, ...defaults }
+  return {
+    ...base,
+    status: pick(LEAD_STATUS_FILTERS, input.status, base.status),
+    progress: pick(LEAD_PROGRESS_FILTERS, input.progress, base.progress),
+    sort: pick(LEAD_SORT_KEYS, input.sort, base.sort),
+    search: typeof input.search === 'string' ? input.search.trim() : base.search,
+    practice: typeof input.practice === 'string' && input.practice.trim()
+      ? input.practice.trim()
+      : base.practice,
+  }
+}

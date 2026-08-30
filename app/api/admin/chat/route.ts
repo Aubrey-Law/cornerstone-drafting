@@ -15,6 +15,7 @@ import { isDraftingSummaryRequest, formatClaudeDraftingSkillInput } from '@/lib/
 import { designSheetImportExecutor, designSheetStatusExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
+import { exportLeadsToolExecutor, leadExportSystemPromptNote } from '@/lib/adminChat/leadExportTool'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
 import {
   matterKnowledgeSystemPromptNote,
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
   const contextLeadId = contextType === 'lead' && body.context_id ? body.context_id : null
   const tools: AdminChatToolExecutor[] = [
     createLeadToolExecutor,
+    exportLeadsToolExecutor,
     ...(contextMatterId
       ? [
           designSheetImportExecutor(contextMatterId, adminUserId ?? null),
@@ -135,7 +137,7 @@ export async function POST(req: Request) {
 
   return createAdminChatStream({
     system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote()
-      + calendarPlanningSystemPromptNote() + matterKnowledgeSystemPromptNote(),
+      + leadExportSystemPromptNote() + calendarPlanningSystemPromptNote() + matterKnowledgeSystemPromptNote(),
     messages: requestMessages.map(message => ({ role: message.role, content: message.content })),
     tools,
     maxIterations: 4,
