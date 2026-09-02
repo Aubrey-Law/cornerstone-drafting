@@ -1,0 +1,13 @@
+{
+  "name": "@aubrey-law/estate-templates",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Estate-generator data corpus: package manifests, DOCX templates, clause library, jurisdiction rules and schemas. Data only, no build step.",
+  "type": "module",
+  "exports": {
+    "./root": {
+      "types": "./root.d.ts",
+      "default": "./root.mjs"
+    }
+  }
+}

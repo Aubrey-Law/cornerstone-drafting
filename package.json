@@ -2,6 +2,12 @@
   "name": "cornerstone-drafting",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/aubreylaw-docgeneration",
+    "tools/workflows"
+  ],
   "engines": {
     "node": ">=22 <26"
   },
