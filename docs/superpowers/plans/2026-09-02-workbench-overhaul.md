@@ -1,10 +1,10 @@
 # Aubrey Law Workbench — Overhaul Plan
 
 **Goal:** Replace Cornerstone's practice-management sprawl with a matter-centric
-drafting platform built on versioned workflow objects and clause-level citations.
-Strip email, telephony/SMS, CRM, billing, scheduling and e-sign. Keep and enhance
-intake, the client portal, document drafting, task management, the assistant, and
-the Word add-in.
+drafting platform built on versioned, stage-scoped prompt objects with typed inputs
+and clause-level citations. Strip telephony/SMS, CRM, billing, scheduling and e-sign.
+Keep and enhance intake, the client portal, document drafting, task management, the
+assistant, email (retargeted at Gmail) and the Word add-in.
 
 **Architecture:** A new Next.js app at `apps/workbench` in this repo, against the
 **same Supabase project**. The existing app keeps running and is retired screen by
@@ -15,17 +15,68 @@ apps import it — there is no fork. No data migration and no cutover cliff.
 `SECURITY DEFINER` RPCs, pgvector, Cloudflare R2, Vercel Cron, Vitest, Anthropic
 SDK, Nunjucks-over-DOCX generation, Office.js.
 
-**Source:** A CogniSync product evaluation and an estate-planning platform build
-prompt (both supplied by the owner, not committed), reconciled against a
-first-hand read of this repository. Every measurement below was taken in this
-worktree at `72eb3ed`.
+**Sources:** A CogniSync product evaluation, an estate-planning platform build
+prompt, and an Irys review (`Cornerstone_Scope.md`, 2026-09-02) — all supplied by
+the owner, none committed — reconciled against a first-hand read of this
+repository. Measurements were taken in this worktree at `72eb3ed`; the execution
+notes were added as phases shipped.
+
+**Revision history:**
+
+| Date | Change |
+|---|---|
+| 2026-09-02 | Initial plan (#375). |
+| 2026-09-02 | Phases 0 and half of 1 shipped (#376, #377, #378, #379). Two corrections learned in execution added — see below. |
+| 2026-09-02 | Irys scope review folded in: prompts become the primary abstraction, email is kept and retargeted at Gmail, probate and trust administration added, Lawmatics two-way sync added. |
 
 **Relationship to the scope-reduction plan:** This supersedes
 `2026-08-28-cornerstone-scope-reduction.md` in part. See *Scope note on the
-in-flight plan* below — three of its phases become dead work, and its Phase 8.1
-golden corpus is promoted to a hard prerequisite.
+in-flight plan* below — several of its phases become dead work, task 7.8 is
+cancelled outright, and its Phase 8.1 golden corpus is promoted to a hard
+prerequisite.
 
 ---
+
+> **Status as of 2026-09-02 19:45 UTC.**
+>
+> | | State |
+> |---|---|
+> | **Phase 0** — repo shape | **Done.** #376 (workspaces + data-corpus packages), #377 (`apps/workbench` + CI). `main` green. |
+> | **Phase 1** — engine extraction | **Half done.** #378 moved the 44-file pure closure (~9,000 LOC) into `@aubrey-law/drafting-engine`. All 45 generated documents verified content-identical. |
+> | **Deploy fix** | #379 merged — the workbench inherited the root app's `instrumentation.ts` on its first production build. |
+> | **Open question 1** | Resolved: Cornerstone is canonical for `estate-fields`. |
+> | **Open questions 2–4** | 2 (billing system of record) partly answered — QuickBooks link declined for now. 3 (OCR) and 4 (add-in distribution) still open. |
+> | **Irys scope review** | Folded in 2026-09-02: prompts primary, email kept on Gmail, probate added, Lawmatics sync added. Phases 4, 13b, 14, 15b, 16, 17 changed. |
+> | **New open question 5** | **Google migration timing.** Email moves to Gmail; does calendar and file storage follow, and when? Gates phase 15b and the fate of the Outlook path. |
+>
+> **Remaining in Phase 1:** the `generate.ts` / `templateReferences.ts` split plus
+> the `clauseClient` and `templateResolver` injections. Held back deliberately —
+> omitting `templateResolver` today falls back to the DB-backed resolver, so
+> making the engine pure changes *which template a client document renders from*.
+> That belongs in a PR where the behavior change is the subject of review.
+
+## Two corrections learned in execution — carry these forward
+
+**1. "Byte-identical DOCX" is not a usable gate.** DOCX is a zip and its entries
+carry timestamps, so two renders of identical input seconds apart differ at the
+byte level. A first determinism check passed only because both renders landed
+inside one timestamp tick — a false green. **The gate is content-level:** hash
+every zip entry's name and bytes, excluding zip metadata. Wherever this plan says
+"byte-identical", read it that way. The working script is in the scratchpad.
+
+**2. Next resolves convention files by walking UP, and this bit twice.**
+`proxy.ts`, `middleware.ts`, `instrumentation.ts` and `instrumentation-client.ts`
+are all inherited from the repository root by any app that does not define its
+own — silently, with a successful build. `apps/workbench` must shadow every one
+the root app defines; `apps/workbench/tests/convention-file-isolation.test.ts`
+enforces that generally rather than file by file.
+
+**The blind spot behind it, still open:** CI runs one hoisted `npm ci` at the
+repo root, so a workbench file importing a dependency it does not declare
+resolves fine in CI and fails only on Vercel, which installs scoped to the app
+directory. That is how the Sentry failure reached production. Nothing currently
+catches this class before deploy. If it recurs, add a scoped-install check for
+`apps/workbench` to CI rather than another test.
 
 ## Context
 
@@ -58,10 +109,37 @@ estate generator, clause library and template corpus that are the firm's real IP
 | Approach | New Next.js app in a **new directory in this repo** |
 | Database | **Same Supabase project.** No data migration, no cutover cliff |
 | Kept | Intake, client portal, drafting/generation, tasks, calendar sync |
-| Removed | Email, telephony/SMS, CRM + leads, billing/invoices, scheduling/booking, e-sign/engagement agreements |
-| Workflow model | **All four purposes** |
+| Removed | Telephony/SMS, CRM + leads, billing/invoices, scheduling/booking, e-sign/engagement agreements |
 | Word add-in | **Port it, then finish it** |
 | Live use | Attorney only; **no client portal users yet** |
+
+**Revised 2026-09-02 after the Irys scope review** (see that section below):
+
+| Question | Decision | Changes what |
+|---|---|---|
+| **Email** | **Kept, on Gmail — not Outlook.** | Reverses the removal. See the migration note below. |
+| **Primary abstraction** | **Prompts primary**; Review playbooks become one prompt type, not the organising model | Reshapes the workflow schema |
+| **Practice scope** | **Adds probate and trust administration** | New matter types, stage H prompts, dated task generation |
+| **Integrations** | **Lawmatics two-way sync** on contacts and stage. QuickBooks not now | Reverses scope-reduction 7.8 |
+
+> **Email is the consequential one, and it needs care.** The plan had email removed
+> because MS365 already owns it. Keeping it on **Gmail** is a different decision, not a
+> reversal to the status quo: the current stack sends through **Resend**
+> (`lib/email/send.ts`) with a **Microsoft Graph** path (`lib/email/graphSend.ts`), and
+> neither is Gmail. So this is "retarget email at Google", not "keep what's there".
+>
+> Two things follow that the answer did not cover, and both need confirming before any
+> email work starts:
+>
+> 1. **Calendar and files.** Calendar sync was kept, and it is Microsoft-based today
+>    (`lib/microsoftCalendar.ts`, `lib/appointments/graphBusy.ts`). If email moves to
+>    Google, calendar and file storage presumably follow — but a half-migrated firm
+>    running Gmail against Outlook calendar is worse than either end state. This plan
+>    assumes calendar follows email to Google and says so rather than guessing silently.
+> 2. **The stated preference on file says MS365** for email, calendar and file storage.
+>    The Irys document describes a mid-migration from M365 to Google, which reconciles
+>    the two — but the migration's timing governs when the Outlook path can be deleted,
+>    and nothing here knows that timing.
 
 ---
 
@@ -89,8 +167,15 @@ thought of this file as an extraction library. It is one.
 
 ## What the split costs — measured
 
-**Removed: ~29,000 LOC** — CRM/leads ~8,700; billing ~7,000; scheduling ~5,300;
-telephony ~3,300; email ~2,300; e-sign/engagement ~2,100.
+**Removed: ~26,700 LOC** — CRM/leads ~8,700; billing ~7,000; scheduling ~5,300;
+telephony ~3,300; e-sign/engagement ~2,100.
+
+*Revised: email (~2,300 LOC) is no longer a removal.* It is kept and retargeted at
+Gmail, which is a rewrite of the send path rather than a deletion — the current stack
+sends through Resend with a Microsoft Graph path, and neither is Gmail. The six
+cross-imports counted below still stand, but two of them (`app/(portal)/messages/actions.ts`
+and `app/intake/(shell)/actions.ts` → `@/lib/email/send`) are no longer breakages to
+resolve; they simply follow the send path to its new target.
 
 **Ported: ~58,000 LOC** — design sheet + drafting UI ~21,600; generator ~15,800;
 intake ~7,700; tasks ~6,600; assistant ~2,900; estate-fields ~1,900; portal ~1,700.
@@ -140,6 +225,95 @@ unrelated to runs — the assistant's playbook library, the drafting-interview
 prompts, and `AGENTS.md` explicitly protects that path. Its payload is a markdown
 blob, which cannot yield per-rule iteration. New tables sit beside it; `work_skills`
 retires when the old app does.
+
+---
+
+## The Irys scope review — what it changes
+
+`Cornerstone_Scope.md` (2026-09-02) reviews Irys as a reference implementation and
+proposes a ~40-prompt Massachusetts estate-planning library, a matter schema, and a
+practice-tool ranking. Most of it strengthens this plan. Three things reshape it.
+
+### 1. Prompts replace workflows as the organising abstraction
+
+The approved plan borrowed CogniSync's four workflow purposes. The Irys schema is a
+better fit for what this firm actually does, and the reason is in the content: of the
+~40 prompts proposed, almost none is a rule-ladder review. They are drafting briefs,
+checklists, client letters and issue-spotters. Forcing those into a shape built for
+marking a document against firm positions would be the "one more representation, not a
+solution" mistake already flagged for `estate-fields`.
+
+So: **prompts are primary; Review playbooks survive as one prompt type** — the case that
+genuinely needs a rule ladder is reviewing a draft prepared elsewhere, which is real but
+rare.
+
+Two things the Irys schema has that the workflow model does not, and both are the point:
+
+- **Typed inputs sourced from the matter record.** `inputs: [{key, source: "matter.client.legal_name"}]`, pre-filled, asking only for what is genuinely missing. Irys prompts ask everything in chat because an Irys matter holds nothing. Cornerstone's `design_sheets` already holds ~195 answered fields. This is the single largest quality difference available and it costs a schema column.
+- **`output_target`.** A prompt that produces a checklist should create checklist objects on the matter, not a wall of chat text. `chat | draft_doc | checklist | task_set | email_draft`. The `tasks` table and `lib/stage-engine/` already exist to receive them.
+
+**Retained from the workflow design:** run/step/finding tables with per-step fail-soft,
+the citation model, and `workflow_runs` as provenance (the doc's `PromptRun` is the same
+idea). Retained schema shape, re-pointed at prompts.
+
+### 2. Stage-gated surfacing and stage-triggered runs
+
+Prompts surface filtered by `matter_types` + current `stage`, and stage transitions fire
+them: Drafting → QA auto-runs the Blank Finder and blocks the move to Client Review while
+a BLOCKER stands; Executed → Funding generates the funding checklist as tasks.
+
+This marries cleanly to machinery that already exists — `lib/stage-engine/fireStageTasks.ts`,
+`matter_stage_rules`, `stage_tasks` and the `workflow_jobs` queue — and it is what makes a
+40-prompt library usable rather than a menu nobody reads.
+
+### 3. Practice scope widens
+
+Probate (MUPC) and trust administration are in: new matter types, the stage H prompts, and
+dated task generation from date of death with jurisdictional deadlines flagged. `probate_track_enabled`
+exists today as a default-off flag; this turns it on rather than inventing a track.
+*Assumption to confirm:* "add probate" is read as the full track — matter types, filing
+roadmap, task generation, successor-trustee onboarding — sequenced after the EP core is solid.
+
+### Grounding: what is already built
+
+Checked against the tree rather than taken on faith.
+
+| Doc proposes | Reality |
+|---|---|
+| Matter fields `blended_family`, `has_minor_children`, `qtip`, `disclaimer`, `spendthrift`, `trust_protector` | **Already exist** as design-sheet decisions. Do not add columns; read the sheet. |
+| `special_needs`, `masshealth`, `out_of_state_property` | **Genuinely absent.** Real gaps — SNT and the five-year lookback are exactly the facts a plan must not miss. |
+| `funding_status`, per-asset funding tracking | `lib/draftPayload/fundingPlan.ts` plans funding **for drafting**; nothing **tracks** it. The tracker is new. |
+| Numbered folder taxonomy (`03_Drafts/`) | `lib/documentFolders.ts` is **13 lines**. Does not exist. |
+| D1 Blank Finder | **Half built** — `scanDocxBufferForMarkers` already gates promotion on `markerCount > 0`. Extend it; don't start over. |
+| Fiduciary matrix | Fiduciary slots exist on the design sheet; the cross-document matrix does not. |
+
+### The estate-tax threshold problem is real and current
+
+The doc warns never to hard-code tax figures into prompt text. **`lib/estateTax.ts` hard-codes
+the entire Massachusetts rate table**, with the 2023 exemption in a comment and no effective
+date anywhere. Nothing marks it stale when the law changes.
+
+That is cheap to fix and worth doing before any prompt quotes a threshold: move the table
+into `firm_settings` (single-row, already exists) keyed by effective date, inject as
+`{{firm.estate_tax_thresholds}}`, and have a prompt that needs a missing figure **say so
+rather than supply one from memory**. A prompt that quotes a stale exemption is worse than
+one that refuses.
+
+### Tools the doc names that this plan lacks
+
+In its own priority order, and all genuinely absent:
+
+1. **Funding tracker** — per-asset status to confirmation, with an `unfunded_asset_value` figure. The doc's claim that unfunded trusts are the profession's largest malpractice exposure is the reason to build it, and the dollar figure is what makes a client act.
+2. **Execution requirements engine** — MA per-document signing rules generated per matter. Takes the highest-consequence checklist out of human memory.
+3. **Fiduciary matrix** — live, cross-document, rather than a regenerated report.
+4. **Signing ceremony module** — scheduling, witness and notary assignment, per-document requirements, scan-and-file. Note this is **not** e-signature: most of an EP set cannot be e-signed (wills need wet signatures and witnesses, deeds need notarisation), which is consistent with removing e-sign rather than in tension with it.
+5. **Plan simulator** — run first death / incapacity / simultaneous death against the current set. Falls out of the prompt engine almost free once documents are in scope.
+
+### Explicitly not adopted
+
+Knowledge-graph "Insights" (nothing to show on a five-document matter), general legal
+research (the answers are in MUPC/MUTC/MassHealth/DOR, not case law), plugins and a
+marketplace (one seat), and e-sign for estate-plan documents.
 
 ---
 
@@ -211,13 +385,10 @@ unchanged on failure). The workbench imports it via a tsconfig path alias to
 `../../lib/draftPayload/*` — an explicit, greppable cross-app import that dies
 with the old app, which beats a fork. Package it during retirement.
 
-**4. `@aubrey-law/estate-fields` — resolved 2026-09-02: Cornerstone is canonical.**
-`SYNC.md` had named the sibling `aubrey-law-app` repo as source of truth while
-scope-reduction task 8.5.3 said the opposite. The owner settled it in this
-repo's favour; the contradicting documents were rewritten and a test now guards
-against the sibling-path dependency returning. Phase 1 is unblocked. The
-mechanism is not finished, though: `aubrey-law-app` still holds its own copy and
-must be pointed at this one, which is work in that repository.
+**4. `@aubrey-law/estate-fields` — a decision, not engineering.**
+`packages/estate-fields/SYNC.md:5` names the sibling `aubrey-law-app` repo as
+source of truth; scope-reduction task 8.5.3 says make Cornerstone canonical. Two
+committed documents disagree. **Resolve before the workbench imports it.**
 
 ---
 
@@ -239,7 +410,24 @@ users it is the only subsystem you can get wrong for free.
 
 ---
 
-## The new part: workflow objects and citations
+## The new part: prompt objects and citations
+
+> **Superseded in part, 2026-09-02.** This section was written for the four-purpose
+> workflow model. Under the Irys decision the organising object is a **prompt**
+> (`stage`, `matter_types`, typed `inputs`, `doc_scope`, `output_target`, `skill_ref`,
+> `version`), with Review playbooks as one type rather than the frame.
+>
+> **What survives unchanged and is still the design to build:** the immutability idiom
+> below (subject → immutable versions with `content_hash` → publications pointer with a
+> composite FK), the run/step/finding tables with one step per unit and per-step
+> fail-soft, the citation table anchored to `document_version_id`, the text-layer and
+> extraction design, the run engine's queuing and prompt-caching, and the export paths.
+> Read `workflows`/`workflow_versions` below as `prompts`/`prompt_versions`; the
+> `purpose` column becomes `output_target` plus a `kind` that admits `review`.
+>
+> **What changes:** `body` carries the Irys `Use Case / Ask me / Then return` text plus
+> typed `inputs`, rather than a purpose-discriminated rule structure. The rule-ladder
+> shape stays as the `review` kind's body only.
 
 ### Schema (new migration `<ts>_workbench_workflows.sql`)
 
@@ -538,6 +726,16 @@ clean (6 cross-imports), the entanglement is confined to a shell we are replacin
 anyway, and the old app stays running throughout. Worth recording as a conscious
 amendment rather than an oversight.
 
+**Further amended 2026-09-02 by the Irys scope decisions.** Two more items in that
+plan are now cancelled rather than merely resequenced:
+
+- **Task 7.8 — retire the Lawmatics OAuth surface (~1,470 LOC).** Cancelled. Lawmatics
+  becomes an integration with two-way sync, so that surface is verified and kept, not
+  deleted.
+- **Anything premised on email leaving.** Email stays, retargeted at Gmail. Phase 2's
+  campaign removal already shipped and is unaffected, but the surrounding assumption
+  that the email subsystem was on its way out no longer holds.
+
 ---
 
 ## Phases
@@ -563,9 +761,21 @@ geometry alone → exported as a tracked-changes DOCX whose `w:ins`/`w:del` land
 the cited text. Golden-file tests asserting
 `text.slice(charStart, charEnd) === quote`.
 
-**4 — Run engine** (2 weeks). Steps, tick route, reaper, tool-forced output, the
-verification gate, `ai_usage` wiring, Realtime progress, findings UI with
-dispositions. Review purpose only.
+**4 — Prompt + run engine** (2–3 weeks). *Reshaped by the Irys review.* The prompt
+object (`stage`, `matter_types`, typed `inputs` with matter-record sources,
+`doc_scope`, `output_target`, `skill_ref`, `version`), the run/step/finding tables,
+tick route, reaper, tool-forced output, the citation verification gate, `ai_usage`
+wiring, Realtime progress. Stage-filtered surfacing on the matter page.
+
+Do the cheap high-value fix here: move the hard-coded Massachusetts rate table out of
+`lib/estateTax.ts` into `firm_settings` with effective dates, so no prompt can quote a
+stale exemption.
+
+**4b — `output_target` wiring** (1 week). `checklist` and `task_set` write real objects
+through the existing `tasks` table and `lib/stage-engine/`; `email_draft` and `draft_doc`
+target the document path. Then stage-transition triggers: Drafting → QA auto-runs the
+Blank Finder (extending `scanDocxBufferForMarkers`, which already gates on markers) and
+blocks Client Review while a BLOCKER stands.
 
 **5 — Portal + shell** (2 weeks). Portal ported onto the new IA and new domain;
 `proxy.ts` rewritten. Zero client users = zero risk.
@@ -599,10 +809,37 @@ precedent in this schema.
 **13 — Word add-in finished** (2 weeks). Hosted, matter-aware, tools, playbook
 runs, clause insertion, version reconciliation.
 
-**14 — Authoring UI + seed content** (3 weeks). Playbook/audit/knowledge editors
-with the rule-ladder outline. Seed the estate-planning playbooks from the build
-prompt (RLT, pour-over will, DPOA, AHCD, ILIT, SNT, third-party review, deed) —
-10–18 substantive rules each; **placeholder text is a failed phase.**
+**13b — Practice tools the doc names** (3–4 weeks). In its priority order: funding
+tracker (per-asset status → confirmation, `unfunded_asset_value`), execution
+requirements engine, fiduciary matrix as a live page object, signing ceremony module.
+Plan simulator falls out of the prompt engine once documents are in scope. Also the
+three missing matter facts — `special_needs`, `masshealth`, `out_of_state_property` —
+and the numbered folder taxonomy, so `doc_scope: matter_drafts` maps to `03_Drafts/`
+and QA can never read a client's 2004 will as a current draft.
+
+**14 — Authoring UI + seed content** (3 weeks). Prompt editor, plus the rule-ladder
+outline for the Review type. Seed the **~40-prompt Massachusetts library from
+`Cornerstone_Scope.md`** (stages A–I: intake, design, drafting briefs, QA, execution,
+funding, maintenance, administration, firm ops) — it is written in a consistent schema
+and is largely paste-ready. Keep the estate-planning review playbooks for the
+third-party-draft case. **Placeholder text is a failed phase.**
+
+**15b — Email retargeted to Gmail** (2 weeks, sequenced by the firm's migration).
+Not a removal any more. Replace the Microsoft Graph send path with Gmail; decide
+whether Resend stays as the transactional sender or Gmail carries everything. Calendar
+follows email to Google, or the firm runs Gmail against an Outlook calendar, which is
+worse than either end state. **Gated on the migration's actual timing, which this plan
+does not know.**
+
+**16 — Probate and trust administration** (3–4 weeks). Turn on `probate_track_enabled`
+rather than inventing a track: matter types, the stage H prompts, MUPC filing roadmap,
+dated task generation from date of death with jurisdictional deadlines flagged,
+successor-trustee onboarding.
+
+**17 — Lawmatics two-way sync** (2 weeks). Contacts and stage. Lawmatics owns the
+pipeline, Cornerstone owns the work. **Reverses scope-reduction task 7.8**, which
+planned to retire the ~1,470-line Lawmatics OAuth surface — that retirement is now
+cancelled and the surface needs verifying rather than deleting.
 
 **15 — Retirement.** Old app screens dark → remove removed-subsystem libs from
 both apps → `CREATE OR REPLACE` the five CRM sync functions as no-ops → bake one
@@ -643,7 +880,7 @@ workbench can write is mapped by `crm_stage_slug_for_intake`. Watch
 
 ## Open questions for the owner
 
-1. ~~**`estate-fields` ownership** — sibling repo or Cornerstone?~~ **Resolved 2026-09-02: Cornerstone is canonical.** The contradicting docs were rewritten and the decision is guarded by a test. Phase 1 is unblocked. Still to do in the other repository: point `aubrey-law-app` at this copy.
+1. **`estate-fields` ownership** — sibling repo or Cornerstone? Two committed docs disagree; blocks Phase 1.
 2. **Billing system of record** — QuickBooks Online is stated, but `invoices`/`billing_*` hold live data. Where does history go before the tables drop?
 3. **Scanned PDFs** — accept "no text layer, upload the DOCX" for v1, or budget an OCR worker?
 4. **Add-in distribution** — stay sideloaded firm-internal, or publish to AppSource (which adds a review cycle and a hosting requirement)?
