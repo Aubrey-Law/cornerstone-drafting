@@ -1,0 +1,12 @@
+{
+  "buildCommand": "next build",
+  "ignoreCommand": "bash ../../scripts/vercel-should-build.sh",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "github": {
+    "silent": true
+  }
+}

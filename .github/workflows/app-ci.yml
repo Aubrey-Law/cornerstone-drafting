@@ -92,3 +92,11 @@ jobs:
       - name: Test
         if: '!cancelled()'
         run: npm test -- --reporter=dot
+
+      # The workbench is a second app in the same workspace, so it needs no
+      # install of its own — the one `npm ci` above covers both. Its suite is
+      # separate because vitest resolves test paths from its own root, and it
+      # runs last because the root app is the one currently in production.
+      - name: Workbench
+        if: '!cancelled()'
+        run: npm run -w apps/workbench verify
