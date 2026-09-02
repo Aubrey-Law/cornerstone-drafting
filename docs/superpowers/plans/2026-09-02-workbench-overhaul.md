@@ -211,10 +211,13 @@ unchanged on failure). The workbench imports it via a tsconfig path alias to
 `../../lib/draftPayload/*` — an explicit, greppable cross-app import that dies
 with the old app, which beats a fork. Package it during retirement.
 
-**4. `@aubrey-law/estate-fields` — a decision, not engineering.**
-`packages/estate-fields/SYNC.md:5` names the sibling `aubrey-law-app` repo as
-source of truth; scope-reduction task 8.5.3 says make Cornerstone canonical. Two
-committed documents disagree. **Resolve before the workbench imports it.**
+**4. `@aubrey-law/estate-fields` — resolved 2026-09-02: Cornerstone is canonical.**
+`SYNC.md` had named the sibling `aubrey-law-app` repo as source of truth while
+scope-reduction task 8.5.3 said the opposite. The owner settled it in this
+repo's favour; the contradicting documents were rewritten and a test now guards
+against the sibling-path dependency returning. Phase 1 is unblocked. The
+mechanism is not finished, though: `aubrey-law-app` still holds its own copy and
+must be pointed at this one, which is work in that repository.
 
 ---
 
@@ -640,7 +643,7 @@ workbench can write is mapped by `crm_stage_slug_for_intake`. Watch
 
 ## Open questions for the owner
 
-1. **`estate-fields` ownership** — sibling repo or Cornerstone? Two committed docs disagree; blocks Phase 1.
+1. ~~**`estate-fields` ownership** — sibling repo or Cornerstone?~~ **Resolved 2026-09-02: Cornerstone is canonical.** The contradicting docs were rewritten and the decision is guarded by a test. Phase 1 is unblocked. Still to do in the other repository: point `aubrey-law-app` at this copy.
 2. **Billing system of record** — QuickBooks Online is stated, but `invoices`/`billing_*` hold live data. Where does history go before the tables drop?
 3. **Scanned PDFs** — accept "no text layer, upload the DOCX" for v1, or budget an OCR worker?
 4. **Add-in distribution** — stay sideloaded firm-internal, or publish to AppSource (which adds a review cycle and a hosting requirement)?

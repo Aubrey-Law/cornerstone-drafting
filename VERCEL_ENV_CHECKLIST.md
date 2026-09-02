@@ -22,7 +22,7 @@
 
 ## Shared fields package
 
-`@aubrey-law/estate-fields` is vendored at `packages/estate-fields/` for Vercel and standalone clones. Sync registry changes from `aubrey-law-app/packages/estate-fields` (see that package's `SYNC.md`).
+`@aubrey-law/estate-fields` lives at `packages/estate-fields/` and is owned by this repository — it is a workspace member, not a vendored mirror, so there is nothing to sync inward and no sibling checkout to arrange. Registry changes land here first; see that package's `SYNC.md` for how other applications consume it.
 
 ## Auth / OAuth (recommended)
 
