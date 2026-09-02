@@ -1,0 +1,300 @@
+import { loadNodeEstateStateRules } from './config'
+import type { NodeEstateContext, NodeEstateData } from './types'
+import { normalizeJurisdictionStateCode } from '../../jurisdictionState'
+import { getPath, isPresent } from './validation'
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function arrayValue(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => (
+    typeof item === 'object' && item !== null && !Array.isArray(item)
+  )) : []
+}
+
+const DEFAULT_POUR_OVER_ALTERNATE_DISPOSITION_TEXT = 'If incorporation by reference fails for any reason, I direct my Personal Representative to distribute the remainder of my estate, excluding any property over which I have a power of appointment, to my spouse if my spouse survives me. If my spouse does not survive me I direct my Personal Representative to distribute the property to my descendants, per stirpes.'
+const BLANK_DOC_DATE = '________________, 20___'
+const BLANK_ORDINAL_DOC_DATE = '_____ day of _________________, 20___'
+const BLANK_SIGNING_COUNTY = '__________________________'
+const BLANK_NOTARY_COMMISSION = '__________________________'
+
+export interface BuildNodeEstateContextArgs {
+  data: NodeEstateData
+  state: string
+  root?: string
+}
+
+export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateContextArgs): NodeEstateContext {
+  const stateCode = normalizeJurisdictionStateCode(state)
+  const stateRules = loadNodeEstateStateRules(stateCode, root)
+  const client = { ...recordValue(data.client) }
+  client.state ??= stateCode
+
+  const spouse = recordValue(data.spouse)
+  const hasSpouse = Boolean(spouse.exists) || isPresent(spouse.full_name)
+  const childRecords = arrayValue(data.children)
+  const children = childRecords.filter(child => isPresent(child.full_name))
+  const gifts = arrayValue(data.specific_gifts)
+  const charitable = arrayValue(data.charitable_gifts)
+  const planning = recordValue(data.planning)
+  const will = { ...recordValue(data.will) }
+  will.pr_structure ??= 'single'
+  will.bond ??= 'no_bond'
+  will.supervision ??= 'unsupervised'
+  will.simultaneous_death ??= 'omit'
+  will.utma_age ??= 21
+  will.no_contest_clause ??= 'omit'
+  will.include_disclaimer_article ??= true
+  will.include_self_proving_affidavit ??= true
+  const tangiblePersonalProperty = { ...recordValue(will.tangible_personal_property) }
+  tangiblePersonalProperty.distribution_method ??= 'children_then_descendants'
+  tangiblePersonalProperty.named_individual = recordValue(tangiblePersonalProperty.named_individual)
+  will.tangible_personal_property = tangiblePersonalProperty
+  const petCare = { ...recordValue(will.pet_care) }
+  petCare.option ??= 'omit'
+  petCare.primary_caretaker = recordValue(petCare.primary_caretaker)
+  petCare.successor_caretaker = recordValue(petCare.successor_caretaker)
+  petCare.pet_trustee = recordValue(petCare.pet_trustee)
+  petCare.remainder_beneficiary = recordValue(petCare.remainder_beneficiary)
+  petCare.enforcer = recordValue(petCare.enforcer)
+  will.pet_care = petCare
+  const family = recordValue(data.family)
+  const familyRecord = {
+    ...family,
+    include_child_gender_markers: Boolean(family.include_child_gender_markers),
+    include_afterborn_children: family.include_afterborn_children !== false,
+    include_expectant_children: family.include_expectant_children !== false,
+    omissions_intentional: Boolean(family.omissions_intentional),
+    include_general_disinheritance: family.include_general_disinheritance !== false,
+    disinherit_issue: Boolean(family.disinherit_issue),
+    additional_disinheritance_language: typeof family.additional_disinheritance_language === 'string'
+      ? family.additional_disinheritance_language
+      : '',
+  }
+  const assets = recordValue(data.assets)
+  const tax = recordValue(data.tax)
+  const guardians = recordValue(data.guardians)
+  const fiduciaries = recordValue(data.fiduciaries)
+  const agent = recordValue(fiduciaries.agent)
+  const trust = { ...recordValue(data.trust) }
+  trust.display_date = trust.date || '________________, 20___'
+  const disinherited = arrayValue(trust.disinherited)
+  const pourOver = { ...recordValue(data.pour_over) }
+  pourOver.alternate_disposition ??= 'spouse_then_descendants'
+  pourOver.alternate_disposition_text ??= DEFAULT_POUR_OVER_ALTERNATE_DISPOSITION_TEXT
+  pourOver.alternate_named ??= { full_name: '' }
+  const outrightWill = { ...recordValue(data.outright_will) }
+  const outrightResiduary = { ...recordValue(outrightWill.residuary) }
+  outrightResiduary.disposition ??= hasSpouse ? 'spouse_then_descendants' : 'descendants_then_heirs'
+  outrightResiduary.named = recordValue(outrightResiduary.named)
+  outrightResiduary.alternate = recordValue(outrightResiduary.alternate)
+  outrightWill.residuary = outrightResiduary
+  const dpoa = { ...recordValue(data.dpoa) }
+  dpoa.include_section_l = Boolean(dpoa.include_section_l)
+  dpoa.include_entity_powers = Boolean(dpoa.include_entity_powers)
+  dpoa.include_advanced_trust_gifting = Boolean(dpoa.include_advanced_trust_gifting)
+  dpoa.include_extended_personal_care = Boolean(dpoa.include_extended_personal_care)
+  dpoa.self_dealing_reviewer = recordValue(dpoa.self_dealing_reviewer)
+  dpoa.self_dealing_reviewer_alt = recordValue(dpoa.self_dealing_reviewer_alt)
+  const healthcare = { ...recordValue(data.healthcare) }
+  healthcare.anatomical_gift ??= null
+  healthcare.anatomical_specified ??= ''
+  const hipaa = { ...recordValue(data.hipaa) }
+  hipaa.psychotherapy_notes ??= null
+  const ferpa = { ...recordValue(data.ferpa) }
+  const ferpaRecords = arrayValue(ferpa.records)
+  ferpa.records = ferpaRecords
+  // Recomputed from the record list rather than trusted from the payload: the
+  // flag only summarizes that list, and a stored value that had fallen out of
+  // step with it would put a limit in the release the categories contradict.
+  // (`all_records` cannot be recomputed here — whether every category was
+  // selected is a fact about the questionnaire, not about this list.)
+  const ferpaIncludesHealthCenter = ferpaRecords.some(record => record.key === 'health_center')
+  ferpa.includes_health_center = ferpaIncludesHealthCenter
+  const college = { ...recordValue(data.college) }
+  const collegeDpoaPowers = arrayValue(college.dpoa_powers)
+  college.dpoa_powers = collegeDpoaPowers
+  const collegePowerKeys = new Set(collegeDpoaPowers.map(power => String(power.key)))
+  const collegeAllPowers = Boolean(college.dpoa_all_powers)
+  const collegePower = (key: string) => collegeAllPowers || collegePowerKeys.has(key)
+  const collegeHipaaExcluded = arrayValue(college.hipaa_excluded_categories)
+  college.hipaa_excluded_categories = collegeHipaaExcluded
+  const collegeHipaaRecipients = arrayValue(college.hipaa_recipients)
+  college.hipaa_recipients = collegeHipaaRecipients
+
+  const execution = { ...recordValue(data.execution) }
+  const signingScheduled = Boolean(execution.signing_scheduled)
+  const executionSigningCounty = execution.signing_county ?? client.signing_county
+  execution.display_doc_date = signingScheduled && isPresent(execution.doc_date)
+    ? execution.doc_date
+    : BLANK_DOC_DATE
+  const ordinalDocDate = signingScheduled
+    && isPresent(execution.ordinal_doc_date)
+    ? execution.ordinal_doc_date
+    : BLANK_ORDINAL_DOC_DATE
+  // Some legacy templates still reference the raw execution fields directly.
+  // Keep the raw and display aliases aligned so missing signing information
+  // renders a usable fill-in line instead of a visible [[ MISSING ]] marker.
+  execution.ordinal_doc_date = ordinalDocDate
+  execution.display_ordinal_doc_date = ordinalDocDate
+  execution.doc_date = execution.display_doc_date
+  execution.display_signing_county = signingScheduled && isPresent(executionSigningCounty)
+    ? executionSigningCounty
+    : BLANK_SIGNING_COUNTY
+  execution.signing_county = execution.display_signing_county
+  execution.display_notary_commission = signingScheduled && isPresent(execution.notary_commission)
+    ? execution.notary_commission
+    : BLANK_NOTARY_COMMISSION
+  execution.notary_commission = execution.display_notary_commission
+
+  const hasMinorChildren = childRecords.some(child => Boolean(child.minor)) || Boolean(planning.has_minor_children)
+  const minorChildren = children.filter(child => Boolean(child.minor))
+  const hasCoPoa = isPresent(getPath(data, 'fiduciaries.agent.co_primary.full_name'))
+  const poaAction = typeof agent.co_agents_action === 'string' ? agent.co_agents_action : 'separate'
+  const hasDpoaSelfDealingReviewer = isPresent(getPath(dpoa, 'self_dealing_reviewer.full_name'))
+  const hasDpoaSelfDealingReviewerAlt = isPresent(getPath(dpoa, 'self_dealing_reviewer_alt.full_name'))
+  const anatomicalGift = typeof healthcare.anatomical_gift === 'string' ? healthcare.anatomical_gift : null
+  const clientAnatomicalGift = typeof healthcare.client_anatomical_gift === 'string'
+    ? healthcare.client_anatomical_gift
+    : null
+  const hasAnatomicalSpecified = anatomicalGift === 'specified' && isPresent(healthcare.anatomical_specified)
+  const hipaaPsychotherapyNotes = typeof hipaa.psychotherapy_notes === 'string' ? hipaa.psychotherapy_notes : null
+  const clientAdvanceDirective = typeof healthcare.client_advance_directive === 'string'
+    ? healthcare.client_advance_directive
+    : null
+  const spouseAdvanceDirective = typeof healthcare.spouse_advance_directive === 'string'
+    ? healthcare.spouse_advance_directive
+    : null
+  const assetItems = arrayValue(assets.items)
+  const ownsRealProperty = Boolean(assets.real_property) || assetItems.some(item => item.category === 'real_property')
+  const simultaneousDeath = typeof will.simultaneous_death === 'string' ? will.simultaneous_death : 'omit'
+  const petCareOption = typeof petCare.option === 'string' ? petCare.option : 'omit'
+  const descendantsDistribution = recordValue(trust.descendants_distribution)
+  const descendantsMethod = typeof descendantsDistribution.method === 'string'
+    ? descendantsDistribution.method
+    : ''
+
+  return {
+    ...data,
+    client,
+    children,
+    minor_children: minorChildren,
+    will,
+    trust,
+    pour_over: pourOver,
+    outright_will: outrightWill,
+    dpoa,
+    healthcare,
+    hipaa,
+    ferpa,
+    college,
+    execution,
+    state: { code: stateCode, ...stateRules },
+    has_spouse: hasSpouse,
+    has_children: children.length > 0,
+    has_minor_children: hasMinorChildren,
+    has_blended_family: Boolean(family.blended_family),
+    has_co_poa: hasCoPoa,
+    has_solo_poa: !hasCoPoa,
+    co_poa_joint: hasCoPoa && poaAction === 'joint',
+    co_poa_majority: hasCoPoa && poaAction === 'majority',
+    co_poa_separate: hasCoPoa && poaAction !== 'joint' && poaAction !== 'majority',
+    aif_has_spouse: Boolean(agent.primary_has_spouse),
+    has_dpoa_self_dealing_reviewer: hasDpoaSelfDealingReviewer,
+    has_dpoa_self_dealing_reviewer_alt: hasDpoaSelfDealingReviewerAlt,
+    hcp_anatomical_all: anatomicalGift === 'all' || clientAnatomicalGift === 'yes',
+    hcp_anatomical_specified: hasAnatomicalSpecified,
+    hcp_anatomical_none: anatomicalGift === 'none' || clientAnatomicalGift === 'no',
+    hcp_anatomical_defer: clientAnatomicalGift === 'defer',
+    hcp_client_advance_prolong_life: clientAdvanceDirective === 'prolong_life',
+    hcp_client_advance_dnr: clientAdvanceDirective === 'do_not_resuscitate',
+    hcp_client_advance_do_not_prolong: clientAdvanceDirective === 'do_not_prolong_life',
+    // `other` means the three named directions are all false and the drafted
+    // language has to come from `healthcare.client_advance_directive_other`.
+    hcp_client_advance_other: clientAdvanceDirective === 'other',
+    hcp_spouse_advance_prolong_life: spouseAdvanceDirective === 'prolong_life',
+    hcp_spouse_advance_dnr: spouseAdvanceDirective === 'do_not_resuscitate',
+    hcp_spouse_advance_do_not_prolong: spouseAdvanceDirective === 'do_not_prolong_life',
+    hcp_spouse_advance_other: spouseAdvanceDirective === 'other',
+    hipaa_psychotherapy_authorized: hipaaPsychotherapyNotes === 'authorize',
+    hipaa_include_poa: Boolean(hipaa.include_poa),
+    hipaa_include_trustees: Boolean(hipaa.include_trustees),
+    hipaa_list_fiduciaries_by_name: hipaa.list_fiduciaries_by_name === 'by_name',
+    hipaa_list_fiduciaries_general: hipaa.list_fiduciaries_by_name === 'general_language',
+    has_ferpa_records: ferpaRecords.length > 0,
+    ferpa_all_records: Boolean(ferpa.all_records),
+    // College Preparation Plan branches. The drafting blockers guarantee a
+    // real answer before generation, so an unset value only appears in ad-hoc
+    // renders — every flag defaults to the document's most conservative shape.
+    college_dpoa_springing: college.dpoa_effective === 'springing',
+    college_dpoa_all_powers: collegeAllPowers,
+    has_college_dpoa_powers: collegeDpoaPowers.length > 0,
+    // One flag per selectable power so each power paragraph is a plain
+    // {% if %}. Granting all powers turns every flag on.
+    college_power_banking: collegePower('banking'),
+    college_power_bills: collegePower('bills'),
+    college_power_tuition: collegePower('tuition'),
+    college_power_financial_aid: collegePower('financial_aid'),
+    college_power_student_loans: collegePower('student_loans'),
+    college_power_credit_cards: collegePower('credit_cards'),
+    college_power_taxes: collegePower('taxes'),
+    college_power_housing: collegePower('housing'),
+    college_power_auto: collegePower('auto'),
+    college_power_insurance_claims: collegePower('insurance_claims'),
+    college_power_retain_attorney: collegePower('retain_attorney'),
+    college_power_citations: collegePower('citations'),
+    college_power_investments: collegePower('investments'),
+    college_power_digital: collegePower('digital'),
+    college_power_employment: collegePower('employment'),
+    college_power_contracts: collegePower('contracts'),
+    has_college_dpoa_withheld: isPresent(college.dpoa_withheld),
+    has_college_hcp_limits: isPresent(college.hcp_limits),
+    has_college_hcp_instructions: isPresent(college.hcp_instructions),
+    college_hipaa_all_except: college.hipaa_scope === 'all_except' && collegeHipaaExcluded.length > 0,
+    college_hipaa_expires_on_date: college.hipaa_expiration === 'date' && isPresent(college.hipaa_expiration_date),
+    has_college_hipaa_recipients: collegeHipaaRecipients.length > 0,
+    has_college_excluded_people: isPresent(college.excluded_people),
+    college_living_will_included: college.living_will_include === 'yes',
+    college_life_support_all_measures: college.life_support === 'all_measures',
+    college_life_support_comfort_only: college.life_support === 'comfort_only',
+    college_life_support_trust_agent: college.life_support === 'trust_agent',
+    college_organ_donation_any: college.organ_donation === 'any',
+    college_organ_donation_specific: college.organ_donation === 'specific' && isPresent(college.organ_donation_notes),
+    college_organ_donation_none: college.organ_donation === 'no',
+    // Campus treatment records are excluded from FERPA's education-records
+    // definition (34 CFR 99.3), so the release names the limit rather than
+    // leaving the student to assume it covers the health center. The FERPA
+    // template reads `ferpa.includes_health_center`; this is its flat sibling,
+    // alongside the other conditional flags, off the same derivation.
+    ferpa_includes_health_center: ferpaIncludesHealthCenter,
+    uses_revocable_trust: Boolean(planning.uses_revocable_trust),
+    includes_pour_over_will: Boolean(planning.include_pour_over_will),
+    includes_simple_will: Boolean(planning.include_simple_will),
+    includes_dpoa: Boolean(planning.include_dpoa),
+    includes_hcp: Boolean(planning.include_hcp),
+    includes_hipaa: Boolean(planning.include_hipaa),
+    distributes_to_descendants: descendantsMethod !== '' && descendantsMethod !== 'none',
+    dpoa_gifting_authorized: dpoa.allow_gifts === true || dpoa.allow_gifts === 'yes',
+    requires_guardian_clause: hasMinorChildren,
+    has_specific_gifts: gifts.length > 0,
+    has_charitable_gifts: charitable.length > 0,
+    has_tangible_personal_property: isPresent(tangiblePersonalProperty.distribution_method),
+    has_pet_care: petCareOption === 'direct_bequest' || petCareOption === 'pet_trust',
+    has_simultaneous_death: hasSpouse && (simultaneousDeath === 'spouse_survives' || simultaneousDeath === 'testator_survives'),
+    has_excluded_guardians: arrayValue(guardians.excluded).length > 0,
+    has_disinherited: disinherited.length > 0,
+    include_child_gender_markers: familyRecord.include_child_gender_markers,
+    include_afterborn_children: familyRecord.include_afterborn_children,
+    include_expectant_children: familyRecord.include_expectant_children,
+    omissions_intentional: familyRecord.omissions_intentional,
+    include_general_disinheritance: familyRecord.include_general_disinheritance,
+    disinherit_issue: familyRecord.disinherit_issue,
+    family: familyRecord,
+    owns_real_property: ownsRealProperty,
+    has_assets: assetItems.length > 0,
+    tax_sensitive_estate: Boolean(tax.sensitive_estate),
+    state_requires_self_proving_affidavit: Boolean(stateRules.requires_self_proving_affidavit),
+    signing_scheduled: signingScheduled,
+  }
+}

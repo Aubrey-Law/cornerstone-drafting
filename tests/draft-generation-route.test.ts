@@ -49,7 +49,7 @@ describe('matter draft generation route', () => {
 
   it('uses the Node estate generator as the draft engine (legacy Python subprocess retired)', () => {
     const source = fs.readFileSync(routePath, 'utf8')
-    const engineSource = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/engine.ts'), 'utf8')
+    const engineSource = fs.readFileSync(path.join(process.cwd(), 'packages/drafting-engine/src/estateGenerator/engine.ts'), 'utf8')
 
     expect(source).toContain('resolveEstateGeneratorEngine')
     expect(source).toContain('llmFallbackEngineLabel')

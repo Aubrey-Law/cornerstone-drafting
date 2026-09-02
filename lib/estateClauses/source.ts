@@ -1,32 +1,5 @@
-import { loadBundledEstateClauseSnapshot } from '@/lib/estateClauses/fileRepository'
-import {
-  loadPublishedEstateClauseSnapshot,
-  type EstateClauseClient,
-} from '@/lib/estateClauses/repository'
-import type { EstateClauseSnapshot } from '@/lib/estateClauses/types'
-
-export interface LoadSnapshotArgs {
-  matterId: string
-  jurisdiction: string
-  client: EstateClauseClient
-  root?: string
-  allowDraft?: boolean
-}
-
-export function estateClauseSource(): 'file' | 'database' {
-  return process.env.ESTATE_CLAUSE_SOURCE === 'database' ? 'database' : 'file'
-}
-
-export async function loadEstateClauseSnapshot(args: LoadSnapshotArgs): Promise<EstateClauseSnapshot> {
-  if (args.jurisdiction !== 'MA') {
-    throw new Error(`Unsupported estate clause jurisdiction: ${args.jurisdiction}`)
-  }
-  if (estateClauseSource() === 'database') {
-    return loadPublishedEstateClauseSnapshot({ client: args.client, matterId: args.matterId })
-  }
-  return loadBundledEstateClauseSnapshot({
-    root: args.root,
-    jurisdiction: args.jurisdiction,
-    allowDraft: args.allowDraft,
-  })
-}
+// Re-export shim. This module moved to @aubrey-law/drafting-engine during
+// Phase 1 of the Workbench overhaul; the path is kept so the ~110 call
+// sites in this app keep resolving. Import the package directly in new
+// code — these shims are deleted as call sites migrate.
+export * from '@aubrey-law/drafting-engine/estateClauses/source'

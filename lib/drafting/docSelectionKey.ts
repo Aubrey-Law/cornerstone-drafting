@@ -1,14 +1,5 @@
-export interface DraftDocSelectionKeyInput {
-  doc_type: string | null
-  variant?: string | null
-  party?: string | null
-}
-
-export function docSelectionTemplateKey(selection: DraftDocSelectionKeyInput): string | null {
-  const docType = selection.doc_type?.trim()
-  if (!docType) return null
-
-  const variant = selection.variant?.trim()
-  const baseKey = variant ? `${docType}:${variant}` : docType
-  return selection.party?.trim().toLowerCase() === 'spouse' ? `${baseKey}:spouse` : baseKey
-}
+// Re-export shim. This module moved to @aubrey-law/drafting-engine during
+// Phase 1 of the Workbench overhaul; the path is kept so the ~110 call
+// sites in this app keep resolving. Import the package directly in new
+// code — these shims are deleted as call sites migrate.
+export * from '@aubrey-law/drafting-engine/drafting/docSelectionKey'

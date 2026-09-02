@@ -12,7 +12,7 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf
  * result as a draft of a will or trust, with no opt-in and no signal to the
  * drafter. So a regression in a template could put model-authored text into a
  * client instrument, filed under the provenance label 'python_fallback': a
- * Python subprocess engine that lib/estateGenerator/engine.ts records as
+ * Python subprocess engine that packages/drafting-engine/src/estateGenerator/engine.ts records as
  * retired and that had not run in months.
  */
 describe('llmDraftFallbackEnabled', () => {
@@ -67,7 +67,7 @@ describe('generation provenance', () => {
   })
 
   it('no longer writes the retired python_fallback label anywhere', () => {
-    for (const file of [ROUTE, 'lib/estateGenerator/engine.ts', 'lib/drafting/persistGeneratedDocument.ts']) {
+    for (const file of [ROUTE, 'packages/drafting-engine/src/estateGenerator/engine.ts', 'lib/drafting/persistGeneratedDocument.ts']) {
       expect(read(file), `${file} must not write the retired label`).not.toMatch(
         /generationEngine\s*=\s*['"]python_fallback['"]|pythonFallbackEngineLabel/,
       )

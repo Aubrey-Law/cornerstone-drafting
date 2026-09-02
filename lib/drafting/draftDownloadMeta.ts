@@ -1,27 +1,5 @@
-export type DraftDocumentReport = {
-  name: string
-  todoCount: number
-  markerCount: number
-  unresolved: string[]
-  missingFields: string[]
-}
-
-export type DraftDownloadMeta = {
-  documents: string[]
-  documentReports: DraftDocumentReport[]
-  hasBlockingMarkers: boolean
-  missing: string[]
-  warnings: string[]
-}
-
-export function encodeDraftDownloadMeta(meta: DraftDownloadMeta): string {
-  return Buffer.from(JSON.stringify(meta), 'utf8').toString('base64url')
-}
-
-export function decodeDraftDownloadMeta(value: string): DraftDownloadMeta | null {
-  try {
-    return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as DraftDownloadMeta
-  } catch {
-    return null
-  }
-}
+// Re-export shim. This module moved to @aubrey-law/drafting-engine during
+// Phase 1 of the Workbench overhaul; the path is kept so the ~110 call
+// sites in this app keep resolving. Import the package directly in new
+// code — these shims are deleted as call sites migrate.
+export * from '@aubrey-law/drafting-engine/drafting/draftDownloadMeta'
