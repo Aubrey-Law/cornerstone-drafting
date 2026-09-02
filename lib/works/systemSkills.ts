@@ -1,12 +1,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { systemWorkflowsRoot } from '@aubrey-law/system-workflows/root'
 import { parseSkillMarkdown, type ParsedSkillMarkdown, type WorkSkillType } from '@/lib/works/skill'
 import { worksDb } from '@/lib/works/data'
 
 // Bundled system-skill source tree. Each skill lives at
 // tools/workflows/system/<type>/<slug>/SKILL.md; the directory name is the
 // stable slug and slugify(frontmatter.name) must equal it.
-export const SYSTEM_WORKFLOWS_ROOT = path.join(process.cwd(), 'tools', 'workflows', 'system')
+//
+// Resolved from the package's own location rather than process.cwd(): a second
+// app in the workspace builds from its own directory and would otherwise look
+// for a tools/workflows tree that only exists at the repository root.
+export const SYSTEM_WORKFLOWS_ROOT = path.join(systemWorkflowsRoot, 'system')
 
 export const SYSTEM_SKILL_TYPES: WorkSkillType[] = ['assistant', 'tabular']
 

@@ -18,8 +18,15 @@ describe('word-addin build isolation', () => {
     expect(addin.private).toBe(true)
 
     const rootPkg = JSON.parse(read('package.json'))
-    // A workspaces key would change hoisting for every root dependency.
-    expect(rootPkg.workspaces).toBeUndefined()
+    // The root is a workspace root now, so the guard is no longer "there is no
+    // workspaces key" — it is that the add-in never joins the hoisted tree.
+    // Its Office.js/Vite toolchain must not shift resolution for the Next app.
+    const workspaces: string[] = rootPkg.workspaces ?? []
+    expect(workspaces).not.toContain('word-addin')
+    expect(workspaces.some((glob) => glob === '*' || glob.startsWith('word-addin'))).toBe(false)
+    // tools/* would sweep in docx-pdf-worker, a standalone Express service with
+    // its own dependency tree; the two data-only packages are named instead.
+    expect(workspaces).not.toContain('tools/*')
     expect(JSON.stringify(rootPkg.dependencies ?? {})).not.toContain('word-addin')
     expect(JSON.stringify(rootPkg.devDependencies ?? {})).not.toContain('word-addin')
   })

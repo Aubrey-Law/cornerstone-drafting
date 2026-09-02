@@ -12,7 +12,7 @@ const config = [
       'my-heirloom-plan-main/**',
       'node_modules/**',
       'tsconfig.tsbuildinfo',
-      'word-addin/**',
+      'word-addin/**', 'apps/**',
     ],
   },
   {
