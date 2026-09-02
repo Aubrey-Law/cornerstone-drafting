@@ -49,8 +49,8 @@ of survives a write.
 ### Marital status vocabulary
 
 `marital_status` is a **shared intake field** — its option list lives in
-`packages/estate-fields/src/core/options.ts` (`MARITAL_STATUS_OPTIONS`), which is a
-mirror of `aubrey-law-app` per `packages/estate-fields/SYNC.md`. Values: `single`,
+`packages/estate-fields/src/core/options.ts` (`MARITAL_STATUS_OPTIONS`), which this
+repository owns per `packages/estate-fields/SYNC.md`. Values: `single`,
 `married`, `divorced`, `widowed`, `separated`, `domestic_partner`, `civil_union`,
 `unmarried_partnership`. Two in-repo mirrors of that list must stay in step —
 `VALID_CLIENT_INTAKE_MARITAL_STATUSES` in `lib/lawmatics.ts` and the extraction schema
@@ -125,4 +125,4 @@ Nearly all packages require `client.full_name`, `client.city`, `client.county`, 
 | Pronoun parsing | Only he/she/ze/they buckets — custom pronouns fall back to they/them |
 | Spouse address | Not collected on the design sheet; HCP agent address falls back to the client address |
 | Spouse street address line 2 | Only the client has one; the worksheet asks for the address once |
-| `packages/estate-fields` sync | This repo holds a mirror. Any option-list change here must also land in `aubrey-law-app` — see `SYNC.md`. |
+| `packages/estate-fields` sync | This repo owns the package. Option-list changes land here and propagate outward as a version bump — see `SYNC.md`. |

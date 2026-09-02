@@ -25,7 +25,7 @@ const nextConfig = {
       { source: '/admin/crm/sync', destination: '/admin/settings/sync', permanent: true },
     ];
   },
-  transpilePackages: ['@aubrey-law/estate-fields'],
+  transpilePackages: ['@aubrey-law/drafting-engine', '@aubrey-law/estate-fields'],
   outputFileTracingRoot: path.resolve(process.cwd()),
   // The engagement-agreement Word template and document-generation assets are
   // read at runtime via fs; keep them in the traced serverless function bundles.

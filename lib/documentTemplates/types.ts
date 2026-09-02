@@ -1,33 +1,5 @@
-export type DocumentTemplateCategory = 'estate' | 'real_estate' | 'engagement'
-export type DocumentTemplateRenderer = 'estate_nunjucks' | 'real_estate_docxtemplater' | 'engagement_docxtemplater'
-export type DocumentTemplateSource = 'bundled' | 'published'
-
-export interface DocumentTemplateDefinition {
-  id: string
-  label: string
-  category: DocumentTemplateCategory
-  renderer: DocumentTemplateRenderer
-  bundledPath: string
-  packageNames: string[]
-}
-
-export interface ResolvedDocumentTemplate {
-  definition: DocumentTemplateDefinition
-  buffer: Buffer
-  source: DocumentTemplateSource
-  versionId: string | null
-  versionLabel: string
-  sha256: string
-}
-
-export interface DocumentTemplateValidationReport {
-  valid: boolean
-  generatedAt: string
-  matterId: string
-  outputFilename: string | null
-  unresolvedMarkers: string[]
-  missingFields: string[]
-  warnings: string[]
-  error?: string
-}
-
+// Re-export shim. This module moved to @aubrey-law/drafting-engine during
+// Phase 1 of the Workbench overhaul; the path is kept so the ~110 call
+// sites in this app keep resolving. Import the package directly in new
+// code — these shims are deleted as call sites migrate.
+export * from '@aubrey-law/drafting-engine/documentTemplates/types'

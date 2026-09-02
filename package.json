@@ -17,7 +17,7 @@
     "build:next": "next build --webpack",
     "build:analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
-    "lint": "eslint app components hooks lib types eslint.config.mjs",
+    "lint": "eslint app components hooks lib types packages/drafting-engine/src eslint.config.mjs",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -44,7 +44,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
-    "@aubrey-law/estate-fields": "file:packages/estate-fields",
+    "@aubrey-law/drafting-engine": "*",
+    "@aubrey-law/estate-fields": "*",
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1019.0",
     "@firma-dev/sdk": "^0.4.0",

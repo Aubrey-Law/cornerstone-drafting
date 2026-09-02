@@ -1,21 +1,5 @@
-const JURISDICTION_STATE_ALIASES: Record<string, string> = {
-  ma: 'MA',
-  mass: 'MA',
-  massachusetts: 'MA',
-  'commonwealth of massachusetts': 'MA',
-}
-
-/** Normalize intake/design-sheet state values to a two-letter jurisdiction code. */
-export function normalizeJurisdictionStateCode(
-  value: string | null | undefined,
-  fallback = 'MA',
-): string {
-  const trimmed = (value ?? '').trim()
-  if (!trimmed) return fallback
-
-  if (/^[A-Za-z]{2}$/.test(trimmed)) {
-    return trimmed.toUpperCase()
-  }
-
-  return JURISDICTION_STATE_ALIASES[trimmed.toLowerCase()] ?? trimmed
-}
+// Re-export shim. This module moved to @aubrey-law/drafting-engine during
+// Phase 1 of the Workbench overhaul; the path is kept so the ~110 call
+// sites in this app keep resolving. Import the package directly in new
+// code — these shims are deleted as call sites migrate.
+export * from '@aubrey-law/drafting-engine/jurisdictionState'
