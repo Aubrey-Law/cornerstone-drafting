@@ -93,6 +93,15 @@ jobs:
         if: '!cancelled()'
         run: npm test -- --reporter=dot
 
+      # Regenerates every estate document and compares it to the golden
+      # corpus. Its own step because it renders 45 DOCX files — too slow for the
+      # unit suite, and a different kind of check: it fails only when output an
+      # attorney has approved changes, and reports unreviewed drift without
+      # blocking.
+      - name: Golden corpus
+        if: '!cancelled()'
+        run: npm run corpus:check
+
       # The workbench is a second app in the same workspace, so it needs no
       # install of its own — the one `npm ci` above covers both. Its suite is
       # separate because vitest resolves test paths from its own root, and it
