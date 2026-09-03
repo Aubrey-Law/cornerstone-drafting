@@ -7,6 +7,7 @@ import { buildStatularExportMarkdown } from '@/lib/designSheet/statularExport'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
+import { generatorInjections } from '@/lib/estateGenerator/generatorInjections'
 import type { NodeEstateData } from '@/lib/estateGenerator/node/types'
 
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -151,6 +152,9 @@ export async function GET(req: NextRequest, { params }: Params) {
         : DESIGN_SUMMARY_PACKAGE,
       state,
       allowDraft: true,
+      // Published template overrides and the firm style set both apply here:
+      // these are client-facing summaries, not internal scratch output.
+      ...(await generatorInjections()),
     })
 
     if (!result.ok) {

@@ -4,6 +4,8 @@ import PizZip from 'pizzip'
 import { XMLValidator } from 'fast-xml-parser'
 import { describe, expect, it } from 'vitest'
 import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 // Word refuses to open ("found unreadable content") a docx whose package
 // structure is invalid, even when every XML part is well-formed. These checks
@@ -143,6 +145,8 @@ describe('generated incapacity documents package integrity', () => {
       fs.readFileSync(path.join(root, 'examples/client-ma-incapacity.json'), 'utf8'),
     )
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'incapacity-documents', state: 'MA', root, allowDraft: true,
     })
     if (!result.ok) throw new Error(result.error)

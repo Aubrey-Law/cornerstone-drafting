@@ -23,6 +23,8 @@ import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import type { DesignSheet } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -211,6 +213,8 @@ describe('FERPA release — rendered document', () => {
 
   const renderText = async (data: Record<string, unknown>) => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'ferpa-release', state: 'MA', root, allowDraft: true,
     })
     expect(result.ok).toBe(true)

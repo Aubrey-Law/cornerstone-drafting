@@ -3,6 +3,8 @@ import path from 'node:path'
 import PizZip from 'pizzip'
 import { XMLValidator } from 'fast-xml-parser'
 import { describe, expect, it } from 'vitest'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 /**
  * Every XML part of every template has to be well-formed, and every namespace
@@ -117,6 +119,8 @@ describe('rendered college documents are openable too', () => {
         state: 'MA',
         root,
         allowDraft: true,
+        templateResolver: bundledTemplateResolver,
+        styleSet: DEFAULT_STYLE_SET,
       })
       expect(result.ok).toBe(true)
       if (!result.ok) return
