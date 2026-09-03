@@ -1,73 +1,116 @@
-// Massachusetts Estate Tax (2023+ rates)
-// Exemption: $2,000,000 (via $99,600 credit)
-// Source: MGL Ch. 65C, as amended by H.4104 (effective Jan 1, 2023)
+/**
+ * Estate tax calculation for the app.
+ *
+ * The figures themselves live in `lib/estateTaxSchedules.ts` as dated data with
+ * their sources — this module is the thin layer that resolves which schedule
+ * applies and hands it to the arithmetic. It used to hard-code the whole
+ * Massachusetts rate table with the exemption in a comment and no effective
+ * date, which is why nothing ever noticed a figure going stale.
+ */
+import {
+  federalEstateTax,
+  massachusettsEstateTax,
+  massachusettsEstateTaxWithCreditShelter,
+  resolveScheduleAsOf,
+  todayIso,
+  BUNDLED_FEDERAL_SCHEDULES,
+  BUNDLED_MA_SCHEDULES,
+  MA_SCHEDULE_2023,
+  type FederalEstateTaxSchedule,
+  type MassachusettsEstateTaxSchedule,
+  type ScheduleLookup,
+} from '@/lib/estateTaxSchedules'
 
-function tentativeTax(adj: number): number {
-  if (adj <= 40000) return 0
-  if (adj <= 90000) return (adj - 40000) * 0.008
-  if (adj <= 140000) return 400 + (adj - 90000) * 0.016
-  if (adj <= 240000) return 1200 + (adj - 140000) * 0.024
-  if (adj <= 440000) return 3600 + (adj - 240000) * 0.032
-  if (adj <= 640000) return 10000 + (adj - 440000) * 0.04
-  if (adj <= 840000) return 18000 + (adj - 640000) * 0.048
-  if (adj <= 1040000) return 27600 + (adj - 840000) * 0.056
-  if (adj <= 1540000) return 38800 + (adj - 1040000) * 0.064
-  if (adj <= 2040000) return 70800 + (adj - 1540000) * 0.072
-  if (adj <= 2540000) return 106800 + (adj - 2040000) * 0.08
-  if (adj <= 3040000) return 146800 + (adj - 2540000) * 0.088
-  if (adj <= 3540000) return 190800 + (adj - 3040000) * 0.096
-  if (adj <= 4040000) return 238800 + (adj - 3540000) * 0.104
-  if (adj <= 5040000) return 290800 + (adj - 4040000) * 0.112
-  if (adj <= 6040000) return 402800 + (adj - 5040000) * 0.12
-  if (adj <= 7040000) return 522800 + (adj - 6040000) * 0.128
-  if (adj <= 8040000) return 650800 + (adj - 7040000) * 0.136
-  if (adj <= 9040000) return 786800 + (adj - 8040000) * 0.144
-  if (adj <= 10040000) return 930800 + (adj - 9040000) * 0.152
-  return 1082800 + (adj - 10040000) * 0.16
-}
+export type {
+  EstateTaxBracket,
+  FederalEstateTaxSchedule,
+  MassachusettsEstateTaxSchedule,
+  ScheduleLookup,
+} from '@/lib/estateTaxSchedules'
 
-/** Estate value at which the $99,600 credit stops covering the tentative tax. */
-export const MA_ESTATE_TAX_EXEMPTION = 2_000_000
-
-export function calculateMAEstateTax(grossEstate: number): number {
-  const adjusted = grossEstate - 60000
-  if (adjusted <= 0) return 0
-  return Math.max(0, tentativeTax(adjusted) - 99600)
+/**
+ * The Massachusetts schedule in force on a date.
+ *
+ * H.4104 carries no sunset, so the bundled schedule is open-ended and this
+ * resolves for any date from 2023 onward. If the legislature changes the table,
+ * no code can detect that on its own — which is why the schedule carries its
+ * `source` and `effectiveFrom` for a human to check, and why the figures are
+ * overridable from `firm_settings` rather than only by a deploy.
+ */
+export function massachusettsScheduleAsOf(
+  asOf: string = todayIso(),
+  schedules: MassachusettsEstateTaxSchedule[] = BUNDLED_MA_SCHEDULES,
+): ScheduleLookup<MassachusettsEstateTaxSchedule> {
+  return resolveScheduleAsOf(schedules, asOf)
 }
 
 /**
- * The same tax, with a credit-shelter plan in place. A two-trust plan parks the
- * first spouse's $2,000,000 exemption in the shelter trust, so only what is
- * left is taxed at the second death. Reuses the credit table above rather than
- * restating any of it.
+ * The federal schedule in force on a date, which may legitimately be none.
+ *
+ * The basic exclusion amount is indexed and changes most years, so each
+ * schedule's window is one year and a date past the newest one returns a miss.
+ * Callers must decide what to show — the honest answer is "not on file", never
+ * last year's number.
  */
-export function calculateMAEstateTaxWithCreditShelter(grossEstate: number): number {
-  return calculateMAEstateTax(Math.max(0, grossEstate - MA_ESTATE_TAX_EXEMPTION))
+export function federalScheduleAsOf(
+  asOf: string = todayIso(),
+  schedules: FederalEstateTaxSchedule[] = BUNDLED_FEDERAL_SCHEDULES,
+): ScheduleLookup<FederalEstateTaxSchedule> {
+  return resolveScheduleAsOf(schedules, asOf)
 }
 
-/** IRS basic exclusion amount (indexed annually). 2025 figure. */
-export const FEDERAL_ESTATE_TAX_EXEMPTION = 13_990_000
-export const FEDERAL_ESTATE_TAX_RATE = 0.40
+/** Estate value at which the Massachusetts credit stops covering the tentative tax. */
+export const MA_ESTATE_TAX_EXEMPTION = MA_SCHEDULE_2023.exemption
 
-export function calculateFederalEstateTax(
+export function calculateMAEstateTax(
   grossEstate: number,
-  options?: { exemption?: number },
+  schedule: MassachusettsEstateTaxSchedule = MA_SCHEDULE_2023,
 ): number {
-  const exemption = options?.exemption ?? FEDERAL_ESTATE_TAX_EXEMPTION
-  const taxable = Math.max(0, grossEstate - exemption)
-  return Math.round(taxable * FEDERAL_ESTATE_TAX_RATE)
+  return massachusettsEstateTax(grossEstate, schedule)
+}
+
+/**
+ * The same tax with a credit-shelter plan in place. A two-trust plan parks the
+ * first spouse's exemption in the shelter trust, so only what is left is taxed
+ * at the second death.
+ */
+export function calculateMAEstateTaxWithCreditShelter(
+  grossEstate: number,
+  schedule: MassachusettsEstateTaxSchedule = MA_SCHEDULE_2023,
+): number {
+  return massachusettsEstateTaxWithCreditShelter(grossEstate, schedule)
+}
+
+export interface PortfolioEstateTaxes {
+  massachusetts: number
+  /**
+   * Null when the firm has no federal schedule on file for the date — the
+   * caller shows that rather than a number. `federalLookup` says why, and how
+   * stale the newest figure on file is.
+   */
+  federal: number | null
+  federalLookup: ScheduleLookup<FederalEstateTaxSchedule>
 }
 
 export function estimatePortfolioEstateTaxes(
   grossEstate: number,
-  options?: { married?: boolean },
-): { federal: number; massachusetts: number } {
-  const federalExemption = options?.married
-    ? FEDERAL_ESTATE_TAX_EXEMPTION * 2
-    : FEDERAL_ESTATE_TAX_EXEMPTION
+  options?: {
+    married?: boolean
+    asOf?: string
+    maSchedules?: MassachusettsEstateTaxSchedule[]
+    federalSchedules?: FederalEstateTaxSchedule[]
+  },
+): PortfolioEstateTaxes {
+  const asOf = options?.asOf ?? todayIso()
+  const ma = massachusettsScheduleAsOf(asOf, options?.maSchedules)
+  const federal = federalScheduleAsOf(asOf, options?.federalSchedules)
+
   return {
-    federal: calculateFederalEstateTax(grossEstate, { exemption: federalExemption }),
-    massachusetts: calculateMAEstateTax(grossEstate),
+    massachusetts: ma.ok ? massachusettsEstateTax(grossEstate, ma.schedule) : 0,
+    federal: federal.ok
+      ? federalEstateTax(grossEstate, federal.schedule, { married: options?.married })
+      : null,
+    federalLookup: federal,
   }
 }
 
