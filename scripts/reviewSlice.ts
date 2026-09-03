@@ -19,6 +19,7 @@
  * Reads a file from disk and touches no matter, so it can be pointed at an
  * opposing-counsel draft before anything about it is stored.
  */
+import { config } from 'dotenv'
 import fs from 'node:fs'
 import path from 'node:path'
 import { applyTrackedEditsAtOffsets } from '@aubrey-law/drafting-engine'
@@ -27,6 +28,16 @@ import { buildPdfTextLayer } from '@/lib/textLayer/pdf'
 import { exportableFindings, runReviewPlaybook } from '@/lib/reviewSlice/runReview'
 import { reviewPlaybookSchema, type ReviewPlaybook } from '@/lib/reviewSlice/types'
 import type { TextLayer } from '@/lib/textLayer/types'
+
+// Run from a shell rather than from Next, so nothing has loaded the environment
+// yet — without this the Anthropic SDK finds no ANTHROPIC_API_KEY and the first
+// rule dies on an auth error. Same shape as scripts/checkMatterContactsConsistency.ts:
+// `override: false` means an already-exported variable still wins, so a caller can
+// point this at a different key without editing a file.
+// `quiet` because this script's stdout is a report a person reads; dotenv's
+// "injected env" banners would sit above the findings for no benefit.
+config({ path: '.env.test', override: false, quiet: true })
+config({ path: '.env.local', override: false, quiet: true })
 
 const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-third-party-draft.json'
 
