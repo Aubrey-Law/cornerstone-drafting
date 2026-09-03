@@ -51,6 +51,8 @@ export const estateTaxSchedulesSchema = z.array(
   z.discriminatedUnion('jurisdiction', [massachusettsScheduleSchema, federalScheduleSchema]),
 )
 
+export type EstateTaxScheduleInput = z.infer<typeof estateTaxSchedulesSchema>[number]
+
 export interface EstateTaxSchedules {
   massachusetts: MassachusettsEstateTaxSchedule[]
   federal: FederalEstateTaxSchedule[]
@@ -126,4 +128,79 @@ export async function loadEstateTaxSchedules(
   }
 
   return { schedules: mergeSchedules(parsed.data), errors: [] }
+}
+
+/**
+ * Replaces the firm's configured schedules.
+ *
+ * The whole array is written at once rather than a row at a time. The editor
+ * shows every schedule together and the resolver reads them together, so a
+ * partial write would let the screen and the stored state disagree about which
+ * figure is in force — which is the failure this whole feature exists to
+ * prevent, arriving by a different door.
+ */
+export async function saveEstateTaxSchedules(
+  admin: SupabaseClient,
+  schedules: unknown,
+  updatedBy: string | null,
+): Promise<{ ok: true; schedules: EstateTaxScheduleInput[] } | { ok: false; errors: string[] }> {
+  const parsed = estateTaxSchedulesSchema.safeParse(schedules)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`),
+    }
+  }
+
+  const overlaps = findOverlaps(parsed.data)
+  if (overlaps.length > 0) return { ok: false, errors: overlaps }
+
+  const { error } = await admin
+    .from('firm_settings')
+    .update({
+      estate_tax_schedules: parsed.data,
+      updated_at: new Date().toISOString(),
+      updated_by: updatedBy,
+    })
+    .eq('id', 1)
+
+  if (error) return { ok: false, errors: [error.message] }
+  return { ok: true, schedules: parsed.data }
+}
+
+/**
+ * Rejects two schedules of one jurisdiction covering the same date.
+ *
+ * The resolver picks the latest `effectiveFrom` among those that match, so an
+ * overlap does not throw — it silently prefers one figure over another, and
+ * which one is a detail of the sort order rather than a decision anybody made.
+ * Better to refuse the save and name the pair.
+ */
+function findOverlaps(schedules: EstateTaxScheduleInput[]): string[] {
+  const errors: string[] = []
+
+  for (const jurisdiction of ['MA', 'US'] as const) {
+    const forJurisdiction = schedules
+      .filter(schedule => schedule.jurisdiction === jurisdiction)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))
+
+    for (let i = 0; i < forJurisdiction.length; i += 1) {
+      const current = forJurisdiction[i]
+      if (current.effectiveTo !== null && current.effectiveTo < current.effectiveFrom) {
+        errors.push(
+          `${jurisdiction} schedule starting ${current.effectiveFrom} ends before it begins.`,
+        )
+      }
+      const next = forJurisdiction[i + 1]
+      if (!next) continue
+      // An open-ended window swallows everything after it.
+      if (current.effectiveTo === null || current.effectiveTo >= next.effectiveFrom) {
+        errors.push(
+          `Two ${jurisdiction} schedules cover ${next.effectiveFrom} — the one starting ${current.effectiveFrom} has not ended.`,
+        )
+      }
+    }
+  }
+
+  return errors
 }
