@@ -13,21 +13,8 @@ import { bundledTemplateResolver, generateNodeEstatePackage } from '@/lib/estate
 import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 import { resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import type { NodeEstateData, NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
+import { findExamplePath, listEstatePackageNames } from './estateExamples'
 
-// Example payloads whose file name does not match the package name exactly.
-const EXAMPLE_ALIASES: Record<string, string> = {
-  'pourover-will': 'client-ma-pourover.json',
-  'spouse-pourover-will': 'client-ma-pourover.json',
-  'incapacity-documents': 'client-ma-incapacity.json',
-  'spouse-incapacity-documents': 'client-ma-incapacity.json',
-  'indv-disclaimer-trust': 'client-ma-disclaimer-trust.json',
-  'assignment-of-personal-property': 'client-ma-assignment-pp.json',
-  'temporary-delegation-parental-powers': 'client-ma-temp-delegation.json',
-  'college-financial-poa': 'client-ma-college-prep.json',
-  'college-education-poa': 'client-ma-college-prep.json',
-  'college-health-care-documents': 'client-ma-college-prep.json',
-  'college-advance-directive': 'client-ma-college-prep.json',
-}
 
 function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {}
@@ -51,10 +38,7 @@ function parseArgs(argv: string[]): Record<string, string> {
 const args = parseArgs(process.argv.slice(2))
 const root = resolveNodeEstateGeneratorRoot()
 
-const packageNames = fs.readdirSync(path.join(root, 'packages'))
-  .filter(file => file.endsWith('.json'))
-  .map(file => file.replace(/\.json$/, ''))
-  .sort()
+const packageNames = listEstatePackageNames(root)
 
 const packageName = args.package
 if (!packageName || !packageNames.includes(packageName)) {
@@ -67,15 +51,8 @@ if (!packageName || !packageNames.includes(packageName)) {
 
 function resolveExamplePath(): string {
   if (args.example) return path.resolve(args.example)
-  const candidates = [
-    `client-ma-${packageName}.json`,
-    EXAMPLE_ALIASES[packageName],
-    'client.json',
-  ].filter((name): name is string => Boolean(name))
-  for (const candidate of candidates) {
-    const candidatePath = path.join(root, 'examples', candidate)
-    if (fs.existsSync(candidatePath)) return candidatePath
-  }
+  const found = findExamplePath(root, packageName as string)
+  if (found) return found
   console.error(`No example payload found for "${packageName}" — pass --example <path>.`)
   process.exit(2)
 }
