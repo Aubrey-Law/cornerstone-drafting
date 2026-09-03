@@ -25,8 +25,10 @@ import path from 'node:path'
 import { applyTrackedEditsAtOffsets } from '@aubrey-law/drafting-engine'
 import { buildDocxTextLayer, citationToParagraphOffsets } from '@/lib/textLayer/docx'
 import { buildPdfTextLayer } from '@/lib/textLayer/pdf'
-import { exportableFindings, runReviewPlaybook } from '@/lib/reviewSlice/runReview'
 import { parseArgs } from '@/lib/reviewSlice/args'
+import { resolveDocumentPath } from '@/lib/reviewSlice/resolvePath'
+import { resolveAnthropicKey } from '@/lib/reviewSlice/resolveKey'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 import { reviewPlaybookSchema, type ReviewPlaybook } from '@/lib/reviewSlice/types'
 import type { TextLayer } from '@/lib/textLayer/types'
 
@@ -41,6 +43,18 @@ config({ path: '.env.test', override: false, quiet: true })
 config({ path: '.env.local', override: false, quiet: true })
 
 const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-third-party-draft.json'
+
+/**
+ * The service-role client, when this machine has the credentials for one.
+ *
+ * Returns null rather than constructing a client with undefined settings, so a
+ * missing Supabase configuration reads as "Settings could not be checked"
+ * instead of a connection error from somewhere deeper.
+ */
+function adminClientIfConfigured() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  return getAdminClient()
+}
 
 async function buildLayer(file: string): Promise<TextLayer> {
   const bytes = fs.readFileSync(file)
@@ -72,14 +86,20 @@ async function main(): Promise<void> {
     console.error('Usage: npm run review:slice -- --file <document.pdf|document.docx>')
     process.exit(2)
   }
-  if (!fs.existsSync(file)) {
-    console.error(`No such file: ${file}`)
+  const located = resolveDocumentPath(file)
+  if (!located.ok) {
+    console.error(located.message)
     process.exit(2)
   }
+  if (located.resolved.repair !== 'none') {
+    // Say what was opened. A repair that stays silent is a different document
+    // read than the one asked for, with nothing to notice it by.
+    console.log(`Reading ${located.resolved.path}`)
+  }
 
-  const layer = await buildLayer(file)
+  const layer = await buildLayer(located.resolved.path)
 
-  console.log(`${path.basename(file)}`)
+  console.log(`${path.basename(located.resolved.path)}`)
   console.log(
     `  ${layer.sourceKind} · ${layer.status} · ${layer.blocks.length} blocks · ` +
       `${layer.text.length} characters${layer.pageCount ? ` · ${layer.pageCount} pages` : ''}`,
@@ -104,6 +124,23 @@ async function main(): Promise<void> {
   const playbook = loadPlaybook(
     typeof args.playbook === 'string' ? args.playbook : DEFAULT_PLAYBOOK,
   )
+
+  // Resolved before the first rule rather than after three identical SDK
+  // errors. The app reads a key saved in Settings ahead of the environment, so
+  // a script that only checked the environment would report an auth failure on
+  // a machine where the app itself works.
+  const key = await resolveAnthropicKey(adminClientIfConfigured())
+  if (!key.ok) {
+    console.error(`\n${key.message}`)
+    process.exit(1)
+  }
+  if (key.source === 'settings') console.log('Using the Anthropic key saved in Settings.')
+  process.env.ANTHROPIC_API_KEY = key.key
+
+  // Imported only now: lib/anthropic builds its client at module load and reads
+  // the environment once, so a static import would capture the key's absence.
+  const { exportableFindings, runReviewPlaybook } = await import('@/lib/reviewSlice/runReview')
+
   console.log(`\n${playbook.title} (v${playbook.version}, ${playbook.rules.length} rules)\n`)
 
   const result = await runReviewPlaybook(layer, playbook, {
@@ -173,7 +210,7 @@ async function main(): Promise<void> {
     return [{ ...offsets, replace: finding.proposedLanguage!, reason: `Rule ${finding.ruleNumber}` }]
   })
 
-  const applied = await applyTrackedEditsAtOffsets(fs.readFileSync(file), edits)
+  const applied = await applyTrackedEditsAtOffsets(fs.readFileSync(located.resolved.path), edits)
   fs.writeFileSync(redlineOut, applied.bytes)
   console.log(`\nWrote ${applied.changes.length} tracked changes to ${redlineOut}`)
   for (const error of applied.errors) {
