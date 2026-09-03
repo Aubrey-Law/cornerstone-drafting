@@ -26,6 +26,7 @@ import { applyTrackedEditsAtOffsets } from '@aubrey-law/drafting-engine'
 import { buildDocxTextLayer, citationToParagraphOffsets } from '@/lib/textLayer/docx'
 import { buildPdfTextLayer } from '@/lib/textLayer/pdf'
 import { exportableFindings, runReviewPlaybook } from '@/lib/reviewSlice/runReview'
+import { parseArgs } from '@/lib/reviewSlice/args'
 import { reviewPlaybookSchema, type ReviewPlaybook } from '@/lib/reviewSlice/types'
 import type { TextLayer } from '@/lib/textLayer/types'
 
@@ -40,25 +41,6 @@ config({ path: '.env.test', override: false, quiet: true })
 config({ path: '.env.local', override: false, quiet: true })
 
 const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-third-party-draft.json'
-
-function parseArgs(argv: string[]): Record<string, string | true> {
-  const args: Record<string, string | true> = {}
-  for (let i = 0; i < argv.length; i += 1) {
-    const match = argv[i].match(/^--([a-z-]+)$/)
-    if (!match) {
-      console.error(`Unexpected argument: ${argv[i]}`)
-      process.exit(2)
-    }
-    const value = argv[i + 1]
-    if (value === undefined || value.startsWith('--')) {
-      args[match[1]] = true
-    } else {
-      args[match[1]] = value
-      i += 1
-    }
-  }
-  return args
-}
 
 async function buildLayer(file: string): Promise<TextLayer> {
   const bytes = fs.readFileSync(file)
@@ -79,7 +61,12 @@ function loadPlaybook(file: string): ReviewPlaybook {
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2))
+  const parsed = parseArgs(process.argv.slice(2))
+  if (!parsed.ok) {
+    console.error(parsed.error)
+    process.exit(2)
+  }
+  const args = parsed.args
   const file = typeof args.file === 'string' ? args.file : null
   if (!file) {
     console.error('Usage: npm run review:slice -- --file <document.pdf|document.docx>')
