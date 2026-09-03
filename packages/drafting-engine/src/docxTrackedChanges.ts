@@ -37,6 +37,26 @@ export interface EditError {
   reason: string
 }
 
+/**
+ * An edit addressed by exact position rather than by searching for text.
+ *
+ * `EditInput` finds its target with a fuzzy search over find/context, which is
+ * the right tool when the caller only knows what the text says. A citation
+ * knows precisely where it is, and searching again for text whose location is
+ * already established can only introduce a way to get it wrong — most obviously
+ * when the same phrase appears twice in a paragraph.
+ *
+ * `start` and `end` index the paragraph's accepted-view text, exactly as
+ * `extractDocxParagraphs` returns it.
+ */
+export interface OffsetEditInput {
+  paragraphIndex: number
+  start: number
+  end: number
+  replace: string
+  reason?: string
+}
+
 export interface ApplyTrackedEditsResult {
   bytes: Buffer
   changes: AppliedChange[]
@@ -960,6 +980,137 @@ export async function extractTrackedChangeIds(
   const out: Array<{ kind: 'ins' | 'del'; w_id: string }> = []
   collectTrackedIds(nodeChildren(body), out)
   return out
+}
+
+/**
+ * The accepted-view text of every paragraph, in document order.
+ *
+ * "Accepted view" means existing tracked insertions are included and existing
+ * deletions are not — the text as it would read if every pending change were
+ * accepted, which is what a reviewer is looking at and therefore what a
+ * citation should address.
+ *
+ * The index of a string in this array is the `paragraphIndex` that
+ * `applyTrackedEditsAtOffsets` expects, so a caller can build a text layer from
+ * this and hand the offsets straight back.
+ */
+export async function extractDocxParagraphs(bytes: Buffer): Promise<string[]> {
+  const { body } = await loadDocument(bytes)
+  return collectParagraphs(nodeChildren(body)).map(flattenParagraphAccepted)
+}
+
+/**
+ * Applies tracked changes at known character offsets.
+ *
+ * Edits are applied in descending (paragraph, start) order so that rewriting a
+ * later span cannot shift the offsets of an earlier one — the caller's offsets
+ * all describe the *original* document, and applying forwards would invalidate
+ * every edit after the first.
+ *
+ * Overlapping edits are refused rather than merged. Two findings that want to
+ * rewrite the same words are a conflict for a person to resolve, and silently
+ * applying one of them would hide that.
+ */
+export async function applyTrackedEditsAtOffsets(
+  bytes: Buffer,
+  edits: OffsetEditInput[],
+  options?: { author?: string },
+): Promise<ApplyTrackedEditsResult> {
+  const author = options?.author ?? 'Cornerstone'
+  const date = new Date().toISOString()
+  const loaded = await loadDocument(bytes)
+  const paragraphs = collectParagraphs(nodeChildren(loaded.body))
+  let nextWId = collectMaxWId(loaded.tree) + 1
+
+  const applied: Array<{ index: number; change: AppliedChange }> = []
+  const errors: EditError[] = []
+
+  // Keep each edit's original position so errors name the caller's index rather
+  // than the order we happened to apply things in.
+  const ordered = edits
+    .map((edit, index) => ({ edit, index }))
+    .sort((a, b) =>
+      b.edit.paragraphIndex - a.edit.paragraphIndex || b.edit.start - a.edit.start,
+    )
+
+  const claimed = new Map<number, Array<{ start: number; end: number }>>()
+
+  for (const { edit, index } of ordered) {
+    const para = paragraphs[edit.paragraphIndex]
+    if (!para) {
+      errors.push({ index, reason: `No paragraph at index ${edit.paragraphIndex}` })
+      continue
+    }
+
+    const raw = flattenParagraphAccepted(para)
+    if (edit.start < 0 || edit.end > raw.length || edit.start > edit.end) {
+      errors.push({
+        index,
+        reason: `Offsets [${edit.start}, ${edit.end}) are outside paragraph ${edit.paragraphIndex} (length ${raw.length})`,
+      })
+      continue
+    }
+
+    const spans = claimed.get(edit.paragraphIndex) ?? []
+    if (spans.some(span => edit.start < span.end && span.start < edit.end)) {
+      errors.push({
+        index,
+        reason: `Offsets [${edit.start}, ${edit.end}) overlap another edit in paragraph ${edit.paragraphIndex}`,
+      })
+      continue
+    }
+
+    const deletedFromDoc = raw.slice(edit.start, edit.end)
+    const collapsed = collapseDiff(deletedFromDoc, edit.replace)
+    const editStart = edit.start + collapsed.prefixLen
+    const editEnd = edit.end - collapsed.suffixLen
+
+    const insId = collapsed.inserted.length ? String(nextWId++) : undefined
+    const delId = collapsed.deleted.length ? String(nextWId++) : undefined
+    if (!insId && !delId) {
+      errors.push({ index, reason: 'Edit is a no-op after diff collapse' })
+      continue
+    }
+
+    rebuildParagraphWithEdit(
+      para,
+      editStart,
+      editEnd,
+      collapsed.inserted,
+      collapsed.deleted,
+      { insId, delId },
+      author,
+      date,
+    )
+
+    spans.push({ start: edit.start, end: edit.end })
+    claimed.set(edit.paragraphIndex, spans)
+
+    applied.push({
+      index,
+      change: {
+        id: insId ?? delId ?? String(nextWId),
+        delId,
+        insId,
+        deletedText: collapsed.deleted,
+        insertedText: collapsed.inserted,
+        // Context is what the fuzzy locator needs to find text again. These
+        // edits were never found by searching, so inventing context here would
+        // only suggest a provenance the change does not have.
+        contextBefore: '',
+        contextAfter: '',
+        reason: edit.reason,
+      },
+    })
+  }
+
+  // Report in the caller's order. Applying descending is an implementation
+  // detail, and a caller correlating results with the edits it passed should
+  // not have to reverse-engineer it.
+  applied.sort((a, b) => a.index - b.index)
+
+  const outBytes = await saveDocument(loaded)
+  return { bytes: outBytes, changes: applied.map(a => a.change), errors }
 }
 
 export async function applyTrackedEdits(
