@@ -754,12 +754,33 @@ there is no fork. Gate: `npm run audit:render-matrix` byte-identical before/afte
 everything that generates a client document.
 
 **3 — Citation vertical slice** (2 weeks). *The go/no-go gate for the whole
-product.* One native PDF + one hand-written 3-rule review workflow (JSON, no
-authoring UI) → 3 findings, each with a `verified` citation carrying
-`{page, charStart, charEnd, bbox}` → clicked in a viewer that highlights from
-geometry alone → exported as a tracked-changes DOCX whose `w:ins`/`w:del` land on
-the cited text. Golden-file tests asserting
-`text.slice(charStart, charEnd) === quote`.
+product.* One hand-written 3-rule review playbook (JSON, no authoring UI) →
+findings, each with a `verified` citation carrying `{page, blockIndex,
+charStart, charEnd, bbox}` → highlighted in a viewer from geometry alone →
+exported as a tracked-changes DOCX whose `w:ins`/`w:del` land on the cited text.
+Golden-file tests asserting `text.slice(charStart, charEnd) === quote`.
+
+**Built as of 2026-09-03.** `lib/textLayer/{types,pdf,docx,match,persist}.ts`,
+`applyTrackedEditsAtOffsets` in the engine, `lib/reviewSlice/runReview.ts`,
+`tools/workflows/review/ma-trust-third-party-draft.json`,
+`components/documents/PdfCitationViewer.tsx`, `npm run review:slice`, and the
+`document_text_layers` / `workflow_citations` migration.
+
+*One deviation from the design above, taken deliberately.* The plan proposed
+making PDF the canonical citation surface and aligning back to the DOCX for the
+tracked-changes export. Instead **each format carries its own layer**: the DOCX
+path gives an exact export (a block's index *is* its paragraph index, so
+citation → edit is arithmetic rather than matching), and the PDF path gives
+exact page and bbox geometry. A fuzzy alignment step between them would have
+been the least reliable link in a chain whose whole value is reliability.
+Reviewing a native PDF and redlining its DOCX twin is the case still open;
+`document_text_layers.aligned_to_layer_id` is in the schema for it. Build it
+against a real document that needs it, not speculatively.
+
+*The check no test can stand in for:* run the playbook against a real
+third-party trust draft and see what share of citations survive verification. A
+high rejection rate means changing the prompting or how the document is
+presented — **never** loosening the verifier.
 
 **4 — Prompt + run engine** (2–3 weeks). *Reshaped by the Irys review.* The prompt
 object (`stage`, `matter_types`, typed `inputs` with matter-record sources,

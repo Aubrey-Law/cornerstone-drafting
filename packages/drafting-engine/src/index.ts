@@ -37,7 +37,13 @@ export { loadEstateClauseSnapshot } from './estateClauses/source'
 
 // DOCX utilities — tracked changes, marker QA, the edit protocol
 export { scanDocxBufferForMarkers } from './drafting/markerScan'
-export { applyTrackedEdits, extractDocxBodyText } from './docxTrackedChanges'
+export {
+  applyTrackedEdits,
+  applyTrackedEditsAtOffsets,
+  extractDocxBodyText,
+  extractDocxParagraphs,
+} from './docxTrackedChanges'
+export type { OffsetEditInput } from './docxTrackedChanges'
 
 // Formatting
 export { applyStyleSetToDocxBuffer } from './styleSets/applyToDocx'
