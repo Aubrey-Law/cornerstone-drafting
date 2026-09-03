@@ -7,6 +7,8 @@ import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
 import { isNodeEstatePackageSupported } from '@/lib/estateGenerator/node/support'
 import { designTargetForMissingField } from '@/lib/estateGenerator/missingFieldDesignMap'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -33,6 +35,8 @@ describe('college-prep will — rendered document', () => {
 
   const renderText = async (data: Record<string, unknown>) => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'will-cp', state: 'MA', root, allowDraft: true,
     })
     expect(result.ok).toBe(true)

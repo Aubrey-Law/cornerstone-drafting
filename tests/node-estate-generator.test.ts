@@ -14,6 +14,8 @@ import { generateEstatePlanDocumentsNode, generateNodeEstatePackage } from '@/li
 import { renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
 import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 import { getPath, missingRequiredFields } from '@/lib/estateGenerator/node/validation'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 const deterministicCoreDocxTimestamp = '2000-01-01T00:00:00.000Z'
@@ -338,6 +340,8 @@ describe('node estate generator config', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     if (!result.ok) throw new Error(result.error)
@@ -357,6 +361,8 @@ describe('node estate generator config', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     if (!result.ok) throw new Error(result.error)
@@ -745,6 +751,8 @@ describe('node estate generator text rendering', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
     if (!result.ok) throw new Error(result.error)
 
@@ -875,6 +883,8 @@ describe('node estate generator text rendering', () => {
       const data = JSON.parse(JSON.stringify(base))
       data.fiduciaries.agent.co_agents_action = action
       const result = await generateNodeEstatePackage({
+        templateResolver: bundledTemplateResolver,
+        styleSet: DEFAULT_STYLE_SET,
         data, packageName: 'incapacity-documents', state: 'MA', root, allowDraft: true,
       })
       expect(result.ok).toBe(true)
@@ -931,6 +941,8 @@ describe('node estate generator text rendering', () => {
     ) as Record<string, unknown>
 
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'incapacity-documents', state: 'MA', root, allowDraft: true,
     })
     expect(result.ok).toBe(true)
@@ -1011,6 +1023,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -1046,6 +1060,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -1072,6 +1088,8 @@ describe('node estate generator package generation', () => {
     ) as Record<string, unknown>
 
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'incapacity-documents', state: 'MA', root, allowDraft: true,
     })
 
@@ -1092,6 +1110,8 @@ describe('node estate generator package generation', () => {
     ) as Record<string, unknown>
 
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'spouse-incapacity-documents', state: 'MA', root, allowDraft: true,
     })
 
@@ -1106,6 +1126,8 @@ describe('node estate generator package generation', () => {
     ) as Record<string, unknown>
 
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName: 'joint-trust', state: 'MA', root, allowDraft: true,
     })
 
@@ -1142,6 +1164,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -1173,6 +1197,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -1195,6 +1221,8 @@ describe('node estate generator package generation', () => {
 
   it('generates the testamentary trust will package without unresolved markers', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1258,6 +1286,8 @@ describe('node estate generator package generation', () => {
 
   it('renders the single-beneficiary testamentary trust branch', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1309,6 +1339,8 @@ describe('node estate generator package generation', () => {
 
   it('does not render unnamed child records in direct simple will generation', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1343,6 +1375,8 @@ describe('node estate generator package generation', () => {
 
   it('still generates a simple will for minor-child plans but reports missing guardian data', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1375,6 +1409,8 @@ describe('node estate generator package generation', () => {
 
   it('still generates a pour-over will but reports a missing named alternate beneficiary', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', city: 'Boston', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1412,6 +1448,8 @@ describe('node estate generator package generation', () => {
 
   it('renders the second successor guardian in the pour-over will', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', city: 'Boston', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1448,6 +1486,8 @@ describe('node estate generator package generation', () => {
 
   it('renders all three trustee succession levels and their co-trustees in the individual trust', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: {
         client: { full_name: 'Jane Example', city: 'Boston', state: 'MA', county: 'Suffolk' },
         spouse: { exists: false },
@@ -1505,6 +1545,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     if (!result.ok) throw new Error(result.error)
@@ -1566,6 +1608,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     if (!result.ok) throw new Error(result.error)
@@ -1587,6 +1631,8 @@ describe('node estate generator package generation', () => {
 
   it('shows the completion warning section only when an included document lacks a successor', async () => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data: toEstateGeneratorData(draftPayload({
         documents: {
           include_dpoa: true,
@@ -2819,6 +2865,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -2955,6 +3003,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -2984,6 +3034,8 @@ describe('node estate generator package generation', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)

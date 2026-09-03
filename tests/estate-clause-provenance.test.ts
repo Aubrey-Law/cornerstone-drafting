@@ -58,6 +58,8 @@ import {
 } from '@/lib/estateGenerator/node/generate'
 import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -264,6 +266,8 @@ describe('estate clause generation provenance', () => {
 
     try {
       const result = await generateNodeEstatePackage({
+        templateResolver: bundledTemplateResolver,
+        styleSet: DEFAULT_STYLE_SET,
         data: { client: { full_name: 'Jane Example', state: 'MA' }, children: [], execution: {} },
         packageName: 'incapacity-documents',
         state: 'MA',

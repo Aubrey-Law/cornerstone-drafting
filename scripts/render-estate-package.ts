@@ -9,7 +9,8 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
+import { bundledTemplateResolver, generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 import { resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import type { NodeEstateData, NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 
@@ -93,7 +94,10 @@ async function main() {
     state,
     allowDraft: true,
     // Bundled templates only — skip the DB-backed custom-template lookup.
-    templateResolver: async () => null,
+    // Standalone QA render: bundled templates and the built-in sweep, never
+    // the database.
+    templateResolver: bundledTemplateResolver,
+    styleSet: DEFAULT_STYLE_SET,
   })
 
   if (!result.ok) {

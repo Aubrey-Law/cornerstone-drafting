@@ -6,6 +6,8 @@ import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
 import { loadNodeEstatePackage } from '@/lib/estateGenerator/node/config'
 import { isNodeEstatePackageSupported } from '@/lib/estateGenerator/node/support'
 import type { NodeEstateData } from '@/lib/estateGenerator/node/types'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -41,6 +43,8 @@ describe('design-summary package', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)
@@ -80,6 +84,8 @@ describe('design-summary package', () => {
       state: 'MA',
       root,
       allowDraft: true,
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
     })
 
     expect(result.ok).toBe(true)

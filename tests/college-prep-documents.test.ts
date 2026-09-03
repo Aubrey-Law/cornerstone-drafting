@@ -23,6 +23,8 @@ import type { DraftPayload } from '@/lib/buildDraftPayload'
 import type { NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 import type { DesignSheet } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
+import { bundledTemplateResolver } from '@aubrey-law/drafting-engine/estateGenerator/node/generate'
+import { DEFAULT_STYLE_SET } from '@aubrey-law/drafting-engine/styleSets/defaults'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -269,6 +271,8 @@ describe('College prep documents — rendered output', () => {
 
   const render = async (packageName: NodeEstatePackageName, data: Record<string, unknown> = example) => {
     const result = await generateNodeEstatePackage({
+      templateResolver: bundledTemplateResolver,
+      styleSet: DEFAULT_STYLE_SET,
       data, packageName, state: 'MA', root, allowDraft: true,
     })
     expect(result.ok).toBe(true)
