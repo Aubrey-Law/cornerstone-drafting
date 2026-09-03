@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
 import { applyTrackedEditsAtOffsets, extractDocxParagraphs } from '@aubrey-law/drafting-engine'
+import { extractTrackedChangeIds, resolveTrackedChange } from '@/lib/docxTrackedChanges'
 import { buildDocxTextLayer, citationToParagraphOffsets } from '@/lib/textLayer/docx'
 import { verifyQuote } from '@/lib/textLayer/match'
 
@@ -173,6 +174,38 @@ describe('citation to tracked-change round trip', () => {
     // Applying runs bottom-up so offsets stay valid; reporting must not.
     expect(applied.changes[0].insertedText).toContain('surety')
     expect(applied.changes[1].insertedText).toContain('Grantor')
+  })
+
+  /**
+   * The strongest available proxy for "open it in Word and check".
+   *
+   * Rejecting every change has to restore the original exactly. It exercises
+   * the same accept/reject machinery `DocxViewerPanel` runs against
+   * `document_edits`, so passing here means the export lands in the review UI
+   * that already ships rather than in a document Word will quietly repair.
+   */
+  it('produces changes the existing accept/reject path round-trips', async () => {
+    const bytes = await trustDocx()
+    const layer = await buildDocxTextLayer(bytes)
+
+    const verified = verifyQuote(layer, 'No bond or other security shall be required', 2)
+    expect(verified.ok).toBe(true)
+    if (!verified.ok) return
+    const offsets = citationToParagraphOffsets(layer, verified.citation.charStart, verified.citation.charEnd)!
+
+    const applied = await applyTrackedEditsAtOffsets(bytes, [
+      { ...offsets, replace: 'No surety bond shall be required', reason: 'Rule 2' },
+    ])
+    expect(applied.errors).toEqual([])
+
+    const ids = await extractTrackedChangeIds(applied.bytes)
+    expect(ids.length).toBeGreaterThan(0)
+
+    const accepted = await resolveTrackedChange(applied.bytes, ids.map(i => i.w_id), 'accept')
+    expect((await extractDocxParagraphs(accepted.bytes))[2]).toContain('No surety bond shall be required')
+
+    const rejected = await resolveTrackedChange(applied.bytes, ids.map(i => i.w_id), 'reject')
+    expect(await extractDocxParagraphs(rejected.bytes)).toEqual(PARAGRAPHS)
   })
 
   it('refuses overlapping edits rather than silently picking one', async () => {

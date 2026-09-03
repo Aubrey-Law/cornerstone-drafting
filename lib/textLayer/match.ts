@@ -128,9 +128,26 @@ function toRawRange(
   return { charStart, charEnd }
 }
 
-/** The drawing rectangles covering a raw character range, one per text span it touches. */
-export function bboxesForRange(layer: TextLayer, charStart: number, charEnd: number): BoundingBox[] {
-  const boxes: BoundingBox[] = []
+export interface PlacedBox {
+  page: number
+  box: BoundingBox
+}
+
+/**
+ * The drawing rectangles covering a character range, one per text run it
+ * touches, each carrying the page it belongs on.
+ *
+ * One rectangle per run rather than one union: a citation crossing a line break
+ * covers two runs, and a single box around both would shade the empty margin
+ * between the lines.
+ *
+ * The page travels with the rectangle rather than being re-derived by the
+ * caller. A caller walking `spans` in parallel to pair pages with boxes would
+ * drift the moment a span has no geometry — which is exactly what happens on a
+ * rotated page, where offsets stay good and boxes are dropped.
+ */
+export function bboxesForRange(layer: TextLayer, charStart: number, charEnd: number): PlacedBox[] {
+  const placed: PlacedBox[] = []
   for (const span of layer.spans) {
     if (span.charEnd <= charStart || span.charStart >= charEnd) continue
     if (!span.bbox) continue
@@ -139,17 +156,20 @@ export function bboxesForRange(layer: TextLayer, charStart: number, charEnd: num
 
     const from = Math.max(charStart, span.charStart) - span.charStart
     const to = Math.min(charEnd, span.charEnd) - span.charStart
-    // Clipping assumes uniform advance width across the span. A span is a single
+    // Clipping assumes uniform advance width across the run. A run is a single
     // text-drawing operation in one font, so this is close; it is display
     // geometry either way, and the authoritative anchor is the offsets.
-    boxes.push({
-      x: span.bbox.x + (span.bbox.width * from) / spanLength,
-      y: span.bbox.y,
-      width: (span.bbox.width * (to - from)) / spanLength,
-      height: span.bbox.height,
+    placed.push({
+      page: span.page,
+      box: {
+        x: span.bbox.x + (span.bbox.width * from) / spanLength,
+        y: span.bbox.y,
+        width: (span.bbox.width * (to - from)) / spanLength,
+        height: span.bbox.height,
+      },
     })
   }
-  return boxes
+  return placed
 }
 
 function pageForOffset(layer: TextLayer, charStart: number): number | null {
@@ -170,7 +190,7 @@ function blockIndexForOffset(layer: TextLayer, charStart: number): number {
 }
 
 function citationAt(layer: TextLayer, charStart: number, charEnd: number): Citation {
-  const boxes = bboxesForRange(layer, charStart, charEnd)
+  const boxes = bboxesForRange(layer, charStart, charEnd).map(placed => placed.box)
   return {
     blockIndex: blockIndexForOffset(layer, charStart),
     charStart,

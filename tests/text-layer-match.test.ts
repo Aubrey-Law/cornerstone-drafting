@@ -137,15 +137,25 @@ describe('citation verification', () => {
     const result = verifyQuote(layer, 'per stirpes', null)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const boxes = bboxesForRange(layer, result.citation.charStart, result.citation.charEnd)
-    expect(boxes.length).toBeGreaterThan(0)
-    for (const box of boxes) {
+    const placed = bboxesForRange(layer, result.citation.charStart, result.citation.charEnd)
+    expect(placed.length).toBeGreaterThan(0)
+    for (const { page, box } of placed) {
+      expect(page).toBe(2)
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.y).toBeGreaterThanOrEqual(0)
       expect(box.width).toBeGreaterThan(0)
       expect(box.x + box.width).toBeLessThanOrEqual(612)
       expect(box.y + box.height).toBeLessThanOrEqual(792)
     }
+  })
+
+  it('reports the page alongside each rectangle rather than leaving it to be re-derived', async () => {
+    const layer = await trustLayer()
+    const result = verifyQuote(layer, 'ARTICLE VIII. DISTRIBUTIONS', null)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const placed = bboxesForRange(layer, result.citation.charStart, result.citation.charEnd)
+    expect(placed.every(p => p.page === 2)).toBe(true)
   })
 
   it('draws one rectangle per line for a quote spanning a line break', async () => {
