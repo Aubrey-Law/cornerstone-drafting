@@ -31,7 +31,12 @@ export function defaultDraftPayloadSupplementary(): Pick<
     hcp_provisions: healthcare.hcp_provisions,
     hipaa_provisions: healthcare.hipaa_provisions,
     fiduciary_display: getFiduciaryDocumentInclusions({ decisions: null }),
-    fiduciary_details: buildFiduciaryRoleDetailsFromDesignSheet(null, [], { full_name: '', address: null }, null),
+    fiduciary_details: buildFiduciaryRoleDetailsFromDesignSheet(
+      null,
+      [],
+      { full_name: '', address: null, phone: null, email: null, date_of_birth: null },
+      null,
+    ),
     excluded_guardians: [],
     assets: [],
     goals_notes: null,

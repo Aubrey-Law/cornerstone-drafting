@@ -95,8 +95,20 @@ describe('fiduciary grid payload compatibility', () => {
       gridSheet[field] = gridSlots('alex', 'blair')
     }
 
-    const client = { full_name: 'Casey Client', address: '10 State Street' }
-    const spouse = { full_name: 'Sam Client', address: '10 State Street' }
+    const client = {
+      full_name: 'Casey Client',
+      address: '10 State Street',
+      phone: '617-555-0100',
+      email: 'casey@example.com',
+      date_of_birth: '1970-04-02',
+    }
+    const spouse = {
+      full_name: 'Sam Client',
+      address: '10 State Street',
+      phone: '617-555-0101',
+      email: 'sam@example.com',
+      date_of_birth: '1971-09-14',
+    }
     const oldRow = oldSheet as unknown as DesignSheetRow
     const gridRow = gridSheet as unknown as DesignSheetRow
 

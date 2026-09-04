@@ -118,19 +118,50 @@ function contactToDetail(
   }
 }
 
+/**
+ * The client or the spouse, as a person who can hold a fiduciary role.
+ *
+ * A slot filled by the client or the spouse themselves does not point at a
+ * `contacts` row — they are not their own contact — so their details have to be
+ * passed in. Carrying only a name and an address is what made
+ * `healthcare.agent.primary.phone` blank on every Health Care Proxy where the
+ * spouse is the agent, which in estate planning is most of them.
+ */
+export interface FiduciaryPerson {
+  full_name: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  date_of_birth: string | null
+}
+
+/**
+ * A fiduciary who is the client or the spouse rather than a contact.
+ *
+ * This used to return `phone`, `email` and `date_of_birth` as an unconditional
+ * `null`, which is worse than it sounds: the generator emits
+ * `[[ MISSING: healthcare.agent.primary.phone ]]` into the document, the draft
+ * preflight reports the blank, and the attorney is sent to Fiduciary Role
+ * Assignment to fill it — where the spouse is already correctly named and there
+ * is no field to change. A blank nobody can fill is worse than a blank, because
+ * it costs someone the trip.
+ *
+ * Phone is formatted the same way `contactToDetail` formats a contact's, so a
+ * document does not read differently depending on whether the agent happened to
+ * be the spouse or someone with a contact row.
+ */
 function personDetail(
-  fullName: string | null | undefined,
-  address: string | null | undefined,
+  person: FiduciaryPerson | null | undefined,
   relationship: string | null | undefined,
 ): DraftPayloadContactDetail | null {
-  const name = fullName?.trim()
+  const name = person?.full_name?.trim()
   if (!name) return null
   return {
     full_name: name,
-    phone: null,
-    email: null,
-    address: address?.trim() || null,
-    date_of_birth: null,
+    phone: formatPhoneDisplay(person?.phone) || null,
+    email: person?.email?.trim() || null,
+    address: person?.address?.trim() || null,
+    date_of_birth: person?.date_of_birth?.trim() || null,
     relationship: relationship?.trim() || null,
   }
 }
@@ -231,8 +262,8 @@ function emptyRoleDetails(): DraftPayloadFiduciaryRoleDetails {
 export function buildFiduciaryRoleDetailsFromDesignSheet(
   designSheet: DesignSheetRow | null,
   contacts: ContactRow[],
-  client: { full_name: string; address: string | null },
-  spouse: { full_name: string; address: string | null } | null,
+  client: FiduciaryPerson,
+  spouse: FiduciaryPerson | null,
 ): DraftPayloadFiduciaryRoleDetails {
   const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
   const details = emptyRoleDetails()
@@ -258,10 +289,10 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
     if (!slot) return null
 
     if (slot.contact_id === CLIENT_PRIMARY_CONTACT_ID) {
-      return personDetail(client.full_name, client.address, 'Spouse')
+      return personDetail(client, 'Spouse')
     }
     if (slot.contact_id === SPOUSE_PRIMARY_CONTACT_ID) {
-      return personDetail(spouse?.full_name, spouse?.address ?? null, 'Spouse')
+      return personDetail(spouse, 'Spouse')
     }
 
     const contact = slot.contact_id ? contactsById.get(slot.contact_id) ?? null : null

@@ -405,16 +405,31 @@ export async function buildDraftPayload(
   const fundingPlan = draftPayloadFundingPlan(designSheet)
   const homestead = draftPayloadHomestead(designSheet)
   const fiduciaryDisplay = getDraftPayloadFiduciaryDisplay(designSheet)
+  // The client and the spouse have no `contacts` row of their own, so when one of
+  // them holds a fiduciary role their details reach the generator only through
+  // here. Passing just a name and an address is what left every Health Care Proxy
+  // naming the spouse as agent with a `[[ MISSING: … .phone ]]` hole the design
+  // sheet had no field to fill.
+  //
+  // The spouse's address is the household one: `design_sheets` has a single
+  // `street`/`city`/`state`/`zip` and no spouse variant, so `null` here was not a
+  // missing value but an unasked question.
   const fiduciaryDetails = buildFiduciaryRoleDetailsFromDesignSheet(
     designSheet,
     contacts,
     {
       full_name: clientFullName,
       address: clientAddress,
+      phone: designSheet.client_phone ?? null,
+      email: designSheet.client_email ?? null,
+      date_of_birth: designSheet.client_dob ?? null,
     },
     spouse ? {
       full_name: spouse.full_name,
-      address: null,
+      address: clientAddress,
+      phone: spouse.phone ?? null,
+      email: spouse.email ?? null,
+      date_of_birth: spouse.dob ?? null,
     } : null,
   )
 
