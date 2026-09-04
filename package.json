@@ -28,6 +28,7 @@
     "corpus:list": "tsx scripts/corpus.ts --list",
     "fixtures:text-layer": "tsx scripts/makeTextLayerFixtures.ts",
     "review:slice": "tsx scripts/reviewSlice.ts",
+    "sweep:markers": "tsx scripts/markerSweep.ts",
     "skill:refs": "tsx scripts/generate-doc-template-skill-references.ts",
     "design:forms": "tsx scripts/generate-design-meeting-forms.ts",
     "design:coverage": "tsx scripts/report-design-answer-coverage.ts",
