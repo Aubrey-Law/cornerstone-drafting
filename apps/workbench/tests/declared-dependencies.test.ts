@@ -28,8 +28,22 @@ function sourceFiles(dir: string): string[] {
     .filter((file) => !file.includes('node_modules') && !file.includes('/.next/'))
 }
 
+/**
+ * Comments are stripped before scanning, and that is not fussiness.
+ * This codebase explains itself at length, and a sentence like
+ * `... nothing" from "the model proposed something ...` reads as a static
+ * import of a package called "the model proposed something" — a failure that
+ * points at the wrong file and wastes the reader's time on a real one.
+ */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    // The `[^:]` guard leaves `https://` inside a string literal alone.
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
 function bareImportsIn(file: string): string[] {
-  const source = fs.readFileSync(file, 'utf8')
+  const source = withoutComments(fs.readFileSync(file, 'utf8'))
   const specifiers: string[] = []
   const pattern = /(?:from|import)\s*['"]([^'"]+)['"]/g
   let match: RegExpExecArray | null

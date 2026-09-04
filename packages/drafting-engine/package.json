@@ -10,5 +10,13 @@
   },
   "devDependencies": {
     "typescript": "5.7.3"
+  },
+  "dependencies": {
+    "@aubrey-law/estate-templates": "*",
+    "fast-xml-parser": "^5.9.3",
+    "jszip": "^3.10.1",
+    "nunjucks": "^3.2.4",
+    "pizzip": "^3.2.0",
+    "zod": "^3.25.0"
   }
 }
