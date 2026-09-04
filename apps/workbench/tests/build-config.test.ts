@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import nextConfig from '../next.config'
+import { workbenchConfig } from '../next.config'
 
 const here = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(here, 'package.json'), 'utf8')) as {
@@ -24,7 +24,7 @@ const declared = new Set([
  */
 describe('workbench build config', () => {
   it('declares every package it asks Next to transpile', () => {
-    const transpiled = nextConfig.transpilePackages ?? []
+    const transpiled = workbenchConfig.transpilePackages ?? []
     expect(transpiled.length).toBeGreaterThan(0)
     for (const name of transpiled) {
       expect(declared, `${name} is in transpilePackages but not in package.json`).toContain(name)
@@ -32,13 +32,13 @@ describe('workbench build config', () => {
   })
 
   it('transpiles the drafting engine, the package the product core lives in', () => {
-    expect(nextConfig.transpilePackages).toContain('@aubrey-law/drafting-engine')
+    expect(workbenchConfig.transpilePackages).toContain('@aubrey-law/drafting-engine')
   })
 
   it('has no type-error escape hatch', () => {
     // A new app has no legacy debt to excuse. The root app's toggle exists
     // because it does; copying it here would let the workbench accumulate the
     // same debt from day one.
-    expect(nextConfig.typescript?.ignoreBuildErrors).toBeUndefined()
+    expect(workbenchConfig.typescript?.ignoreBuildErrors).toBeUndefined()
   })
 })

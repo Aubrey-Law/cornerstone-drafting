@@ -1,10 +1,19 @@
 import path from 'node:path'
+import { withSentryConfig } from '@sentry/nextjs'
 import type { NextConfig } from 'next'
 import { assertDeployEnv } from './lib/env'
 
 // A deploy build with a missing variable fails here, with every missing name,
 // while the previous deployment keeps serving. Locally this only warns.
 assertDeployEnv(process.env)
+
+/**
+ * The Sentry build plugin creates a release and uploads source maps, both of
+ * which need an authenticated token. Running it without one produces only
+ * misleading release warnings, so it is gated on the credential rather than on
+ * an environment name.
+ */
+const SENTRY_BUILD_PLUGIN_ENABLED = Boolean(process.env.SENTRY_AUTH_TOKEN)
 
 /**
  * The workbench builds from apps/workbench, not the repository root, so two
@@ -20,9 +29,24 @@ assertDeployEnv(process.env)
  * tests/build-config.test.ts holds the two in step, because a package that is
  * transpiled but undeclared resolves on a developer machine and not on Vercel.
  */
-const nextConfig: NextConfig = {
+export const workbenchConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
-  transpilePackages: ['@aubrey-law/estate-fields', '@aubrey-law/drafting-engine', '@aubrey-law/ui'],
+  transpilePackages: [
+    '@aubrey-law/estate-fields',
+    '@aubrey-law/drafting-engine',
+    '@aubrey-law/ui',
+  ],
 }
 
-export default nextConfig
+export default SENTRY_BUILD_PLUGIN_ENABLED
+  ? withSentryConfig(workbenchConfig, {
+      org: 'aubrey-law',
+      // The Workbench reports into its own project, so a spike here is not read
+      // as a regression in the app the firm runs today.
+      project: process.env.SENTRY_PROJECT ?? 'workbench',
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
+      telemetry: false,
+      widenClientFileUpload: false,
+    })
+  : workbenchConfig

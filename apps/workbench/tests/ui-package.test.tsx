@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { Button } from '@aubrey-law/ui/button'
-import nextConfig from '../next.config'
+import { workbenchConfig } from '../next.config'
 
 const here = path.resolve(__dirname, '..')
 
@@ -33,6 +33,6 @@ describe('workbench uses @aubrey-law/ui', () => {
   })
 
   it('transpiles the package', () => {
-    expect(nextConfig.transpilePackages).toContain('@aubrey-law/ui')
+    expect(workbenchConfig.transpilePackages).toContain('@aubrey-law/ui')
   })
 })
