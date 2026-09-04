@@ -1,4 +1,6 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Button } from '@aubrey-law/ui/button'
 import { SignOutButton } from '@/components/SignOutButton'
 import { LOGIN_PATH } from '@/lib/auth/gate'
 import { getSessionUser } from '@/lib/supabase/server'
@@ -25,7 +27,12 @@ export default async function TodayPage() {
           tasks and the drafting surfaces land here phase by phase.
         </p>
       </div>
-      <SignOutButton />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button asChild>
+          <Link href="/review">Review a draft</Link>
+        </Button>
+        <SignOutButton />
+      </div>
     </main>
   )
 }

@@ -12,6 +12,8 @@
     "verify": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@aubrey-law/citations": "*",
     "@aubrey-law/drafting-engine": "*",
     "@aubrey-law/estate-fields": "*",
     "@aubrey-law/estate-templates": "*",

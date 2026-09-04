@@ -92,6 +92,7 @@ export const config = {
   matcher: [
     '/',
     '/matters/:path*',
+    '/review/:path*',
     '/tasks/:path*',
     '/library/:path*',
     '/settings/:path*',

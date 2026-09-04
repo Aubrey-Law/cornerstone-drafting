@@ -17,6 +17,29 @@
 export type WorkbenchDatabase = {
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          id: string
+          route: string
+          model: string
+        }
+        Insert: {
+          route: string
+          model: string
+          context_type?: string | null
+          matter_id?: string | null
+          user_id?: string | null
+          input_tokens?: number
+          output_tokens?: number
+          cache_read_input_tokens?: number
+          cache_creation_input_tokens?: number
+          duration_ms?: number | null
+          success?: boolean
+          error_message?: string | null
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
       users: {
         Row: {
           id: string
