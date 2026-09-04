@@ -189,7 +189,7 @@ function AgendaRow({
                 </span>
                 {appointment.source === 'calendly'
                   ? ' · Calendly'
-                  : !appointment.outlookSynced && appointment.status === 'scheduled'
+                  : !appointment.calendarSynced && appointment.status === 'scheduled'
                     ? ' · ⚠ not on Outlook'
                     : ''}
               </p>

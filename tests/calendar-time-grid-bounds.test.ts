@@ -42,7 +42,7 @@ function appointment(overrides: Partial<CalendarAppointment> = {}): CalendarAppo
     notes: null,
     typeLabel: 'Discovery call',
     source: 'internal',
-    outlookSynced: true,
+    calendarSynced: true,
     onlineMeetingUrl: null,
     linkedMatterId: null,
     linkedMatterNumber: null,

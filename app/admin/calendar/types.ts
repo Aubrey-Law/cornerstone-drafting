@@ -16,7 +16,7 @@ export interface CalendarAppointment {
   notes: string | null
   typeLabel: string
   source: string
-  outlookSynced: boolean
+  calendarSynced: boolean
   onlineMeetingUrl: string | null
   linkedMatterId: string | null
   linkedMatterNumber: string | null

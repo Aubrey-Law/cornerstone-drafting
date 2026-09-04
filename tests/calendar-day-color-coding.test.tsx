@@ -18,7 +18,7 @@ function appointment(overrides: Partial<CalendarAppointment> & Pick<CalendarAppo
     startTime: '2026-07-30T14:00:00.000Z', endTime: '2026-07-30T15:00:00.000Z',
     status: 'scheduled', locationType: 'teams', secondAttendeeName: null, secondAttendeeEmail: null,
     attendeeName: 'Jane Alpha', attendeeEmail: 'jane@example.com', attendeePhone: null, notes: null,
-    typeLabel: 'Discovery call', source: 'internal', outlookSynced: true, onlineMeetingUrl: null,
+    typeLabel: 'Discovery call', source: 'internal', calendarSynced: true, onlineMeetingUrl: null,
     linkedMatterId: null, linkedMatterNumber: null, linkedMatterStage: null, linkedMatterPlanType: null,
     linkedLeadId: null,
     ...overrides,

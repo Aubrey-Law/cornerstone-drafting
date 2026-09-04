@@ -46,7 +46,7 @@ interface AppointmentListItem {
   attendeeEmail: string
   typeLabel: string
   source: string
-  outlookSynced: boolean
+  calendarSynced: boolean
   linkedMatterId: string | null
   linkedLeadId: string | null
 }
@@ -533,7 +533,7 @@ export function SchedulingSettingsSection() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {fmtWhen(a.startTime)} · {a.attendeeEmail}
-                    {!a.outlookSynced && a.status === 'scheduled' && (
+                    {!a.calendarSynced && a.status === 'scheduled' && (
                       <span className="ml-2 text-amber">⚠ not on Outlook calendar</span>
                     )}
                   </p>
