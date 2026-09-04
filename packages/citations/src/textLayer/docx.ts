@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
-import { extractDocxParagraphs } from '@aubrey-law/drafting-engine'
+// The specific module, not the package barrel. The barrel re-exports the whole
+// generator, so importing it here dragged nunjucks, pizzip and the template
+// renderer into the review route's bundle for the sake of one paragraph
+// extractor. This module needs only jszip and fast-xml-parser.
+import { extractDocxParagraphs } from '@aubrey-law/drafting-engine/docxTrackedChanges'
 import type { TextBlock, TextLayer } from './types'
 
 export const DOCX_EXTRACTOR = 'docx-accepted-view'

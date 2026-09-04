@@ -35,8 +35,12 @@ export const workbenchConfig: NextConfig = {
    * `@napi-rs/canvas` is a native binding, which cannot be placed in an ESM
    * chunk at all — the build fails outright rather than degrading. pdf.js
    * reaches for it to measure glyphs server-side.
+   *
+   * Only that one. Listing `pdfjs-dist` here made the build warn that the
+   * package "can't be external": the viewer imports its worker as ESM
+   * (`pdf.worker.min.mjs`), which cannot then be reached by `require()`.
    */
-  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist', 'pizzip'],
+  serverExternalPackages: ['@napi-rs/canvas'],
   /**
    * Files read at runtime through `fs`, which tracing cannot infer from an
    * import. The review playbook is one: it lives in the bundled workflow tree
