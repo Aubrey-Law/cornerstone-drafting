@@ -7,6 +7,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { auditDocumentAccess, isAdminUser, userCanReadDocument } from '@/lib/documentSecurity'
 import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
+import { checkDocumentShareable, describeShareBlock } from '@/lib/documents/shareGate'
 
 // GET /api/documents/[id]  →  { url: signedDownloadUrl, document: MatterDocument }
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -71,7 +72,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const { data: existing, error: loadError } = await sb
     .from('matter_documents')
-    .select('id, matter_id, name, shared_at')
+    // r2_key, content_type, source and missing_count are here for the share
+    // gate, which reads the bytes a client would actually download.
+    .select('id, matter_id, name, shared_at, r2_key, content_type, source, missing_count')
     .eq('id', id)
     .single()
   if (loadError || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -104,6 +107,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (isShareToggle) {
     const wasShared = existing.shared_at !== null
+
+    // Checked only on the way *out*. Unsharing must always work — it is how a
+    // document that should not have gone out is pulled back, and gating that
+    // would be exactly backwards.
+    if (shared) {
+      const check = await checkDocumentShareable(existing)
+      if (!check.shareable) {
+        return NextResponse.json(
+          {
+            error: describeShareBlock(check),
+            reason: check.reason,
+            missingFields: check.reason === 'missing_fields' ? check.missingFields : undefined,
+          },
+          { status: 409 },
+        )
+      }
+    }
+
     const { data, error: shareErr } = await sb
       .from('matter_documents')
       .update({ shared_at: shared ? new Date().toISOString() : null })

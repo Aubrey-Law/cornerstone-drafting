@@ -96,8 +96,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         uploaded_by: user.id,
         generation_id: doc.generation_id ?? null,
         generation_engine: doc.generation_engine ?? null,
-        marker_count: 0,
-        missing_count: 0,
+        // Inherited, not zeroed. A PDF render of a marked-up document shows
+        // the `[[ MISSING: … ]]` markers just as plainly as the DOCX does, so
+        // claiming a clean count here made converting to PDF a way around the
+        // share gate.
+        marker_count: doc.marker_count ?? 0,
+        missing_count: doc.missing_count ?? 0,
         reviewed_at: new Date().toISOString(),
         reviewed_by: user.id,
       })

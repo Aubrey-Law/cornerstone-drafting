@@ -344,18 +344,27 @@ export function MatterDocumentsTab({
   const handleShare = async (docs: MatterDocument[], shared: boolean) => {
     if (docs.length === 0) return
     setBusy(shared ? 'share' : 'unshare')
-    try {
-      for (const doc of docs) {
+
+    // Per document rather than one try around the loop. Sharing is now gated on
+    // unfilled generator fields, so one document in a selection being refused
+    // is an ordinary outcome — and aborting the batch on it would silently
+    // leave the rest unshared with no indication which ones.
+    const failures: string[] = []
+    let done = 0
+    for (const doc of docs) {
+      try {
         await setDocumentShared(doc.id, shared)
+        done += 1
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : `Could not update ${doc.name}`)
       }
-      const verb = shared ? 'Shared' : 'Unshared'
-      toast.success(`${verb} ${docs.length} document${docs.length === 1 ? '' : 's'}`)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not update sharing')
-    } finally {
-      setBusy(null)
     }
+
+    const verb = shared ? 'Shared' : 'Unshared'
+    if (done > 0) toast.success(`${verb} ${done} document${done === 1 ? '' : 's'}`)
+    for (const failure of failures) toast.error(failure)
+    await refresh()
+    setBusy(null)
   }
 
   const handleDownloadSelected = async () => {
