@@ -1,0 +1,27 @@
+{
+  "name": "@aubrey-law/citations",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Verified citations: text-layer extraction with character offsets (PDF and DOCX), quote verification against the document, the review-playbook runner, and the PDF citation viewer. The model caller and the database client are injected.",
+  "type": "module",
+  "exports": {
+    "./prompt": "./src/prompt.ts",
+    "./textLayer/*": "./src/textLayer/*.ts",
+    "./review/*": "./src/review/*.ts",
+    "./react/*": "./src/react/*.tsx"
+  },
+  "dependencies": {
+    "@aubrey-law/drafting-engine": "*",
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@supabase/supabase-js": "^2.100.1",
+    "pdfjs-dist": "5.4.296",
+    "@napi-rs/canvas": "0.1.80",
+    "zod": "^3.25.0"
+  },
+  "peerDependencies": {
+    "react": "19.2.4"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
+}

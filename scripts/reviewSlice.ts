@@ -140,10 +140,15 @@ async function main(): Promise<void> {
   // Imported only now: lib/anthropic builds its client at module load and reads
   // the environment once, so a static import would capture the key's absence.
   const { exportableFindings, runReviewPlaybook } = await import('@/lib/reviewSlice/runReview')
+  // The review runner takes its model caller as an argument, so the app's
+  // wrapper — retries plus ai_usage accounting — is supplied here rather than
+  // reached for inside the package.
+  const { callAnthropic } = await import('@/lib/anthropic')
 
   console.log(`\n${playbook.title} (v${playbook.version}, ${playbook.rules.length} rules)\n`)
 
   const result = await runReviewPlaybook(layer, playbook, {
+    callModel: callAnthropic,
     model: typeof args.model === 'string' ? args.model : undefined,
   })
 

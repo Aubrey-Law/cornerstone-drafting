@@ -1,0 +1,44 @@
+{
+  "name": "@aubrey-law/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The shared design system: shadcn/Radix primitives, the theme token source and its generated CSS, and cn(). Consumed by the root app (through components/ui shims) and the workbench.",
+  "type": "module",
+  "exports": {
+    "./utils": "./src/utils.ts",
+    "./theme/*": "./src/theme/*.ts",
+    "./styles/*": "./styles/*",
+    "./*": "./src/*.tsx"
+  },
+  "scripts": {
+    "theme:generate": "tsx scripts/generate-theme-css.ts"
+  },
+  "dependencies": {
+    "@radix-ui/react-alert-dialog": "1.1.15",
+    "@radix-ui/react-avatar": "1.1.11",
+    "@radix-ui/react-checkbox": "1.3.3",
+    "@radix-ui/react-collapsible": "1.1.12",
+    "@radix-ui/react-context-menu": "2.3.7",
+    "@radix-ui/react-dialog": "1.1.15",
+    "@radix-ui/react-dropdown-menu": "2.1.16",
+    "@radix-ui/react-label": "2.1.8",
+    "@radix-ui/react-popover": "1.1.15",
+    "@radix-ui/react-progress": "1.1.16",
+    "@radix-ui/react-select": "2.2.6",
+    "@radix-ui/react-slot": "1.2.4",
+    "@radix-ui/react-switch": "1.2.6",
+    "@radix-ui/react-tabs": "1.1.13",
+    "@radix-ui/react-tooltip": "1.2.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "1.1.1",
+    "lucide-react": "^0.564.0",
+    "tailwind-merge": "^3.3.1"
+  },
+  "peerDependencies": {
+    "react": "19.2.4"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
+}

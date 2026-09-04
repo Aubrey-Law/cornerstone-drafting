@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '../styles/theme/index.css';
+@import '@aubrey-law/ui/styles/theme/index.css';
+
+/* The primitives live outside this app's directory; Tailwind must be told to scan them. */
+@source '../packages/ui/src';
 
 @custom-variant dark (&:is(.dark *));
 
