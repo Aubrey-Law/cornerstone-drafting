@@ -146,3 +146,32 @@ describe('cancelling and rescheduling go back to where the event actually is', (
     expect(targetForAppointment({})).toBeNull()
   })
 })
+
+describe('the rule the settings screen and the booking flow share', () => {
+  it('names Google when connected, Outlook when only that is, nothing when neither', async () => {
+    // One function, not two copies. A screen that confidently names a calendar
+    // bookings do not go to is worse than a screen that says nothing.
+    const { preferredTarget, CALENDAR_TARGET_LABEL } = await import(
+      '@/lib/appointments/calendarTarget'
+    )
+
+    expect(preferredTarget({ google: true, microsoft: true })).toBe('google')
+    expect(preferredTarget({ google: false, microsoft: true })).toBe('microsoft')
+    expect(preferredTarget({ google: false, microsoft: false })).toBeNull()
+
+    expect(CALENDAR_TARGET_LABEL.google).toBe('Google Calendar')
+    expect(CALENDAR_TARGET_LABEL.microsoft).toBe('Outlook')
+    expect(CALENDAR_TARGET_LABEL.none).toContain('nothing is connected')
+  })
+
+  it('is what resolveCalendarTarget actually dispatches on', async () => {
+    connected('google')
+    expect(await resolveCalendarTarget()).toBe('google')
+
+    connected('microsoft')
+    expect(await resolveCalendarTarget()).toBe('microsoft')
+
+    connected('none')
+    expect(await resolveCalendarTarget()).toBeNull()
+  })
+})

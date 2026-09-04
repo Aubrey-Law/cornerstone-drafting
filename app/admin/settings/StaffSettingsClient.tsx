@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
+import { CALENDAR_TARGET_LABEL, preferredTarget } from '@/lib/appointments/calendarTarget'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   DEFAULT_ANTHROPIC_MODEL,
@@ -33,6 +34,7 @@ type Tab =
   | 'api-keys'
   | 'connectors'
   | 'outlook'
+  | 'google'
   | 'email'
   | 'scheduling'
   | 'sla'
@@ -95,6 +97,13 @@ export function StaffSettingsClient({
     connected: boolean
     email: string | null
   } | null>(null)
+  const [google, setGoogle] = useState<{
+    envConfigured: boolean
+    configIssue: string | null
+    connected: boolean
+    email: string | null
+    canRefresh: boolean
+  } | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -102,6 +111,7 @@ export function StaffSettingsClient({
     const t = sp.get('tab')
     if (
       t === 'outlook' ||
+      t === 'google' ||
       t === 'email' ||
       t === 'scheduling' ||
       t === 'models' ||
@@ -118,16 +128,25 @@ export function StaffSettingsClient({
     }
     const err = sp.get('mscal_error')
     if (err) toast.error(err)
+    if (sp.get('gcal_connected') === '1') {
+      toast.success('Google Calendar connected')
+    }
+    const gerr = sp.get('gcal_error')
+    // Google's failures are long and specific (a redirect URI that does not
+    // match, a consent that returned no refresh token) and the whole message is
+    // the instruction, so it is not truncated.
+    if (gerr) toast.error(gerr)
   }, [isAdministrator])
 
   useEffect(() => {
     if (!token) return
     void (async () => {
-      const [pRes, kRes, cRes, oRes] = await Promise.all([
+      const [pRes, kRes, cRes, oRes, gRes] = await Promise.all([
         fetch('/api/admin/me/preferences', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/api-keys', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/connectors', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/microsoft/status', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/google/status', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       if (pRes.ok) {
         const body = await pRes.json()
@@ -148,6 +167,16 @@ export function StaffSettingsClient({
           configIssue: body.configIssue ?? null,
           connected: Boolean(body.connected),
           email: body.email ?? null,
+        })
+      }
+      if (gRes.ok) {
+        const body = await gRes.json()
+        setGoogle({
+          envConfigured: Boolean(body.envConfigured),
+          configIssue: body.configIssue ?? null,
+          connected: Boolean(body.connected),
+          email: body.email ?? null,
+          canRefresh: Boolean(body.canRefresh),
         })
       }
     })()
@@ -345,6 +374,7 @@ export function StaffSettingsClient({
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
             ['outlook', 'Outlook'],
+            ['google', 'Google Calendar'],
             ['email', 'Email'],
             ['scheduling', 'Scheduling'],
             ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
@@ -677,6 +707,94 @@ export function StaffSettingsClient({
             <Button size="sm" asChild>
               <a href="/api/admin/microsoft/connect">Connect Outlook</a>
             </Button>
+          )}
+        </section>
+      )}
+
+      {tab === 'google' && (
+        <section className="space-y-4 rounded-lg border border-border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Google Calendar</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connect the firm&rsquo;s Google account so appointments are written to Google
+              Calendar. Existing appointments already in Outlook stay there and are still
+              cancelled and moved there.
+            </p>
+          </div>
+          {!google ? (
+            <p className="text-sm text-muted-foreground">Loading&hellip;</p>
+          ) : !google.envConfigured ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+              Google Calendar is not configured.
+              {google.configIssue ? ` ${google.configIssue}` : ''} Set
+              GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET and
+              GOOGLE_CALENDAR_REDIRECT_URI (pointing at /api/admin/google/callback), then
+              redeploy so the new values are visible.
+            </p>
+          ) : google.connected ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm">
+                  Connected as{' '}
+                  <span className="font-medium">{google.email || 'Google Calendar'}</span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    if (!token) return
+                    void (async () => {
+                      setSaving(true)
+                      try {
+                        const res = await fetch('/api/admin/google/status', {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                        if (!res.ok) throw new Error('Disconnect failed')
+                        setGoogle((g) => (g ? { ...g, connected: false, email: null } : g))
+                        toast.success('Google Calendar disconnected')
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Disconnect failed')
+                      } finally {
+                        setSaving(false)
+                      }
+                    })()
+                  }}
+                >
+                  Disconnect
+                </Button>
+              </div>
+              {!google.canRefresh && (
+                <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                  This connection has no refresh token, so it will stop working within the hour.
+                  Remove Cornerstone at myaccount.google.com/permissions and connect again.
+                </p>
+              )}
+            </div>
+          ) : (
+            <Button size="sm" asChild>
+              <a href="/api/admin/google/connect">Connect Google Calendar</a>
+            </Button>
+          )}
+
+          {/* The question worth answering on this screen: where does the next
+              booking actually land? `preferredTarget` is the same function the
+              booking flow dispatches on, so this cannot drift into naming a
+              calendar that bookings do not go to. */}
+          {google && outlook && (
+            <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+              New appointments go to{' '}
+              <span className="font-medium">
+                {CALENDAR_TARGET_LABEL[
+                  preferredTarget({
+                    google: google.connected,
+                    microsoft: outlook.connected,
+                  }) ?? 'none'
+                ]}
+              </span>
+              .
+            </p>
           )}
         </section>
       )}

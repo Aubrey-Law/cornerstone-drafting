@@ -2,6 +2,7 @@ import { getAnyConnectionForProvider } from '@/lib/calendarConnections'
 import * as graph from '@/lib/appointments/graphEvents'
 import * as google from '@/lib/appointments/googleEvents'
 import type { CreateEventInput } from '@/lib/appointments/graphEvents'
+import { preferredTarget, type CalendarTarget } from '@/lib/appointments/calendarTarget'
 
 /**
  * One calendar for the booking flow to talk to, whichever one the firm is on.
@@ -15,7 +16,8 @@ import type { CreateEventInput } from '@/lib/appointments/graphEvents'
  * cancelled, and by then nothing points at the cause.
  */
 
-export type CalendarTarget = 'google' | 'microsoft'
+export { preferredTarget, CALENDAR_TARGET_LABEL } from '@/lib/appointments/calendarTarget'
+export type { CalendarTarget } from '@/lib/appointments/calendarTarget'
 
 export interface CreatedCalendarEvent {
   target: CalendarTarget
@@ -36,11 +38,17 @@ export interface AppointmentEventIds {
  * a deploy. Returns null when neither is connected, which is not an error: the
  * booking is kept and the missing event shows in admin as an appointment with no
  * event id, exactly as it did before.
+ *
+ * The rule is a separate pure function because the settings screen also tells the
+ * attorney where the next booking will land. Two copies of "Google first" would
+ * be one edit away from a screen that confidently names the wrong calendar.
  */
 export async function resolveCalendarTarget(): Promise<CalendarTarget | null> {
-  if (await getAnyConnectionForProvider('google')) return 'google'
-  if (await getAnyConnectionForProvider('microsoft')) return 'microsoft'
-  return null
+  const [google, microsoft] = await Promise.all([
+    getAnyConnectionForProvider('google'),
+    getAnyConnectionForProvider('microsoft'),
+  ])
+  return preferredTarget({ google: Boolean(google), microsoft: Boolean(microsoft) })
 }
 
 /** Where an existing event lives, or null when the booking never got one. */
