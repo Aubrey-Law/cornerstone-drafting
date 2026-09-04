@@ -244,6 +244,28 @@ Staff connect Outlook under **Settings**. Manual matter email uses Graph when co
 
 **Entra app registration:** Under **Authentication → Redirect URIs**, add the same URL as `MICROSOFT_GRAPH_REDIRECT_URI` (e.g. `https://cornerstone.aubreylegal.com/api/microsoft/callback` or `.../api/admin/microsoft/callback`). A mismatch causes 404 or `redirect_uri` token errors.
 
+## Optional — Google Calendar
+
+| Variable | Purpose |
+|----------|---------|
+| `GOOGLE_CALENDAR_CLIENT_ID` | OAuth client ID from the Google Cloud console |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | OAuth client secret |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | Must exactly match an Authorised redirect URI on the OAuth client: `https://<host>/api/admin/google/callback` |
+
+Connect at `/api/admin/google/connect`.
+
+**Google Cloud setup:** enable the **Google Calendar API**, create an OAuth
+client of type *Web application*, and add the same URL as
+`GOOGLE_CALENDAR_REDIRECT_URI` under **Authorised redirect URIs** — Google
+matches it exactly, including scheme and any trailing slash.
+
+**If a connection reports no refresh token:** Google issues one only on an
+account's first consent, and Cornerstone asks for `prompt=consent` to force it.
+Where an older grant is still in place, remove Cornerstone at
+[myaccount.google.com/permissions](https://myaccount.google.com/permissions) and
+connect again. The callback refuses to store a connection without one rather
+than saving something that stops working within the hour.
+
 ## Optional — Retell
 
 | Variable | Purpose |

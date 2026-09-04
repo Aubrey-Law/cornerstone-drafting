@@ -38,16 +38,29 @@ export async function getStoredCalendarConnection(
   return data as CalendarConnection | null
 }
 
-/** Firm-wide fallback: first microsoft connection (solo-practice). */
-export async function getAnyMicrosoftConnection(): Promise<CalendarConnection | null> {
+/**
+ * Firm-wide fallback: the most recently refreshed connection for a provider.
+ *
+ * The firm is a single practitioner, so "whose connection" is not a question
+ * worth asking at every call site — but the provider is, now that there is more
+ * than one.
+ */
+export async function getAnyConnectionForProvider(
+  provider: CalendarProvider,
+): Promise<CalendarConnection | null> {
   const { data } = await getAdminClient()
     .from('calendar_connections')
     .select('*')
-    .eq('provider', 'microsoft')
+    .eq('provider', provider)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data as CalendarConnection | null
+}
+
+/** Firm-wide fallback: first microsoft connection (solo-practice). */
+export async function getAnyMicrosoftConnection(): Promise<CalendarConnection | null> {
+  return getAnyConnectionForProvider('microsoft')
 }
 
 export async function storeCalendarConnection(
