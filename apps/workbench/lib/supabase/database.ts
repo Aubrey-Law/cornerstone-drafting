@@ -60,7 +60,18 @@ export type WorkbenchDatabase = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      /**
+       * SECURITY DEFINER. Creates the caller's `users` row and returns the
+       * role it derived from their confirmed address. Listed here because the
+       * sign-in callback calls it; the role is the server's choice, not an
+       * argument.
+       */
+      ensure_user_profile: {
+        Args: { p_display_name: string | null }
+        Returns: string
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

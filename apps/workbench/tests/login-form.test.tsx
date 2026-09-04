@@ -8,6 +8,7 @@ import { LoginForm } from '@/app/auth/login/LoginForm'
 const replace = vi.fn()
 const refresh = vi.fn()
 const signInWithPassword = vi.fn()
+const signInWithOAuth = vi.fn()
 let searchParams = new URLSearchParams()
 
 vi.mock('next/navigation', () => ({
@@ -15,7 +16,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams,
 }))
 vi.mock('@/lib/supabase/browser', () => ({
-  getBrowserSupabase: () => ({ auth: { signInWithPassword } }),
+  getBrowserSupabase: () => ({ auth: { signInWithPassword, signInWithOAuth } }),
 }))
 
 
@@ -24,6 +25,7 @@ beforeEach(() => {
   replace.mockReset()
   refresh.mockReset()
   signInWithPassword.mockReset()
+  signInWithOAuth.mockReset()
   searchParams = new URLSearchParams()
 })
 afterEach(cleanup)
@@ -116,5 +118,50 @@ describe('the login form when the auth service is unreachable', () => {
     await screen.findByRole('alert')
     // A button left disabled after a failed attempt is a dead form.
     expect(screen.getByRole('button', { name: /sign in/i })).not.toBeDisabled()
+  })
+})
+
+describe('signing in with Google', () => {
+  it('sends the browser to Google, returning through this app’s callback', async () => {
+    signInWithOAuth.mockResolvedValue({ data: {}, error: null })
+    render(<LoginForm />)
+    fireEvent.click(screen.getByRole('button', { name: /google/i }))
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalledTimes(1))
+    const [[options]] = signInWithOAuth.mock.calls
+    expect(options.provider).toBe('google')
+    expect(options.options.redirectTo).toContain('/auth/callback')
+  })
+
+  it('carries the remembered destination through the round trip', async () => {
+    searchParams = new URLSearchParams('redirectTo=%2Freview')
+    signInWithOAuth.mockResolvedValue({ data: {}, error: null })
+    render(<LoginForm />)
+    fireEvent.click(screen.getByRole('button', { name: /google/i }))
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled())
+    const [[options]] = signInWithOAuth.mock.calls
+    expect(options.options.redirectTo).toContain('redirectTo=%2Freview')
+  })
+
+  it('drops a destination that leaves this site', async () => {
+    searchParams = new URLSearchParams('redirectTo=https%3A%2F%2Fevil.example')
+    signInWithOAuth.mockResolvedValue({ data: {}, error: null })
+    render(<LoginForm />)
+    fireEvent.click(screen.getByRole('button', { name: /google/i }))
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled())
+    const [[options]] = signInWithOAuth.mock.calls
+    expect(options.options.redirectTo).not.toContain('evil.example')
+  })
+
+  it('reports a refused Google sign-in', async () => {
+    signInWithOAuth.mockResolvedValue({ data: {}, error: { message: 'provider disabled' } })
+    render(<LoginForm />)
+    fireEvent.click(screen.getByRole('button', { name: /google/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not start|google/i)
+  })
+
+  it('explains a refusal from the callback in the firm’s terms', async () => {
+    searchParams = new URLSearchParams('error=firm_domain_required')
+    render(<LoginForm />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/aubreylegal\.com|firm/i)
   })
 })
