@@ -12,6 +12,7 @@ import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { DesignPlanTrack } from '@/lib/collegePrepDesign'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
+import { realNameOrNull } from '@/lib/draftPayload/placeholderNames'
 
 const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
@@ -40,8 +41,9 @@ export function decisionString(
 
 /** Return a contact's full name string, or null if no useful name exists. */
 function contactName(c: ContactRow): string | null {
-  const name = fullName(c.first_name, c.last_name)
-  return name || null
+  // realNameOrNull, not `name || null`: a contact called "To Be Determined" has
+  // a name, so it would flow into the instrument as an appointment.
+  return realNameOrNull(fullName(c.first_name, c.last_name))
 }
 
 /** Return a contact's relationship to the client (e.g. "Spouse", "Brother"). */

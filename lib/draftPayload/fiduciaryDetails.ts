@@ -5,6 +5,7 @@ import {
 } from '@/lib/designSheet/fiduciaryDocumentInclusions'
 import { principalOrderByPriority } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { realNameOrNull } from '@/lib/draftPayload/placeholderNames'
 import { getRelationshipLabel, structuredFromContactProfile } from '@/lib/kinship/relationshipLabels'
 import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
 
@@ -83,8 +84,8 @@ function fullName(first: string | null, last: string | null): string {
 }
 
 function contactName(contact: ContactRow): string | null {
-  const name = fullName(contact.first_name, contact.last_name)
-  return name || null
+  // See realNameOrNull: a placeholder is treated as an unfilled slot, not a name.
+  return realNameOrNull(fullName(contact.first_name, contact.last_name))
 }
 
 function contactRelationship(
@@ -296,7 +297,13 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
     }
 
     const contact = slot.contact_id ? contactsById.get(slot.contact_id) ?? null : null
-    return contact ? contactToDetail(contact, designSheet, perspective) : null
+    if (!contact) return null
+    const detail = contactToDetail(contact, designSheet, perspective)
+    // A placeholder name resolves to an empty `full_name`. Returning the detail
+    // anyway would appoint a nameless fiduciary; returning null makes the slot
+    // read as unfilled, which is what it is. `resolveContactDetails` already
+    // filters the same way for the HIPAA agent lists.
+    return detail.full_name ? detail : null
   }
 
   const trustee = getDesignSlots(designSheet, 'trustee_slots')
