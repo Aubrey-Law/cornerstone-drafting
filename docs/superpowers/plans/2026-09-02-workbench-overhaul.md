@@ -28,6 +28,9 @@ notes were added as phases shipped.
 | 2026-09-02 | Initial plan (#375). |
 | 2026-09-02 | Phases 0 and half of 1 shipped (#376, #377, #378, #379). Two corrections learned in execution added — see below. |
 | 2026-09-02 | Irys scope review folded in: prompts become the primary abstraction, email is kept and retargeted at Gmail, probate and trust administration added, Lawmatics two-way sync added. |
+| 2026-09-03 | Phase 1 finished (#381), golden corpus built (#382), citation slice built (#383) with CLI follow-ups (#384, #387). Open question 5 resolved: the Google migration is complete. |
+| 2026-09-03 | Estate-tax schedules moved into dated configuration with a settings screen (#385, #386), pulled forward out of phase 4. |
+| 2026-09-04 | Share gate on unfilled `[[ MISSING: ]]` fields (#388), pulled forward out of phase 4b. |
 
 **Relationship to the scope-reduction plan:** This supersedes
 `2026-08-28-cornerstone-scope-reduction.md` in part. See *Scope note on the
@@ -37,23 +40,30 @@ prerequisite.
 
 ---
 
-> **Status as of 2026-09-02 19:45 UTC.**
+> **Status as of 2026-09-04 03:00 UTC.**
 >
 > | | State |
 > |---|---|
-> | **Phase 0** — repo shape | **Done.** #376 (workspaces + data-corpus packages), #377 (`apps/workbench` + CI). `main` green. |
-> | **Phase 1** — engine extraction | **Half done.** #378 moved the 44-file pure closure (~9,000 LOC) into `@aubrey-law/drafting-engine`. All 45 generated documents verified content-identical. |
-> | **Deploy fix** | #379 merged — the workbench inherited the root app's `instrumentation.ts` on its first production build. |
+> | **Phase 0** — repo shape | **Done.** #376 (workspaces + data-corpus packages), #377 (`apps/workbench` + CI), #379 (instrumentation shadow). |
+> | **Phase 1** — engine extraction | **Done.** #378 moved the 44-file pure closure (~9,000 LOC); #381 finished it — `generateNodeEstatePackage` is in the package with `templateResolver` and `styleSet` as *required* injections, and the `NODE_ENV === 'test'` branches are gone. All 45 generated documents verified content-identical. |
+> | **Phase 2** — golden corpus | **Built, awaiting attorney approval.** #382 — content-hash fingerprints for 45 documents across 30 packages, `corpus:check`/`update`/`list`, CI step. **Zero approved**, so the gate reports but never blocks until the documents are signed off. |
+> | **Phase 3** — citation slice | **Built 2026-09-03**, #383, with follow-ups #384 and #387 making the CLI usable from a real shell. **The go/no-go answer itself is still owed** — it needs one run against a real third-party draft, and the number to read is *citations rejected*. |
+> | **Phase 4** — pulled forward | The estate-tax table (#385, #386) and the marker share gate (#388) shipped ahead of the rest of phase 4, since neither depends on the citation gate. |
 > | **Open question 1** | Resolved: Cornerstone is canonical for `estate-fields`. |
-> | **Open questions 2–4** | 2 (billing system of record) partly answered — QuickBooks link declined for now. 3 (OCR) and 4 (add-in distribution) still open. |
+> | **Open question 2** | Partly answered — QuickBooks link declined for now. |
+> | **Open questions 3–4** | 3 (OCR for scanned PDFs) and 4 (add-in distribution) still open. |
+> | **Open question 5** | **Resolved 2026-09-03: the migration to Google is already complete.** Email, calendar and files are all Google, so the Microsoft Graph path is dead code against the firm's actual setup — removed in phase 15b rather than maintained, and phase 15b is no longer gated. |
 > | **Irys scope review** | Folded in 2026-09-02: prompts primary, email kept on Gmail, probate added, Lawmatics sync added. Phases 4, 13b, 14, 15b, 16, 17 changed. |
-> | **New open question 5** | **Google migration timing.** Email moves to Gmail; does calendar and file storage follow, and when? Gates phase 15b and the fate of the Outlook path. |
 >
-> **Remaining in Phase 1:** the `generate.ts` / `templateReferences.ts` split plus
-> the `clauseClient` and `templateResolver` injections. Held back deliberately —
-> omitting `templateResolver` today falls back to the DB-backed resolver, so
-> making the engine pure changes *which template a client document renders from*.
-> That belongs in a PR where the behavior change is the subject of review.
+> **Two things carried forward that automation cannot close:**
+>
+> 1. **The published-template-override run.** #381 made the injections required, so a
+>    missed call site is a typecheck error — but nothing in the suite talks to the
+>    database. Generating for a matter with a published template override, and
+>    confirming the override is used rather than the bundled template, is still a
+>    manual check.
+> 2. **Corpus approvals.** 45 documents fingerprinted, none approved. The gate is inert
+>    until at least the packages drafted most often are signed off.
 
 ## Two corrections learned in execution — carry these forward
 
@@ -788,9 +798,53 @@ object (`stage`, `matter_types`, typed `inputs` with matter-record sources,
 tick route, reaper, tool-forced output, the citation verification gate, `ai_usage`
 wiring, Realtime progress. Stage-filtered surfacing on the matter page.
 
-Do the cheap high-value fix here: move the hard-coded Massachusetts rate table out of
+~~Do the cheap high-value fix here: move the hard-coded Massachusetts rate table out of
 `lib/estateTax.ts` into `firm_settings` with effective dates, so no prompt can quote a
-stale exemption.
+stale exemption.~~ **Done 2026-09-03**, ahead of the rest of phase 4 since it needed no
+citation gate. `lib/estateTaxSchedules.ts` holds dated schedules with their sources,
+`firm_settings.estate_tax_schedules` overrides them without a deploy, and
+`resolveScheduleAsOf` returns **"not on file"** rather than the nearest figure.
+Settings → Estate tax edits the federal figures by year; the Massachusetts table is
+read-only there, because H.4104 carries no sunset and there is nothing to update.
+
+Two things the work turned up that the plan had not anticipated:
+
+- **The federal exclusion was the stale figure, not the Massachusetts table.** MA's
+  schedule is legitimately open-ended. The federal basic exclusion is *indexed
+  annually* — it was hard-coded at the 2025 figure and would have gone on being quoted
+  forever. Its window is now closed at 2025-12-31, so any later date reports that no
+  figure is on file.
+- **Typecheck did not protect the display.** `formatAssetCurrency` accepts
+  `number | null` and renders null as `"$0"`, so a missing federal exclusion would have
+  shown as $0 of federal tax on a $20M estate — a confident number that is false, and
+  worse than a stale one. Only an assertion on rendered output catches this class;
+  there is now one.
+
+**Marker gate — built 2026-09-04, ahead of the rest of 4b.**
+`lib/documents/shareGate.ts` refuses to set `matter_documents.shared_at` on a firm
+document that still carries unresolved `[[ MISSING: … ]]` fields. Unsharing is never
+gated, and a document the client uploaded is never scanned.
+
+Three findings during the build:
+
+- **The gate belongs at `shared_at`, not at generation.** That column is the only thing
+  standing between a draft and the client portal, so it is the only place a block is
+  worth having. Blocking generation would stop the attorney working on their own draft.
+- **`convert-pdf` hard-coded `marker_count: 0`** on the PDF row it created, so
+  converting to PDF was a way around any marker gate — the PDF shows the markers just
+  as plainly as the DOCX. It now inherits the source document's counts.
+- **A scan that cannot open the file must refuse, not pass.**
+  `scanDocxBufferForMarkers` reports clean on an unopenable buffer, which is right for
+  a report and wrong for a gate; the gate returns `unverifiable` instead.
+
+*Original finding, 2026-09-03.* Investigating a real client draft — a Health Care Proxy
+carrying four `[[ MISSING: ]]` fields — established that `scanDocxBufferForMarkers` has
+**never blocked anything**. `app/api/admin/matters/[id]/draft/route.ts:685` computes
+`hasBlockingMarkers` and the comment beside it says so outright: "(The hard promote
+block lands in WP3.)" WP3 was never done. Owner decision: build the block at the share
+boundary rather than touch the live drafting path mid-overhaul, and scope it to
+`missingFields` — those are always unintentional, unlike the deliberate blanks in a
+signature block, which are not markers at all.
 
 **4b — `output_target` wiring** (1 week). `checklist` and `task_set` write real objects
 through the existing `tasks` table and `lib/stage-engine/`; `email_draft` and `draft_doc`
