@@ -121,6 +121,15 @@ vi.mock('@/lib/appointments/graphBusy', () => {
   }
 })
 
+// Microsoft is the connected provider, as the firm's is today. The graphEvents
+// mock below is reached *through* the real calendarSync dispatch rather than in
+// place of it, so these tests still prove a booking routes to the calendar that
+// is actually connected.
+vi.mock('@/lib/calendarConnections', () => ({
+  getAnyConnectionForProvider: vi.fn(async (provider: string) =>
+    provider === 'microsoft' ? { user_id: 'user-1', provider } : null),
+}))
+
 vi.mock('@/lib/appointments/graphEvents', () => ({
   createCalendarEvent: vi.fn(async (input: Record<string, unknown>) => {
     state.createdEvents.push(input)
@@ -479,6 +488,7 @@ describe('cancelAppointment', () => {
     linked_matter_id: null,
     booked_by_user_id: null,
     microsoft_event_id: 'graph-event-1',
+    google_event_id: null,
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',
     reminder_sent_at: null,
@@ -563,6 +573,7 @@ describe('rescheduleAppointment', () => {
     linked_matter_id: 'matter-7',
     booked_by_user_id: null,
     microsoft_event_id: 'graph-event-1',
+    google_event_id: null,
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',
     reminder_sent_at: null,

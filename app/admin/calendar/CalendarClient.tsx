@@ -590,7 +590,7 @@ export function CalendarClient() {
                           {a.source === 'calendly' && (
                             <span className="ml-2 text-primary">Calendly</span>
                           )}
-                          {a.source !== 'calendly' && !a.outlookSynced && a.status === 'scheduled' && (
+                          {a.source !== 'calendly' && !a.calendarSynced && a.status === 'scheduled' && (
                             <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
                           )}
                         </p>

@@ -10,10 +10,11 @@ import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
 import { fetchAllBusy, AvailabilityUnavailableError } from './graphBusy'
 import {
-  cancelCalendarEvent,
-  createCalendarEvent,
-  rescheduleCalendarEvent,
-} from './graphEvents'
+  cancelAppointmentEvent,
+  createAppointmentEvent,
+  eventIdColumn,
+  rescheduleAppointmentEvent,
+} from './calendarSync'
 import { runPostBookingAutomation } from './automation'
 import { formatWhen, locationLine } from './emailFormat'
 import { createManageToken } from './manageTokens'
@@ -396,15 +397,15 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       .eq('id', appointmentId)
   }
 
-  // Create the Outlook event. Failure keeps the booking (flagged in admin by
-  // microsoft_event_id being null).
+  // Create the calendar event in whichever calendar is connected. Failure keeps
+  // the booking, flagged in admin by the event id being null.
   const firm = await loadFirmSettings()
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
     .filter(Boolean)
     .join(', ')
   let teamsUrl: string | null = null
   try {
-    const event = await createCalendarEvent({
+    const event = await createAppointmentEvent({
       type: effectiveType,
       startIso,
       endIso,
@@ -416,13 +417,20 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       notes: input.notes,
       officeAddress: office || null,
     })
-    teamsUrl = event.onlineMeetingUrl
-    await admin
-      .from('appointments')
-      .update({ microsoft_event_id: event.eventId, online_meeting_url: teamsUrl })
-      .eq('id', appointmentId)
+    if (event) {
+      teamsUrl = event.onlineMeetingUrl
+      // The id goes in the column for the calendar that actually holds it, so a
+      // later cancel or reschedule can find its way back to the same place.
+      await admin
+        .from('appointments')
+        .update({
+          [eventIdColumn(event.target)]: event.eventId,
+          online_meeting_url: teamsUrl,
+        })
+        .eq('id', appointmentId)
+    }
   } catch (err) {
-    console.error('[appointments] graph event create failed for', appointmentId, err)
+    console.error('[appointments] calendar event create failed for', appointmentId, err)
   }
 
   await recordActivity({
@@ -476,12 +484,10 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     .eq('status', 'scheduled')
   if (error) throw error
 
-  if (appointment.microsoft_event_id) {
-    try {
-      await cancelCalendarEvent(appointment.microsoft_event_id)
-    } catch (err) {
-      console.error('[appointments] graph cancel failed for', appointment.id, err)
-    }
+  try {
+    await cancelAppointmentEvent(appointment)
+  } catch (err) {
+    console.error('[appointments] calendar cancel failed for', appointment.id, err)
   }
 
   await recordActivity({
@@ -644,12 +650,10 @@ export async function rescheduleAppointment(
     throw error
   }
 
-  if (appointment.microsoft_event_id) {
-    try {
-      await rescheduleCalendarEvent(appointment.microsoft_event_id, startIso, endIso)
-    } catch (err) {
-      console.error('[appointments] graph reschedule failed for', appointment.id, err)
-    }
+  try {
+    await rescheduleAppointmentEvent(appointment, startIso, endIso)
+  } catch (err) {
+    console.error('[appointments] calendar reschedule failed for', appointment.id, err)
   }
 
   await recordActivity({

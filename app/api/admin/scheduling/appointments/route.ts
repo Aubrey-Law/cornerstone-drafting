@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, online_meeting_url, source, created_at, raw',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, google_event_id, online_meeting_url, source, created_at, raw',
     )
 
   if (hasRange) {
@@ -119,9 +119,11 @@ export async function GET(req: NextRequest) {
         typeById.get(row.appointment_type_id ?? '')?.label ??
         'Unknown',
       calendarShowAsBusy: getRawBoolean(row.raw, 'calendarShowAsBusy', true),
-      // Null after a successful booking means the Outlook event failed to
-      // create — surfaced in the admin list as a warning.
-      outlookSynced: Boolean(row.microsoft_event_id),
+      // Null after a successful booking means the calendar event failed to
+      // create — surfaced in the admin list as a warning. Either provider
+      // counts: the warning is about the appointment not reaching a calendar,
+      // not about which calendar it was.
+      calendarSynced: Boolean(row.microsoft_event_id || row.google_event_id),
       onlineMeetingUrl: row.online_meeting_url ?? null,
     })),
   })
