@@ -4,13 +4,27 @@
     {
       "name": "cornerstone-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3002
     },
     {
       "name": "cornerstone-dev-attach",
       "url": "http://localhost:3002",
       "port": 3002
+    },
+    {
+      "name": "workbench-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "-w",
+        "apps/workbench",
+        "dev"
+      ],
+      "port": 3003
     }
   ]
 }

@@ -1,11 +1,11 @@
 #!/usr/bin/env npx tsx
 /**
- * Generates styles/theme/generated.css from lib/theme/tokens.ts
+ * Generates packages/ui/styles/theme/generated.css from packages/ui/src/theme/tokens.ts
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { allThemeCssVars, themes } from '../lib/theme/tokens'
+import { allThemeCssVars, themes } from '../src/theme/tokens'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -21,7 +21,7 @@ function main() {
   const dark = allThemeCssVars(themes.dark)
 
   const css = `/* AUTO-GENERATED — do not edit. Run: npm run theme:generate */
-/* Source: lib/theme/tokens.ts */
+/* Source: packages/ui/src/theme/tokens.ts */
 
 @layer theme-tokens {
   /**

@@ -58,4 +58,33 @@ describe('workbench convention-file isolation', () => {
       expect(fs.readFileSync(file, 'utf8')).not.toMatch(/from '\.\.\/\.\.\/(?!\.)/)
     }
   })
+  /**
+   * The relative-import check above is blind to tsconfig path aliases. The plan
+   * deliberately reaches into the root app once — `lib/draftPayload` is the
+   * domain model and is imported by alias rather than forked — so the rule is
+   * not "no aliases out of this directory" but "only the named ones". Anything
+   * else that escapes `apps/workbench` is a fork in disguise.
+   */
+  it('escapes the app directory only through the allow-listed path aliases', () => {
+    const ALLOWED_CROSS_APP_ALIASES = new Set<string>([
+      // '@draft-payload/*' — to be added with the drafting port (plan §Shared-code extraction, item 3).
+    ])
+    const tsconfig = JSON.parse(fs.readFileSync(path.join(here, 'tsconfig.json'), 'utf8')) as {
+      compilerOptions?: { paths?: Record<string, string[]> }
+    }
+    const paths = tsconfig.compilerOptions?.paths ?? {}
+    expect(Object.keys(paths).length).toBeGreaterThan(0)
+    for (const [alias, targets] of Object.entries(paths)) {
+      for (const target of targets) {
+        const resolved = path.resolve(here, target.replace(/\*$/, ''))
+        const escapes = !resolved.startsWith(here + path.sep) && resolved !== here
+        if (escapes) {
+          expect(
+            ALLOWED_CROSS_APP_ALIASES,
+            `tsconfig alias ${alias} → ${target} leaves apps/workbench and is not allow-listed`,
+          ).toContain(alias)
+        }
+      }
+    }
+  })
 })
