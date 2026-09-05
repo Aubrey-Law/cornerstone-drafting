@@ -1,9 +1,7 @@
 'use client'
 
 import { useActionState, useOptimistic, useState } from 'react'
-import { Button } from '@aubrey-law/ui/button'
-import type { Citation } from '@aubrey-law/citations/textLayer/types'
-import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
+import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import { isCitable, orderFindings } from '@/lib/review/order'
 import type { Disposition, StoredFinding } from '@/lib/review/persist'
 import { BlockTextViewer } from '@/app/review/BlockTextViewer'

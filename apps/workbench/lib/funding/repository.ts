@@ -48,7 +48,7 @@ export async function loadFundingRows(
 
   let matterQuery = sb
     .from('matters')
-    .select('id, title, stage, client_intake_id')
+    .select('id, name, stage, client_intake_id')
     .eq('relationship_status', 'hired')
   if (options.matterId) matterQuery = matterQuery.eq('id', options.matterId)
 
@@ -82,7 +82,7 @@ export async function loadFundingRows(
       const recorded = fundingByKey.get(`${matter.id}:${asset.id}`)
       rows.push({
         matter_id: matter.id as string,
-        matter_title: (matter.title as string | null) ?? null,
+        matter_title: (matter.name as string | null) ?? null,
         matter_stage: (matter.stage as string | null) ?? null,
         asset_id: asset.id as string,
         category: asset.category as string,

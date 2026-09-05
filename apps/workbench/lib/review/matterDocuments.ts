@@ -24,7 +24,7 @@ export async function loadReviewableByMatter(
 
   const { data: matters, error: matterError } = await sb
     .from('matters')
-    .select('id, title')
+    .select('id, name')
     .eq('relationship_status', 'hired')
   if (matterError) throw new Error(`Could not load matters: ${matterError.message}`)
   if (!matters || matters.length === 0) return []
@@ -71,7 +71,7 @@ export async function loadReviewableByMatter(
   return matters
     .map((matter) => ({
       matterId: String(matter.id),
-      title: (matter.title as string | null) ?? 'Untitled matter',
+      title: (matter.name as string | null) ?? 'Untitled matter',
       documents: reviewableDocuments(rowsByMatter.get(String(matter.id)) ?? []),
     }))
     .filter((matter) => matter.documents.length > 0)

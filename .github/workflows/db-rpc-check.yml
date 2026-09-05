@@ -1,12 +1,18 @@
-name: Database RPC check
+name: Database schema check
 
-# Verifies every Supabase RPC the app calls is actually resolvable.
+# Verifies every Supabase RPC the app calls is actually resolvable, and every
+# column the workbench reads actually exists.
 #
 # The scheduled run is the important one. The outage this guards against was not
 # caused by a code change — migration 20260812000000 was recorded as applied
 # while its SQL never executed, so the database lost two functions on its own and
 # nobody noticed until a lead edit failed in production. A pull_request trigger
 # alone would never have caught that; a daily run does.
+#
+# The column check is here for the same reason from the other direction: five
+# workbench features shipped reading `matters.title`, a column that has never
+# existed, and every unit test passed because each built its fixture rows from
+# the same wrong assumption. Only the database can answer that.
 
 on:
   pull_request:
@@ -26,9 +32,12 @@ concurrency:
 
 jobs:
   rpc-drift:
+    # Named for the RPC check alone because branch protection requires this
+    # exact string; renaming it would block open pull requests on a check
+    # they never report.
     name: RPCs called in code exist in the database
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -38,8 +47,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
 
-      # No `npm ci`: the script imports only node builtins and global fetch.
+      # The column check parses the query chains from the AST, so it needs
+      # TypeScript; the RPC check on its own would not.
+      - name: Install
+        run: npm ci
+
       - name: Flag missing credentials
         if: env.SUPABASE_SERVICE_ROLE_KEY == '' || env.NEXT_PUBLIC_SUPABASE_URL == ''
         run: |
@@ -47,3 +61,6 @@ jobs:
 
       - name: Check RPCs
         run: node scripts/checkDbRpcs.mjs
+
+      - name: Check columns
+        run: node scripts/checkDbColumns.mjs

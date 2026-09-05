@@ -142,7 +142,7 @@ export async function loadRunSummaries(
   if (!runs || runs.length === 0) return []
 
   const [{ data: matters }, { data: versions }] = await Promise.all([
-    sb.from('matters').select('id, title').in('id', [...new Set(runs.map((r) => String(r.matter_id)))]),
+    sb.from('matters').select('id, name').in('id', [...new Set(runs.map((r) => String(r.matter_id)))]),
     sb
       .from('document_versions')
       .select('id, document_id, filename')
@@ -154,7 +154,7 @@ export async function loadRunSummaries(
     ? await sb.from('matter_documents').select('id, name').in('id', documentIds)
     : { data: [] }
 
-  const titleById = new Map((matters ?? []).map((m) => [String(m.id), String(m.title ?? 'Untitled matter')]))
+  const titleById = new Map((matters ?? []).map((m) => [String(m.id), String(m.name ?? 'Untitled matter')]))
   const nameByDocument = new Map((documents ?? []).map((d) => [String(d.id), String(d.name)]))
   const nameByVersion = new Map(
     (versions ?? []).map((v) => [
