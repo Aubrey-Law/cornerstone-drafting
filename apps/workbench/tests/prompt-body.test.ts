@@ -30,11 +30,36 @@ describe('the prompt body schema', () => {
     expect(promptBodySchema.safeParse(auditBody).success).toBe(true)
   })
 
-  it('refuses a field audit body wearing the review kind', () => {
-    // The database enforces this with a composite key; the schema is the same
-    // rule stated where the author will meet it first.
+  it('refuses a body whose kind and shape disagree', () => {
+    // What this actually proves: a field-audit body labelled `review` has no
+    // `rules`, so it is refused. It does NOT prove the union is discriminated
+    // — both arms carry a literal `kind`, so a plain union refuses the same
+    // input. The discriminated form is chosen for the error it reports, not
+    // for what it accepts, and no assertion here can tell the two apart.
     const crossed = { ...auditBody, kind: 'review' as const }
     expect(promptBodySchema.safeParse(crossed).success).toBe(false)
+  })
+
+  it('lets the kind alone decide which arm applies', () => {
+    // The property worth guaranteeing: when a body carries both arms' fields
+    // and both are individually valid, `kind` selects the arm and the other
+    // arm's data is dropped rather than carried along. A review body must not
+    // be able to smuggle checks through, because a later task turns checks
+    // into tasks on a real matter.
+    const both = { ...reviewBody, ...auditBody, kind: 'review' as const }
+    const asReview = promptBodySchema.safeParse(both)
+    expect(asReview.success).toBe(true)
+    if (asReview.success) {
+      expect(asReview.data.kind).toBe('review')
+      expect('checks' in asReview.data).toBe(false)
+    }
+
+    const asAudit = promptBodySchema.safeParse({ ...both, kind: 'field_audit' as const })
+    expect(asAudit.success).toBe(true)
+    if (asAudit.success) {
+      expect(asAudit.data.kind).toBe('field_audit')
+      expect('rules' in asAudit.data).toBe(false)
+    }
   })
 
   it('refuses a check that reads no fields', () => {
