@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./prompt": "./src/prompt.ts",
+    "./prompt/*": "./src/prompt/*.ts",
     "./textLayer/*": "./src/textLayer/*.ts",
     "./review/*": "./src/review/*.ts",
     "./react/*": "./src/react/*.tsx"
