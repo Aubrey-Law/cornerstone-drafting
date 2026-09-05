@@ -1,6 +1,6 @@
 name: Database types drift
 
-# Keeps types/supabase.generated.ts describing the database it claims to.
+# Keeps packages/db-types/src/supabase.generated.ts describing the database it claims to.
 #
 # The file is generated (`npm run db:types:linked`) and checked in, and nothing
 # ever verified it. It went four merged migrations out of date without anyone
@@ -117,15 +117,15 @@ jobs:
       - name: Fail on drift, printing it
         if: steps.cli.outputs.version != ''
         run: |
-          if git diff --quiet -- types/supabase.generated.ts; then
+          if git diff --quiet -- packages/db-types/src/supabase.generated.ts; then
             echo "Generated types match the database."
             exit 0
           fi
           echo "::group::Drift"
-          git --no-pager diff --stat -- types/supabase.generated.ts
-          git --no-pager diff -- types/supabase.generated.ts | head -400
+          git --no-pager diff --stat -- packages/db-types/src/supabase.generated.ts
+          git --no-pager diff -- packages/db-types/src/supabase.generated.ts | head -400
           echo "::endgroup::"
-          echo "::error::types/supabase.generated.ts does not match the database. Re-run this workflow from the Actions tab with 'open_pr' checked and it will raise the pull request itself."
+          echo "::error::packages/db-types/src/supabase.generated.ts does not match the database. Re-run this workflow from the Actions tab with 'open_pr' checked and it will raise the pull request itself."
           exit 1
 
   regenerate:
@@ -187,17 +187,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- types/supabase.generated.ts; then
+          if git diff --quiet -- packages/db-types/src/supabase.generated.ts; then
             echo "Generated types already match the database; nothing to open."
             exit 0
           fi
-          git --no-pager diff --stat -- types/supabase.generated.ts
+          git --no-pager diff --stat -- packages/db-types/src/supabase.generated.ts
           branch="chore/regenerate-supabase-types-${GITHUB_RUN_ID}"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git checkout -b "$branch"
           # Only the generated file: never a stray change from the run.
-          git add types/supabase.generated.ts
+          git add packages/db-types/src/supabase.generated.ts
           git commit -m 'Regenerate Supabase types from the database'
           git push -u origin "$branch"
 
@@ -209,7 +209,7 @@ jobs:
             --base "${GITHUB_REF_NAME}" \
             --head "$branch" \
             --title 'Regenerate Supabase types from the database' \
-            --body 'Opened by the Database types drift workflow. `types/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
+            --body 'Opened by the Database types drift workflow. `packages/db-types/src/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
           then
             echo "::error::Regenerated types are pushed to '$branch', but the pull request could not be opened. If the reason above is \"GitHub Actions is not permitted to create or approve pull requests\", enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'. Until then, open it here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${GITHUB_REF_NAME}...${branch}?expand=1"
             exit 1

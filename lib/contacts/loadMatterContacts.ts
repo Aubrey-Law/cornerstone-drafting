@@ -16,7 +16,7 @@ type AdminClient = SupabaseClient<Database>
  * correctly on each.
  *
  * Two queries rather than an embedded select: `matter_contacts` is absent from
- * types/supabase.generated.ts until the migration is applied and the types
+ * packages/db-types/src/supabase.generated.ts until the migration is applied and the types
  * regenerated.
  */
 export async function loadMatterContacts(

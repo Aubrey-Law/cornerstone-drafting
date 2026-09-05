@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('Supabase database types', () => {
-  const source = fs.readFileSync(path.join(process.cwd(), 'types/supabase.generated.ts'), 'utf8')
+  const source = fs.readFileSync(path.join(process.cwd(), 'packages/db-types/src/supabase.generated.ts'), 'utf8')
   const generator = fs.readFileSync(path.join(process.cwd(), 'scripts/generateSupabaseTypes.mjs'), 'utf8')
 
   it('checks in generated schema types without a permissive table placeholder', () => {

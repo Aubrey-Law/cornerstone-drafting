@@ -1,12 +1,12 @@
 /**
  * Compatibility adapter while existing queries are migrated to the checked-in
- * generated schema in `types/supabase.generated.ts`.
+ * generated schema in `@aubrey-law/db-types`.
  *
  * New or materially changed database code should use `GeneratedDatabase`
  * directly. Removing this adapter is tracked by `check:db-types`; its presence
  * is intentional until the generated-type backlog is resolved table by table.
  */
-export type { Database as GeneratedDatabase, Json } from './supabase.generated'
+export type { Database as GeneratedDatabase, Json } from '@aubrey-law/db-types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CompatibilityRow = { [column: string]: any }

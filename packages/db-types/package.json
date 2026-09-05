@@ -1,0 +1,13 @@
+{
+  "name": "@aubrey-law/db-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The generated Postgres schema types, checked in and kept honest by the db-types-drift workflow. Types only, no runtime, no build step — both apps read the same schema rather than each describing it.",
+  "type": "module",
+  "exports": {
+    ".": "./src/supabase.generated.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
+}

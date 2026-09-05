@@ -86,7 +86,7 @@ function pickPerson(
  */
 export async function getHousehold(admin: AdminClient, matterId: string): Promise<Household> {
   // Two queries rather than an embedded select: `matter_contacts` is absent
-  // from types/supabase.generated.ts until the migration is applied and the
+  // from packages/db-types/src/supabase.generated.ts until the migration is applied and the
   // types regenerated, and PostgREST embedding needs the relationship to be
   // declared there. Joining in TypeScript costs one round trip and keeps this
   // independent of the generated-type backlog.

@@ -14,6 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
     "@aubrey-law/citations": "*",
+    "@aubrey-law/db-types": "*",
     "@aubrey-law/drafting-engine": "*",
     "@aubrey-law/estate-fields": "*",
     "@aubrey-law/estate-templates": "*",

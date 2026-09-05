@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-const source = readFileSync('types/supabase.generated.ts', 'utf8')
+const source = readFileSync('packages/db-types/src/supabase.generated.ts', 'utf8')
 const compatibility = readFileSync('types/supabase.ts', 'utf8')
 const requiredFragments = [
   'PostgrestVersion:',
