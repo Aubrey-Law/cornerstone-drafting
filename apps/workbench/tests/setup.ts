@@ -13,3 +13,20 @@ import '@testing-library/jest-dom/vitest'
 if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = function scrollIntoView() {}
 }
+
+/**
+ * jsdom implements no layout, so it has no `ResizeObserver` either. Radix
+ * primitives construct one to track an element's box; without it they throw
+ * from inside a render and the component never mounts.
+ *
+ * A no-op is the honest stand-in for the same reason as `scrollIntoView`
+ * above: nothing here has a size to observe, so there is no measurement a test
+ * could meaningfully assert on.
+ */
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+}

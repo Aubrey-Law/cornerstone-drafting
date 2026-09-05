@@ -5,6 +5,8 @@ import { detectKinds } from '@/lib/execution/detect'
 import { loadExecutionMatters } from '@/lib/execution/repository'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { loadCeremony } from '@/lib/ceremony/repository'
+import { CeremonyRecord } from './CeremonyRecord'
 import { ExecutionChecklist } from './ExecutionChecklist'
 
 export const metadata = { title: 'Execution · Aubrey Law Workbench' }
@@ -22,6 +24,7 @@ export default async function MatterExecutionPage({
   if (!matter) notFound()
 
   const detected = detectKinds(matter.documentNames)
+  const ceremony = await loadCeremony(getAdminClient(), matterId)
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
@@ -32,7 +35,10 @@ export default async function MatterExecutionPage({
         <h1 className="text-2xl font-semibold tracking-tight">{matter.title}</h1>
       </div>
 
-      <ExecutionChecklist detected={detected.kinds} unmatched={detected.unmatched} />
+      <div className="space-y-12">
+        <ExecutionChecklist detected={detected.kinds} unmatched={detected.unmatched} />
+        <CeremonyRecord matterId={matterId} ceremony={ceremony} kinds={detected.kinds} />
+      </div>
     </main>
   )
 }
