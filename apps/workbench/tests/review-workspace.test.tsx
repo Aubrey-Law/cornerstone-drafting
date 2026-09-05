@@ -91,7 +91,7 @@ describe('ReviewWorkspace', () => {
     render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     // The attorney should know what is about to be checked, not only what came back.
     expect(screen.getByText(PLAYBOOK.rules[0].statement)).toBeInTheDocument()
-    expect(screen.getByText(/nothing is saved/i)).toBeInTheDocument()
+    expect(screen.getByText(/is recorded and can be returned to/i)).toBeInTheDocument()
   })
 
   it('shows the findings and the document side by side after a run', async () => {
@@ -228,7 +228,10 @@ describe('ReviewWorkspace, whether the review was recorded', () => {
     respondWith({})
     render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
-    expect(await screen.findByTestId('save-state')).toHaveTextContent(/recorded against this document version/i)
+    const state = await screen.findByTestId('save-state')
+    expect(state).toHaveTextContent(/recorded/i)
+    // The link is what makes a recorded review something you return to.
+    expect(state.querySelector('a')).toHaveAttribute('href', '/review/run-1')
   })
 
   /**

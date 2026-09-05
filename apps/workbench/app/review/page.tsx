@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { LOGIN_PATH } from '@/lib/auth/gate'
 import { loadReviewPlaybook } from '@/lib/review/playbook'
+import { loadRunSummaries } from '@/lib/review/history'
 import { loadReviewableByMatter } from '@/lib/review/matterDocuments'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
@@ -23,9 +24,11 @@ export default async function ReviewPage() {
   // Every draft reviewed here is the firm's own and already filed, so the
   // normal path is choosing one rather than uploading it.
   const matters = await loadReviewableByMatter(getAdminClient())
+  const runs = await loadRunSummaries(getAdminClient(), 15)
 
   return (
     <ReviewWorkspace
+      runs={runs}
       matters={matters.map((matter) => ({
         matterId: matter.matterId,
         title: matter.title,
