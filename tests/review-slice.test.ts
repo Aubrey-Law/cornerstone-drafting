@@ -7,11 +7,45 @@ import { reviewPlaybookSchema, type ReviewPlaybook } from '@/lib/reviewSlice/typ
 import type { AnthropicMessageResponse } from '@/lib/anthropic'
 import type { TextLayer } from '@/lib/textLayer/types'
 
-const PLAYBOOK: ReviewPlaybook = reviewPlaybookSchema.parse(
-  JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'tools/workflows/review/ma-trust-firm-qa.json'), 'utf8'),
-  ),
-)
+/**
+ * Used to be read from `tools/workflows/review/ma-trust-firm-qa.json`. That
+ * file is gone — the playbook lives in the database now (see
+ * `apps/workbench/lib/review/playbook.ts` and the seed migration
+ * `supabase/migrations/20261028010000_seed_review_playbook.sql`), read there
+ * through a Supabase client this standalone script deliberately has no
+ * dependency on. Inlined here rather than reintroducing that dependency,
+ * kept byte-for-byte identical to what the seed migration inserts (see
+ * `apps/workbench/tests/review-playbook.test.ts`, which checks the migration
+ * against its own stated hash) so this file's assertions — about *this*
+ * playbook's rules and severities — keep meaning what they said.
+ */
+const PLAYBOOK: ReviewPlaybook = reviewPlaybookSchema.parse({
+  slug: 'ma-trust-firm-qa',
+  title: 'Massachusetts revocable trust — firm quality review',
+  version: 1,
+  rules: [
+    {
+      number: '1',
+      risk: 'high',
+      statement:
+        "Our exculpation and indemnity language carves out gross negligence and bad faith, not willful misconduct alone. A carve-out limited to willful misconduct leaves our beneficiaries without recourse for conduct well short of intentional wrongdoing, and is narrower than we intend to draft.",
+      preferredLanguage:
+        "except to the extent such claims arise from the Trustee's own willful misconduct, bad faith, or gross negligence",
+    },
+    {
+      number: '2',
+      risk: 'medium',
+      statement:
+        "Our waiver of the trustee's bond is limited to trustees named in the instrument and successors appointed under its terms. An unqualified waiver running to anyone who ever serves removes the protection at exactly the point it is needed — when a trustee nobody chose takes office.",
+    },
+    {
+      number: '3',
+      risk: 'blocker',
+      statement:
+        "Every discretionary distribution standard we draft states whether the trustee considers a beneficiary's other resources. Silence is the defect: it leaves our trustee to guess, and it changes both the tax treatment and the creditor exposure of the interest.",
+    },
+  ],
+})
 
 let cached: TextLayer | null = null
 async function trustLayer(): Promise<TextLayer> {

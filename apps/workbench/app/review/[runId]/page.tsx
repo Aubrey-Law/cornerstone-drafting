@@ -28,7 +28,7 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
           Review
         </Link>
         <h1 className="text-lg font-semibold tracking-tight">
-          {run.playbookSlug} v{run.playbookVersion}
+          {run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : `${run.kind} run`}
         </h1>
         <p className="text-xs text-muted-foreground">
           {run.findings.length} findings · {cited} cited · {refused} citations rejected

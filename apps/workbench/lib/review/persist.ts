@@ -32,8 +32,8 @@ export const WORKFLOW_RUN_COLUMNS = [
   'matter_id',
   'document_version_id',
   'text_layer_id',
-  'playbook_slug',
-  'playbook_version',
+  'prompt_version_id',
+  'kind',
   'model',
   'status',
   'rule_total',
@@ -83,7 +83,23 @@ export interface SaveRunInput {
   matterId: string
   documentVersionId: string
   layer: TextLayer
-  playbook: { slug: string; version: number }
+  /**
+   * The exact prompt version the review ran against, not a slug and an
+   * integer.
+   *
+   * A finding is only interpretable against the exact wording that produced
+   * it — "rule 1 says the carve-out must name gross negligence" means
+   * nothing once rule 1's statement could have changed. A slug plus a
+   * version number is two values someone could edit independently after the
+   * fact: the row that used to record `playbook_slug`/`playbook_version`
+   * pointed at a version by describing it, not by referencing it, so a
+   * playbook edited (or a version renumbered) after a run would silently
+   * change what that run appears to have been checked against. A foreign key
+   * into `prompt_versions`, an immutable table, cannot be edited out from
+   * under the run it describes — the row it names is the row that ran, for
+   * as long as the run exists.
+   */
+  promptVersionId: string
   model: string | null
   result: ReviewResult
   userId: string
@@ -136,8 +152,8 @@ export async function saveRun(
       matter_id: input.matterId,
       document_version_id: input.documentVersionId,
       text_layer_id: layerRow.id,
-      playbook_slug: input.playbook.slug,
-      playbook_version: input.playbook.version,
+      prompt_version_id: input.promptVersionId,
+      kind: 'review',
       model: input.model,
       status: runStatusFor(counts),
       rule_total: counts.ruleTotal,
@@ -227,8 +243,12 @@ export interface StoredRun {
   runId: string
   matterId: string
   documentVersionId: string
-  playbookSlug: string
-  playbookVersion: number
+  kind: string
+  /** The version the run was checked against. Null for a run recorded before this column existed. */
+  promptVersionId: string | null
+  /** The prompt's current slug and this version's number, when that version's prompt still resolves. */
+  promptSlug: string | null
+  promptVersionNumber: number | null
   status: string
   ruleTotal: number
   failedCount: number

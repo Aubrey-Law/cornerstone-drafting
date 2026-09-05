@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { AnthropicKeyMissingError, anthropicModelCaller } from '@/lib/anthropic'
 import { requireStaff } from '@/lib/auth/requireStaff'
-import { loadReviewPlaybook } from '@/lib/review/playbook'
+import { loadPublishedPrompt } from '@/lib/prompts/repository'
+import { REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
 import { saveRun } from '@/lib/review/persist'
 import { runDocumentReview } from '@/lib/review/run'
@@ -80,7 +81,24 @@ export async function POST(request: Request) {
     throw error
   }
 
-  const playbook = loadReviewPlaybook()
+  // Loaded here rather than through `loadReviewPlaybook`, which returns only
+  // the shape the runner needs: `saveRun` below needs the version's id too,
+  // to record exactly which wording produced these findings.
+  const prompt = await loadPublishedPrompt(getAdminClient(), REVIEW_PLAYBOOK_SLUG)
+  if (!prompt || prompt.body.kind !== 'review') {
+    // 503, matching the missing-Anthropic-key case above: the app is fine,
+    // this feature has nothing published to run.
+    return NextResponse.json(
+      { error: `No published review prompt named "${REVIEW_PLAYBOOK_SLUG}".` },
+      { status: 503 },
+    )
+  }
+  const playbook = {
+    slug: prompt.slug,
+    title: prompt.title,
+    version: prompt.versionNumber,
+    rules: prompt.body.rules,
+  }
   const startedAt = new Date().toISOString()
 
   try {
@@ -98,7 +116,7 @@ export async function POST(request: Request) {
         matterId: anchor.matterId,
         documentVersionId: anchor.documentVersionId,
         layer,
-        playbook: { slug: playbook.slug, version: playbook.version },
+        promptVersionId: prompt.versionId,
         model: null,
         result,
         userId: auth.user.id,

@@ -9,6 +9,19 @@ const MIGRATION = fs.readFileSync(
 )
 
 /**
+ * `workflow_runs` is altered again in 20261028000000_prompt_objects.sql:
+ * `playbook_slug`/`playbook_version` are dropped and `prompt_version_id`/
+ * `kind` are added. `columnsOf` below applies those alterations rather than
+ * reading only the original `create table`, so this test still describes the
+ * table as it now stands instead of the table as it stood before that
+ * migration ran.
+ */
+const PROMPT_OBJECTS_MIGRATION = fs.readFileSync(
+  path.resolve(__dirname, '../../../supabase/migrations/20261028000000_prompt_objects.sql'),
+  'utf8',
+)
+
+/**
  * The status is the one field a reader skims, so it may not overstate what the
  * run covered. A run that lost a rule to a failed model call is `partial`, and
  * calling it `completed` would say every rule was applied when one never was.
@@ -42,7 +55,22 @@ describe('the run tables and the shapes the app declares', () => {
   const columnsOf = (table: string) => {
     const start = MIGRATION.indexOf(`create table if not exists public.${table} (`)
     const block = MIGRATION.slice(start, MIGRATION.indexOf('create index', start))
-    return [...block.matchAll(/^\s{2}([a-z_]+) (?:uuid|text|integer|jsonb|timestamptz)/gm)].map((m) => m[1])
+    const base = [...block.matchAll(/^\s{2}([a-z_]+) (?:uuid|text|integer|jsonb|timestamptz)/gm)].map((m) => m[1])
+    if (table !== 'workflow_runs') return base
+
+    const added = [
+      ...PROMPT_OBJECTS_MIGRATION.matchAll(
+        /alter table public\.workflow_runs\s+add column if not exists ([a-z_]+)/g,
+      ),
+    ].map((m) => m[1])
+    const dropped = new Set(
+      [
+        ...PROMPT_OBJECTS_MIGRATION.matchAll(
+          /alter table public\.workflow_runs\s+drop column if exists ([a-z_]+)/g,
+        ),
+      ].map((m) => m[1]),
+    )
+    return [...base.filter((column) => !dropped.has(column)), ...added]
   }
 
   it('declares exactly the workflow_runs columns', () => {

@@ -6,14 +6,27 @@ const runRow = (over: Record<string, unknown> = {}) => ({
   matter_id: 'm-1',
   document_version_id: 'v-1',
   text_layer_id: 'l-1',
-  playbook_slug: 'ma-trust-firm-qa',
-  playbook_version: 1,
+  prompt_version_id: 'pv-1',
+  kind: 'review',
   status: 'completed',
   rule_total: 2,
   finding_count: 2,
   failed_count: 0,
   failures: [],
   finished_at: '2026-09-05T12:00:00Z',
+  ...over,
+})
+
+const promptVersionRow = (over: Record<string, unknown> = {}) => ({
+  id: 'pv-1',
+  prompt_id: 'p-1',
+  version_number: 1,
+  ...over,
+})
+
+const promptRow = (over: Record<string, unknown> = {}) => ({
+  id: 'p-1',
+  slug: 'ma-trust-firm-qa',
   ...over,
 })
 
@@ -138,5 +151,44 @@ describe('toStoredRun', () => {
       layerRow,
     )
     expect(run.findings.map((f) => f.ruleNumber)).toEqual(['2', '10'])
+  })
+
+  /**
+   * playbook_slug/playbook_version were dropped in favour of
+   * prompt_version_id: a run now records the version it was checked
+   * against by reference, not by a slug-and-integer pair that could be
+   * edited independently of the run.
+   */
+  it('carries the run’s kind and the version it points at', () => {
+    const run = toStoredRun(runRow(), [findingRow()], [], layerRow)
+    expect(run.kind).toBe('review')
+    expect(run.promptVersionId).toBe('pv-1')
+  })
+
+  it('defaults kind to review for a run recorded before the column existed', () => {
+    const run = toStoredRun(runRow({ kind: undefined }), [findingRow()], [], layerRow)
+    expect(run.kind).toBe('review')
+  })
+
+  /**
+   * The slug and version number are looked up separately, not through an
+   * embedded select — see the comment on toStoredRun. Passing both rows
+   * shows a human-readable label; the two lookups are what fill it in.
+   */
+  it('names the prompt version when it is passed the rows to join', () => {
+    const run = toStoredRun(runRow(), [findingRow()], [], layerRow, promptVersionRow(), promptRow())
+    expect(run.promptSlug).toBe('ma-trust-firm-qa')
+    expect(run.promptVersionNumber).toBe(1)
+  })
+
+  /**
+   * A run whose prompt_version_id no longer resolves to a real version (the
+   * version's prompt was deleted, or the lookup simply was not done) reports
+   * that it cannot say, rather than inventing a slug or a number.
+   */
+  it('reports no prompt slug or version number when neither row is joined', () => {
+    const run = toStoredRun(runRow(), [findingRow()], [], layerRow)
+    expect(run.promptSlug).toBeNull()
+    expect(run.promptVersionNumber).toBeNull()
   })
 })

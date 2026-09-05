@@ -60,12 +60,22 @@ function toLayer(row: Row | null): TextLayer | null {
  * attaching a citation to the wrong finding: a claim about a client's
  * instrument pointing at words another rule found would be worse than no
  * citation at all, and it would look entirely convincing.
+ *
+ * `promptVersionRow` and `promptRow` are optional and travel separately from
+ * `runRow` rather than through an embedded select, the same way the matter
+ * and document lookups below do: `scripts/lib/queryReferences.mjs` cannot
+ * split an embedded select's columns per table, so `query-columns.test.ts`
+ * would flag one. They are null whenever the run's `prompt_version_id` no
+ * longer resolves to a real version — an edited-out version cannot be shown,
+ * only reported as missing rather than invented.
  */
 export function toStoredRun(
   runRow: Row,
   findingRows: readonly Row[],
   citationRows: readonly Row[],
   layerRow: Row | null,
+  promptVersionRow: Row | null = null,
+  promptRow: Row | null = null,
 ): StoredRun {
   const citationByFinding = new Map<string, Row>()
   for (const row of citationRows) {
@@ -101,8 +111,10 @@ export function toStoredRun(
     runId: String(runRow.id),
     matterId: String(runRow.matter_id),
     documentVersionId: String(runRow.document_version_id),
-    playbookSlug: String(runRow.playbook_slug ?? ''),
-    playbookVersion: Number(runRow.playbook_version ?? 0),
+    kind: String(runRow.kind ?? 'review'),
+    promptVersionId: runRow.prompt_version_id ? String(runRow.prompt_version_id) : null,
+    promptSlug: promptRow ? str(promptRow.slug) : null,
+    promptVersionNumber: promptVersionRow ? Number(promptVersionRow.version_number) : null,
     status: String(runRow.status ?? ''),
     ruleTotal: Number(runRow.rule_total ?? 0),
     failedCount: Number(runRow.failed_count ?? 0),
@@ -194,5 +206,28 @@ export async function loadRun(
     ? await sb.from('workflow_citations').select('*').in('finding_id', findingIds)
     : { data: [] as Row[] }
 
-  return toStoredRun(runRow, findings ?? [], citations ?? [], layers?.[0] ?? null)
+  // Two more plain lookups rather than one embedded select, for the same
+  // reason the matter/document lookups above are separate: only a
+  // `.select('col1, col2')` string can be checked column-by-column against
+  // the generated types.
+  let promptVersionRow: Row | null = null
+  let promptRow: Row | null = null
+  if (runRow.prompt_version_id) {
+    const { data: versions } = await sb
+      .from('prompt_versions')
+      .select('id, prompt_id, version_number')
+      .eq('id', String(runRow.prompt_version_id))
+      .limit(1)
+    promptVersionRow = versions?.[0] ?? null
+    if (promptVersionRow?.prompt_id) {
+      const { data: prompts } = await sb
+        .from('prompts')
+        .select('id, slug')
+        .eq('id', String(promptVersionRow.prompt_id))
+        .limit(1)
+      promptRow = prompts?.[0] ?? null
+    }
+  }
+
+  return toStoredRun(runRow, findings ?? [], citations ?? [], layers?.[0] ?? null, promptVersionRow, promptRow)
 }

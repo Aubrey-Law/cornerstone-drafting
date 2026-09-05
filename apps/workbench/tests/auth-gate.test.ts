@@ -61,6 +61,17 @@ describe('auth gate', () => {
     it('denies a session whose role never resolved', () => {
       expect(decide({ pathname: '/', ...roleless })).toEqual({ kind: 'deny', status: 401 })
     })
+
+    /**
+     * `/prompts` runs a field-audit prompt against a matter's design sheet —
+     * a practice tool exactly like `/review` or `/matters`, gated the same
+     * way for the same reason.
+     */
+    it('gates /prompts behind staff, like every other practice tool', () => {
+      expect(decide({ pathname: '/prompts', ...noSession })).toEqual({ kind: 'deny', status: 401 })
+      expect(decide({ pathname: '/prompts', ...client })).toEqual({ kind: 'redirect', to: CLIENT_HOME })
+      expect(decide({ pathname: '/prompts', ...staff })).toEqual({ kind: 'pass' })
+    })
   })
 
   describe('client surface', () => {
