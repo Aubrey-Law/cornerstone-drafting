@@ -48,10 +48,43 @@ export const fieldAuditBodySchema = z.object({
   checks: z.array(fieldAuditCheckSchema).min(1),
 })
 
-export const promptBodySchema = z.discriminatedUnion('kind', [
-  reviewBodySchema,
-  fieldAuditBodySchema,
-])
+/**
+ * `check.reads` and `inputs[].key` are two independently authored lists. A
+ * check that names a field no input declares produces a reference to a value
+ * that was never fetched — `resolveInputs` only populates `values` for
+ * declared keys, so an undeclared read resolves to nothing indistinguishable
+ * from a field that is genuinely empty. A model claiming that emptiness would
+ * be believed about a fact the run never looked at, and it lands hardest on
+ * the `absent` outcome the most serious checks exist to catch. Refuse the
+ * body before it can be published, rather than let the gap surface as a
+ * verified finding later.
+ *
+ * This is attached to the union's result rather than to `fieldAuditBodySchema`
+ * itself: zod's `discriminatedUnion` reads `.shape` off each arm to find the
+ * discriminator values, and `.superRefine` on an arm returns a `ZodEffects`
+ * that has no `.shape` — wiring that arm into `z.discriminatedUnion` throws
+ * `Cannot read properties of undefined (reading 'kind')` at module load, not
+ * merely a check that's silently skipped. Refining the assembled union leaves
+ * its arms and discriminator untouched and only adds a check afterward.
+ */
+export const promptBodySchema = z
+  .discriminatedUnion('kind', [reviewBodySchema, fieldAuditBodySchema])
+  .superRefine((body, ctx) => {
+    if (body.kind !== 'field_audit') return
+
+    const declaredKeys = new Set(body.inputs.map((input) => input.key))
+    body.checks.forEach((check, index) => {
+      for (const key of check.reads) {
+        if (!declaredKeys.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `check ${check.number} reads "${key}", which no input declares`,
+            path: ['checks', index, 'reads'],
+          })
+        }
+      }
+    })
+  })
 
 export type PromptKind = z.infer<typeof promptBodySchema>['kind']
 export type PromptBody = z.infer<typeof promptBodySchema>

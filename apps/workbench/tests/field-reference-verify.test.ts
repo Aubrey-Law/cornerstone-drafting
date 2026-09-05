@@ -61,4 +61,26 @@ describe('verifying what a check claimed a field says', () => {
     })
     expect(result.verification).toBe('verified')
   })
+
+  it('refuses a claim of emptiness about a field it never received', () => {
+    // "Empty" and "never read" are different claims and only one of them can
+    // be checked. Treating them alike would let a wiring mistake produce a
+    // verified finding about a fact the run never looked at.
+    const result = verifyFieldReference(values, ['not_supplied'], {
+      fieldKey: 'not_supplied',
+      claimedValue: null,
+    })
+    expect(result.verification).toBe('unverified')
+    expect(result.actualValue).toBeNull()
+  })
+
+  it('still verifies emptiness for a field that was read and is empty', () => {
+    // The distinction must not cost the case it was built for: include_qdot
+    // is present and null, and a claim that it is empty is correct.
+    const result = verifyFieldReference(values, ['include_qdot'], {
+      fieldKey: 'include_qdot',
+      claimedValue: null,
+    })
+    expect(result.verification).toBe('verified')
+  })
 })

@@ -9,7 +9,10 @@ const reviewBody = {
 
 const auditBody = {
   kind: 'field_audit' as const,
-  inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: true }],
+  inputs: [
+    { key: 'concerns', source: 'design_sheet.concerns', required: true },
+    { key: 'goals_notes', source: 'design_sheet.goals_notes', required: false },
+  ],
   checks: [
     {
       number: '1',
@@ -74,5 +77,33 @@ describe('the prompt body schema', () => {
     // checks is the same. Both must be refused rather than quietly passing.
     expect(promptBodySchema.safeParse({ ...reviewBody, rules: [] }).success).toBe(false)
     expect(promptBodySchema.safeParse({ ...auditBody, checks: [] }).success).toBe(false)
+  })
+
+  it('refuses a check that reads a field no input declares', () => {
+    // A field nobody declared is never fetched, so it resolves to nothing —
+    // and "nothing" is indistinguishable from a field that is genuinely
+    // empty. A model claiming emptiness would be believed about a fact the
+    // run never actually read.
+    const undeclared = {
+      ...auditBody,
+      checks: [{ ...auditBody.checks[0], reads: ['concerns', 'never_declared'] }],
+    }
+    const result = promptBodySchema.safeParse(undeclared)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain('never_declared')
+    }
+  })
+
+  it('accepts a check reading every field its prompt declares', () => {
+    const declared = {
+      ...auditBody,
+      inputs: [
+        { key: 'concerns', source: 'design_sheet.concerns', required: true },
+        { key: 'goals_notes', source: 'design_sheet.goals_notes', required: false },
+      ],
+      checks: [{ ...auditBody.checks[0], reads: ['concerns', 'goals_notes'] }],
+    }
+    expect(promptBodySchema.safeParse(declared).success).toBe(true)
   })
 })
