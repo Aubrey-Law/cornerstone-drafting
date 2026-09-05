@@ -34,6 +34,9 @@ export default async function TodayPage() {
         <Button asChild variant="outline">
           <Link href="/funding">Funding</Link>
         </Button>
+        <Button asChild variant="outline">
+          <Link href="/execution">Execution</Link>
+        </Button>
         <SignOutButton />
       </div>
     </main>
