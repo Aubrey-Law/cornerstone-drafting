@@ -24,7 +24,7 @@ export const LOGIN_PATH = '/auth/login'
 const PUBLIC_PREFIXES = ['/auth', '/api/health']
 
 const STAFF_EXACT = [STAFF_HOME]
-const STAFF_PREFIXES = ['/execution', '/funding', '/matters', '/review', '/tasks', '/library', '/settings', '/api/staff']
+const STAFF_PREFIXES = ['/execution', '/fiduciary', '/funding', '/matters', '/review', '/tasks', '/library', '/settings', '/api/staff']
 const CLIENT_PREFIXES = [CLIENT_HOME, '/api/portal']
 
 /**

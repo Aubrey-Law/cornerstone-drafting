@@ -92,6 +92,7 @@ export const config = {
   matcher: [
     '/',
     '/execution/:path*',
+    '/fiduciary/:path*',
     '/funding/:path*',
     '/matters/:path*',
     '/review/:path*',
