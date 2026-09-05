@@ -2,7 +2,7 @@ import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import type { FieldAuditBody, FieldAuditCheck } from '../prompt/body'
 import { runPrompt } from '../prompt/runPrompt'
 import type { ModelCaller, ModelRequest } from '../review/model'
-import { verifyFieldReference } from './verify'
+import { collectLeaves, verifyFieldReference } from './verify'
 import type { FieldAuditFinding, FieldAuditResult, FieldReference } from './types'
 
 export const FIELD_AUDIT_TOOL_NAME = 'report_check'
@@ -64,6 +64,10 @@ Rules for every answer:
   its support.
 - Reference only the fields the check lists as its reads. A reference to any
   other field can never be verified.
+- A field shown as several indented lines holds several values. Quote exactly
+  one of them, copied from the right of the "=" — never a summary of the
+  collection and never two values joined together. One value per reference;
+  use several references when a conclusion rests on several values.
 - Report what the sheet records, not what you would prefer it recorded.
 - If the sheet is silent on the point, the outcome is "absent" — reference the
   field with a null claimed_value rather than referencing something adjacent.
@@ -91,10 +95,20 @@ export interface RunFieldAuditDependencies {
   model?: string
 }
 
-function formatFieldValue(value: unknown): string {
+function formatFieldValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return '(empty)'
   if (typeof value === 'string') return value
-  return JSON.stringify(value)
+  if (typeof value !== 'object') return JSON.stringify(value)
+
+  // A structured field is shown as the leaves it is made of, because those are
+  // the only things a reference can be verified against. Serialising it whole
+  // asks the model to quote a JSON document back character for character,
+  // which it will not do — it summarises instead, and every summary fails
+  // verification for a reason that is the prompt's fault rather than the
+  // model's.
+  const leaves = collectLeaves(value, key)
+  if (leaves.length === 0) return '(empty)'
+  return leaves.map((leaf) => `  ${leaf.path} = ${String(leaf.value)}`).join('\n')
 }
 
 function sheetForPrompt(values: Record<string, unknown>): string {
@@ -102,7 +116,7 @@ function sheetForPrompt(values: Record<string, unknown>): string {
   // keys `verifyFieldReference` looks up — otherwise the label is noise and
   // every claim fails for citing a key the sheet never showed.
   const lines = Object.entries(values)
-    .map(([key, value]) => `[field: ${key}] ${formatFieldValue(value)}`)
+    .map(([key, value]) => `[field: ${key}]\n${formatFieldValue(key, value)}`)
     .join('\n\n')
   return quoteUserContent('design_sheet', lines)
 }

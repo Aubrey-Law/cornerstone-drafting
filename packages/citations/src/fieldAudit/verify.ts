@@ -34,7 +34,17 @@ interface Leaf {
  * `null` is handled separately as a claim about the whole structure being
  * empty, not about one of its fields being blank.
  */
-function collectLeaves(value: unknown, rootPath: string, out: Leaf[] = []): Leaf[] {
+/**
+ * Every scalar inside a value, with the path that reaches it.
+ *
+ * Exported because the audit prompt shows the model these same leaves. What a
+ * model is shown and what the verifier will accept have to be one list: the
+ * document path learned this the same way, numbering the blocks the verifier
+ * scopes by so the citation hint is not noise. Two functions that agreed only
+ * by care would drift, and the drift would look like a model that cannot
+ * quote.
+ */
+export function collectLeaves(value: unknown, rootPath: string, out: Leaf[] = []): Leaf[] {
   if (Array.isArray(value)) {
     value.forEach((item, i) => collectLeaves(item, `${rootPath}[${i}]`, out))
   } else if (value !== null && typeof value === 'object') {
@@ -75,6 +85,32 @@ function isEmptyStructure(value: object): boolean {
  * compared. The scope is part of the check, and a finding resting on a field
  * nobody authorised it to read is not better for happening to be right.
  */
+/**
+ * Whether a claim quotes this text, by the rule the document verifier uses:
+ * is it in there, exactly once?
+ *
+ * A design-sheet field like `concerns` holds a paragraph in the client's own
+ * words, and a finding rests on one sentence of it. Demanding the whole field
+ * back would be stricter than anything asked of a document citation, and it
+ * would fail every claim that did the right thing. Uniqueness is what keeps
+ * that honest: a phrase occurring twice cannot say which occurrence it means,
+ * so it is refused rather than guessed at — the same reason `verifyQuote`
+ * treats an ambiguous quote as no citation at all.
+ */
+function quotesText(actual: string, claimed: string): boolean {
+  const haystack = normalise(actual)
+  const needle = normalise(claimed)
+  if (needle.length === 0 || haystack.length === 0) return false
+  if (haystack === needle) return true
+
+  let hits = 0
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+    hits += 1
+    if (hits > 1) return false
+  }
+  return hits === 1
+}
+
 export function verifyFieldReference(
   values: Record<string, unknown>,
   reads: string[],
@@ -135,7 +171,11 @@ export function verifyFieldReference(
   }
 
   const actualText = actual === null ? null : typeof actual === 'string' ? actual : JSON.stringify(actual)
-  const matches = normalise(actual) === normalise(claim.claimedValue)
+  const matches =
+    normalise(actual) === normalise(claim.claimedValue) ||
+    (typeof actual === 'string' &&
+      claim.claimedValue !== null &&
+      quotesText(actual, claim.claimedValue))
 
   return {
     ...claim,

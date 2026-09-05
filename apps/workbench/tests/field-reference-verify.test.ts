@@ -247,3 +247,40 @@ describe('recording matchedPath — the leaf a structured claim actually rested 
     expect(result.matchedPath).toBe('children[0].name')
   })
 })
+
+describe('quoting part of a long text field', () => {
+  const prose = {
+    concerns: 'Make sure my son Daniel is provided for. I also want the house to stay in the family.',
+    repeated: 'the house matters to me and the house is the main asset',
+  }
+
+  it('verifies a sentence quoted from a longer field', () => {
+    // A concerns field holds a paragraph and a finding rests on one sentence
+    // of it. Demanding the whole field back would be stricter than anything
+    // asked of a document citation and would refuse every claim that did the
+    // right thing.
+    const result = verifyFieldReference(prose, ['concerns'], {
+      fieldKey: 'concerns',
+      claimedValue: 'I also want the house to stay in the family',
+    })
+    expect(result.verification).toBe('verified')
+  })
+
+  it('refuses a phrase that appears twice, rather than guessing which', () => {
+    // The rule verifyQuote follows: a quote occurring more than once cannot
+    // say which occurrence it means, so it is no citation at all.
+    const result = verifyFieldReference(prose, ['repeated'], {
+      fieldKey: 'repeated',
+      claimedValue: 'the house',
+    })
+    expect(result.verification).toBe('unverified')
+  })
+
+  it('still refuses a sentence the field does not contain', () => {
+    const result = verifyFieldReference(prose, ['concerns'], {
+      fieldKey: 'concerns',
+      claimedValue: 'sell the house and divide the proceeds',
+    })
+    expect(result.verification).toBe('unverified')
+  })
+})
