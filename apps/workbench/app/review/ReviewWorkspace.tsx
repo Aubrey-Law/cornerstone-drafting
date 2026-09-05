@@ -16,6 +16,16 @@ export interface ReviewableChoice {
   kind: 'docx' | 'pdf'
 }
 
+export interface RunSummaryChoice {
+  runId: string
+  matterTitle: string
+  documentName: string
+  status: string
+  findingCount: number
+  failedCount: number
+  finishedAt: string | null
+}
+
 export interface MatterChoice {
   matterId: string
   title: string
@@ -41,9 +51,11 @@ interface ReviewResponse {
 export function ReviewWorkspace({
   playbook,
   matters,
+  runs = [],
 }: {
   playbook: PlaybookSummary
   matters: MatterChoice[]
+  runs?: RunSummaryChoice[]
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
@@ -196,10 +208,35 @@ export function ReviewWorkspace({
             ))}
           </ol>
           <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-            Nothing is saved. The document is read, reviewed and discarded, so this can be pointed at
-            a draft from another firm before anything is decided about it — and closing this tab
-            discards the findings with it.
+            A review of a document filed on a matter is recorded and can be returned to. An uploaded
+            draft is not, because there is no filed version for its citations to point at.
           </p>
+
+          {runs.length > 0 ? (
+            <div className="space-y-2" data-testid="run-history">
+              <h2 className="text-sm font-semibold">Recorded reviews</h2>
+              <ul className="divide-y divide-border border-y border-border">
+                {runs.map((run) => (
+                  <li key={run.runId}>
+                    <Link
+                      href={`/review/${run.runId}`}
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-muted/50"
+                    >
+                      <span className="min-w-0">
+                        <span className="font-medium">{run.documentName}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{run.matterTitle}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {run.findingCount} findings
+                        {run.failedCount > 0 ? ` · ${run.failedCount} rules failed` : ''}
+                        {run.status === 'partial' ? ' · partial' : ''}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : (
         <div className="grid flex-1 grid-cols-1 lg:grid-cols-2">
@@ -222,7 +259,11 @@ export function ReviewWorkspace({
                   </span>
                 ) : review.runId ? (
                   <span className="text-muted-foreground">
-                    Recorded against this document version.
+                    Recorded.{' '}
+                    <Link href={`/review/${review.runId}`} className="underline underline-offset-4">
+                      Open the saved review
+                    </Link>
+                    .
                   </span>
                 ) : (
                   <span className="text-muted-foreground">

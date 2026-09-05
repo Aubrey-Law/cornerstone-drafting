@@ -56,7 +56,7 @@ export async function loadFiduciaries(
 
   let matterQuery = sb
     .from('matters')
-    .select('id, title, client_intake_id')
+    .select('id, name, client_intake_id')
     .eq('relationship_status', 'hired')
   if (options.matterId) matterQuery = matterQuery.eq('id', options.matterId)
 
@@ -93,7 +93,7 @@ export async function loadFiduciaries(
 
     return {
       matterId,
-      title: (matter.title as string | null) ?? 'Untitled matter',
+      title: (matter.name as string | null) ?? 'Untitled matter',
       appointments: rows
         .filter((row) => isRole(String(row.role)))
         .map((row) => ({

@@ -37,6 +37,7 @@
     "prebuild:next": "npm run theme:generate",
     "validate-env": "node scripts/validateEnv.mjs",
     "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
+    "check:db-columns": "node scripts/checkDbColumns.mjs",
     "check:migration-drift": "node scripts/checkMigrationDrift.mjs",
     "check:db-types": "node scripts/checkSupabaseTypes.mjs",
     "check:matter-contacts": "tsx scripts/checkMatterContactsConsistency.ts",

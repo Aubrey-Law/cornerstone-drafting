@@ -25,7 +25,7 @@ export async function loadExecutionMatters(
 ): Promise<ExecutionMatter[]> {
   const sb = untyped(client)
 
-  let matterQuery = sb.from('matters').select('id, title, stage').eq('relationship_status', 'hired')
+  let matterQuery = sb.from('matters').select('id, name, stage').eq('relationship_status', 'hired')
   if (options.matterId) matterQuery = matterQuery.eq('id', options.matterId)
 
   const { data: matters, error: matterError } = await matterQuery
@@ -42,7 +42,7 @@ export async function loadExecutionMatters(
 
   return matters.map((matter) => ({
     matterId: String(matter.id),
-    title: (matter.title as string | null) ?? 'Untitled matter',
+    title: (matter.name as string | null) ?? 'Untitled matter',
     stage: (matter.stage as string | null) ?? null,
     documentNames: (documents ?? [])
       .filter((d) => String(d.matter_id) === String(matter.id))
