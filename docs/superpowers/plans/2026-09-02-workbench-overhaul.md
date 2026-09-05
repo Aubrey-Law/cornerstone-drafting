@@ -29,6 +29,7 @@ notes were added as phases shipped.
 | 2026-09-02 | Phases 0 and half of 1 shipped (#376, #377, #378, #379). Two corrections learned in execution added — see below. |
 | 2026-09-02 | Irys scope review folded in: prompts become the primary abstraction, email is kept and retargeted at Gmail, probate and trust administration added, Lawmatics two-way sync added. |
 | 2026-09-03 | Phase 1 finished (#381), golden corpus built (#382), citation slice built (#383) with CLI follow-ups (#384, #387). Open question 5 resolved: the Google migration is complete. |
+| 2026-09-05 | Workbench shell shipped (#394–#398): shared design system, portal auth with Google, findings workspace, one shared schema. **The Phase 3 go/no-go answered** — 8 citations verified, 1 rejected, against three real instruments. All four practice tools from 13b built (#399–#402). **A stated premise corrected by the owner: the firm reviews only its own drafts** — the playbook was rescoped and renamed (#403). |
 | 2026-09-03 | Estate-tax schedules moved into dated configuration with a settings screen (#385, #386), pulled forward out of phase 4. |
 | 2026-09-04 | Share gate on unfilled `[[ MISSING: ]]` fields (#388), pulled forward out of phase 4b. |
 
@@ -40,14 +41,16 @@ prerequisite.
 
 ---
 
-> **Status as of 2026-09-04 03:00 UTC.**
+> **Status as of 2026-09-05 11:45 UTC.**
 >
 > | | State |
 > |---|---|
 > | **Phase 0** — repo shape | **Done.** #376 (workspaces + data-corpus packages), #377 (`apps/workbench` + CI), #379 (instrumentation shadow). |
 > | **Phase 1** — engine extraction | **Done.** #378 moved the 44-file pure closure (~9,000 LOC); #381 finished it — `generateNodeEstatePackage` is in the package with `templateResolver` and `styleSet` as *required* injections, and the `NODE_ENV === 'test'` branches are gone. All 45 generated documents verified content-identical. |
 > | **Phase 2** — golden corpus | **Built, awaiting attorney approval.** #382 — content-hash fingerprints for 45 documents across 30 packages, `corpus:check`/`update`/`list`, CI step. **Zero approved**, so the gate reports but never blocks until the documents are signed off. |
-> | **Phase 3** — citation slice | **Built 2026-09-03**, #383, with follow-ups #384 and #387 making the CLI usable from a real shell. **The go/no-go answer itself is still owed** — it needs one run against a real third-party draft, and the number to read is *citations rejected*. |
+> | **Phase 3** — citation slice | **Built and answered.** #383, with #384/#387 making the CLI usable and #403 adding the attempted quote to a refusal. **The gate passed:** across three real instruments — a sample realty trust and the firm's own joint trust, 121 and 1,037 blocks — **8 citations verified and 1 rejected.** The rejection was the verifier working; it kept the rationale and dropped the unsupported quote. The tracked-changes export produced real `w:ins`/`w:del`. *Still owed: opening that redline in Word to confirm the insertions land on the cited clauses.* |
+> | **Workbench shell** | **Done 2026-09-05.** #394 (design system + scaffold), #395 (engine dependencies), #396 (Google sign-in, firm accounts only), #397 (playbook bundled not read from disk), #398 (one shared generated schema). |
+> | **Phase 13b** — practice tools | **All four built 2026-09-05.** #399 funding tracker, #400 execution requirements, #401 signing ceremony record, #402 fiduciary matrix. None has yet been used by a person on a real matter, which is the next thing worth doing. |
 > | **Phase 4** — pulled forward | The estate-tax table (#385, #386) and the marker share gate (#388) shipped ahead of the rest of phase 4, since neither depends on the citation gate. |
 > | **Open question 1** | Resolved: Cornerstone is canonical for `estate-fields`. |
 > | **Open question 2** | Partly answered — QuickBooks link declined for now. |
@@ -253,9 +256,27 @@ checklists, client letters and issue-spotters. Forcing those into a shape built 
 marking a document against firm positions would be the "one more representation, not a
 solution" mistake already flagged for `estate-fields`.
 
-So: **prompts are primary; Review playbooks survive as one prompt type** — the case that
-genuinely needs a rule ladder is reviewing a draft prepared elsewhere, which is real but
-rare.
+So: **prompts are primary; Review playbooks survive as one prompt type.**
+
+> **Corrected by the owner, 2026-09-05.** This paragraph used to say the rule-ladder case
+> was "reviewing a draft prepared elsewhere, which is real but rare". It is not rare — it
+> does not occur. Every draft is the firm's own, every redline is the attorney's own
+> change, opposing counsel sends no comments, and **clients receive only PDFs**.
+>
+> The rule ladder is therefore **quality review of the firm's own drafting**, and a
+> deviation is a template or an edit to fix rather than a point to negotiate. The playbook
+> was renamed accordingly (`ma-trust-third-party-draft` → `ma-trust-firm-qa`, #403).
+>
+> The reframing was not cosmetic. Restating one rule as "*every* discretionary
+> distribution standard we draft states…" moved it from COMPLIANT to a blocker-level
+> DEVIATION against the firm's own joint trust, because the new wording demands
+> completeness where the old one accepted a single satisfying clause. No code changed.
+>
+> Two consequences elsewhere in this plan. The prompt-injection hardening around a
+> reviewed document is now defence in depth rather than a live threat — keep it, since the
+> day a foreign document does arrive is the day nobody is thinking about it. And any path
+> that could send a DOCX to a client contradicts "clients receive only PDFs"; the portal
+> work in Phase 5 should enforce that rather than assume it.
 
 Two things the Irys schema has that the workflow model does not, and both are the point:
 
@@ -772,7 +793,8 @@ Golden-file tests asserting `text.slice(charStart, charEnd) === quote`.
 
 **Built as of 2026-09-03.** `lib/textLayer/{types,pdf,docx,match,persist}.ts`,
 `applyTrackedEditsAtOffsets` in the engine, `lib/reviewSlice/runReview.ts`,
-`tools/workflows/review/ma-trust-third-party-draft.json`,
+`tools/workflows/review/ma-trust-firm-qa.json` (renamed from
+`ma-trust-third-party-draft` in #403),
 `components/documents/PdfCitationViewer.tsx`, `npm run review:slice`, and the
 `document_text_layers` / `workflow_citations` migration.
 
@@ -787,10 +809,19 @@ Reviewing a native PDF and redlining its DOCX twin is the case still open;
 `document_text_layers.aligned_to_layer_id` is in the schema for it. Build it
 against a real document that needs it, not speculatively.
 
-*The check no test can stand in for:* run the playbook against a real
-third-party trust draft and see what share of citations survive verification. A
-high rejection rate means changing the prompting or how the document is
-presented — **never** loosening the verifier.
+*The check no test can stand in for* — **taken 2026-09-05.** Run against three real
+instruments, the playbook returned **8 verified citations and 1 rejected**, the
+rejection landing on a quote the model had tidied rather than copied. A high
+rejection rate means changing the prompting or how the document is presented —
+**never** loosening the verifier.
+
+That rejection exposed a gap and closed it: a finding recorded *that* a citation
+failed but never what was attempted, so the rate could be measured and not acted
+on. `ReviewFinding.attemptedQuote` now carries the words on refusal, and both the
+CLI and the findings list show them (#403).
+
+*Still owed, and small:* open the exported redline in real Word and confirm the
+insertions land on the cited clauses.
 
 **4 — Prompt + run engine** (2–3 weeks). *Reshaped by the Irys review.* The prompt
 object (`stage`, `matter_types`, typed `inputs` with matter-record sources,
@@ -884,9 +915,21 @@ precedent in this schema.
 **13 — Word add-in finished** (2 weeks). Hosted, matter-aware, tools, playbook
 runs, clause insertion, version reconciliation.
 
-**13b — Practice tools the doc names** (3–4 weeks). In its priority order: funding
-tracker (per-asset status → confirmation, `unfunded_asset_value`), execution
-requirements engine, fiduciary matrix as a live page object, signing ceremony module.
+**13b — Practice tools the doc names** (3–4 weeks). **All four built 2026-09-05**, in
+the priority order given: funding tracker (#399, per-asset status → confirmation with
+`unfunded_asset_value`; a database trigger refuses to record a retirement account as
+retitled, which is a taxable distribution of the whole account), execution requirements
+engine (#400, twelve document kinds each carrying its statutory citation), signing
+ceremony record (#401, which objects while the witness is still in the room rather than
+after), fiduciary matrix (#402, which found **14 of 33 role chains with no successor** in
+the live data before anyone opened it).
+
+Built against tables that already existed, so only two migrations were needed. Scan-and-file
+is deliberately deferred: attaching the executed PDF needs R2 wiring the workbench does not
+have, and half an upload is worse than none. **None of the four has been used by a person on
+a real matter, and the Massachusetts rules in the execution engine are a reading that wants
+the attorney's eye.**
+
 Plan simulator falls out of the prompt engine once documents are in scope. Also the
 three missing matter facts — `special_needs`, `masshealth`, `out_of_state_property` —
 and the numbered folder taxonomy, so `doc_scope: matter_drafts` maps to `03_Drafts/`
