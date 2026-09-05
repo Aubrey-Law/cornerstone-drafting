@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import { runStatusFor, WORKFLOW_RUN_COLUMNS, WORKFLOW_FINDING_COLUMNS } from '@/lib/review/persist'
+import fs from 'node:fs'
+import path from 'node:path'
+
+const MIGRATION = fs.readFileSync(
+  path.resolve(__dirname, '../../../supabase/migrations/20261027000000_workflow_runs_and_findings.sql'),
+  'utf8',
+)
+
+/**
+ * The status is the one field a reader skims, so it may not overstate what the
+ * run covered. A run that lost a rule to a failed model call is `partial`, and
+ * calling it `completed` would say every rule was applied when one never was.
+ */
+describe('runStatusFor', () => {
+  it('is completed when every rule ran', () => {
+    expect(runStatusFor({ ruleTotal: 3, findingCount: 3, failedCount: 0 })).toBe('completed')
+  })
+
+  it('is partial when a rule was lost', () => {
+    expect(runStatusFor({ ruleTotal: 3, findingCount: 2, failedCount: 1 })).toBe('partial')
+  })
+
+  it('is failed when no rule survived', () => {
+    // Nothing was learned about the document, and the record should not imply
+    // it was reviewed.
+    expect(runStatusFor({ ruleTotal: 3, findingCount: 0, failedCount: 3 })).toBe('failed')
+  })
+
+  it('is failed rather than completed for a playbook with no rules', () => {
+    expect(runStatusFor({ ruleTotal: 0, findingCount: 0, failedCount: 0 })).toBe('failed')
+  })
+})
+
+/**
+ * The tables are created by the migration in this change, so the app declares
+ * their columns locally until the generated types catch up. Compared against
+ * the SQL so the two cannot drift while they are apart.
+ */
+describe('the run tables and the shapes the app declares', () => {
+  const columnsOf = (table: string) => {
+    const start = MIGRATION.indexOf(`create table if not exists public.${table} (`)
+    const block = MIGRATION.slice(start, MIGRATION.indexOf('create index', start))
+    return [...block.matchAll(/^\s{2}([a-z_]+) (?:uuid|text|integer|jsonb|timestamptz)/gm)].map((m) => m[1])
+  }
+
+  it('declares exactly the workflow_runs columns', () => {
+    expect([...WORKFLOW_RUN_COLUMNS].sort()).toEqual(columnsOf('workflow_runs').sort())
+  })
+
+  it('declares exactly the workflow_findings columns', () => {
+    expect([...WORKFLOW_FINDING_COLUMNS].sort()).toEqual(columnsOf('workflow_findings').sort())
+  })
+
+  /**
+   * A run may only be recorded against a filed document. An upload has no
+   * durable identity, so a saved run about one would carry citations anchored
+   * to nothing — which is the bug the citation model exists to avoid.
+   */
+  it('requires both a matter and a document version', () => {
+    expect(MIGRATION).toMatch(/matter_id uuid not null/)
+    expect(MIGRATION).toMatch(/document_version_id uuid not null/)
+  })
+
+  it('ties a citation to the finding it supports', () => {
+    expect(MIGRATION).toMatch(/alter table public\.workflow_citations[\s\S]*?finding_id uuid/)
+    expect(MIGRATION).toMatch(/references public\.workflow_findings\(id\) on delete cascade/)
+  })
+
+  it('refuses a decision with no time on it', () => {
+    expect(MIGRATION).toMatch(/disposition = 'open' or disposition_at is not null/)
+  })
+
+  it('refuses an attempted quote with no refusal beside it', () => {
+    expect(MIGRATION).toMatch(/citation_refusal is not null or attempted_quote is null/)
+  })
+
+  it('makes cost per run answerable', () => {
+    expect(MIGRATION).toMatch(/alter table public\.ai_usage[\s\S]*?workflow_run_id uuid/)
+  })
+})

@@ -31,6 +31,8 @@ interface PlaybookSummary {
 interface ReviewResponse {
   filename: string
   anchor: { documentVersionId: string; documentId: string; matterId: string } | null
+  runId: string | null
+  saveError: string | null
   playbook: { slug: string; title: string; version: number }
   layer: TextLayer
   result: ReviewResult
@@ -202,11 +204,32 @@ export function ReviewWorkspace({
       ) : (
         <div className="grid flex-1 grid-cols-1 lg:grid-cols-2">
           <section className="border-b border-border lg:border-b-0 lg:border-r">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold">{counts.total} findings</h2>
-              <p className="text-xs text-muted-foreground">
-                {counts.cited} cited · {counts.refused} citations rejected
-                {counts.failed > 0 ? ` · ${counts.failed} rules failed` : ''}
+            <div className="space-y-1 border-b border-border px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className="text-sm font-semibold">{counts.total} findings</h2>
+                <p className="text-xs text-muted-foreground">
+                  {counts.cited} cited · {counts.refused} citations rejected
+                  {counts.failed > 0 ? ` · ${counts.failed} rules failed` : ''}
+                </p>
+              </div>
+              {/* Whether this review exists anywhere but on screen. A review the
+                  attorney believes was recorded and was not is worse than one
+                  they know was not. */}
+              <p className="text-xs" data-testid="save-state">
+                {review.saveError ? (
+                  <span className="text-destructive">
+                    Not recorded: {review.saveError}
+                  </span>
+                ) : review.runId ? (
+                  <span className="text-muted-foreground">
+                    Recorded against this document version.
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Not recorded — an uploaded draft has no filed version to anchor citations to.
+                    Choose the document from its matter to keep the review.
+                  </span>
+                )}
               </p>
             </div>
             <FindingsList

@@ -26,6 +26,9 @@ const PLAYBOOK = {
 const TEXT = 'The Trustee shall not be liable except for willful misconduct.'
 const PAYLOAD = {
   filename: 'smith-trust.pdf',
+  anchor: { documentVersionId: 'v-1', documentId: 'd-1', matterId: 'm-1' },
+  runId: 'run-1',
+  saveError: null,
   playbook: { slug: 'ma-trust-firm-qa', title: PLAYBOOK.title, version: 1 },
   layer: {
     sourceKind: 'pdf',
@@ -211,5 +214,41 @@ describe('ReviewWorkspace, choosing a filed document', () => {
     render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     fireEvent.click(screen.getByRole('button', { name: /run review/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/choose a document/i)
+  })
+})
+
+describe('ReviewWorkspace, whether the review was recorded', () => {
+  const respondWith = (over: Record<string, unknown>) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ...PAYLOAD, ...over }), { status: 200 })),
+    )
+
+  it('says a filed document’s review was recorded', async () => {
+    respondWith({})
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
+    await upload()
+    expect(await screen.findByTestId('save-state')).toHaveTextContent(/recorded against this document version/i)
+  })
+
+  /**
+   * An upload has no filed version, so a stored citation would point at
+   * nothing. Saying so is what stops the attorney assuming a review exists
+   * somewhere it does not.
+   */
+  it('says an upload was not recorded, and why', async () => {
+    respondWith({ anchor: null, runId: null })
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
+    await upload()
+    const state = await screen.findByTestId('save-state')
+    expect(state).toHaveTextContent(/not recorded/i)
+    expect(state).toHaveTextContent(/no filed version/i)
+  })
+
+  it('reports a failed save rather than swallowing it', async () => {
+    respondWith({ runId: null, saveError: 'duplicate key value violates unique constraint' })
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
+    await upload()
+    expect(await screen.findByTestId('save-state')).toHaveTextContent(/duplicate key/i)
   })
 })

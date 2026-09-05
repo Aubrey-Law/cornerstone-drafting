@@ -3,6 +3,7 @@ import { AnthropicKeyMissingError, anthropicModelCaller } from '@/lib/anthropic'
 import { requireStaff } from '@/lib/auth/requireStaff'
 import { loadReviewPlaybook } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
+import { saveRun } from '@/lib/review/persist'
 import { runDocumentReview } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
 import { readObject } from '@/lib/storage/r2'
@@ -80,15 +81,38 @@ export async function POST(request: Request) {
   }
 
   const playbook = loadReviewPlaybook()
+  const startedAt = new Date().toISOString()
 
   try {
     const { layer, result } = await runDocumentReview(bytes, filename, playbook, {
       callModel,
       userId: auth.user.id,
     })
+    // Recorded only for a filed document. A failure to store is reported rather
+    // than swallowed: a review the attorney believes was saved and was not is
+    // worse than one they know was not.
+    let runId: string | null = null
+    let saveError: string | null = null
+    if (anchor) {
+      const saved = await saveRun(getAdminClient(), {
+        matterId: anchor.matterId,
+        documentVersionId: anchor.documentVersionId,
+        layer,
+        playbook: { slug: playbook.slug, version: playbook.version },
+        model: null,
+        result,
+        userId: auth.user.id,
+        startedAt,
+      })
+      if (saved.ok) runId = saved.runId
+      else saveError = saved.message
+    }
+
     return NextResponse.json({
       filename,
       anchor,
+      runId,
+      saveError,
       playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },
       layer,
       result,
