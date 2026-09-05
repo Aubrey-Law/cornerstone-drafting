@@ -95,6 +95,7 @@ export const config = {
     '/fiduciary/:path*',
     '/funding/:path*',
     '/matters/:path*',
+    '/prompts/:path*',
     '/review/:path*',
     '/tasks/:path*',
     '/library/:path*',
