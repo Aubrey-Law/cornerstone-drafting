@@ -39,15 +39,30 @@ export type SourceRows = {
   matter: Record<string, unknown>
 }
 
+/**
+ * `missing` and `unresolvable` look like the same failure — a value the prompt
+ * needed isn't there — but this codebase has already shipped five features
+ * querying `matters.title`, a column that never existed, so "the path is
+ * wrong" and "the field is blank" cannot share a bucket. `missing` is a design
+ * sheet a person can finish filling in. `unresolvable` is a path whose column
+ * was allow-listed at publish time and has since gone stale — typing will
+ * never fix it, and a caller that can't tell the two apart would send an
+ * attorney to go complete a field that no longer exists.
+ */
 export type ResolvedInputs =
   | { ok: true; values: Record<string, unknown> }
-  | { ok: false; missing: string[] }
+  | { ok: false; missing: string[]; unresolvable: string[] }
 
 /** Declared sources with no entry in the allow-list. Empty means publishable. */
 export function unknownSources(declarations: PromptInput[]): string[] {
   return declarations.map(d => d.source).filter(source => !(source in SOURCE_ALLOW_LIST))
 }
 
+// `{}`, `0`, and `false` are answers, not absence — deliberately not treated as
+// empty here. That's only correct because these jsonb columns are initialised
+// to `[]` or `null`, never `{}` (see how design sheets are built in the root
+// app); if a boolean column joins the allow-list, don't "fix" this to catch
+// `false` too.
 function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined) return true
   if (typeof value === 'string') return value.trim().length === 0
@@ -65,11 +80,14 @@ function isEmpty(value: unknown): boolean {
 export function resolveInputs(declarations: PromptInput[], rows: SourceRows): ResolvedInputs {
   const values: Record<string, unknown> = {}
   const missing: string[] = []
+  const unresolvable: string[] = []
 
   for (const declaration of declarations) {
     const entry = SOURCE_ALLOW_LIST[declaration.source]
     if (!entry) {
-      missing.push(declaration.source)
+      // Ignores `declaration.required`: an optional input pointing at a
+      // vanished column is still a broken prompt, just a quieter one.
+      unresolvable.push(declaration.source)
       continue
     }
     const value = rows[entry.table]?.[entry.column] ?? null
@@ -77,8 +95,10 @@ export function resolveInputs(declarations: PromptInput[], rows: SourceRows): Re
       missing.push(declaration.source)
       continue
     }
-    values[declaration.key] = value ?? null
+    values[declaration.key] = value
   }
 
-  return missing.length > 0 ? { ok: false, missing } : { ok: true, values }
+  return missing.length > 0 || unresolvable.length > 0
+    ? { ok: false, missing, unresolvable }
+    : { ok: true, values }
 }

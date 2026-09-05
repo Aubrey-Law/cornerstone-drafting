@@ -1,7 +1,6 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { SOURCE_ALLOW_LIST, resolveInputs, unknownSources } from '@aubrey-law/citations/prompt/inputs'
+import { schemaColumns } from './helpers/schemaColumns'
 
 const declarations = [
   { key: 'concerns', source: 'design_sheet.concerns', required: true },
@@ -24,7 +23,19 @@ describe('resolving a prompt’s declared inputs', () => {
       design_sheet: { concerns: null, goals_notes: 'x' },
       matter: { name: 'Smith Family Trust' },
     })
-    expect(resolved).toEqual({ ok: false, missing: ['design_sheet.concerns'] })
+    expect(resolved).toEqual({ ok: false, missing: ['design_sheet.concerns'], unresolvable: [] })
+  })
+
+  it('reports an unresolvable optional source separately from a missing required one', () => {
+    // An optional input pointing at a vanished column is still a broken
+    // prompt, just a quieter one — it stays unresolvable regardless of
+    // `required`, and it must never land in `missing`, which a caller reads
+    // as "a person can fix this by filling in the design sheet."
+    const resolved = resolveInputs(
+      [{ key: 'notes', source: 'design_sheet.not_a_column', required: false }],
+      { design_sheet: { concerns: 'x' }, matter: { name: 'Smith Family Trust' } },
+    )
+    expect(resolved).toEqual({ ok: false, missing: [], unresolvable: ['design_sheet.not_a_column'] })
   })
 
   it('names a source that is not on the allow-list', () => {
@@ -39,21 +50,25 @@ describe('resolving a prompt’s declared inputs', () => {
     }
   })
 
+  it('agrees with itself about what each path means', () => {
+    // The key and the value restate each other, so they can disagree. A
+    // transposed entry names two real columns and would pass every other test
+    // here while feeding a prompt the wrong fact.
+    for (const [source, entry] of Object.entries(SOURCE_ALLOW_LIST)) {
+      expect(source).toBe(`${entry.table}.${entry.column}`)
+    }
+  })
+
   it('names only columns the generated types actually have', () => {
     // The matters.title lesson: a list of column names is an assumption until
-    // something compares it to the schema.
-    const generated = fs.readFileSync(
-      path.resolve(__dirname, '../../../packages/db-types/src/supabase.generated.ts'),
-      'utf8',
-    )
-    const rowBlock = (table: string) =>
-      generated.slice(generated.indexOf(`      ${table}: {`)).split('        }')[0]
-    const designSheet = rowBlock('design_sheets')
-    const matters = rowBlock('matters')
-
-    for (const [pathName, entry] of Object.entries(SOURCE_ALLOW_LIST)) {
-      const block = entry.table === 'design_sheet' ? designSheet : matters
-      expect(block, `${pathName} names a column that does not exist`).toContain(`\n          ${entry.column}:`)
+    // something compares it to the schema. Read through the compiler rather
+    // than by slicing text, because the file it reads is regenerated.
+    const schema = schemaColumns()
+    const tables = { design_sheet: 'design_sheets', matter: 'matters' } as const
+    for (const [source, entry] of Object.entries(SOURCE_ALLOW_LIST)) {
+      const columns = schema.get(tables[entry.table])
+      expect(columns, `no table for ${source}`).toBeDefined()
+      expect(columns!, `${source} names a column that does not exist`).toContain(entry.column)
     }
   })
 })
