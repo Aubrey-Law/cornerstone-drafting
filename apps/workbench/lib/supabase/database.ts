@@ -1,78 +1,12 @@
 /**
- * The schema this app actually reads, as a type.
+ * The schema this app talks to.
  *
- * The root app carries ~10,600 lines of generated types for ~120 tables. The
- * Workbench reads one column of one table today, and typing its clients
- * against a schema this small does two things: queries are checked rather than
- * `any`, and postgrest's type machinery has something small to resolve — an
- * untyped client makes `from().select().eq()` instantiate deeply enough that
- * tsc gives up (TS2589).
+ * The generated types, shared with the old app through `@aubrey-law/db-types`,
+ * rather than a description of the schema maintained here. This started as a
+ * hand-written type covering the one table the app read, which was honest at
+ * the time and would have become a second source of truth the moment anyone
+ * forgot to update it.
  *
- * This is a stepping stone, not a second source of truth. The generated types
- * move into a shared package when the drafting port needs the full schema,
- * with the root app re-exporting them — the same shim pattern as
- * `@aubrey-law/ui`. Until then, adding a table here is a deliberate act that
- * says which data this app has started to touch.
+ * A type-only re-export, so nothing survives compilation.
  */
-export type WorkbenchDatabase = {
-  public: {
-    Tables: {
-      ai_usage: {
-        Row: {
-          id: string
-          route: string
-          model: string
-        }
-        Insert: {
-          route: string
-          model: string
-          context_type?: string | null
-          matter_id?: string | null
-          user_id?: string | null
-          input_tokens?: number
-          output_tokens?: number
-          cache_read_input_tokens?: number
-          cache_creation_input_tokens?: number
-          duration_ms?: number | null
-          success?: boolean
-          error_message?: string | null
-        }
-        Update: Record<string, never>
-        Relationships: []
-      }
-      users: {
-        Row: {
-          id: string
-          email: string | null
-          role: string | null
-        }
-        Insert: {
-          id: string
-          email?: string | null
-          role?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string | null
-          role?: string | null
-        }
-        Relationships: []
-      }
-    }
-    Views: Record<string, never>
-    Functions: {
-      /**
-       * SECURITY DEFINER. Creates the caller's `users` row and returns the
-       * role it derived from their confirmed address. Listed here because the
-       * sign-in callback calls it; the role is the server's choice, not an
-       * argument.
-       */
-      ensure_user_profile: {
-        Args: { p_display_name: string | null }
-        Returns: string
-      }
-    }
-    Enums: Record<string, never>
-    CompositeTypes: Record<string, never>
-  }
-}
+export type { Database as WorkbenchDatabase } from '@aubrey-law/db-types'

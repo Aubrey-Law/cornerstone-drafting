@@ -17,7 +17,7 @@
     "build:next": "next build --webpack",
     "build:analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
-    "lint": "eslint app components hooks lib types packages/citations/src packages/drafting-engine/src packages/ui/src eslint.config.mjs",
+    "lint": "eslint app components hooks lib types packages/citations/src packages/db-types/src packages/drafting-engine/src packages/ui/src eslint.config.mjs",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -51,6 +51,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
     "@aubrey-law/citations": "*",
+    "@aubrey-law/db-types": "*",
     "@aubrey-law/drafting-engine": "*",
     "@aubrey-law/estate-fields": "*",
     "@aubrey-law/ui": "*",

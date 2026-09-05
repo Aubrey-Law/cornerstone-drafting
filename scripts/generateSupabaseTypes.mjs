@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { renameSync, writeFileSync } from 'node:fs'
 
-const outputPath = 'types/supabase.generated.ts'
+const outputPath = 'packages/db-types/src/supabase.generated.ts'
 const temporaryPath = `${outputPath}.tmp`
 const result = spawnSync(
   'supabase',

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * `types/supabase.generated.ts` is generated and checked in, and until this
+ * `packages/db-types/src/supabase.generated.ts` is generated and checked in, and until this
  * workflow nothing compared it to the database. It drifted four merged
  * migrations out of date unnoticed — still declaring a dropped table and
  * columns, missing four newer objects — because almost all database code goes
@@ -60,8 +60,8 @@ describe('when the types check runs', () => {
 describe('what the check does about drift', () => {
   it('fails, and prints the diff so the fix is obvious', () => {
     const compare = step('Fail on drift, printing it')
-    expect(compare).toContain('git diff --quiet -- types/supabase.generated.ts')
-    expect(compare).toContain('git --no-pager diff -- types/supabase.generated.ts')
+    expect(compare).toContain('git diff --quiet -- packages/db-types/src/supabase.generated.ts')
+    expect(compare).toContain('git --no-pager diff -- packages/db-types/src/supabase.generated.ts')
     expect(compare).toContain('exit 1')
   })
 
@@ -74,7 +74,7 @@ describe('what the check does about drift', () => {
     expect(pr).toContain('git push -u origin')
     expect(pr).toContain('gh pr create')
     // It commits only the generated file — never a stray change from the run.
-    expect(pr).toContain('git add types/supabase.generated.ts')
+    expect(pr).toContain('git add packages/db-types/src/supabase.generated.ts')
   })
 
   it('does not both open a pull request and fail the run for the same drift', () => {
