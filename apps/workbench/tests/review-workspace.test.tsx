@@ -85,7 +85,7 @@ afterEach(() => {
 
 describe('ReviewWorkspace', () => {
   it('names the rules before anything is uploaded', () => {
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     // The attorney should know what is about to be checked, not only what came back.
     expect(screen.getByText(PLAYBOOK.rules[0].statement)).toBeInTheDocument()
     expect(screen.getByText(/nothing is saved/i)).toBeInTheDocument()
@@ -93,7 +93,7 @@ describe('ReviewWorkspace', () => {
 
   it('shows the findings and the document side by side after a run', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(PAYLOAD), { status: 200 })))
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
 
     expect(await screen.findByText(/1 findings/)).toBeInTheDocument()
@@ -104,7 +104,7 @@ describe('ReviewWorkspace', () => {
 
   it('hands the viewer the citation of the finding that was selected', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(PAYLOAD), { status: 200 })))
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     await screen.findByTestId('pdf-viewer')
 
@@ -115,7 +115,7 @@ describe('ReviewWorkspace', () => {
 
   it('names the rules that never ran, rather than folding them into the count', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(PAYLOAD), { status: 200 })))
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     // A rule that failed is not a rule that found nothing.
     expect(await screen.findByText(/rules that did not run/i)).toBeInTheDocument()
@@ -127,19 +127,89 @@ describe('ReviewWorkspace', () => {
       'fetch',
       vi.fn(async () => new Response(JSON.stringify({ error: 'This document has no text layer — it is most likely a scan.' }), { status: 422 })),
     )
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     expect(await screen.findByRole('alert')).toHaveTextContent(/no text layer/i)
   })
 
   it('lets a disposition be recorded and taken back', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(PAYLOAD), { status: 200 })))
-    render(<ReviewWorkspace playbook={PLAYBOOK} />)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     const accept = await screen.findByRole('button', { name: /accept/i })
     fireEvent.click(accept)
     await waitFor(() => expect(accept).toHaveAttribute('aria-pressed', 'true'))
     fireEvent.click(accept)
     await waitFor(() => expect(accept).toHaveAttribute('aria-pressed', 'false'))
+  })
+})
+
+const MATTERS = [
+  {
+    matterId: 'm-1',
+    title: 'Smith Revocable Trust',
+    documents: [
+      { versionId: 'v-1', name: 'Smith Trust.docx', kind: 'docx' as const },
+      { versionId: 'v-2', name: 'Smith Pour-Over Will.docx', kind: 'docx' as const },
+    ],
+  },
+  {
+    matterId: 'm-2',
+    title: 'Jones Trust',
+    documents: [{ versionId: 'v-9', name: 'Jones Trust.docx', kind: 'docx' as const }],
+  },
+]
+
+/**
+ * Reviewing a document already filed on a matter is the normal path now: every
+ * draft is the firm's own, so it exists before the review does — and only a
+ * filed document carries the version id a citation can be anchored to.
+ */
+describe('ReviewWorkspace, choosing a filed document', () => {
+  it('offers the matters and their citable documents', () => {
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={MATTERS} />)
+    expect(screen.getByLabelText('Matter')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Smith Trust.docx' })).toBeInTheDocument()
+  })
+
+  it('shows only the chosen matter\u2019s documents', () => {
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={MATTERS} />)
+    expect(screen.getByRole('option', { name: 'Smith Trust.docx' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Jones Trust.docx' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Matter'), { target: { value: 'm-2' } })
+    expect(screen.getByRole('option', { name: 'Jones Trust.docx' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Smith Trust.docx' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * The id travels, never the storage key. A key from the browser would be an
+   * arbitrary read against the bucket holding every client's documents.
+   */
+  it('sends the version id and no file', async () => {
+    // Typed so the request body can be read back; vi.fn's inferred call tuple
+    // is empty for a zero-argument implementation.
+    const fetchMock = vi.fn(
+      async (_url: string, init: { body: FormData }) => {
+        void init
+        return new Response(JSON.stringify(PAYLOAD), { status: 200 })
+      },
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={MATTERS} />)
+
+    fireEvent.change(screen.getByLabelText('Document'), { target: { value: 'v-2' } })
+    fireEvent.click(screen.getByRole('button', { name: /run review/i }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const body = fetchMock.mock.calls[0][1].body
+    expect(body.get('documentVersionId')).toBe('v-2')
+    expect(body.get('document')).toBeNull()
+  })
+
+  it('does not ask for a document when none is chosen and none uploaded', async () => {
+    render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: /run review/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/choose a document/i)
   })
 })
