@@ -29,6 +29,7 @@ describe('verifying what a check claimed a field says', () => {
       fieldKey: 'concerns',
       claimedValue: 'Make sure my son Daniel is provided for',
       actualValue: 'Make sure my son Daniel is provided for',
+      matchedPath: null,
       verification: 'verified',
     })
   })
@@ -166,5 +167,83 @@ describe('verifying a claim against a structured (jsonb array-of-objects) field'
     })
     expect(result.verification).toBe('verified')
     expect(result.actualValue).toBe('850000')
+  })
+})
+
+describe('recording matchedPath — the leaf a structured claim actually rested on', () => {
+  it('records the path of a matched child name', () => {
+    const result = verifyFieldReference(structured, ['children'], {
+      fieldKey: 'children',
+      claimedValue: 'Daniel Smith',
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBe('children[0].name')
+  })
+
+  it('records the path of a matched nested asset description', () => {
+    const result = verifyFieldReference(structured, ['assets'], {
+      fieldKey: 'assets',
+      claimedValue: '12 Elm St, Concord MA',
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBe('assets[0].description')
+  })
+
+  it('records no path for a scalar field match — the field name already says it all', () => {
+    const result = verifyFieldReference(values, ['concerns'], {
+      fieldKey: 'concerns',
+      claimedValue: 'Make sure my son Daniel is provided for',
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBeNull()
+  })
+
+  it('records no path for a verified emptiness claim', () => {
+    const result = verifyFieldReference(structured, ['disinheritances'], {
+      fieldKey: 'disinheritances',
+      claimedValue: null,
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBeNull()
+  })
+
+  it('records no path for a claim that fails to verify', () => {
+    const result = verifyFieldReference(structured, ['children'], {
+      fieldKey: 'children',
+      claimedValue: 'Danielle Smith',
+    })
+    expect(result.verification).toBe('unverified')
+    expect(result.matchedPath).toBeNull()
+  })
+
+  it('records the path of a value that may belong to another record', () => {
+    // The known limit of matching leaves: this date is real and really in
+    // `children`, but it is Daniel's, and a claim attaching it to Ana would
+    // be verified. The path is what lets a person see that — the verifier
+    // cannot, because a leaf carries no memory of the object it came from.
+    const result = verifyFieldReference(structured, ['children'], {
+      fieldKey: 'children',
+      claimedValue: '2018-04-02',
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBe('children[0].dob')
+  })
+
+  it('matches the first leaf when more than one leaf equals the claim', () => {
+    // Two children could share a value (e.g. the same dob, or a duplicate
+    // name). This is verified against whichever leaf the walk reaches
+    // first — no ambiguity state, just a deliberate, tested tie-break.
+    const twins = {
+      children: [
+        { name: 'Sam Smith', dob: '2020-01-01' },
+        { name: 'Sam Smith', dob: '2020-01-01' },
+      ],
+    }
+    const result = verifyFieldReference(twins, ['children'], {
+      fieldKey: 'children',
+      claimedValue: 'Sam Smith',
+    })
+    expect(result.verification).toBe('verified')
+    expect(result.matchedPath).toBe('children[0].name')
   })
 })

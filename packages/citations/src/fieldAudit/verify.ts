@@ -7,23 +7,42 @@ function normalise(value: unknown): string {
   return text.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
+/** Appends a key to a path, dotted unless the path is still empty. */
+function joinKey(path: string, key: string): string {
+  return path ? `${path}.${key}` : key
+}
+
+interface Leaf {
+  /** Dotted/indexed path from the field itself, e.g. `children[0].dob`. */
+  path: string
+  value: unknown
+}
+
 /**
  * Every scalar (string, number, boolean) reachable inside a structured value,
- * in the raw form it actually holds — not yet normalised, so a caller can
- * still report the exact leaf that matched.
+ * paired with the path that reaches it — in the raw form it actually holds,
+ * not yet normalised, so a caller can still report the exact leaf that
+ * matched and where it lives.
+ *
+ * `path` starts at `rootPath` (the field key) and grows by `.key` for an
+ * object member or `[i]` for an array element as the walk descends, so the
+ * path handed back is ready to show a person, not just an offset into this
+ * function's own recursion.
  *
  * `null` entries inside the structure (an asset with a blank `value`, say)
  * are not collected: they are not a fact a claim can point at, and a claim of
  * `null` is handled separately as a claim about the whole structure being
  * empty, not about one of its fields being blank.
  */
-function collectLeaves(value: unknown, out: unknown[] = []): unknown[] {
+function collectLeaves(value: unknown, rootPath: string, out: Leaf[] = []): Leaf[] {
   if (Array.isArray(value)) {
-    for (const item of value) collectLeaves(item, out)
+    value.forEach((item, i) => collectLeaves(item, `${rootPath}[${i}]`, out))
   } else if (value !== null && typeof value === 'object') {
-    for (const entry of Object.values(value as Record<string, unknown>)) collectLeaves(entry, out)
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      collectLeaves(entry, joinKey(rootPath, key), out)
+    }
   } else if (value !== null && value !== undefined) {
-    out.push(value)
+    out.push({ path: rootPath, value })
   }
   return out
 }
@@ -62,7 +81,7 @@ export function verifyFieldReference(
   claim: FieldReferenceClaim,
 ): FieldReference {
   if (!reads.includes(claim.fieldKey)) {
-    return { ...claim, actualValue: null, verification: 'unverified' }
+    return { ...claim, actualValue: null, matchedPath: null, verification: 'unverified' }
   }
 
   // A key absent from `values` was never fetched — schema wiring should
@@ -75,7 +94,7 @@ export function verifyFieldReference(
   // all. Believing a claim of emptiness about a field nobody fetched would
   // hand back a verified finding about a fact the run never looked at.
   if (!Object.prototype.hasOwnProperty.call(values, claim.fieldKey)) {
-    return { ...claim, actualValue: null, verification: 'unverified' }
+    return { ...claim, actualValue: null, matchedPath: null, verification: 'unverified' }
   }
 
   const actual = values[claim.fieldKey] ?? null
@@ -89,24 +108,30 @@ export function verifyFieldReference(
       return {
         ...claim,
         actualValue: empty ? null : JSON.stringify(actual),
+        matchedPath: null,
         verification: empty ? 'verified' : 'unverified',
       }
     }
 
     const claimedNorm = normalise(claim.claimedValue)
-    const matchedLeaf = collectLeaves(actual).find(leaf => normalise(leaf) === claimedNorm)
+    // More than one leaf can equal the claim (two children could share a
+    // name). That is verified against the first match — there is no
+    // ambiguity state, only the plain fact that a leaf equalling the claim
+    // was found — and `matchedPath` names that first leaf.
+    const matchedLeaf = collectLeaves(actual, claim.fieldKey).find(leaf => normalise(leaf.value) === claimedNorm)
 
     if (matchedLeaf !== undefined) {
       return {
         ...claim,
-        actualValue: typeof matchedLeaf === 'string' ? matchedLeaf : JSON.stringify(matchedLeaf),
+        actualValue: typeof matchedLeaf.value === 'string' ? matchedLeaf.value : JSON.stringify(matchedLeaf.value),
+        matchedPath: matchedLeaf.path,
         verification: 'verified',
       }
     }
 
     // Nothing inside matched. The whole structure is recorded, not nothing,
     // so the near miss stays readable the same way a scalar mismatch does.
-    return { ...claim, actualValue: JSON.stringify(actual), verification: 'unverified' }
+    return { ...claim, actualValue: JSON.stringify(actual), matchedPath: null, verification: 'unverified' }
   }
 
   const actualText = actual === null ? null : typeof actual === 'string' ? actual : JSON.stringify(actual)
@@ -115,6 +140,9 @@ export function verifyFieldReference(
   return {
     ...claim,
     actualValue: actualText,
+    // A scalar field's path is just the field itself — recording it would
+    // add nothing a reader doesn't already know from `fieldKey`.
+    matchedPath: null,
     verification: matches ? 'verified' : 'unverified',
   }
 }
