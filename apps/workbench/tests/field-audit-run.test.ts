@@ -98,6 +98,19 @@ describe('runFieldAudit', () => {
     expect(result.findings.map(f => f.checkNumber)).toEqual(['2'])
   })
 
+  it('reports an unrecognised outcome by naming it in the failure reason', async () => {
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({
+          outcome: 'weird_outcome',
+          rationale: 'Something odd.',
+          references: [],
+        }),
+    })
+    expect(result.failures).toEqual([{ checkNumber: '1', reason: 'Unrecognised outcome weird_outcome' }])
+    expect(result.findings).toEqual([])
+  })
+
   it('compliant carries null severity', async () => {
     const result = await runFieldAudit(CONTEXT, BODY, {
       callModel: async () =>

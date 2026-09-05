@@ -124,15 +124,16 @@ function asString(value: unknown): string | null {
 
 /**
  * Turns one check's tool input into a finding, verifying every claimed
- * reference against `values` on the way. Returns null for an input
- * `runPrompt` should record as a failure rather than a finding — here, only
- * an outcome the tool schema does not actually allow through.
+ * reference against `values` on the way. Throws for an input `runPrompt`
+ * should record as a failure rather than a finding — here, only an outcome
+ * the tool schema does not actually allow through — so the specific reason
+ * travels with it.
  */
 function findingForCheck(
   check: FieldAuditCheck,
   input: Record<string, unknown>,
   values: Record<string, unknown>,
-): FieldAuditFinding | null {
+): FieldAuditFinding {
   const outcome = input.outcome
   if (
     outcome !== 'compliant' &&
@@ -140,7 +141,7 @@ function findingForCheck(
     outcome !== 'absent' &&
     outcome !== 'not_applicable'
   ) {
-    return null
+    throw new Error(`Unrecognised outcome ${String(outcome)}`)
   }
 
   const rawReferences = Array.isArray(input.references) ? input.references : []

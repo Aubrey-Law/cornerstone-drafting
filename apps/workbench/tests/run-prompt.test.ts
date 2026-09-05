@@ -85,21 +85,24 @@ describe('runPrompt', () => {
     expect(result.findings).toEqual([])
   })
 
-  it('records a failure when findingFor returns null, without losing other units', async () => {
+  it('records a failure carrying its own message when findingFor throws, without losing other units', async () => {
     const result = await runPrompt<string, { value: string }>(
       {
         units: ['a', 'b'],
         toolName: TOOL_NAME,
         idFor: unit => unit,
         requestFor,
-        findingFor: (unit, input) => (unit === 'a' ? null : { value: `${unit}:${input.value}` }),
+        findingFor: (unit, input) => {
+          if (unit === 'a') throw new Error('Unrecognised outcome weird')
+          return { value: `${unit}:${input.value}` }
+        },
       },
       {
         callModel: async () => respondWith({ value: 'ok' }),
         context: { route: 'test', contextType: 'general' },
       },
     )
-    expect(result.failures).toEqual([{ unitId: 'a', reason: 'Model input did not produce a finding' }])
+    expect(result.failures).toEqual([{ unitId: 'a', reason: 'Unrecognised outcome weird' }])
     expect(result.findings).toEqual([{ value: 'b:ok' }])
   })
 
@@ -109,7 +112,9 @@ describe('runPrompt', () => {
         units: ['x'],
         toolName: TOOL_NAME,
         requestFor,
-        findingFor: () => null,
+        findingFor: () => {
+          throw new Error('unused')
+        },
       },
       {
         callModel: async () => respondWithNoToolCall(),

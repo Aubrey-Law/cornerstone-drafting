@@ -26,7 +26,7 @@ export interface PromptSeams<Unit, Finding> {
   units: Unit[]
   requestFor: (unit: Unit) => ModelRequest
   toolName: string
-  findingFor: (unit: Unit, input: Record<string, unknown>) => Finding | null
+  findingFor: (unit: Unit, input: Record<string, unknown>) => Finding
   /** Names a unit for `failures`. Defaults to its index, stringified. */
   idFor?: (unit: Unit, index: number) => string
 }
@@ -56,9 +56,9 @@ function readToolInput(response: ModelResponse, toolName: string): Record<string
  * both reduce to.
  *
  * Fail-soft per unit, unconditionally: a throwing call, a missing tool call,
- * or `findingFor` rejecting the input each cost only that one unit, never the
- * run. This is what lets forty rules over one document, or forty checks over
- * one design sheet, survive a single bad response instead of losing the whole
+ * or a throwing `findingFor` each cost only that one unit, never the run.
+ * This is what lets forty rules over one document, or forty checks over one
+ * design sheet, survive a single bad response instead of losing the whole
  * pass to it.
  */
 export async function runPrompt<Unit, Finding>(
@@ -73,29 +73,24 @@ export async function runPrompt<Unit, Finding>(
     const unitId = seams.idFor ? seams.idFor(unit, index) : String(index)
 
     let input: Record<string, unknown> | null
+    let finding: Finding
     try {
       const response = await deps.callModel(seams.requestFor(unit), deps.context)
       input = readToolInput(response, seams.toolName)
+
+      if (!input) {
+        failures.push({ unitId, reason: 'Model returned no tool call' })
+        continue
+      }
+
+      // `findingFor` throws instead of returning a sentinel for input it
+      // can't use — an unrecognised outcome, say — because a throw carries
+      // its own message and a sentinel doesn't. There is one way a unit
+      // fails here and one place its reason comes from: whatever the model
+      // call or `findingFor` threw, caught below.
+      finding = seams.findingFor(unit, input)
     } catch (error) {
       failures.push({ unitId, reason: (error as Error).message })
-      continue
-    }
-
-    if (!input) {
-      failures.push({ unitId, reason: 'Model returned no tool call' })
-      continue
-    }
-
-    const finding = seams.findingFor(unit, input)
-    if (finding === null) {
-      // `findingFor`'s own reason for rejecting the input (an unrecognised
-      // outcome, say) does not travel through this generic path — its
-      // signature returns Finding | null, not a diagnosis, because a shared
-      // failure-reason vocabulary is itself something the two kinds do not
-      // actually share. Each adapter is free to fail loudly with a thrown
-      // error instead, from inside requestFor or findingFor, whenever it
-      // wants a specific reason recorded here.
-      failures.push({ unitId, reason: 'Model input did not produce a finding' })
       continue
     }
 

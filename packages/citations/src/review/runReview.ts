@@ -105,11 +105,11 @@ function asString(value: unknown): string | null {
 
 /**
  * Turns one rule's tool input into a finding, verifying its quote against
- * `layer` on the way. Returns null for an input `runPrompt` should record as
- * a failure rather than a finding — here, only an outcome the tool schema
- * does not actually allow through.
+ * `layer` on the way. Throws for an input `runPrompt` should record as a
+ * failure rather than a finding — here, only an outcome the tool schema does
+ * not actually allow through — so the specific reason travels with it.
  */
-function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer: TextLayer): ReviewFinding | null {
+function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer: TextLayer): ReviewFinding {
   const outcome = input.outcome
   if (
     outcome !== 'compliant' &&
@@ -117,7 +117,7 @@ function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer:
     outcome !== 'absent' &&
     outcome !== 'not_applicable'
   ) {
-    return null
+    throw new Error(`Unrecognised outcome ${String(outcome)}`)
   }
 
   const quote = asString(input.quote)
