@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       ai_usage: {
@@ -7009,6 +7004,143 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_publications: {
+        Row: {
+          prompt_id: string
+          published_at: string
+          published_by: string | null
+          version_id: string
+        }
+        Insert: {
+          prompt_id: string
+          published_at?: string
+          published_by?: string | null
+          version_id: string
+        }
+        Update: {
+          prompt_id?: string
+          published_at?: string
+          published_by?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_publications_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: true
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_publications_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_publications_version_id_prompt_id_fkey"
+            columns: ["version_id", "prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_versions"
+            referencedColumns: ["id", "prompt_id"]
+          },
+        ]
+      }
+      prompt_versions: {
+        Row: {
+          body: Json
+          change_summary: string | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          prompt_id: string
+          validation_status: string
+          version_number: number
+        }
+        Insert: {
+          body: Json
+          change_summary?: string | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          prompt_id: string
+          validation_status?: string
+          version_number: number
+        }
+        Update: {
+          body?: Json
+          change_summary?: string | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          prompt_id?: string
+          validation_status?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_versions_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_versions_prompt_id_kind_fkey"
+            columns: ["prompt_id", "kind"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id", "kind"]
+          },
+        ]
+      }
+      prompts: {
+        Row: {
+          created_at: string
+          id: string
+          is_system: boolean
+          kind: string
+          matter_types: string[]
+          slug: string
+          stages: string[]
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          kind: string
+          matter_types?: string[]
+          slug: string
+          stages?: string[]
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          kind?: string
+          matter_types?: string[]
+          slug?: string
+          stages?: string[]
+          title?: string
+        }
+        Relationships: []
+      }
       rate_limits: {
         Row: {
           bucket: string
@@ -8545,6 +8677,47 @@ export type Database = {
           },
         ]
       }
+      workflow_field_references: {
+        Row: {
+          actual_value: string | null
+          claimed_value: string | null
+          created_at: string
+          field_key: string
+          finding_id: string
+          id: string
+          matched_path: string | null
+          verification: string
+        }
+        Insert: {
+          actual_value?: string | null
+          claimed_value?: string | null
+          created_at?: string
+          field_key: string
+          finding_id: string
+          id?: string
+          matched_path?: string | null
+          verification: string
+        }
+        Update: {
+          actual_value?: string | null
+          claimed_value?: string | null
+          created_at?: string
+          field_key?: string
+          finding_id?: string
+          id?: string
+          matched_path?: string | null
+          verification?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_field_references_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_findings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_findings: {
         Row: {
           attempted_quote: string | null
@@ -8693,16 +8866,16 @@ export type Database = {
       workflow_runs: {
         Row: {
           created_by: string | null
-          document_version_id: string
+          document_version_id: string | null
           failed_count: number
           failures: Json
           finding_count: number
           finished_at: string | null
           id: string
+          kind: string
           matter_id: string
           model: string | null
-          playbook_slug: string
-          playbook_version: number
+          prompt_version_id: string | null
           rule_total: number
           started_at: string
           status: string
@@ -8710,16 +8883,16 @@ export type Database = {
         }
         Insert: {
           created_by?: string | null
-          document_version_id: string
+          document_version_id?: string | null
           failed_count?: number
           failures?: Json
           finding_count?: number
           finished_at?: string | null
           id?: string
+          kind?: string
           matter_id: string
           model?: string | null
-          playbook_slug: string
-          playbook_version: number
+          prompt_version_id?: string | null
           rule_total?: number
           started_at?: string
           status: string
@@ -8727,16 +8900,16 @@ export type Database = {
         }
         Update: {
           created_by?: string | null
-          document_version_id?: string
+          document_version_id?: string | null
           failed_count?: number
           failures?: Json
           finding_count?: number
           finished_at?: string | null
           id?: string
+          kind?: string
           matter_id?: string
           model?: string | null
-          playbook_slug?: string
-          playbook_version?: number
+          prompt_version_id?: string | null
           rule_total?: number
           started_at?: string
           status?: string
@@ -8777,6 +8950,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_prompt_version_id_fkey"
+            columns: ["prompt_version_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_versions"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "workflow_runs_text_layer_id_fkey"
@@ -11035,12 +11215,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11064,11 +11244,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11089,11 +11269,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11114,11 +11294,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11131,11 +11311,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11149,3 +11329,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

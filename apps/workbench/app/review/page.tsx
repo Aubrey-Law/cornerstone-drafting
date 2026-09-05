@@ -20,11 +20,12 @@ export default async function ReviewPage() {
   const user = await getSessionUser()
   if (!user) redirect(LOGIN_PATH)
 
-  const playbook = loadReviewPlaybook()
+  const client = getAdminClient()
+  const playbook = await loadReviewPlaybook(client)
   // Every draft reviewed here is the firm's own and already filed, so the
   // normal path is choosing one rather than uploading it.
-  const matters = await loadReviewableByMatter(getAdminClient())
-  const runs = await loadRunSummaries(getAdminClient(), 15)
+  const matters = await loadReviewableByMatter(client)
+  const runs = await loadRunSummaries(client, 15)
 
   return (
     <ReviewWorkspace

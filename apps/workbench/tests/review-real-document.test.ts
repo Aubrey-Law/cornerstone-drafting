@@ -2,10 +2,59 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildLayer, reviewLayer } from '@/lib/review/run'
-import { loadReviewPlaybook } from '@/lib/review/playbook'
+import { loadReviewPlaybook, REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import type { ModelResponse } from '@aubrey-law/citations/review/model'
 
 const FIXTURE = path.join(__dirname, 'fixtures/trust-excerpt.pdf')
+
+/**
+ * The playbook now lives in the database, so what used to be a synchronous
+ * module import is a query. This is a narrow, hand-built fake of the one
+ * shape `loadReviewPlaybook` touches — the same idiom
+ * `apps/workbench/tests/supabase-clients.test.ts` uses for `readUserRole` —
+ * standing in for a real `prompts` / `prompt_publications` / `prompt_versions`
+ * chain so this test can still run with no database.
+ */
+function fakePublishedPrompt() {
+  const prompt = { id: 'p-1', slug: REVIEW_PLAYBOOK_SLUG, title: 'MA trust firm QA', kind: 'review' }
+  const version = {
+    id: 'v-1',
+    version_number: 1,
+    body: {
+      kind: 'review',
+      inputs: [],
+      rules: [
+        {
+          number: '1',
+          risk: 'high',
+          statement: 'Our exculpation and indemnity language carves out gross negligence and bad faith, not willful misconduct alone.',
+        },
+      ],
+    },
+  }
+  return {
+    from: (table: string) => {
+      const builder = {
+        select: () => builder,
+        eq: (column: string, value: unknown) => ({
+          maybeSingle: async () => {
+            if (table === 'prompts' && column === 'slug' && value === prompt.slug) {
+              return { data: prompt, error: null }
+            }
+            if (table === 'prompt_publications' && column === 'prompt_id' && value === prompt.id) {
+              return { data: { version_id: version.id }, error: null }
+            }
+            if (table === 'prompt_versions' && column === 'id' && value === version.id) {
+              return { data: version, error: null }
+            }
+            return { data: null, error: null }
+          },
+        }),
+      }
+      return builder
+    },
+  } as never
+}
 
 /**
  * The pipeline against a real PDF, with only the model's judgement scripted.
@@ -35,7 +84,7 @@ describe('review of a real PDF', () => {
 
   it('verifies a quote the document really contains, with page geometry', async () => {
     const layer = await buildLayer(fs.readFileSync(FIXTURE), 'pdf')
-    const playbook = loadReviewPlaybook()
+    const playbook = await loadReviewPlaybook(fakePublishedPrompt())
     // A phrase copied out of the extracted text, the way a model is asked to.
     const block = layer.blocks.find((b) => b.text.includes('willful misconduct'))
     expect(block, 'fixture should contain an exculpation clause').toBeTruthy()
@@ -75,7 +124,7 @@ describe('review of a real PDF', () => {
 
   it('refuses a quote the model did not take from the document', async () => {
     const layer = await buildLayer(fs.readFileSync(FIXTURE), 'pdf')
-    const playbook = loadReviewPlaybook()
+    const playbook = await loadReviewPlaybook(fakePublishedPrompt())
     const result = await reviewLayer(layer, { ...playbook, rules: [playbook.rules[0]] }, {
       callModel: async () =>
         ({

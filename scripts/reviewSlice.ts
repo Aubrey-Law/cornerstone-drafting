@@ -1,10 +1,17 @@
 /**
  * Run a review playbook against a document, standalone:
  *
- *   npm run review:slice -- --file ~/drafts/smith-trust.pdf
- *   npm run review:slice -- --file draft.docx --playbook tools/workflows/review/ma-trust-firm-qa.json
- *   npm run review:slice -- --file draft.docx --redline /tmp/smith-trust-marked.docx
+ *   npm run review:slice -- --file draft.docx --playbook /tmp/ma-trust-firm-qa.json
+ *   npm run review:slice -- --file draft.docx --playbook /tmp/ma-trust-firm-qa.json --redline /tmp/smith-trust-marked.docx
  *   npm run review:slice -- --file draft.pdf --layer-only
+ *
+ * `--playbook` is required (except with `--layer-only`, which never reads
+ * one). The firm's one playbook, `ma-trust-firm-qa`, used to be bundled as
+ * `tools/workflows/review/ma-trust-firm-qa.json` and this script defaulted to
+ * it; it now lives in the database as a published prompt (see
+ * `apps/workbench/lib/review/playbook.ts`), which this script — a
+ * credential-free, no-matter-touched diagnostic — deliberately does not
+ * query. Export the playbook to a file to use it here.
  *
  * This exists for one job the automated suite cannot do. Nothing in the tests
  * talks to a model, so nothing in the tests can answer the question this whole
@@ -41,8 +48,6 @@ import type { TextLayer } from '@/lib/textLayer/types'
 // "injected env" banners would sit above the findings for no benefit.
 config({ path: '.env.test', override: false, quiet: true })
 config({ path: '.env.local', override: false, quiet: true })
-
-const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-firm-qa.json'
 
 /**
  * The service-role client, when this machine has the credentials for one.
@@ -121,9 +126,15 @@ async function main(): Promise<void> {
     return
   }
 
-  const playbook = loadPlaybook(
-    typeof args.playbook === 'string' ? args.playbook : DEFAULT_PLAYBOOK,
-  )
+  if (typeof args.playbook !== 'string') {
+    console.error(
+      'Usage: npm run review:slice -- --file <document.pdf|document.docx> --playbook <playbook.json>\n\n' +
+        'The playbook is no longer bundled in the repository — it lives in the database as a published ' +
+        'prompt (see apps/workbench/lib/review/playbook.ts). Export it to a file to use it here.',
+    )
+    process.exit(2)
+  }
+  const playbook = loadPlaybook(args.playbook)
 
   // Resolved before the first rule rather than after three identical SDK
   // errors. The app reads a key saved in Settings ahead of the environment, so

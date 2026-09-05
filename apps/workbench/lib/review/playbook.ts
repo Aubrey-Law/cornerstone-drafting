@@ -1,42 +1,76 @@
-import { reviewPlaybookSchema, type ReviewPlaybook } from '@aubrey-law/citations/review/types'
-import playbookJson from '@aubrey-law/system-workflows/review/ma-trust-firm-qa.json'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
+import type { ReviewPlaybook } from '@aubrey-law/citations/review/types'
+import { loadPublishedPrompt } from '@/lib/prompts/repository'
 
 /**
- * The playbook is firm content, bundled with the repository rather than typed
- * into a screen, and read through the workspace package so both apps run the
- * same rules from the same file.
+ * The playbook used to be firm content bundled with the repository: a module
+ * import of `tools/workflows/review/ma-trust-firm-qa.json`, read through a
+ * workspace package so both apps ran the same rules from the same file.
  *
- * Imported as a module, never read from disk. Next traces a serverless bundle
- * by following imports, so an `fs.readFileSync` is invisible to it: the route
- * builds clean, deploys, and throws ENOENT on the first request. That is
- * exactly what happened. `outputFileTracingIncludes` was meant to cover it and
- * silently did not — those globs resolve against the project directory, not
+ * It was a module import, deliberately, never a file read at runtime. Next
+ * traces a serverless bundle by following imports, so an `fs.readFileSync` is
+ * invisible to it: the route builds clean, deploys, and throws ENOENT on the
+ * first request. That is exactly what happened once.
+ * `outputFileTracingIncludes` was meant to cover it and silently did not —
+ * those globs resolve against the project directory, not
  * `outputFileTracingRoot`, so a path written from the repository root matched
  * nothing and no build step said so. An import cannot fail that way, because
  * the compiler puts the bytes in the bundle.
  *
- * It is still validated at load. The file is edited by hand, and a playbook
- * that drifts out of schema would otherwise surface as a review that quietly
- * skipped a rule — the failure this product cannot have.
+ * The database has neither problem. There is no bundle to trace and no build
+ * step whose globs can miss a path — the playbook is a row, fetched the same
+ * way in development and in production. That is what let it stop being an
+ * import: not that reading it needed to get easier, but that the two ways it
+ * used to fail in production (an invisible file read, a tracing config that
+ * silently didn't match) simply do not apply to a query.
+ *
+ * It is still validated on every read, the same as it was validated at
+ * import time before. `prompt_versions.body` is jsonb, and nothing about the
+ * database — not the composite foreign key from prompts, not publishing —
+ * stops a hand-run `update` from putting the wrong shape into an
+ * already-published row. A playbook that drifted out of schema would surface
+ * as a review that quietly skipped a rule, which is the failure this product
+ * cannot have. See `toPublishedPrompt` in `lib/prompts/repository.ts` for
+ * where that validation actually happens.
  *
  * One playbook for now: reviewing a Massachusetts revocable trust this firm
- * drafted, against the positions this firm holds. Every draft here is our own,
- * so a deviation is a template or an edit to fix rather than a point to
- * negotiate. A library with a picker is the authoring phase, and will be
- * database-backed rather than another import.
+ * drafted, against the positions this firm holds. Every draft here is our
+ * own, so a deviation is a template or an edit to fix rather than a point to
+ * negotiate. A library with a picker is the authoring phase, which is why
+ * prompts live as versioned, publishable rows rather than another import —
+ * this is the first prompt to use that shape, not the last.
  */
 export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-firm-qa'
 
-let cached: ReviewPlaybook | null = null
-
-export function loadReviewPlaybook(): ReviewPlaybook {
-  if (cached) return cached
-  const parsed = reviewPlaybookSchema.safeParse(playbookJson)
-  if (!parsed.success) {
+/**
+ * Loads the published review playbook, validated and ready to run.
+ *
+ * Throws when nothing is published under `REVIEW_PLAYBOOK_SLUG` — there is
+ * no reasonable fallback for "review the document against nothing" — and
+ * throws when the published prompt exists but is not a review prompt, which
+ * would otherwise run a field-audit body's `checks` through code built for a
+ * review body's `rules`.
+ */
+export async function loadReviewPlaybook(
+  client: SupabaseClient<WorkbenchDatabase>,
+): Promise<ReviewPlaybook> {
+  const prompt = await loadPublishedPrompt(client, REVIEW_PLAYBOOK_SLUG)
+  if (!prompt) {
     throw new Error(
-      `Review playbook ${REVIEW_PLAYBOOK_SLUG} does not match the expected shape: ${parsed.error.message}`,
+      `No published prompt named "${REVIEW_PLAYBOOK_SLUG}". Publish a review prompt with that slug before running a review.`,
     )
   }
-  cached = parsed.data
-  return cached
+  if (prompt.body.kind !== 'review') {
+    throw new Error(
+      `Prompt "${REVIEW_PLAYBOOK_SLUG}" is published as a "${prompt.body.kind}" prompt, not a review playbook.`,
+    )
+  }
+
+  return {
+    slug: prompt.slug,
+    title: prompt.title,
+    version: prompt.versionNumber,
+    rules: prompt.body.rules,
+  }
 }
