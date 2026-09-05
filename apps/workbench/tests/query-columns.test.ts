@@ -10,20 +10,19 @@ const generated = path.join(repoRoot, 'packages/db-types/src/supabase.generated.
 /**
  * Tables the generated types do not describe yet, with why.
  *
- * A table here is exempt from this check only; `npm run check:db-columns` asks
- * the live database and exempts nothing. The list still has to stay true — the
- * test below fails once an entry appears in the generated types, which is what
- * stops the exemption from outliving the reason for it.
+ * Empty, and worth keeping empty: a table here is exempt from the column check,
+ * and the queries reading it lose the compile-time check too, because a typed
+ * client cannot describe a table its types do not contain. That is how
+ * `matters.title` survived — the repositories cast the client to
+ * `SupabaseClient<never>` so the new tables would compile, which switched off
+ * column checking for every table they touched, including the typed ones.
+ *
+ * Add an entry only for a table whose migration has not reached the generated
+ * types yet, then regenerate them (`db-types-drift.yml`, dispatched with
+ * `open_pr`) and remove it. The last test below fails once an entry is stale,
+ * so the exemption cannot outlive its reason.
  */
-const TABLES_AWAITING_TYPES: Record<string, string> = {
-  workflow_runs: 'added by 20261027000000_workflow_runs_and_findings.sql',
-  workflow_findings: 'added by 20261027000000_workflow_runs_and_findings.sql',
-  workflow_citations: 'gained finding_id in 20261027000000_workflow_runs_and_findings.sql',
-  document_text_layers: 'predates the generated types',
-  signing_ceremonies: 'added by 20261026000000_signing_ceremonies.sql',
-  ceremony_documents: 'added by 20261026000000_signing_ceremonies.sql',
-  asset_funding: 'added by 20261025000000_asset_funding.sql',
-}
+const TABLES_AWAITING_TYPES: Record<string, string> = {}
 
 /** `Database['public']['Tables'][table]['Row']` property names, read from the AST. */
 function schemaColumns(): Map<string, Set<string>> {
@@ -89,6 +88,8 @@ describe('every column the workbench queries exists in the schema', () => {
     // Passing on nothing is how a guard stops guarding without anyone noticing.
     expect(references.length).toBeGreaterThan(100)
     expect(new Set(references.map((r) => r.table)).size).toBeGreaterThan(10)
+    // Every table is typed, so nothing is exempt and everything is checked.
+    expect(references.filter((r) => !schema.has(r.table))).toEqual([])
   })
 
   it('reads no column a typed table does not have', () => {

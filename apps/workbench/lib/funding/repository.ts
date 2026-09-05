@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { FundingMethod, FundingStatus } from './model'
 import { methodIsPermitted } from './model'
 import type { FundingJoinRow } from './rollup'
@@ -26,10 +27,6 @@ export const ASSET_FUNDING_COLUMNS = [
 ] as const
 
 /** Reaches a table the generated types do not describe yet. See above. */
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
-
 const ASSET_SELECT = 'id, category, description, ownership, value, client_intake_id'
 
 /**
@@ -41,10 +38,10 @@ const ASSET_SELECT = 'id, category, description, ownership, value, client_intake
  * assembling it here costs nothing and is far easier to read than a view.
  */
 export async function loadFundingRows(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   options: { matterId?: string } = {},
 ): Promise<FundingJoinRow[]> {
-  const sb = untyped(client)
+  const sb = client
 
   let matterQuery = sb
     .from('matters')
@@ -119,7 +116,7 @@ export interface SaveFundingInput {
  * write to the table, and neither rule is one to discover from a stack trace.
  */
 export async function saveAssetFunding(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   input: SaveFundingInput,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!methodIsPermitted(input.category, input.method)) {
@@ -137,7 +134,7 @@ export async function saveAssetFunding(
     }
   }
 
-  const { error } = await untyped(client)
+  const { error } = await client
     .from('asset_funding')
     .upsert(
       {

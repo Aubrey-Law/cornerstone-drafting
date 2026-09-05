@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { FindingOutcome, ReviewRule } from '@aubrey-law/citations/review/types'
 import type { VerifyReason } from '@aubrey-law/citations/textLayer/match'
@@ -112,10 +113,6 @@ export function toStoredRun(
   }
 }
 
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
-
 export interface RunSummary {
   runId: string
   matterTitle: string
@@ -129,10 +126,10 @@ export interface RunSummary {
 
 /** Recent runs, newest first — a review is returned to soon after it is made. */
 export async function loadRunSummaries(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   limit = 25,
 ): Promise<RunSummary[]> {
-  const sb = untyped(client)
+  const sb = client
   const { data: runs, error } = await sb
     .from('workflow_runs')
     .select('id, matter_id, document_version_id, status, rule_total, finding_count, failed_count, finished_at')
@@ -176,10 +173,10 @@ export async function loadRunSummaries(
 }
 
 export async function loadRun(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   runId: string,
 ): Promise<StoredRun | null> {
-  const sb = untyped(client)
+  const sb = client
   const { data: runs, error } = await sb.from('workflow_runs').select('*').eq('id', runId).limit(1)
   if (error) throw new Error(`Could not load the run: ${error.message}`)
   const runRow = runs?.[0]

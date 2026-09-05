@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { ReviewFinding, ReviewResult } from '@aubrey-law/citations/review/types'
+import type { Json } from '@aubrey-law/db-types'
 
 /**
  * Recording a review so it outlives the page.
@@ -10,6 +12,21 @@ import type { ReviewFinding, ReviewResult } from '@aubrey-law/citations/review/t
  * nothing — which is precisely the failure the citation model exists to avoid.
  * Reviewing an upload stays ephemeral, and the screen says so.
  */
+/**
+ * A citation shape on its way into a `jsonb` column.
+ *
+ * `Json` requires an index signature, which an interface does not structurally
+ * satisfy, so `TextBlock[]` and `BoundingBox` are rejected despite serialising
+ * perfectly. Enumerating their fields instead would compile and then silently
+ * drop any field added later — on geometry the whole citation model depends on
+ * being exact. So the shape is asserted and every field survives the round
+ * trip, which `toStoredRun` reads back.
+ *
+ * This asserts nothing about column *names*: those stay checked, which is the
+ * mistake that put `matters.title` into five features.
+ */
+const asJson = (value: unknown): Json => value as Json
+
 export const WORKFLOW_RUN_COLUMNS = [
   'id',
   'matter_id',
@@ -62,10 +79,6 @@ export function runStatusFor(counts: {
   return counts.failedCount > 0 ? 'partial' : 'completed'
 }
 
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
-
 export interface SaveRunInput {
   matterId: string
   documentVersionId: string
@@ -85,10 +98,10 @@ export interface SaveRunInput {
  * numbers with nothing to measure against.
  */
 export async function saveRun(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   input: SaveRunInput,
 ): Promise<{ ok: true; runId: string } | { ok: false; message: string }> {
-  const sb = untyped(client)
+  const sb = client
 
   const { data: layerRow, error: layerError } = await sb
     .from('document_text_layers')
@@ -102,8 +115,8 @@ export async function saveRun(
         source_sha256: input.layer.sourceSha256,
         page_count: input.layer.pageCount,
         text: input.layer.text,
-        blocks: input.layer.blocks,
-        spans: input.layer.spans,
+        blocks: asJson(input.layer.blocks),
+        spans: asJson(input.layer.spans),
       },
       { onConflict: 'document_version_id,source_kind' },
     )
@@ -170,7 +183,7 @@ export async function saveRun(
         char_start: finding.citation.charStart,
         char_end: finding.citation.charEnd,
         page: finding.citation.page,
-        bbox: finding.citation.bbox,
+        bbox: asJson(finding.citation.bbox),
         quote: finding.citation.quote,
         verification: finding.citation.verification,
       })
@@ -186,10 +199,10 @@ export async function saveRun(
 export type Disposition = 'open' | 'accepted' | 'rejected' | 'deferred'
 
 export async function saveDisposition(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   input: { findingId: string; disposition: Disposition; note: string | null; userId: string },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { error } = await untyped(client)
+  const { error } = await client
     .from('workflow_findings')
     .update({
       disposition: input.disposition,

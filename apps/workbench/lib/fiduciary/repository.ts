@@ -1,9 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import { FIDUCIARY_ROLES, type Appointment, type FiduciaryRole, type ForParty } from './matrix'
-
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
 
 /**
  * Which appointment rows belong to a matter.
@@ -49,10 +46,10 @@ const fullName = (contact: Record<string, unknown>): string =>
  * win, so a later change is never hidden behind an older intake answer.
  */
 export async function loadFiduciaries(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   options: { matterId?: string } = {},
 ): Promise<MatterFiduciaries[]> {
-  const sb = untyped(client)
+  const sb = client
 
   let matterQuery = sb
     .from('matters')

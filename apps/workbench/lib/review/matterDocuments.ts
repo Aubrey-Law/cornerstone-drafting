@@ -1,9 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import { reviewableDocuments, type DocumentVersionRow, type ReviewableDocument } from './documents'
-
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
 
 export interface MatterDocuments {
   matterId: string
@@ -18,9 +15,9 @@ export interface MatterDocuments {
  * schema, so the join is done here rather than in the query.
  */
 export async function loadReviewableByMatter(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
 ): Promise<MatterDocuments[]> {
-  const sb = untyped(client)
+  const sb = client
 
   const { data: matters, error: matterError } = await sb
     .from('matters')
