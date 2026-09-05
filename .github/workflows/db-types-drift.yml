@@ -33,7 +33,16 @@ name: Database types drift
 # permission on one.
 
 on:
+  # `ready_for_review` is not a default type, and it is here because a pull
+  # request opened by a workflow using GITHUB_TOKEN starts no workflow run at
+  # all — GitHub refuses, to stop a workflow triggering itself. The types PR
+  # this workflow raises arrived with no checks whatsoever, which on a branch
+  # protected by four required checks reads as "nothing has gone wrong" rather
+  # than "nothing has been run". Those PRs are drafts now, and a person marking
+  # one ready is an event from a person, so this is the trigger that finally
+  # runs the gate on them.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     # 12:00 UTC on weekdays — early morning ET, matching the other two checks.
     - cron: '0 12 * * 1-5'
@@ -205,11 +214,20 @@ jobs:
           # from opening pull requests loses the work only if the failure is
           # illegible. Name the setting and print the link rather than exiting
           # on a bare GraphQL error.
+          # DRAFT, DELIBERATELY. A pull request opened with GITHUB_TOKEN starts
+          # no workflow run, so this one arrives with none of the four required
+          # checks — and a branch protection whose checks never report is not a
+          # gate. `enforce_admins` is off, so the person who can merge it is
+          # also the person allowed to bypass, and what they would see is a
+          # pull request with nothing red on it. A draft cannot be merged by
+          # anyone, and marking it ready is an event from a person, which does
+          # start the workflows.
           if ! gh pr create \
+            --draft \
             --base "${GITHUB_REF_NAME}" \
             --head "$branch" \
             --title 'Regenerate Supabase types from the database' \
-            --body 'Opened by the Database types drift workflow. `packages/db-types/src/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
+            --body-file .github/pr-bodies/regenerated-types.md
           then
             echo "::error::Regenerated types are pushed to '$branch', but the pull request could not be opened. If the reason above is \"GitHub Actions is not permitted to create or approve pull requests\", enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'. Until then, open it here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${GITHUB_REF_NAME}...${branch}?expand=1"
             exit 1

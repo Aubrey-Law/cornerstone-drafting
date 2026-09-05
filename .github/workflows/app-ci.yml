@@ -30,7 +30,16 @@ name: Application CI
 # with the database workflows, not on the merge path.
 
 on:
+  # `ready_for_review` is not a default type, and it is here because a pull
+  # request opened by a workflow using GITHUB_TOKEN starts no workflow run at
+  # all — GitHub refuses, to stop a workflow triggering itself. The types PR
+  # that db-types-drift.yml raises arrived with no checks whatsoever, which on
+  # a branch protected by four required checks reads as "nothing has gone
+  # wrong" rather than "nothing has been run". Those PRs are opened as drafts
+  # now, and a person marking one ready is an event from a person, so this is
+  # the trigger that finally runs the gate on them.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
