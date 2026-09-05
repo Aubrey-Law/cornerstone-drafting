@@ -68,4 +68,11 @@ describe('the prompt body schema', () => {
     const noReads = { ...auditBody, checks: [{ ...auditBody.checks[0], reads: [] }] }
     expect(promptBodySchema.safeParse(noReads).success).toBe(false)
   })
+
+  it('refuses a body with nothing to run', () => {
+    // Zero rules is a review that checks nothing and reports success; zero
+    // checks is the same. Both must be refused rather than quietly passing.
+    expect(promptBodySchema.safeParse({ ...reviewBody, rules: [] }).success).toBe(false)
+    expect(promptBodySchema.safeParse({ ...auditBody, checks: [] }).success).toBe(false)
+  })
 })
