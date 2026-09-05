@@ -10,6 +10,18 @@ import { BlockTextViewer } from './BlockTextViewer'
 import { FindingsList, type Disposition } from './FindingsList'
 import { PdfCitationViewer } from '@aubrey-law/citations/react/PdfCitationViewer'
 
+export interface ReviewableChoice {
+  versionId: string
+  name: string
+  kind: 'docx' | 'pdf'
+}
+
+export interface MatterChoice {
+  matterId: string
+  title: string
+  documents: ReviewableChoice[]
+}
+
 interface PlaybookSummary {
   title: string
   version: number
@@ -18,13 +30,22 @@ interface PlaybookSummary {
 
 interface ReviewResponse {
   filename: string
+  anchor: { documentVersionId: string; documentId: string; matterId: string } | null
   playbook: { slug: string; title: string; version: number }
   layer: TextLayer
   result: ReviewResult
 }
 
-export function ReviewWorkspace({ playbook }: { playbook: PlaybookSummary }) {
+export function ReviewWorkspace({
+  playbook,
+  matters,
+}: {
+  playbook: PlaybookSummary
+  matters: MatterChoice[]
+}) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
+  const [versionId, setVersionId] = useState(matters[0]?.documents[0]?.versionId ?? '')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [review, setReview] = useState<ReviewResponse | null>(null)
@@ -36,7 +57,10 @@ export function ReviewWorkspace({ playbook }: { playbook: PlaybookSummary }) {
   const onSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const file = fileRef.current?.files?.[0]
-    if (!file) {
+    // A filed document wins over an upload: it carries a real version id, which
+    // is what a citation can be anchored to.
+    const chosen = file ? null : versionId
+    if (!file && !chosen) {
       setError('Choose a document to review.')
       return
     }
@@ -48,10 +72,13 @@ export function ReviewWorkspace({ playbook }: { playbook: PlaybookSummary }) {
     setDispositions({})
     // Read for the viewer before the upload consumes the stream, so a PDF can
     // be rendered from the copy already in the browser rather than fetched back.
-    setPdfBytes(file.name.toLowerCase().endsWith('.pdf') ? await file.arrayBuffer() : null)
+    // Only an upload can supply its own bytes for the viewer; a filed document
+    // is read server-side, and its PDF view arrives with the layer.
+    setPdfBytes(file && file.name.toLowerCase().endsWith('.pdf') ? await file.arrayBuffer() : null)
 
     const body = new FormData()
-    body.set('document', file)
+    if (file) body.set('document', file)
+    else body.set('documentVersionId', chosen as string)
 
     try {
       const response = await fetch('/api/staff/review', { method: 'POST', body })
@@ -66,7 +93,7 @@ export function ReviewWorkspace({ playbook }: { playbook: PlaybookSummary }) {
     } finally {
       setPending(false)
     }
-  }, [])
+  }, [versionId])
 
   const citation: Citation | null = useMemo(() => {
     if (!review || selected === null) return null
@@ -94,6 +121,39 @@ export function ReviewWorkspace({ playbook }: { playbook: PlaybookSummary }) {
           <h1 className="text-lg font-semibold tracking-tight">Review a draft</h1>
         </div>
         <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+          {matters.length > 0 ? (
+            <>
+              <select
+                aria-label="Matter"
+                value={matterId}
+                onChange={(event) => {
+                  setMatterId(event.target.value)
+                  const next = matters.find((m) => m.matterId === event.target.value)
+                  setVersionId(next?.documents[0]?.versionId ?? '')
+                }}
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+              >
+                {matters.map((matter) => (
+                  <option key={matter.matterId} value={matter.matterId}>
+                    {matter.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Document"
+                value={versionId}
+                onChange={(event) => setVersionId(event.target.value)}
+                className="h-9 max-w-64 rounded-md border border-input bg-transparent px-2 text-sm"
+              >
+                {(matters.find((m) => m.matterId === matterId)?.documents ?? []).map((document) => (
+                  <option key={document.versionId} value={document.versionId}>
+                    {document.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-muted-foreground">or upload</span>
+            </>
+          ) : null}
           <input
             ref={fileRef}
             type="file"
