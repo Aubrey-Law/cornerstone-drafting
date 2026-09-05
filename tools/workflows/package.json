@@ -2,12 +2,13 @@
   "name": "@aubrey-law/system-workflows",
   "version": "0.0.0",
   "private": true,
-  "description": "Bundled system-workflow SKILL.md tree synced into work_skills. Data only, no build step.",
+  "description": "Bundled system-workflow SKILL.md tree synced into work_skills, plus the review playbooks. Data only, no build step. The review playbooks are exported as subpaths so an app can import one as a module rather than read it from disk — a file read is invisible to Next’s bundle tracing and fails only in production.",
   "type": "module",
   "exports": {
     "./root": {
       "types": "./root.d.ts",
       "default": "./root.mjs"
-    }
+    },
+    "./review/*": "./review/*"
   }
 }
