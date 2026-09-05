@@ -204,11 +204,17 @@ export async function runReviewPlaybook(
 
     let citation: ReviewFinding['citation'] = null
     let citationRefusal: ReviewFinding['citationRefusal'] = null
+    let attemptedQuote: ReviewFinding['attemptedQuote'] = null
 
     if (quote) {
       const verified = verifyQuote(layer, quote, blockIndex)
-      if (verified.ok) citation = verified.citation
-      else citationRefusal = verified.reason
+      if (verified.ok) {
+        citation = verified.citation
+      } else {
+        citationRefusal = verified.reason
+        // Kept only on refusal: a verified citation already holds the text.
+        attemptedQuote = quote
+      }
     }
 
     findings.push({
@@ -219,6 +225,7 @@ export async function runReviewPlaybook(
       proposedLanguage: asString(input.proposed_language),
       citation,
       citationRefusal,
+      attemptedQuote,
     })
   }
 

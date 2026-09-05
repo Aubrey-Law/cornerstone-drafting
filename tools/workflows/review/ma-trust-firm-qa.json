@@ -1,0 +1,24 @@
+{
+  "slug": "ma-trust-firm-qa",
+  "title": "Massachusetts revocable trust — firm quality review",
+  "version": 1,
+  "rules": [
+    {
+      "number": "1",
+      "risk": "high",
+      "statement": "Our exculpation and indemnity language carves out gross negligence and bad faith, not willful misconduct alone. A carve-out limited to willful misconduct leaves our beneficiaries without recourse for conduct well short of intentional wrongdoing, and is narrower than we intend to draft.",
+      "preferredLanguage": "except to the extent such claims arise from the Trustee's own willful misconduct, bad faith, or gross negligence"
+    },
+    {
+      "number": "2",
+      "risk": "medium",
+      "statement": "Our waiver of the trustee's bond is limited to trustees named in the instrument and successors appointed under its terms. An unqualified waiver running to anyone who ever serves removes the protection at exactly the point it is needed — when a trustee nobody chose takes office."
+    },
+    {
+      "number": "3",
+      "risk": "blocker",
+      "statement": "Every discretionary distribution standard we draft states whether the trustee considers a beneficiary's other resources. Silence is the defect: it leaves our trustee to guess, and it changes both the tax treatment and the creditor exposure of the interest."
+    }
+  ],
+  "scope": "Reviewing a trust this firm drafted, against the positions this firm holds. Every draft here is our own, so a deviation is a template or an edit to fix, not a point to negotiate. Supersedes ma-trust-third-party-draft, which was written for a draft prepared elsewhere — a case this practice does not have."
+}

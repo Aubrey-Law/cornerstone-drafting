@@ -48,7 +48,7 @@ describe('review CLI arguments', () => {
   it('keeps several switches and values apart', () => {
     const result = parseArgs([
       '--file', 'a trust.docx',
-      '--playbook', 'tools/workflows/review/ma-trust-third-party-draft.json',
+      '--playbook', 'tools/workflows/review/ma-trust-firm-qa.json',
       '--redline', '/tmp/marked up.docx',
       '--layer-only',
     ])
@@ -56,7 +56,7 @@ describe('review CLI arguments', () => {
     if (!result.ok) return
     expect(result.args).toEqual({
       file: 'a trust.docx',
-      playbook: 'tools/workflows/review/ma-trust-third-party-draft.json',
+      playbook: 'tools/workflows/review/ma-trust-firm-qa.json',
       redline: '/tmp/marked up.docx',
       'layer-only': true,
     })

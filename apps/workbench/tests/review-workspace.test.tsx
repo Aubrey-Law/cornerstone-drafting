@@ -26,7 +26,7 @@ const PLAYBOOK = {
 const TEXT = 'The Trustee shall not be liable except for willful misconduct.'
 const PAYLOAD = {
   filename: 'smith-trust.pdf',
-  playbook: { slug: 'ma-trust-third-party-draft', title: PLAYBOOK.title, version: 1 },
+  playbook: { slug: 'ma-trust-firm-qa', title: PLAYBOOK.title, version: 1 },
   layer: {
     sourceKind: 'pdf',
     status: 'ok',
@@ -39,7 +39,7 @@ const PAYLOAD = {
     spans: [],
   },
   result: {
-    playbookSlug: 'ma-trust-third-party-draft',
+    playbookSlug: 'ma-trust-firm-qa',
     playbookVersion: 1,
     findings: [
       {
@@ -58,6 +58,7 @@ const PAYLOAD = {
           verification: 'verified',
         },
         citationRefusal: null,
+        attemptedQuote: null,
       },
     ],
     failures: [{ ruleNumber: '2', reason: 'overloaded' }],

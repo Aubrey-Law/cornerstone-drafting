@@ -22,6 +22,7 @@ const cited: ReviewFinding = {
     verification: 'verified',
   },
   citationRefusal: null,
+  attemptedQuote: null,
 }
 
 const uncited: ReviewFinding = {
@@ -32,6 +33,7 @@ const uncited: ReviewFinding = {
   proposedLanguage: null,
   citation: null,
   citationRefusal: 'not_found',
+  attemptedQuote: 'the trustee is not liable for anything at all',
 }
 
 const absent: ReviewFinding = {
@@ -42,6 +44,7 @@ const absent: ReviewFinding = {
   proposedLanguage: null,
   citation: null,
   citationRefusal: null,
+  attemptedQuote: null,
 }
 
 const noop = () => {}
@@ -73,6 +76,16 @@ describe('FindingsList', () => {
     const item = screen.getByTestId('finding-2')
     expect(item.textContent).toMatch(/not citable/i)
     expect(item.textContent).toMatch(/excluded from (the )?export/i)
+  })
+
+  /**
+   * Showing the words the model reached for is what lets the attorney tell a
+   * paraphrase from a verifier that is being too strict. Without them the
+   * finding is an assertion with nothing to check.
+   */
+  it('shows what the model tried to quote, so the refusal can be judged', () => {
+    render(<FindingsList findings={[uncited]} selected={null} onSelect={noop} dispositions={{}} onDispose={noop} />)
+    expect(screen.getByTestId('finding-2').textContent).toContain('the trustee is not liable for anything at all')
   })
 
   it('does not offer to point at the document for an uncited finding', () => {

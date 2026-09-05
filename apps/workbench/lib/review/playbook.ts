@@ -1,5 +1,5 @@
 import { reviewPlaybookSchema, type ReviewPlaybook } from '@aubrey-law/citations/review/types'
-import playbookJson from '@aubrey-law/system-workflows/review/ma-trust-third-party-draft.json'
+import playbookJson from '@aubrey-law/system-workflows/review/ma-trust-firm-qa.json'
 
 /**
  * The playbook is firm content, bundled with the repository rather than typed
@@ -19,11 +19,13 @@ import playbookJson from '@aubrey-law/system-workflows/review/ma-trust-third-par
  * that drifts out of schema would otherwise surface as a review that quietly
  * skipped a rule — the failure this product cannot have.
  *
- * One playbook for now: reviewing a Massachusetts revocable trust drafted
- * elsewhere. A library with a picker is the authoring phase, and will be
+ * One playbook for now: reviewing a Massachusetts revocable trust this firm
+ * drafted, against the positions this firm holds. Every draft here is our own,
+ * so a deviation is a template or an edit to fix rather than a point to
+ * negotiate. A library with a picker is the authoring phase, and will be
  * database-backed rather than another import.
  */
-export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-third-party-draft'
+export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-firm-qa'
 
 let cached: ReviewPlaybook | null = null
 
