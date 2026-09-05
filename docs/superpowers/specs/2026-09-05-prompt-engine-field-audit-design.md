@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-05
 **Phase:** 4 of `docs/superpowers/plans/2026-09-02-workbench-overhaul.md`, first sub-project
-**Status:** design approved, not yet planned
+**Status:** approved by the owner 2026-09-05; implementation plan next
 
 ## Why this slice
 
@@ -236,9 +236,15 @@ exists to answer. The seams are narrow enough to collapse if the third kind disa
 - The authoring UI and the ~40-prompt library (phase 14). `Cornerstone_Scope.md` is not in
   this repository; the six checks above are drafted here rather than seeded from it.
 
-## Open questions for the owner
+## Owner decisions, 2026-09-05
 
-1. Do the six checks match how you would actually review a design sheet, and is anything
-   there you would not want raised as a task?
-2. Check 1 is the broadest and will be the noisiest. Should it start at `high` rather than
-   `blocker` until its reference-verification rate is known?
+1. **The six checks are approved as drafted.** All six raise tasks.
+2. **Check 1 stays at `blocker`.** It was offered at `high` on the argument that it is the
+   broadest and will be the noisiest. Rejected: a stated concern the plan does not answer
+   is the failure the whole check set exists to catch, and grading it down to manage its
+   own noise would hide exactly the finding worth having.
+
+   The consequence is that its noise has to be managed by **prompting and reference
+   verification, not by severity** — the same rule the citation verifier follows. If check
+   1 produces findings whose field references do not survive verification, the fix is the
+   prompt, never the threshold.
