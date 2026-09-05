@@ -91,6 +91,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 export const config = {
   matcher: [
     '/',
+    '/funding/:path*',
     '/matters/:path*',
     '/review/:path*',
     '/tasks/:path*',
