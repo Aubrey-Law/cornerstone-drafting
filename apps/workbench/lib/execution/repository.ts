@@ -1,14 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 
 export interface ExecutionMatter {
   matterId: string
   title: string
   stage: string | null
   documentNames: string[]
-}
-
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
 }
 
 /**
@@ -20,10 +17,10 @@ function untyped(client: SupabaseClient<never>): SupabaseClient {
  * draft, and an old version in the list would be a document to sign twice.
  */
 export async function loadExecutionMatters(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   options: { matterId?: string } = {},
 ): Promise<ExecutionMatter[]> {
-  const sb = untyped(client)
+  const sb = client
 
   let matterQuery = sb.from('matters').select('id, name, stage').eq('relationship_status', 'hired')
   if (options.matterId) matterQuery = matterQuery.eq('id', options.matterId)

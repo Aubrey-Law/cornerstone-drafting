@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -30,6 +30,7 @@ export type Database = {
           route: string
           success: boolean
           user_id: string | null
+          workflow_run_id: string | null
         }
         Insert: {
           cache_creation_input_tokens?: number
@@ -46,6 +47,7 @@ export type Database = {
           route: string
           success?: boolean
           user_id?: string | null
+          workflow_run_id?: string | null
         }
         Update: {
           cache_creation_input_tokens?: number
@@ -62,6 +64,7 @@ export type Database = {
           route?: string
           success?: boolean
           user_id?: string | null
+          workflow_run_id?: string | null
         }
         Relationships: [
           {
@@ -84,6 +87,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "ai_usage_workflow_run_id_fkey"
+            columns: ["workflow_run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -148,6 +158,7 @@ export type Database = {
           created_at: string
           end_time: string
           external_booking_uid: string | null
+          google_event_id: string | null
           id: string
           linked_lead_id: string | null
           linked_matter_id: string | null
@@ -175,6 +186,7 @@ export type Database = {
           created_at?: string
           end_time: string
           external_booking_uid?: string | null
+          google_event_id?: string | null
           id?: string
           linked_lead_id?: string | null
           linked_matter_id?: string | null
@@ -202,6 +214,7 @@ export type Database = {
           created_at?: string
           end_time?: string
           external_booking_uid?: string | null
+          google_event_id?: string | null
           id?: string
           linked_lead_id?: string | null
           linked_matter_id?: string | null
@@ -262,6 +275,81 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
+          },
+        ]
+      }
+      asset_funding: {
+        Row: {
+          asset_intake_id: string
+          confirmed_on: string | null
+          created_at: string
+          id: string
+          matter_id: string
+          method: string
+          note: string | null
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          asset_intake_id: string
+          confirmed_on?: string | null
+          created_at?: string
+          id?: string
+          matter_id: string
+          method?: string
+          note?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          asset_intake_id?: string
+          confirmed_on?: string | null
+          created_at?: string
+          id?: string
+          matter_id?: string
+          method?: string
+          note?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_funding_asset_intake_id_fkey"
+            columns: ["asset_intake_id"]
+            isOneToOne: false
+            referencedRelation: "asset_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_funding_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_funding_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "asset_funding_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "asset_funding_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -957,6 +1045,59 @@ export type Database = {
           voicemail_url?: string | null
         }
         Relationships: []
+      }
+      ceremony_documents: {
+        Row: {
+          ceremony_id: string
+          created_at: string
+          document_kind: string
+          executed: boolean
+          id: string
+          notarized: boolean
+          note: string | null
+          recorded_on: string | null
+          recording_reference: string | null
+          signed_on: string | null
+          updated_at: string
+          witness_count: number
+        }
+        Insert: {
+          ceremony_id: string
+          created_at?: string
+          document_kind: string
+          executed?: boolean
+          id?: string
+          notarized?: boolean
+          note?: string | null
+          recorded_on?: string | null
+          recording_reference?: string | null
+          signed_on?: string | null
+          updated_at?: string
+          witness_count?: number
+        }
+        Update: {
+          ceremony_id?: string
+          created_at?: string
+          document_kind?: string
+          executed?: boolean
+          id?: string
+          notarized?: boolean
+          note?: string | null
+          recorded_on?: string | null
+          recording_reference?: string | null
+          signed_on?: string | null
+          updated_at?: string
+          witness_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ceremony_documents_ceremony_id_fkey"
+            columns: ["ceremony_id"]
+            isOneToOne: false
+            referencedRelation: "signing_ceremonies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_intake: {
         Row: {
@@ -3197,6 +3338,69 @@ export type Database = {
           },
         ]
       }
+      document_text_layers: {
+        Row: {
+          aligned_to_layer_id: string | null
+          blocks: Json
+          created_at: string
+          document_version_id: string
+          extractor: string
+          extractor_version: string
+          id: string
+          page_count: number | null
+          source_kind: string
+          source_sha256: string
+          spans: Json
+          status: string
+          text: string
+        }
+        Insert: {
+          aligned_to_layer_id?: string | null
+          blocks?: Json
+          created_at?: string
+          document_version_id: string
+          extractor: string
+          extractor_version: string
+          id?: string
+          page_count?: number | null
+          source_kind: string
+          source_sha256: string
+          spans?: Json
+          status?: string
+          text: string
+        }
+        Update: {
+          aligned_to_layer_id?: string | null
+          blocks?: Json
+          created_at?: string
+          document_version_id?: string
+          extractor?: string
+          extractor_version?: string
+          id?: string
+          page_count?: number | null
+          source_kind?: string
+          source_sha256?: string
+          spans?: Json
+          status?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_text_layers_aligned_to_layer_id_fkey"
+            columns: ["aligned_to_layer_id"]
+            isOneToOne: false
+            referencedRelation: "document_text_layers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_text_layers_document_version_id_fkey"
+            columns: ["document_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_versions: {
         Row: {
           created_at: string
@@ -4343,6 +4547,7 @@ export type Database = {
           email_logo_header: boolean
           email_signature_default: boolean
           email_signature_html: string | null
+          estate_tax_schedules: Json
           firm_name: string | null
           id: number
           phone: string | null
@@ -4369,6 +4574,7 @@ export type Database = {
           email_logo_header?: boolean
           email_signature_default?: boolean
           email_signature_html?: string | null
+          estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
           phone?: string | null
@@ -4395,6 +4601,7 @@ export type Database = {
           email_logo_header?: boolean
           email_signature_default?: boolean
           email_signature_html?: string | null
+          estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
           phone?: string | null
@@ -7035,6 +7242,86 @@ export type Database = {
         }
         Relationships: []
       }
+      signing_ceremonies: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          health_care_agent_name: string | null
+          id: string
+          location: string | null
+          matter_id: string
+          notary_name: string | null
+          note: string | null
+          scheduled_for: string | null
+          status: string
+          updated_at: string
+          witness_one_name: string | null
+          witness_two_name: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          health_care_agent_name?: string | null
+          id?: string
+          location?: string | null
+          matter_id: string
+          notary_name?: string | null
+          note?: string | null
+          scheduled_for?: string | null
+          status?: string
+          updated_at?: string
+          witness_one_name?: string | null
+          witness_two_name?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          health_care_agent_name?: string | null
+          id?: string
+          location?: string | null
+          matter_id?: string
+          notary_name?: string | null
+          note?: string | null
+          scheduled_for?: string | null
+          status?: string
+          updated_at?: string
+          witness_one_name?: string | null
+          witness_two_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signing_ceremonies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signing_ceremonies_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signing_ceremonies_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "signing_ceremonies_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       sla_task_templates: {
         Row: {
           created_at: string
@@ -8191,6 +8478,139 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_citations: {
+        Row: {
+          bbox: Json | null
+          block_index: number
+          char_end: number
+          char_start: number
+          created_at: string
+          document_version_id: string
+          finding_id: string | null
+          id: string
+          page: number | null
+          quote: string
+          text_layer_id: string
+          verification: string
+        }
+        Insert: {
+          bbox?: Json | null
+          block_index: number
+          char_end: number
+          char_start: number
+          created_at?: string
+          document_version_id: string
+          finding_id?: string | null
+          id?: string
+          page?: number | null
+          quote: string
+          text_layer_id: string
+          verification?: string
+        }
+        Update: {
+          bbox?: Json | null
+          block_index?: number
+          char_end?: number
+          char_start?: number
+          created_at?: string
+          document_version_id?: string
+          finding_id?: string | null
+          id?: string
+          page?: number | null
+          quote?: string
+          text_layer_id?: string
+          verification?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_citations_document_version_id_fkey"
+            columns: ["document_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_citations_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_citations_text_layer_id_fkey"
+            columns: ["text_layer_id"]
+            isOneToOne: false
+            referencedRelation: "document_text_layers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_findings: {
+        Row: {
+          attempted_quote: string | null
+          citation_refusal: string | null
+          created_at: string
+          disposition: string
+          disposition_at: string | null
+          disposition_by: string | null
+          disposition_note: string | null
+          id: string
+          outcome: string
+          proposed_language: string | null
+          rationale: string
+          rule_number: string
+          run_id: string
+          severity: string | null
+        }
+        Insert: {
+          attempted_quote?: string | null
+          citation_refusal?: string | null
+          created_at?: string
+          disposition?: string
+          disposition_at?: string | null
+          disposition_by?: string | null
+          disposition_note?: string | null
+          id?: string
+          outcome: string
+          proposed_language?: string | null
+          rationale?: string
+          rule_number: string
+          run_id: string
+          severity?: string | null
+        }
+        Update: {
+          attempted_quote?: string | null
+          citation_refusal?: string | null
+          created_at?: string
+          disposition?: string
+          disposition_at?: string | null
+          disposition_by?: string | null
+          disposition_note?: string | null
+          id?: string
+          outcome?: string
+          proposed_language?: string | null
+          rationale?: string
+          rule_number?: string
+          run_id?: string
+          severity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_findings_disposition_by_fkey"
+            columns: ["disposition_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_findings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_jobs: {
         Row: {
           attempts: number
@@ -8267,6 +8687,103 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
+          },
+        ]
+      }
+      workflow_runs: {
+        Row: {
+          created_by: string | null
+          document_version_id: string
+          failed_count: number
+          failures: Json
+          finding_count: number
+          finished_at: string | null
+          id: string
+          matter_id: string
+          model: string | null
+          playbook_slug: string
+          playbook_version: number
+          rule_total: number
+          started_at: string
+          status: string
+          text_layer_id: string | null
+        }
+        Insert: {
+          created_by?: string | null
+          document_version_id: string
+          failed_count?: number
+          failures?: Json
+          finding_count?: number
+          finished_at?: string | null
+          id?: string
+          matter_id: string
+          model?: string | null
+          playbook_slug: string
+          playbook_version: number
+          rule_total?: number
+          started_at?: string
+          status: string
+          text_layer_id?: string | null
+        }
+        Update: {
+          created_by?: string | null
+          document_version_id?: string
+          failed_count?: number
+          failures?: Json
+          finding_count?: number
+          finished_at?: string | null
+          id?: string
+          matter_id?: string
+          model?: string | null
+          playbook_slug?: string
+          playbook_version?: number
+          rule_total?: number
+          started_at?: string
+          status?: string
+          text_layer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_runs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_document_version_id_fkey"
+            columns: ["document_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_text_layer_id_fkey"
+            columns: ["text_layer_id"]
+            isOneToOne: false
+            referencedRelation: "document_text_layers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -10518,12 +11035,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10547,11 +11064,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10572,11 +11089,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10597,11 +11114,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10614,11 +11131,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { DocumentKind } from '@/lib/execution/requirements'
 import type { CeremonyRoles, DocumentRecord } from './validation'
 
@@ -52,15 +53,11 @@ export interface Ceremony extends CeremonyRoles {
   documents: Array<DocumentRecord & { recordingReference: string | null; note: string | null }>
 }
 
-function untyped(client: SupabaseClient<never>): SupabaseClient {
-  return client as unknown as SupabaseClient
-}
-
 export async function loadCeremony(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   matterId: string,
 ): Promise<Ceremony | null> {
-  const sb = untyped(client)
+  const sb = client
 
   // The most recent appointment. A matter can be signed more than once — a
   // restatement, a missed document — and the latest is the one being worked on.
@@ -118,10 +115,10 @@ export interface SaveCeremonyInput extends CeremonyRoles {
 }
 
 export async function saveCeremony(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   input: SaveCeremonyInput,
 ): Promise<{ ok: true; ceremonyId: string } | { ok: false; message: string }> {
-  const sb = untyped(client)
+  const sb = client
   const row = {
     matter_id: input.matterId,
     scheduled_for: input.scheduledFor,
@@ -164,14 +161,14 @@ export interface SaveDocumentInput {
 }
 
 export async function saveCeremonyDocument(
-  client: SupabaseClient<never>,
+  client: SupabaseClient<WorkbenchDatabase>,
   input: SaveDocumentInput,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (input.executed && !input.signedOn) {
     return { ok: false, message: 'Recording a document as signed needs the date it was signed.' }
   }
 
-  const { error } = await untyped(client)
+  const { error } = await client
     .from('ceremony_documents')
     .upsert(
       {
