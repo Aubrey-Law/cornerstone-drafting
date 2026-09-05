@@ -1,26 +1,40 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { systemWorkflowsRoot } from '@aubrey-law/system-workflows/root'
 import { reviewPlaybookSchema, type ReviewPlaybook } from '@aubrey-law/citations/review/types'
+import playbookJson from '@aubrey-law/system-workflows/review/ma-trust-third-party-draft.json'
 
 /**
  * The playbook is firm content, bundled with the repository rather than typed
  * into a screen, and read through the workspace package so both apps run the
  * same rules from the same file.
  *
- * One playbook for now — reviewing a Massachusetts revocable trust drafted
- * elsewhere. A library with a picker is the authoring phase; hard-coding the
- * slug here is honest about there being one.
+ * Imported as a module, never read from disk. Next traces a serverless bundle
+ * by following imports, so an `fs.readFileSync` is invisible to it: the route
+ * builds clean, deploys, and throws ENOENT on the first request. That is
+ * exactly what happened. `outputFileTracingIncludes` was meant to cover it and
+ * silently did not — those globs resolve against the project directory, not
+ * `outputFileTracingRoot`, so a path written from the repository root matched
+ * nothing and no build step said so. An import cannot fail that way, because
+ * the compiler puts the bytes in the bundle.
+ *
+ * It is still validated at load. The file is edited by hand, and a playbook
+ * that drifts out of schema would otherwise surface as a review that quietly
+ * skipped a rule — the failure this product cannot have.
+ *
+ * One playbook for now: reviewing a Massachusetts revocable trust drafted
+ * elsewhere. A library with a picker is the authoring phase, and will be
+ * database-backed rather than another import.
  */
 export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-third-party-draft'
 
-export function loadReviewPlaybook(slug: string = REVIEW_PLAYBOOK_SLUG): ReviewPlaybook {
-  const file = path.join(systemWorkflowsRoot, 'review', `${slug}.json`)
-  const parsed = reviewPlaybookSchema.safeParse(JSON.parse(fs.readFileSync(file, 'utf8')))
+let cached: ReviewPlaybook | null = null
+
+export function loadReviewPlaybook(): ReviewPlaybook {
+  if (cached) return cached
+  const parsed = reviewPlaybookSchema.safeParse(playbookJson)
   if (!parsed.success) {
-    // A playbook that drifts out of schema would otherwise surface as a review
-    // that quietly skipped a rule, which is the failure this product cannot have.
-    throw new Error(`Review playbook ${slug} does not match the expected shape: ${parsed.error.message}`)
+    throw new Error(
+      `Review playbook ${REVIEW_PLAYBOOK_SLUG} does not match the expected shape: ${parsed.error.message}`,
+    )
   }
-  return parsed.data
+  cached = parsed.data
+  return cached
 }

@@ -42,18 +42,21 @@ export const workbenchConfig: NextConfig = {
    */
   serverExternalPackages: ['@napi-rs/canvas'],
   /**
-   * Files read at runtime through `fs`, which tracing cannot infer from an
-   * import. The review playbook is one: it lives in the bundled workflow tree
-   * and is read by path, so without this the route builds clean and then throws
-   * ENOENT on Vercel. Paths are relative to outputFileTracingRoot above.
+   * Files reached at runtime by path rather than by import, which tracing
+   * cannot infer. pdf.js resolves its own standard fonts and its native canvas
+   * binding this way.
+   *
+   * These globs resolve against the **project directory**, not
+   * `outputFileTracingRoot` — which is why `./node_modules/...` works here and
+   * a path written from the repository root would match nothing, silently. The
+   * review playbook used to be listed here and never was traced; it is a module
+   * import now, which cannot fail that way. Prefer an import to an entry here.
    */
   outputFileTracingIncludes: {
     '/api/staff/review': [
-      './tools/workflows/review/**',
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
-    '/review': ['./tools/workflows/review/**'],
   },
   transpilePackages: [
     '@aubrey-law/estate-fields',
