@@ -146,6 +146,30 @@ verifier.
 
 **Only verified findings become tasks.**
 
+### A limit found while building it, 2026-09-05
+
+Several allow-listed fields are `jsonb` arrays of objects — `children`, `assets`,
+`specific_bequests`, `disinheritances`. Comparing a claim against the whole value would
+have required the model to reproduce the exact serialised JSON, which no model producing a
+natural-language claim will do, so those fields would have been effectively uncitable —
+and four of the six checks read them.
+
+A claim is therefore verified when it matches a scalar **leaf inside** the structure, which
+is what `verifyQuote` already does for documents: the model is not asked to reproduce the
+source, only to point at something really in it.
+
+That has a cost, and it was found by constructing the case rather than reasoning about it.
+A leaf carries no memory of the object it came from, so a claim of "Ana was born
+2018-04-02" verifies when that date is really in `children` but belongs to Daniel. The
+verifier cannot catch a misattribution of this kind.
+
+No structural matcher was built for it. There is no real data yet to say whether it bites,
+and a matcher designed against an imagined failure is the speculative building this plan
+warns against. Instead the reference records `matchedPath` — `children[0].dob` — the way a
+document citation records its block and span, so the attorney reading a finding can see
+which fact it rests on. **Whether misattribution actually occurs is a question for the real
+run in the plan's last task**, and the answer belongs in the prompt, never in the verifier.
+
 ## Output
 
 `emitTasks` writes `tasks` rows with `source: 'prompt'`, `task_type: 'single'`,
