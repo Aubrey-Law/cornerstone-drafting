@@ -9,6 +9,7 @@ const finding = (over: Partial<ReviewFinding> & { ruleNumber: string }): ReviewF
   proposedLanguage: null,
   citation: null,
   citationRefusal: null,
+  attemptedQuote: null,
   ...over,
 })
 

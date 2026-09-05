@@ -9,7 +9,7 @@ import type { TextLayer } from '@/lib/textLayer/types'
 
 const PLAYBOOK: ReviewPlaybook = reviewPlaybookSchema.parse(
   JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'tools/workflows/review/ma-trust-third-party-draft.json'), 'utf8'),
+    fs.readFileSync(path.join(process.cwd(), 'tools/workflows/review/ma-trust-firm-qa.json'), 'utf8'),
   ),
 )
 
@@ -110,6 +110,47 @@ describe('review playbook run', () => {
     })
     expect(result.findings[0].citation).toBeNull()
     expect(result.findings[0].citationRefusal).toBe('ambiguous')
+  })
+
+  /**
+   * A rejected citation has to say what was attempted, not only that something
+   * was. The rejection rate is the measure this whole slice is judged by, and
+   * the response to a high one is to change the prompting or how the document
+   * is presented — neither of which can be decided without seeing the words the
+   * model tried to quote.
+   */
+  it('keeps the quote it could not verify, so the refusal can be diagnosed', async () => {
+    const layer = await trustLayer()
+    const result = await runReviewPlaybook(layer, PLAYBOOK, {
+      callModel: scriptedModel([
+        {
+          outcome: 'deviation',
+          rationale: 'Tidied the punctuation while quoting.',
+          quote: 'the Trustee shall never be liable to any person whatsoever',
+          block_index: null,
+          proposed_language: null,
+        },
+      ]),
+    })
+    const [finding] = result.findings
+    expect(finding.citationRefusal).toBe('not_found')
+    expect(finding.attemptedQuote).toBe('the Trustee shall never be liable to any person whatsoever')
+  })
+
+  it('has no attempted quote when the citation was accepted', async () => {
+    const layer = await trustLayer()
+    const result = await runReviewPlaybook(layer, PLAYBOOK, {
+      callModel: scriptedModel([
+        {
+          outcome: 'deviation',
+          rationale: 'Liability is carved out only for willful misconduct.',
+          quote: 'willful misconduct',
+          block_index: null,
+          proposed_language: 'willful misconduct, bad faith, or gross negligence',
+        },
+      ]),
+    })
+    expect(result.findings[0].attemptedQuote).toBeNull()
   })
 
   /**

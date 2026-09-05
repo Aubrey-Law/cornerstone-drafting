@@ -35,13 +35,19 @@ const DISPOSITIONS: Array<{ value: Disposition; label: string }> = [
  * read as a checkable claim, and it can never reach an export. Saying both is
  * what keeps "verified" meaning something.
  */
-function CitationRefusal() {
+function CitationRefusal({ attempted }: { attempted: string | null }) {
   return (
-    <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">Not citable.</span> The quoted words could not
-      be found in this document, so this finding is excluded from the export and from any redline.
-      Read it as a lead to check by hand.
-    </p>
+    <div className="space-y-1 rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
+      <p>
+        <span className="font-medium text-foreground">Not citable.</span> The quoted words could not
+        be found in this document, so this finding is excluded from the export and from any redline.
+        Read it as a lead to check by hand.
+      </p>
+      {/* The attempted words, so a paraphrase can be told from a verifier that
+          is being too strict. Without them the finding is an assertion with
+          nothing to check. */}
+      {attempted ? <p className="italic">It tried to quote: “{attempted}”</p> : null}
+    </div>
   )
 }
 
@@ -105,7 +111,7 @@ export function FindingsList({
               </blockquote>
             ) : null}
 
-            {finding.citationRefusal ? <CitationRefusal /> : null}
+            {finding.citationRefusal ? <CitationRefusal attempted={finding.attemptedQuote} /> : null}
 
             {finding.proposedLanguage ? (
               <p className="text-sm">

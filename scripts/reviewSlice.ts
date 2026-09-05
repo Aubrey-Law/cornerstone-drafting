@@ -2,7 +2,7 @@
  * Run a review playbook against a document, standalone:
  *
  *   npm run review:slice -- --file ~/drafts/smith-trust.pdf
- *   npm run review:slice -- --file draft.docx --playbook tools/workflows/review/ma-trust-third-party-draft.json
+ *   npm run review:slice -- --file draft.docx --playbook tools/workflows/review/ma-trust-firm-qa.json
  *   npm run review:slice -- --file draft.docx --redline /tmp/smith-trust-marked.docx
  *   npm run review:slice -- --file draft.pdf --layer-only
  *
@@ -42,7 +42,7 @@ import type { TextLayer } from '@/lib/textLayer/types'
 config({ path: '.env.test', override: false, quiet: true })
 config({ path: '.env.local', override: false, quiet: true })
 
-const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-third-party-draft.json'
+const DEFAULT_PLAYBOOK = 'tools/workflows/review/ma-trust-firm-qa.json'
 
 /**
  * The service-role client, when this machine has the credentials for one.
@@ -171,6 +171,9 @@ async function main(): Promise<void> {
     } else if (finding.citationRefusal) {
       unverified += 1
       console.log(`  ✗ citation rejected: ${finding.citationRefusal}`)
+      // Printed so a poor rate can be acted on. Reading the attempted words is
+      // how you tell a model that paraphrased from a verifier that is wrong.
+      if (finding.attemptedQuote) console.log(`    tried: “${finding.attemptedQuote}”`)
     }
 
     if (finding.proposedLanguage) console.log(`  → ${finding.proposedLanguage}`)

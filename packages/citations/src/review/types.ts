@@ -50,6 +50,16 @@ export interface ReviewFinding {
   citation: Citation | null
   /** Why no citation, when there is none. Null when one was expected and found. */
   citationRefusal: VerifyReason | null
+  /**
+   * The words the model tried to quote, kept only when they could not be
+   * verified.
+   *
+   * The share of citations that survive verification is the measure this whole
+   * design is judged by, and the response to a poor one is to change the
+   * prompting or how the document is presented — never to loosen the verifier.
+   * Neither can be decided without seeing what the model actually reached for.
+   */
+  attemptedQuote: string | null
 }
 
 export interface ReviewResult {
