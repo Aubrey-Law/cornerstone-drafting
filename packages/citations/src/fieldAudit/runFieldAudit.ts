@@ -1,6 +1,7 @@
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import type { FieldAuditBody, FieldAuditCheck } from '../prompt/body'
-import type { ModelCaller, ModelRequest, ModelResponse } from '../review/model'
+import { runPrompt } from '../prompt/runPrompt'
+import type { ModelCaller, ModelRequest } from '../review/model'
 import { verifyFieldReference } from './verify'
 import type { FieldAuditFinding, FieldAuditResult, FieldReference } from './types'
 
@@ -90,12 +91,6 @@ export interface RunFieldAuditDependencies {
   model?: string
 }
 
-interface ToolInput {
-  outcome: unknown
-  rationale: unknown
-  references: unknown
-}
-
 function formatFieldValue(value: unknown): string {
   if (value === null || value === undefined) return '(empty)'
   if (typeof value === 'string') return value
@@ -123,17 +118,49 @@ function checkMessage(check: FieldAuditCheck): string {
   return lines.join('\n')
 }
 
-function readToolInput(response: ModelResponse): ToolInput | null {
-  for (const block of response.content) {
-    if (block.type === 'tool_use' && block.name === FIELD_AUDIT_TOOL_NAME) {
-      return block.input as ToolInput
-    }
-  }
-  return null
-}
-
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+/**
+ * Turns one check's tool input into a finding, verifying every claimed
+ * reference against `values` on the way. Returns null for an input
+ * `runPrompt` should record as a failure rather than a finding — here, only
+ * an outcome the tool schema does not actually allow through.
+ */
+function findingForCheck(
+  check: FieldAuditCheck,
+  input: Record<string, unknown>,
+  values: Record<string, unknown>,
+): FieldAuditFinding | null {
+  const outcome = input.outcome
+  if (
+    outcome !== 'compliant' &&
+    outcome !== 'deviation' &&
+    outcome !== 'absent' &&
+    outcome !== 'not_applicable'
+  ) {
+    return null
+  }
+
+  const rawReferences = Array.isArray(input.references) ? input.references : []
+  const references: FieldReference[] = rawReferences
+    .filter((ref): ref is Record<string, unknown> => ref !== null && typeof ref === 'object')
+    .map(ref =>
+      verifyFieldReference(values, check.reads, {
+        fieldKey: asString(ref.field_key) ?? '',
+        claimedValue: asString(ref.claimed_value),
+      }),
+    )
+    .filter(ref => ref.fieldKey !== '')
+
+  return {
+    checkNumber: check.number,
+    outcome,
+    severity: outcome === 'deviation' || outcome === 'absent' ? check.risk : null,
+    rationale: asString(input.rationale) ?? '',
+    references,
+  }
 }
 
 /**
@@ -153,24 +180,26 @@ function asString(value: unknown): string | null {
  * thirty-nine reads. As in review, this is why an audit is run contiguously
  * rather than interleaved with other work — the five-minute TTL is what pays
  * for the shared prefix.
+ *
+ * The loop itself lives in ../prompt/runPrompt — this function supplies the
+ * three things that differ from a review's: what a unit (a check) is, what
+ * its request says, and what its response becomes.
  */
 export async function runFieldAudit(
   context: FieldAuditContext,
   body: FieldAuditBody,
   deps: RunFieldAuditDependencies,
 ): Promise<FieldAuditResult> {
-  const call = deps.callModel
   const model = deps.model ?? 'claude-sonnet-5'
   const sheet = sheetForPrompt(context.values)
 
-  const findings: FieldAuditFinding[] = []
-  const failures: FieldAuditResult['failures'] = []
-
-  for (const check of body.checks) {
-    let input: ToolInput | null
-    try {
-      const response = await call(
-        {
+  const run = await runPrompt<FieldAuditCheck, FieldAuditFinding>(
+    {
+      units: body.checks,
+      toolName: FIELD_AUDIT_TOOL_NAME,
+      idFor: check => check.number,
+      requestFor: check =>
+        ({
           model,
           max_tokens: 1024,
           system: [
@@ -181,62 +210,25 @@ export async function runFieldAudit(
           messages: [{ role: 'user', content: checkMessage(check) }],
           tools: [FIELD_AUDIT_TOOL],
           tool_choice: { type: 'tool', name: FIELD_AUDIT_TOOL_NAME },
-        } as ModelRequest,
-        {
-          route: 'field_audit/prompt',
-          matterId: context.matterId ?? null,
-          userId: context.userId ?? null,
-          contextType: 'matter',
-        },
-      )
-      input = readToolInput(response)
-    } catch (error) {
-      // Per-check fail-soft: one check losing its call must not cost the audit.
-      failures.push({ checkNumber: check.number, reason: (error as Error).message })
-      continue
-    }
-
-    if (!input) {
-      failures.push({ checkNumber: check.number, reason: 'Model returned no tool call' })
-      continue
-    }
-
-    const outcome = input.outcome
-    if (
-      outcome !== 'compliant' &&
-      outcome !== 'deviation' &&
-      outcome !== 'absent' &&
-      outcome !== 'not_applicable'
-    ) {
-      failures.push({ checkNumber: check.number, reason: `Unrecognised outcome ${String(outcome)}` })
-      continue
-    }
-
-    const rawReferences = Array.isArray(input.references) ? input.references : []
-    const references: FieldReference[] = rawReferences
-      .filter((ref): ref is Record<string, unknown> => ref !== null && typeof ref === 'object')
-      .map(ref =>
-        verifyFieldReference(context.values, check.reads, {
-          fieldKey: asString(ref.field_key) ?? '',
-          claimedValue: asString(ref.claimed_value),
-        }),
-      )
-      .filter(ref => ref.fieldKey !== '')
-
-    findings.push({
-      checkNumber: check.number,
-      outcome,
-      severity: outcome === 'deviation' || outcome === 'absent' ? check.risk : null,
-      rationale: asString(input.rationale) ?? '',
-      references,
-    })
-  }
+        }) as ModelRequest,
+      findingFor: (check, input) => findingForCheck(check, input, context.values),
+    },
+    {
+      callModel: deps.callModel,
+      context: {
+        route: 'field_audit/prompt',
+        matterId: context.matterId ?? null,
+        userId: context.userId ?? null,
+        contextType: 'matter',
+      },
+    },
+  )
 
   return {
     promptSlug: context.promptSlug,
     promptVersion: context.promptVersion,
-    findings,
-    failures,
+    findings: run.findings,
+    failures: run.failures.map(failure => ({ checkNumber: failure.unitId, reason: failure.reason })),
   }
 }
 
