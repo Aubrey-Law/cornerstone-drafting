@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   PROMPT_TASK_SOURCE,
+  emitTasks,
+  planEmit,
   taskRowsFor,
-  tasksToSupersede,
-  tasksToSupersedeForUnits,
   type ExistingPromptTask,
+  type TaskRow,
 } from '@/lib/fieldAudit/tasks'
 import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
@@ -41,7 +42,7 @@ const finding = (over: Partial<FieldAuditFinding> = {}): FieldAuditFinding => ({
 
 describe('taskRowsFor', () => {
   it('templates a task from the check and appends the finding’s rationale', () => {
-    const rows = taskRowsFor('matter-1', 'run-1', [check()], [finding()])
+    const rows = taskRowsFor('matter-1', 'run-1', [check()], [finding()], 'task_set', 'Audit')
 
     expect(rows).toEqual([
       {
@@ -55,6 +56,7 @@ describe('taskRowsFor', () => {
           'The design sheet records a concern the structured decisions do not address.\n\n' +
           'The client raised a concern about the stepchildren that the residuary never answers.',
         priority: 'high',
+        checklist: [],
       },
     ])
   })
@@ -65,7 +67,14 @@ describe('taskRowsFor', () => {
    * would have no way to leave the rest of the run's tasks alone.
    */
   it('names both the run and the unit in the batch tag', () => {
-    const [row] = taskRowsFor('matter-1', 'run-1', [check({ number: '7' })], [finding({ checkNumber: '7' })])
+    const [row] = taskRowsFor(
+      'matter-1',
+      'run-1',
+      [check({ number: '7' })],
+      [finding({ checkNumber: '7' })],
+      'task_set',
+      'Audit',
+    )
     expect(row.batch_tag).toBe('prompt:run-1#7')
   })
 
@@ -75,6 +84,8 @@ describe('taskRowsFor', () => {
       'run-1',
       [check({ number: '1' }), check({ number: '2', taskTemplate: { title: 'Other', description: 'Other issue', priority: 'normal' } })],
       [finding({ checkNumber: '1' }), finding({ checkNumber: '2' })],
+      'task_set',
+      'Audit',
     )
     expect(rows).toHaveLength(2)
     expect(rows.map((r) => r.title)).toEqual(['A stated concern is not answered by the plan', 'Other'])
@@ -87,12 +98,106 @@ describe('taskRowsFor', () => {
    * title for.
    */
   it('skips a finding whose check number matches no check', () => {
-    const rows = taskRowsFor('matter-1', 'run-1', [check({ number: '1' })], [finding({ checkNumber: '9' })])
+    const rows = taskRowsFor(
+      'matter-1',
+      'run-1',
+      [check({ number: '1' })],
+      [finding({ checkNumber: '9' })],
+      'task_set',
+      'Audit',
+    )
     expect(rows).toEqual([])
   })
 
   it('produces no rows for no findings', () => {
-    expect(taskRowsFor('matter-1', 'run-1', [check()], [])).toEqual([])
+    expect(taskRowsFor('matter-1', 'run-1', [check()], [], 'task_set', 'Audit')).toEqual([])
+  })
+})
+
+const CHECK_2 = check({
+  number: '2',
+  taskTemplate: {
+    title: 'A person named in the notes is missing from the plan',
+    description: 'Someone is named in free text but appears in no structured field.',
+    priority: 'normal',
+  },
+})
+/**
+ * Check 2 first, deliberately. Declared in numeric order, body order and
+ * check-number order coincide — and the ordering test below could then not
+ * tell a body-order sort from a sort on `checkNumber`, which would pass today
+ * and diverge the moment a prompt declares its checks out of order, or reaches
+ * check 10, which sorts before check 2 as a string.
+ */
+const CHECKS = [CHECK_2, check({ number: '1' })]
+
+const FINDING_1 = finding({ checkNumber: '1', rationale: 'Because the residuary never answers it.' })
+const FINDING_2 = finding({ checkNumber: '2', rationale: 'And nobody named Ruth appears anywhere.' })
+
+describe('taskRowsFor with an output target', () => {
+  it('produces no rows at all for chat', () => {
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1], 'chat', 'Audit')).toEqual([])
+  })
+
+  it('produces one single task per finding for task_set', () => {
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'task_set', 'Audit')
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.task_type)).toEqual(['single', 'single'])
+    // Body order, which `CHECKS` deliberately declares check 2 first in.
+    expect(rows.map((row) => row.batch_tag)).toEqual(['prompt:run-1#2', 'prompt:run-1#1'])
+    expect(rows.every((row) => row.checklist.length === 0)).toBe(true)
+  })
+
+  it('produces exactly one checklist task carrying an item per finding', () => {
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'MA design sheet audit')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].task_type).toBe('checklist')
+    // No unit suffix: there is no single unit a run-level task belongs to.
+    expect(rows[0].batch_tag).toBe('prompt:run-1')
+    expect(rows[0].title).toBe('MA design sheet audit')
+    expect(rows[0].checklist).toEqual([
+      { text: 'A person named in the notes is missing from the plan', done: false },
+      { text: 'A stated concern is not answered by the plan', done: false },
+    ])
+    // Collapsing into items must not lose the evidence.
+    expect(rows[0].description).toContain('Because the residuary never answers it.')
+    expect(rows[0].description).toContain('And nobody named Ruth appears anywhere.')
+  })
+
+  /**
+   * The body's order, not the findings' arrival order. A prompt's checks are
+   * ordered the way their author meant, and a checklist read out of that
+   * order reads as a different document.
+   */
+  it('orders items by the prompt body, not by the findings array or the check number', () => {
+    // The findings arrive in numeric order, and `CHECKS` declares check 2
+    // first, so only a body-order sort produces this. A sort on
+    // `finding.checkNumber` would put check 1's item first and fail here.
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'Audit')
+    expect(rows[0].checklist.map((item) => item.text)).toEqual([
+      'A person named in the notes is missing from the plan',
+      'A stated concern is not answered by the plan',
+    ])
+  })
+
+  it('takes the highest priority among the contributing checks', () => {
+    // Check 2 alone is 'normal'; with check 1's 'high' in the set it is 'high'.
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_2], 'checklist', 'Audit')[0].priority).toBe('normal')
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'Audit')[0].priority).toBe('high')
+  })
+
+  /**
+   * Not an empty checklist. A task with no items says work is needed and then
+   * names none, which is worse than saying nothing — and it is exactly what a
+   * run whose every finding failed verification would otherwise produce.
+   */
+  it('produces no checklist task when nothing is actionable', () => {
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [], 'checklist', 'Audit')).toEqual([])
+  })
+
+  it('skips a finding whose check the prompt version does not contain', () => {
+    const drifted = finding({ checkNumber: '99', rationale: 'Out of step.' })
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [drifted], 'checklist', 'Audit')).toEqual([])
   })
 })
 
@@ -102,153 +207,336 @@ const existingTask = (over: Partial<ExistingPromptTask> = {}): ExistingPromptTas
   batchTag: 'prompt:run-old',
   status: 'open',
   assigneeId: null,
+  title: 'A stated concern is not answered by the plan',
+  description: 'Whatever it said last time.',
+  priority: 'high',
+  taskType: 'single',
+  checklist: [],
   ...over,
 })
 
-describe('tasksToSupersede', () => {
-  it('supersedes an open, unassigned task from an earlier run', () => {
-    const ids = tasksToSupersede([existingTask({ id: 'task-1' })], 'run-new')
-    expect(ids).toEqual(['task-1'])
+describe('planEmit', () => {
+  /** A row this run wants to exist, matching `existingTask`'s content. */
+  function desiredRow(overrides: Partial<TaskRow> = {}): TaskRow {
+    return {
+      matter_id: 'matter-1',
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'single',
+      auto: true,
+      batch_tag: 'prompt:run-new#1',
+      title: 'A stated concern is not answered by the plan',
+      description: 'Whatever it said last time.',
+      priority: 'high',
+      checklist: [],
+      ...overrides,
+    }
+  }
+
+  /** One of this run's own open, unassigned tasks. */
+  function open(overrides: Partial<ExistingPromptTask> = {}): ExistingPromptTask {
+    return existingTask({ batchTag: 'prompt:run-new#1', ...overrides })
+  }
+
+  it('inserts everything and withdraws a previous run’s set on a first run', () => {
+    const plan = planEmit([open({ id: 'old-1', batchTag: 'prompt:run-old#1' })], [desiredRow()])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['old-1'])
   })
 
   /**
-   * The moment someone picks a task up it stops being merely a suggestion
-   * still standing. A newer run no longer surfacing the same finding does
-   * not make that work moot, so a tool must never close it out from under
-   * them.
+   * The regression this function exists to fix. #412 stopped passing
+   * `unitIds`, so a retried run's second done-pass re-inserted a task for
+   * every unit — including the ones that never failed, whose task survived
+   * because the old filter excluded this run's own id. Nothing in the
+   * database stops it: `tasks` has no unique index on `batch_tag`.
    */
-  it('never supersedes a task someone has been assigned', () => {
-    const ids = tasksToSupersede([existingTask({ assigneeId: 'user-1' })], 'run-new')
-    expect(ids).toEqual([])
+  it('inserts nothing and withdraws nothing when the run already said this', () => {
+    const plan = planEmit([open()], [desiredRow()])
+    expect(plan.insert).toEqual([])
+    expect(plan.keep).toEqual(['task-1'])
+    expect(plan.supersede).toEqual([])
   })
 
-  /**
-   * A completed task is a record of work that actually happened. Closing it
-   * out as "superseded" would rewrite history rather than tidy a queue.
-   */
-  it('never supersedes a task that is already done', () => {
-    const ids = tasksToSupersede([existingTask({ status: 'done' })], 'run-new')
-    expect(ids).toEqual([])
-  })
-
-  it('never touches a task from another source', () => {
-    const ids = tasksToSupersede([existingTask({ source: 'manual' })], 'run-new')
-    expect(ids).toEqual([])
-  })
-
-  it('never supersedes this run’s own tasks', () => {
-    const ids = tasksToSupersede([existingTask({ batchTag: 'prompt:run-new' })], 'run-new')
-    expect(ids).toEqual([])
-  })
-
-  it('leaves a blocked or in-progress task alone too', () => {
-    const ids = tasksToSupersede(
-      [existingTask({ id: 'a', status: 'blocked' }), existingTask({ id: 'b', status: 'in_progress' })],
-      'run-new',
-    )
-    expect(ids).toEqual([])
-  })
-
-  it('supersedes several eligible tasks from different earlier runs at once', () => {
-    const ids = tasksToSupersede(
+  it('replaces a task whose rationale changed, and only that one', () => {
+    const plan = planEmit(
       [
-        existingTask({ id: 'a', batchTag: 'prompt:run-1' }),
-        existingTask({ id: 'b', batchTag: 'prompt:run-2' }),
-        existingTask({ id: 'c', assigneeId: 'user-1' }),
+        open({ id: 'unit-1', batchTag: 'prompt:run-new#1' }),
+        open({ id: 'unit-2', batchTag: 'prompt:run-new#2', title: 'A person is missing' }),
       ],
-      'run-3',
+      [
+        desiredRow({ batch_tag: 'prompt:run-new#1' }),
+        desiredRow({
+          batch_tag: 'prompt:run-new#2',
+          title: 'A person is missing',
+          description: 'Now it says something else.',
+        }),
+      ],
     )
-    expect(ids.sort()).toEqual(['a', 'b'])
+    // Unit 1 is untouched: same id, same created_at, no churn.
+    expect(plan.keep).toEqual(['unit-1'])
+    expect(plan.supersede).toEqual(['unit-2'])
+    expect(plan.insert.map((row) => row.batch_tag)).toEqual(['prompt:run-new#2'])
+  })
+
+  it('withdraws a task for a finding this run no longer makes', () => {
+    const plan = planEmit([open({ id: 'gone', batchTag: 'prompt:run-new#9' })], [])
+    expect(plan.insert).toEqual([])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['gone'])
+  })
+
+  /** A duplicate pair left by the pre-fix bug has only one twin to match. */
+  it('self-heals a duplicate left by the earlier bug', () => {
+    const plan = planEmit([open({ id: 'first' }), open({ id: 'second' })], [desiredRow()])
+    expect(plan.insert).toEqual([])
+    expect(plan.keep).toEqual(['first'])
+    expect(plan.supersede).toEqual(['second'])
+  })
+
+  it('never touches a task someone else made, holds, or has moved on', () => {
+    const plan = planEmit(
+      [
+        existingTask({ id: 'manual', source: 'manual', batchTag: null }),
+        existingTask({ id: 'assigned', batchTag: 'prompt:run-old#1', assigneeId: 'user-1' }),
+        existingTask({ id: 'done', batchTag: 'prompt:run-old#2', status: 'done' }),
+        existingTask({ id: 'in-progress', batchTag: 'prompt:run-old#3', status: 'in_progress' }),
+      ],
+      [desiredRow()],
+    )
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /** The checklist tag has no unit suffix and needs no special case. */
+  it('treats a run-level tag exactly like a unit-level one', () => {
+    const row = desiredRow({
+      batch_tag: 'prompt:run-new',
+      task_type: 'checklist',
+      checklist: [{ text: 'One', done: false }],
+    })
+    const same = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-new',
+      taskType: 'checklist',
+      checklist: [{ text: 'One', done: false }],
+    })
+    expect(planEmit([same], [row])).toEqual({ insert: [], keep: ['list'], supersede: [] })
+
+    const changed = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-new',
+      taskType: 'checklist',
+      checklist: [{ text: 'Two', done: false }],
+    })
+    const plan = planEmit([changed], [row])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['list'])
+    expect(plan.insert).toHaveLength(1)
   })
 
   /**
-   * A tag now carries a unit suffix (`prompt:run-old#3`), but this is still
-   * a previous run's tag as far as a first run is concerned — the run id is
-   * parsed back out rather than the whole tag compared, so the suffix
-   * changes nothing about which earlier tasks get closed.
+   * A ticked item is someone's progress. `planEmit` only inserts and archives,
+   * so "not matching" means archived-and-replaced-with-a-blank-copy, never
+   * rewritten in place — which is why `done` is outside the content key.
    */
-  it('still selects a previous run’s tasks despite the new unit suffix', () => {
-    const ids = tasksToSupersede([existingTask({ id: 'task-1', batchTag: 'prompt:run-old#3' })], 'run-new')
-    expect(ids).toEqual(['task-1'])
+  it('keeps a checklist someone has partly ticked, so their progress survives', () => {
+    const row = desiredRow({
+      batch_tag: 'prompt:run-new',
+      task_type: 'checklist',
+      checklist: [
+        { text: 'One', done: false },
+        { text: 'Two', done: false },
+      ],
+    })
+    const ticked = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-new',
+      taskType: 'checklist',
+      checklist: [
+        { text: 'One', done: true },
+        { text: 'Two', done: false },
+      ],
+    })
+    expect(planEmit([ticked], [row])).toEqual({ insert: [], keep: ['list'], supersede: [] })
   })
 
-  it('still leaves this run’s own tasks alone once they carry a unit suffix', () => {
-    const ids = tasksToSupersede([existingTask({ batchTag: 'prompt:run-new#3' })], 'run-new')
-    expect(ids).toEqual([])
+  /** But a checklist whose *items* changed is a different checklist. */
+  it('replaces a checklist whose item text changed, ticks or not', () => {
+    const row = desiredRow({
+      batch_tag: 'prompt:run-new',
+      task_type: 'checklist',
+      checklist: [{ text: 'One', done: false }],
+    })
+    const ticked = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-new',
+      taskType: 'checklist',
+      checklist: [{ text: 'Something else', done: true }],
+    })
+    const plan = planEmit([ticked], [row])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['list'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /** `priority` alone, because it is a *derived* value — the highest among the
+   *  contributing checks — which is the kind of field a later refactor gets
+   *  wrong without anything failing. */
+  it('replaces a task whose priority alone changed', () => {
+    const plan = planEmit([open({ priority: 'normal' })], [desiredRow()])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['task-1'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /** The mirror of the self-heal case: one existing row against two identical
+   *  desired rows must keep it once and insert the second, which is where an
+   *  off-by-one in `matched` would show. */
+  it('claims each twin at most once when two desired rows are identical', () => {
+    const plan = planEmit([open({ id: 'only' })], [desiredRow(), desiredRow()])
+    expect(plan.keep).toEqual(['only'])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.supersede).toEqual([])
   })
 })
 
-describe('tasksToSupersedeForUnits', () => {
-  it('supersedes only this run’s open, unassigned task for a named unit', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2' })],
-      'run-1',
-      ['2'],
-    )
-    expect(ids).toEqual(['task-1'])
-  })
+/**
+ * Enough of a PostgREST client for `emitTasks`: a `select` chain that resolves
+ * to `rows`, plus recorders for what was inserted and updated.
+ */
+function fakeClient(rows: unknown[]) {
+  const inserted: unknown[][] = []
+  const updatedIds: string[][] = []
+  const client = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { eq: async () => ({ data: rows, error: null }) }
+            },
+          }
+        },
+        async insert(values: unknown[]) {
+          inserted.push(values)
+          return { error: null }
+        },
+        update() {
+          return {
+            async in(_column: string, ids: string[]) {
+              updatedIds.push(ids)
+              return { error: null }
+            },
+          }
+        },
+      }
+    },
+  }
+  return { client: client as never, inserted, updatedIds }
+}
 
+describe('emitTasks', () => {
   /**
-   * The whole reason this is a separate function from `tasksToSupersede`:
-   * a retry only replaces the units it actually retried. A unit this retry
-   * never touched keeps its earlier task, even though it came from the same
-   * run.
+   * Not "produces no rows" — touches the database not at all. An empty
+   * `desired` set reaching `planEmit` would withdraw every open prompt task on
+   * the matter, so a `chat` prompt would silently destroy another prompt's
+   * output. The short-circuit has to be before the query, and this is what
+   * proves it is.
    */
-  it('never supersedes this run’s task for a unit outside the named set', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2' })],
-      'run-1',
-      ['3'],
-    )
-    expect(ids).toEqual([])
+  it('reads nothing and writes nothing for chat', async () => {
+    let touched = false
+    const client = {
+      from() {
+        touched = true
+        throw new Error('emitTasks must not touch the database for a chat prompt')
+      },
+    } as never
+
+    await expect(
+      emitTasks(client, {
+        matterId: 'matter-1',
+        runId: 'run-1',
+        checks: CHECKS,
+        findings: [FINDING_1],
+        outputTarget: 'chat',
+        promptTitle: 'Audit',
+      }),
+    ).resolves.toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(touched).toBe(false)
   })
 
-  it('never supersedes another run’s task for the same unit number', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-other#2' })],
-      'run-1',
-      ['2'],
-    )
-    expect(ids).toEqual([])
+  it('inserts one checklist row and withdraws the previous run’s tasks', async () => {
+    const { client, inserted, updatedIds } = fakeClient([
+      {
+        id: 'old-1',
+        source: PROMPT_TASK_SOURCE,
+        batch_tag: 'prompt:run-old#1',
+        status: 'open',
+        assignee_id: null,
+        title: 'A stated concern is not answered by the plan',
+        description: 'Older wording.',
+        priority: 'high',
+        task_type: 'single',
+        checklist: [],
+      },
+    ])
+
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+
+    expect(result).toEqual({ created: 1, kept: 0, superseded: 1 })
+    expect(inserted).toHaveLength(1)
+    expect(inserted[0]).toHaveLength(1)
+    expect(updatedIds).toEqual([['old-1']])
   })
 
-  it('never supersedes an assigned task, even for a named unit of this run', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', assigneeId: 'user-1' })],
-      'run-1',
-      ['2'],
-    )
-    expect(ids).toEqual([])
-  })
+  /** The regression, end to end through `emitTasks` rather than `planEmit`. */
+  it('is idempotent: a second pass over the same run writes nothing', async () => {
+    const first = fakeClient([])
+    await emitTasks(first.client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+    const row = (first.inserted[0] as Array<Record<string, unknown>>)[0]
 
-  it('never supersedes a non-open task, even for a named unit of this run', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', status: 'done' })],
-      'run-1',
-      ['2'],
-    )
-    expect(ids).toEqual([])
-  })
+    // The same row read back the way PostgREST would return it.
+    const second = fakeClient([
+      {
+        id: 'list-1',
+        source: row.source,
+        batch_tag: row.batch_tag,
+        status: 'open',
+        assignee_id: null,
+        title: row.title,
+        description: row.description,
+        priority: row.priority,
+        task_type: row.task_type,
+        checklist: row.checklist,
+      },
+    ])
 
-  it('never touches a task from another source, even matching the run and unit', () => {
-    const ids = tasksToSupersedeForUnits(
-      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', source: 'manual' })],
-      'run-1',
-      ['2'],
-    )
-    expect(ids).toEqual([])
-  })
+    const result = await emitTasks(second.client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
 
-  it('supersedes several named units from this run at once, leaving an untouched unit alone', () => {
-    const ids = tasksToSupersedeForUnits(
-      [
-        existingTask({ id: 'a', batchTag: 'prompt:run-1#1' }),
-        existingTask({ id: 'b', batchTag: 'prompt:run-1#2' }),
-        existingTask({ id: 'c', batchTag: 'prompt:run-1#3' }),
-      ],
-      'run-1',
-      ['1', '2'],
-    )
-    expect(ids.sort()).toEqual(['a', 'b'])
+    expect(result).toEqual({ created: 0, kept: 1, superseded: 0 })
+    expect(second.inserted).toEqual([])
+    expect(second.updatedIds).toEqual([])
   })
 })

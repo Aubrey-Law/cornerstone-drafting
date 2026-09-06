@@ -48,6 +48,7 @@ const AUDIT_BODY: FieldAuditBody = {
   kind: 'field_audit',
   inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: false }],
   checks: [AUDIT_CHECK],
+  outputTarget: 'task_set',
 }
 
 const ALL_NULL_TRIGGER_ROW = {

@@ -118,11 +118,11 @@ export async function GET(req: Request) {
     // Tasks belong to the caller once a run is actually done, never to
     // `workRun` itself — see its own header comment. Only a field audit
     // emits them, and only from findings that survived reference
-    // verification. This is now the only place `emitTasks` is ever called —
-    // a first run and a retried run both reach it only here, once their run
-    // has no `pending` steps left, so a run's tasks are created exactly
-    // once no matter how many ticks it took.
+    // verification. This is the only place `emitTasks` is ever called — a
+    // first run and a retried run both reach it only here, once their run has
+    // no `pending` steps left.
     if (context.kind === 'field_audit') {
+      const body = context.prompt.body as FieldAuditBody
       const stored = await loadFieldAuditFindings(admin, runId)
       const actionable = actionableFindings({
         promptSlug: context.prompt.slug,
@@ -133,8 +133,14 @@ export async function GET(req: Request) {
       await emitTasks(admin, {
         matterId: String(context.run.matter_id),
         runId,
-        checks: (context.prompt.body as FieldAuditBody).checks,
+        checks: body.checks,
         findings: actionable,
+        // The target from the version this run pinned, never the published
+        // one: a prompt republished as `chat` since must not retroactively
+        // decide that a `task_set` run mid-flight produces nothing.
+        // `loadRunContext` reads `prompt_version_id` for exactly this reason.
+        outputTarget: body.outputTarget,
+        promptTitle: context.prompt.title,
       })
     }
   }

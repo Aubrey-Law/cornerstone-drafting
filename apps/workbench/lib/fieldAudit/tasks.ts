@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
-import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import type { FieldAuditCheck, OutputTarget } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
@@ -9,11 +9,33 @@ import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
  * `tasks_source_check` was extended to allow this (see the migration
  * alongside this file, 20261029000000_prompt_task_source.sql): none of
  * manual/stage/template/cadence/sla means "a prompt run created this", and
- * `tasksToSupersede` below depends on that being a fact the database
- * enforces on every row, not a convention this module merely assumes every
- * caller respects.
+ * `planEmit` below depends on that being a fact the database enforces on
+ * every row, not a convention this module merely assumes every caller
+ * respects.
  */
 export const PROMPT_TASK_SOURCE = 'prompt'
+
+/**
+ * A checklist item as `public.tasks.checklist` holds them.
+ *
+ * A `type` rather than an `interface` on purpose. The generated column type
+ * is `Json`, and TypeScript synthesises an implicit index signature for an
+ * object *type alias* but not for an *interface* — so this is assignable to
+ * `Json` with no cast at the `insert`, while still rejecting an excess
+ * property. As an interface it would need an explicit
+ * `[key: string]: string | boolean` to satisfy `Json`, and that signature
+ * would then quietly accept any misspelled field. Nothing extends or
+ * re-opens this type, so the interface bought nothing.
+ *
+ * Declared here rather than imported from the root app's
+ * `lib/tasks/types.ts`: that is a separate app whose `@/*` resolves to a
+ * different root, and the shared contract is the column, not a TypeScript
+ * file across an app boundary.
+ */
+export type ChecklistItem = {
+  text: string
+  done: boolean
+}
 
 export interface TaskRow {
   matter_id: string
@@ -24,152 +46,281 @@ export interface TaskRow {
   title: string
   description: string
   priority: string
+  /** Empty for a `single` task; one entry per finding for a `checklist` one. */
+  checklist: ChecklistItem[]
 }
 
+const PRIORITY_ORDER: Record<string, number> = { low: 0, normal: 1, high: 2 }
+
 /**
- * One `tasks` row per actionable finding, templated from the check that
- * produced it.
+ * The rows one run's findings become, in the shape its prompt version asked
+ * for.
  *
  * `findings` is expected to already be `actionableFindings(result)` from
- * `@aubrey-law/citations/fieldAudit/runFieldAudit` — only findings whose
- * references all verified — so nothing here re-checks that; this is purely
- * the templating step, matching a finding back to the check it came from and
- * filling in its template.
+ * `@aubrey-law/citations/fieldAudit/runFieldAudit` — the severity,
+ * disposition and verified-reference gate — so nothing here re-checks that.
+ * This is the templating step and the shaping step, nothing more.
+ *
+ * A finding whose check number names nothing in this prompt version is
+ * skipped rather than guessed at: the prompt and the result have fallen out
+ * of step with each other, and there is no template to fill in.
  */
 export function taskRowsFor(
   matterId: string,
   runId: string,
   checks: FieldAuditCheck[],
   findings: FieldAuditFinding[],
+  target: OutputTarget,
+  promptTitle: string,
 ): TaskRow[] {
+  // Nothing at all, not an empty row. See `emitTasks`, which returns before
+  // it reads anything for this target.
+  if (target === 'chat') return []
+
   const checkByNumber = new Map(checks.map((check) => [check.number, check]))
+  const bodyOrder = new Map(checks.map((check, index) => [check.number, index]))
 
-  return findings.flatMap((finding) => {
-    const check = checkByNumber.get(finding.checkNumber)
-    // A finding whose check number names nothing in this prompt version has
-    // no template to fill in — the prompt and the result have fallen out of
-    // step with each other — so it is skipped rather than guessed at.
-    if (!check) return []
+  // The body's order, not the findings' arrival order: a playbook's order is
+  // the order its author meant.
+  const matched = findings
+    .flatMap((f) => {
+      const check = checkByNumber.get(f.checkNumber)
+      return check ? [{ finding: f, check }] : []
+    })
+    .sort((a, b) => (bodyOrder.get(a.finding.checkNumber) ?? 0) - (bodyOrder.get(b.finding.checkNumber) ?? 0))
 
-    return [
-      {
-        matter_id: matterId,
-        source: PROMPT_TASK_SOURCE,
-        task_type: 'single',
-        auto: true,
-        // Names both the run and the unit: a task records which run
-        // produced it *and* which check within that run, so a retry can
-        // later replace one unit's task without touching the rest of the
-        // run's tasks. See `tasksToSupersedeForUnits` below.
-        batch_tag: `prompt:${runId}#${finding.checkNumber}`,
-        title: check.taskTemplate.title,
-        // The template's own description first, then the specific rationale
-        // this finding gave — the template says what kind of problem this
-        // is, the rationale says what the sheet actually shows.
-        description: `${check.taskTemplate.description}\n\n${finding.rationale}`,
-        priority: check.taskTemplate.priority,
-      },
-    ]
-  })
+  if (target === 'task_set') {
+    return matched.map(({ finding, check }) => ({
+      matter_id: matterId,
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'single',
+      auto: true,
+      // Names both the run and the unit, so a retry can replace one unit's
+      // task without touching the rest. `planEmit` compares whole tags and
+      // does not parse this, but a person reading the row can.
+      batch_tag: `prompt:${runId}#${finding.checkNumber}`,
+      title: check.taskTemplate.title,
+      // The template says what kind of problem this is; the rationale says
+      // what the sheet actually shows.
+      description: `${check.taskTemplate.description}\n\n${finding.rationale}`,
+      priority: check.taskTemplate.priority,
+      checklist: [],
+    }))
+  }
+
+  // `checklist`: one task for the whole run.
+  //
+  // No items means no task. An empty checklist says work is needed and then
+  // names none, which is worse than saying nothing — and it is what a run
+  // whose every finding failed verification would otherwise produce.
+  if (matched.length === 0) return []
+
+  const items: ChecklistItem[] = matched.map(({ check }) => ({ text: check.taskTemplate.title, done: false }))
+
+  // The rationales go in the description rather than into the item text: an
+  // item is a line someone ticks, and six paragraphs of reasoning is not
+  // that. Nothing is lost — the evidence is right underneath.
+  const description = [
+    // No "on the design sheet": this templates every prompt in the library,
+    // and 39 of the coming 40 are not that prompt. The title says what ran.
+    `${promptTitle} found ${items.length === 1 ? '1 item' : `${items.length} items`} to confirm.`,
+    '',
+    ...matched.map(({ finding, check }, index) => `${index + 1}. ${check.taskTemplate.title}\n${finding.rationale}`),
+  ].join('\n')
+
+  const priority = matched.reduce(
+    (highest, { check }) =>
+      (PRIORITY_ORDER[check.taskTemplate.priority] ?? 0) > (PRIORITY_ORDER[highest] ?? 0)
+        ? check.taskTemplate.priority
+        : highest,
+    'low' as string,
+  )
+
+  return [
+    {
+      matter_id: matterId,
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'checklist',
+      auto: true,
+      // No unit suffix: there is no single unit a run-level task belongs to.
+      batch_tag: `prompt:${runId}`,
+      title: promptTitle,
+      description,
+      priority,
+      checklist: items,
+    },
+  ]
 }
 
+/**
+ * An existing prompt task, with everything `planEmit` compares.
+ *
+ * The content fields are here because identity is by content: a task that
+ * already says exactly what this run wants to say is the same task, and
+ * re-creating it would churn its id and its `created_at` for nothing.
+ */
 export interface ExistingPromptTask {
   id: string
   source: string
   batchTag: string | null
   status: string
   assigneeId: string | null
+  title: string
+  description: string
+  priority: string
+  taskType: string
+  checklist: ChecklistItem[]
+}
+
+export interface EmitPlan {
+  /** Rows to create. */
+  insert: TaskRow[]
+  /** Ids left exactly as they are, because they already say this. */
+  keep: string[]
+  /** Ids to withdraw. */
+  supersede: string[]
 }
 
 /**
- * Pulls the run id (and, if present, the unit id) out of a `batch_tag`.
+ * Everything this call compares, as one string: tag, title, description,
+ * priority, type, and the checklist items' text. Byte-identical, not
+ * semantically equivalent — the description embeds the model's own rationale,
+ * so a re-executed unit churns even when the finding is substantively the
+ * same. That is the intended trade; a comparison that tried to judge
+ * "substantively the same" would be a second verifier with nothing to verify
+ * against.
  *
- * A tag is `prompt:${runId}` (no unit — nothing but a first run ever wrote
- * that shape before this module started stamping units) or
- * `prompt:${runId}#${unitId}`. Parsing the run id back out, rather than
- * comparing the whole tag string, is what lets `tasksToSupersede` keep
- * meaning "this run" even once the tag carries a unit suffix it knows
- * nothing about. Returns `null` for a tag that doesn't fit either shape —
- * such a tag is not this run's own by construction, so callers should treat
- * that the same as "some other run".
+ * **An item's `done` flag is deliberately excluded.** `planEmit` only inserts
+ * and archives — it has no branch that rewrites a row in place. So including
+ * `done` would mean a partly-ticked checklist stops matching, gets archived,
+ * and is replaced by a blank copy, taking the attorney's progress out of the
+ * working queue. Excluding it means the keys match, the row is kept untouched,
+ * and the ticks survive along with its id and `created_at`. Nothing is lost:
+ * if the findings really changed, the rationales in the description changed
+ * with them and the key mismatches on its own merits. `done` differs only when
+ * a person changed it, which is the one case that must not cause a withdrawal.
+ *
+ * The item text is read positionally rather than by stringifying each item
+ * object, because `jsonb` sorts object keys on the way in — a stored item
+ * comes back as `{"done":…,"text":…}` whatever order it was written in, so
+ * stringifying the objects would make every checklist comparison fail
+ * forever, silently, from the first real run.
  */
-function parseBatchTag(tag: string | null): { runId: string; unitId: string | null } | null {
-  if (!tag) return null
-  const match = /^prompt:([^#]+)(?:#(.+))?$/.exec(tag)
-  if (!match) return null
-  return { runId: match[1], unitId: match[2] ?? null }
+function contentKey(parts: {
+  batchTag: string | null
+  title: string
+  description: string
+  priority: string
+  taskType: string
+  checklist: ChecklistItem[]
+}): string {
+  return JSON.stringify([
+    parts.batchTag,
+    parts.title,
+    parts.description,
+    parts.priority,
+    parts.taskType,
+    // Text only — see the note above on why `done` is excluded.
+    parts.checklist.map((item) => item.text),
+  ])
 }
 
 /**
- * Which of a matter's earlier prompt-sourced tasks a new *first* run should
- * close.
+ * What a run should create, keep and withdraw — one question, replacing the
+ * two functions this used to be.
  *
- * Narrow on purpose, on every axis at once:
+ * `tasksToSupersede` and `tasksToSupersedeForUnits` split on whether the
+ * caller passed the unit ids a retry had touched. Nothing passed them: #411
+ * added the mechanism in `retry.ts`, #412 moved `emitTasks` into the tick and
+ * dropped the argument, and the result was that a retried run's second
+ * done-pass re-created a task for every unit including the ones that never
+ * failed. `tasks` has no unique index on `batch_tag`, so the duplicates simply
+ * appeared.
+ *
+ * Asking about content instead of about units removes the need for the hint
+ * altogether, and is what makes this idempotent: run it twice over an
+ * unchanged run and the second call does nothing at all — provided nobody
+ * edited the tasks in between, since a hand-edited title or description is a
+ * content change like any other.
+ *
+ * Idempotent *within a run*, to be exact. The tag carries the run id, so a
+ * genuinely new run is new content and an unchanged finding still archives and
+ * re-inserts. That is what the advisory logic in `lib/runs/advisory.ts`
+ * expects — a newer run's answer replaces an older one's — but it means the
+ * anti-churn argument below holds only for a run re-emitting its own tasks.
+ *
+ * A retried unit whose rationale changed no longer matches, so it is withdrawn
+ * and re-created; a unit the retry never touched matches exactly, so it keeps
+ * its id and its `created_at`. Both `batch_tag` shapes —
+ * `prompt:<runId>#<unitId>` for a task set and `prompt:<runId>` for a
+ * checklist — fall out of this with neither being special-cased, which is why
+ * `parseBatchTag` is gone too.
+ *
+ * Narrow on the same three axes it always was, for the same reasons:
  *
  *  - `source === PROMPT_TASK_SOURCE` only. A tool may withdraw its own
- *    suggestion; it must never touch a task a person added by hand, or one
- *    the stage engine or the SLA plan is tracking. Those did not come from a
- *    prompt run and are not this run's to close.
- *  - `status === 'open'` only. A task already `done` is a record of work
- *    that actually happened, not a live suggestion still standing — closing
- *    it out because a newer run no longer finds the issue would rewrite what
- *    happened rather than tidy a queue. A `blocked` or `in_progress` task is
- *    left alone for a related reason: something is already underway on it.
- *  - `assigneeId === null` only. The moment someone picks it up, a
- *    tool-suggested task becomes real work someone is doing. A newer run no
- *    longer surfacing the same finding does not make that work moot, and
- *    closing it out from under the person doing it would erase something
- *    real to tidy something cosmetic.
- *  - the tag's run id is not this run's own. A run cannot supersede itself;
- *    this is what stops the tasks a run just created from being read back as
- *    "earlier" and immediately withdrawn in the same breath. Compared by the
- *    run id parsed out of the tag, not the whole tag string, so this still
- *    holds now that a tag can carry a unit suffix this function does not
- *    otherwise care about — a first run supersedes a *previous run's* whole
- *    open, unassigned set, one unit at a time or not.
+ *    suggestion; it must never touch a task a person added by hand, or one the
+ *    stage engine or the SLA plan is tracking.
+ *  - `status === 'open'` only. A `done` task is a record of work that
+ *    happened; a `blocked` or `in_progress` one has something underway on it.
+ *  - `assigneeId === null` only. The moment someone picks it up, a suggested
+ *    task is real work someone is doing, and a newer run not surfacing the
+ *    same finding does not make that work moot.
+ *
+ * What is *not* narrowed, and should be: this is scoped to the matter, not to
+ * the prompt. Two prompts emitting tasks on one matter would each withdraw the
+ * other's. That was true before this change too — it is invisible only
+ * because one prompt emits tasks and the review prompt does not — and fixing
+ * it means putting the prompt into the tag, which is its own decision. See
+ * the design note.
  */
-export function tasksToSupersede(existing: ExistingPromptTask[], runId: string): string[] {
-  return existing
-    .filter((task) => task.source === PROMPT_TASK_SOURCE)
-    .filter((task) => task.status === 'open')
-    .filter((task) => task.assigneeId === null)
-    .filter((task) => parseBatchTag(task.batchTag)?.runId !== runId)
-    .map((task) => task.id)
-}
+export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[]): EmitPlan {
+  const candidates = existing.filter(
+    (task) => task.source === PROMPT_TASK_SOURCE && task.status === 'open' && task.assigneeId === null,
+  )
 
-/**
- * Which of *this run's own* tasks a retry of some of its units should close.
- *
- * A different question from `tasksToSupersede`, deliberately kept separate
- * rather than folded into it with a flag: a first run is withdrawing a
- * *previous run's* whole open set because this run is about to answer the
- * same questions again from scratch. A retry is replacing its own earlier
- * answer to one unit — the units that did not fail were never touched, so
- * their tasks (this run's own, tagged with units outside `unitIds`) must
- * survive untouched too. Matching on `runId` here, where `tasksToSupersede`
- * deliberately excludes it, is not a contradiction: it is the same
- * "supersede the tasks this exact question was already answered by"
- * property, aimed at the run that is retrying itself instead of the run
- * before it.
- *
- * The same open/unassigned narrowing applies, for the same reason: a tool
- * may withdraw its own suggestion, never a person's work in progress.
- */
-export function tasksToSupersedeForUnits(
-  existing: ExistingPromptTask[],
-  runId: string,
-  unitIds: string[],
-): string[] {
-  const units = new Set(unitIds)
-  return existing
-    .filter((task) => task.source === PROMPT_TASK_SOURCE)
-    .filter((task) => task.status === 'open')
-    .filter((task) => task.assigneeId === null)
-    .filter((task) => {
-      const parsed = parseBatchTag(task.batchTag)
-      return parsed !== null && parsed.runId === runId && parsed.unitId !== null && units.has(parsed.unitId)
+  const byContent = new Map<string, string[]>()
+  for (const task of candidates) {
+    const key = contentKey({
+      batchTag: task.batchTag,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      taskType: task.taskType,
+      checklist: task.checklist,
     })
-    .map((task) => task.id)
+    const ids = byContent.get(key)
+    if (ids) ids.push(task.id)
+    else byContent.set(key, [task.id])
+  }
+
+  const keep: string[] = []
+  const insert: TaskRow[] = []
+  const matched = new Set<string>()
+
+  for (const row of desired) {
+    const key = contentKey({
+      batchTag: row.batch_tag,
+      title: row.title,
+      description: row.description,
+      priority: row.priority,
+      taskType: row.task_type,
+      checklist: row.checklist,
+    })
+    // The first twin not already claimed. A duplicate pair left by the
+    // pre-fix bug therefore keeps one and withdraws the other, which is how
+    // this self-heals rather than preserving the damage.
+    const twin = byContent.get(key)?.find((id) => !matched.has(id))
+    if (twin) {
+      matched.add(twin)
+      keep.push(twin)
+    } else {
+      insert.push(row)
+    }
+  }
+
+  const supersede = candidates.filter((task) => !matched.has(task.id)).map((task) => task.id)
+  return { insert, keep, supersede }
 }
 
 export interface EmitTasksInput {
@@ -177,55 +328,48 @@ export interface EmitTasksInput {
   runId: string
   checks: FieldAuditCheck[]
   findings: FieldAuditFinding[]
-  /**
-   * Present only for a retry: the unit ids that were actually retried. When
-   * given, `emitTasks` emits tasks for (and supersedes only) those units'
-   * findings, using `tasksToSupersedeForUnits` instead of `tasksToSupersede`
-   * — a retry replaces its own earlier answer to these units, not a
-   * previous run's whole set. Absent, `emitTasks` behaves exactly as a first
-   * run always has.
-   */
-  unitIds?: string[]
+  /** From the run's pinned prompt version body — never the published one. */
+  outputTarget: OutputTarget
+  /** Titles a `checklist` task. Unused by `task_set`. */
+  promptTitle: string
 }
 
 export interface EmitTasksResult {
   created: number
+  /** Already said exactly this, so left alone — id and `created_at` intact. */
+  kept: number
   superseded: number
 }
 
 /**
- * Creates this run's tasks, then withdraws the earlier prompt-sourced tasks
- * it supersedes.
+ * Makes this matter's open prompt tasks say what this run says.
  *
- * The matter's earlier prompt tasks are read *before* this run's own rows are
- * inserted below — not after, the way a first run reading only its own
- * `PROMPT_TASK_SOURCE` tag could get away with once. A retry's new task for a
- * unit carries the *same* `batch_tag` its earlier attempt's task did — same
- * run, same unit, see `taskRowsFor` — so a query taken after the insert would
- * see both rows under an identical tag with no way to tell "the one this call
- * just created" from "the one it means to withdraw". Reading first means the
- * snapshot `tasksToSupersede`/`tasksToSupersedeForUnits` judge is always
- * exactly what existed before this call, never what it just wrote.
+ * Reads the existing tasks *before* inserting anything, which is what lets
+ * `planEmit` compare against a snapshot that cannot contain rows this call
+ * just wrote. The withdrawal happens only after the insert succeeds: if the
+ * insert throws, nothing that was open a moment ago has been closed out for a
+ * run that never produced its replacements.
  *
- * The archive itself still only happens after the insert succeeds: if the
- * insert fails, this function has already thrown before it ever reaches the
- * update below, so nothing that was still open a moment ago is closed out for
- * a run that never actually produced its replacements. Reading the snapshot
- * early changes only when the harmless part (a `select`) happens, not that
- * guarantee.
+ * Safe to call twice. `planEmit` is idempotent over an unchanged run, so a
+ * retried run's second pass through the tick creates nothing and withdraws
+ * nothing — which is exactly what it did not do before `planEmit` existed.
  */
 export async function emitTasks(
   client: SupabaseClient<WorkbenchDatabase>,
   input: EmitTasksInput,
 ): Promise<EmitTasksResult> {
+  // `chat` produces no objects, so it reads nothing and writes nothing. This
+  // returns before the query rather than after it on purpose: an empty
+  // `desired` would make `planEmit` withdraw every open prompt task on the
+  // matter, which is not "produces nothing", it is "destroys someone else's
+  // something".
+  if (input.outputTarget === 'chat') return { created: 0, kept: 0, superseded: 0 }
+
   const sb = client
 
-  // Every earlier prompt task on this matter, regardless of status or who
-  // holds it — `tasksToSupersede`/`tasksToSupersedeForUnits` are the only
-  // places that decide which of them this call is actually allowed to close.
   const { data: existingRows, error: existingError } = await sb
     .from('tasks')
-    .select('id, source, batch_tag, status, assignee_id')
+    .select('id, source, batch_tag, status, assignee_id, title, description, priority, task_type, checklist')
     .eq('matter_id', input.matterId)
     .eq('source', PROMPT_TASK_SOURCE)
   if (existingError) {
@@ -238,28 +382,30 @@ export async function emitTasks(
     batchTag: (row.batch_tag as string | null) ?? null,
     status: String(row.status),
     assigneeId: (row.assignee_id as string | null) ?? null,
+    title: String(row.title ?? ''),
+    description: String(row.description ?? ''),
+    priority: String(row.priority ?? ''),
+    taskType: String(row.task_type ?? ''),
+    checklist: Array.isArray(row.checklist) ? (row.checklist as ChecklistItem[]) : [],
   }))
 
-  // A retry only ever knows about the units it actually retried — the
-  // findings for units it did not touch belong to that unit's own earlier
-  // task, which this call must leave alone.
-  const findings = input.unitIds
-    ? input.findings.filter((finding) => input.unitIds!.includes(finding.checkNumber))
-    : input.findings
+  const desired = taskRowsFor(
+    input.matterId,
+    input.runId,
+    input.checks,
+    input.findings,
+    input.outputTarget,
+    input.promptTitle,
+  )
 
-  const rows = taskRowsFor(input.matterId, input.runId, input.checks, findings)
-  let created = 0
-  if (rows.length > 0) {
-    const { error: insertError } = await sb.from('tasks').insert(rows)
+  const plan = planEmit(existing, desired)
+
+  if (plan.insert.length > 0) {
+    const { error: insertError } = await sb.from('tasks').insert(plan.insert)
     if (insertError) throw new Error(`Could not create tasks for this run: ${insertError.message}`)
-    created = rows.length
   }
 
-  const superseded = input.unitIds
-    ? tasksToSupersedeForUnits(existing, input.runId, input.unitIds)
-    : tasksToSupersede(existing, input.runId)
-
-  if (superseded.length > 0) {
+  if (plan.supersede.length > 0) {
     const { error: updateError } = await sb
       .from('tasks')
       .update({
@@ -271,9 +417,9 @@ export async function emitTasks(
         skipped_at: new Date().toISOString(),
         closeout_reason: 'prompt_superseded',
       })
-      .in('id', superseded)
+      .in('id', plan.supersede)
     if (updateError) throw new Error(`Could not withdraw superseded tasks: ${updateError.message}`)
   }
 
-  return { created, superseded: superseded.length }
+  return { created: plan.insert.length, kept: plan.keep.length, superseded: plan.supersede.length }
 }

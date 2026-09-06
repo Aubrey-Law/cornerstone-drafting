@@ -107,3 +107,88 @@ describe('the prompt body schema', () => {
     expect(promptBodySchema.safeParse(declared).success).toBe(true)
   })
 })
+
+describe('outputTarget', () => {
+  /** The minimum valid field-audit body, with no outputTarget stated. */
+  function bodyWithout(): Record<string, unknown> {
+    return {
+      kind: 'field_audit',
+      inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: true }],
+      checks: [
+        {
+          number: '1',
+          statement: 'Every concern has a provision.',
+          risk: 'blocker',
+          reads: ['concerns'],
+          taskTemplate: { title: 'A concern is unanswered', description: 'Confirm it.', priority: 'high' },
+        },
+      ],
+    }
+  }
+
+  /**
+   * The load-bearing case. Versions 1 to 3 of `ma-design-sheet-audit` are
+   * published without this field, and `toPublishedPrompt` re-validates every
+   * body on every read — so a required field would throw for every run
+   * already in the database, not merely for new ones.
+   */
+  it('defaults to task_set, so a body published before it existed still parses', () => {
+    const parsed = promptBodySchema.parse(bodyWithout())
+    expect(parsed.kind).toBe('field_audit')
+    if (parsed.kind !== 'field_audit') throw new Error('unreachable')
+    expect(parsed.outputTarget).toBe('task_set')
+  })
+
+  it.each(['chat', 'task_set', 'checklist'] as const)('accepts %s', (target) => {
+    const parsed = promptBodySchema.parse({ ...bodyWithout(), outputTarget: target })
+    if (parsed.kind !== 'field_audit') throw new Error('unreachable')
+    expect(parsed.outputTarget).toBe(target)
+  })
+
+  /**
+   * The overhaul plan names five targets; two are not built. A schema that
+   * accepted them would let someone publish a prompt that silently produces
+   * nothing, which is the failure mode this whole project keeps finding.
+   *
+   * `null` is in the list because `.default()` fires on *absence*, not on
+   * `null` — so a hand-edited jsonb body carrying an explicit
+   * `"outputTarget": null` is refused rather than defaulted, and
+   * `toPublishedPrompt` throws for that version. That loud failure is the
+   * intended behaviour: a null nobody meant to write is a mistake to see, not
+   * one to silently read as `task_set`.
+   */
+  it.each(['draft_doc', 'email_draft', 'tasks', '', null] as Array<string | null>)(
+    'refuses the unimplemented target %s',
+    (target) => {
+      expect(promptBodySchema.safeParse({ ...bodyWithout(), outputTarget: target }).success).toBe(false)
+    },
+  )
+
+  /**
+   * A *valid* review body, so the assertion turns on the extra key rather
+   * than on `rules.min(1)` failing first. The previous version of this test
+   * used `rules: []`, which meant it passed whether or not the schema knew
+   * about `outputTarget` at all — it could not fail, which is worse than
+   * absent, because it reads as coverage.
+   *
+   * What this pins: `outputTarget` belongs to the field-audit arm only. If
+   * someone later hoists it onto a shared base, this fails.
+   */
+  it('strips outputTarget from a review body rather than keeping it', () => {
+    const parsed = promptBodySchema.safeParse({
+      kind: 'review',
+      inputs: [],
+      rules: [
+        {
+          number: '1',
+          statement: 'Our exculpation language carves out gross negligence.',
+          risk: 'high',
+        },
+      ],
+      outputTarget: 'checklist',
+    })
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect('outputTarget' in parsed.data).toBe(false)
+  })
+})

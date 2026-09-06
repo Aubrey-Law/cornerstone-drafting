@@ -3,7 +3,14 @@ import type { TaskTemplateItem } from '@/lib/tasks/templateItems'
 
 export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'done', 'archived'] as const
 export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
-export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla'] as const
+/**
+ * `'prompt'` is a task a prompt run created — the database has allowed it
+ * since 20261029000000_prompt_task_source.sql, and this union did not, so
+ * every such task rendered with an empty source pill and could not be
+ * filtered for. The workbench writes these rows and never reads them; this app
+ * is the only place they are seen.
+ */
+export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt'] as const
 export const TASK_TYPES = ['single', 'checklist'] as const
 
 /**
@@ -293,6 +300,7 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   template: 'Template',
   cadence: 'Cadence',
   sla: 'Plan',
+  prompt: 'Prompt',
 }
 
 /**
@@ -309,6 +317,11 @@ export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   template: 'bg-blue-bg text-blue',
   cadence: 'bg-stage-active-bg text-stage-active-text',
   sla: 'bg-green-bg text-green',
+  // 6.84:1 light, 8.48:1 dark, measured with lib/theme/contrast.ts against
+  // the theme tokens rather than picked by eye. Amber is unused by the other
+  // source pills, so the chip carries information at a glance, and it reads
+  // as "a machine suggested this, someone still has to agree".
+  prompt: 'bg-amber-bg text-amber',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {

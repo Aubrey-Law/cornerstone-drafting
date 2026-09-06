@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TASK_SOURCES, TASK_SOURCE_PILL, type TaskSource } from '@/lib/tasks/types'
+import { TASK_SOURCES, TASK_SOURCE_LABEL, TASK_SOURCE_PILL, type TaskSource } from '@/lib/tasks/types'
 import { allThemeCssVars, themes } from '@/lib/theme/tokens'
 import { contrastRatio, parseColor } from '@/lib/theme/contrast'
 
@@ -62,6 +62,25 @@ describe('every task source pill is readable', () => {
     // neutral chip the pill would stop carrying any information at all.
     const others = TASK_SOURCES.filter(s => s !== 'sla').map(s => TASK_SOURCE_PILL[s])
     expect(others).not.toContain(TASK_SOURCE_PILL.sla)
+  })
+
+  /**
+   * The gap that let a whole feature ship unlabelled: `'prompt'` was added to
+   * the database's `tasks_source_check` and never to `TASK_SOURCES`, so both
+   * maps returned `undefined` for it and `TaskSourcePill` rendered an empty
+   * chip. The contrast cases above iterate `TASK_SOURCES` and so could not
+   * see a source the union did not know about. This checks the maps are total
+   * against the union, which is the assertion that would have caught it.
+   */
+  it('has a label and a pill for every source, with no blanks', () => {
+    for (const source of TASK_SOURCES) {
+      expect(TASK_SOURCE_LABEL[source], `${source} label`).toBeTruthy()
+      expect(TASK_SOURCE_PILL[source], `${source} pill`).toBeTruthy()
+    }
+  })
+
+  it('knows about tasks a prompt run created', () => {
+    expect(TASK_SOURCES).toContain('prompt')
   })
 })
 

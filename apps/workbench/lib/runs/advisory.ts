@@ -95,7 +95,7 @@ export interface UnresolvedBlockerMatter {
  * A matter that entered `design`, then `drafting`, then `design` again fires
  * the same stage-entry audit three times. Only the newest of those three
  * runs is the current answer to the question the audit asks; the other two
- * are stale answers to a question already re-answered. `tasksToSupersede`
+ * are stale answers to a question already re-answered. `planEmit`
  * (`lib/fieldAudit/tasks.ts`) already encodes exactly this notion for the
  * tasks a run emits — a newer run's tasks replace an older run's, not add to
  * them — and this is the same idea applied to the advisory instead of
