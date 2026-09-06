@@ -7,6 +7,7 @@ import { loadRunContext } from '@/lib/runs/context'
 import { finaliseRun } from '@/lib/runs/record'
 import { reapAbandonedRuns } from '@/lib/runs/reaper'
 import { toRunSteps } from '@/lib/runs/steps'
+import { materialiseStageTrigger } from '@/lib/runs/triggers'
 import { workRun } from '@/lib/runs/worker'
 import { getAdminClient } from '@/lib/supabase/admin'
 import type { FieldAuditBody } from '@aubrey-law/citations/prompt/body'
@@ -17,7 +18,9 @@ import { actionableFindings } from '@aubrey-law/citations/fieldAudit/runFieldAud
  *
  * A run spans as many invocations as it needs: this fires roughly once a
  * minute (`vercel.json`'s `crons` entry), reaps whatever the previous
- * invocation left mid-flight, claims one queued run, works it for up to
+ * invocation left mid-flight, materialises one pending stage trigger into a
+ * queued run (`materialiseStageTrigger` — see its own module for why that
+ * happens before the claim below), claims one queued run, works it for up to
  * `TICK_BUDGET_MS`, and leaves the rest for the next tick if it isn't done.
  *
  * `maxDuration` matches `workRun`'s own budget headroom — 300 seconds against
@@ -46,9 +49,18 @@ export async function GET(req: Request) {
   const { reaped } = await reapAbandonedRuns(admin, () => Date.now())
 
   const worker = `${os.hostname()}:${process.pid}`
+
+  // Materialise before claiming. A stage trigger that fired seconds ago
+  // becomes a queued run now, and the claim below may pick it up in this
+  // same invocation rather than leaving it for the next minute. Its own
+  // internal claim (`claim_prompt_stage_trigger`) has exactly the same
+  // null-row shape as `claim_workflow_run` below — see that call's comment —
+  // and `materialiseStageTrigger` already guards on the id, not falsiness.
+  const materialised = await materialiseStageTrigger(admin, worker)
+
   const { data: claimed, error: claimError } = await admin.rpc('claim_workflow_run', { p_worker: worker })
   if (claimError) {
-    return NextResponse.json({ error: `Could not claim a run: ${claimError.message}` }, { status: 500 })
+    return NextResponse.json({ reaped, materialised, error: `Could not claim a run: ${claimError.message}` }, { status: 500 })
   }
 
   // An empty claim returns HTTP 200 and a full row whose every column is
@@ -58,14 +70,19 @@ export async function GET(req: Request) {
   // null": the worker would then query steps for `run_id = null`, find none,
   // and finalise a run that does not exist. The guard has to be on the id.
   if (claimed?.id == null) {
-    return NextResponse.json({ reaped, claimedRunId: null, worked: 0, done: null })
+    // `materialised` is included here too — not only once a run is
+    // claimed — because a tick that only materialised a trigger into a run
+    // (this invocation's claim above may simply have lost the race for it,
+    // or arrived too late in the same tick to see it) must not report
+    // `claimedRunId: null` and read as having done nothing.
+    return NextResponse.json({ reaped, materialised, claimedRunId: null, worked: 0, done: null })
   }
 
   const runId = String(claimed.id)
 
   const context = await loadRunContext(admin, runId)
   if (!context.ok) {
-    return NextResponse.json({ reaped, claimedRunId: runId, error: context.message }, { status: 500 })
+    return NextResponse.json({ reaped, materialised, claimedRunId: runId, error: context.message }, { status: 500 })
   }
 
   let callModel
@@ -77,7 +94,7 @@ export async function GET(req: Request) {
       // the app is fine, this feature is not configured. The run stays
       // `running` and the claim's own heartbeat leaves it for the reaper to
       // hand back rather than lost.
-      return NextResponse.json({ reaped, claimedRunId: runId, error: error.message }, { status: 503 })
+      return NextResponse.json({ reaped, materialised, claimedRunId: runId, error: error.message }, { status: 503 })
     }
     throw error
   }
@@ -91,7 +108,7 @@ export async function GET(req: Request) {
       .eq('run_id', runId)
     if (stepsError) {
       return NextResponse.json(
-        { reaped, claimedRunId: runId, error: `Could not reload the run's steps: ${stepsError.message}` },
+        { reaped, materialised, claimedRunId: runId, error: `Could not reload the run's steps: ${stepsError.message}` },
         { status: 500 },
       )
     }
@@ -122,5 +139,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ reaped, claimedRunId: runId, worked: result.worked, done: result.done })
+  return NextResponse.json({ reaped, materialised, claimedRunId: runId, worked: result.worked, done: result.done })
 }
