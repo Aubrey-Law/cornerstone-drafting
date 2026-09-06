@@ -59,27 +59,30 @@ them exactly the behaviour they have always had.
 
 **Files:**
 - Modify: `packages/citations/src/prompt/body.ts:45-49`
-- Test: `packages/citations/tests/prompt-body.test.ts`
+- Test: `apps/workbench/tests/prompt-body.test.ts` (the existing suite for this schema — `packages/citations` has no test runner of its own)
 
 - [ ] **Step 1: Find the existing body tests**
 
 Run:
 
 ```bash
-ls packages/citations/tests/ | grep -i -E "body|prompt"
+ls apps/workbench/tests/ | grep -i -E "body|prompt"
 ```
 
-If `prompt-body.test.ts` exists, append the `describe` block from Step 2 to it. If it does
-not, create it with this header first:
+Expected: `prompt-body.test.ts` among them. **`packages/citations` has no test runner** —
+the root `vitest.config.ts` includes `tests/**` relative to the repo root and
+`apps/workbench/vitest.config.ts` includes `tests/**` relative to that app, so nothing
+picks up a file under `packages/`. The existing suite for `promptBodySchema` is
+`apps/workbench/tests/prompt-body.test.ts`, importing it as
+`@aubrey-law/citations/prompt/body`. Append the Step 2 block there.
 
-```ts
-import { describe, expect, it } from 'vitest'
-import { promptBodySchema } from '../src/prompt/body'
-```
+Note for every later task: a workbench test must be run from `apps/workbench`. A command
+like `npx vitest run apps/workbench/tests/x.test.ts` from the repo root matches no files and
+**reports success**, which is worse than failing.
 
 - [ ] **Step 2: Write the failing tests**
 
-Add to `packages/citations/tests/prompt-body.test.ts`:
+Add to `apps/workbench/tests/prompt-body.test.ts`, which already covers this schema:
 
 ```ts
 describe('outputTarget', () => {
@@ -147,7 +150,7 @@ describe('outputTarget', () => {
 Run:
 
 ```bash
-npx vitest run packages/citations/tests/prompt-body.test.ts
+cd apps/workbench && npx vitest run tests/prompt-body.test.ts
 ```
 
 Expected: the `defaults to task_set` and `accepts %s` cases FAIL — `parsed.outputTarget` is
@@ -197,7 +200,7 @@ export type OutputTarget = z.infer<typeof outputTargetSchema>
 Run:
 
 ```bash
-npx vitest run packages/citations/tests/prompt-body.test.ts
+cd apps/workbench && npx vitest run tests/prompt-body.test.ts
 ```
 
 Expected: PASS, all cases.
@@ -207,7 +210,7 @@ Expected: PASS, all cases.
 Run:
 
 ```bash
-npx vitest run packages/citations
+cd apps/workbench && npx vitest run
 ```
 
 Expected: PASS. `outputTarget` is now a non-optional property of the parsed field-audit
@@ -450,7 +453,7 @@ describe('planEmit', () => {
 Run:
 
 ```bash
-npx vitest run apps/workbench/tests/field-audit-tasks.test.ts
+cd apps/workbench && npx vitest run tests/field-audit-tasks.test.ts
 ```
 
 Expected: FAIL — `planEmit` is not exported from `@/lib/fieldAudit/tasks`, and
@@ -668,7 +671,7 @@ Expected: no output.
 Run:
 
 ```bash
-npx vitest run apps/workbench/tests/field-audit-tasks.test.ts
+cd apps/workbench && npx vitest run tests/field-audit-tasks.test.ts
 ```
 
 Expected: the `planEmit` suite PASSES. The `taskRowsFor` and `emitTasks` suites in the same
@@ -841,7 +844,7 @@ describe('taskRowsFor with an output target', () => {
 Run:
 
 ```bash
-npx vitest run apps/workbench/tests/field-audit-tasks.test.ts
+cd apps/workbench && npx vitest run tests/field-audit-tasks.test.ts
 ```
 
 Expected: FAIL — `taskRowsFor` takes four arguments, not six.
@@ -1229,7 +1232,7 @@ than adding a second one.
 Run:
 
 ```bash
-npx vitest run apps/workbench/tests/field-audit-tasks.test.ts
+cd apps/workbench && npx vitest run tests/field-audit-tasks.test.ts
 ```
 
 Expected: PASS, every suite.
@@ -1309,7 +1312,7 @@ Replace the `if (context.kind === 'field_audit')` block:
 Run:
 
 ```bash
-npx tsc --noEmit -p apps/workbench/tsconfig.json
+cd apps/workbench && npx tsc --noEmit -p tsconfig.json
 ```
 
 Expected: no errors. If `body.outputTarget` is reported as possibly undefined, Task 1's
@@ -1320,7 +1323,7 @@ Expected: no errors. If `body.outputTarget` is reported as possibly undefined, T
 Run:
 
 ```bash
-npx vitest run apps/workbench
+cd apps/workbench && npx vitest run
 ```
 
 Expected: PASS.
@@ -1468,7 +1471,7 @@ Expected: PASS. The parameterised contrast cases now include `light: prompt` and
 Run:
 
 ```bash
-npx tsc --noEmit && npx vitest run
+npm run typecheck && npx vitest run
 ```
 
 Expected: PASS. `TaskSource` gaining a member can surface exhaustive `switch` statements or
@@ -1790,7 +1793,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 Run:
 
 ```bash
-npx tsc --noEmit && npx tsc --noEmit -p apps/workbench/tsconfig.json && npx vitest run
+npm run typecheck && npx vitest run && (cd apps/workbench && npx tsc --noEmit -p tsconfig.json && npx vitest run)
 ```
 
 Expected: PASS.
@@ -1800,8 +1803,15 @@ Expected: PASS.
 `emitTasks` now selects `title, description, priority, task_type, checklist` and inserts
 `checklist`. The offline check reads the generated types; the live one reads PostgREST:
 
+The offline check, from the workbench:
+
 ```bash
-npx vitest run tests/query-columns.test.ts
+cd apps/workbench && npx vitest run tests/query-columns.test.ts
+```
+
+Then the live check, from the worktree root:
+
+```bash
 cp /Users/scottaubrey/Desktop/GitHub/cornerstone-drafting/.env.local .env.local.tmp
 set -a && . ./.env.local.tmp && set +a
 node scripts/checkDbColumns.mjs
