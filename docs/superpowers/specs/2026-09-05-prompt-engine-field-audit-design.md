@@ -200,6 +200,34 @@ the same prompt on the same matter are closed with a `closeout_reason` naming th
 A task that has been edited, assigned, or completed is never touched — the tool may
 withdraw its own suggestion, never a person's work.
 
+## Checks 1 and 2 overlap, and that is accepted — 2026-09-06
+
+When a concern is about people, checks 1 and 2 report the same gap twice: "no provision
+answers this concern" and "this named person is missing" are one fact seen from two sides.
+On the first real matter this produced two blocker tasks for one omission.
+
+Two attempts at fixing it by prompt content:
+
+- **Version 2** gave both checks the fiduciary fields. That fixed a worse problem — they
+  had been reporting guardians as absent while being shown only the beneficiary fields —
+  and created this overlap.
+- **Version 3** divided them by subject: check 2 owns people, check 1 owns provisions, and
+  check 1's statement says outright that a named-person gap belongs to check 2. Measured on
+  the same matter, **it did not stop the duplication.** Check 1's framing moved, from "these
+  persons appear nowhere" to "the slots accommodate only one temporary guardian", and it
+  still fired.
+
+The reason is structural. **Each check is an independent model call with no knowledge of
+what the others found**, which is precisely what makes per-unit fail-soft and the cached
+document prefix work. No prompt wording can de-duplicate across checks, because no check
+can see another's finding. Doing it properly would need a post-pass over findings — a
+finding that suppresses another finding — which is a new concept in this design.
+
+**The owner accepted the duplication on 2026-09-06.** Adding finding-suppression to solve
+a two-task annoyance on a six-check prompt is a poor trade, and the right moment to judge
+it is when the ~40-prompt library is running and the frequency can be seen across many
+matters rather than inferred from one. Revisit it then, with numbers.
+
 ## The six checks
 
 Drafted for the owner's review. They are deliberately **not** deterministic field
