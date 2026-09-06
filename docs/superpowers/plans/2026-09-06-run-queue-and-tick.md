@@ -606,6 +606,17 @@ Stub the worker so the accepted case does no real work — the door is what this
 
 Expected: FAIL — module not found.
 
+### An empty claim returns a row of nulls, not null — verified 2026-09-06
+
+Checked against the live database after applying the migration: calling
+`claim_workflow_run` with nothing queued returns HTTP 200 and a **full row whose every
+column is null**, not JSON `null`. A composite-returning plpgsql function does that.
+
+So the tick must test `claimed?.id == null`, never `!claimed`. A naive falsy check reads
+"nothing to do" as "claimed a run whose id is null", and the worker then tries to work it —
+querying steps for `run_id = null`, finding none, and finalising a run that does not exist.
+Write the guard on the id and say why in a comment.
+
 - [ ] **Step 3: Write the route**
 
 `maxDuration = 300`, `runtime = 'nodejs'`, `dynamic = 'force-dynamic'`, matching
