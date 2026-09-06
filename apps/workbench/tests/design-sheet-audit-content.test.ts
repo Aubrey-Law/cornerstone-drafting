@@ -156,3 +156,64 @@ describe('the version-2 seed migration for the design-sheet audit', () => {
     expect(hash).toBe(seededContentHash())
   })
 })
+
+/**
+ * Version 3 divides checks 1 and 2 by subject rather than by fields.
+ *
+ * Version 2 gave both the fiduciary fields, which fixed their false positives
+ * and made them overlap: one guardian gap raised two blocker tasks. Check 1
+ * keeps the fiduciary fields — without them it cannot see that a concern about
+ * who decides was answered — but is told to report provisions and leave named
+ * persons to check 2.
+ */
+describe('the version-3 seed migration for the design-sheet audit', () => {
+  const V3 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261102000000_design_sheet_audit_v3.sql'),
+    'utf8',
+  )
+  const bodyText = () =>
+    V3.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+
+  it('publishes version 3, and repoints rather than doing nothing', () => {
+    // A `do nothing` here would leave the publication on version 2 — the
+    // exact failure the v2 migration already had to correct.
+    expect(V3).toMatch(/version_number\s*\)?\s*\n?.*3,|,\s*\n\s*3,/)
+    expect(V3).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('leaves check 1 able to see the fiduciary fields', () => {
+    // Removing them would reintroduce the false positive v2 fixed: a concern
+    // about who decides, answered by an appointment it could not see.
+    const body = JSON.parse(bodyText())
+    const check1 = body.checks.find((c: { number: string }) => c.number === '1')
+    expect(check1.reads).toContain('guardian_slots')
+    expect(check1.reads).toContain('guardian_primary')
+  })
+
+  it('tells check 1 to leave a named person to check 2', () => {
+    const body = JSON.parse(bodyText())
+    const check1 = body.checks.find((c: { number: string }) => c.number === '1')
+    expect(check1.statement).toMatch(/check 2/i)
+  })
+
+  it('leaves check 2 exactly as version 2 had it', () => {
+    // The division is one-sided on purpose: check 2 was already right.
+    const v2 = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261101000000_design_sheet_audit_v2.sql'),
+      'utf8',
+    )
+    const pick = (sql: string) =>
+      JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'"))
+        .checks.find((c: { number: string }) => c.number === '2')
+    expect(pick(V3)).toEqual(pick(v2))
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V3.match(/::jsonb,\s*\n\s*'([0-9a-f]{64})'/)![1]
+    expect(crypto.createHash('sha256').update(bodyText()).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    expect(promptBodySchema.safeParse(JSON.parse(bodyText())).success).toBe(true)
+  })
+})
