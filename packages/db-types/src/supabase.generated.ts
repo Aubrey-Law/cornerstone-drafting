@@ -8868,6 +8868,60 @@ export type Database = {
           },
         ]
       }
+      workflow_run_steps: {
+        Row: {
+          attempts: number
+          finding_id: string | null
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          run_id: string
+          sequence: number
+          started_at: string | null
+          status: string
+          unit_id: string
+        }
+        Insert: {
+          attempts?: number
+          finding_id?: string | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          run_id: string
+          sequence: number
+          started_at?: string | null
+          status: string
+          unit_id: string
+        }
+        Update: {
+          attempts?: number
+          finding_id?: string | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          run_id?: string
+          sequence?: number
+          started_at?: string | null
+          status?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_run_steps_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_run_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_runs: {
         Row: {
           created_by: string | null
@@ -8881,6 +8935,7 @@ export type Database = {
           matter_id: string
           model: string | null
           prompt_version_id: string | null
+          resolved_inputs: Json | null
           rule_total: number
           started_at: string
           status: string
@@ -8898,6 +8953,7 @@ export type Database = {
           matter_id: string
           model?: string | null
           prompt_version_id?: string | null
+          resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
           status: string
@@ -8915,6 +8971,7 @@ export type Database = {
           matter_id?: string
           model?: string | null
           prompt_version_id?: string | null
+          resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
           status?: string
