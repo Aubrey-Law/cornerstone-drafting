@@ -1312,7 +1312,7 @@ Replace the `if (context.kind === 'field_audit')` block:
 Run:
 
 ```bash
-cd apps/workbench && npx tsc --noEmit -p tsconfig.json
+cd apps/workbench && npm run typecheck
 ```
 
 Expected: no errors. If `body.outputTarget` is reported as possibly undefined, Task 1's
@@ -1788,15 +1788,25 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 7: Full check before the real run
 
-- [ ] **Step 1: Everything**
+- [ ] **Step 1: Everything, in both projects**
 
-Run:
+The root and the workbench are **separate vitest projects and separate typecheck
+projects**: the root `tsconfig.typecheck.json` excludes `apps/`, and the root vitest
+`include` is root-relative. Neither covers the other, so `npm run typecheck && npx vitest
+run` at the root proves nothing about the app this branch mostly changes. Run all four.
 
 ```bash
-npm run typecheck && npx vitest run && (cd apps/workbench && npx tsc --noEmit -p tsconfig.json && npx vitest run)
+npm run typecheck && npx vitest run
 ```
 
-Expected: PASS.
+```bash
+cd apps/workbench && npm run typecheck && npx vitest run
+```
+
+Expected: both PASS. For reference, the counts on this branch before Task 2 were
+459 files / 4866 passed / 1 skipped at the root, and 83 files / 1007 passed in the
+workbench — so a suite that has silently stopped collecting files shows up as a number
+that dropped rather than as a green tick.
 
 - [ ] **Step 2: The queried columns exist in the live database**
 
