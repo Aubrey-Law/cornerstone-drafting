@@ -1,17 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
-import { loadPromptVersionById } from '@/lib/prompts/repository'
 import { actionableFindings, runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
-import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 import { recordStep, finaliseRun, type UnitOutcome } from './record'
 import { unitsToRetry, type RunStep, type StepStatus } from './steps'
 import { saveFindings as saveFieldAuditFindings } from '@/lib/fieldAudit/persist'
 import { emitTasks } from '@/lib/fieldAudit/tasks'
 import { saveFindings as saveReviewFindings } from '@/lib/review/persist'
-import { toLayer } from '@/lib/review/history'
+import { loadRunContext, unitsFor, type ReviewBody } from './context'
 
 /**
  * Retrying the units a run lost — the whole reason this slice exists.
@@ -25,9 +24,11 @@ import { toLayer } from '@/lib/review/history'
  * the design calls out: how the retried units are picked out of the prompt
  * body (`body.checks` vs `body.rules`), and how the pinned evidence is
  * rebuilt (`resolved_inputs` vs the text layer read back by `text_layer_id`).
- * Dispatch happens once, on `runRow.kind`, at those two points; everything
- * else — loading the pinned prompt version, deleting a superseded finding,
- * recording steps, finalising the run — runs the same way for both.
+ * `loadRunContext` (`./context.ts`) is what rebuilds both — the tick needs
+ * exactly the same thing, and two copies of that rebuild would drift.
+ * Dispatch happens once, on `context.kind`, at those two points; everything
+ * else — deleting a superseded finding, recording steps, finalising the run —
+ * runs the same way for both.
  */
 
 export interface RetryDependencies {
@@ -58,18 +59,19 @@ function toRunStep(row: StepRow): RunStep {
 /**
  * Retries the failed units of one run, and only them.
  *
- * 1. Load the run and its steps. `unitsToRetry` gives the failed unit ids,
- *    in the order they originally ran. Nothing failed → return unchanged,
- *    without opening a single connection to the model.
- * 2. Load **the run's own `prompt_version_id`** — never the currently
- *    published version. A retry finishes the run it belongs to; silently
- *    upgrading it to a newer wording would make the run's findings answers
- *    to two different questions. See `loadPromptVersionById`.
- * 3. Filter the body's units down to the retry set, and rebuild the pinned
- *    evidence for the run's kind — `resolved_inputs` for a field audit, the
- *    stored text layer for a review. Neither re-reads its live source: a
- *    sheet or document edited since the run belongs to a fresh run, not
- *    this one. Run the matching engine over just that subset.
+ * 1. Load the run's context — its own `prompt_version_id` (never the
+ *    currently published one; a retry finishes the run it belongs to, and
+ *    silently upgrading it to a newer wording would make the run's findings
+ *    answers to two different questions) and the pinned evidence for its
+ *    kind. See `loadRunContext` (`./context.ts`).
+ * 2. Load the run's steps. `unitsToRetry` gives the failed unit ids, in the
+ *    order they originally ran. Nothing failed → return unchanged, without
+ *    opening a single connection to the model.
+ * 3. Filter the body's units down to the retry set with `unitsFor`, in the
+ *    body's own order, and run the matching engine over just that subset
+ *    against the evidence already loaded. Neither re-reads its live source:
+ *    a sheet or document edited since the run belongs to a fresh run, not
+ *    this one.
  * 4. For each retried unit, delete the finding its earlier attempt left
  *    (Task 8 — see the comment at the delete below) before the new one is
  *    stored, then store what came back and finalise the run from its steps
@@ -89,16 +91,8 @@ export async function retryFailedSteps(
   runId: string,
   deps: RetryDependencies,
 ): Promise<RetryResult> {
-  const { data: runRow, error: runError } = await client
-    .from('workflow_runs')
-    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model')
-    .eq('id', runId)
-    .maybeSingle()
-  if (runError) return { ok: false, message: `Could not load the run: ${runError.message}` }
-  if (!runRow) return { ok: false, message: `No run ${runId}.` }
-  if (!runRow.prompt_version_id) {
-    return { ok: false, message: `Run ${runId} has no prompt version recorded, so there is nothing to retry against.` }
-  }
+  const context = await loadRunContext(client, runId)
+  if (!context.ok) return context
 
   const { data: stepRows, error: stepsError } = await client
     .from('workflow_run_steps')
@@ -111,19 +105,11 @@ export async function retryFailedSteps(
   if (retryUnitIds.length === 0) return { ok: true, retried: 0 }
 
   const stepByUnit = new Map<string, StepRow>(((stepRows ?? []) as StepRow[]).map((row) => [String(row.unit_id), row]))
-  const retrySet = new Set(retryUnitIds)
 
   // Set only on the field-audit branch, and read after `finaliseRun` below —
   // a retried unit's task has to reflect the run's *final* recorded outcome,
   // the same way a first run's does.
   let fieldAuditTasks: { checks: FieldAuditCheck[]; findings: FieldAuditFinding[] } | null = null
-
-  // Pinned prompt version, never the published one — see the header
-  // comment. A run's `prompt_version_id` is set once, at `openRun`, and
-  // retry reads that same id back rather than going through
-  // `loadPublishedPrompt`/`prompt_publications` at all.
-  const prompt = await loadPromptVersionById(client, String(runRow.prompt_version_id))
-  if (!prompt) return { ok: false, message: `Prompt version ${runRow.prompt_version_id} no longer exists.` }
 
   // A step's `attempts` is what it already recorded; retry runs it once
   // more, so the count written back is one higher than what is already
@@ -136,11 +122,9 @@ export async function retryFailedSteps(
     await recordStep(client, runId, unitId, sequence, outcome, attempts)
   }
 
-  if (runRow.kind === 'field_audit') {
-    if (prompt.body.kind !== 'field_audit') {
-      return { ok: false, message: `Prompt version ${prompt.versionId} is not a field audit, but run ${runId} is.` }
-    }
-    const checks = prompt.body.checks.filter((check) => retrySet.has(check.number))
+  if (context.kind === 'field_audit') {
+    const { prompt, values, run } = context
+    const checks = unitsFor(prompt.body as FieldAuditBody, retryUnitIds)
     if (checks.length === 0) {
       return {
         ok: false,
@@ -148,21 +132,16 @@ export async function retryFailedSteps(
       }
     }
 
-    // The evidence this run actually saw, pinned at `openRun` time so a
-    // retry an hour later answers the same question the run asked. Never
-    // re-read `design_sheets`: a sheet edited since belongs to a fresh run.
-    const values = (runRow.resolved_inputs ?? {}) as Record<string, unknown>
-
     const result = await runFieldAudit(
       {
         promptSlug: prompt.slug,
         promptVersion: prompt.versionNumber,
         values,
-        matterId: String(runRow.matter_id),
+        matterId: String(run.matter_id),
         userId: deps.userId ?? null,
       },
-      { ...prompt.body, checks },
-      { callModel: deps.callModel, model: deps.model ?? runRow.model ?? undefined, onUnitSettled },
+      { ...(prompt.body as FieldAuditBody), checks },
+      { callModel: deps.callModel, model: deps.model ?? run.model ?? undefined, onUnitSettled },
     )
 
     const deleted = await deleteSupersededFindings(client, retryUnitIds, stepByUnit)
@@ -175,39 +154,20 @@ export async function retryFailedSteps(
     // applies again itself via `unitIds`, kept here too so the check list
     // handed to it matches the units it is being asked to emit for.
     fieldAuditTasks = { checks, findings: actionableFindings(result) }
-  } else if (runRow.kind === 'review') {
-    if (prompt.body.kind !== 'review') {
-      return { ok: false, message: `Prompt version ${prompt.versionId} is not a review, but run ${runId} is.` }
-    }
-    const rules = prompt.body.rules.filter((rule) => retrySet.has(rule.number))
+  } else {
+    const { prompt, layer, run } = context
+    const rules = unitsFor(prompt.body as ReviewBody, retryUnitIds)
     if (rules.length === 0) {
       return {
         ok: false,
         message: `None of the failed units (${retryUnitIds.join(', ')}) are still in "${prompt.title}" version ${prompt.versionNumber}.`,
       }
     }
-    if (!runRow.text_layer_id || !runRow.document_version_id) {
-      return { ok: false, message: `Run ${runId} has no stored text layer to replay against.` }
-    }
-
-    // The layer this run actually reviewed, read back rather than
-    // re-extracted — nothing is re-fetched from R2. Retrying a rule against
-    // a document redlined since the run would anchor its citation to text
-    // that no longer matches these offsets; a fresh run is how you review
-    // the current draft.
-    const { data: layerRow, error: layerError } = await client
-      .from('document_text_layers')
-      .select('source_kind, status, extractor, extractor_version, source_sha256, page_count, text, blocks, spans')
-      .eq('id', runRow.text_layer_id)
-      .maybeSingle()
-    if (layerError) return { ok: false, message: `Could not load the stored text layer: ${layerError.message}` }
-    const layer = toLayer(layerRow)
-    if (!layer) return { ok: false, message: `Text layer ${runRow.text_layer_id} no longer exists.` }
 
     const result = await runReviewPlaybook(
       layer,
       { slug: prompt.slug, title: prompt.title, version: prompt.versionNumber, rules },
-      { callModel: deps.callModel, model: deps.model ?? runRow.model ?? undefined, userId: deps.userId ?? null, onUnitSettled },
+      { callModel: deps.callModel, model: deps.model ?? run.model ?? undefined, userId: deps.userId ?? null, onUnitSettled },
     )
 
     const deleted = await deleteSupersededFindings(client, retryUnitIds, stepByUnit)
@@ -215,13 +175,11 @@ export async function retryFailedSteps(
 
     const saved = await saveReviewFindings(client, {
       runId,
-      documentVersionId: String(runRow.document_version_id),
-      textLayerId: String(runRow.text_layer_id),
+      documentVersionId: String(run.document_version_id),
+      textLayerId: String(run.text_layer_id),
       result,
     })
     if (!saved.ok) return { ok: false, message: saved.message }
-  } else {
-    return { ok: false, message: `Unknown run kind "${String(runRow.kind)}".` }
   }
 
   // Read the steps back rather than merging the retried outcomes into the
@@ -239,7 +197,7 @@ export async function retryFailedSteps(
   // them; a review never emits tasks at all, retried or not.
   if (fieldAuditTasks) {
     await emitTasks(client, {
-      matterId: String(runRow.matter_id),
+      matterId: String(context.run.matter_id),
       runId,
       checks: fieldAuditTasks.checks,
       findings: fieldAuditTasks.findings,
