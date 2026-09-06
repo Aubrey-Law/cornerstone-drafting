@@ -149,20 +149,46 @@ describe('outputTarget', () => {
    * The overhaul plan names five targets; two are not built. A schema that
    * accepted them would let someone publish a prompt that silently produces
    * nothing, which is the failure mode this whole project keeps finding.
+   *
+   * `null` is in the list because `.default()` fires on *absence*, not on
+   * `null` — so a hand-edited jsonb body carrying an explicit
+   * `"outputTarget": null` is refused rather than defaulted, and
+   * `toPublishedPrompt` throws for that version. That loud failure is the
+   * intended behaviour: a null nobody meant to write is a mistake to see, not
+   * one to silently read as `task_set`.
    */
-  it.each(['draft_doc', 'email_draft', 'tasks', ''])('refuses the unimplemented target %s', (target) => {
-    expect(promptBodySchema.safeParse({ ...bodyWithout(), outputTarget: target }).success).toBe(false)
-  })
+  it.each(['draft_doc', 'email_draft', 'tasks', '', null] as Array<string | null>)(
+    'refuses the unimplemented target %s',
+    (target) => {
+      expect(promptBodySchema.safeParse({ ...bodyWithout(), outputTarget: target }).success).toBe(false)
+    },
+  )
 
-  it('does not accept outputTarget on a review body', () => {
-    const review = {
+  /**
+   * A *valid* review body, so the assertion turns on the extra key rather
+   * than on `rules.min(1)` failing first. The previous version of this test
+   * used `rules: []`, which meant it passed whether or not the schema knew
+   * about `outputTarget` at all — it could not fail, which is worse than
+   * absent, because it reads as coverage.
+   *
+   * What this pins: `outputTarget` belongs to the field-audit arm only. If
+   * someone later hoists it onto a shared base, this fails.
+   */
+  it('strips outputTarget from a review body rather than keeping it', () => {
+    const parsed = promptBodySchema.safeParse({
       kind: 'review',
       inputs: [],
-      rules: [],
+      rules: [
+        {
+          number: '1',
+          statement: 'Our exculpation language carves out gross negligence.',
+          risk: 'high',
+        },
+      ],
       outputTarget: 'checklist',
-    }
-    // Refused for having no rules, whatever happens to the extra key — the
-    // point is that the review arm gains nothing here.
-    expect(promptBodySchema.safeParse(review).success).toBe(false)
+    })
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect('outputTarget' in parsed.data).toBe(false)
   })
 })

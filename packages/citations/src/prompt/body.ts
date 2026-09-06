@@ -62,6 +62,17 @@ export const fieldAuditBodySchema = z.object({
    * published without this field — so requiring it would not reject a bad new
    * prompt, it would throw on every run already in the database. The default
    * is `task_set` because that is what those versions in fact did.
+   *
+   * Defaulted rather than `.optional()`, which is the other shape that parses
+   * those old bodies. `.optional()` would leave the field `undefined` and push
+   * a `?? 'task_set'` fallback into every consumer — the same decision restated
+   * at each call site, wrong the first time one of them forgets. The default
+   * belongs in the schema, where it is stated once.
+   *
+   * Which makes the value effectively frozen. It is not a preference about what
+   * a new prompt should do; it is the recorded behaviour of versions 1 to 3, and
+   * changing it would retroactively rewrite what those runs meant. A different
+   * default for new prompts would have to be a separate, explicit field.
    */
   outputTarget: outputTargetSchema.default('task_set'),
 })
