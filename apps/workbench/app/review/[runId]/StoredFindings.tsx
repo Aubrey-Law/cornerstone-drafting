@@ -4,9 +4,11 @@ import { useActionState, useOptimistic, useState } from 'react'
 import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import { isCitable, orderFindings } from '@/lib/review/order'
 import type { Disposition, StoredFinding } from '@/lib/review/persist'
+import type { RunStep } from '@/lib/runs/steps'
 import { BlockTextViewer } from '@/app/review/BlockTextViewer'
 import { FindingsList } from '@/app/review/FindingsList'
-import { recordDisposition } from './actions'
+import { RunSteps } from '@/app/runs/RunSteps'
+import { recordDisposition, retryRun } from './actions'
 
 /**
  * A recorded review, read back.
@@ -21,13 +23,16 @@ export function StoredFindings({
   runId,
   findings,
   layer,
+  steps = [],
 }: {
   runId: string
   findings: StoredFinding[]
   layer: TextLayer | null
+  steps?: RunStep[]
 }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [state, submit] = useActionState(recordDisposition, { message: null })
+  const [retryState, submitRetry, retryPending] = useActionState(retryRun, { message: null })
 
   // Shown immediately, so a decision does not appear to be ignored while the
   // round trip completes.
@@ -79,6 +84,22 @@ export function StoredFindings({
             submit(form)
           }}
         />
+        {steps.length > 0 ? (
+          <div className="border-t border-border p-4">
+            <h2 className="mb-2 text-sm font-semibold">Steps</h2>
+            <RunSteps
+              steps={steps}
+              unitNoun="rules"
+              retryPending={retryPending}
+              retryMessage={retryState.message}
+              onRetry={() => {
+                const form = new FormData()
+                form.set('runId', runId)
+                submitRetry(form)
+              }}
+            />
+          </div>
+        ) : null}
       </section>
       <section className="overflow-auto">
         {layer ? (

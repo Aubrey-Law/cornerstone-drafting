@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { runStatusFor, WORKFLOW_RUN_COLUMNS, WORKFLOW_FINDING_COLUMNS } from '@/lib/review/persist'
+import { WORKFLOW_RUN_COLUMNS, WORKFLOW_FINDING_COLUMNS } from '@/lib/review/persist'
+import { statusFromSteps, type RunStep } from '@/lib/runs/steps'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -21,28 +22,50 @@ const PROMPT_OBJECTS_MIGRATION = fs.readFileSync(
   'utf8',
 )
 
+const step = (unitId: string, status: RunStep['status']): RunStep => ({
+  unitId,
+  status,
+  attempts: 1,
+  sequence: Number(unitId),
+})
+
 /**
  * The status is the one field a reader skims, so it may not overstate what the
  * run covered. A run that lost a rule to a failed model call is `partial`, and
  * calling it `completed` would say every rule was applied when one never was.
+ *
+ * `runStatusFor` used to compute this from finding/failure counts, and it
+ * disagreed with `runStatusForAudit` in `lib/fieldAudit/persist.ts` on a run
+ * with zero findings and zero failures — this one called that `failed`, the
+ * other `completed`. Both are gone. `statusFromSteps` in `lib/runs/steps.ts`
+ * is the one function either kind of run reads its status from now, computed
+ * from the steps themselves rather than from counts kept in step with them by
+ * hand in two separate files.
  */
-describe('runStatusFor', () => {
+describe("a review's run status, from its steps", () => {
   it('is completed when every rule ran', () => {
-    expect(runStatusFor({ ruleTotal: 3, findingCount: 3, failedCount: 0 })).toBe('completed')
+    expect(statusFromSteps([step('1', 'succeeded'), step('2', 'succeeded'), step('3', 'succeeded')])).toBe(
+      'completed',
+    )
   })
 
   it('is partial when a rule was lost', () => {
-    expect(runStatusFor({ ruleTotal: 3, findingCount: 2, failedCount: 1 })).toBe('partial')
+    expect(statusFromSteps([step('1', 'succeeded'), step('2', 'succeeded'), step('3', 'failed')])).toBe('partial')
   })
 
   it('is failed when no rule survived', () => {
     // Nothing was learned about the document, and the record should not imply
     // it was reviewed.
-    expect(runStatusFor({ ruleTotal: 3, findingCount: 0, failedCount: 3 })).toBe('failed')
+    expect(statusFromSteps([step('1', 'failed'), step('2', 'failed'), step('3', 'failed')])).toBe('failed')
   })
 
-  it('is failed rather than completed for a playbook with no rules', () => {
-    expect(runStatusFor({ ruleTotal: 0, findingCount: 0, failedCount: 0 })).toBe('failed')
+  /**
+   * This is the exact case the two old functions disagreed on. Neither was
+   * reachable — a run always has at least one step once it opens — which is
+   * exactly why the disagreement went unnoticed.
+   */
+  it('is failed rather than completed for a run with no steps at all', () => {
+    expect(statusFromSteps([])).toBe('failed')
   })
 })
 

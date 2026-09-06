@@ -75,4 +75,32 @@ describe('PromptsWorkspace', () => {
 
     expect(screen.getByTestId('no-prompts').textContent).toMatch(/no field-audit prompt is published/i)
   })
+
+  /**
+   * A field-audit run used to have nowhere to be seen: this page ran one and
+   * reported a count, and that was the end of it. Each recorded run now links
+   * to its own page.
+   */
+  it('links each recorded run to its own page', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        runs={[
+          {
+            runId: 'run-1',
+            matterTitle: 'Smith Family Trust',
+            promptTitle: 'Issue spotter',
+            status: 'completed',
+            findingCount: 3,
+            failedCount: 0,
+            finishedAt: '2026-09-05T12:00:00Z',
+          },
+        ]}
+      />,
+    )
+
+    const link = screen.getByRole('link', { name: /issue spotter/i })
+    expect(link).toHaveAttribute('href', '/prompts/run-1')
+  })
 })

@@ -1,22 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { findingRowsFor, referenceRowsFor, runStatusForAudit } from '@/lib/fieldAudit/persist'
+import { findingRowsFor, referenceRowsFor } from '@/lib/fieldAudit/persist'
+import { statusFromSteps, type RunStep } from '@/lib/runs/steps'
 import type { FieldAuditFinding, FieldAuditResult } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
- * The three pure helpers behind `saveAuditRun`, checked without a client — the
- * same split `lib/review/persist.ts`'s own tests would use if it had them: a
- * row shape is a function of data, and the database call is the only part
- * that needs a network.
+ * The pure helpers behind `saveFindings`, checked without a client — the same
+ * split `lib/review/persist.ts`'s own tests would use if it had them: a row
+ * shape is a function of data, and the database call is the only part that
+ * needs a network.
  */
-describe('runStatusForAudit', () => {
-  it('is completed when nothing failed', () => {
-    expect(runStatusForAudit({ findingCount: 4, failedCount: 0 })).toBe('completed')
-  })
 
-  it('is completed even with no findings, so long as nothing failed', () => {
-    // A clean run that found nothing wrong is not the same failure as a run
-    // that never got to look.
-    expect(runStatusForAudit({ findingCount: 0, failedCount: 0 })).toBe('completed')
+const step = (unitId: string, status: RunStep['status']): RunStep => ({
+  unitId,
+  status,
+  attempts: 1,
+  sequence: Number(unitId),
+})
+
+/**
+ * `runStatusForAudit` used to live in `lib/fieldAudit/persist.ts`, computing
+ * this from finding/failure counts. It disagreed with `runStatusFor`, its
+ * counterpart in `lib/review/persist.ts`, on a run with zero findings and
+ * zero failures — the first called that `failed`, the second `completed`.
+ * `statusFromSteps` in `lib/runs/steps.ts` replaces both: it is the one
+ * function either kind of run reads its status from now, computed from the
+ * steps themselves rather than from counts kept in step with them by hand.
+ */
+describe("a field audit's run status, from its steps", () => {
+  it('is completed when every check ran and produced a finding', () => {
+    expect(
+      statusFromSteps([step('1', 'succeeded'), step('2', 'succeeded'), step('3', 'succeeded'), step('4', 'succeeded')]),
+    ).toBe('completed')
   })
 
   /**
@@ -25,7 +39,7 @@ describe('runStatusForAudit', () => {
    * a word that suggests it still partly worked.
    */
   it('is failed when everything failed and nothing was found', () => {
-    expect(runStatusForAudit({ findingCount: 0, failedCount: 3 })).toBe('failed')
+    expect(statusFromSteps([step('1', 'failed'), step('2', 'failed'), step('3', 'failed')])).toBe('failed')
   })
 
   /**
@@ -34,7 +48,17 @@ describe('runStatusForAudit', () => {
    * some did not run at all.
    */
   it('is partial when some checks failed but others still produced findings', () => {
-    expect(runStatusForAudit({ findingCount: 2, failedCount: 1 })).toBe('partial')
+    expect(statusFromSteps([step('1', 'succeeded'), step('2', 'succeeded'), step('3', 'failed')])).toBe('partial')
+  })
+
+  /**
+   * This is the exact case the two old functions disagreed on. Neither was
+   * reachable — a run always has at least one step once it opens — which is
+   * exactly why the disagreement went unnoticed. `statusFromSteps` settles
+   * it: nothing ran, so the honest word is `failed`, not `completed`.
+   */
+  it('is failed for a run with no steps at all, unlike the old runStatusForAudit', () => {
+    expect(statusFromSteps([])).toBe('failed')
   })
 })
 

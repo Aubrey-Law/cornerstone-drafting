@@ -3,6 +3,7 @@ import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { ReviewFinding, ReviewResult } from '@aubrey-law/citations/review/types'
 import type { Json } from '@aubrey-law/db-types'
+import type { RunStep } from '@/lib/runs/steps'
 
 /**
  * Recording a review so it outlives the page.
@@ -11,6 +12,24 @@ import type { Json } from '@aubrey-law/db-types'
  * durable identity, so a saved run about one would carry citations anchored to
  * nothing — which is precisely the failure the citation model exists to avoid.
  * Reviewing an upload stays ephemeral, and the screen says so.
+ *
+ * Split into the same three phases `lib/fieldAudit/persist.ts` and
+ * `lib/fieldAudit/run.ts` use — see the migration's header comment
+ * (20261030000000_run_steps.sql) for why the run row now has to exist before
+ * the engine starts:
+ *
+ *  1. `saveTextLayer` persists the layer a review is about to run against,
+ *     so its id exists to pin on the run — `openRun` (`lib/runs/record.ts`)
+ *     does that next, in the route handler, before the engine runs.
+ *  2. Each rule's outcome is written with `recordStep` as it settles.
+ *  3. `saveFindings` stores what came back and links each finding to its
+ *     step, then `finaliseRun` sets the run's status and counts.
+ *
+ * `saveRun` — one call doing all of this at the very end — and
+ * `runStatusFor`, which computed the run's status from finding/failure
+ * counts and disagreed with `lib/fieldAudit/persist.ts`'s own version of the
+ * same question, are both gone. `statusFromSteps` in `lib/runs/steps.ts` is
+ * the one function either kind of run reads its status from now.
  */
 /**
  * A citation shape on its way into a `jsonb` column.
@@ -62,64 +81,24 @@ export const WORKFLOW_FINDING_COLUMNS = [
   'created_at',
 ] as const
 
-export type RunStatus = 'completed' | 'partial' | 'failed'
-
-/**
- * The status is the one field a reader skims, so it may not overstate coverage.
- * A run that lost a rule to a failed call is `partial`; calling it `completed`
- * would claim every rule was applied when one never was. A run that lost every
- * rule learned nothing and must not read as a review at all.
- */
-export function runStatusFor(counts: {
-  ruleTotal: number
-  findingCount: number
-  failedCount: number
-}): RunStatus {
-  if (counts.findingCount === 0) return 'failed'
-  return counts.failedCount > 0 ? 'partial' : 'completed'
-}
-
-export interface SaveRunInput {
-  matterId: string
+export interface SaveTextLayerInput {
   documentVersionId: string
   layer: TextLayer
-  /**
-   * The exact prompt version the review ran against, not a slug and an
-   * integer.
-   *
-   * A finding is only interpretable against the exact wording that produced
-   * it — "rule 1 says the carve-out must name gross negligence" means
-   * nothing once rule 1's statement could have changed. A slug plus a
-   * version number is two values someone could edit independently after the
-   * fact: the row that used to record `playbook_slug`/`playbook_version`
-   * pointed at a version by describing it, not by referencing it, so a
-   * playbook edited (or a version renumbered) after a run would silently
-   * change what that run appears to have been checked against. A foreign key
-   * into `prompt_versions`, an immutable table, cannot be edited out from
-   * under the run it describes — the row it names is the row that ran, for
-   * as long as the run exists.
-   */
-  promptVersionId: string
-  model: string | null
-  result: ReviewResult
-  userId: string
-  startedAt: string
 }
 
 /**
- * Stores the layer, the run, its findings and their verified citations.
+ * Persists the layer a review is about to run against.
  *
- * The text layer goes first and its id is kept on the run, because every stored
- * citation is a pair of offsets into that layer's text — without it they are
- * numbers with nothing to measure against.
+ * Called before `openRun`, not after: every stored citation is a pair of
+ * offsets into this layer's text, so `text_layer_id` has to already exist to
+ * be pinned on the run — the same guarantee `resolved_inputs` gives a field
+ * audit, which a review has had since the start.
  */
-export async function saveRun(
+export async function saveTextLayer(
   client: SupabaseClient<WorkbenchDatabase>,
-  input: SaveRunInput,
-): Promise<{ ok: true; runId: string } | { ok: false; message: string }> {
-  const sb = client
-
-  const { data: layerRow, error: layerError } = await sb
+  input: SaveTextLayerInput,
+): Promise<{ ok: true; layerId: string } | { ok: false; message: string }> {
+  const { data, error } = await client
     .from('document_text_layers')
     .upsert(
       {
@@ -138,43 +117,39 @@ export async function saveRun(
     )
     .select('id')
     .single()
-  if (layerError) return { ok: false, message: `Could not store the text layer: ${layerError.message}` }
+  if (error) return { ok: false, message: `Could not store the text layer: ${error.message}` }
+  return { ok: true, layerId: String(data.id) }
+}
 
-  const counts = {
-    ruleTotal: input.result.findings.length + input.result.failures.length,
-    findingCount: input.result.findings.length,
-    failedCount: input.result.failures.length,
-  }
+export interface SaveFindingsInput {
+  runId: string
+  documentVersionId: string
+  textLayerId: string
+  result: ReviewResult
+}
 
-  const { data: runRow, error: runError } = await sb
-    .from('workflow_runs')
-    .insert({
-      matter_id: input.matterId,
-      document_version_id: input.documentVersionId,
-      text_layer_id: layerRow.id,
-      prompt_version_id: input.promptVersionId,
-      kind: 'review',
-      model: input.model,
-      status: runStatusFor(counts),
-      rule_total: counts.ruleTotal,
-      finding_count: counts.findingCount,
-      failed_count: counts.failedCount,
-      failures: input.result.failures,
-      started_at: input.startedAt,
-      finished_at: new Date().toISOString(),
-      created_by: input.userId,
-    })
-    .select('id')
-    .single()
-  if (runError) return { ok: false, message: `Could not store the run: ${runError.message}` }
-
-  const runId = String(runRow.id)
+/**
+ * Stores this run's findings and their verified citations, and links each
+ * finding back to the step that produced it — `finding_id` on
+ * `workflow_run_steps` is set here, in this third phase, once a finding
+ * actually exists to point at. Mirrors `lib/fieldAudit/persist.ts`'s
+ * `saveFindings`.
+ *
+ * Also carries the run's failures onto `workflow_runs.failures`, which the
+ * run page has always read to show why a rule was lost. This restructure
+ * changes when a run is recorded, not what it shows.
+ */
+export async function saveFindings(
+  client: SupabaseClient<WorkbenchDatabase>,
+  input: SaveFindingsInput,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const sb = client
 
   for (const finding of input.result.findings) {
     const { data: findingRow, error: findingError } = await sb
       .from('workflow_findings')
       .insert({
-        run_id: runId,
+        run_id: input.runId,
         rule_number: finding.ruleNumber,
         outcome: finding.outcome,
         severity: finding.severity,
@@ -193,7 +168,7 @@ export async function saveRun(
     if (finding.citation && finding.citation.verification === 'verified') {
       const { error: citationError } = await sb.from('workflow_citations').insert({
         finding_id: findingRow.id,
-        text_layer_id: layerRow.id,
+        text_layer_id: input.textLayerId,
         document_version_id: input.documentVersionId,
         block_index: finding.citation.blockIndex,
         char_start: finding.citation.charStart,
@@ -207,9 +182,26 @@ export async function saveRun(
         return { ok: false, message: `Could not store a citation: ${citationError.message}` }
       }
     }
+
+    const { error: linkError } = await sb
+      .from('workflow_run_steps')
+      .update({ finding_id: findingRow.id })
+      .eq('run_id', input.runId)
+      .eq('unit_id', finding.ruleNumber)
+    if (linkError) {
+      return { ok: false, message: `Could not link the finding to its step: ${linkError.message}` }
+    }
   }
 
-  return { ok: true, runId }
+  const { error: failuresError } = await sb
+    .from('workflow_runs')
+    .update({ failures: asJson(input.result.failures) })
+    .eq('id', input.runId)
+  if (failuresError) {
+    return { ok: false, message: `Could not record the run's failures: ${failuresError.message}` }
+  }
+
+  return { ok: true }
 }
 
 export type Disposition = 'open' | 'accepted' | 'rejected' | 'deferred'
@@ -242,7 +234,8 @@ export interface StoredFinding extends ReviewFinding {
 export interface StoredRun {
   runId: string
   matterId: string
-  documentVersionId: string
+  /** Null only for a run recorded before this column existed — a review always has a document. */
+  documentVersionId: string | null
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null
@@ -256,4 +249,5 @@ export interface StoredRun {
   finishedAt: string | null
   findings: StoredFinding[]
   layer: TextLayer | null
+  steps: RunStep[]
 }
