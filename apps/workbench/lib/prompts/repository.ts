@@ -13,6 +13,14 @@ import { promptBodySchema, type PromptBody } from '@aubrey-law/citations/prompt/
  */
 export interface PublishedPrompt {
   versionId: string
+  /**
+   * The *prompt*, not the version. The withdrawal rule in
+   * `lib/fieldAudit/tasks.ts` scopes a run's candidates to its own prompt, and
+   * scoping by version instead would strand every task the moment a prompt is
+   * republished — version 4 must still retire version 3's tasks, because it is
+   * a newer answer to the same question.
+   */
+  promptId: string
   versionNumber: number
   slug: string
   title: string
@@ -42,6 +50,7 @@ export function toPublishedPrompt(row: {
   id: string
   version_number: number
   body: unknown
+  prompt_id: string
   prompts: { slug: string; title: string; kind: string } | null
 }): PublishedPrompt {
   const slug = row.prompts?.slug ?? `(prompt for version ${row.id})`
@@ -65,6 +74,7 @@ export function toPublishedPrompt(row: {
 
   return {
     versionId: row.id,
+    promptId: row.prompt_id,
     versionNumber: row.version_number,
     slug: row.prompts.slug,
     title: row.prompts.title,
@@ -121,6 +131,7 @@ export async function loadPublishedPrompt(
     id: versionRow.id,
     version_number: versionRow.version_number,
     body: versionRow.body,
+    prompt_id: promptRow.id,
     prompts: { slug: promptRow.slug, title: promptRow.title, kind: promptRow.kind },
   })
 }
@@ -161,6 +172,7 @@ export async function loadPromptVersionById(
     id: versionRow.id,
     version_number: versionRow.version_number,
     body: versionRow.body,
+    prompt_id: String(versionRow.prompt_id),
     prompts: promptRow ? { slug: promptRow.slug, title: promptRow.title, kind: promptRow.kind } : null,
   })
 }
@@ -208,6 +220,7 @@ export async function loadPublishedPrompts(
       id: version.id,
       version_number: version.version_number,
       body: version.body,
+      prompt_id: String(publication.prompt_id),
       prompts: prompt ? { slug: prompt.slug, title: prompt.title, kind: prompt.kind } : null,
     })
   })

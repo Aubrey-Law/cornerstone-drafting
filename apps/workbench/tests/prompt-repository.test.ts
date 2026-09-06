@@ -11,9 +11,18 @@ const versionRow = (over: Partial<Parameters<typeof toPublishedPrompt>[0]> = {})
   id: 'version-1',
   version_number: 3,
   body: reviewBody,
+  prompt_id: 'prompt-1',
   prompts: { slug: 'ma-trust-firm-qa', title: 'MA trust firm QA', kind: 'review' },
   ...over,
 })
+
+const FIELD_AUDIT_CHECK = {
+  number: '1',
+  statement: 'Every stated concern is answered.',
+  risk: 'blocker' as const,
+  reads: ['x'],
+  taskTemplate: { title: 't', description: 'd', priority: 'high' as const },
+}
 
 /**
  * `toPublishedPrompt` is the pure half — validated directly against plain
@@ -24,6 +33,7 @@ describe('toPublishedPrompt', () => {
     const prompt = toPublishedPrompt(versionRow())
     expect(prompt).toEqual({
       versionId: 'version-1',
+      promptId: 'prompt-1',
       versionNumber: 3,
       slug: 'ma-trust-firm-qa',
       title: 'MA trust firm QA',
@@ -57,6 +67,28 @@ describe('toPublishedPrompt', () => {
   it('still names the version id when the row has no prompt to blame', () => {
     const row = versionRow({ body: { kind: 'review', inputs: [], rules: [] }, prompts: null })
     expect(() => toPublishedPrompt(row)).toThrow(/version-1/)
+  })
+
+  /**
+   * The withdrawal rule scopes candidates by prompt, and the only way it can
+   * know this run's prompt is off the loaded version. `prompt_id` was always
+   * read by both loaders and never exposed.
+   */
+  it('carries the prompt id, not only the version id', () => {
+    const prompt = toPublishedPrompt({
+      id: 'version-1',
+      version_number: 4,
+      body: {
+        kind: 'field_audit',
+        inputs: [{ key: 'x', source: 'design_sheet.concerns', required: true }],
+        checks: [FIELD_AUDIT_CHECK],
+        outputTarget: 'checklist',
+      },
+      prompt_id: 'prompt-1',
+      prompts: { slug: 'ma-design-sheet-audit', title: 'MA design sheet audit', kind: 'field_audit' },
+    })
+    expect(prompt.promptId).toBe('prompt-1')
+    expect(prompt.versionId).toBe('version-1')
   })
 })
 
@@ -101,6 +133,7 @@ describe('loadPublishedPrompt', () => {
     const prompt = await loadPublishedPrompt(client, 'ma-trust-firm-qa')
     expect(prompt).toEqual({
       versionId: 'v-1',
+      promptId: 'p-1',
       versionNumber: 2,
       slug: 'ma-trust-firm-qa',
       title: 'MA trust firm QA',

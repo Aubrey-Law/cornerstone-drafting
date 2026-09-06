@@ -83,6 +83,7 @@ function contextWith(n: number): RunContext {
     },
     prompt: {
       versionId: 'v1',
+      promptId: 'p1',
       versionNumber: 1,
       slug: 'audit-1',
       title: 'Audit One',
