@@ -663,7 +663,12 @@ Then confirm nothing else refers to either deleted function:
 grep -rn "tasksToSupersede\|parseBatchTag" --include="*.ts" --include="*.tsx" apps packages lib app components
 ```
 
-Expected: no output.
+Expected: hits **only** inside `apps/workbench/lib/fieldAudit/tasks.ts`, and only in two places
+— `planEmit`'s own doc comment, which names what it replaced deliberately, and inside
+`EmitTasksInput`/`emitTasks`, which Task 3 rewrites wholesale. Fixing that second group now
+would only churn code Task 3 replaces, so leave it. A hit in any *other* file is a real
+problem: report it rather than fixing it, since it means something depended on the old
+behaviour.
 
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -681,7 +686,7 @@ not set and `emitTasks` still references the deleted functions. That is Task 3.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/workbench/lib/fieldAudit/tasks.ts apps/workbench/tests/field-audit-tasks.test.ts
+git add apps/workbench/lib/fieldAudit/tasks.ts apps/workbench/tests/field-audit-tasks.test.ts apps/workbench/lib/runs/advisory.ts
 git commit -m "One question decides which tasks a run creates, keeps and withdraws
 
 emitTasks took a unitIds hint that chose between tasksToSupersede and
