@@ -255,17 +255,38 @@ export async function runFieldAudit(
  * decision.
  *
  * One gate rather than a filter repeated at each call site, mirroring
- * `exportableFindings` in runReview.ts: "only verified evidence leaves the
- * tool" is the rule everything here rests on, and a finding needs at least
- * one reference and every one of them verified before it qualifies. A
- * `compliant` or `not_applicable` finding never needed to prove anything, so
- * it is excluded regardless of its references.
+ * `exportableFindings` in runReview.ts. A `compliant` or `not_applicable`
+ * finding never needed to prove anything, so it is excluded regardless of its
+ * references.
+ *
+ * **This is not the verifier, and the verifier has not moved.** An unverified
+ * claim is still refused as evidence, still stored with what the field
+ * actually held, and still counted in the rate this design is judged by. What
+ * this decides is different: how much checked support a finding needs before
+ * it is worth a person's time.
+ *
+ * It required *every* reference to verify, and that was too strict once a
+ * finding could carry several. Three runs of the same six checks against the
+ * same matter verified 19, 18 and 17 of 19 references — the outcomes identical
+ * every time, the drift always on the jsonb array fields (`children`,
+ * `assets`) where a model phrases a claim differently run to run. Under the old
+ * rule a blocker — "a person named in the notes is missing from the plan" —
+ * had three of its four references check out and produced no task at all. A
+ * finding supported three ways out of four is not an unsupported claim, and
+ * dropping it silently is the worse error: the attorney never learns it was
+ * found.
+ *
+ * So: at least one verified reference. The unverified ones travel with the
+ * finding and the run view shows each one's status, so what a task rests on
+ * stays visible rather than being averaged away.
+ *
+ * Owner's decision, 2026-09-06, after the rate was measured across those three
+ * runs.
  */
 export function actionableFindings(result: FieldAuditResult): FieldAuditFinding[] {
   return result.findings.filter(
     finding =>
       (finding.outcome === 'deviation' || finding.outcome === 'absent') &&
-      finding.references.length > 0 &&
-      finding.references.every(reference => reference.verification === 'verified'),
+      finding.references.some(reference => reference.verification === 'verified'),
   )
 }

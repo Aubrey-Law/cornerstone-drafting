@@ -158,7 +158,7 @@ describe('runFieldAudit', () => {
 })
 
 describe('actionableFindings', () => {
-  it('excludes a finding where one reference verified and another did not', async () => {
+  it('includes a finding supported in part, and keeps the unverified reference with it', async () => {
     const bothTrusteesCheck: FieldAuditCheck = {
       number: '3',
       statement: 'Both trustees are identified.',
@@ -176,6 +176,38 @@ describe('actionableFindings', () => {
             { field_key: 'successor_trustee_name', claimed_value: 'Someone Else' },
           ],
         }),
+    })
+    // Three runs of the same checks against the same matter verified 19, 18
+    // and 17 of 19 references — always drifting on the jsonb array fields. The
+    // old rule dropped a blocker whose other references all checked out, and
+    // the attorney never learned it was found. The unverified reference is
+    // kept on the finding so what the task rests on stays visible.
+    const actionable = actionableFindings(result)
+    expect(actionable).toHaveLength(1)
+    expect(actionable[0].references.filter((r) => r.verification === 'verified')).toHaveLength(1)
+    expect(actionable[0].references.filter((r) => r.verification !== 'verified')).toHaveLength(1)
+  })
+
+  it('excludes a finding no reference supports at all', async () => {
+    // The floor the gate still holds. Nothing was checked, so there is nothing
+    // to act on — this is the case the verifier exists for, and loosening the
+    // gate did not move it.
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({
+          outcome: 'deviation',
+          rationale: 'Asserted without support.',
+          references: [{ field_key: 'trustee_name', claimed_value: 'Not what the field says' }],
+        }),
+    })
+    expect(result.findings).toHaveLength(1)
+    expect(actionableFindings(result)).toEqual([])
+  })
+
+  it('excludes a finding carrying no references whatsoever', async () => {
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({ outcome: 'deviation', rationale: 'Bare assertion.', references: [] }),
     })
     expect(actionableFindings(result)).toEqual([])
   })
