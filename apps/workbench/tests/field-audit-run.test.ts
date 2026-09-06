@@ -297,4 +297,55 @@ describe('runMatterAudit queues a run rather than running the engine', () => {
     expect(steps.every((step) => step.status === 'pending')).toBe(true)
     expect(steps.every((step) => step.attempts === 0)).toBe(true)
   })
+
+  it('opens a run with no actor when the stage engine fired it', async () => {
+    // A trigger-fired run has no user behind it. `created_by` is nullable for
+    // exactly this case, and inventing an actor would put a person's name on
+    // something they did not do.
+    const client = seededClient()
+    const result = await runMatterAudit(client as unknown as SupabaseClient<WorkbenchDatabase>, {
+      slug: 'audit-1',
+      matterId: 'm1',
+      userId: null,
+      poke: false,
+    })
+    expect(result.ok).toBe(true)
+    const [run] = client.tableRows('workflow_runs') as Array<{ created_by: string | null }>
+    expect(run.created_by).toBeNull()
+  })
+
+  it('pokes the tick by default, which is what the screen relies on', async () => {
+    // Asserted first, because the next test asserts the absence of this and
+    // an absence proves nothing unless the presence is proven too. With the
+    // injection broken, `poke: false` would "pass" trivially.
+    let poked = 0
+    const client = seededClient()
+    await runMatterAudit(client as unknown as SupabaseClient<WorkbenchDatabase>, {
+      slug: 'audit-1',
+      matterId: 'm1',
+      userId: 'u1',
+      pokeTick: async () => {
+        poked += 1
+      },
+    })
+    expect(poked).toBe(1)
+  })
+
+  it('does not poke when it is already inside a tick', async () => {
+    // The tick materialises a trigger and then works it in the same
+    // invocation. Poking from there would ask a second tick to start for work
+    // this one is about to do.
+    let poked = 0
+    const client = seededClient()
+    await runMatterAudit(client as unknown as SupabaseClient<WorkbenchDatabase>, {
+      slug: 'audit-1',
+      matterId: 'm1',
+      userId: null,
+      poke: false,
+      pokeTick: async () => {
+        poked += 1
+      },
+    })
+    expect(poked).toBe(0)
+  })
 })

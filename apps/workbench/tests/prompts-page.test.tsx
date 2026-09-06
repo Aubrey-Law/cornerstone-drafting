@@ -104,3 +104,89 @@ describe('PromptsWorkspace', () => {
     expect(link).toHaveAttribute('href', '/prompts/run-1')
   })
 })
+
+describe('PromptsWorkspace: unresolved blockers', () => {
+  /**
+   * The whole point of reusing `disposition`: an attorney who has already
+   * accepted or rejected a blocker as a false positive should not keep
+   * seeing it here. That is proven at the data layer in
+   * tests/run-advisory.test.ts; this only proves the section renders what
+   * it is given.
+   */
+  it('lists a matter with an open blocker, linking to the run that raised it', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        unresolvedBlockers={[
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['2'] },
+        ]}
+      />,
+    )
+
+    const section = screen.getByTestId('unresolved-blockers')
+    expect(section.textContent).toContain('Smith Family Trust')
+    const link = screen.getByRole('link', { name: /smith family trust/i })
+    expect(link).toHaveAttribute('href', '/prompts/run-9')
+  })
+
+  /**
+   * The failure this branch fixes: a matter with three runs of the same
+   * prompt used to show six near-identical rows, two per run. One matter
+   * with several unresolved checks must render as one row naming every
+   * check, not one row per finding.
+   */
+  it('renders one row per matter, naming every unresolved check on it', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        unresolvedBlockers={[
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['1', '2'] },
+        ]}
+      />,
+    )
+
+    const section = screen.getByTestId('unresolved-blockers')
+    // One row for the matter, not one per check.
+    expect(section.querySelectorAll('li')).toHaveLength(1)
+    expect(section.textContent).toContain('Check 1')
+    expect(section.textContent).toContain('Check 2')
+  })
+
+  it('says nothing when there are none', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        unresolvedBlockers={[]}
+      />,
+    )
+
+    expect(screen.queryByTestId('unresolved-blockers')).toBeNull()
+  })
+
+  /**
+   * A list of blockers with no explanation invites the reader to assume a
+   * transition was prevented. It was not — a hard gate was rejected on the
+   * evidence of real false positives (see the design doc) — so the section's
+   * own text must not claim a transition was blocked or stopped.
+   */
+  it('does not claim anything was blocked', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        unresolvedBlockers={[
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['2'] },
+        ]}
+      />,
+    )
+
+    const section = screen.getByTestId('unresolved-blockers')
+    expect(section.textContent).not.toMatch(/was blocked/i)
+    expect(section.textContent).not.toMatch(/prevented/i)
+    expect(section.textContent).not.toMatch(/stopped/i)
+    expect(section.textContent).toMatch(/does not block anything/i)
+  })
+})

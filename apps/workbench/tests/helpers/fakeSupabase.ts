@@ -13,6 +13,11 @@
  *
  * `.delete()` was added for retry (`lib/runs/retry.ts`), which deletes a
  * retried unit's superseded finding by id before writing the new one.
+ *
+ * `.rpc()` was added for `lib/runs/triggers.ts`, which claims a stage trigger
+ * through `claim_prompt_stage_trigger` — a plpgsql function, not a table, so
+ * nothing in `FakeQueryBuilder` can stand in for it. A test supplies the
+ * response its scenario needs via `rpcHandlers`, keyed by function name.
  */
 type Row = Record<string, unknown>
 
@@ -161,13 +166,20 @@ class FakeQueryBuilder {
   }
 }
 
+type RpcResult = { data: unknown; error: { message: string } | null }
+type RpcHandler = (args?: Record<string, unknown>) => RpcResult | Promise<RpcResult>
+
 export interface FakeClient {
   from(table: string): FakeQueryBuilder
   tableRows(table: string): Row[]
+  rpc(name: string, args?: Record<string, unknown>): Promise<RpcResult>
 }
 
-/** A fake client seeded with starting rows per table, by name. */
-export function makeFakeClient(seed: Record<string, Row[]> = {}): FakeClient {
+/**
+ * A fake client seeded with starting rows per table, by name, and — for the
+ * plpgsql functions no table can stand in for — a handler per RPC name.
+ */
+export function makeFakeClient(seed: Record<string, Row[]> = {}, rpcHandlers: Record<string, RpcHandler> = {}): FakeClient {
   const tables = new Map<string, FakeTable>()
   for (const [name, rows] of Object.entries(seed)) {
     const table = new FakeTable(name)
@@ -182,6 +194,11 @@ export function makeFakeClient(seed: Record<string, Row[]> = {}): FakeClient {
     },
     tableRows(name: string) {
       return tables.get(name)?.rows ?? []
+    },
+    async rpc(name: string, args?: Record<string, unknown>) {
+      const handler = rpcHandlers[name]
+      if (!handler) throw new Error(`fakeSupabase: no rpc handler registered for "${name}"`)
+      return handler(args)
     },
   }
 }
