@@ -251,6 +251,23 @@ export async function runFieldAudit(
 }
 
 /**
+ * Whether one finding may act.
+ *
+ * Extracted from `actionableFindings` so the withdrawal rule in
+ * `apps/workbench/lib/fieldAudit/tasks.ts` can ask the same question from the
+ * other side without carrying its own copy of the answer. Two copies could
+ * disagree, and the shape of that disagreement is a finding that is refused as
+ * unverifiable *and* counted as grounds for withdrawing an earlier one — which
+ * is the defect this slice exists to remove.
+ */
+export function isActionable(finding: FieldAuditFinding): boolean {
+  return (
+    (finding.outcome === 'deviation' || finding.outcome === 'absent') &&
+    finding.references.some(reference => reference.verification === 'verified')
+  )
+}
+
+/**
  * The findings that may act on anything — surface as a task, drive a
  * decision.
  *
@@ -284,9 +301,63 @@ export async function runFieldAudit(
  * runs.
  */
 export function actionableFindings(result: FieldAuditResult): FieldAuditFinding[] {
-  return result.findings.filter(
-    finding =>
-      (finding.outcome === 'deviation' || finding.outcome === 'absent') &&
-      finding.references.some(reference => reference.verification === 'verified'),
-  )
+  return result.findings.filter(isActionable)
+}
+
+/**
+ * What a run concluded about one check.
+ *
+ * `cleared` and `inconclusive` both produce no task, which is exactly why they
+ * need distinguishing: `cleared` is the run saying it looked and the check is
+ * fine, and `inconclusive` is the run seeing a problem it cannot cite, or not
+ * answering at all. Only the first is grounds for retiring someone's task.
+ */
+export type CheckAnswer = 'cleared' | 'actionable' | 'inconclusive'
+
+export function answerForFinding(
+  finding: FieldAuditFinding | undefined,
+  unitSucceeded: boolean,
+): CheckAnswer {
+  // A unit that failed did not answer, whatever finding an earlier attempt
+  // left behind — so it can retire nothing.
+  if (!unitSucceeded) return 'inconclusive'
+  if (!finding) return 'inconclusive'
+  if (finding.outcome === 'compliant' || finding.outcome === 'not_applicable') return 'cleared'
+  return isActionable(finding) ? 'actionable' : 'inconclusive'
+}
+
+export interface RunAnswers {
+  /** Every check number the run's prompt version declares, mapped to its answer. */
+  byCheck: Record<string, CheckAnswer>
+  /**
+   * Every check came back `cleared` or `actionable`. A complete answer may
+   * retire prior work; a partial one may only add to it.
+   */
+  authoritative: boolean
+}
+
+export function runAnswers(input: {
+  checkNumbers: string[]
+  /** *All* of the run's findings, not `actionableFindings` — the withdrawal
+   *  decision needs the outcomes the gate discards. */
+  findings: FieldAuditFinding[]
+  /** Units whose step did not succeed. */
+  failedCheckNumbers: string[]
+}): RunAnswers {
+  const findingByCheck = new Map(input.findings.map(finding => [finding.checkNumber, finding]))
+  const failed = new Set(input.failedCheckNumbers)
+
+  const byCheck: Record<string, CheckAnswer> = {}
+  for (const checkNumber of input.checkNumbers) {
+    byCheck[checkNumber] = answerForFinding(findingByCheck.get(checkNumber), !failed.has(checkNumber))
+  }
+
+  return {
+    byCheck,
+    // A prompt with no checks is not a complete answer to anything, and
+    // `every` on an empty list would call it one.
+    authoritative:
+      input.checkNumbers.length > 0 &&
+      input.checkNumbers.every(checkNumber => byCheck[checkNumber] !== 'inconclusive'),
+  }
 }
