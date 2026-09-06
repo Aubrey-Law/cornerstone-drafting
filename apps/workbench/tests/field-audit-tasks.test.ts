@@ -488,6 +488,26 @@ describe('planEmit retirement scoping', () => {
     expect(plan.insert).toHaveLength(1)
   })
 
+  /**
+   * The superset clause at a *strict* superset. The sibling test above compares
+   * equal sets, which passes whichever direction the comparison runs, so the
+   * clause was only ever asserted at equality on the retiring side. Reversing
+   * it retires a task saying more than the new one does — the bug in miniature.
+   */
+  it('retires an older checklist whose items the new one strictly extends', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'actionable', '3': 'inconclusive' }, authoritative: false }
+    const plan = planEmit(
+      [checklistTask({ checklist: [{ text: 'A stated concern is not answered by the plan', done: false }] })],
+      [checklistRow([
+        'A stated concern is not answered by the plan',
+        'A person named in the notes is missing from the plan',
+      ])],
+      answers,
+    )
+    expect(plan.supersede).toEqual(['list'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
   it('keeps an older checklist that says something the new one does not', () => {
     const answers: RunAnswers = { byCheck: { '1': 'inconclusive' }, authoritative: false }
     const plan = planEmit(
@@ -533,6 +553,40 @@ describe('planEmit retirement scoping', () => {
     expect(plan.insert).toHaveLength(1)
   })
 
+  /**
+   * Clause 0 with nothing else able to license retirement, which is what the
+   * two tests above do not manage: in the first the candidate's only item is
+   * also in the desired set, so the superset clause fires anyway, and in the
+   * second `desiredUnits` holds that check, so the unit clause does. Both pass
+   * with clause 0 deleted.
+   *
+   * Here the retry's new item set is a strict *subset* of the old task's — the
+   * run still cannot cite everything it cited last time — on a run that is not
+   * authoritative. So the superset clause refuses, the tag carries no unit, and
+   * clause 0 alone stands between this and the old task surviving while a
+   * second one is inserted beside it under the same tag. That duplicate is the
+   * bug an earlier slice already had to fix once: a retry that cannot re-state
+   * everything must still replace its own task rather than add to it.
+   */
+  it('replaces its own run-level task by exact tag even when it now says less', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'actionable', '2': 'inconclusive' }, authoritative: false }
+    const plan = planEmit(
+      [checklistTask({
+        id: 'mine',
+        batchTag: 'prompt:run-new',
+        checklist: [
+          { text: 'A stated concern is not answered by the plan', done: false },
+          { text: 'A person named in the notes is missing from the plan', done: false },
+        ],
+      })],
+      [checklistRow(['A stated concern is not answered by the plan'])],
+      answers,
+    )
+    expect(plan.supersede).toEqual(['mine'])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.keep).toEqual([])
+  })
+
   describe('unit-suffixed tags', () => {
     const oldUnit = () => existingTask({ id: 'u7', batchTag: 'prompt:run-old#7' })
 
@@ -543,6 +597,19 @@ describe('planEmit retirement scoping', () => {
 
     it('keeps it when this run was inconclusive on that check', () => {
       const answers: RunAnswers = { byCheck: { '7': 'inconclusive' }, authoritative: false }
+      expect(planEmit([oldUnit()], [], answers).supersede).toEqual([])
+    })
+
+    /**
+     * `actionable` is not by itself grounds for retirement — a desired row for
+     * that check has to actually exist. It can fail to: `taskRowsFor` skips a
+     * finding whose check number names nothing in the run's pinned prompt
+     * version, so a check the model reported against a statement the version no
+     * longer carries is actionable in `byCheck` and absent from `desired`. The
+     * task must stand, since nothing was emitted to replace it.
+     */
+    it('keeps it when the run found that check actionable but emitted no row for it', () => {
+      const answers: RunAnswers = { byCheck: { '7': 'actionable' }, authoritative: false }
       expect(planEmit([oldUnit()], [], answers).supersede).toEqual([])
     })
 
