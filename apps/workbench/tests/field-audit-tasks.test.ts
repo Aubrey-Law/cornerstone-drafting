@@ -135,6 +135,14 @@ const CHECKS = [CHECK_2, check({ number: '1' })]
 const FINDING_1 = finding({ checkNumber: '1', rationale: 'Because the residuary never answers it.' })
 const FINDING_2 = finding({ checkNumber: '2', rationale: 'And nobody named Ruth appears anywhere.' })
 
+/**
+ * Read off the fixture rather than typed out, because it has to be the exact
+ * string `taskRowsFor` puts in a checklist item. A hand-typed near-miss would
+ * make the run-level superset clause in `mayRetire` be tested against text it
+ * can never match, and the test would then pass for the wrong reason.
+ */
+const CHECK_1_TITLE = check({ number: '1' }).taskTemplate.title
+
 describe('taskRowsFor with an output target', () => {
   it('produces no rows at all for chat', () => {
     expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1], 'chat', 'Audit')).toEqual([])
@@ -626,6 +634,7 @@ describe('emitTasks', () => {
         runId: 'run-1',
         checks: CHECKS,
         findings: [FINDING_1],
+        failedCheckNumbers: [],
         outputTarget: 'chat',
         promptTitle: 'Audit',
       }),
@@ -654,6 +663,7 @@ describe('emitTasks', () => {
       runId: 'run-1',
       checks: CHECKS,
       findings: [FINDING_1, FINDING_2],
+      failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
     })
@@ -672,6 +682,7 @@ describe('emitTasks', () => {
       runId: 'run-1',
       checks: CHECKS,
       findings: [FINDING_1, FINDING_2],
+      failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
     })
@@ -698,6 +709,7 @@ describe('emitTasks', () => {
       runId: 'run-1',
       checks: CHECKS,
       findings: [FINDING_1, FINDING_2],
+      failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
     })
@@ -705,5 +717,56 @@ describe('emitTasks', () => {
     expect(result).toEqual({ created: 0, kept: 1, superseded: 0 })
     expect(second.inserted).toEqual([])
     expect(second.updatedIds).toEqual([])
+  })
+
+  /**
+   * The end-to-end shape of the bug. `emitTasks` is handed a blocker with no
+   * verified reference — which is what the model actually returned on the
+   * second real run — and must create nothing *and* withdraw nothing.
+   */
+  it('creates nothing and withdraws nothing from an uncitable finding', async () => {
+    const { client, inserted, updatedIds } = fakeClient([
+      {
+        id: 'standing',
+        source: PROMPT_TASK_SOURCE,
+        batch_tag: 'prompt:run-old',
+        status: 'open',
+        assignee_id: null,
+        title: 'MA design sheet audit',
+        description: 'One item to confirm.',
+        priority: 'high',
+        task_type: 'checklist',
+        checklist: [{ text: CHECK_1_TITLE, done: false }],
+      },
+    ])
+
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-new',
+      checks: CHECKS,
+      findings: [finding({ checkNumber: '1', references: [] })],
+      failedCheckNumbers: [],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+
+    expect(result).toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(inserted).toEqual([])
+    expect(updatedIds).toEqual([])
+  })
+
+  it('applies the gate itself, so a compliant finding makes no task', async () => {
+    const { client, inserted } = fakeClient([])
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-new',
+      checks: CHECKS,
+      findings: [finding({ checkNumber: '1', outcome: 'compliant' }), finding({ checkNumber: '2', outcome: 'compliant' })],
+      failedCheckNumbers: [],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+    expect(result.created).toBe(0)
+    expect(inserted).toEqual([])
   })
 })

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { FieldAuditCheck, OutputTarget } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
-import type { RunAnswers } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import { isActionable, runAnswers, type RunAnswers } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 
 /**
  * The `tasks.source` value a field-audit run's own tasks carry.
@@ -57,10 +57,18 @@ const PRIORITY_ORDER: Record<string, number> = { low: 0, normal: 1, high: 2 }
  * The rows one run's findings become, in the shape its prompt version asked
  * for.
  *
- * `findings` is expected to already be `actionableFindings(result)` from
- * `@aubrey-law/citations/fieldAudit/runFieldAudit` — the severity,
- * disposition and verified-reference gate — so nothing here re-checks that.
- * This is the templating step and the shaping step, nothing more.
+ * `findings` is expected to already be gated — the severity, disposition and
+ * verified-reference test `isActionable` in
+ * `@aubrey-law/citations/fieldAudit/runFieldAudit` applies — so nothing here
+ * re-checks that. This is the templating step and the shaping step, nothing
+ * more.
+ *
+ * That gate is now applied by `emitTasks` immediately below rather than by
+ * whoever calls it, which is deliberate: one source of truth for what may
+ * act. A caller free to gate for itself is a caller free to gate differently,
+ * and `emitTasks` also has to hand the *ungated* outcomes to the withdrawal
+ * rule — so it is the one place that knows both, and the only place that
+ * should decide.
  *
  * A finding whose check number names nothing in this prompt version is
  * skipped rather than guessed at: the prompt and the result have fallen out
@@ -421,7 +429,15 @@ export interface EmitTasksInput {
   matterId: string
   runId: string
   checks: FieldAuditCheck[]
+  /**
+   * *All* of the run's findings, not the gated subset. `emitTasks` applies
+   * the gate itself, because the withdrawal rule needs the outcomes the gate
+   * discards: a `compliant` check is what entitles this run to retire an
+   * earlier task, and it never survives `isActionable`.
+   */
   findings: FieldAuditFinding[]
+  /** Units whose step did not succeed — they answered nothing, so they retire nothing. */
+  failedCheckNumbers: string[]
   /** From the run's pinned prompt version body — never the published one. */
   outputTarget: OutputTarget
   /** Titles a `checklist` task. Unused by `task_set`. */
@@ -483,21 +499,22 @@ export async function emitTasks(
     checklist: Array.isArray(row.checklist) ? (row.checklist as ChecklistItem[]) : [],
   }))
 
+  const answers = runAnswers({
+    checkNumbers: input.checks.map((check) => check.number),
+    findings: input.findings,
+    failedCheckNumbers: input.failedCheckNumbers,
+  })
+
   const desired = taskRowsFor(
     input.matterId,
     input.runId,
     input.checks,
-    input.findings,
+    input.findings.filter(isActionable),
     input.outputTarget,
     input.promptTitle,
   )
 
-  // Placeholder, and deliberately not a guess at the run's real answer: it
-  // reproduces exactly what this call site did before this slice, so nothing
-  // here changes yet. Task 3 threads the run's actual `runAnswers(...)`
-  // through from the tick, which is where the check numbers and the failed
-  // units are known.
-  const plan = planEmit(existing, desired, { byCheck: {}, authoritative: true })
+  const plan = planEmit(existing, desired, answers)
 
   if (plan.insert.length > 0) {
     const { error: insertError } = await sb.from('tasks').insert(plan.insert)

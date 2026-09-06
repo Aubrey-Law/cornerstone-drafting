@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/cron/tick/route'
 import type { EmitTasksInput } from '@/lib/fieldAudit/tasks'
+import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
  * The tick route's door — the three outcomes that matter before any run is
@@ -36,6 +37,10 @@ const state = vi.hoisted(() => ({
   claimed: { id: null } as { id: string | null },
   context: { ok: false, message: 'no context configured' } as unknown,
   workResult: { done: false, worked: 0 },
+  /** What `loadFieldAuditFindings` reports the run stored. */
+  findings: [] as FieldAuditFinding[],
+  /** `workflow_run_steps` rows, as the route's own reload would read them. */
+  stepRows: [] as Record<string, unknown>[],
 }))
 
 /**
@@ -53,10 +58,11 @@ vi.mock('@/lib/supabase/admin', () => ({
       callOrder.push(name)
       return { data: state.claimed, error: null }
     },
-    // The route reloads the run's steps before finalising. Nothing here
-    // asserts on them — `workRun` and `finaliseRun` are both stubbed — so an
-    // empty set is enough to get past the reload and on to `emitTasks`.
-    from: () => ({ select: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+    // The route reloads the run's steps before finalising, and reads which
+    // of them failed on the way to `emitTasks`. Most tests here care about
+    // neither and leave the default empty set, which is enough to get past
+    // the reload.
+    from: () => ({ select: () => ({ eq: async () => ({ data: state.stepRows, error: null }) }) }),
   }),
 }))
 
@@ -84,7 +90,7 @@ vi.mock('@/lib/runs/record', () => ({
 }))
 
 vi.mock('@/lib/fieldAudit/history', () => ({
-  loadFieldAuditFindings: async () => [],
+  loadFieldAuditFindings: async () => state.findings,
 }))
 
 vi.mock('@/lib/fieldAudit/tasks', () => ({ emitTasks }))
@@ -237,6 +243,8 @@ describe('the tick’s field-audit branch', () => {
     state.claimed = { id: null }
     state.context = { ok: false, message: 'no context configured' }
     state.workResult = { done: false, worked: 0 }
+    state.findings = []
+    state.stepRows = []
     if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET
     else process.env.CRON_SECRET = ORIGINAL_SECRET
   })
@@ -283,6 +291,62 @@ describe('the tick’s field-audit branch', () => {
     expect(res.status).toBe(200)
     expect(emitTasks).toHaveBeenCalledTimes(1)
     expect(emitTasks.mock.calls[0][1]).toMatchObject({ outputTarget: 'chat' })
+  })
+
+  /**
+   * The tick must pass *all* the findings, not `actionableFindings`. The
+   * withdrawal rule needs the outcomes the gate discards — a `compliant` check
+   * is what entitles a run to retire an earlier task, and it never survives
+   * the gate.
+   *
+   * The pinned body's `checks` are left empty: `emitTasks` is stubbed, so it
+   * is only ever handed them, while `findings` and `failedCheckNumbers` are
+   * the two arguments the tick itself computes — and so the only two this can
+   * hold it to.
+   */
+  it('hands emitTasks every finding, and the units that failed', async () => {
+    state.context = pinned('checklist')
+    // Check 1 came back clean — no task, and the one outcome the gate throws
+    // away that the withdrawal rule cannot do without. Check 2 is a deviation
+    // the gate would keep.
+    state.findings = [
+      {
+        checkNumber: '1',
+        outcome: 'compliant',
+        severity: 'low',
+        rationale: 'Every concern is answered.',
+        references: [],
+      },
+      {
+        checkNumber: '2',
+        outcome: 'deviation',
+        severity: 'high',
+        rationale: 'Nobody named Ruth appears in a structured field.',
+        references: [
+          {
+            fieldKey: 'notes',
+            claimedValue: 'Ruth',
+            actualValue: 'Ruth',
+            matchedPath: null,
+            verification: 'verified',
+          },
+        ],
+      },
+    ]
+    // Check 2's step failed, so whatever finding an earlier attempt left
+    // behind, this run did not answer that check.
+    state.stepRows = [
+      { unit_id: '1', status: 'succeeded', sequence: 0, attempts: 1, last_error: null, finding_id: 'finding-1' },
+      { unit_id: '2', status: 'failed', sequence: 1, attempts: 2, last_error: 'timed out', finding_id: 'finding-2' },
+    ]
+
+    const res = await tick()
+    expect(res.status).toBe(200)
+    expect(emitTasks).toHaveBeenCalledTimes(1)
+    const passed = vi.mocked(emitTasks).mock.calls[0][1]
+    expect(passed.findings).toHaveLength(2)
+    expect(passed.findings.map((f) => f.outcome)).toContain('compliant')
+    expect(passed.failedCheckNumbers).toEqual(['2'])
   })
 
   /** Tasks belong to a run that is finished, never to one mid-flight. */
