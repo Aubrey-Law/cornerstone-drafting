@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { toPublishedPrompt, loadPublishedPrompt, loadPublishedPrompts } from '@/lib/prompts/repository'
+import {
+  toPublishedPrompt,
+  loadPublishedPrompt,
+  loadPromptVersionById,
+  loadPublishedPrompts,
+} from '@/lib/prompts/repository'
 
 const reviewBody = {
   kind: 'review' as const,
@@ -119,7 +124,7 @@ function fakeClient(tables: Record<string, unknown[]>) {
       }
       return builder
     },
-    // The narrow shape above is all loadPublishedPrompt/loadPublishedPrompts touch.
+    // The narrow shape above is all three loaders touch.
   } as never
 }
 
@@ -153,6 +158,42 @@ describe('loadPublishedPrompt', () => {
       prompt_versions: [],
     })
     expect(await loadPublishedPrompt(client, 'ma-trust-firm-qa')).toBeNull()
+  })
+})
+
+describe('loadPromptVersionById', () => {
+  /**
+   * Pins the prompt id this loader reports, and pins it as distinct from the
+   * version id — the mix-up being guarded against is `versionRow.id` standing
+   * in where `versionRow.prompt_id` was meant, which only disagreeing fixture
+   * ids can catch.
+   *
+   * This is the production path: `loadRunContext` in `lib/runs/context.ts`
+   * calls this to rebuild what a run was asked to do, from the version the run
+   * pinned rather than whatever the slug publishes now. The withdrawal rule in
+   * `lib/fieldAudit/tasks.ts` then scopes a run's candidate tasks by
+   * `promptId`, so a wrong id here would not throw anywhere — a run would
+   * simply consider some other prompt's tasks its own, or find none of its
+   * own, and every test would still pass. Silence is the whole risk.
+   */
+  it('carries the prompt id of the pinned version, not the version id', async () => {
+    const client = fakeClient({
+      prompts: [{ id: 'p-1', slug: 'ma-trust-firm-qa', title: 'MA trust firm QA', kind: 'review' }],
+      prompt_versions: [{ id: 'v-1', version_number: 2, body: reviewBody, prompt_id: 'p-1' }],
+    })
+    expect(await loadPromptVersionById(client, 'v-1')).toEqual({
+      versionId: 'v-1',
+      promptId: 'p-1',
+      versionNumber: 2,
+      slug: 'ma-trust-firm-qa',
+      title: 'MA trust firm QA',
+      body: reviewBody,
+    })
+  })
+
+  it('returns null when no version has that id', async () => {
+    const client = fakeClient({ prompts: [], prompt_versions: [] })
+    expect(await loadPromptVersionById(client, 'v-gone')).toBeNull()
   })
 })
 
@@ -190,6 +231,24 @@ describe('loadPublishedPrompts', () => {
     })
     const prompts = await loadPublishedPrompts(client)
     expect(prompts.map((p) => p.slug).sort()).toEqual(['field-audit', 'ma-trust-firm-qa'])
+  })
+
+  /**
+   * Pins each listed row's prompt id as the prompt's, distinct from the
+   * version's. The test above asserts only `.slug`, so `promptId` could have
+   * been filled from the version row and nothing here would have noticed —
+   * and since the withdrawal rule scopes by that value, a picker that handed
+   * on a version id would mis-scope a run rather than fail loudly.
+   */
+  it('gives each row its prompt id, not its version id', async () => {
+    const client = fakeClient({
+      prompts: [{ id: 'p-1', slug: 'ma-trust-firm-qa', title: 'MA trust firm QA', kind: 'review' }],
+      prompt_publications: [{ prompt_id: 'p-1', version_id: 'v-1' }],
+      prompt_versions: [{ id: 'v-1', version_number: 1, body: reviewBody }],
+    })
+    const [prompt] = await loadPublishedPrompts(client)
+    expect(prompt.promptId).toBe('p-1')
+    expect(prompt.versionId).toBe('v-1')
   })
 
   it('returns an empty list when nothing is published', async () => {
