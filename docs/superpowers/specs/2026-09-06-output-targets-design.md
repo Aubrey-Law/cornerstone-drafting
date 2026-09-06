@@ -90,40 +90,99 @@ Items come from `actionableFindings` — the same severity, disposition and veri
 gate. A `checklist` run whose findings all failed verification creates **no task at all**,
 not an empty checklist: a task with nothing in it says work is needed and then names none.
 
-## Superseding has to learn a second shape
+## Superseding has to learn a second shape — and is currently broken
 
 This is the interaction worth naming, because it is where a careless change would break
-something that already works.
+something that already works. Except that on checking, it does not currently work.
 
 Tasks carry `batch_tag` as `prompt:<runId>#<unitId>` — the unit suffix added in #411 so a
 retry could replace one unit's task without touching another's. A `checklist` run produces
 **one task for the whole run**, so there is no single unit it belongs to. Its tag is
 `prompt:<runId>` with no suffix, and superseding it is per-run rather than per-unit.
 
-Both shapes must work at once, because a prompt's target can change between versions and
-runs of both kinds will coexist on a matter.
+`parseBatchTag` already handles both: its regex `^prompt:([^#]+)(?:#(.+))?$` makes the
+suffix optional and returns a null `unitId` without one. It is module-private rather than
+exported, which was the only thing that looked like it needed settling.
 
-Checked rather than assumed, and the groundwork is further along than it looked:
-`parseBatchTag` already exists in `lib/fieldAudit/tasks.ts`, and its regex —
-`^prompt:([^#]+)(?:#(.+))?$` — **already makes the suffix optional**, returning a null
-`unitId` for a tag without one. So the discriminator is there; it is private to the module
-rather than exported, which is the only thing to settle.
+### The retry path lost its wiring in #412
 
-`tasks.task_type` was the other claim worth checking, because assuming a CHECK constraint
-admits a value is a mistake already made once on this branch — `status: 'skipped'` turned
-out not to be allowed on the unified `tasks` table. Here it holds:
-`20260729132012_unified_tasks.sql` declares `check (task_type in ('single', 'checklist'))`,
-so `checklist` needs no migration.
+`emitTasks` takes a `unitIds` argument that selects `tasksToSupersedeForUnits` over
+`tasksToSupersede` — the whole mechanism #411 built so a retry replaces its own unit's task
+and leaves the others alone. **Nothing passes it.** `git log -S` shows
+`unitIds: retryUnitIds` in `retry.ts` until #412 moved `emitTasks` out of retry and into the
+tick, where it was never reinstated. So `tasksToSupersedeForUnits` is dead code, and a
+retried run reaching `done` a second time inserts a task for *every* actionable finding
+again — including the units that never failed, whose task from the first pass survives
+because `tasksToSupersede` excludes this run's own id. Duplicate tasks, one per unit that
+succeeded first time. There is no unique index on `batch_tag` to stop it.
 
-The protections do not change: a task that is assigned, or whose status is not `open`, is
-never touched.
+No live duplicates exist, because the prompt tasks were cleared by hand on 2026-09-06 for a
+different reason. That is luck, not correctness.
+
+**`checklist` inherits this exactly.** One task tagged `prompt:<runId>` would be inserted
+twice by a retried run's second done-pass. So this is not a bug to note and route around; it
+is a prerequisite.
+
+### One decision instead of two functions
+
+The fix is not to re-thread `unitIds`. `emitTasks` already reads the matter's existing
+prompt tasks *before* inserting anything — that ordering was added deliberately, and it
+means the snapshot can never contain rows the call itself just wrote. Given that, the
+run-id exclusion in `tasksToSupersede` is guarding against a problem the read-ordering
+already solved, and removing it lets one function answer the whole question:
+
+> Of this tool's own open, unassigned tasks on this matter, which already say exactly what
+> this run now wants to say? Keep those. Insert what is missing. Withdraw the rest.
+
+Identity is by content — tag, title, description, priority, type and checklist items
+together. A retried unit whose rationale changed is superseded and re-inserted; a unit the
+retry never touched matches its existing task exactly and is left alone, keeping its id and
+its `created_at`. A second done-pass over an unchanged run inserts nothing and withdraws
+nothing. Both tag shapes fall out of this without either being special-cased, and
+`tasksToSupersede` and `tasksToSupersedeForUnits` both collapse into it.
+
+It also self-heals: a duplicate pair left by the current bug has only one twin among the
+desired rows, so the other is withdrawn.
+
+### What this does not fix, named
+
+Superseding is scoped to `source = 'prompt'` and the matter — **not to the prompt**. Two
+prompts emitting tasks on one matter would each withdraw the other's on every run. That is
+true of the code today and stays true after this change; it is invisible now only because
+one prompt emits tasks and the review prompt does not. The 40-prompt library makes it
+certain, and the fix means changing the tag shape a third time to carry the prompt, which
+deserves its own decision rather than being folded in here.
+
+## The tasks render as a blank pill in the app that shows them
+
+The workbench never reads `tasks` — it only writes them. The root app is the only place an
+attorney sees them, and there `TASK_SOURCES` in `lib/tasks/types.ts` is
+`['manual', 'stage', 'template', 'cadence', 'sla']`. `'prompt'` was added to the database's
+`tasks_source_check` in #410 and never to the TypeScript union.
+
+So `TASK_SOURCE_LABEL['prompt']` and `TASK_SOURCE_PILL['prompt']` are both `undefined`, and
+`TaskSourcePill` renders an **empty, unstyled chip**. The source filter has no Prompt
+option. Every task this feature has ever created shows up unlabelled in the one place it is
+read.
+
+This belongs in this slice rather than a later one: a slice about what a run produces cannot
+leave its output unreadable. Adding `'prompt'` to the union is enough — it is consumed only
+by the two filter dropdowns and `tests/task-pill-contrast.test.ts`, which iterates
+`TASK_SOURCES` and so covers the new pill automatically. Task creation in
+`app/api/admin/tasks/route.ts` hard-codes `'template' | 'cadence' | 'manual'`, so this
+cannot let anyone hand-create a prompt task.
+
+`bg-amber-bg text-amber` measures 6.84:1 light and 8.48:1 dark — checked against the theme
+tokens, not chosen by eye — and no other source pill uses amber.
 
 ## Testing
 
 - Pure functions tested directly: the body schema accepting each target and refusing an unimplemented one; the checklist rows built from findings; superseding across both tag shapes.
 - **A `chat` prompt creates no tasks**, asserted rather than assumed — this is the target whose whole content is an absence.
 - **A `checklist` run with no actionable findings creates no task**, not an empty one.
-- **A retry of a `task_set` run still replaces only its own unit's task** while a `checklist` run's task is superseded per run — the two shapes proven not to interfere.
+- **A retried run's second done-pass creates no duplicate** — asserted for both a `task_set` run and a `checklist` run, since this is the regression the slice is built on top of. The reverse too: a retried unit whose rationale changed *is* replaced, and an untouched unit keeps its existing task id.
+- **A duplicate pair left by the current bug is self-healed** rather than preserved.
+- **A `'prompt'` task renders a labelled, AA-contrast pill** in both themes — the existing contrast test covers it once the union admits it, plus an assertion that the label and pill entries exist at all, which is the thing that was missing.
 - A real run of version 4 against a real matter, reported before this is called done: one task, its items, and the previous run's tasks superseded correctly.
 
 ## Out of scope, named
