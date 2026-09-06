@@ -10,6 +10,15 @@ import { StoredFindings } from './StoredFindings'
 
 export const metadata = { title: 'Review · Aubrey Law Workbench' }
 
+/**
+ * See the matching comment in `app/prompts/[runId]/page.tsx`: a run that is
+ * still `running` needs this page to keep catching up with the tick route
+ * working it in the background, and revalidating on a timer is the smaller
+ * change than a client polling loop, with no websocket elsewhere here to be
+ * consistent with.
+ */
+export const revalidate = 5
+
 export default async function StoredRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const user = await getSessionUser()
   if (!user) redirect(LOGIN_PATH)

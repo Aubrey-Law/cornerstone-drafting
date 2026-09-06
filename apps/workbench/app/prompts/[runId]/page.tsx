@@ -11,6 +11,17 @@ import { FieldAuditRunView } from './FieldAuditRunView'
 export const metadata = { title: 'Field audit · Aubrey Law Workbench' }
 
 /**
+ * Refreshes this page on the next request at least every 5 seconds, rather
+ * than only when Next would otherwise revalidate it. A run that is still
+ * `running` needs the page to keep catching up with it — the tick route
+ * (`app/api/cron/tick/route.ts`) works it in the background, on its own
+ * schedule, with nothing on this page to push an update. A client polling
+ * loop would do the same job; this is the smaller change, and there is no
+ * websocket elsewhere in this codebase for a loop to be consistent with.
+ */
+export const revalidate = 5
+
+/**
  * A field-audit run, read back.
  *
  * Until this route existed, a recorded field audit had nowhere to be seen —

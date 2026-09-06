@@ -4,7 +4,7 @@ import { useActionState, useOptimistic, useState } from 'react'
 import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import { isCitable, orderFindings } from '@/lib/review/order'
 import type { Disposition, StoredFinding } from '@/lib/review/persist'
-import type { RunStep } from '@/lib/runs/steps'
+import { statusFromSteps, type RunStep } from '@/lib/runs/steps'
 import { BlockTextViewer } from '@/app/review/BlockTextViewer'
 import { FindingsList } from '@/app/review/FindingsList'
 import { RunSteps } from '@/app/runs/RunSteps'
@@ -90,6 +90,7 @@ export function StoredFindings({
             <RunSteps
               steps={steps}
               unitNoun="rules"
+              runStatus={statusFromSteps(steps)}
               retryPending={retryPending}
               retryMessage={retryState.message}
               onRetry={() => {

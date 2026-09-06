@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@aubrey-law/ui/button'
 import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { ReviewResult } from '@aubrey-law/citations/review/types'
@@ -45,7 +46,18 @@ interface ReviewResponse {
   saveError: string | null
   playbook: { slug: string; title: string; version: number }
   layer: TextLayer
-  result: ReviewResult
+  /**
+   * Present only for the ephemeral upload path (`app/api/staff/review/route.ts`):
+   * an upload with no filed version to anchor to still runs the playbook
+   * inline and returns its result in the same response. A filed document's
+   * review is queued instead — `queued: true` below, and no `result` at
+   * all, since nothing has run yet. `onSubmit` never stores a queued
+   * response in `review`; this field is typed optional anyway, so a future
+   * caller of `setReview` cannot reintroduce the crash that not checking for
+   * it once caused (`review.result.findings` throwing for a queued run).
+   */
+  result?: ReviewResult
+  queued?: boolean
 }
 
 export function ReviewWorkspace({
@@ -57,6 +69,7 @@ export function ReviewWorkspace({
   matters: MatterChoice[]
   runs?: RunSummaryChoice[]
 }) {
+  const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
   const [versionId, setVersionId] = useState(matters[0]?.documents[0]?.versionId ?? '')
@@ -101,27 +114,36 @@ export function ReviewWorkspace({
         setError(typeof payload?.error === 'string' ? payload.error : 'The review could not be run.')
         return
       }
+      // A filed document's review is queued, not run in this request — see
+      // the `ReviewResponse.queued` comment. There is no result to show yet;
+      // the run's own page (`/review/[runId]`) is what will show it,
+      // refreshing itself until the run settles. Sending the browser there
+      // beats rendering this workspace as though a result had arrived.
+      if (payload?.queued && payload?.runId) {
+        router.push(`/review/${payload.runId}`)
+        return
+      }
       setReview(payload as ReviewResponse)
     } catch {
       setError('The review could not be reached. Check your connection and try again.')
     } finally {
       setPending(false)
     }
-  }, [versionId])
+  }, [router, versionId])
 
   const citation: Citation | null = useMemo(() => {
-    if (!review || selected === null) return null
+    if (!review?.result || selected === null) return null
     const finding = review.result.findings.find((f) => f.ruleNumber === selected)
     return finding && isCitable(finding) ? finding.citation : null
   }, [review, selected])
 
   const counts = useMemo(() => {
-    const findings = review?.result.findings ?? []
+    const findings = review?.result?.findings ?? []
     return {
       total: findings.length,
       cited: findings.filter(isCitable).length,
       refused: findings.filter((f) => f.citationRefusal !== null).length,
-      failed: review?.result.failures.length ?? 0,
+      failed: review?.result?.failures.length ?? 0,
     }
   }, [review])
 
@@ -188,7 +210,7 @@ export function ReviewWorkspace({
         </p>
       ) : null}
 
-      {!review ? (
+      {!review || !review.result ? (
         <section className="mx-auto w-full max-w-2xl space-y-4 px-6 py-10">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">{playbook.title}</h2>
