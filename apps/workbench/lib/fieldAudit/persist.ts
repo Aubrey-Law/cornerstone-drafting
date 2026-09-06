@@ -4,40 +4,22 @@ import type { FieldAuditFinding, FieldAuditResult } from '@aubrey-law/citations/
 import type { Json } from '@aubrey-law/db-types'
 
 /**
- * Recording a field audit so it outlives the page.
+ * Recording a field audit's findings, once the engine has returned.
  *
- * Follows `lib/review/persist.ts`'s shape: a run row, then one row per
- * finding, then that finding's evidence underneath it. The one real
- * difference is what "evidence" means for each kind — a review cites offsets
- * into a text layer, an audit cites a claim against a design-sheet field —
- * and that difference is why this lives in its own module rather than as a
- * branch inside `saveRun`: the two would share almost nothing but the run row
- * and the finding loop, and forcing them into one function would mean every
- * reader has to hold both shapes in their head to follow either one.
+ * The run row itself is opened before the engine starts and each unit's
+ * outcome is written as it settles — see `lib/runs/record.ts`'s `openRun` and
+ * `recordStep`, and `lib/fieldAudit/run.ts`, which wires them together. This
+ * module is only the third phase: store what each unit produced and link it
+ * back to the step that produced it.
+ *
+ * `runStatusForAudit` used to live here, computing the same thing
+ * `runStatusFor` in `lib/review/persist.ts` computed — and disagreeing with
+ * it. Both are gone in favour of `statusFromSteps` in `lib/runs/steps.ts`,
+ * the one function that answers "how did this run go", read from the steps
+ * themselves rather than from counts kept in step with them by hand in two
+ * places.
  */
 const asJson = (value: unknown): Json => value as Json
-
-export type RunStatus = 'completed' | 'partial' | 'failed'
-
-/**
- * The status is the one field a reader skims, so it may not overstate
- * coverage.
- *
- * A run that lost a check to a failed call but still produced findings from
- * the rest is `partial` — not `completed`, which would claim every check ran,
- * and not `failed`, which would bury the findings it did produce. `partial`
- * is the honest word for exactly that: it is what stops a run that reports
- * only its findings from reading as if it covered the whole prompt.
- *
- * A run that lost every check to a failure and produced nothing is `failed`
- * outright — there is nothing here for a person to act on, and calling that
- * `partial` would say a review happened when it did not.
- */
-export function runStatusForAudit(counts: { findingCount: number; failedCount: number }): RunStatus {
-  if (counts.failedCount === 0) return 'completed'
-  if (counts.findingCount === 0) return 'failed'
-  return 'partial'
-}
 
 export interface FindingRow {
   run_id: string
@@ -92,77 +74,42 @@ export function referenceRowsFor(findingId: string, finding: FieldAuditFinding):
   }))
 }
 
-export interface SaveAuditRunInput {
-  matterId: string
-  promptVersionId: string
-  result: FieldAuditResult
-  model: string | null
-  userId: string
-}
-
 /**
- * Stores the run, its findings and every reference underneath them.
+ * Stores this run's findings and their evidence, and links each finding back
+ * to the step that produced it: `finding_id` on `workflow_run_steps` is set
+ * here, in this third phase, once a finding actually exists to point at —
+ * not in the second, where a step is recorded from an outcome the engine
+ * knows nothing about persistence.
  *
- * `document_version_id` and `text_layer_id` are always null: a field audit
- * runs against a matter's declared facts, not a filed document, which is
- * exactly what `workflow_runs_review_needs_document` (see
- * 20261028000000_prompt_objects.sql) exists to make representable — that
- * constraint only binds `kind = 'review'`.
+ * Also carries the run's failures onto `workflow_runs.failures`, the column
+ * the run page has always read to show why a unit was lost. Steps now carry
+ * the same information (`last_error`, keyed by `unit_id`), but this
+ * restructure is about *when* a run is recorded, not what it shows — moving
+ * that read to the steps is Task 9's job, not this one's.
+ *
+ * Written inline rather than by calling `findingRowsFor`/`referenceRowsFor`
+ * above, even though the shape is identical: this codebase's offline column
+ * safety net (tests/query-columns.test.ts, scripts/checkDbColumns.mjs) can
+ * only see a column name written as a literal object passed straight to
+ * `.insert(...)`, not one built by a helper and handed over as a value, and
+ * not one inside an array — see scripts/lib/queryReferences.mjs.
+ * `lib/ceremony/repository.ts` already accepts the same trade for the same
+ * reason. The helpers above stay as the pure, unit-tested statement of what
+ * each row should look like; this loop is what the database actually runs,
+ * and must be kept matching them by hand. References are inserted one at a
+ * time rather than batched for exactly this reason: `matched_path` is the
+ * column this whole feature exists not to lose, and a batched array insert
+ * would make it invisible to the one check that would catch a typo in its
+ * name.
  */
-export async function saveAuditRun(
+export async function saveFindings(
   client: SupabaseClient<WorkbenchDatabase>,
-  input: SaveAuditRunInput,
-): Promise<{ ok: true; runId: string } | { ok: false; message: string }> {
+  runId: string,
+  result: FieldAuditResult,
+): Promise<{ ok: true } | { ok: false; message: string }> {
   const sb = client
 
-  const counts = {
-    findingCount: input.result.findings.length,
-    failedCount: input.result.failures.length,
-  }
-  const now = new Date().toISOString()
-
-  const { data: runRow, error: runError } = await sb
-    .from('workflow_runs')
-    .insert({
-      matter_id: input.matterId,
-      document_version_id: null,
-      text_layer_id: null,
-      prompt_version_id: input.promptVersionId,
-      kind: 'field_audit',
-      model: input.model,
-      status: runStatusForAudit(counts),
-      rule_total: counts.findingCount + counts.failedCount,
-      finding_count: counts.findingCount,
-      failed_count: counts.failedCount,
-      // Stored as `FieldAuditResult` names them (`checkNumber`, not `ruleNumber`)
-      // — nothing downstream depends on a shared shape with a review run's
-      // failures yet, so there is no reason to rename the field on the way in.
-      failures: asJson(input.result.failures),
-      started_at: now,
-      finished_at: now,
-      created_by: input.userId,
-    })
-    .select('id')
-    .single()
-  if (runError) return { ok: false, message: `Could not store the run: ${runError.message}` }
-
-  const runId = String(runRow.id)
-
-  // Written inline rather than by calling `findingRowsFor`/`referenceRowsFor`
-  // above, even though the shape is identical: this codebase's offline column
-  // safety net (tests/query-columns.test.ts, scripts/checkDbColumns.mjs) can
-  // only see a column name written as a literal object passed straight to
-  // `.insert(...)`, not one built by a helper and handed over as a value, and
-  // not one inside an array — see scripts/lib/queryReferences.mjs.
-  // `lib/ceremony/repository.ts` already accepts the same trade for the same
-  // reason. The helpers above stay as the pure, unit-tested statement of what
-  // each row should look like; this loop is what the database actually runs,
-  // and must be kept matching them by hand. References are inserted one at a
-  // time rather than batched for exactly this reason: `matched_path` is the
-  // column this whole feature exists not to lose, and a batched array insert
-  // would make it invisible to the one check that would catch a typo in its
-  // name.
-  for (const finding of input.result.findings) {
+  for (const finding of result.findings) {
     const { data: findingRow, error: findingError } = await sb
       .from('workflow_findings')
       .insert({
@@ -188,7 +135,24 @@ export async function saveAuditRun(
       })
       if (referenceError) return { ok: false, message: `Could not store a reference: ${referenceError.message}` }
     }
+
+    const { error: linkError } = await sb
+      .from('workflow_run_steps')
+      .update({ finding_id: findingId })
+      .eq('run_id', runId)
+      .eq('unit_id', finding.checkNumber)
+    if (linkError) {
+      return { ok: false, message: `Could not link the finding to its step: ${linkError.message}` }
+    }
   }
 
-  return { ok: true, runId }
+  const { error: failuresError } = await sb
+    .from('workflow_runs')
+    .update({ failures: asJson(result.failures) })
+    .eq('id', runId)
+  if (failuresError) {
+    return { ok: false, message: `Could not record the run's failures: ${failuresError.message}` }
+  }
+
+  return { ok: true }
 }

@@ -1,0 +1,172 @@
+/**
+ * A minimal in-memory stand-in for a Supabase client's query builder,
+ * covering only the chain shapes this codebase's persistence modules
+ * actually use: `.from(table).select(...).eq(...).order(...).limit(...).maybeSingle()`,
+ * `.insert(row).select('id').single()`, `.update(partial).eq(...)`,
+ * `.upsert(row, { onConflict }).eq(...)`, and a bare `await` on any of those
+ * (the query builder is a thenable, exactly as the real client's is).
+ *
+ * Not a general Supabase mock — just enough surface for a run's whole path
+ * (`loadPublishedPrompt`, `loadSourceRows`, `openRun`/`recordStep`/
+ * `finaliseRun`, `saveFindings`, `emitTasks`) to run against seeded rows
+ * without a network, so a test can prove what got written and in what order.
+ */
+type Row = Record<string, unknown>
+
+let counter = 0
+function nextId(prefix: string): string {
+  counter += 1
+  return `${prefix}-${counter}`
+}
+
+class FakeTable {
+  rows: Row[] = []
+  constructor(public name: string) {}
+}
+
+type PendingOp =
+  | { type: 'insert'; payload: Row | Row[] }
+  | { type: 'update'; payload: Row }
+  | { type: 'upsert'; payload: Row; onConflict?: string }
+
+class FakeQueryBuilder {
+  private filters: Array<[string, unknown]> = []
+  private inFilters: Array<[string, unknown[]]> = []
+  private orderSpec: { column: string; ascending: boolean } | null = null
+  private limitN: number | null = null
+  private pendingOp: PendingOp | null = null
+
+  constructor(private table: FakeTable) {}
+
+  select(_columns?: string) {
+    return this
+  }
+
+  eq(column: string, value: unknown) {
+    this.filters.push([column, value])
+    return this
+  }
+
+  in(column: string, values: unknown[]) {
+    this.inFilters.push([column, values])
+    return this
+  }
+
+  order(column: string, options?: { ascending?: boolean }) {
+    this.orderSpec = { column, ascending: options?.ascending ?? true }
+    return this
+  }
+
+  limit(count: number) {
+    this.limitN = count
+    return this
+  }
+
+  insert(payload: Row | Row[]) {
+    this.pendingOp = { type: 'insert', payload }
+    return this
+  }
+
+  update(payload: Row) {
+    this.pendingOp = { type: 'update', payload }
+    return this
+  }
+
+  upsert(payload: Row, options?: { onConflict?: string }) {
+    this.pendingOp = { type: 'upsert', payload, onConflict: options?.onConflict }
+    return this
+  }
+
+  private matches(row: Row): boolean {
+    for (const [column, value] of this.filters) if (row[column] !== value) return false
+    for (const [column, values] of this.inFilters) if (!values.includes(row[column])) return false
+    return true
+  }
+
+  private resolve(): { data: Row[]; error: null } {
+    if (!this.pendingOp) {
+      let rows = this.table.rows.filter((row) => this.matches(row))
+      if (this.orderSpec) {
+        const { column, ascending } = this.orderSpec
+        rows = [...rows].sort((a, b) => {
+          const av = a[column] as number
+          const bv = b[column] as number
+          return ascending ? av - bv : bv - av
+        })
+      }
+      if (this.limitN !== null) rows = rows.slice(0, this.limitN)
+      return { data: rows, error: null }
+    }
+
+    if (this.pendingOp.type === 'insert') {
+      const payloads = Array.isArray(this.pendingOp.payload) ? this.pendingOp.payload : [this.pendingOp.payload]
+      const inserted = payloads.map((payload) => {
+        const row: Row = { id: nextId(this.table.name), ...payload }
+        this.table.rows.push(row)
+        return row
+      })
+      return { data: inserted, error: null }
+    }
+
+    if (this.pendingOp.type === 'update') {
+      const rows = this.table.rows.filter((row) => this.matches(row))
+      for (const row of rows) Object.assign(row, this.pendingOp!.payload)
+      return { data: rows, error: null }
+    }
+
+    // upsert
+    const onConflict = (this.pendingOp.onConflict ?? 'id').split(',')
+    const payload = this.pendingOp.payload
+    const existing = this.table.rows.find((row) => onConflict.every((column) => row[column] === payload[column]))
+    if (existing) {
+      Object.assign(existing, payload)
+      return { data: [existing], error: null }
+    }
+    const row: Row = { id: nextId(this.table.name), ...payload }
+    this.table.rows.push(row)
+    return { data: [row], error: null }
+  }
+
+  async maybeSingle() {
+    const { data } = this.resolve()
+    return { data: data[0] ?? null, error: null }
+  }
+
+  async single() {
+    const { data } = this.resolve()
+    if (!data[0]) return { data: null, error: { message: `no matching row in ${this.table.name}` } }
+    return { data: data[0], error: null }
+  }
+
+  then<TResult1 = { data: Row[]; error: null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: Row[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    return Promise.resolve(this.resolve()).then(onfulfilled, onrejected)
+  }
+}
+
+export interface FakeClient {
+  from(table: string): FakeQueryBuilder
+  tableRows(table: string): Row[]
+}
+
+/** A fake client seeded with starting rows per table, by name. */
+export function makeFakeClient(seed: Record<string, Row[]> = {}): FakeClient {
+  const tables = new Map<string, FakeTable>()
+  for (const [name, rows] of Object.entries(seed)) {
+    const table = new FakeTable(name)
+    table.rows = rows.map((row) => ({ ...row }))
+    tables.set(name, table)
+  }
+
+  return {
+    from(name: string) {
+      if (!tables.has(name)) tables.set(name, new FakeTable(name))
+      return new FakeQueryBuilder(tables.get(name)!)
+    },
+    tableRows(name: string) {
+      return tables.get(name)?.rows ?? []
+    },
+  }
+}

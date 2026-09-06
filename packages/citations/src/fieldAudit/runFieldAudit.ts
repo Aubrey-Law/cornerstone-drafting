@@ -1,6 +1,6 @@
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import type { FieldAuditBody, FieldAuditCheck } from '../prompt/body'
-import { runPrompt } from '../prompt/runPrompt'
+import { runPrompt, type RunPromptDependencies } from '../prompt/runPrompt'
 import type { ModelCaller, ModelRequest } from '../review/model'
 import { collectLeaves, verifyFieldReference } from './verify'
 import type { FieldAuditFinding, FieldAuditResult, FieldReference } from './types'
@@ -93,6 +93,8 @@ export interface RunFieldAuditDependencies {
    */
   callModel: ModelCaller
   model?: string
+  /** Forwarded straight through to `runPrompt` — see its own doc comment. */
+  onUnitSettled?: RunPromptDependencies['onUnitSettled']
 }
 
 function formatFieldValue(key: string, value: unknown): string {
@@ -236,6 +238,7 @@ export async function runFieldAudit(
         userId: context.userId ?? null,
         contextType: 'matter',
       },
+      onUnitSettled: deps.onUnitSettled,
     },
   )
 

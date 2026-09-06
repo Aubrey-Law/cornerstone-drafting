@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
+import { runMatterAudit } from '@/lib/fieldAudit/run'
+import { makeFakeClient } from './helpers/fakeSupabase'
 import {
   FIELD_AUDIT_TOOL_NAME,
   actionableFindings,
@@ -186,5 +190,77 @@ describe('actionableFindings', () => {
         }),
     })
     expect(actionableFindings(result)).toHaveLength(1)
+  })
+})
+
+/**
+ * `runMatterAudit`'s own three-phase restructure: the run row opens before
+ * the engine starts, and each check's outcome is written as it settles — so
+ * a run that loses every check to a dead model still leaves a `workflow_runs`
+ * row and a `workflow_run_steps` row per check, instead of the old
+ * "run the engine, insert everything at the end" leaving nothing at all.
+ *
+ * `makeFakeClient` stands in for Supabase: real enough to exercise
+ * `loadPublishedPrompt`, `loadSourceRows`, `openRun`/`recordStep`/
+ * `finaliseRun` and `saveFindings` end to end, without a network.
+ */
+describe('runMatterAudit records a run even when every check fails', () => {
+  const AUDIT_CHECK: FieldAuditCheck = {
+    number: '1',
+    statement: 'A trustee is named.',
+    risk: 'high',
+    reads: ['concerns'],
+    taskTemplate: { title: 'Name a trustee', description: 'Add a trustee to the sheet.', priority: 'high' },
+  }
+  const AUDIT_BODY: FieldAuditBody = {
+    kind: 'field_audit',
+    inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: false }],
+    checks: [AUDIT_CHECK, { ...AUDIT_CHECK, number: '2', statement: 'Second check.' }],
+  }
+
+  function seededClient() {
+    return makeFakeClient({
+      prompts: [{ id: 'p1', slug: 'audit-1', title: 'Audit One', kind: 'field_audit' }],
+      prompt_publications: [{ prompt_id: 'p1', version_id: 'v1' }],
+      prompt_versions: [{ id: 'v1', version_number: 1, body: AUDIT_BODY }],
+      matters: [{ id: 'm1', name: 'Test matter' }],
+      design_sheets: [{ matter_id: 'm1', version: 1, concerns: 'Some concern text' }],
+    })
+  }
+
+  it('leaves a running-then-failed run and a failed step per check, not nothing at all', async () => {
+    const client = seededClient()
+
+    const result = await runMatterAudit(client as unknown as SupabaseClient<WorkbenchDatabase>, {
+      slug: 'audit-1',
+      matterId: 'm1',
+      userId: 'u1',
+      callModel: async () => {
+        throw new Error('model down')
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.findingCount).toBe(0)
+
+    const runs = client.tableRows('workflow_runs')
+    expect(runs).toHaveLength(1)
+    expect(runs[0].id).toBe(result.runId)
+    // Finalised to `failed`: every check was attempted and none produced a
+    // finding — the honest word for a run that learned nothing, not
+    // `completed`, which would say every check ran clean.
+    expect(runs[0].status).toBe('failed')
+    expect(runs[0].failed_count).toBe(2)
+    expect(runs[0].finding_count).toBe(0)
+
+    const steps = client.tableRows('workflow_run_steps')
+    expect(steps).toHaveLength(2)
+    // The steps belong to the run that was actually opened — not to nothing,
+    // and not to some other id — which is only true because the run exists
+    // before the engine starts.
+    expect(steps.every((step) => step.run_id === result.runId)).toBe(true)
+    expect(steps.map((step) => step.status)).toEqual(['failed', 'failed'])
+    expect(steps.map((step) => step.last_error)).toEqual(['model down', 'model down'])
   })
 })

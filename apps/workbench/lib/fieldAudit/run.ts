@@ -1,12 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
+import type { Json } from '@aubrey-law/db-types'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { loadSourceRows } from '@/lib/prompts/designSheet'
+import { openRun, recordStep, finaliseRun } from '@/lib/runs/record'
+import type { RunStep } from '@/lib/runs/steps'
 import { actionableFindings, runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import { resolveInputs } from '@aubrey-law/citations/prompt/inputs'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
-import { saveAuditRun } from './persist'
+import { saveFindings } from './persist'
 import { emitTasks } from './tasks'
+
+const asJson = (value: unknown): Json => value as Json
 
 export interface RunMatterAuditOptions {
   slug: string
@@ -24,9 +29,28 @@ export type RunMatterAuditResult =
  * The whole path from "an attorney picked a prompt and a matter" to
  * "findings are recorded and verified findings are tasks".
  *
- * Every failure here is one a person reading the message can act on, or know
- * they cannot — which is the same split `resolveInputs` draws between
- * `missing` and `unresolvable`, carried through to what the screen says:
+ * Runs in three phases now, not one pass at the end:
+ *
+ *  1. `openRun` inserts the run as `running`, pinning the resolved design-sheet
+ *     values a retry will later replay against instead of re-reading
+ *     `design_sheets` — see the migration's header comment for why a sheet
+ *     edited between a run and its retry would otherwise leave two findings
+ *     side by side answering different questions.
+ *  2. `runFieldAudit` runs the engine; `onUnitSettled` writes each check's
+ *     outcome with `recordStep` as it settles, before the next check starts.
+ *  3. `saveFindings` stores what came back and links each finding to its
+ *     step, then `finaliseRun` sets the run's status and counts from the
+ *     steps themselves.
+ *
+ * This is what turns "a run killed mid-flight leaves nothing" into "a run
+ * killed mid-flight leaves a `running` row with however many steps settled
+ * before it died" — a failure you can look at instead of one you can only
+ * infer.
+ *
+ * Every failure before the run opens is one a person reading the message can
+ * act on, or know they cannot — which is the same split `resolveInputs` draws
+ * between `missing` and `unresolvable`, carried through to what the screen
+ * says:
  *
  *  - `missing` names fields nobody has filled in yet. The design sheet is
  *    incomplete, and completing it is exactly what would let the audit run.
@@ -73,6 +97,24 @@ export async function runMatterAudit(
     }
   }
 
+  const runId = await openRun(client, {
+    matterId: options.matterId,
+    kind: 'field_audit',
+    promptVersionId: prompt.versionId,
+    model: options.model ?? null,
+    unitTotal: prompt.body.checks.length,
+    userId: options.userId,
+    resolvedInputs: asJson(resolved.values),
+    documentVersionId: null,
+    textLayerId: null,
+  })
+
+  // Filled in as each check settles, in the order it settled — which is
+  // playbook order, since runPrompt runs one unit at a time. This is what
+  // `finaliseRun` reads the run's status and counts from.
+  const steps: RunStep[] = []
+  let sequence = 0
+
   const result = await runFieldAudit(
     {
       promptSlug: prompt.slug,
@@ -82,24 +124,34 @@ export async function runMatterAudit(
       userId: options.userId,
     },
     prompt.body,
-    { callModel: options.callModel, model: options.model },
+    {
+      callModel: options.callModel,
+      model: options.model,
+      onUnitSettled: async (unitId, outcome) => {
+        const stepSequence = sequence
+        sequence += 1
+        await recordStep(client, runId, unitId, stepSequence, outcome, 1)
+        steps.push({
+          unitId,
+          status: outcome.ok ? 'succeeded' : 'failed',
+          attempts: 1,
+          sequence: stepSequence,
+        })
+      },
+    },
   )
 
-  const saved = await saveAuditRun(client, {
-    matterId: options.matterId,
-    promptVersionId: prompt.versionId,
-    result,
-    model: options.model ?? null,
-    userId: options.userId,
-  })
+  const saved = await saveFindings(client, runId, result)
   if (!saved.ok) return { ok: false, message: saved.message }
+
+  await finaliseRun(client, runId, steps)
 
   const { created } = await emitTasks(client, {
     matterId: options.matterId,
-    runId: saved.runId,
+    runId,
     checks: prompt.body.checks,
     findings: actionableFindings(result),
   })
 
-  return { ok: true, runId: saved.runId, findingCount: result.findings.length, tasksCreated: created }
+  return { ok: true, runId, findingCount: result.findings.length, tasksCreated: created }
 }
