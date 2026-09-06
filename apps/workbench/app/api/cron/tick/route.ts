@@ -11,7 +11,6 @@ import { materialiseStageTrigger } from '@/lib/runs/triggers'
 import { workRun } from '@/lib/runs/worker'
 import { getAdminClient } from '@/lib/supabase/admin'
 import type { FieldAuditBody } from '@aubrey-law/citations/prompt/body'
-import { actionableFindings } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 
 /**
  * The cron that works the run queue.
@@ -116,25 +115,25 @@ export async function GET(req: Request) {
     await finaliseRun(admin, runId, steps)
 
     // Tasks belong to the caller once a run is actually done, never to
-    // `workRun` itself — see its own header comment. Only a field audit
-    // emits them, and only from findings that survived reference
-    // verification. This is the only place `emitTasks` is ever called — a
-    // first run and a retried run both reach it only here, once their run has
-    // no `pending` steps left.
+    // `workRun` itself — see its own header comment. Only a field audit emits
+    // them, and only from findings that survived reference verification —
+    // which `emitTasks` now decides, from everything this hands it. This is
+    // the only place `emitTasks` is ever called — a first run and a retried
+    // run both reach it only here, once their run has no `pending` steps left.
     if (context.kind === 'field_audit') {
       const body = context.prompt.body as FieldAuditBody
       const stored = await loadFieldAuditFindings(admin, runId)
-      const actionable = actionableFindings({
-        promptSlug: context.prompt.slug,
-        promptVersion: context.prompt.versionNumber,
-        findings: stored,
-        failures: [],
-      })
       await emitTasks(admin, {
         matterId: String(context.run.matter_id),
         runId,
         checks: body.checks,
-        findings: actionable,
+        // Every finding, not the gated subset: `emitTasks` applies the gate,
+        // and the withdrawal rule needs the outcomes it discards. A run that
+        // cleared a check is what entitles it to retire an earlier task, and
+        // a `compliant` finding never survives the gate.
+        findings: stored,
+        // A unit that did not succeed answered nothing, so it retires nothing.
+        failedCheckNumbers: steps.filter((step) => step.status !== 'succeeded').map((step) => step.unitId),
         // The target from the version this run pinned, never the published
         // one: a prompt republished as `chat` since must not retroactively
         // decide that a `task_set` run mid-flight produces nothing.
