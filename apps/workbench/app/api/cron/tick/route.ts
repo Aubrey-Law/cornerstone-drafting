@@ -101,8 +101,10 @@ export async function GET(req: Request) {
     // Tasks belong to the caller once a run is actually done, never to
     // `workRun` itself — see its own header comment. Only a field audit
     // emits them, and only from findings that survived reference
-    // verification, the same gate `emitTasks`'s other caller (`retry.ts`)
-    // applies.
+    // verification. This is now the only place `emitTasks` is ever called —
+    // a first run and a retried run both reach it only here, once their run
+    // has no `pending` steps left, so a run's tasks are created exactly
+    // once no matter how many ticks it took.
     if (context.kind === 'field_audit') {
       const stored = await loadFieldAuditFindings(admin, runId)
       const actionable = actionableFindings({
