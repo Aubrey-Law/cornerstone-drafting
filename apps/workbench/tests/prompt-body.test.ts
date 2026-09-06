@@ -107,3 +107,62 @@ describe('the prompt body schema', () => {
     expect(promptBodySchema.safeParse(declared).success).toBe(true)
   })
 })
+
+describe('outputTarget', () => {
+  /** The minimum valid field-audit body, with no outputTarget stated. */
+  function bodyWithout(): Record<string, unknown> {
+    return {
+      kind: 'field_audit',
+      inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: true }],
+      checks: [
+        {
+          number: '1',
+          statement: 'Every concern has a provision.',
+          risk: 'blocker',
+          reads: ['concerns'],
+          taskTemplate: { title: 'A concern is unanswered', description: 'Confirm it.', priority: 'high' },
+        },
+      ],
+    }
+  }
+
+  /**
+   * The load-bearing case. Versions 1 to 3 of `ma-design-sheet-audit` are
+   * published without this field, and `toPublishedPrompt` re-validates every
+   * body on every read — so a required field would throw for every run
+   * already in the database, not merely for new ones.
+   */
+  it('defaults to task_set, so a body published before it existed still parses', () => {
+    const parsed = promptBodySchema.parse(bodyWithout())
+    expect(parsed.kind).toBe('field_audit')
+    if (parsed.kind !== 'field_audit') throw new Error('unreachable')
+    expect(parsed.outputTarget).toBe('task_set')
+  })
+
+  it.each(['chat', 'task_set', 'checklist'] as const)('accepts %s', (target) => {
+    const parsed = promptBodySchema.parse({ ...bodyWithout(), outputTarget: target })
+    if (parsed.kind !== 'field_audit') throw new Error('unreachable')
+    expect(parsed.outputTarget).toBe(target)
+  })
+
+  /**
+   * The overhaul plan names five targets; two are not built. A schema that
+   * accepted them would let someone publish a prompt that silently produces
+   * nothing, which is the failure mode this whole project keeps finding.
+   */
+  it.each(['draft_doc', 'email_draft', 'tasks', ''])('refuses the unimplemented target %s', (target) => {
+    expect(promptBodySchema.safeParse({ ...bodyWithout(), outputTarget: target }).success).toBe(false)
+  })
+
+  it('does not accept outputTarget on a review body', () => {
+    const review = {
+      kind: 'review',
+      inputs: [],
+      rules: [],
+      outputTarget: 'checklist',
+    }
+    // Refused for having no rules, whatever happens to the extra key — the
+    // point is that the review arm gains nothing here.
+    expect(promptBodySchema.safeParse(review).success).toBe(false)
+  })
+})

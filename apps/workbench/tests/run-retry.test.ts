@@ -37,6 +37,7 @@ const AUDIT_BODY: FieldAuditBody = {
   kind: 'field_audit',
   inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: false }],
   checks: AUDIT_CHECKS,
+  outputTarget: 'task_set',
 }
 
 interface StepSeed {

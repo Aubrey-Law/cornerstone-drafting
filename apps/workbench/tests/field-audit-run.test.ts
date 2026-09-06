@@ -37,6 +37,7 @@ function bodyWithChecks(checks: FieldAuditCheck[]): FieldAuditBody {
       { key: 'children', source: 'design_sheet.children', required: false },
     ],
     checks,
+    outputTarget: 'task_set',
   }
 }
 
@@ -247,6 +248,7 @@ describe('runMatterAudit queues a run rather than running the engine', () => {
     kind: 'field_audit',
     inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: false }],
     checks: [AUDIT_CHECK, { ...AUDIT_CHECK, number: '2', statement: 'Second check.' }],
+    outputTarget: 'task_set',
   }
 
   function seededClient() {

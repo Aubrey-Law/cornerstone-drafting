@@ -42,10 +42,28 @@ export const reviewBodySchema = z.object({
   rules: z.array(reviewRuleSchema).min(1),
 })
 
+/**
+ * What a run produces. Three values, not the overhaul plan's five: `draft_doc`
+ * and `email_draft` need R2 write access, a document-creation path outside the
+ * root app's drafting engine, and above all an answer to what verifies
+ * generated prose — a claim with no source to check it against. Admitting a
+ * value nothing implements would let someone publish a prompt that silently
+ * produces nothing.
+ */
+export const outputTargetSchema = z.enum(['chat', 'task_set', 'checklist'])
+
 export const fieldAuditBodySchema = z.object({
   kind: z.literal('field_audit'),
   inputs: z.array(promptInputSchema),
   checks: z.array(fieldAuditCheckSchema).min(1),
+  /**
+   * Defaulted, never required. `toPublishedPrompt` re-validates every body on
+   * every read, and versions 1 to 3 of `ma-design-sheet-audit` are already
+   * published without this field — so requiring it would not reject a bad new
+   * prompt, it would throw on every run already in the database. The default
+   * is `task_set` because that is what those versions in fact did.
+   */
+  outputTarget: outputTargetSchema.default('task_set'),
 })
 
 /**
@@ -91,3 +109,4 @@ export type PromptBody = z.infer<typeof promptBodySchema>
 export type FieldAuditBody = z.infer<typeof fieldAuditBodySchema>
 export type FieldAuditCheck = z.infer<typeof fieldAuditCheckSchema>
 export type PromptInput = z.infer<typeof promptInputSchema>
+export type OutputTarget = z.infer<typeof outputTargetSchema>

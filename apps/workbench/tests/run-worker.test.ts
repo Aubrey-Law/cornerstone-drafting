@@ -23,7 +23,7 @@ const CHECKS: FieldAuditCheck[] = ['1', '2', '3', '4'].map((number) => ({
   taskTemplate: { title: 'Task', description: 'Do the thing.', priority: 'high' },
 }))
 
-const BODY: FieldAuditBody = { kind: 'field_audit', inputs: [], checks: CHECKS }
+const BODY: FieldAuditBody = { kind: 'field_audit', inputs: [], checks: CHECKS, outputTarget: 'task_set' }
 
 function reply(): ModelResponse {
   return {
