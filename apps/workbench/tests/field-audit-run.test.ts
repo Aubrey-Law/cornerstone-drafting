@@ -194,17 +194,16 @@ describe('actionableFindings', () => {
 })
 
 /**
- * `runMatterAudit`'s own three-phase restructure: the run row opens before
- * the engine starts, and each check's outcome is written as it settles — so
- * a run that loses every check to a dead model still leaves a `workflow_runs`
- * row and a `workflow_run_steps` row per check, instead of the old
- * "run the engine, insert everything at the end" leaving nothing at all.
+ * `runMatterAudit` no longer runs the engine at all — it opens the run,
+ * writes one `pending` step per check, and pokes the tick. A tick claims the
+ * run and does the actual work later (`apps/workbench/app/api/cron/tick/route.ts`);
+ * this only proves the run is left in the shape a tick can pick up.
  *
  * `makeFakeClient` stands in for Supabase: real enough to exercise
- * `loadPublishedPrompt`, `loadSourceRows`, `openRun`/`recordStep`/
- * `finaliseRun` and `saveFindings` end to end, without a network.
+ * `loadPublishedPrompt`, `loadSourceRows`, `openRun` and `openSteps` end to
+ * end, without a network.
  */
-describe('runMatterAudit records a run even when every check fails', () => {
+describe('runMatterAudit queues a run rather than running the engine', () => {
   const AUDIT_CHECK: FieldAuditCheck = {
     number: '1',
     statement: 'A trustee is named.',
@@ -228,39 +227,42 @@ describe('runMatterAudit records a run even when every check fails', () => {
     })
   }
 
-  it('leaves a running-then-failed run and a failed step per check, not nothing at all', async () => {
+  it('leaves a queued run with a pending step per check, and never calls the model', async () => {
     const client = seededClient()
 
+    // `runMatterAudit`'s options no longer accept a model caller at all —
+    // there is nothing left to hand it one to invoke. That absence, not a
+    // call count, is the proof: the engine runs in the tick, never here.
     const result = await runMatterAudit(client as unknown as SupabaseClient<WorkbenchDatabase>, {
       slug: 'audit-1',
       matterId: 'm1',
       userId: 'u1',
-      callModel: async () => {
-        throw new Error('model down')
-      },
     })
 
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected ok')
-    expect(result.findingCount).toBe(0)
+    expect(result.queued).toBe(true)
 
     const runs = client.tableRows('workflow_runs')
     expect(runs).toHaveLength(1)
     expect(runs[0].id).toBe(result.runId)
-    // Finalised to `failed`: every check was attempted and none produced a
-    // finding — the honest word for a run that learned nothing, not
-    // `completed`, which would say every check ran clean.
-    expect(runs[0].status).toBe('failed')
-    expect(runs[0].failed_count).toBe(2)
+    // `queued`, not `running` and not `failed` — a tick has not claimed it
+    // yet, so nothing has been attempted, let alone lost.
+    expect(runs[0].status).toBe('queued')
+    expect(runs[0].failed_count).toBe(0)
     expect(runs[0].finding_count).toBe(0)
 
     const steps = client.tableRows('workflow_run_steps')
     expect(steps).toHaveLength(2)
     // The steps belong to the run that was actually opened — not to nothing,
     // and not to some other id — which is only true because the run exists
-    // before the engine starts.
+    // before its steps do.
     expect(steps.every((step) => step.run_id === result.runId)).toBe(true)
-    expect(steps.map((step) => step.status)).toEqual(['failed', 'failed'])
-    expect(steps.map((step) => step.last_error)).toEqual(['model down', 'model down'])
+    // The run's shape is known immediately: both checks are `pending`, in
+    // the body's own order, with no attempt made yet.
+    expect(steps.map((step) => step.unit_id)).toEqual(['1', '2'])
+    expect(steps.map((step) => step.sequence)).toEqual([0, 1])
+    expect(steps.every((step) => step.status === 'pending')).toBe(true)
+    expect(steps.every((step) => step.attempts === 0)).toBe(true)
   })
 })

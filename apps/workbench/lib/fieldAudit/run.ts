@@ -3,13 +3,9 @@ import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { Json } from '@aubrey-law/db-types'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { loadSourceRows } from '@/lib/prompts/designSheet'
-import { openRun, recordStep, finaliseRun } from '@/lib/runs/record'
-import type { RunStep } from '@/lib/runs/steps'
-import { actionableFindings, runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import { openRun, openSteps } from '@/lib/runs/record'
+import { pokeTick } from '@/lib/runs/enqueue'
 import { resolveInputs } from '@aubrey-law/citations/prompt/inputs'
-import type { ModelCaller } from '@aubrey-law/citations/review/model'
-import { saveFindings } from './persist'
-import { emitTasks } from './tasks'
 
 const asJson = (value: unknown): Json => value as Json
 
@@ -17,35 +13,36 @@ export interface RunMatterAuditOptions {
   slug: string
   matterId: string
   userId: string
-  callModel: ModelCaller
   model?: string
 }
 
 export type RunMatterAuditResult =
-  | { ok: true; runId: string; findingCount: number; tasksCreated: number }
+  | { ok: true; runId: string; queued: true }
   | { ok: false; message: string }
 
 /**
- * The whole path from "an attorney picked a prompt and a matter" to
- * "findings are recorded and verified findings are tasks".
+ * The whole path from "an attorney picked a prompt and a matter" to "a run
+ * is queued and on its way".
  *
- * Runs in three phases now, not one pass at the end:
+ * Used to run the engine itself, in the same request, and report what it
+ * found. The tick route now does that work — see
+ * `apps/workbench/app/api/cron/tick/route.ts` — so this only enqueues:
  *
- *  1. `openRun` inserts the run as `running`, pinning the resolved design-sheet
- *     values a retry will later replay against instead of re-reading
- *     `design_sheets` — see the migration's header comment for why a sheet
- *     edited between a run and its retry would otherwise leave two findings
- *     side by side answering different questions.
- *  2. `runFieldAudit` runs the engine; `onUnitSettled` writes each check's
- *     outcome with `recordStep` as it settles, before the next check starts.
- *  3. `saveFindings` stores what came back and links each finding to its
- *     step, then `finaliseRun` sets the run's status and counts from the
- *     steps themselves.
+ *  1. `openRun` inserts the run as `queued`, pinning the resolved design-sheet
+ *     values a retry (or the tick itself) will replay against instead of
+ *     re-reading `design_sheets` — see the migration's header comment for why
+ *     a sheet edited between a run and its retry would otherwise leave two
+ *     findings side by side answering different questions.
+ *  2. `openSteps` inserts one `pending` step per check, in the prompt body's
+ *     own order, so the run's shape ("3 of 40") is known before any work
+ *     happens.
+ *  3. `pokeTick` nudges the tick route so work starts now rather than on the
+ *     next cron.
  *
- * This is what turns "a run killed mid-flight leaves nothing" into "a run
- * killed mid-flight leaves a `running` row with however many steps settled
- * before it died" — a failure you can look at instead of one you can only
- * infer.
+ * Tasks used to be created here too, once the engine returned. They belong
+ * to the tick now — the only place a run is ever actually finished, whether
+ * that took one tick or several. Creating them here as well would create a
+ * queued run's tasks twice.
  *
  * Every failure before the run opens is one a person reading the message can
  * act on, or know they cannot — which is the same split `resolveInputs` draws
@@ -109,49 +106,14 @@ export async function runMatterAudit(
     textLayerId: null,
   })
 
-  // Filled in as each check settles, in the order it settled — which is
-  // playbook order, since runPrompt runs one unit at a time. This is what
-  // `finaliseRun` reads the run's status and counts from.
-  const steps: RunStep[] = []
-  let sequence = 0
-
-  const result = await runFieldAudit(
-    {
-      promptSlug: prompt.slug,
-      promptVersion: prompt.versionNumber,
-      values: resolved.values,
-      matterId: options.matterId,
-      userId: options.userId,
-    },
-    prompt.body,
-    {
-      callModel: options.callModel,
-      model: options.model,
-      onUnitSettled: async (unitId, outcome) => {
-        const stepSequence = sequence
-        sequence += 1
-        await recordStep(client, runId, unitId, stepSequence, outcome, 1)
-        steps.push({
-          unitId,
-          status: outcome.ok ? 'succeeded' : 'failed',
-          attempts: 1,
-          sequence: stepSequence,
-        })
-      },
-    },
+  // The body's own order — the order a tick will work them in.
+  await openSteps(
+    client,
+    runId,
+    prompt.body.checks.map((check) => check.number),
   )
 
-  const saved = await saveFindings(client, runId, result)
-  if (!saved.ok) return { ok: false, message: saved.message }
+  await pokeTick()
 
-  await finaliseRun(client, runId, steps)
-
-  const { created } = await emitTasks(client, {
-    matterId: options.matterId,
-    runId,
-    checks: prompt.body.checks,
-    findings: actionableFindings(result),
-  })
-
-  return { ok: true, runId, findingCount: result.findings.length, tasksCreated: created }
+  return { ok: true, runId, queued: true }
 }

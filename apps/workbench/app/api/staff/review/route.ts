@@ -4,16 +4,16 @@ import { requireStaff } from '@/lib/auth/requireStaff'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
-import { saveFindings, saveTextLayer } from '@/lib/review/persist'
+import { saveTextLayer } from '@/lib/review/persist'
 import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
 import { readObject } from '@/lib/storage/r2'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { openRun, recordStep, finaliseRun } from '@/lib/runs/record'
-import type { RunStep } from '@/lib/runs/steps'
+import { openRun, openSteps } from '@/lib/runs/record'
+import { pokeTick } from '@/lib/runs/enqueue'
 
 /**
- * Runs one review playbook against one uploaded document.
+ * Starts one review playbook against one uploaded document.
  *
  * Two ways in. A `documentVersionId` names a document already filed on a
  * matter, which is the normal case now that every draft reviewed here is the
@@ -24,8 +24,15 @@ import type { RunStep } from '@/lib/runs/steps'
  * The client sends an id, never a storage key. A key from the browser would be
  * an arbitrary read against the bucket holding every client's documents.
  *
- * Nothing is stored yet. The run and its findings are the next piece; this is
- * what makes them anchorable.
+ * A filed document's review is queued, not run here: once its text layer is
+ * saved and the run is opened, `openSteps` writes one `pending` step per
+ * rule and `pokeTick` nudges the tick route, and this request returns without
+ * calling the model at all — see `apps/workbench/app/api/cron/tick/route.ts`,
+ * which now does that work. `workflow_runs` requires a `document_version_id`
+ * and `text_layer_id` for any `review`-kind row (the migration's own check
+ * constraint), so an ad-hoc upload with nothing filed to anchor to can never
+ * become a queued run in the first place — that path still runs the playbook
+ * inline and shows the result without recording it, exactly as it always has.
  */
 export const maxDuration = 300
 
@@ -112,11 +119,12 @@ export async function POST(request: Request) {
     const admin = getAdminClient()
 
     // Recorded only for a filed document, and only for a document with an
-    // actual text layer — a scan throws from `reviewLayer` below before any
-    // rule ever runs, and a run opened ahead of that would be a `running`
-    // row this request could never finish. Everything else about a failure
-    // to store is reported rather than swallowed: a review the attorney
-    // believes was saved and was not is worse than one they know was not.
+    // actual text layer — a scan throws from `reviewLayer` below, in the
+    // unrecorded fallback path, before any rule ever runs, and a run opened
+    // ahead of that would sit `queued` forever with nothing for a tick to
+    // work. Everything else about a failure to store is reported rather than
+    // swallowed: a review the attorney believes was saved and was not is
+    // worse than one they know was not.
     let runId: string | null = null
     let textLayerId: string | null = null
     let saveError: string | null = null
@@ -151,45 +159,42 @@ export async function POST(request: Request) {
       }
     }
 
-    // Filled in as each rule settles, in the order it settled — which is
-    // playbook order, since runPrompt runs one unit at a time. This is what
-    // `finaliseRun` reads the run's status and counts from.
-    const steps: RunStep[] = []
-    let sequence = 0
-
-    const result = await reviewLayer(layer, playbook, {
-      callModel,
-      userId: auth.user.id,
-      onUnitSettled: runId
-        ? async (unitId, outcome) => {
-            const stepSequence = sequence
-            sequence += 1
-            await recordStep(admin, runId!, unitId, stepSequence, outcome, 1)
-            steps.push({
-              unitId,
-              status: outcome.ok ? 'succeeded' : 'failed',
-              attempts: 1,
-              sequence: stepSequence,
-            })
-          }
-        : undefined,
-    })
-
     if (runId) {
-      const saved = await saveFindings(admin, {
+      // Enqueue instead of running: one `pending` step per rule, in the
+      // playbook's own order, then a nudge so the tick claims it now rather
+      // than on the next cron. The model is never called from this request —
+      // see `apps/workbench/app/api/cron/tick/route.ts`, which now does that
+      // work and saves what it finds.
+      await openSteps(
+        admin,
         runId,
-        documentVersionId: anchor!.documentVersionId,
-        textLayerId: textLayerId!,
-        result,
+        playbook.rules.map((rule) => rule.number),
+      )
+      await pokeTick()
+
+      return NextResponse.json({
+        filename,
+        anchor,
+        runId,
+        saveError,
+        playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },
+        layer,
+        queued: true,
       })
-      if (!saved.ok) saveError = saved.message
-      await finaliseRun(admin, runId, steps)
     }
+
+    // Nothing to enqueue — an ad-hoc upload with no filed version to anchor
+    // to, or a storage hiccup that kept this one from being saved (`workflow_runs`
+    // requires both `document_version_id` and `text_layer_id` for a
+    // `review`-kind row, so neither case can become a queued run). Run the
+    // playbook inline instead, so the attorney still sees a result; it is
+    // simply not recorded.
+    const result = await reviewLayer(layer, playbook, { callModel, userId: auth.user.id })
 
     return NextResponse.json({
       filename,
       anchor,
-      runId,
+      runId: null,
       saveError,
       playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },
       layer,
