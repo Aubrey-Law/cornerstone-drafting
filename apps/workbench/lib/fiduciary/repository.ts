@@ -32,7 +32,12 @@ export interface MatterFiduciaries {
 const isRole = (value: string): value is FiduciaryRole =>
   (FIDUCIARY_ROLES as readonly string[]).includes(value)
 
-const fullName = (contact: Record<string, unknown>): string =>
+/**
+ * Exported so a second caller with its own reason to turn a `contacts` row
+ * into a display name (see `designSheet.ts`'s `*_slots` resolution) reuses
+ * this rather than writing a second version of the same three-field join.
+ */
+export const fullName = (contact: Record<string, unknown>): string =>
   [contact.first_name, contact.middle_name, contact.last_name]
     .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
     .join(' ') || 'Unnamed contact'
