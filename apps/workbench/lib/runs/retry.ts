@@ -1,12 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import { loadPromptVersionById } from '@/lib/prompts/repository'
-import { runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import { actionableFindings, runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
+import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 import { recordStep, finaliseRun, type UnitOutcome } from './record'
 import { unitsToRetry, type RunStep, type StepStatus } from './steps'
 import { saveFindings as saveFieldAuditFindings } from '@/lib/fieldAudit/persist'
+import { emitTasks } from '@/lib/fieldAudit/tasks'
 import { saveFindings as saveReviewFindings } from '@/lib/review/persist'
 import { toLayer } from '@/lib/review/history'
 
@@ -71,6 +74,15 @@ function toRunStep(row: StepRow): RunStep {
  *    (Task 8 — see the comment at the delete below) before the new one is
  *    stored, then store what came back and finalise the run from its steps
  *    as they now stand.
+ * 5. For a field audit only, emit tasks for the retried units — the same
+ *    `emitTasks` a first run calls, but scoped to just the units this retry
+ *    touched (`unitIds`), so a check that failed, was retried, and now
+ *    reports a verified actionable finding gets the task a first run would
+ *    have given it, and so that this run's own tasks for the units that
+ *    *didn't* fail are left alone. See `tasksToSupersedeForUnits` in
+ *    `lib/fieldAudit/tasks.ts` for why that is a different question from the
+ *    one a first run asks. A review retry creates no tasks — reviews never
+ *    have.
  */
 export async function retryFailedSteps(
   client: SupabaseClient<WorkbenchDatabase>,
@@ -100,6 +112,11 @@ export async function retryFailedSteps(
 
   const stepByUnit = new Map<string, StepRow>(((stepRows ?? []) as StepRow[]).map((row) => [String(row.unit_id), row]))
   const retrySet = new Set(retryUnitIds)
+
+  // Set only on the field-audit branch, and read after `finaliseRun` below —
+  // a retried unit's task has to reflect the run's *final* recorded outcome,
+  // the same way a first run's does.
+  let fieldAuditTasks: { checks: FieldAuditCheck[]; findings: FieldAuditFinding[] } | null = null
 
   // Pinned prompt version, never the published one — see the header
   // comment. A run's `prompt_version_id` is set once, at `openRun`, and
@@ -153,6 +170,11 @@ export async function retryFailedSteps(
 
     const saved = await saveFieldAuditFindings(client, runId, result)
     if (!saved.ok) return { ok: false, message: saved.message }
+
+    // Findings for the retried checks only — same restriction `emitTasks`
+    // applies again itself via `unitIds`, kept here too so the check list
+    // handed to it matches the units it is being asked to emit for.
+    fieldAuditTasks = { checks, findings: actionableFindings(result) }
   } else if (runRow.kind === 'review') {
     if (prompt.body.kind !== 'review') {
       return { ok: false, message: `Prompt version ${prompt.versionId} is not a review, but run ${runId} is.` }
@@ -212,6 +234,18 @@ export async function retryFailedSteps(
   if (finalStepsError) return { ok: false, message: `Could not reload the run's steps: ${finalStepsError.message}` }
   const finalSteps = ((finalStepRows ?? []) as StepRow[]).map(toRunStep)
   await finaliseRun(client, runId, finalSteps)
+
+  // A field audit's retried units get the task a first run would have given
+  // them; a review never emits tasks at all, retried or not.
+  if (fieldAuditTasks) {
+    await emitTasks(client, {
+      matterId: String(runRow.matter_id),
+      runId,
+      checks: fieldAuditTasks.checks,
+      findings: fieldAuditTasks.findings,
+      unitIds: retryUnitIds,
+    })
+  }
 
   return { ok: true, retried: retryUnitIds.length }
 }

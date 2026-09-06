@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { PROMPT_TASK_SOURCE, taskRowsFor, tasksToSupersede, type ExistingPromptTask } from '@/lib/fieldAudit/tasks'
+import {
+  PROMPT_TASK_SOURCE,
+  taskRowsFor,
+  tasksToSupersede,
+  tasksToSupersedeForUnits,
+  type ExistingPromptTask,
+} from '@/lib/fieldAudit/tasks'
 import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
@@ -43,7 +49,7 @@ describe('taskRowsFor', () => {
         source: PROMPT_TASK_SOURCE,
         task_type: 'single',
         auto: true,
-        batch_tag: 'prompt:run-1',
+        batch_tag: 'prompt:run-1#1',
         title: 'A stated concern is not answered by the plan',
         description:
           'The design sheet records a concern the structured decisions do not address.\n\n' +
@@ -51,6 +57,16 @@ describe('taskRowsFor', () => {
         priority: 'high',
       },
     ])
+  })
+
+  /**
+   * A task records which run produced it *and* which check within that run —
+   * without the unit half of the tag, a retry replacing one unit's task
+   * would have no way to leave the rest of the run's tasks alone.
+   */
+  it('names both the run and the unit in the batch tag', () => {
+    const [row] = taskRowsFor('matter-1', 'run-1', [check({ number: '7' })], [finding({ checkNumber: '7' })])
+    expect(row.batch_tag).toBe('prompt:run-1#7')
   })
 
   it('produces one row per finding', () => {
@@ -62,6 +78,7 @@ describe('taskRowsFor', () => {
     )
     expect(rows).toHaveLength(2)
     expect(rows.map((r) => r.title)).toEqual(['A stated concern is not answered by the plan', 'Other'])
+    expect(rows.map((r) => r.batch_tag)).toEqual(['prompt:run-1#1', 'prompt:run-1#2'])
   })
 
   /**
@@ -140,6 +157,97 @@ describe('tasksToSupersede', () => {
         existingTask({ id: 'c', assigneeId: 'user-1' }),
       ],
       'run-3',
+    )
+    expect(ids.sort()).toEqual(['a', 'b'])
+  })
+
+  /**
+   * A tag now carries a unit suffix (`prompt:run-old#3`), but this is still
+   * a previous run's tag as far as a first run is concerned — the run id is
+   * parsed back out rather than the whole tag compared, so the suffix
+   * changes nothing about which earlier tasks get closed.
+   */
+  it('still selects a previous run’s tasks despite the new unit suffix', () => {
+    const ids = tasksToSupersede([existingTask({ id: 'task-1', batchTag: 'prompt:run-old#3' })], 'run-new')
+    expect(ids).toEqual(['task-1'])
+  })
+
+  it('still leaves this run’s own tasks alone once they carry a unit suffix', () => {
+    const ids = tasksToSupersede([existingTask({ batchTag: 'prompt:run-new#3' })], 'run-new')
+    expect(ids).toEqual([])
+  })
+})
+
+describe('tasksToSupersedeForUnits', () => {
+  it('supersedes only this run’s open, unassigned task for a named unit', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2' })],
+      'run-1',
+      ['2'],
+    )
+    expect(ids).toEqual(['task-1'])
+  })
+
+  /**
+   * The whole reason this is a separate function from `tasksToSupersede`:
+   * a retry only replaces the units it actually retried. A unit this retry
+   * never touched keeps its earlier task, even though it came from the same
+   * run.
+   */
+  it('never supersedes this run’s task for a unit outside the named set', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2' })],
+      'run-1',
+      ['3'],
+    )
+    expect(ids).toEqual([])
+  })
+
+  it('never supersedes another run’s task for the same unit number', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-other#2' })],
+      'run-1',
+      ['2'],
+    )
+    expect(ids).toEqual([])
+  })
+
+  it('never supersedes an assigned task, even for a named unit of this run', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', assigneeId: 'user-1' })],
+      'run-1',
+      ['2'],
+    )
+    expect(ids).toEqual([])
+  })
+
+  it('never supersedes a non-open task, even for a named unit of this run', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', status: 'done' })],
+      'run-1',
+      ['2'],
+    )
+    expect(ids).toEqual([])
+  })
+
+  it('never touches a task from another source, even matching the run and unit', () => {
+    const ids = tasksToSupersedeForUnits(
+      [existingTask({ id: 'task-1', batchTag: 'prompt:run-1#2', source: 'manual' })],
+      'run-1',
+      ['2'],
+    )
+    expect(ids).toEqual([])
+  })
+
+  it('supersedes several named units from this run at once, leaving an untouched unit alone', () => {
+    const ids = tasksToSupersedeForUnits(
+      [
+        existingTask({ id: 'a', batchTag: 'prompt:run-1#1' }),
+        existingTask({ id: 'b', batchTag: 'prompt:run-1#2' }),
+        existingTask({ id: 'c', batchTag: 'prompt:run-1#3' }),
+      ],
+      'run-1',
+      ['1', '2'],
     )
     expect(ids.sort()).toEqual(['a', 'b'])
   })

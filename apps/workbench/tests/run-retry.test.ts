@@ -58,6 +58,28 @@ function reply(): ModelResponse {
   } as unknown as ModelResponse
 }
 
+/**
+ * A deviation whose one reference verifies against `resolved_inputs`'
+ * default `concerns` value — an actionable finding, the kind
+ * `actionableFindings` keeps and `emitTasks` turns into a task.
+ */
+function actionableReply(): ModelResponse {
+  return {
+    content: [
+      {
+        type: 'tool_use',
+        name: FIELD_AUDIT_TOOL_NAME,
+        id: 'x',
+        input: {
+          outcome: 'deviation',
+          rationale: 'The concern is not addressed by the plan.',
+          references: [{ field_key: 'concerns', claimed_value: 'the original words' }],
+        },
+      },
+    ],
+  } as unknown as ModelResponse
+}
+
 interface StepSeed {
   unit_id: string
   status: 'pending' | 'running' | 'succeeded' | 'failed'
@@ -70,6 +92,7 @@ interface StubConfig {
   resolved_inputs?: Record<string, unknown>
   prompt_version_id?: string
   findings?: Array<{ id: string; run_id: string; rule_number: string }>
+  tasks?: Array<Record<string, unknown>>
 }
 
 /**
@@ -108,6 +131,7 @@ function stubClientWithRun(config: StubConfig) {
     prompt_versions: [{ id: promptVersionId, version_number: 1, body: AUDIT_BODY, prompt_id: 'p1' }],
     matters: [{ id: 'm1', name: 'Test matter' }],
     design_sheets: [{ matter_id: 'm1', version: 1, concerns: 'edited since' }],
+    tasks: config.tasks ?? [],
   })
 
   const deletedFindings: string[] = []
@@ -251,5 +275,99 @@ describe('retrying a run', () => {
       callModel: async () => reply(),
     })
     expect(stub.deletedFindings).toEqual([])
+  })
+
+  /**
+   * The gap this commit closes: a check that failed, was retried, and now
+   * reports a verified actionable finding must create the task a first run
+   * would have given it. Before this, `retryFailedSteps` never called
+   * `emitTasks` at all, so this finding showed on screen and created nothing.
+   */
+  it('a retry that turns a failure into a verified actionable finding creates the task for it', async () => {
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0 },
+        { unit_id: '2', status: 'failed', sequence: 1 },
+        { unit_id: '3', status: 'succeeded', sequence: 2 },
+      ],
+    })
+    const result = await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
+      callModel: async () => actionableReply(),
+    })
+    expect(result).toEqual({ ok: true, retried: 1 })
+
+    const tasks = stub.tableRows('tasks')
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0]).toMatchObject({
+      matter_id: 'm1',
+      source: 'prompt',
+      // Tags both the run and the unit — the retried check, "2" — so a
+      // later retry of a *different* unit in this same run never touches
+      // this task by mistake.
+      batch_tag: 'prompt:run-1#2',
+      title: 'Task',
+    })
+  })
+
+  /**
+   * The other half of the same gap: a retry must supersede only the unit it
+   * actually retried, never the tasks standing for units it left alone —
+   * `tasksToSupersedeForUnits`, not the first-run `tasksToSupersede`.
+   */
+  it('supersedes only that unit’s earlier task, leaving other units’ tasks alone', async () => {
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0 },
+        { unit_id: '2', status: 'failed', sequence: 1 },
+        { unit_id: '3', status: 'succeeded', sequence: 2 },
+      ],
+      tasks: [
+        {
+          id: 'task-unit-2',
+          matter_id: 'm1',
+          source: 'prompt',
+          task_type: 'single',
+          auto: true,
+          batch_tag: 'prompt:run-1#2',
+          title: 'Old task for unit 2',
+          description: 'Stale.',
+          priority: 'high',
+          status: 'open',
+          assignee_id: null,
+        },
+        {
+          id: 'task-unit-1',
+          matter_id: 'm1',
+          source: 'prompt',
+          task_type: 'single',
+          auto: true,
+          batch_tag: 'prompt:run-1#1',
+          title: 'Task for unit 1',
+          description: 'Untouched by this retry.',
+          priority: 'high',
+          status: 'open',
+          assignee_id: null,
+        },
+      ],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
+      callModel: async () => actionableReply(),
+    })
+
+    const tasks = stub.tableRows('tasks')
+    const byId = new Map(tasks.map((task) => [String(task.id), task]))
+
+    // The old task for the retried unit is archived — this retry replaced it.
+    expect(byId.get('task-unit-2')?.status).toBe('archived')
+    // Unit 1 never failed and was never retried: its task is untouched.
+    expect(byId.get('task-unit-1')?.status).toBe('open')
+    // And the new task the retry itself just created is not immediately
+    // superseded by its own insert — see emitTasks' read-before-insert order.
+    // (The fake table applies no DB default, so the freshly-inserted row
+    // carries no `status` at all rather than the real schema's `open`
+    // default — what matters here is that it is not `archived`.)
+    const newTaskForUnit2 = tasks.find((task) => task.id !== 'task-unit-2' && task.batch_tag === 'prompt:run-1#2')
+    expect(newTaskForUnit2).toBeDefined()
+    expect(newTaskForUnit2?.status).not.toBe('archived')
   })
 })
