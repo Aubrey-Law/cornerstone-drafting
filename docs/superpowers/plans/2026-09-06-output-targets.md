@@ -1517,6 +1517,7 @@ hash that looks plausible and is wrong.
 
 **Files:**
 - Create: `supabase/migrations/20261104000000_design_sheet_audit_v4.sql`
+- Test: `apps/workbench/tests/design-sheet-audit-content.test.ts` (append a v4 block — the file already has one per seeded version)
 
 - [ ] **Step 1: Generate the migration**
 
@@ -1608,36 +1609,118 @@ PY
 Expected output: the path, a 64-character hash, `outputTarget present: True`,
 `checks unchanged: True`.
 
-- [ ] **Step 2: Confirm the body parses against the schema before applying it**
+- [ ] **Step 2: Add the version-4 block to the seed-content test**
 
-The database cannot enforce a zod schema on a jsonb column, so a bad body would only be
-caught when `toPublishedPrompt` next read it — at which point every run page throws. Check
-it now:
+`apps/workbench/tests/design-sheet-audit-content.test.ts` already has a `describe` block per
+seeded version — v2 and v3 — each asserting that the body parses, that every declared source
+is one `resolveInputs` can resolve, and that the stated `content_hash` is the real sha256
+rather than a value typed in and never rechecked. Follow that convention; a permanent test
+is the point, not a throwaway check before applying.
 
-```bash
-cat > /tmp/v4-body.test.ts <<'EOF'
-import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { promptBodySchema } from '@aubrey-law/citations/prompt/body'
+A successful `promptBodySchema.safeParse` is itself the proof that every check's `reads`
+names a declared input, because `superRefine` refuses a body where that is not true. That
+is why these blocks assert the parse and not the relationship.
 
-describe('version 4 of the design-sheet audit', () => {
-  it('parses, and says checklist', () => {
-    const sql = readFileSync('supabase/migrations/20261104000000_design_sheet_audit_v4.sql', 'utf8')
-    const literal = /'(\{"kind":"field_audit".*?\})'::jsonb/s.exec(sql)![1]
-    const parsed = promptBodySchema.parse(JSON.parse(literal.replaceAll("''", "'")))
-    expect(parsed.kind).toBe('field_audit')
-    if (parsed.kind !== 'field_audit') throw new Error('unreachable')
+Append to that file:
+
+```ts
+/**
+ * Version 4 changes what a run *produces*, not what it checks.
+ *
+ * `outputTarget` lives in the body rather than on `prompts` because a run
+ * records only its `prompt_version_id`: as a mutable column, an old run would
+ * be indistinguishable from one that produced something else. So a change of
+ * target is a new version, and the checks themselves are untouched — which is
+ * the strongest thing this block can assert, and it does.
+ */
+describe('the version-4 seed migration for the design-sheet audit', () => {
+  const V4 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261104000000_design_sheet_audit_v4.sql'),
+    'utf8',
+  )
+  const bodyText = () => V4.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+
+  it('publishes version 4, and repoints rather than doing nothing', () => {
+    // A `do nothing` here would leave the publication on version 3 — the
+    // exact failure the v2 migration already had to correct.
+    expect(V4).toMatch(/version_number\s*\)?\s*\n?.*4,|,\s*\n\s*4,/)
+    expect(V4).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('makes the new version insert idempotent', () => {
+    expect(V4).toMatch(/on conflict \(prompt_id, version_number\) do nothing/)
+  })
+
+  it('adds a version of the same prompt, found by slug rather than a pasted id', () => {
+    // An earlier migration in this series pasted an id lifted by pattern and
+    // got the *version's* id instead of the prompt's. Selecting by the thing
+    // that is stable removes the question.
+    expect(V4).toMatch(/where p\.slug = 'ma-design-sheet-audit'/)
+    expect(V4).not.toMatch(/insert into public\.prompts\s*\(/)
+  })
+
+  it('says checklist', () => {
+    const parsed = promptBodySchema.parse(JSON.parse(bodyText()))
+    if (parsed.kind !== 'field_audit') throw new Error('expected a field_audit body')
     expect(parsed.outputTarget).toBe('checklist')
-    expect(parsed.checks).toHaveLength(6)
+  })
+
+  /**
+   * The whole claim of this version: it changes the target and nothing else.
+   * Comparing the parsed checks against version 3's proves the body was
+   * derived rather than retyped — a hand-edited copy would drift a statement
+   * or a `reads` entry and nobody would notice until a run behaved
+   * differently for a reason nobody chose.
+   */
+  it('leaves every check exactly as version 3 had it', () => {
+    const v3 = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261102000000_design_sheet_audit_v3.sql'),
+      'utf8',
+    )
+    const checksOf = (sql: string) =>
+      JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")).checks
+    expect(checksOf(V4)).toEqual(checksOf(v3))
+  })
+
+  it('leaves version 3’s own inputs alone too', () => {
+    const v3 = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261102000000_design_sheet_audit_v3.sql'),
+      'utf8',
+    )
+    const inputsOf = (sql: string) =>
+      JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")).inputs
+    expect(inputsOf(V4)).toEqual(inputsOf(v3))
+  })
+
+  it('declares no source outside the allow-list', () => {
+    const parsed = promptBodySchema.parse(JSON.parse(bodyText()))
+    if (parsed.kind !== 'field_audit') throw new Error('expected a field_audit body')
+    expect(unknownSources(parsed.inputs)).toEqual([])
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V4.match(/::jsonb,\s*\n\s*'([0-9a-f]{64})'/)![1]
+    expect(crypto.createHash('sha256').update(bodyText()).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    expect(promptBodySchema.safeParse(JSON.parse(bodyText())).success).toBe(true)
   })
 })
-EOF
-cp /tmp/v4-body.test.ts apps/workbench/tests/zz-v4-body.test.ts
-npx vitest run apps/workbench/tests/zz-v4-body.test.ts
-rm apps/workbench/tests/zz-v4-body.test.ts /tmp/v4-body.test.ts
 ```
 
-Expected: PASS. If it fails, fix the migration before applying anything.
+Run it — and note this must pass **before** the migration is applied, since it reads the
+`.sql` file rather than the database:
+
+```bash
+cd apps/workbench && npx vitest run tests/design-sheet-audit-content.test.ts
+```
+
+Expected: PASS, including the pre-existing v2 and v3 blocks. If `states the real sha256`
+fails, the generator in Step 1 hashed the wrong form — it must hash the JSON with SQL's
+doubled quotes collapsed, which is what `bodyText()` does here. Fix the migration; do not
+adjust the test to match a wrong hash.
+
 
 - [ ] **Step 3: Apply the migration**
 
