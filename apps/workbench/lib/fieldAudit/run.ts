@@ -4,7 +4,7 @@ import type { Json } from '@aubrey-law/db-types'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { loadSourceRows } from '@/lib/prompts/designSheet'
 import { openRun, openSteps } from '@/lib/runs/record'
-import { pokeTick } from '@/lib/runs/enqueue'
+import { pokeTick as realPokeTick } from '@/lib/runs/enqueue'
 import { resolveInputs } from '@aubrey-law/citations/prompt/inputs'
 
 const asJson = (value: unknown): Json => value as Json
@@ -12,8 +12,19 @@ const asJson = (value: unknown): Json => value as Json
 export interface RunMatterAuditOptions {
   slug: string
   matterId: string
-  userId: string
+  // Null when the stage engine fired this rather than an attorney picking a
+  // prompt and a matter — `workflow_runs.created_by` is nullable for exactly
+  // that case, and inventing an actor would put a person's name on something
+  // they did not do.
+  userId: string | null
   model?: string
+  // Off when the caller is a tick already working through the queue: it is
+  // about to claim this run in the same invocation, and poking would only
+  // ask a second tick to start for work this one is already doing.
+  poke?: boolean
+  // Injectable so a test can observe whether a poke happened without a real
+  // network call. Defaults to the real `pokeTick`.
+  pokeTick?: () => Promise<void>
 }
 
 export type RunMatterAuditResult =
@@ -21,8 +32,10 @@ export type RunMatterAuditResult =
   | { ok: false; message: string }
 
 /**
- * The whole path from "an attorney picked a prompt and a matter" to "a run
- * is queued and on its way".
+ * The whole path from "a prompt and a matter" to "a run is queued and on its
+ * way" — whether the prompt and matter were an attorney's choice on
+ * `/prompts`, or a stage entry the trigger fired (`userId: null`, `poke:
+ * false` — see those fields' comments on `RunMatterAuditOptions`).
  *
  * Used to run the engine itself, in the same request, and report what it
  * found. The tick route now does that work — see
@@ -37,7 +50,8 @@ export type RunMatterAuditResult =
  *     own order, so the run's shape ("3 of 40") is known before any work
  *     happens.
  *  3. `pokeTick` nudges the tick route so work starts now rather than on the
- *     next cron.
+ *     next cron — skipped when the caller is already inside a tick, which is
+ *     about to claim this same run without needing to be asked.
  *
  * Tasks used to be created here too, once the engine returned. They belong
  * to the tick now — the only place a run is ever actually finished, whether
@@ -113,7 +127,9 @@ export async function runMatterAudit(
     prompt.body.checks.map((check) => check.number),
   )
 
-  await pokeTick()
+  if (options.poke ?? true) {
+    await (options.pokeTick ?? realPokeTick)()
+  }
 
   return { ok: true, runId, queued: true }
 }
