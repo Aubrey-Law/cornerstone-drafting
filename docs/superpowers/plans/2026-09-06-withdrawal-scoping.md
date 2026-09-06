@@ -357,11 +357,6 @@ what they were implicitly assuming:
   function authoritative(): RunAnswers {
     return { byCheck: { '1': 'actionable' }, authoritative: true }
   }
-
-  /** A run that saw a problem on check 1 and could not cite it. */
-  function inconclusive(): RunAnswers {
-    return { byCheck: { '1': 'inconclusive' }, authoritative: false }
-  }
 ```
 
 Then append a new suite:
@@ -585,11 +580,17 @@ function mayRetire(
   //    beside the one it means to replace.
   if (task.batchTag !== null && desiredTags.has(task.batchTag)) return true
 
-  // A complete answer may retire prior work.
-  if (answers.authoritative) return true
-
+  // Parsed *before* the authority check, not after. A tag of neither shape was
+  // not written by this module, so no clause of the rule covers it and it
+  // stands — including against an authoritative run, which has answered every
+  // check of its own prompt version and still knows nothing about this row.
+  // The design note lists `authoritative` inside each tag shape's clauses
+  // rather than above them, for this reason.
   const parsed = parseBatchTag(task.batchTag)
   if (parsed === null) return false
+
+  // A complete answer may retire prior work.
+  if (answers.authoritative) return true
 
   if (parsed.unitId !== null) {
     // This run either says that check is fine, or is re-reporting it — in
