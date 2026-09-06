@@ -10,6 +10,9 @@
  * (`loadPublishedPrompt`, `loadSourceRows`, `openRun`/`recordStep`/
  * `finaliseRun`, `saveFindings`, `emitTasks`) to run against seeded rows
  * without a network, so a test can prove what got written and in what order.
+ *
+ * `.delete()` was added for retry (`lib/runs/retry.ts`), which deletes a
+ * retried unit's superseded finding by id before writing the new one.
  */
 type Row = Record<string, unknown>
 
@@ -28,6 +31,7 @@ type PendingOp =
   | { type: 'insert'; payload: Row | Row[] }
   | { type: 'update'; payload: Row }
   | { type: 'upsert'; payload: Row; onConflict?: string }
+  | { type: 'delete' }
 
 class FakeQueryBuilder {
   private filters: Array<[string, unknown]> = []
@@ -77,6 +81,11 @@ class FakeQueryBuilder {
     return this
   }
 
+  delete() {
+    this.pendingOp = { type: 'delete' }
+    return this
+  }
+
   private matches(row: Row): boolean {
     for (const [column, value] of this.filters) if (row[column] !== value) return false
     for (const [column, values] of this.inFilters) if (!values.includes(row[column])) return false
@@ -112,6 +121,12 @@ class FakeQueryBuilder {
       const rows = this.table.rows.filter((row) => this.matches(row))
       for (const row of rows) Object.assign(row, this.pendingOp!.payload)
       return { data: rows, error: null }
+    }
+
+    if (this.pendingOp.type === 'delete') {
+      const removed = this.table.rows.filter((row) => this.matches(row))
+      this.table.rows = this.table.rows.filter((row) => !this.matches(row))
+      return { data: removed, error: null }
     }
 
     // upsert

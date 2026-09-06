@@ -23,8 +23,8 @@ import { toLayer } from '@/lib/review/history'
  * body (`body.checks` vs `body.rules`), and how the pinned evidence is
  * rebuilt (`resolved_inputs` vs the text layer read back by `text_layer_id`).
  * Dispatch happens once, on `runRow.kind`, at those two points; everything
- * else — loading the pinned prompt version, recording steps, finalising the
- * run — runs the same way for both.
+ * else — loading the pinned prompt version, deleting a superseded finding,
+ * recording steps, finalising the run — runs the same way for both.
  */
 
 export interface RetryDependencies {
@@ -40,6 +40,7 @@ type StepRow = {
   status: unknown
   sequence: unknown
   attempts: unknown
+  finding_id?: unknown
 }
 
 function toRunStep(row: StepRow): RunStep {
@@ -66,8 +67,10 @@ function toRunStep(row: StepRow): RunStep {
  *    stored text layer for a review. Neither re-reads its live source: a
  *    sheet or document edited since the run belongs to a fresh run, not
  *    this one. Run the matching engine over just that subset.
- * 4. Store what came back and finalise the run from its steps as they now
- *    stand.
+ * 4. For each retried unit, delete the finding its earlier attempt left
+ *    (Task 8 — see the comment at the delete below) before the new one is
+ *    stored, then store what came back and finalise the run from its steps
+ *    as they now stand.
  */
 export async function retryFailedSteps(
   client: SupabaseClient<WorkbenchDatabase>,
@@ -87,7 +90,7 @@ export async function retryFailedSteps(
 
   const { data: stepRows, error: stepsError } = await client
     .from('workflow_run_steps')
-    .select('unit_id, status, sequence, attempts')
+    .select('unit_id, status, sequence, attempts, finding_id')
     .eq('run_id', runId)
   if (stepsError) return { ok: false, message: `Could not load the run's steps: ${stepsError.message}` }
 
@@ -145,6 +148,9 @@ export async function retryFailedSteps(
       { callModel: deps.callModel, model: deps.model ?? runRow.model ?? undefined, onUnitSettled },
     )
 
+    const deleted = await deleteSupersededFindings(client, retryUnitIds, stepByUnit)
+    if (!deleted.ok) return deleted
+
     const saved = await saveFieldAuditFindings(client, runId, result)
     if (!saved.ok) return { ok: false, message: saved.message }
   } else if (runRow.kind === 'review') {
@@ -182,6 +188,9 @@ export async function retryFailedSteps(
       { callModel: deps.callModel, model: deps.model ?? runRow.model ?? undefined, userId: deps.userId ?? null, onUnitSettled },
     )
 
+    const deleted = await deleteSupersededFindings(client, retryUnitIds, stepByUnit)
+    if (!deleted.ok) return deleted
+
     const saved = await saveReviewFindings(client, {
       runId,
       documentVersionId: String(runRow.document_version_id),
@@ -205,4 +214,38 @@ export async function retryFailedSteps(
   await finaliseRun(client, runId, finalSteps)
 
   return { ok: true, retried: retryUnitIds.length }
+}
+
+/**
+ * The destructive part of retry, named.
+ *
+ * `workflow_findings` has `unique (run_id, rule_number)`, so a retried
+ * unit's new finding collides with the one its earlier attempt left. This
+ * deletes that superseded finding by the `finding_id` the step already
+ * holds — not by matching `(run_id, rule_number)`, which the step never
+ * claimed and which could delete a row a *different* attempt produced under
+ * the same number by coincidence of timing. Only a unit actually being
+ * retried is touched; a step with no `finding_id` (its earlier attempt never
+ * produced one) is left alone.
+ *
+ * `workflow_citations` and `workflow_field_references` both declare
+ * `finding_id ... references public.workflow_findings(id) on delete cascade`
+ * — `workflow_citations` in `supabase/migrations/20261027000000_workflow_runs_and_findings.sql`
+ * (added by `alter table ... add column if not exists finding_id ...`), and
+ * `workflow_field_references` in `supabase/migrations/20261028000000_prompt_objects.sql`.
+ * Confirmed by reading both migrations rather than assumed: a superseded
+ * finding's evidence goes with it, and nothing is left orphaned.
+ */
+async function deleteSupersededFindings(
+  client: SupabaseClient<WorkbenchDatabase>,
+  retryUnitIds: string[],
+  stepByUnit: Map<string, StepRow>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  for (const unitId of retryUnitIds) {
+    const findingId = stepByUnit.get(unitId)?.finding_id
+    if (!findingId) continue
+    const { error } = await client.from('workflow_findings').delete().eq('id', String(findingId))
+    if (error) return { ok: false, message: `Could not delete the superseded finding for unit ${unitId}: ${error.message}` }
+  }
+  return { ok: true }
 }

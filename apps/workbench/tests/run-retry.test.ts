@@ -12,9 +12,10 @@ import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prom
  *
  * `stubClientWithRun` builds on `makeFakeClient` (`./helpers/fakeSupabase`)
  * rather than a second hand-rolled fake: it seeds a `field_audit` run, its
- * steps, and the prompt version it was checked against, then wraps one
- * chain (`prompt_versions.eq('id', ...)`) so the test can see which prompt
- * version id retry actually read.
+ * steps, and the prompt version it was checked against, then wraps two
+ * chains so the test can see what retry actually did that a seeded table
+ * can't show by itself — which prompt version id got read, and which
+ * finding ids got deleted.
  */
 
 const AUDIT_CHECKS: FieldAuditCheck[] = ['1', '2', '3'].map((number) => ({
@@ -61,12 +62,14 @@ interface StepSeed {
   unit_id: string
   status: 'pending' | 'running' | 'succeeded' | 'failed'
   sequence: number
+  finding_id?: string | null
 }
 
 interface StubConfig {
   steps: StepSeed[]
   resolved_inputs?: Record<string, unknown>
   prompt_version_id?: string
+  findings?: Array<{ id: string; run_id: string; rule_number: string }>
 }
 
 /**
@@ -98,27 +101,44 @@ function stubClientWithRun(config: StubConfig) {
       status: step.status,
       sequence: step.sequence,
       attempts: 1,
+      finding_id: step.finding_id ?? null,
     })),
+    workflow_findings: config.findings ?? [],
     prompts: [{ id: 'p1', slug: 'audit-1', title: 'Audit One', kind: 'field_audit' }],
     prompt_versions: [{ id: promptVersionId, version_number: 1, body: AUDIT_BODY, prompt_id: 'p1' }],
     matters: [{ id: 'm1', name: 'Test matter' }],
     design_sheets: [{ matter_id: 'm1', version: 1, concerns: 'edited since' }],
   })
 
+  const deletedFindings: string[] = []
   const versionsRead: string[] = []
 
   return {
     tableRows: base.tableRows,
+    deletedFindings,
     versionsRead,
     from(table: string) {
       const builder = base.from(table) as unknown as {
         eq: (column: string, value: unknown) => unknown
+        delete: () => { eq: (column: string, value: unknown) => unknown }
       }
       if (table === 'prompt_versions') {
         const originalEq = builder.eq.bind(builder)
         builder.eq = (column: string, value: unknown) => {
           if (column === 'id') versionsRead.push(String(value))
           return originalEq(column, value)
+        }
+      }
+      if (table === 'workflow_findings') {
+        const originalDelete = builder.delete.bind(builder)
+        builder.delete = () => {
+          const del = originalDelete()
+          const originalDelEq = del.eq.bind(del)
+          del.eq = (column: string, value: unknown) => {
+            if (column === 'id') deletedFindings.push(String(value))
+            return originalDelEq(column, value)
+          }
+          return del
         }
       }
       return builder
@@ -197,5 +217,39 @@ describe('retrying a run', () => {
     )
     expect(calls).toBe(0)
     expect(result).toEqual({ ok: true, retried: 0 })
+  })
+
+  it('replaces the finding its earlier attempt left, and only that one', async () => {
+    // workflow_findings has unique (run_id, rule_number), so a retried
+    // unit's new finding collides with the one its earlier attempt left. The
+    // old one is a superseded answer to the same question from the same
+    // run — keeping both would make the constraint a lie. Another unit's
+    // finding is untouched.
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0, finding_id: 'f1' },
+        { unit_id: '2', status: 'failed', sequence: 1, finding_id: 'f2' },
+      ],
+      findings: [
+        { id: 'f1', run_id: 'run-1', rule_number: '1' },
+        { id: 'f2', run_id: 'run-1', rule_number: '2' },
+      ],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
+      callModel: async () => reply(),
+    })
+    expect(stub.deletedFindings).toEqual(['f2'])
+  })
+
+  it('deletes nothing when the retried step never produced a finding', async () => {
+    // The only step being retried here has finding_id: null — a genuine
+    // null, not an absent field a lenient check would let slide by.
+    const stub = stubClientWithRun({
+      steps: [{ unit_id: '1', status: 'failed', sequence: 0, finding_id: null }],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
+      callModel: async () => reply(),
+    })
+    expect(stub.deletedFindings).toEqual([])
   })
 })
