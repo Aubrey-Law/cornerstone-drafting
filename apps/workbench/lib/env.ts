@@ -13,6 +13,7 @@ export const REQUIRED_SERVER_ENV = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'CRON_SECRET',
 ] as const
 
 export type RequiredServerEnv = (typeof REQUIRED_SERVER_ENV)[number]
