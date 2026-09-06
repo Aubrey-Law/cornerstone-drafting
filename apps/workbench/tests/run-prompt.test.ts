@@ -123,4 +123,96 @@ describe('runPrompt', () => {
     )
     expect(result.failures).toEqual([{ unitId: '0', reason: 'Model returned no tool call' }])
   })
+
+  it('reports each unit as it settles, in order, with its outcome', async () => {
+    // A run that dies halfway must leave a record of how far it got. That is
+    // only possible if the engine says so per unit rather than at the end.
+    const settled: Array<[string, boolean]> = []
+    let attempts = 0
+    await runPrompt<string, { value: string }>(
+      {
+        units: ['a', 'b'],
+        toolName: TOOL_NAME,
+        idFor: unit => unit,
+        requestFor,
+        findingFor: (unit, input) => ({ value: `${unit}:${input.value}` }),
+      },
+      {
+        callModel: async () => {
+          attempts += 1
+          if (attempts === 1) throw new Error('overloaded')
+          return respondWith({ value: 'ok' })
+        },
+        context: { route: 'test', contextType: 'general' },
+        onUnitSettled: async (unitId, outcome) => {
+          settled.push([unitId, outcome.ok])
+        },
+      },
+    )
+    expect(settled).toEqual([
+      ['a', false],
+      ['b', true],
+    ])
+  })
+
+  it('carries the failure reason to the hook, not just to the result', async () => {
+    const reasons: string[] = []
+    await runPrompt<string, { value: string }>(
+      {
+        units: ['a'],
+        toolName: TOOL_NAME,
+        idFor: unit => unit,
+        requestFor,
+        findingFor: (unit, input) => ({ value: `${unit}:${input.value}` }),
+      },
+      {
+        callModel: async () => {
+          throw new Error('overloaded')
+        },
+        context: { route: 'test', contextType: 'general' },
+        onUnitSettled: async (_unitId, outcome) => {
+          if (!outcome.ok) reasons.push(outcome.reason)
+        },
+      },
+    )
+    expect(reasons).toEqual(['overloaded'])
+  })
+
+  it('runs without a hook, because most callers do not need one', async () => {
+    const result = await runPrompt<string, { value: string }>(
+      {
+        units: ['a'],
+        toolName: TOOL_NAME,
+        idFor: unit => unit,
+        requestFor,
+        findingFor: (unit, input) => ({ value: `${unit}:${input.value}` }),
+      },
+      {
+        callModel: async () => respondWith({ value: 'ok' }),
+        context: { route: 'test', contextType: 'general' },
+      },
+    )
+    expect(result.findings).toEqual([{ value: 'a:ok' }])
+  })
+
+  it('still returns findings when the recorder throws', async () => {
+    const result = await runPrompt<string, { value: string }>(
+      {
+        units: ['a'],
+        toolName: TOOL_NAME,
+        idFor: unit => unit,
+        requestFor,
+        findingFor: (unit, input) => ({ value: `${unit}:${input.value}` }),
+      },
+      {
+        callModel: async () => respondWith({ value: 'ok' }),
+        context: { route: 'test', contextType: 'general' },
+        onUnitSettled: async () => {
+          throw new Error('database down')
+        },
+      },
+    )
+    expect(result.findings).toEqual([{ value: 'a:ok' }])
+    expect(result.failures).toEqual([])
+  })
 })

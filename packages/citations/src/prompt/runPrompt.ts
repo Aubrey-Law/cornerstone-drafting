@@ -34,6 +34,22 @@ export interface PromptSeams<Unit, Finding> {
 export interface RunPromptDependencies {
   callModel: ModelCaller
   context: ModelCallContext
+  /**
+   * Called as each unit settles, before the next one starts.
+   *
+   * The loop knows what happened to a unit at the moment it happens; the
+   * caller is the only one that can write it down. Reporting at the end
+   * instead would mean a run killed halfway — a timeout, a deploy, a closed
+   * lambda — leaves neither its work nor any evidence of how far it got.
+   *
+   * Deliberately not given the finding. Persistence belongs to the app and
+   * this package knows nothing about a database; what a unit produced is
+   * stored by the caller from the result, and linked to the step afterwards.
+   */
+  onUnitSettled?: (
+    unitId: string,
+    outcome: { ok: true } | { ok: false; reason: string },
+  ) => Promise<void>
 }
 
 export interface PromptRunResult<Finding> {
@@ -68,6 +84,20 @@ export async function runPrompt<Unit, Finding>(
   const findings: Finding[] = []
   const failures: PromptRunResult<Finding>['failures'] = []
 
+  const settle = async (
+    unitId: string,
+    outcome: { ok: true } | { ok: false; reason: string },
+  ): Promise<void> => {
+    if (!deps.onUnitSettled) return
+    // A recorder that fails must not lose the unit's actual result. The step
+    // row is the record of the work, not the work.
+    try {
+      await deps.onUnitSettled(unitId, outcome)
+    } catch {
+      // Intentionally swallowed; see above.
+    }
+  }
+
   for (let index = 0; index < seams.units.length; index++) {
     const unit = seams.units[index]
     const unitId = seams.idFor ? seams.idFor(unit, index) : String(index)
@@ -80,6 +110,7 @@ export async function runPrompt<Unit, Finding>(
 
       if (!input) {
         failures.push({ unitId, reason: 'Model returned no tool call' })
+        await settle(unitId, { ok: false, reason: 'Model returned no tool call' })
         continue
       }
 
@@ -90,11 +121,14 @@ export async function runPrompt<Unit, Finding>(
       // call or `findingFor` threw, caught below.
       finding = seams.findingFor(unit, input)
     } catch (error) {
-      failures.push({ unitId, reason: (error as Error).message })
+      const reason = (error as Error).message
+      failures.push({ unitId, reason })
+      await settle(unitId, { ok: false, reason })
       continue
     }
 
     findings.push(finding)
+    await settle(unitId, { ok: true })
   }
 
   return { findings, failures }
