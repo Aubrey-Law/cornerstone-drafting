@@ -316,4 +316,48 @@ describe('loadUnresolvedBlockers', () => {
       },
     ])
   })
+
+  it('clears when a later clean run of the same prompt found nothing', async () => {
+    // The case a blockers-first query cannot see. An attorney fixed the
+    // design sheet, the matter re-entered the stage, and the re-audit found
+    // nothing — so there is nothing to show. Before this, the older run's
+    // blocker advised forever, because the clean run had no findings to
+    // appear in the query at all and could not supersede it.
+    // ...a client with an older run carrying an open blocker, and a newer run
+    // of the same prompt with no findings...
+    const client = makeFakeClient({
+      workflow_findings: [finding({ id: 'f-old', run_id: 'run-old', rule_number: '1' })],
+      workflow_runs: [
+        { id: 'run-old', matter_id: 'matter-1', prompt_version_id: 'pv-1', started_at: '2026-01-01T00:00:00Z' },
+        { id: 'run-new', matter_id: 'matter-1', prompt_version_id: 'pv-1', started_at: '2026-02-01T00:00:00Z' },
+      ],
+      prompt_versions: [{ id: 'pv-1', prompt_id: 'prompt-1' }],
+      matters: [{ id: 'matter-1', name: 'Smith Family Trust' }],
+    })
+
+    expect(await loadUnresolvedBlockers(client as never)).toEqual([])
+  })
+
+  it('does not let a clean run of a different prompt clear the first prompt\'s blocker', async () => {
+    // The clean re-run only clears the (matter, prompt) pair it belongs to.
+    // A different prompt's blocker on the same matter is untouched by it.
+    const client = makeFakeClient({
+      workflow_findings: [finding({ id: 'f-old', run_id: 'run-old', rule_number: '1' })],
+      workflow_runs: [
+        { id: 'run-old', matter_id: 'matter-1', prompt_version_id: 'pv-a', started_at: '2026-01-01T00:00:00Z' },
+        { id: 'run-new-other-prompt', matter_id: 'matter-1', prompt_version_id: 'pv-b', started_at: '2026-02-01T00:00:00Z' },
+      ],
+      prompt_versions: [
+        { id: 'pv-a', prompt_id: 'prompt-a' },
+        { id: 'pv-b', prompt_id: 'prompt-b' },
+      ],
+      matters: [{ id: 'matter-1', name: 'Smith Family Trust' }],
+    })
+
+    const blockers = await loadUnresolvedBlockers(client as unknown as SupabaseClient<WorkbenchDatabase>)
+
+    expect(blockers).toEqual([
+      { matterId: 'matter-1', matterTitle: 'Smith Family Trust', runId: 'run-old', ruleNumbers: ['1'] },
+    ])
+  })
 })

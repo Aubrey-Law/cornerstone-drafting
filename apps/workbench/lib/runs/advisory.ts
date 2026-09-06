@@ -188,12 +188,43 @@ export interface UnresolvedBlocker {
  * Every matter with an unresolved blocker on record, one entry per matter —
  * the list `/prompts` shows above the picker.
  *
- * The `.eq`/`.in` filters below narrow what comes over the wire; they are not
- * what decides which findings are advisories. `toBlockerAdvisories` above is
- * — every row this function fetches is passed through it, so a filter here
+ * Order matters here, and it runs backwards from what reads naturally.
+ * Querying blocker findings first, then superseding among whatever that
+ * returned, was the original shape — and it has a hole: a newer run of the
+ * same prompt that found *nothing* produces no blocker-severity rows, so it
+ * never enters the set the superseding step works over and can never
+ * supersede the older run that did. An attorney fixes the design sheet, the
+ * re-audit comes back clean, and the old blocker advises forever — the list
+ * only ever growing, which is the one failure an advisory cannot survive
+ * (see the module docstring above).
+ *
+ * So this finds the latest run per (matter, prompt) *first*, over every
+ * candidate run whether or not it produced a finding, and only then asks
+ * which of those latest runs still has an open blocker. A clean latest run
+ * is found by this query and simply contributes no findings, rather than
+ * being invisible to it.
+ *
+ * Reading every run in the table to find "the latest per (matter, prompt)"
+ * would be an unbounded scan that grows with the whole run history forever,
+ * most of which no attorney's decision depends on. It is bounded here to
+ * runs belonging to a matter that has *ever* produced a blocker-severity
+ * finding, at any disposition or outcome: a matter that has never once
+ * produced a blocker cannot need clearing of one, whatever its latest run
+ * looks like, so it is never a candidate. That first, cheap query is the
+ * only place `severity = 'blocker'` is checked without also checking
+ * `disposition`/`outcome` — checking those here would reintroduce the exact
+ * hole this function exists to close, by excluding the clean run the
+ * superseding step needs to see.
+ *
+ * The `.eq`/`.in` filters on the final findings read narrow what comes over
+ * the wire; they are not what decides which findings are advisories.
+ * `toBlockerAdvisories` above is — every row reaches it, so a filter here
  * drifting out of step with that gate would only cost round-trip size, never
  * correctness. `groupUnresolvedBlockersByMatter` is the analogous gate for
- * which run's findings are current and how they are grouped for display.
+ * which run's findings are current and how they are grouped for display;
+ * it still runs here even though the findings read is already scoped to one
+ * run per (matter, prompt) — it is what turns those per-prompt survivors
+ * into one entry per matter.
  *
  * Plain queries rather than a PostgREST embedded select, following
  * `lib/prompts/designSheet.ts`'s `loadMattersWithDesignSheets`: an embedded
@@ -203,40 +234,47 @@ export interface UnresolvedBlocker {
 export async function loadUnresolvedBlockers(client: SupabaseClient<WorkbenchDatabase>): Promise<UnresolvedBlocker[]> {
   const sb = client
 
-  const { data: findings, error: findingsError } = await sb
+  // Bound the scan: only matters that have ever produced a blocker-severity
+  // finding, at any disposition/outcome, are candidates at all. This is the
+  // one query that checks `severity` alone — deliberately, so a matter whose
+  // only blocker is on an older, now-superseded run is still found.
+  const { data: everBlocker, error: everBlockerError } = await sb
     .from('workflow_findings')
-    .select('id, run_id, rule_number, outcome, severity, disposition')
+    .select('run_id')
     .eq('severity', 'blocker')
-    .eq('disposition', 'open')
-    .in('outcome', ['deviation', 'absent'])
-  if (findingsError) throw new Error(`Could not load findings: ${findingsError.message}`)
-  if (!findings || findings.length === 0) return []
+  if (everBlockerError) throw new Error(`Could not load findings: ${everBlockerError.message}`)
+  if (!everBlocker || everBlocker.length === 0) return []
 
-  const runIds = [...new Set(findings.map((finding) => String(finding.run_id)))]
-  const { data: runs, error: runsError } = await sb
+  const everBlockerRunIds = [...new Set(everBlocker.map((finding) => String(finding.run_id)))]
+  const { data: everBlockerRuns, error: everBlockerRunsError } = await sb
+    .from('workflow_runs')
+    .select('id, matter_id')
+    .in('id', everBlockerRunIds)
+  if (everBlockerRunsError) throw new Error(`Could not load runs: ${everBlockerRunsError.message}`)
+
+  const candidateMatterIds = [...new Set((everBlockerRuns ?? []).map((run) => String(run.matter_id)))]
+  if (candidateMatterIds.length === 0) return []
+
+  // Every run against a candidate matter — not only the ones with a blocker
+  // finding — so the latest run of a (matter, prompt) pair is found even
+  // when it is the clean re-run that has none.
+  const { data: candidateRuns, error: candidateRunsError } = await sb
     .from('workflow_runs')
     .select('id, matter_id, prompt_version_id, started_at')
-    .in('id', runIds)
-  if (runsError) throw new Error(`Could not load runs: ${runsError.message}`)
+    .in('matter_id', candidateMatterIds)
+  if (candidateRunsError) throw new Error(`Could not load runs: ${candidateRunsError.message}`)
 
-  const matterByRun: Record<string, string> = {}
-  const promptVersionByRun: Record<string, string | null> = {}
-  const startedAtByRun: Record<string, string> = {}
-  for (const run of runs ?? []) {
-    const runId = String(run.id)
-    matterByRun[runId] = String(run.matter_id)
-    promptVersionByRun[runId] = (run.prompt_version_id as string | null) ?? null
-    startedAtByRun[runId] = str(run.started_at) ?? ''
-  }
+  // Only runs that can actually be judged: read #1 above requires a
+  // `matter_id` and a `prompt_version_id` to place a run in a (matter,
+  // prompt) group at all.
+  const runs = (candidateRuns ?? []).filter((run) => run.matter_id != null && run.prompt_version_id != null)
+  if (runs.length === 0) return []
 
-  const advisories = toBlockerAdvisories(findings, matterByRun)
-  if (advisories.length === 0) return []
-
-  // Resolve each implicated run's prompt *version* to the prompt it is a
-  // version of — `groupUnresolvedBlockersByMatter` supersedes by prompt, not
-  // by version, so this join is what makes "version 2 supersedes version 1"
-  // possible rather than "version 2 is a different prompt from version 1".
-  const versionIds = [...new Set(Object.values(promptVersionByRun).filter((id): id is string => id !== null))]
+  // Resolve each run's prompt *version* to the prompt it is a version of —
+  // grouping happens by prompt, not by version, so this join is what makes
+  // "version 2 supersedes version 1" possible rather than "version 2 is a
+  // different prompt from version 1".
+  const versionIds = [...new Set(runs.map((run) => String(run.prompt_version_id)))]
   const { data: promptVersions, error: promptVersionsError } = versionIds.length
     ? await sb.from('prompt_versions').select('id, prompt_id').in('id', versionIds)
     : { data: [] as Row[], error: null }
@@ -244,15 +282,57 @@ export async function loadUnresolvedBlockers(client: SupabaseClient<WorkbenchDat
 
   const promptByVersion = new Map((promptVersions ?? []).map((version) => [String(version.id), String(version.prompt_id)]))
 
-  const runInfo: Record<string, RunSupersedeInfo> = {}
-  for (const runId of Object.keys(matterByRun)) {
-    const versionId = promptVersionByRun[runId]
-    runInfo[runId] = {
-      promptId: versionId ? (promptByVersion.get(versionId) ?? null) : null,
-      startedAt: startedAtByRun[runId] ?? '',
-    }
+  const matterByRun: Record<string, string> = {}
+  const startedAtByRun: Record<string, string> = {}
+  const promptIdByRun: Record<string, string | null> = {}
+  for (const run of runs) {
+    const runId = String(run.id)
+    matterByRun[runId] = String(run.matter_id)
+    startedAtByRun[runId] = str(run.started_at) ?? ''
+    promptIdByRun[runId] = promptByVersion.get(String(run.prompt_version_id)) ?? null
   }
 
+  // The latest run per (matter, prompt) — step 3 of the fix. A run whose
+  // prompt cannot be resolved (a deleted or not-yet-migrated version) is its
+  // own singleton group, exactly as `groupUnresolvedBlockersByMatter` treats
+  // it below: with no prompt to group it by, it is always "the latest" of
+  // itself.
+  const latestRunByGroup = new Map<string, { runId: string; startedAt: string }>()
+  for (const run of runs) {
+    const runId = String(run.id)
+    const promptId = promptIdByRun[runId]
+    const key = promptId ? `${matterByRun[runId]}::${promptId}` : `run:${runId}`
+    const startedAt = startedAtByRun[runId] ?? ''
+    const existing = latestRunByGroup.get(key)
+    if (!existing || startedAt > existing.startedAt) {
+      latestRunByGroup.set(key, { runId, startedAt })
+    }
+  }
+  const latestRunIds = [...new Set([...latestRunByGroup.values()].map((entry) => entry.runId))]
+
+  // Step 4: blockers, but only within those latest runs. A clean latest run
+  // simply matches nothing here and so contributes no findings.
+  const { data: findings, error: findingsError } = await sb
+    .from('workflow_findings')
+    .select('id, run_id, rule_number, outcome, severity, disposition')
+    .eq('severity', 'blocker')
+    .eq('disposition', 'open')
+    .in('outcome', ['deviation', 'absent'])
+    .in('run_id', latestRunIds)
+  if (findingsError) throw new Error(`Could not load findings: ${findingsError.message}`)
+  if (!findings || findings.length === 0) return []
+
+  const advisories = toBlockerAdvisories(findings, matterByRun)
+  if (advisories.length === 0) return []
+
+  const runInfo: Record<string, RunSupersedeInfo> = {}
+  for (const runId of latestRunIds) {
+    runInfo[runId] = { promptId: promptIdByRun[runId] ?? null, startedAt: startedAtByRun[runId] ?? '' }
+  }
+
+  // Step 5: group by matter, on what survived. Every advisory here already
+  // comes from a "latest" run, so nothing is superseded at this point — this
+  // is what turns per-(matter, prompt) survivors into one entry per matter.
   const groups = groupUnresolvedBlockersByMatter(advisories, runInfo)
   if (groups.length === 0) return []
 
