@@ -45,8 +45,11 @@ describe('resolving a prompt’s declared inputs', () => {
   })
 
   it('allows only columns that exist on the tables it names', () => {
+    // `[a-z0-9_]`, not `[a-z_]`: real fiduciary-slot columns are numbered
+    // (guardian_alt1, trustee_alt1), and a pattern that rejected digits would
+    // only be testing this file's own assumption, not the schema.
     for (const path of Object.keys(SOURCE_ALLOW_LIST)) {
-      expect(path).toMatch(/^(design_sheet|matter)\.[a-z_]+$/)
+      expect(path).toMatch(/^(design_sheet|matter)\.[a-z0-9_]+$/)
     }
   })
 

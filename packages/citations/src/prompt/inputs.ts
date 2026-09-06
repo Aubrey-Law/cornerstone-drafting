@@ -31,6 +31,20 @@ export const SOURCE_ALLOW_LIST: Record<string, { table: 'design_sheet' | 'matter
   'design_sheet.marital_status': { table: 'design_sheet', column: 'marital_status' },
   'design_sheet.trust_name': { table: 'design_sheet', column: 'trust_name' },
   'design_sheet.plan_type': { table: 'design_sheet', column: 'plan_type' },
+  // Name-bearing fiduciary fields. A check asking whether a person named in
+  // free text appears "in the plan" was, until now, shown none of these — the
+  // only fields where a fiduciary appointment is actually recorded as a name
+  // a model can quote. The `*_slots` fields (see designSheet.ts) hold contact
+  // references, not names, and are declared separately once resolved.
+  'design_sheet.guardian_primary': { table: 'design_sheet', column: 'guardian_primary' },
+  'design_sheet.guardian_alt1': { table: 'design_sheet', column: 'guardian_alt1' },
+  'design_sheet.trustee_primary': { table: 'design_sheet', column: 'trustee_primary' },
+  'design_sheet.trustee_alt1': { table: 'design_sheet', column: 'trustee_alt1' },
+  'design_sheet.executor_primary': { table: 'design_sheet', column: 'executor_primary' },
+  'design_sheet.hcp_primary': { table: 'design_sheet', column: 'hcp_primary' },
+  'design_sheet.poa_primary': { table: 'design_sheet', column: 'poa_primary' },
+  'design_sheet.spouse_name': { table: 'design_sheet', column: 'spouse_name' },
+  'design_sheet.client_name': { table: 'design_sheet', column: 'client_name' },
   'matter.name': { table: 'matter', column: 'name' },
 }
 
