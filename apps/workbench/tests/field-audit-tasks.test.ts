@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   PROMPT_TASK_SOURCE,
+  emitTasks,
   planEmit,
   taskRowsFor,
   type ExistingPromptTask,
@@ -41,7 +42,7 @@ const finding = (over: Partial<FieldAuditFinding> = {}): FieldAuditFinding => ({
 
 describe('taskRowsFor', () => {
   it('templates a task from the check and appends the finding’s rationale', () => {
-    const rows = taskRowsFor('matter-1', 'run-1', [check()], [finding()])
+    const rows = taskRowsFor('matter-1', 'run-1', [check()], [finding()], 'task_set', 'Audit')
 
     expect(rows).toEqual([
       {
@@ -55,6 +56,7 @@ describe('taskRowsFor', () => {
           'The design sheet records a concern the structured decisions do not address.\n\n' +
           'The client raised a concern about the stepchildren that the residuary never answers.',
         priority: 'high',
+        checklist: [],
       },
     ])
   })
@@ -65,7 +67,14 @@ describe('taskRowsFor', () => {
    * would have no way to leave the rest of the run's tasks alone.
    */
   it('names both the run and the unit in the batch tag', () => {
-    const [row] = taskRowsFor('matter-1', 'run-1', [check({ number: '7' })], [finding({ checkNumber: '7' })])
+    const [row] = taskRowsFor(
+      'matter-1',
+      'run-1',
+      [check({ number: '7' })],
+      [finding({ checkNumber: '7' })],
+      'task_set',
+      'Audit',
+    )
     expect(row.batch_tag).toBe('prompt:run-1#7')
   })
 
@@ -75,6 +84,8 @@ describe('taskRowsFor', () => {
       'run-1',
       [check({ number: '1' }), check({ number: '2', taskTemplate: { title: 'Other', description: 'Other issue', priority: 'normal' } })],
       [finding({ checkNumber: '1' }), finding({ checkNumber: '2' })],
+      'task_set',
+      'Audit',
     )
     expect(rows).toHaveLength(2)
     expect(rows.map((r) => r.title)).toEqual(['A stated concern is not answered by the plan', 'Other'])
@@ -87,12 +98,95 @@ describe('taskRowsFor', () => {
    * title for.
    */
   it('skips a finding whose check number matches no check', () => {
-    const rows = taskRowsFor('matter-1', 'run-1', [check({ number: '1' })], [finding({ checkNumber: '9' })])
+    const rows = taskRowsFor(
+      'matter-1',
+      'run-1',
+      [check({ number: '1' })],
+      [finding({ checkNumber: '9' })],
+      'task_set',
+      'Audit',
+    )
     expect(rows).toEqual([])
   })
 
   it('produces no rows for no findings', () => {
-    expect(taskRowsFor('matter-1', 'run-1', [check()], [])).toEqual([])
+    expect(taskRowsFor('matter-1', 'run-1', [check()], [], 'task_set', 'Audit')).toEqual([])
+  })
+})
+
+const CHECK_2 = check({
+  number: '2',
+  taskTemplate: {
+    title: 'A person named in the notes is missing from the plan',
+    description: 'Someone is named in free text but appears in no structured field.',
+    priority: 'normal',
+  },
+})
+const CHECKS = [check({ number: '1' }), CHECK_2]
+
+const FINDING_1 = finding({ checkNumber: '1', rationale: 'Because the residuary never answers it.' })
+const FINDING_2 = finding({ checkNumber: '2', rationale: 'And nobody named Ruth appears anywhere.' })
+
+describe('taskRowsFor with an output target', () => {
+  it('produces no rows at all for chat', () => {
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1], 'chat', 'Audit')).toEqual([])
+  })
+
+  it('produces one single task per finding for task_set', () => {
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'task_set', 'Audit')
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.task_type)).toEqual(['single', 'single'])
+    expect(rows.map((row) => row.batch_tag)).toEqual(['prompt:run-1#1', 'prompt:run-1#2'])
+    expect(rows.every((row) => row.checklist.length === 0)).toBe(true)
+  })
+
+  it('produces exactly one checklist task carrying an item per finding', () => {
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'MA design sheet audit')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].task_type).toBe('checklist')
+    // No unit suffix: there is no single unit a run-level task belongs to.
+    expect(rows[0].batch_tag).toBe('prompt:run-1')
+    expect(rows[0].title).toBe('MA design sheet audit')
+    expect(rows[0].checklist).toEqual([
+      { text: 'A stated concern is not answered by the plan', done: false },
+      { text: 'A person named in the notes is missing from the plan', done: false },
+    ])
+    // Collapsing into items must not lose the evidence.
+    expect(rows[0].description).toContain('Because the residuary never answers it.')
+    expect(rows[0].description).toContain('And nobody named Ruth appears anywhere.')
+  })
+
+  /**
+   * The body's order, not the findings' arrival order. A prompt's checks are
+   * ordered the way their author meant, and a checklist read out of that
+   * order reads as a different document.
+   */
+  it('orders items by the prompt body, not by the findings array', () => {
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_2, FINDING_1], 'checklist', 'Audit')
+    expect(rows[0].checklist.map((item) => item.text)).toEqual([
+      'A stated concern is not answered by the plan',
+      'A person named in the notes is missing from the plan',
+    ])
+  })
+
+  it('takes the highest priority among the contributing checks', () => {
+    // Check 2 alone is 'normal'; with check 1's 'high' in the set it is 'high'.
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_2], 'checklist', 'Audit')[0].priority).toBe('normal')
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'Audit')[0].priority).toBe('high')
+  })
+
+  /**
+   * Not an empty checklist. A task with no items says work is needed and then
+   * names none, which is worse than saying nothing — and it is exactly what a
+   * run whose every finding failed verification would otherwise produce.
+   */
+  it('produces no checklist task when nothing is actionable', () => {
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [], 'checklist', 'Audit')).toEqual([])
+  })
+
+  it('skips a finding whose check the prompt version does not contain', () => {
+    const drifted = finding({ checkNumber: '99', rationale: 'Out of step.' })
+    expect(taskRowsFor('matter-1', 'run-1', CHECKS, [drifted], 'checklist', 'Audit')).toEqual([])
   })
 })
 
@@ -246,5 +340,145 @@ describe('planEmit', () => {
     const plan = planEmit([ticked], [row])
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
+  })
+})
+
+/**
+ * Enough of a PostgREST client for `emitTasks`: a `select` chain that resolves
+ * to `rows`, plus recorders for what was inserted and updated.
+ */
+function fakeClient(rows: unknown[]) {
+  const inserted: unknown[][] = []
+  const updatedIds: string[][] = []
+  const client = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { eq: async () => ({ data: rows, error: null }) }
+            },
+          }
+        },
+        async insert(values: unknown[]) {
+          inserted.push(values)
+          return { error: null }
+        },
+        update() {
+          return {
+            async in(_column: string, ids: string[]) {
+              updatedIds.push(ids)
+              return { error: null }
+            },
+          }
+        },
+      }
+    },
+  }
+  return { client: client as never, inserted, updatedIds }
+}
+
+describe('emitTasks', () => {
+  /**
+   * Not "produces no rows" — touches the database not at all. An empty
+   * `desired` set reaching `planEmit` would withdraw every open prompt task on
+   * the matter, so a `chat` prompt would silently destroy another prompt's
+   * output. The short-circuit has to be before the query, and this is what
+   * proves it is.
+   */
+  it('reads nothing and writes nothing for chat', async () => {
+    let touched = false
+    const client = {
+      from() {
+        touched = true
+        throw new Error('emitTasks must not touch the database for a chat prompt')
+      },
+    } as never
+
+    await expect(
+      emitTasks(client, {
+        matterId: 'matter-1',
+        runId: 'run-1',
+        checks: CHECKS,
+        findings: [FINDING_1],
+        outputTarget: 'chat',
+        promptTitle: 'Audit',
+      }),
+    ).resolves.toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(touched).toBe(false)
+  })
+
+  it('inserts one checklist row and withdraws the previous run’s tasks', async () => {
+    const { client, inserted, updatedIds } = fakeClient([
+      {
+        id: 'old-1',
+        source: PROMPT_TASK_SOURCE,
+        batch_tag: 'prompt:run-old#1',
+        status: 'open',
+        assignee_id: null,
+        title: 'A stated concern is not answered by the plan',
+        description: 'Older wording.',
+        priority: 'high',
+        task_type: 'single',
+        checklist: [],
+      },
+    ])
+
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+
+    expect(result).toEqual({ created: 1, kept: 0, superseded: 1 })
+    expect(inserted).toHaveLength(1)
+    expect(inserted[0]).toHaveLength(1)
+    expect(updatedIds).toEqual([['old-1']])
+  })
+
+  /** The regression, end to end through `emitTasks` rather than `planEmit`. */
+  it('is idempotent: a second pass over the same run writes nothing', async () => {
+    const first = fakeClient([])
+    await emitTasks(first.client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+    const row = (first.inserted[0] as Array<Record<string, unknown>>)[0]
+
+    // The same row read back the way PostgREST would return it.
+    const second = fakeClient([
+      {
+        id: 'list-1',
+        source: row.source,
+        batch_tag: row.batch_tag,
+        status: 'open',
+        assignee_id: null,
+        title: row.title,
+        description: row.description,
+        priority: row.priority,
+        task_type: row.task_type,
+        checklist: row.checklist,
+      },
+    ])
+
+    const result = await emitTasks(second.client, {
+      matterId: 'matter-1',
+      runId: 'run-1',
+      checks: CHECKS,
+      findings: [FINDING_1, FINDING_2],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+    })
+
+    expect(result).toEqual({ created: 0, kept: 1, superseded: 0 })
+    expect(second.inserted).toEqual([])
+    expect(second.updatedIds).toEqual([])
   })
 })

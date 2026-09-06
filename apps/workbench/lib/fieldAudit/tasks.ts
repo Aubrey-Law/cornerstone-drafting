@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
-import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import type { FieldAuditCheck, OutputTarget } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
@@ -24,6 +24,11 @@ export const PROMPT_TASK_SOURCE = 'prompt'
 export interface ChecklistItem {
   text: string
   done: boolean
+  /** `tasks.checklist` is a `Json` column in the generated types, and a plain
+   *  interface is not assignable to `Json` without this. Declared here rather
+   *  than cast away at the `insert` call, so the items keep a real type on
+   *  every path that reads them. */
+  [key: string]: string | boolean
 }
 
 export interface TaskRow {
@@ -39,51 +44,104 @@ export interface TaskRow {
   checklist: ChecklistItem[]
 }
 
+const PRIORITY_ORDER: Record<string, number> = { low: 0, normal: 1, high: 2 }
+
 /**
- * One `tasks` row per actionable finding, templated from the check that
- * produced it.
+ * The rows one run's findings become, in the shape its prompt version asked
+ * for.
  *
  * `findings` is expected to already be `actionableFindings(result)` from
- * `@aubrey-law/citations/fieldAudit/runFieldAudit` — only findings whose
- * references all verified — so nothing here re-checks that; this is purely
- * the templating step, matching a finding back to the check it came from and
- * filling in its template.
+ * `@aubrey-law/citations/fieldAudit/runFieldAudit` — the severity,
+ * disposition and verified-reference gate — so nothing here re-checks that.
+ * This is the templating step and the shaping step, nothing more.
+ *
+ * A finding whose check number names nothing in this prompt version is
+ * skipped rather than guessed at: the prompt and the result have fallen out
+ * of step with each other, and there is no template to fill in.
  */
 export function taskRowsFor(
   matterId: string,
   runId: string,
   checks: FieldAuditCheck[],
   findings: FieldAuditFinding[],
+  target: OutputTarget,
+  promptTitle: string,
 ): TaskRow[] {
+  // Nothing at all, not an empty row. See `emitTasks`, which returns before
+  // it reads anything for this target.
+  if (target === 'chat') return []
+
   const checkByNumber = new Map(checks.map((check) => [check.number, check]))
+  const bodyOrder = new Map(checks.map((check, index) => [check.number, index]))
 
-  return findings.flatMap((finding) => {
-    const check = checkByNumber.get(finding.checkNumber)
-    // A finding whose check number names nothing in this prompt version has
-    // no template to fill in — the prompt and the result have fallen out of
-    // step with each other — so it is skipped rather than guessed at.
-    if (!check) return []
+  // The body's order, not the findings' arrival order: a playbook's order is
+  // the order its author meant.
+  const matched = findings
+    .flatMap((f) => {
+      const check = checkByNumber.get(f.checkNumber)
+      return check ? [{ finding: f, check }] : []
+    })
+    .sort((a, b) => (bodyOrder.get(a.finding.checkNumber) ?? 0) - (bodyOrder.get(b.finding.checkNumber) ?? 0))
 
-    return [
-      {
-        matter_id: matterId,
-        source: PROMPT_TASK_SOURCE,
-        task_type: 'single',
-        auto: true,
-        // Names both the run and the unit: a task records which run
-        // produced it *and* which check within that run, so a retry can
-        // later replace one unit's task without touching the rest of the
-        // run's tasks. See `planEmit` below.
-        batch_tag: `prompt:${runId}#${finding.checkNumber}`,
-        title: check.taskTemplate.title,
-        // The template's own description first, then the specific rationale
-        // this finding gave — the template says what kind of problem this
-        // is, the rationale says what the sheet actually shows.
-        description: `${check.taskTemplate.description}\n\n${finding.rationale}`,
-        priority: check.taskTemplate.priority,
-      },
-    ]
-  })
+  if (target === 'task_set') {
+    return matched.map(({ finding, check }) => ({
+      matter_id: matterId,
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'single',
+      auto: true,
+      // Names both the run and the unit, so a retry can replace one unit's
+      // task without touching the rest. `planEmit` compares whole tags and
+      // does not parse this, but a person reading the row can.
+      batch_tag: `prompt:${runId}#${finding.checkNumber}`,
+      title: check.taskTemplate.title,
+      // The template says what kind of problem this is; the rationale says
+      // what the sheet actually shows.
+      description: `${check.taskTemplate.description}\n\n${finding.rationale}`,
+      priority: check.taskTemplate.priority,
+      checklist: [],
+    }))
+  }
+
+  // `checklist`: one task for the whole run.
+  //
+  // No items means no task. An empty checklist says work is needed and then
+  // names none, which is worse than saying nothing — and it is what a run
+  // whose every finding failed verification would otherwise produce.
+  if (matched.length === 0) return []
+
+  const items: ChecklistItem[] = matched.map(({ check }) => ({ text: check.taskTemplate.title, done: false }))
+
+  // The rationales go in the description rather than into the item text: an
+  // item is a line someone ticks, and six paragraphs of reasoning is not
+  // that. Nothing is lost — the evidence is right underneath.
+  const description = [
+    `${promptTitle} found ${items.length === 1 ? '1 item' : `${items.length} items`} to confirm on the design sheet.`,
+    '',
+    ...matched.map(({ finding, check }, index) => `${index + 1}. ${check.taskTemplate.title}\n${finding.rationale}`),
+  ].join('\n')
+
+  const priority = matched.reduce(
+    (highest, { check }) =>
+      (PRIORITY_ORDER[check.taskTemplate.priority] ?? 0) > (PRIORITY_ORDER[highest] ?? 0)
+        ? check.taskTemplate.priority
+        : highest,
+    'low' as string,
+  )
+
+  return [
+    {
+      matter_id: matterId,
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'checklist',
+      auto: true,
+      // No unit suffix: there is no single unit a run-level task belongs to.
+      batch_tag: `prompt:${runId}`,
+      title: promptTitle,
+      description,
+      priority,
+      checklist: items,
+    },
+  ]
 }
 
 /**
@@ -236,55 +294,48 @@ export interface EmitTasksInput {
   runId: string
   checks: FieldAuditCheck[]
   findings: FieldAuditFinding[]
-  /**
-   * Present only for a retry: the unit ids that were actually retried. When
-   * given, `emitTasks` emits tasks for (and supersedes only) those units'
-   * findings, using `tasksToSupersedeForUnits` instead of `tasksToSupersede`
-   * — a retry replaces its own earlier answer to these units, not a
-   * previous run's whole set. Absent, `emitTasks` behaves exactly as a first
-   * run always has.
-   */
-  unitIds?: string[]
+  /** From the run's pinned prompt version body — never the published one. */
+  outputTarget: OutputTarget
+  /** Titles a `checklist` task. Unused by `task_set`. */
+  promptTitle: string
 }
 
 export interface EmitTasksResult {
   created: number
+  /** Already said exactly this, so left alone — id and `created_at` intact. */
+  kept: number
   superseded: number
 }
 
 /**
- * Creates this run's tasks, then withdraws the earlier prompt-sourced tasks
- * it supersedes.
+ * Makes this matter's open prompt tasks say what this run says.
  *
- * The matter's earlier prompt tasks are read *before* this run's own rows are
- * inserted below — not after, the way a first run reading only its own
- * `PROMPT_TASK_SOURCE` tag could get away with once. A retry's new task for a
- * unit carries the *same* `batch_tag` its earlier attempt's task did — same
- * run, same unit, see `taskRowsFor` — so a query taken after the insert would
- * see both rows under an identical tag with no way to tell "the one this call
- * just created" from "the one it means to withdraw". Reading first means the
- * snapshot `tasksToSupersede`/`tasksToSupersedeForUnits` judge is always
- * exactly what existed before this call, never what it just wrote.
+ * Reads the existing tasks *before* inserting anything, which is what lets
+ * `planEmit` compare against a snapshot that cannot contain rows this call
+ * just wrote. The withdrawal happens only after the insert succeeds: if the
+ * insert throws, nothing that was open a moment ago has been closed out for a
+ * run that never produced its replacements.
  *
- * The archive itself still only happens after the insert succeeds: if the
- * insert fails, this function has already thrown before it ever reaches the
- * update below, so nothing that was still open a moment ago is closed out for
- * a run that never actually produced its replacements. Reading the snapshot
- * early changes only when the harmless part (a `select`) happens, not that
- * guarantee.
+ * Safe to call twice. `planEmit` is idempotent over an unchanged run, so a
+ * retried run's second pass through the tick creates nothing and withdraws
+ * nothing — which is exactly what it did not do before `planEmit` existed.
  */
 export async function emitTasks(
   client: SupabaseClient<WorkbenchDatabase>,
   input: EmitTasksInput,
 ): Promise<EmitTasksResult> {
+  // `chat` produces no objects, so it reads nothing and writes nothing. This
+  // returns before the query rather than after it on purpose: an empty
+  // `desired` would make `planEmit` withdraw every open prompt task on the
+  // matter, which is not "produces nothing", it is "destroys someone else's
+  // something".
+  if (input.outputTarget === 'chat') return { created: 0, kept: 0, superseded: 0 }
+
   const sb = client
 
-  // Every earlier prompt task on this matter, regardless of status or who
-  // holds it — `tasksToSupersede`/`tasksToSupersedeForUnits` are the only
-  // places that decide which of them this call is actually allowed to close.
   const { data: existingRows, error: existingError } = await sb
     .from('tasks')
-    .select('id, source, batch_tag, status, assignee_id')
+    .select('id, source, batch_tag, status, assignee_id, title, description, priority, task_type, checklist')
     .eq('matter_id', input.matterId)
     .eq('source', PROMPT_TASK_SOURCE)
   if (existingError) {
@@ -297,28 +348,30 @@ export async function emitTasks(
     batchTag: (row.batch_tag as string | null) ?? null,
     status: String(row.status),
     assigneeId: (row.assignee_id as string | null) ?? null,
+    title: String(row.title ?? ''),
+    description: String(row.description ?? ''),
+    priority: String(row.priority ?? ''),
+    taskType: String(row.task_type ?? ''),
+    checklist: Array.isArray(row.checklist) ? (row.checklist as ChecklistItem[]) : [],
   }))
 
-  // A retry only ever knows about the units it actually retried — the
-  // findings for units it did not touch belong to that unit's own earlier
-  // task, which this call must leave alone.
-  const findings = input.unitIds
-    ? input.findings.filter((finding) => input.unitIds!.includes(finding.checkNumber))
-    : input.findings
+  const desired = taskRowsFor(
+    input.matterId,
+    input.runId,
+    input.checks,
+    input.findings,
+    input.outputTarget,
+    input.promptTitle,
+  )
 
-  const rows = taskRowsFor(input.matterId, input.runId, input.checks, findings)
-  let created = 0
-  if (rows.length > 0) {
-    const { error: insertError } = await sb.from('tasks').insert(rows)
+  const plan = planEmit(existing, desired)
+
+  if (plan.insert.length > 0) {
+    const { error: insertError } = await sb.from('tasks').insert(plan.insert)
     if (insertError) throw new Error(`Could not create tasks for this run: ${insertError.message}`)
-    created = rows.length
   }
 
-  const superseded = input.unitIds
-    ? tasksToSupersedeForUnits(existing, input.runId, input.unitIds)
-    : tasksToSupersede(existing, input.runId)
-
-  if (superseded.length > 0) {
+  if (plan.supersede.length > 0) {
     const { error: updateError } = await sb
       .from('tasks')
       .update({
@@ -330,9 +383,9 @@ export async function emitTasks(
         skipped_at: new Date().toISOString(),
         closeout_reason: 'prompt_superseded',
       })
-      .in('id', superseded)
+      .in('id', plan.supersede)
     if (updateError) throw new Error(`Could not withdraw superseded tasks: ${updateError.message}`)
   }
 
-  return { created, superseded: superseded.length }
+  return { created: plan.insert.length, kept: plan.keep.length, superseded: plan.supersede.length }
 }
