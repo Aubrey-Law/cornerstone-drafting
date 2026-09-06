@@ -6,18 +6,11 @@ import { isCitable } from '@/lib/review/order'
 import { formatDate } from '@/lib/funding/format'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { statusFromSteps } from '@/lib/runs/steps'
+import { RunProgressRefresh } from '@/app/runs/RunProgressRefresh'
 import { StoredFindings } from './StoredFindings'
 
 export const metadata = { title: 'Review · Aubrey Law Workbench' }
-
-/**
- * See the matching comment in `app/prompts/[runId]/page.tsx`: a run that is
- * still `running` needs this page to keep catching up with the tick route
- * working it in the background, and revalidating on a timer is the smaller
- * change than a client polling loop, with no websocket elsewhere here to be
- * consistent with.
- */
-export const revalidate = 5
 
 export default async function StoredRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const user = await getSessionUser()
@@ -34,6 +27,7 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <header className="space-y-1 border-b border-border px-6 py-4">
         <Link href="/review" className="text-xs text-muted-foreground underline underline-offset-4">
           Review

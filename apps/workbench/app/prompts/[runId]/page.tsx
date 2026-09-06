@@ -6,20 +6,11 @@ import { loadFieldAuditFindings } from '@/lib/fieldAudit/history'
 import { formatDate } from '@/lib/funding/format'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { statusFromSteps } from '@/lib/runs/steps'
+import { RunProgressRefresh } from '@/app/runs/RunProgressRefresh'
 import { FieldAuditRunView } from './FieldAuditRunView'
 
 export const metadata = { title: 'Field audit · Aubrey Law Workbench' }
-
-/**
- * Refreshes this page on the next request at least every 5 seconds, rather
- * than only when Next would otherwise revalidate it. A run that is still
- * `running` needs the page to keep catching up with it — the tick route
- * (`app/api/cron/tick/route.ts`) works it in the background, on its own
- * schedule, with nothing on this page to push an update. A client polling
- * loop would do the same job; this is the smaller change, and there is no
- * websocket elsewhere in this codebase for a loop to be consistent with.
- */
-export const revalidate = 5
 
 /**
  * A field-audit run, read back.
@@ -44,6 +35,7 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <header className="space-y-1 border-b border-border px-6 py-4">
         <Link href="/prompts" className="text-xs text-muted-foreground underline underline-offset-4">
           Run a prompt
