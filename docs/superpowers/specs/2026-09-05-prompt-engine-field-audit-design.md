@@ -144,7 +144,26 @@ the share of references that survive verification is the measure this design is 
 by, and the response to a poor one is to change the prompting, **never** to loosen the
 verifier.
 
-**Only verified findings become tasks.**
+**Only verified evidence becomes a task — revised 2026-09-06.**
+
+As first built, a finding needed *every* reference verified. Three runs of the same six
+checks against the same matter verified 19, 18 and 17 of 19 references, the outcomes
+identical each time and the drift always on the jsonb array fields, where a model phrases a
+claim about `children` or `assets` differently run to run.
+
+Under that rule a blocker — "a person named in the notes is missing from the plan" — had
+three of its four references check out and produced no task at all. A finding supported
+three ways out of four is not an unsupported claim, and dropping it silently is the worse
+error, because the attorney never learns it was found.
+
+The rule is now **at least one verified reference**. The owner decided this on 2026-09-06,
+after the rate had been measured rather than guessed at.
+
+The verifier did not move. An unverified claim is still refused as evidence, still stored
+with what the field actually held, and still counted in the rate this design is judged by;
+the unverified references travel with the finding and the run view shows each one's status,
+so what a task rests on stays visible. What changed is only how much checked support a
+finding needs before it is worth a person's time.
 
 ### A limit found while building it, 2026-09-05
 
