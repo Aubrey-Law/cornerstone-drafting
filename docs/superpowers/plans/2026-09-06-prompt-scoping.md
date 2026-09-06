@@ -340,8 +340,17 @@ than the matter, and that a candidate whose prompt is unknown stands.
 cd apps/workbench && npx vitest run tests/field-audit-tasks.test.ts
 ```
 
-Expected: PASS. `emitTasks` in the same file will not compile yet — it still calls `planEmit`
-with the old shape and builds `ExistingPromptTask` without `promptId`. That is Task 3.
+Expected: the `planEmit` and `taskRowsFor` suites PASS, and **two `emitTasks` tests fail** —
+`inserts one checklist row and withdraws the previous run's tasks` and `creates nothing and
+withdraws nothing from an uncitable finding`. `emitTasks` in the same file both fails to
+compile *and* misbehaves at runtime: it still builds `ExistingPromptTask` without a
+`promptId` (so no candidate matches the scope) and passes a bare `RunAnswers` (so
+`run.answers` is `undefined`). Both are Task 3's to fix. Do not stub a `promptId` in
+`emitTasks` to go green — any stub either fails to typecheck or fabricates a scope.
+
+**This leaves the branch red between Task 2 and Task 3**, in tests as well as the typecheck.
+That is the plan's intended slicing, but it means the branch must not be pushed or merged
+between them.
 
 - [ ] **Step 5: Prove the scope bites**
 
