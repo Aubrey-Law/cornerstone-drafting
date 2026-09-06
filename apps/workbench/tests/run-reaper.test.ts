@@ -100,3 +100,36 @@ describe('applying the decision to the database', () => {
     expect((client.tableRows('workflow_runs')[0] as { status: string }).status).toBe('running')
   })
 })
+
+describe('a run whose worker died after finishing every step', () => {
+  it('is settled from its steps rather than handed back with nothing to do', async () => {
+    // Found by running the reaper against the real database: a run with all
+    // six steps succeeded was requeued, because it was `running` and stale but
+    // had no `running` steps to fail. It self-heals a tick later, and until
+    // then a finished run reports as `queued`.
+    const client = makeFakeClient({
+      workflow_runs: [{
+        id: 'run-1', status: 'running', reclaims: 0,
+        last_tick_at: new Date(0).toISOString(),
+      }],
+      workflow_run_steps: [
+        { id: 's1', run_id: 'run-1', unit_id: '1', status: 'succeeded', attempts: 1, sequence: 0 },
+        { id: 's2', run_id: 'run-1', unit_id: '2', status: 'succeeded', attempts: 1, sequence: 1 },
+      ],
+    })
+
+    await reapAbandonedRuns(client as never, () => STALE_AFTER_MS + 1)
+
+    const [run] = client.tableRows('workflow_runs') as Array<{ status: string; reclaims: number; finding_count: number }>
+    expect(run.status).toBe('completed')
+    expect(run.reclaims).toBe(0)
+    expect(run.finding_count).toBe(2)
+  })
+
+  it('still requeues a run that has work left', () => {
+    // The distinction that makes the case above safe: pending work is what
+    // requeueing is for.
+    expect(reapDecision({ status: 'running', lastTickAt: 0, reclaims: 0 }, STALE_AFTER_MS + 1))
+      .toEqual({ reap: true, requeue: true })
+  })
+})

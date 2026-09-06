@@ -1,3 +1,4 @@
+import { statusFromSteps, type RunStep } from './steps'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 
@@ -100,7 +101,37 @@ export async function reapAbandonedRuns(
       .eq('status', 'running')
     if (stepsError) throw new Error(`Could not fail the abandoned run's steps: ${stepsError.message}`)
 
-    if (decision.requeue) {
+    // A worker can finish every step and die before finalising the run. There
+    // is then nothing to requeue — handing it back would claim it, find no
+    // pending steps, and finalise it a tick later, reporting a finished run as
+    // `queued` in between. Finalise it here instead, from what its steps
+    // already say.
+    const { data: remaining, error: remainingError } = await client
+      .from('workflow_run_steps')
+      .select('unit_id, status, attempts, sequence')
+      .eq('run_id', runId)
+    if (remainingError) throw new Error(`Could not read the abandoned run's steps: ${remainingError.message}`)
+
+    const steps = ((remaining ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      unitId: String(row.unit_id),
+      status: row.status as RunStep['status'],
+      attempts: Number(row.attempts ?? 0),
+      sequence: Number(row.sequence ?? 0),
+    }))
+    const nothingLeft = steps.length > 0 && !steps.some((step) => step.status === 'pending')
+
+    if (nothingLeft) {
+      const { error: settleError } = await client
+        .from('workflow_runs')
+        .update({
+          status: statusFromSteps(steps),
+          finding_count: steps.filter((step) => step.status === 'succeeded').length,
+          failed_count: steps.filter((step) => step.status === 'failed').length,
+          finished_at: finishedAt,
+        })
+        .eq('id', runId)
+      if (settleError) throw new Error(`Could not settle the abandoned run: ${settleError.message}`)
+    } else if (decision.requeue) {
       const { error: requeueError } = await client
         .from('workflow_runs')
         .update({ status: 'queued', reclaims: reclaims + 1 })
