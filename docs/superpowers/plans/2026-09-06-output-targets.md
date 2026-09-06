@@ -153,10 +153,15 @@ Run:
 cd apps/workbench && npx vitest run tests/prompt-body.test.ts
 ```
 
-Expected: the `defaults to task_set` and `accepts %s` cases FAIL — `parsed.outputTarget` is
-`undefined`, and TypeScript reports that `outputTarget` does not exist on the field-audit
-type. The `refuses` cases pass already, for the wrong reason (zod strips unknown keys rather
-than rejecting them), which is exactly why they are not the only tests here.
+Expected: **all** the new cases FAIL. The `defaults to task_set` and `accepts %s` cases fail
+because `parsed.outputTarget` is `undefined`, and TypeScript reports that `outputTarget`
+does not exist on the field-audit type.
+
+The `refuses` cases fail too, and it is worth being precise about why, because the obvious
+guess is backwards: zod **strips** an unknown key rather than rejecting it, so before the
+schema knows about `outputTarget`, `safeParse` *succeeds* and `expect(success).toBe(false)`
+fails. They are real red-to-green tests, not cases that pass for the wrong reason. If you
+see them pass at this step, something is wrong — do not weaken the assertions to match.
 
 - [ ] **Step 4: Add the field to the schema**
 
