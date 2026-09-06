@@ -9,6 +9,7 @@ import {
 } from '@/lib/fieldAudit/tasks'
 import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
+import { runAnswers, type RunAnswers } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 
 const check = (over: Partial<FieldAuditCheck> = {}): FieldAuditCheck => ({
   number: '1',
@@ -216,6 +217,12 @@ const existingTask = (over: Partial<ExistingPromptTask> = {}): ExistingPromptTas
 })
 
 describe('planEmit', () => {
+  /** A run that answered everything, so retirement is permitted and the
+   *  existing guarantees below are unchanged by this slice. */
+  function authoritative(): RunAnswers {
+    return { byCheck: { '1': 'actionable' }, authoritative: true }
+  }
+
   /** A row this run wants to exist, matching `existingTask`'s content. */
   function desiredRow(overrides: Partial<TaskRow> = {}): TaskRow {
     return {
@@ -238,7 +245,7 @@ describe('planEmit', () => {
   }
 
   it('inserts everything and withdraws a previous run’s set on a first run', () => {
-    const plan = planEmit([open({ id: 'old-1', batchTag: 'prompt:run-old#1' })], [desiredRow()])
+    const plan = planEmit([open({ id: 'old-1', batchTag: 'prompt:run-old#1' })], [desiredRow()], authoritative())
     expect(plan.insert).toHaveLength(1)
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['old-1'])
@@ -252,7 +259,7 @@ describe('planEmit', () => {
    * database stops it: `tasks` has no unique index on `batch_tag`.
    */
   it('inserts nothing and withdraws nothing when the run already said this', () => {
-    const plan = planEmit([open()], [desiredRow()])
+    const plan = planEmit([open()], [desiredRow()], authoritative())
     expect(plan.insert).toEqual([])
     expect(plan.keep).toEqual(['task-1'])
     expect(plan.supersede).toEqual([])
@@ -272,6 +279,7 @@ describe('planEmit', () => {
           description: 'Now it says something else.',
         }),
       ],
+      authoritative(),
     )
     // Unit 1 is untouched: same id, same created_at, no churn.
     expect(plan.keep).toEqual(['unit-1'])
@@ -280,7 +288,7 @@ describe('planEmit', () => {
   })
 
   it('withdraws a task for a finding this run no longer makes', () => {
-    const plan = planEmit([open({ id: 'gone', batchTag: 'prompt:run-new#9' })], [])
+    const plan = planEmit([open({ id: 'gone', batchTag: 'prompt:run-new#9' })], [], authoritative())
     expect(plan.insert).toEqual([])
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['gone'])
@@ -288,7 +296,7 @@ describe('planEmit', () => {
 
   /** A duplicate pair left by the pre-fix bug has only one twin to match. */
   it('self-heals a duplicate left by the earlier bug', () => {
-    const plan = planEmit([open({ id: 'first' }), open({ id: 'second' })], [desiredRow()])
+    const plan = planEmit([open({ id: 'first' }), open({ id: 'second' })], [desiredRow()], authoritative())
     expect(plan.insert).toEqual([])
     expect(plan.keep).toEqual(['first'])
     expect(plan.supersede).toEqual(['second'])
@@ -303,6 +311,7 @@ describe('planEmit', () => {
         existingTask({ id: 'in-progress', batchTag: 'prompt:run-old#3', status: 'in_progress' }),
       ],
       [desiredRow()],
+      authoritative(),
     )
     expect(plan.supersede).toEqual([])
     expect(plan.insert).toHaveLength(1)
@@ -321,7 +330,7 @@ describe('planEmit', () => {
       taskType: 'checklist',
       checklist: [{ text: 'One', done: false }],
     })
-    expect(planEmit([same], [row])).toEqual({ insert: [], keep: ['list'], supersede: [] })
+    expect(planEmit([same], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
 
     const changed = existingTask({
       id: 'list',
@@ -329,7 +338,7 @@ describe('planEmit', () => {
       taskType: 'checklist',
       checklist: [{ text: 'Two', done: false }],
     })
-    const plan = planEmit([changed], [row])
+    const plan = planEmit([changed], [row], authoritative())
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
@@ -358,7 +367,7 @@ describe('planEmit', () => {
         { text: 'Two', done: false },
       ],
     })
-    expect(planEmit([ticked], [row])).toEqual({ insert: [], keep: ['list'], supersede: [] })
+    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
   })
 
   /** But a checklist whose *items* changed is a different checklist. */
@@ -374,7 +383,7 @@ describe('planEmit', () => {
       taskType: 'checklist',
       checklist: [{ text: 'Something else', done: true }],
     })
-    const plan = planEmit([ticked], [row])
+    const plan = planEmit([ticked], [row], authoritative())
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
@@ -384,7 +393,7 @@ describe('planEmit', () => {
    *  contributing checks — which is the kind of field a later refactor gets
    *  wrong without anything failing. */
   it('replaces a task whose priority alone changed', () => {
-    const plan = planEmit([open({ priority: 'normal' })], [desiredRow()])
+    const plan = planEmit([open({ priority: 'normal' })], [desiredRow()], authoritative())
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['task-1'])
     expect(plan.insert).toHaveLength(1)
@@ -394,10 +403,168 @@ describe('planEmit', () => {
    *  desired rows must keep it once and insert the second, which is where an
    *  off-by-one in `matched` would show. */
   it('claims each twin at most once when two desired rows are identical', () => {
-    const plan = planEmit([open({ id: 'only' })], [desiredRow(), desiredRow()])
+    const plan = planEmit([open({ id: 'only' })], [desiredRow(), desiredRow()], authoritative())
     expect(plan.keep).toEqual(['only'])
     expect(plan.insert).toHaveLength(1)
     expect(plan.supersede).toEqual([])
+  })
+})
+
+describe('planEmit retirement scoping', () => {
+  function checklistTask(over: Partial<ExistingPromptTask> = {}): ExistingPromptTask {
+    return existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-old',
+      taskType: 'checklist',
+      title: 'MA design sheet audit',
+      description: 'One item to confirm.',
+      checklist: [{ text: 'A stated concern is not answered by the plan', done: false }],
+      ...over,
+    })
+  }
+
+  function checklistRow(items: string[], over: Partial<TaskRow> = {}): TaskRow {
+    return {
+      matter_id: 'matter-1',
+      source: PROMPT_TASK_SOURCE,
+      task_type: 'checklist',
+      auto: true,
+      batch_tag: 'prompt:run-new',
+      title: 'MA design sheet audit',
+      description: 'Some items to confirm.',
+      priority: 'high',
+      checklist: items.map((text) => ({ text, done: false })),
+      ...over,
+    }
+  }
+
+  /**
+   * The measured failure, replayed. Run `a2a4f300` produced a blocker with
+   * four verified references and one checklist task; run `1c22acb5` reached
+   * the same conclusion with zero references, so the gate refused it — and the
+   * withdrawal step archived the first task anyway, leaving the matter with no
+   * blocker at all. The task must now stand.
+   */
+  it('does not retire a task when the run could not cite the problem', () => {
+    const plan = planEmit([checklistTask()], [], runAnswers({
+      checkNumbers: ['1', '2'],
+      findings: [],
+      failedCheckNumbers: [],
+    }))
+    expect(plan.insert).toEqual([])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual([])
+  })
+
+  /** The reverse: a run that answered everything and found nothing wrong. */
+  it('retires the task when the run cleared every check', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'cleared', '2': 'cleared' }, authoritative: true }
+    const plan = planEmit([checklistTask()], [], answers)
+    expect(plan.supersede).toEqual(['list'])
+  })
+
+  /**
+   * A run still reporting the same check says everything the old task said —
+   * item text is the check's template title, fixed by the prompt version — so
+   * the old one goes rather than standing beside the new one. Without this the
+   * conservative rule would leave two checklists on the matter.
+   */
+  it('retires an older checklist whose items the new one repeats, even when inconclusive elsewhere', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'actionable', '3': 'inconclusive' }, authoritative: false }
+    const plan = planEmit(
+      [checklistTask()],
+      [checklistRow(['A stated concern is not answered by the plan'])],
+      answers,
+    )
+    expect(plan.supersede).toEqual(['list'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  it('keeps an older checklist that says something the new one does not', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'inconclusive' }, authoritative: false }
+    const plan = planEmit(
+      [checklistTask({ checklist: [
+        { text: 'A stated concern is not answered by the plan', done: false },
+        { text: 'A person named in the notes is missing from the plan', done: false },
+      ] })],
+      [checklistRow(['A stated concern is not answered by the plan'])],
+      answers,
+    )
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /**
+   * Clause 0. A retry rewrites its own answer under the same tag — it is not
+   * retiring anything on the strength of silence — and this is the only thing
+   * stopping it inserting a second task beside the one it replaces while the
+   * run is inconclusive elsewhere.
+   */
+  it('replaces its own task by exact tag even when not authoritative', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'actionable', '2': 'inconclusive' }, authoritative: false }
+    const plan = planEmit(
+      [checklistTask({ id: 'mine', batchTag: 'prompt:run-new', description: 'Older wording.' })],
+      [checklistRow(['A stated concern is not answered by the plan'])],
+      answers,
+    )
+    expect(plan.supersede).toEqual(['mine'])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.keep).toEqual([])
+  })
+
+  it('replaces its own unit-tagged task by exact tag even when not authoritative', () => {
+    const answers: RunAnswers = { byCheck: { '1': 'actionable' }, authoritative: false }
+    const mine = existingTask({ id: 'unit', batchTag: 'prompt:run-new#1', description: 'Older wording.' })
+    const row: TaskRow = {
+      matter_id: 'matter-1', source: PROMPT_TASK_SOURCE, task_type: 'single', auto: true,
+      batch_tag: 'prompt:run-new#1', title: 'A stated concern is not answered by the plan',
+      description: 'Newer wording.', priority: 'high', checklist: [],
+    }
+    const plan = planEmit([mine], [row], answers)
+    expect(plan.supersede).toEqual(['unit'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  describe('unit-suffixed tags', () => {
+    const oldUnit = () => existingTask({ id: 'u7', batchTag: 'prompt:run-old#7' })
+
+    it('retires it when this run cleared that check', () => {
+      const answers: RunAnswers = { byCheck: { '7': 'cleared' }, authoritative: false }
+      expect(planEmit([oldUnit()], [], answers).supersede).toEqual(['u7'])
+    })
+
+    it('keeps it when this run was inconclusive on that check', () => {
+      const answers: RunAnswers = { byCheck: { '7': 'inconclusive' }, authoritative: false }
+      expect(planEmit([oldUnit()], [], answers).supersede).toEqual([])
+    })
+
+    it('retires it when this run re-reports the same check under a new run id', () => {
+      const answers: RunAnswers = { byCheck: { '7': 'actionable' }, authoritative: false }
+      const row: TaskRow = {
+        matter_id: 'matter-1', source: PROMPT_TASK_SOURCE, task_type: 'single', auto: true,
+        batch_tag: 'prompt:run-new#7', title: 'Something', description: 'Anything',
+        priority: 'high', checklist: [],
+      }
+      expect(planEmit([oldUnit()], [row], answers).supersede).toEqual(['u7'])
+    })
+  })
+
+  /**
+   * A tag with no unit suffix and no items carries no per-check signal at all,
+   * so it stands unless the run is a complete answer or replacing it outright.
+   * Fails safe rather than falling back to the old behaviour.
+   */
+  it('keeps a suffix-less task with no items unless the run is authoritative', () => {
+    const legacy = existingTask({ id: 'legacy', batchTag: 'prompt:run-old', checklist: [] })
+    const answers: RunAnswers = { byCheck: { '1': 'inconclusive' }, authoritative: false }
+    expect(planEmit([legacy], [], answers).supersede).toEqual([])
+    expect(planEmit([legacy], [], { byCheck: { '1': 'cleared' }, authoritative: true }).supersede).toEqual(['legacy'])
+  })
+
+  /** A tag this module did not write is never this run's to retire. */
+  it('never retires a task whose tag it cannot parse', () => {
+    const foreign = existingTask({ id: 'foreign', batchTag: 'something-else' })
+    expect(planEmit([foreign], [], { byCheck: {}, authoritative: true }).supersede).toEqual([])
   })
 })
 

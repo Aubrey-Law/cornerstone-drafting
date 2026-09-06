@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { FieldAuditCheck, OutputTarget } from '@aubrey-law/citations/prompt/body'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
+import type { RunAnswers } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 
 /**
  * The `tasks.source` value a field-audit run's own tasks carry.
@@ -96,8 +97,9 @@ export function taskRowsFor(
       task_type: 'single',
       auto: true,
       // Names both the run and the unit, so a retry can replace one unit's
-      // task without touching the rest. `planEmit` compares whole tags and
-      // does not parse this, but a person reading the row can.
+      // task without touching the rest. `planEmit` matches on whole tags, and
+      // takes this one apart only to ask whether the run answered that check
+      // before retiring it — see `parseBatchTag`.
       batch_tag: `prompt:${runId}#${finding.checkNumber}`,
       title: check.taskTemplate.title,
       // The template says what kind of problem this is; the rationale says
@@ -226,6 +228,76 @@ function contentKey(parts: {
 }
 
 /**
+ * Pulls the run id and, if present, the unit id out of a `batch_tag`.
+ *
+ * Deleted when `planEmit` replaced the two superseding functions, because
+ * comparing whole tags made both shapes work with no second code path.
+ * Reinstated because the withdrawal rule genuinely needs the unit: "did this
+ * run clear check 7" cannot be asked of a tag that has not been taken apart.
+ * Returns `null` for a tag that fits neither shape — such a tag was not
+ * written by this module, and is never this run's to retire.
+ */
+function parseBatchTag(tag: string | null): { runId: string; unitId: string | null } | null {
+  if (!tag) return null
+  const match = /^prompt:([^#]+)(?:#(.+))?$/.exec(tag)
+  if (!match) return null
+  return { runId: match[1], unitId: match[2] ?? null }
+}
+
+/**
+ * Whether this run is entitled to withdraw one earlier task.
+ *
+ * The rule the design note states, in order. Everything not covered here
+ * stands, which is the change: a run used to retire anything it did not
+ * re-state, and a finding refused by the verification gate looks exactly like
+ * a check the run cleared. One is evidence of absence, the other absence of
+ * evidence, and only the first is grounds for closing someone's work.
+ */
+function mayRetire(
+  task: ExistingPromptTask,
+  answers: RunAnswers,
+  desiredTags: Set<string>,
+  desiredUnits: Set<string>,
+  desiredItemText: Set<string>,
+): boolean {
+  // 0. Replacement. A desired row carries this exact tag, so the run is
+  //    rewriting its own answer rather than retiring one on the strength of
+  //    silence. First because it is what stops a retry inserting a second task
+  //    beside the one it means to replace.
+  if (task.batchTag !== null && desiredTags.has(task.batchTag)) return true
+
+  // A tag of neither shape was not written by this module. Asked before
+  // `authoritative`, not after: a complete answer is a complete answer about
+  // *this prompt version's checks*, which says nothing whatever about a row
+  // some other tool tagged. Nothing this module emits can reach here — both
+  // shapes parse — so this only ever spares a stranger's task.
+  const parsed = parseBatchTag(task.batchTag)
+  if (parsed === null) return false
+
+  // A complete answer may retire prior work.
+  if (answers.authoritative) return true
+
+  if (parsed.unitId !== null) {
+    // This run either says that check is fine, or is re-reporting it — in
+    // which case the new row replaces the old one in substance even though
+    // the run ids differ.
+    return answers.byCheck[parsed.unitId] === 'cleared' || desiredUnits.has(parsed.unitId)
+  }
+
+  // A run-level (checklist) tag names no single check, so its *items* are the
+  // only per-check signal available: if this run's items repeat all of them,
+  // the new task already says everything the old one said. Item text is the
+  // check's `taskTemplate.title`, fixed by the prompt version, so it is stable
+  // across runs and this comparison means something.
+  //
+  // No items means no signal at all — a suffix-less tag from before the unit
+  // suffix existed, or a task built some other way — so it stands rather than
+  // falling back to the old behaviour.
+  if (task.checklist.length === 0) return false
+  return task.checklist.every((item) => desiredItemText.has(item.text))
+}
+
+/**
  * What a run should create, keep and withdraw — one question, replacing the
  * two functions this used to be.
  *
@@ -253,8 +325,8 @@ function contentKey(parts: {
  * and re-created; a unit the retry never touched matches exactly, so it keeps
  * its id and its `created_at`. Both `batch_tag` shapes —
  * `prompt:<runId>#<unitId>` for a task set and `prompt:<runId>` for a
- * checklist — fall out of this with neither being special-cased, which is why
- * `parseBatchTag` is gone too.
+ * checklist — fall out of the content comparison with neither being
+ * special-cased. Only the withdrawal rule below tells them apart.
  *
  * Narrow on the same three axes it always was, for the same reasons:
  *
@@ -273,8 +345,18 @@ function contentKey(parts: {
  * because one prompt emits tasks and the review prompt does not — and fixing
  * it means putting the prompt into the tag, which is its own decision. See
  * the design note.
+ *
+ * What it may **not** do, which is the point of the `answers` argument: retire
+ * a task on the strength of having said nothing about it. A finding the
+ * verification gate refused produces no row, exactly like a check the run
+ * cleared — and until that distinction existed, an uncitable blocker retired a
+ * cited one. See `mayRetire` above and the design note.
  */
-export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[]): EmitPlan {
+export function planEmit(
+  existing: ExistingPromptTask[],
+  desired: TaskRow[],
+  answers: RunAnswers,
+): EmitPlan {
   const candidates = existing.filter(
     (task) => task.source === PROMPT_TASK_SOURCE && task.status === 'open' && task.assigneeId === null,
   )
@@ -319,7 +401,19 @@ export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[]): Em
     }
   }
 
-  const supersede = candidates.filter((task) => !matched.has(task.id)).map((task) => task.id)
+  const desiredTags = new Set(desired.map((row) => row.batch_tag))
+  const desiredUnits = new Set(
+    desired.flatMap((row) => {
+      const parsed = parseBatchTag(row.batch_tag)
+      return parsed?.unitId ? [parsed.unitId] : []
+    }),
+  )
+  const desiredItemText = new Set(desired.flatMap((row) => row.checklist.map((item) => item.text)))
+
+  const supersede = candidates
+    .filter((task) => !matched.has(task.id))
+    .filter((task) => mayRetire(task, answers, desiredTags, desiredUnits, desiredItemText))
+    .map((task) => task.id)
   return { insert, keep, supersede }
 }
 
@@ -398,7 +492,12 @@ export async function emitTasks(
     input.promptTitle,
   )
 
-  const plan = planEmit(existing, desired)
+  // Placeholder, and deliberately not a guess at the run's real answer: it
+  // reproduces exactly what this call site did before this slice, so nothing
+  // here changes yet. Task 3 threads the run's actual `runAnswers(...)`
+  // through from the tick, which is where the check numbers and the failed
+  // units are known.
+  const plan = planEmit(existing, desired, { byCheck: {}, authoritative: true })
 
   if (plan.insert.length > 0) {
     const { error: insertError } = await sb.from('tasks').insert(plan.insert)
