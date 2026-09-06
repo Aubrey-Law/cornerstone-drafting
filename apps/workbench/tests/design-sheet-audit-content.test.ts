@@ -217,3 +217,87 @@ describe('the version-3 seed migration for the design-sheet audit', () => {
     expect(promptBodySchema.safeParse(JSON.parse(bodyText())).success).toBe(true)
   })
 })
+
+/**
+ * Version 4 changes what a run *produces*, not what it checks.
+ *
+ * `outputTarget` lives in the body rather than on `prompts` because a run
+ * records only its `prompt_version_id`: as a mutable column, an old run would
+ * be indistinguishable from one that produced something else. So a change of
+ * target is a new version, and the checks themselves are untouched — which is
+ * the strongest thing this block can assert, and it does.
+ */
+describe('the version-4 seed migration for the design-sheet audit', () => {
+  const V4 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261104000000_design_sheet_audit_v4.sql'),
+    'utf8',
+  )
+  const bodyText = () => V4.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+
+  it('publishes version 4, and repoints rather than doing nothing', () => {
+    // A `do nothing` here would leave the publication on version 3 — the
+    // exact failure the v2 migration already had to correct.
+    expect(V4).toMatch(/version_number\s*\)?\s*\n?.*4,|,\s*\n\s*4,/)
+    expect(V4).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('makes the new version insert idempotent', () => {
+    expect(V4).toMatch(/on conflict \(prompt_id, version_number\) do nothing/)
+  })
+
+  it('adds a version of the same prompt, found by slug rather than a pasted id', () => {
+    // An earlier migration in this series pasted an id lifted by pattern and
+    // got the *version's* id instead of the prompt's. Selecting by the thing
+    // that is stable removes the question.
+    expect(V4).toMatch(/where p\.slug = 'ma-design-sheet-audit'/)
+    expect(V4).not.toMatch(/insert into public\.prompts\s*\(/)
+  })
+
+  it('says checklist', () => {
+    const parsed = promptBodySchema.parse(JSON.parse(bodyText()))
+    if (parsed.kind !== 'field_audit') throw new Error('expected a field_audit body')
+    expect(parsed.outputTarget).toBe('checklist')
+  })
+
+  /**
+   * The whole claim of this version: it changes the target and nothing else.
+   * Comparing the parsed checks against version 3's proves the body was
+   * derived rather than retyped — a hand-edited copy would drift a statement
+   * or a `reads` entry and nobody would notice until a run behaved
+   * differently for a reason nobody chose.
+   */
+  it('leaves every check exactly as version 3 had it', () => {
+    const v3 = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261102000000_design_sheet_audit_v3.sql'),
+      'utf8',
+    )
+    const checksOf = (sql: string) =>
+      JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")).checks
+    expect(checksOf(V4)).toEqual(checksOf(v3))
+  })
+
+  it('leaves version 3’s own inputs alone too', () => {
+    const v3 = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261102000000_design_sheet_audit_v3.sql'),
+      'utf8',
+    )
+    const inputsOf = (sql: string) =>
+      JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")).inputs
+    expect(inputsOf(V4)).toEqual(inputsOf(v3))
+  })
+
+  it('declares no source outside the allow-list', () => {
+    const parsed = promptBodySchema.parse(JSON.parse(bodyText()))
+    if (parsed.kind !== 'field_audit') throw new Error('expected a field_audit body')
+    expect(unknownSources(parsed.inputs)).toEqual([])
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V4.match(/::jsonb,\s*\n\s*'([0-9a-f]{64})'/)![1]
+    expect(crypto.createHash('sha256').update(bodyText()).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    expect(promptBodySchema.safeParse(JSON.parse(bodyText())).success).toBe(true)
+  })
+})
