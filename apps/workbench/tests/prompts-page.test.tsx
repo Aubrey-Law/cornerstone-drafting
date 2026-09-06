@@ -119,7 +119,7 @@ describe('PromptsWorkspace: unresolved blockers', () => {
         prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
         matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
         unresolvedBlockers={[
-          { findingId: 'f-1', runId: 'run-9', matterId: 'm-1', matterTitle: 'Smith Family Trust', ruleNumber: '2' },
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['2'] },
         ]}
       />,
     )
@@ -128,6 +128,30 @@ describe('PromptsWorkspace: unresolved blockers', () => {
     expect(section.textContent).toContain('Smith Family Trust')
     const link = screen.getByRole('link', { name: /smith family trust/i })
     expect(link).toHaveAttribute('href', '/prompts/run-9')
+  })
+
+  /**
+   * The failure this branch fixes: a matter with three runs of the same
+   * prompt used to show six near-identical rows, two per run. One matter
+   * with several unresolved checks must render as one row naming every
+   * check, not one row per finding.
+   */
+  it('renders one row per matter, naming every unresolved check on it', () => {
+    render(
+      <PromptsWorkspace
+        prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
+        matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
+        unresolvedBlockers={[
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['1', '2'] },
+        ]}
+      />,
+    )
+
+    const section = screen.getByTestId('unresolved-blockers')
+    // One row for the matter, not one per check.
+    expect(section.querySelectorAll('li')).toHaveLength(1)
+    expect(section.textContent).toContain('Check 1')
+    expect(section.textContent).toContain('Check 2')
   })
 
   it('says nothing when there are none', () => {
@@ -154,7 +178,7 @@ describe('PromptsWorkspace: unresolved blockers', () => {
         prompts={[{ slug: 'ma-design-sheet-audit', title: 'Issue spotter', checkCount: 6 }]}
         matters={[{ matterId: 'm-1', title: 'Smith Family Trust' }]}
         unresolvedBlockers={[
-          { findingId: 'f-1', runId: 'run-9', matterId: 'm-1', matterTitle: 'Smith Family Trust', ruleNumber: '2' },
+          { matterId: 'm-1', matterTitle: 'Smith Family Trust', runId: 'run-9', ruleNumbers: ['2'] },
         ]}
       />,
     )

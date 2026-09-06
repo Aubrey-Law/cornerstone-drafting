@@ -27,11 +27,10 @@ export interface FieldAuditRunChoice {
 }
 
 export interface UnresolvedBlockerChoice {
-  findingId: string
-  runId: string
   matterId: string
   matterTitle: string
-  ruleNumber: string
+  runId: string
+  ruleNumbers: string[]
 }
 
 // Kept here rather than imported from actions.ts: a "use server" file may
@@ -135,13 +134,15 @@ export function PromptsWorkspace({
           </p>
           <ul className="divide-y divide-border border-y border-border">
             {unresolvedBlockers.map((blocker) => (
-              <li key={blocker.findingId}>
+              <li key={blocker.matterId}>
                 <Link
                   href={`/prompts/${blocker.runId}`}
                   className="flex items-baseline justify-between gap-3 py-2 text-sm hover:bg-muted/50"
                 >
                   <span className="font-medium">{blocker.matterTitle}</span>
-                  <span className="text-xs text-muted-foreground">Check {blocker.ruleNumber}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {blocker.ruleNumbers.map((ruleNumber) => `Check ${ruleNumber}`).join(', ')}
+                  </span>
                 </Link>
               </li>
             ))}
