@@ -173,6 +173,13 @@ export interface ExistingPromptTask {
   id: string
   source: string
   batchTag: string | null
+  /**
+   * The prompt this task's run belonged to, resolved by `emitTasks` through
+   * `workflow_runs.prompt_version_id` → `prompt_versions.prompt_id`. `null`
+   * when the run no longer exists or the tag does not parse — in which case
+   * the task is nobody's to retire and stands.
+   */
+  promptId: string | null
   status: string
   assigneeId: string | null
   title: string
@@ -306,6 +313,21 @@ function mayRetire(
 }
 
 /**
+ * The run `planEmit` is deciding for: which prompt it belongs to, and what it
+ * concluded.
+ *
+ * An object rather than two positional arguments because both describe the
+ * same thing and a fourth positional would read as noise at every call site —
+ * and because the next thing this decision needs should not churn them all
+ * again.
+ */
+export interface PlanEmitRun {
+  /** Only this prompt's tasks are this run's to touch. */
+  promptId: string
+  answers: RunAnswers
+}
+
+/**
  * What a run should create, keep and withdraw — one question, replacing the
  * two functions this used to be.
  *
@@ -347,12 +369,12 @@ function mayRetire(
  *    task is real work someone is doing, and a newer run not surfacing the
  *    same finding does not make that work moot.
  *
- * What is *not* narrowed, and should be: this is scoped to the matter, not to
- * the prompt. Two prompts emitting tasks on one matter would each withdraw the
- * other's. That was true before this change too — it is invisible only
- * because one prompt emits tasks and the review prompt does not — and fixing
- * it means putting the prompt into the tag, which is its own decision. See
- * the design note.
+ * Narrowed on a fourth axis as well: the prompt. Only this run's own prompt's
+ * tasks are its to touch, so two prompts emitting on one matter no longer
+ * withdraw each other's on every run. The scope is the prompt and not the
+ * version — version 4 still retires version 3's tasks, being a newer answer to
+ * the same question — and a candidate whose prompt could not be resolved
+ * matches nothing and stands, since it is nobody's to retire.
  *
  * What it may **not** do, which is the point of the `answers` argument: retire
  * a task on the strength of having said nothing about it. A finding the
@@ -360,13 +382,17 @@ function mayRetire(
  * cleared — and until that distinction existed, an uncitable blocker retired a
  * cited one. See `mayRetire` above and the design note.
  */
-export function planEmit(
-  existing: ExistingPromptTask[],
-  desired: TaskRow[],
-  answers: RunAnswers,
-): EmitPlan {
+export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[], run: PlanEmitRun): EmitPlan {
   const candidates = existing.filter(
-    (task) => task.source === PROMPT_TASK_SOURCE && task.status === 'open' && task.assigneeId === null,
+    (task) =>
+      task.source === PROMPT_TASK_SOURCE &&
+      task.status === 'open' &&
+      task.assigneeId === null &&
+      // Another prompt's tasks are not this run's to touch — not to retire,
+      // and not to claim as a twin either, since an identical row from another
+      // prompt would otherwise suppress this run's own insert. A `null`
+      // `promptId` never matches, which is the intended fail-safe.
+      task.promptId === run.promptId,
   )
 
   const byContent = new Map<string, string[]>()
@@ -420,7 +446,7 @@ export function planEmit(
 
   const supersede = candidates
     .filter((task) => !matched.has(task.id))
-    .filter((task) => mayRetire(task, answers, desiredTags, desiredUnits, desiredItemText))
+    .filter((task) => mayRetire(task, run.answers, desiredTags, desiredUnits, desiredItemText))
     .map((task) => task.id)
   return { insert, keep, supersede }
 }

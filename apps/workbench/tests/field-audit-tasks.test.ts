@@ -5,6 +5,7 @@ import {
   planEmit,
   taskRowsFor,
   type ExistingPromptTask,
+  type PlanEmitRun,
   type TaskRow,
 } from '@/lib/fieldAudit/tasks'
 import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
@@ -210,10 +211,14 @@ describe('taskRowsFor with an output target', () => {
   })
 })
 
+/** The prompt every fixture below belongs to unless it says otherwise. */
+const PROMPT_ID = 'prompt-1'
+
 const existingTask = (over: Partial<ExistingPromptTask> = {}): ExistingPromptTask => ({
   id: 'task-1',
   source: PROMPT_TASK_SOURCE,
   batchTag: 'prompt:run-old',
+  promptId: PROMPT_ID,
   status: 'open',
   assigneeId: null,
   title: 'A stated concern is not answered by the plan',
@@ -225,10 +230,9 @@ const existingTask = (over: Partial<ExistingPromptTask> = {}): ExistingPromptTas
 })
 
 describe('planEmit', () => {
-  /** A run that answered everything, so retirement is permitted and the
-   *  existing guarantees below are unchanged by this slice. */
-  function authoritative(): RunAnswers {
-    return { byCheck: { '1': 'actionable' }, authoritative: true }
+  /** A run that answered everything, so retirement is permitted. */
+  function authoritative(): PlanEmitRun {
+    return { promptId: PROMPT_ID, answers: { byCheck: { '1': 'actionable' }, authoritative: true } }
   }
 
   /** A row this run wants to exist, matching `existingTask`'s content. */
@@ -454,11 +458,10 @@ describe('planEmit retirement scoping', () => {
    * blocker at all. The task must now stand.
    */
   it('does not retire a task when the run could not cite the problem', () => {
-    const plan = planEmit([checklistTask()], [], runAnswers({
-      checkNumbers: ['1', '2'],
-      findings: [],
-      failedCheckNumbers: [],
-    }))
+    const plan = planEmit([checklistTask()], [], {
+      promptId: PROMPT_ID,
+      answers: runAnswers({ checkNumbers: ['1', '2'], findings: [], failedCheckNumbers: [] }),
+    })
     expect(plan.insert).toEqual([])
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual([])
@@ -467,7 +470,7 @@ describe('planEmit retirement scoping', () => {
   /** The reverse: a run that answered everything and found nothing wrong. */
   it('retires the task when the run cleared every check', () => {
     const answers: RunAnswers = { byCheck: { '1': 'cleared', '2': 'cleared' }, authoritative: true }
-    const plan = planEmit([checklistTask()], [], answers)
+    const plan = planEmit([checklistTask()], [], { promptId: PROMPT_ID, answers })
     expect(plan.supersede).toEqual(['list'])
   })
 
@@ -482,7 +485,7 @@ describe('planEmit retirement scoping', () => {
     const plan = planEmit(
       [checklistTask()],
       [checklistRow(['A stated concern is not answered by the plan'])],
-      answers,
+      { promptId: PROMPT_ID, answers },
     )
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
@@ -502,7 +505,7 @@ describe('planEmit retirement scoping', () => {
         'A stated concern is not answered by the plan',
         'A person named in the notes is missing from the plan',
       ])],
-      answers,
+      { promptId: PROMPT_ID, answers },
     )
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
@@ -516,7 +519,7 @@ describe('planEmit retirement scoping', () => {
         { text: 'A person named in the notes is missing from the plan', done: false },
       ] })],
       [checklistRow(['A stated concern is not answered by the plan'])],
-      answers,
+      { promptId: PROMPT_ID, answers },
     )
     expect(plan.supersede).toEqual([])
     expect(plan.insert).toHaveLength(1)
@@ -533,7 +536,7 @@ describe('planEmit retirement scoping', () => {
     const plan = planEmit(
       [checklistTask({ id: 'mine', batchTag: 'prompt:run-new', description: 'Older wording.' })],
       [checklistRow(['A stated concern is not answered by the plan'])],
-      answers,
+      { promptId: PROMPT_ID, answers },
     )
     expect(plan.supersede).toEqual(['mine'])
     expect(plan.insert).toHaveLength(1)
@@ -548,7 +551,7 @@ describe('planEmit retirement scoping', () => {
       batch_tag: 'prompt:run-new#1', title: 'A stated concern is not answered by the plan',
       description: 'Newer wording.', priority: 'high', checklist: [],
     }
-    const plan = planEmit([mine], [row], answers)
+    const plan = planEmit([mine], [row], { promptId: PROMPT_ID, answers })
     expect(plan.supersede).toEqual(['unit'])
     expect(plan.insert).toHaveLength(1)
   })
@@ -580,7 +583,7 @@ describe('planEmit retirement scoping', () => {
         ],
       })],
       [checklistRow(['A stated concern is not answered by the plan'])],
-      answers,
+      { promptId: PROMPT_ID, answers },
     )
     expect(plan.supersede).toEqual(['mine'])
     expect(plan.insert).toHaveLength(1)
@@ -592,12 +595,12 @@ describe('planEmit retirement scoping', () => {
 
     it('retires it when this run cleared that check', () => {
       const answers: RunAnswers = { byCheck: { '7': 'cleared' }, authoritative: false }
-      expect(planEmit([oldUnit()], [], answers).supersede).toEqual(['u7'])
+      expect(planEmit([oldUnit()], [], { promptId: PROMPT_ID, answers }).supersede).toEqual(['u7'])
     })
 
     it('keeps it when this run was inconclusive on that check', () => {
       const answers: RunAnswers = { byCheck: { '7': 'inconclusive' }, authoritative: false }
-      expect(planEmit([oldUnit()], [], answers).supersede).toEqual([])
+      expect(planEmit([oldUnit()], [], { promptId: PROMPT_ID, answers }).supersede).toEqual([])
     })
 
     /**
@@ -610,7 +613,7 @@ describe('planEmit retirement scoping', () => {
      */
     it('keeps it when the run found that check actionable but emitted no row for it', () => {
       const answers: RunAnswers = { byCheck: { '7': 'actionable' }, authoritative: false }
-      expect(planEmit([oldUnit()], [], answers).supersede).toEqual([])
+      expect(planEmit([oldUnit()], [], { promptId: PROMPT_ID, answers }).supersede).toEqual([])
     })
 
     it('retires it when this run re-reports the same check under a new run id', () => {
@@ -620,7 +623,7 @@ describe('planEmit retirement scoping', () => {
         batch_tag: 'prompt:run-new#7', title: 'Something', description: 'Anything',
         priority: 'high', checklist: [],
       }
-      expect(planEmit([oldUnit()], [row], answers).supersede).toEqual(['u7'])
+      expect(planEmit([oldUnit()], [row], { promptId: PROMPT_ID, answers }).supersede).toEqual(['u7'])
     })
   })
 
@@ -632,14 +635,90 @@ describe('planEmit retirement scoping', () => {
   it('keeps a suffix-less task with no items unless the run is authoritative', () => {
     const legacy = existingTask({ id: 'legacy', batchTag: 'prompt:run-old', checklist: [] })
     const answers: RunAnswers = { byCheck: { '1': 'inconclusive' }, authoritative: false }
-    expect(planEmit([legacy], [], answers).supersede).toEqual([])
-    expect(planEmit([legacy], [], { byCheck: { '1': 'cleared' }, authoritative: true }).supersede).toEqual(['legacy'])
+    expect(planEmit([legacy], [], { promptId: PROMPT_ID, answers }).supersede).toEqual([])
+    const complete: RunAnswers = { byCheck: { '1': 'cleared' }, authoritative: true }
+    expect(planEmit([legacy], [], { promptId: PROMPT_ID, answers: complete }).supersede).toEqual(['legacy'])
   })
 
   /** A tag this module did not write is never this run's to retire. */
   it('never retires a task whose tag it cannot parse', () => {
     const foreign = existingTask({ id: 'foreign', batchTag: 'something-else' })
-    expect(planEmit([foreign], [], { byCheck: {}, authoritative: true }).supersede).toEqual([])
+    const answers: RunAnswers = { byCheck: {}, authoritative: true }
+    expect(planEmit([foreign], [], { promptId: PROMPT_ID, answers }).supersede).toEqual([])
+  })
+})
+
+describe('planEmit prompt scoping', () => {
+  const OTHER_PROMPT = 'prompt-2'
+
+  function run(answers: RunAnswers, promptId = PROMPT_ID): PlanEmitRun {
+    return { promptId, answers }
+  }
+
+  /**
+   * The failure this exists to prevent. Two prompts emitting on one matter
+   * would each withdraw the other's on every run — invisible today only
+   * because the review playbook emits no tasks, and certain once the
+   * 40-prompt library lands.
+   */
+  it('never retires a task belonging to another prompt', () => {
+    const theirs = existingTask({ id: 'theirs', promptId: OTHER_PROMPT, batchTag: 'prompt:their-run#1' })
+    const plan = planEmit([theirs], [], run({ byCheck: { '1': 'cleared' }, authoritative: true }))
+    expect(plan.supersede).toEqual([])
+    expect(plan.keep).toEqual([])
+  })
+
+  /** Not a twin either — otherwise an identical task from another prompt
+   *  would suppress this run's own insert. */
+  it('never counts another prompt’s task as a twin', () => {
+    const theirs = existingTask({ id: 'theirs', promptId: OTHER_PROMPT, batchTag: 'prompt:run-new#1' })
+    const row: TaskRow = {
+      matter_id: 'matter-1', source: PROMPT_TASK_SOURCE, task_type: 'single', auto: true,
+      batch_tag: 'prompt:run-new#1', title: theirs.title, description: theirs.description,
+      priority: theirs.priority, checklist: [],
+    }
+    const plan = planEmit([theirs], [row], run({ byCheck: { '1': 'actionable' }, authoritative: true }))
+    expect(plan.keep).toEqual([])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.supersede).toEqual([])
+  })
+
+  /**
+   * What distinguishes prompt-scoping from version-scoping: an older *version*
+   * of the same prompt is still this run's to retire, because it is a newer
+   * answer to the same question.
+   */
+  it('retires a task from an earlier version of the same prompt', () => {
+    const older = existingTask({ id: 'older', promptId: PROMPT_ID, batchTag: 'prompt:v3-run#1' })
+    const plan = planEmit([older], [], run({ byCheck: { '1': 'cleared' }, authoritative: true }))
+    expect(plan.supersede).toEqual(['older'])
+  })
+
+  /** A candidate whose run could not be resolved has no prompt, so it is not
+   *  this run's to retire — the same "withdraw only where you know" rule. */
+  it('keeps a task whose prompt could not be resolved', () => {
+    const unknown = existingTask({ id: 'unknown', promptId: null, batchTag: 'prompt:gone#1' })
+    const plan = planEmit([unknown], [], run({ byCheck: { '1': 'cleared' }, authoritative: true }))
+    expect(plan.supersede).toEqual([])
+  })
+
+  /**
+   * The whole point, end to end as a pure decision: two prompts alternating on
+   * one matter each keep their own and touch nothing of the other's.
+   */
+  it('lets two prompts coexist on one matter', () => {
+    const mine = existingTask({ id: 'mine', promptId: PROMPT_ID, batchTag: 'prompt:my-old#1' })
+    const theirs = existingTask({ id: 'theirs', promptId: OTHER_PROMPT, batchTag: 'prompt:their-run#1' })
+
+    const mineRuns = planEmit([mine, theirs], [], run({ byCheck: { '1': 'cleared' }, authoritative: true }))
+    expect(mineRuns.supersede).toEqual(['mine'])
+
+    const theirsRuns = planEmit(
+      [mine, theirs],
+      [],
+      run({ byCheck: { '1': 'cleared' }, authoritative: true }, OTHER_PROMPT),
+    )
+    expect(theirsRuns.supersede).toEqual(['theirs'])
   })
 })
 
