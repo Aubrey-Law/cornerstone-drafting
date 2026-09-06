@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
+import { fullName } from '@/lib/fiduciary/repository'
 import { SOURCE_ALLOW_LIST, type SourceRows } from '@aubrey-law/citations/prompt/inputs'
 
 /**
@@ -40,9 +41,32 @@ const MATTER_COLUMNS = Object.values(SOURCE_ALLOW_LIST)
 // is itself a single string-literal AST node — a `'...' + '...'` join is a
 // binary expression and would be invisible to it just the same as a runtime
 // `.join(', ')` would be.
-const DESIGN_SHEET_SELECT = 'concerns, goals_notes, drafting_notes, children, assets, specific_bequests, disinheritances, residuary_beneficiary, residual_beneficiary_individuals, residuary_distribution, spouse_citizenship, include_qdot, marital_trust_type, real_property_transfer, state, client_domicile, marital_status, trust_name, plan_type'
+const DESIGN_SHEET_SELECT = 'concerns, goals_notes, drafting_notes, children, assets, specific_bequests, disinheritances, residuary_beneficiary, residual_beneficiary_individuals, residuary_distribution, spouse_citizenship, include_qdot, marital_trust_type, real_property_transfer, state, client_domicile, marital_status, trust_name, plan_type, guardian_primary, guardian_alt1, trustee_primary, trustee_alt1, executor_primary, hcp_primary, poa_primary, spouse_name, client_name, guardian_slots, temporary_guardian_slots, trustee_slots, executor_slots, hcp_slots, poa_slots'
 
 const MATTER_SELECT = 'name'
+
+/**
+ * Same-file string literal, not built from `.filter(...)` on
+ * `DESIGN_SHEET_COLUMNS` at call time — for the same reason `DESIGN_SHEET_SELECT`
+ * above is a literal and not a runtime join: scripts/lib/queryReferences.mjs's
+ * `stringConstants` only recognises a `const` whose initializer is itself a
+ * string-literal AST node.
+ */
+const SLOT_COLUMNS = [
+  'guardian_slots',
+  'temporary_guardian_slots',
+  'trustee_slots',
+  'executor_slots',
+  'hcp_slots',
+  'poa_slots',
+] as const
+
+/**
+ * The columns read to name a slot's contact. A same-file string constant so
+ * tests/query-columns.test.ts and scripts/checkDbColumns.mjs can see it, same
+ * as `DESIGN_SHEET_SELECT` above.
+ */
+const CONTACT_SELECT = 'id, first_name, middle_name, last_name'
 
 function assertSelectMatches(label: string, select: string, derived: string[]): void {
   const literal = [...new Set(select.split(',').map((column) => column.trim()))].sort()
@@ -58,9 +82,68 @@ function assertSelectMatches(label: string, select: string, derived: string[]): 
 assertSelectMatches('design_sheet', DESIGN_SHEET_SELECT, DESIGN_SHEET_COLUMNS)
 assertSelectMatches('matter', MATTER_SELECT, MATTER_COLUMNS)
 
+/** One entry of a `*_slots` array, as it is actually stored: a foreign key. */
+interface RawSlot {
+  id?: unknown
+  is_co?: unknown
+  order?: unknown
+  contact_id?: unknown
+}
+
+/** Every `contact_id` any slot column on this sheet points at, deduplicated. */
+function slotContactIds(sheet: Record<string, unknown>): string[] {
+  const ids = new Set<string>()
+  for (const column of SLOT_COLUMNS) {
+    const raw = sheet[column]
+    if (!Array.isArray(raw)) continue
+    for (const entry of raw as RawSlot[]) {
+      if (entry?.contact_id != null) ids.add(String(entry.contact_id))
+    }
+  }
+  return [...ids]
+}
+
+/**
+ * Replaces every `*_slots` array's entries with `{ order, is_co, name }`,
+ * dropping `contact_id` — a foreign key a model cannot answer "is Thomas
+ * Parker in this plan?" from. A slot whose contact is missing from
+ * `contactNameById` becomes `name: null` rather than being dropped: an
+ * unresolvable reference is a fact about the matter (a contact record that
+ * was deleted or never linked correctly), not something to hide from the
+ * check that would otherwise report it absent.
+ *
+ * A column that is not an array (`null`, or simply not selected) is left
+ * exactly as it was — there is nothing to resolve.
+ */
+function resolveSlots(
+  sheet: Record<string, unknown>,
+  contactNameById: Map<string, string>,
+): Record<string, unknown> {
+  const resolved: Record<string, unknown> = { ...sheet }
+  for (const column of SLOT_COLUMNS) {
+    const raw = sheet[column]
+    if (!Array.isArray(raw)) continue
+    resolved[column] = (raw as RawSlot[]).map((entry) => {
+      const contactId = entry?.contact_id != null ? String(entry.contact_id) : null
+      return {
+        order: entry?.order ?? null,
+        is_co: entry?.is_co ?? null,
+        name: contactId ? (contactNameById.get(contactId) ?? null) : null,
+      }
+    })
+  }
+  return resolved
+}
+
 /**
  * The matter and its latest design sheet, read as exactly the columns a
- * field-audit prompt is ever allowed to reference.
+ * field-audit prompt is ever allowed to reference — with every `*_slots`
+ * column's contact references resolved to names (see `resolveSlots`).
+ *
+ * The resolution happens here, in the app, not in packages/citations: that
+ * package knows nothing about a database, and reaching into `contacts` from
+ * inside it would be the first crack in a boundary this branch has otherwise
+ * held throughout.
  *
  * Null when the matter does not exist, or exists but has no design sheet yet
  * — an audit has nothing to run against either way, and the caller is better
@@ -89,8 +172,20 @@ export async function loadSourceRows(
   if (sheetError) throw new Error(`Could not load the design sheet: ${sheetError.message}`)
   if (!matterRow || !sheetRow) return null
 
+  const sheet = sheetRow as Record<string, unknown>
+  const contactIds = slotContactIds(sheet)
+  let contactNameById = new Map<string, string>()
+  if (contactIds.length > 0) {
+    const { data: contacts, error: contactError } = await sb
+      .from('contacts')
+      .select(CONTACT_SELECT)
+      .in('id', contactIds)
+    if (contactError) throw new Error(`Could not load contacts: ${contactError.message}`)
+    contactNameById = new Map((contacts ?? []).map((c) => [String(c.id), fullName(c as Record<string, unknown>)]))
+  }
+
   return {
-    design_sheet: sheetRow as Record<string, unknown>,
+    design_sheet: resolveSlots(sheet, contactNameById),
     matter: matterRow as Record<string, unknown>,
   }
 }
