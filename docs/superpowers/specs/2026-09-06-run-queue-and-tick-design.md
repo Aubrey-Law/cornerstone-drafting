@@ -49,13 +49,21 @@ queue; follow it rather than inventing a second idiom.
 ### A gap this exposes
 
 `scripts/checkDbRpcs.mjs` scans `['app', 'lib', 'components']` **from the repository root**
-— it does not scan `apps/workbench` at all. Every RPC the workbench calls is currently
-unverified, and this slice adds the first one.
+— it does not scan `apps/workbench` at all.
+
+This is not merely a gap this slice would open. The workbench already calls one RPC that
+nothing has ever verified: `ensure_user_profile`, in `lib/supabase/profile.ts`, on the
+**sign-in path**. It does exist — checked against PostgREST on 2026-09-06, one of 89
+exposed — so nothing is broken today. But had it been dropped or renamed, sign-in would
+have failed in production with no check catching it first, which is the exact outage this
+workflow was written after: migration 20260812000000 was recorded as applied while its SQL
+never ran, two functions vanished, and every lead edit failed until someone noticed by
+hand.
 
 That is the same shape as the hole that let `matters.title` ship: a guard that does not
-cover the code being written. The checker is extended to scan the workbench in this slice,
-and the extension is proven by pointing a call at a function that does not exist and
-watching it fail.
+cover the code being written. The checker is extended to scan the workbench in this slice —
+which is worth doing for the sign-in dependency alone, before any queue — and the extension
+is proven by pointing a call at a function that does not exist and watching it fail.
 
 ## The tick route
 
