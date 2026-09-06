@@ -122,7 +122,14 @@ const CHECK_2 = check({
     priority: 'normal',
   },
 })
-const CHECKS = [check({ number: '1' }), CHECK_2]
+/**
+ * Check 2 first, deliberately. Declared in numeric order, body order and
+ * check-number order coincide — and the ordering test below could then not
+ * tell a body-order sort from a sort on `checkNumber`, which would pass today
+ * and diverge the moment a prompt declares its checks out of order, or reaches
+ * check 10, which sorts before check 2 as a string.
+ */
+const CHECKS = [CHECK_2, check({ number: '1' })]
 
 const FINDING_1 = finding({ checkNumber: '1', rationale: 'Because the residuary never answers it.' })
 const FINDING_2 = finding({ checkNumber: '2', rationale: 'And nobody named Ruth appears anywhere.' })
@@ -136,7 +143,8 @@ describe('taskRowsFor with an output target', () => {
     const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'task_set', 'Audit')
     expect(rows).toHaveLength(2)
     expect(rows.map((row) => row.task_type)).toEqual(['single', 'single'])
-    expect(rows.map((row) => row.batch_tag)).toEqual(['prompt:run-1#1', 'prompt:run-1#2'])
+    // Body order, which `CHECKS` deliberately declares check 2 first in.
+    expect(rows.map((row) => row.batch_tag)).toEqual(['prompt:run-1#2', 'prompt:run-1#1'])
     expect(rows.every((row) => row.checklist.length === 0)).toBe(true)
   })
 
@@ -148,8 +156,8 @@ describe('taskRowsFor with an output target', () => {
     expect(rows[0].batch_tag).toBe('prompt:run-1')
     expect(rows[0].title).toBe('MA design sheet audit')
     expect(rows[0].checklist).toEqual([
-      { text: 'A stated concern is not answered by the plan', done: false },
       { text: 'A person named in the notes is missing from the plan', done: false },
+      { text: 'A stated concern is not answered by the plan', done: false },
     ])
     // Collapsing into items must not lose the evidence.
     expect(rows[0].description).toContain('Because the residuary never answers it.')
@@ -161,11 +169,14 @@ describe('taskRowsFor with an output target', () => {
    * ordered the way their author meant, and a checklist read out of that
    * order reads as a different document.
    */
-  it('orders items by the prompt body, not by the findings array', () => {
-    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_2, FINDING_1], 'checklist', 'Audit')
+  it('orders items by the prompt body, not by the findings array or the check number', () => {
+    // The findings arrive in numeric order, and `CHECKS` declares check 2
+    // first, so only a body-order sort produces this. A sort on
+    // `finding.checkNumber` would put check 1's item first and fail here.
+    const rows = taskRowsFor('matter-1', 'run-1', CHECKS, [FINDING_1, FINDING_2], 'checklist', 'Audit')
     expect(rows[0].checklist.map((item) => item.text)).toEqual([
-      'A stated concern is not answered by the plan',
       'A person named in the notes is missing from the plan',
+      'A stated concern is not answered by the plan',
     ])
   })
 

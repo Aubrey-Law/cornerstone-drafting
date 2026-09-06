@@ -16,19 +16,25 @@ import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 export const PROMPT_TASK_SOURCE = 'prompt'
 
 /**
- * A checklist item as `public.tasks.checklist` holds them. Declared here
- * rather than imported from the root app's `lib/tasks/types.ts`: this is a
- * separate app with its own module graph, and the shared contract is the
- * column, not a TypeScript file across an app boundary.
+ * A checklist item as `public.tasks.checklist` holds them.
+ *
+ * A `type` rather than an `interface` on purpose. The generated column type
+ * is `Json`, and TypeScript synthesises an implicit index signature for an
+ * object *type alias* but not for an *interface* — so this is assignable to
+ * `Json` with no cast at the `insert`, while still rejecting an excess
+ * property. As an interface it would need an explicit
+ * `[key: string]: string | boolean` to satisfy `Json`, and that signature
+ * would then quietly accept any misspelled field. Nothing extends or
+ * re-opens this type, so the interface bought nothing.
+ *
+ * Declared here rather than imported from the root app's
+ * `lib/tasks/types.ts`: that is a separate app whose `@/*` resolves to a
+ * different root, and the shared contract is the column, not a TypeScript
+ * file across an app boundary.
  */
-export interface ChecklistItem {
+export type ChecklistItem = {
   text: string
   done: boolean
-  /** `tasks.checklist` is a `Json` column in the generated types, and a plain
-   *  interface is not assignable to `Json` without this. Declared here rather
-   *  than cast away at the `insert` call, so the items keep a real type on
-   *  every path that reads them. */
-  [key: string]: string | boolean
 }
 
 export interface TaskRow {
@@ -115,7 +121,9 @@ export function taskRowsFor(
   // item is a line someone ticks, and six paragraphs of reasoning is not
   // that. Nothing is lost — the evidence is right underneath.
   const description = [
-    `${promptTitle} found ${items.length === 1 ? '1 item' : `${items.length} items`} to confirm on the design sheet.`,
+    // No "on the design sheet": this templates every prompt in the library,
+    // and 39 of the coming 40 are not that prompt. The title says what ran.
+    `${promptTitle} found ${items.length === 1 ? '1 item' : `${items.length} items`} to confirm.`,
     '',
     ...matched.map(({ finding, check }, index) => `${index + 1}. ${check.taskTemplate.title}\n${finding.rationale}`),
   ].join('\n')
