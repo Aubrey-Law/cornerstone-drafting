@@ -3,6 +3,7 @@ import { LOGIN_PATH } from '@/lib/auth/gate'
 import { loadPublishedPrompts } from '@/lib/prompts/repository'
 import { loadMattersWithDesignSheets } from '@/lib/prompts/designSheet'
 import { loadFieldAuditRunSummaries } from '@/lib/fieldAudit/history'
+import { loadUnresolvedBlockers } from '@/lib/runs/advisory'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
 import { PromptsWorkspace } from './PromptsWorkspace'
@@ -38,6 +39,7 @@ export default async function PromptsPage() {
   )
   const matters = await loadMattersWithDesignSheets(client)
   const runs = await loadFieldAuditRunSummaries(client, 15)
+  const unresolvedBlockers = await loadUnresolvedBlockers(client)
 
   return (
     <PromptsWorkspace
@@ -48,6 +50,7 @@ export default async function PromptsPage() {
       }))}
       matters={matters}
       runs={runs}
+      unresolvedBlockers={unresolvedBlockers}
     />
   )
 }

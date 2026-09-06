@@ -26,6 +26,14 @@ export interface FieldAuditRunChoice {
   finishedAt: string | null
 }
 
+export interface UnresolvedBlockerChoice {
+  findingId: string
+  runId: string
+  matterId: string
+  matterTitle: string
+  ruleNumber: string
+}
+
 // Kept here rather than imported from actions.ts: a "use server" file may
 // only export async functions, so the seed value for `useActionState` lives
 // on this side instead.
@@ -42,15 +50,25 @@ const INITIAL_STATE: RunAuditState = {
  * and see what came back. Follows `app/review/ReviewWorkspace.tsx`'s shape —
  * a picker in the header, the "what is about to happen" summary before
  * anything has run, and the result after it has.
+ *
+ * `unresolvedBlockers` is a knowingly-wrong-place-for-now advisory (see
+ * `docs/superpowers/specs/2026-09-06-stage-triggered-runs-design.md`): stage
+ * transitions happen in the old app's matter screens, not here, so this
+ * surfaces a blocker to someone who has already moved the matter. Phases 6
+ * and 10 bring matters into the workbench, and the advisory belongs beside
+ * the stage control then — until this page has one, `/prompts` is where it
+ * lives, and it never blocks anything, only tells.
  */
 export function PromptsWorkspace({
   prompts,
   matters,
   runs = [],
+  unresolvedBlockers = [],
 }: {
   prompts: PromptChoice[]
   matters: MatterChoice[]
   runs?: FieldAuditRunChoice[]
+  unresolvedBlockers?: UnresolvedBlockerChoice[]
 }) {
   const [slug, setSlug] = useState(prompts[0]?.slug ?? '')
   const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
@@ -101,6 +119,35 @@ export function PromptsWorkspace({
           </form>
         ) : null}
       </header>
+
+      {unresolvedBlockers.length > 0 ? (
+        <section
+          className="mx-6 mt-4 space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3"
+          data-testid="unresolved-blockers"
+        >
+          <h2 className="text-sm font-semibold">Blockers nobody has dispositioned yet</h2>
+          {/* Advisory only, and said plainly: a list of blockers with no
+              explanation invites the reader to assume a transition was
+              prevented. It was not — stage moves happen in the old app's
+              matter screens, this page only surfaces what was found there. */}
+          <p className="text-xs text-muted-foreground">
+            An unresolved blocker does not block anything. Disposition it on the run page to clear it from this list.
+          </p>
+          <ul className="divide-y divide-border border-y border-border">
+            {unresolvedBlockers.map((blocker) => (
+              <li key={blocker.findingId}>
+                <Link
+                  href={`/prompts/${blocker.runId}`}
+                  className="flex items-baseline justify-between gap-3 py-2 text-sm hover:bg-muted/50"
+                >
+                  <span className="font-medium">{blocker.matterTitle}</span>
+                  <span className="text-xs text-muted-foreground">Check {blocker.ruleNumber}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {state.message ? (
         <p role="alert" className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
