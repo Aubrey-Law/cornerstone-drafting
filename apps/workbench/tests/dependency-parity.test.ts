@@ -40,11 +40,29 @@ describe('workbench dependency parity with the root app', () => {
     expect(allDeps(workbench)[name]).toBe(allDeps(root)[name])
   })
 
-  it('declares no cron jobs while the root app owns them', () => {
-    // Both apps deploy from the same repo against the same database. A cron
-    // duplicated here fires twice; /api/cron/scheduled-emails runs every
-    // minute and is not idempotent.
-    const vercel = JSON.parse(fs.readFileSync(path.resolve(here, 'vercel.json'), 'utf8'))
-    expect(vercel.crons ?? []).toEqual([])
+  it('never declares a cron path the root app already owns', () => {
+    // Both apps deploy from the same repo against the same database, so a
+    // cron path declared in *both* vercel.json files fires twice against the
+    // same data — /api/cron/scheduled-emails in the root app runs every
+    // minute and is not idempotent. That used to mean "the workbench
+    // declares no crons at all," because it had none of its own. It has one
+    // now: /api/cron/tick drives the workbench's own run queue
+    // (workflow_runs / workflow_run_steps), tables the root app never
+    // touches, so it is not a duplicate of anything the root app already
+    // runs. The guard that actually matters — no path claimed by both — is
+    // this one, not a blanket ban on the workbench ever having a cron.
+    const workbenchVercel = JSON.parse(fs.readFileSync(path.resolve(here, 'vercel.json'), 'utf8')) as {
+      crons?: Array<{ path: string }>
+    }
+    const rootVercel = JSON.parse(fs.readFileSync(path.resolve(here, '../../vercel.json'), 'utf8')) as {
+      crons?: Array<{ path: string }>
+    }
+    const rootPaths = new Set((rootVercel.crons ?? []).map((cron) => cron.path))
+    const workbenchPaths = (workbenchVercel.crons ?? []).map((cron) => cron.path)
+
+    expect(workbenchPaths.length).toBeGreaterThan(0)
+    for (const p of workbenchPaths) {
+      expect(rootPaths.has(p)).toBe(false)
+    }
   })
 })

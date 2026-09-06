@@ -8932,9 +8932,12 @@ export type Database = {
           finished_at: string | null
           id: string
           kind: string
+          last_tick_at: string | null
+          locked_by: string | null
           matter_id: string
           model: string | null
           prompt_version_id: string | null
+          reclaims: number
           resolved_inputs: Json | null
           rule_total: number
           started_at: string
@@ -8950,9 +8953,12 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind?: string
+          last_tick_at?: string | null
+          locked_by?: string | null
           matter_id: string
           model?: string | null
           prompt_version_id?: string | null
+          reclaims?: number
           resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
@@ -8968,9 +8974,12 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind?: string
+          last_tick_at?: string | null
+          locked_by?: string | null
           matter_id?: string
           model?: string | null
           prompt_version_id?: string | null
+          reclaims?: number
           resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
@@ -9719,6 +9728,36 @@ export type Database = {
           to: "workflow_jobs"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      claim_workflow_run: {
+        Args: { p_worker: string }
+        Returns: {
+          created_by: string | null
+          document_version_id: string | null
+          failed_count: number
+          failures: Json
+          finding_count: number
+          finished_at: string | null
+          id: string
+          kind: string
+          last_tick_at: string | null
+          locked_by: string | null
+          matter_id: string
+          model: string | null
+          prompt_version_id: string | null
+          reclaims: number
+          resolved_inputs: Json | null
+          rule_total: number
+          started_at: string
+          status: string
+          text_layer_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workflow_runs"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       close_invoice_checkout_session: {

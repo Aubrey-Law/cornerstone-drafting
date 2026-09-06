@@ -9,9 +9,12 @@ import { statusFromSteps, type RunStep } from './steps'
  * (20261030000000_run_steps.sql) for why that order left nothing behind when
  * a run died mid-flight.
  *
- *   1. `openRun` — insert the run as `running`, with its pinned evidence.
- *   2. The engine runs; each unit's outcome is written with `recordStep` as
- *      it settles, through `onUnitSettled`.
+ *   1. `openRun` — insert the run as `queued`, with its pinned evidence, and
+ *      `openSteps` — insert one `pending` step per unit, so the run's shape
+ *      ("3 of 40") is known before any work happens.
+ *   2. A tick claims the run (`running` now means a worker holds it) and
+ *      works its steps; each unit's outcome is written with `recordStep` as
+ *      it settles.
  *   3. Findings are stored and linked to their step, then `finaliseRun` sets
  *      the run's status and counts from the steps themselves.
  */
@@ -35,7 +38,14 @@ export interface OpenRunInput {
   textLayerId: string | null
 }
 
-/** The row `openRun` inserts — a run that exists, but has not done anything yet. */
+/**
+ * The row `openRun` inserts — a run that exists, but has not done anything yet.
+ *
+ * `status` is `queued`, not `running`: the caller that opens a run no longer
+ * runs the engine itself, it enqueues and returns. `running` now means a
+ * tick has claimed the run — see `claim_workflow_run` — and a run sits
+ * `queued` from here until that happens.
+ */
 export function openRunRowFor(input: OpenRunInput) {
   return {
     matter_id: input.matterId,
@@ -44,7 +54,7 @@ export function openRunRowFor(input: OpenRunInput) {
     prompt_version_id: input.promptVersionId,
     kind: input.kind,
     model: input.model,
-    status: 'running' as const,
+    status: 'queued' as const,
     rule_total: input.unitTotal,
     finding_count: 0,
     failed_count: 0,
@@ -73,8 +83,8 @@ export function stepRowFor(runId: string, unitId: string, sequence: number, outc
 }
 
 /**
- * Inserts the run as `running`, before the engine has done anything. Returns
- * its id, which every step written during the run references.
+ * Inserts the run as `queued`, before a tick has claimed it. Returns its id,
+ * which every step written during the run references.
  *
  * Written inline rather than by spreading `openRunRowFor`'s return value —
  * see `lib/fieldAudit/persist.ts`'s header comment on inline column literals.
@@ -95,7 +105,7 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
       prompt_version_id: input.promptVersionId,
       kind: input.kind,
       model: input.model,
-      status: 'running',
+      status: 'queued',
       rule_total: input.unitTotal,
       finding_count: 0,
       failed_count: 0,
@@ -108,6 +118,42 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
     .single()
   if (error) throw new Error(`Could not open the run: ${error.message}`)
   return String(data.id)
+}
+
+/**
+ * Inserts one `pending` step per unit, before any work has happened — the
+ * opposite of `recordStep`, which only ever writes a step that has already
+ * settled.
+ *
+ * Written at enqueue time, right after `openRun`, so a run's shape is known
+ * from the first moment: the page can say "3 of 40" immediately, rather than
+ * counting up from nothing as steps trickle in.
+ *
+ * One row at a time, inline, rather than a single batched `.insert(rows)` —
+ * for the same reason `lib/fieldAudit/persist.ts` stores its references one
+ * at a time: the offline column checker (tests/query-columns.test.ts,
+ * scripts/checkDbColumns.mjs) can only see a column name written as a
+ * literal in the object passed straight to `.insert(...)`, and an array
+ * literal is invisible to it — see scripts/lib/queryReferences.mjs.
+ */
+export async function openSteps(
+  client: SupabaseClient<WorkbenchDatabase>,
+  runId: string,
+  unitIds: string[],
+): Promise<void> {
+  for (let sequence = 0; sequence < unitIds.length; sequence += 1) {
+    const { error } = await client.from('workflow_run_steps').insert({
+      run_id: runId,
+      unit_id: unitIds[sequence],
+      sequence,
+      status: 'pending',
+      attempts: 0,
+      last_error: null,
+      started_at: null,
+      finished_at: null,
+    })
+    if (error) throw new Error(`Could not open the run's steps: ${error.message}`)
+  }
 }
 
 /**

@@ -6,6 +6,8 @@ import { loadFieldAuditFindings } from '@/lib/fieldAudit/history'
 import { formatDate } from '@/lib/funding/format'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { statusFromSteps } from '@/lib/runs/steps'
+import { RunProgressRefresh } from '@/app/runs/RunProgressRefresh'
 import { FieldAuditRunView } from './FieldAuditRunView'
 
 export const metadata = { title: 'Field audit · Aubrey Law Workbench' }
@@ -33,6 +35,7 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <header className="space-y-1 border-b border-border px-6 py-4">
         <Link href="/prompts" className="text-xs text-muted-foreground underline underline-offset-4">
           Run a prompt

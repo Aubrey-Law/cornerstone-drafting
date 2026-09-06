@@ -6,6 +6,8 @@ import { isCitable } from '@/lib/review/order'
 import { formatDate } from '@/lib/funding/format'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { statusFromSteps } from '@/lib/runs/steps'
+import { RunProgressRefresh } from '@/app/runs/RunProgressRefresh'
 import { StoredFindings } from './StoredFindings'
 
 export const metadata = { title: 'Review · Aubrey Law Workbench' }
@@ -25,6 +27,7 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <header className="space-y-1 border-b border-border px-6 py-4">
         <Link href="/review" className="text-xs text-muted-foreground underline underline-offset-4">
           Review

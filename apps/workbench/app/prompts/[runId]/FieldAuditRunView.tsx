@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 import type { FieldAuditOutcome } from '@aubrey-law/citations/fieldAudit/types'
 import type { StoredFieldAuditFinding } from '@/lib/fieldAudit/history'
-import type { RunStep } from '@/lib/runs/steps'
+import { statusFromSteps, type RunStep } from '@/lib/runs/steps'
 import { RunSteps } from '@/app/runs/RunSteps'
 import { retryRun } from './actions'
 
@@ -91,6 +91,7 @@ export function FieldAuditRunView({
         <RunSteps
           steps={steps}
           unitNoun="checks"
+          runStatus={statusFromSteps(steps)}
           retryPending={retryPending}
           retryMessage={retryState.message}
           onRetry={() => {

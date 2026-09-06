@@ -48,13 +48,14 @@ export interface RetryState {
 }
 
 /**
- * Re-runs the rules a review lost, and only them.
+ * Re-queues the rules a review lost, and only them.
  *
  * Checks the session itself, the same as `recordDisposition` above — a
  * server action is a public endpoint regardless of which page rendered the
- * button that calls it. Handles a missing API key the same way
- * `app/prompts/actions.ts`'s `runAudit` does: the app is fine, this feature
- * is not configured.
+ * button that calls it. `retryFailedSteps` itself no longer calls the
+ * model — a tick does, once it claims the requeued run — so this only fails
+ * fast, the way `app/prompts/actions.ts`'s `runAudit` does, rather than
+ * queueing a retry the tick could never work.
  */
 export async function retryRun(_previous: RetryState, form: FormData): Promise<RetryState> {
   const user = await getSessionUser()
@@ -63,15 +64,14 @@ export async function retryRun(_previous: RetryState, form: FormData): Promise<R
   const runId = String(form.get('runId') ?? '')
   if (!runId) return { message: 'That form was missing its run.' }
 
-  let callModel
   try {
-    callModel = anthropicModelCaller()
+    anthropicModelCaller()
   } catch (error) {
     if (error instanceof AnthropicKeyMissingError) return { message: error.message }
     throw error
   }
 
-  const result = await retryFailedSteps(getAdminClient(), runId, { callModel, userId: user.id })
+  const result = await retryFailedSteps(getAdminClient(), runId)
   if (!result.ok) return { message: result.message }
 
   revalidatePath(`/review/${runId}`)

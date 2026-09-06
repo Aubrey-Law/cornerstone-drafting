@@ -8,5 +8,8 @@
   },
   "github": {
     "silent": true
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/tick", "schedule": "* * * * *" }
+  ]
 }

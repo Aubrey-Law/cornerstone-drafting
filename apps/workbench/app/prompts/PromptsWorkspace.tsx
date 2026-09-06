@@ -144,18 +144,22 @@ export function PromptsWorkspace({
 
         {state.ok ? (
           <div className="rounded-md border border-border p-3 text-sm" data-testid="run-result">
-            <p className="font-medium">
-              {state.findingCount} {state.findingCount === 1 ? 'finding' : 'findings'}, {state.tasksCreated}{' '}
-              {state.tasksCreated === 1 ? 'task' : 'tasks'} created.
-            </p>
+            {/* The audit is queued, not finished — `runAudit` no longer calls
+                the model itself, so there is no finding count or task count
+                to report yet (see app/prompts/actions.ts). Pointing at the
+                run's own page, which keeps refreshing until it settles, beats
+                showing counts that are still null. */}
             {state.runId ? (
-              <p className="text-xs text-muted-foreground">
+              <p>
+                Queued.{' '}
                 <Link href={`/prompts/${state.runId}`} className="underline underline-offset-4">
-                  Run {state.runId}
-                </Link>{' '}
-                recorded.
+                  Follow its progress
+                </Link>
+                .
               </p>
-            ) : null}
+            ) : (
+              <p className="font-medium">Queued.</p>
+            )}
           </div>
         ) : null}
 

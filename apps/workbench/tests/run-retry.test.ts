@@ -3,14 +3,19 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import { retryFailedSteps } from '@/lib/runs/retry'
 import { makeFakeClient } from './helpers/fakeSupabase'
-import { FIELD_AUDIT_TOOL_NAME } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
-import { REVIEW_TOOL_NAME } from '@aubrey-law/citations/review/runReview'
-import type { ModelRequest, ModelResponse } from '@aubrey-law/citations/review/model'
 import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import type { ReviewRule } from '@aubrey-law/citations/review/types'
 
 /**
  * Retrying a run — proving the property the whole slice exists for.
+ *
+ * `retryFailedSteps` used to run the matching engine itself, over just the
+ * failed units, in the same request. It no longer does: it marks the failed
+ * units `pending` again and queues the run, and a tick does the actual work
+ * — `tests/run-worker.test.ts` is where "the model is called only for
+ * `pending` units" now lives, since that is a property of the worker, not of
+ * retry. What belongs here is what retry itself is responsible for: which
+ * steps it touches, and which it leaves alone.
  *
  * `stubClientWithRun` builds on `makeFakeClient` (`./helpers/fakeSupabase`)
  * rather than a second hand-rolled fake: it seeds a `field_audit` run, its
@@ -34,58 +39,11 @@ const AUDIT_BODY: FieldAuditBody = {
   checks: AUDIT_CHECKS,
 }
 
-function unitOf(request: ModelRequest): string {
-  const content = String((request.messages[0] as { content: unknown }).content)
-  const match = content.match(/Check (\S+):/)
-  if (!match) throw new Error(`Could not find a check number in the request: ${content}`)
-  return match[1]
-}
-
-function sheetTextOf(request: ModelRequest): string {
-  const system = request.system as Array<{ text: string }>
-  // index 0 is the static instructions; index 1 is the cached, varying sheet.
-  return system[1]?.text ?? ''
-}
-
-function reply(): ModelResponse {
-  return {
-    content: [
-      {
-        type: 'tool_use',
-        name: FIELD_AUDIT_TOOL_NAME,
-        id: 'x',
-        input: { outcome: 'compliant', rationale: 'Fine.', references: [] },
-      },
-    ],
-  } as unknown as ModelResponse
-}
-
-/**
- * A deviation whose one reference verifies against `resolved_inputs`'
- * default `concerns` value — an actionable finding, the kind
- * `actionableFindings` keeps and `emitTasks` turns into a task.
- */
-function actionableReply(): ModelResponse {
-  return {
-    content: [
-      {
-        type: 'tool_use',
-        name: FIELD_AUDIT_TOOL_NAME,
-        id: 'x',
-        input: {
-          outcome: 'deviation',
-          rationale: 'The concern is not addressed by the plan.',
-          references: [{ field_key: 'concerns', claimed_value: 'the original words' }],
-        },
-      },
-    ],
-  } as unknown as ModelResponse
-}
-
 interface StepSeed {
   unit_id: string
   status: 'pending' | 'running' | 'succeeded' | 'failed'
   sequence: number
+  attempts?: number
   finding_id?: string | null
 }
 
@@ -94,16 +52,16 @@ interface StubConfig {
   resolved_inputs?: Record<string, unknown>
   prompt_version_id?: string
   findings?: Array<{ id: string; run_id: string; rule_number: string }>
-  tasks?: Array<Record<string, unknown>>
+  run_status?: string
 }
 
 /**
  * A field-audit run, seeded with its steps and its own pinned prompt
  * version — and, deliberately, a `design_sheets` row holding a *different*
- * value than `resolved_inputs`. That row is never read by a correct
- * `retryFailedSteps`: it exists so that the break/restore experiment (make
- * retry read the live sheet instead of the pinned column) has something
- * different to leak, rather than happening to pass either way.
+ * value than `resolved_inputs`. Retry no longer replays anything against
+ * either — `loadRunContext` is called only to confirm the run still
+ * resolves — but the mismatch stays seeded so a regression that started
+ * reading the live sheet again would still have something to leak.
  */
 function stubClientWithRun(config: StubConfig) {
   const promptVersionId = config.prompt_version_id ?? 'v1'
@@ -112,6 +70,7 @@ function stubClientWithRun(config: StubConfig) {
       {
         id: 'run-1',
         kind: 'field_audit',
+        status: config.run_status ?? 'partial',
         prompt_version_id: promptVersionId,
         matter_id: 'm1',
         resolved_inputs: config.resolved_inputs ?? { concerns: 'the original words' },
@@ -125,7 +84,7 @@ function stubClientWithRun(config: StubConfig) {
       unit_id: step.unit_id,
       status: step.status,
       sequence: step.sequence,
-      attempts: 1,
+      attempts: step.attempts ?? 1,
       finding_id: step.finding_id ?? null,
     })),
     workflow_findings: config.findings ?? [],
@@ -133,362 +92,6 @@ function stubClientWithRun(config: StubConfig) {
     prompt_versions: [{ id: promptVersionId, version_number: 1, body: AUDIT_BODY, prompt_id: 'p1' }],
     matters: [{ id: 'm1', name: 'Test matter' }],
     design_sheets: [{ matter_id: 'm1', version: 1, concerns: 'edited since' }],
-    tasks: config.tasks ?? [],
-  })
-
-  const deletedFindings: string[] = []
-  const versionsRead: string[] = []
-
-  return {
-    tableRows: base.tableRows,
-    deletedFindings,
-    versionsRead,
-    from(table: string) {
-      const builder = base.from(table) as unknown as {
-        eq: (column: string, value: unknown) => unknown
-        delete: () => { eq: (column: string, value: unknown) => unknown }
-      }
-      if (table === 'prompt_versions') {
-        const originalEq = builder.eq.bind(builder)
-        builder.eq = (column: string, value: unknown) => {
-          if (column === 'id') versionsRead.push(String(value))
-          return originalEq(column, value)
-        }
-      }
-      if (table === 'workflow_findings') {
-        const originalDelete = builder.delete.bind(builder)
-        builder.delete = () => {
-          const del = originalDelete()
-          const originalDelEq = del.eq.bind(del)
-          del.eq = (column: string, value: unknown) => {
-            if (column === 'id') deletedFindings.push(String(value))
-            return originalDelEq(column, value)
-          }
-          return del
-        }
-      }
-      return builder
-    },
-  }
-}
-
-function client(config: StubConfig) {
-  return stubClientWithRun(config) as unknown as SupabaseClient<WorkbenchDatabase>
-}
-
-describe('retrying a run', () => {
-  it('calls the model only for the units that failed', async () => {
-    // The whole point. A run that lost one check of six must cost one call
-    // to fix, not six — and the five that succeeded must not be re-paid for.
-    const called: string[] = []
-    await retryFailedSteps(
-      client({
-        steps: [
-          { unit_id: '1', status: 'succeeded', sequence: 0 },
-          { unit_id: '2', status: 'failed', sequence: 1 },
-          { unit_id: '3', status: 'succeeded', sequence: 2 },
-        ],
-      }),
-      'run-1',
-      {
-        callModel: async (request) => {
-          called.push(unitOf(request))
-          return reply()
-        },
-      },
-    )
-    expect(called).toEqual(['2'])
-  })
-
-  it('replays against the evidence the run was pinned to, not the sheet as it is now', async () => {
-    // A retry an hour later must answer the same question the run asked. A
-    // sheet edited in between belongs to a fresh run, not this one.
-    let seen = ''
-    await retryFailedSteps(
-      client({
-        resolved_inputs: { concerns: 'the original words' },
-        steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
-      }),
-      'run-1',
-      {
-        callModel: async (request) => {
-          seen = sheetTextOf(request)
-          return reply()
-        },
-      },
-    )
-    expect(seen).toContain('the original words')
-    expect(seen).not.toContain('edited since')
-  })
-
-  it('uses the prompt version the run used, not whatever is published now', async () => {
-    // A retry finishes the run it belongs to. Silently upgrading it to a
-    // newer wording would make the run's findings answers to two questions.
-    const stub = stubClientWithRun({
-      prompt_version_id: 'v1',
-      steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
-    })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => reply(),
-    })
-    expect(stub.versionsRead).toEqual(['v1'])
-  })
-
-  it('does nothing when no step failed', async () => {
-    let calls = 0
-    const result = await retryFailedSteps(
-      client({ steps: [{ unit_id: '1', status: 'succeeded', sequence: 0 }] }),
-      'run-1',
-      { callModel: async () => { calls += 1; return reply() } },
-    )
-    expect(calls).toBe(0)
-    expect(result).toEqual({ ok: true, retried: 0 })
-  })
-
-  it('replaces the finding its earlier attempt left, and only that one', async () => {
-    // workflow_findings has unique (run_id, rule_number), so a retried
-    // unit's new finding collides with the one its earlier attempt left. The
-    // old one is a superseded answer to the same question from the same
-    // run — keeping both would make the constraint a lie. Another unit's
-    // finding is untouched.
-    const stub = stubClientWithRun({
-      steps: [
-        { unit_id: '1', status: 'succeeded', sequence: 0, finding_id: 'f1' },
-        { unit_id: '2', status: 'failed', sequence: 1, finding_id: 'f2' },
-      ],
-      findings: [
-        { id: 'f1', run_id: 'run-1', rule_number: '1' },
-        { id: 'f2', run_id: 'run-1', rule_number: '2' },
-      ],
-    })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => reply(),
-    })
-    expect(stub.deletedFindings).toEqual(['f2'])
-  })
-
-  it('deletes nothing when the retried step never produced a finding', async () => {
-    // The only step being retried here has finding_id: null — a genuine
-    // null, not an absent field a lenient check would let slide by.
-    const stub = stubClientWithRun({
-      steps: [{ unit_id: '1', status: 'failed', sequence: 0, finding_id: null }],
-    })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => reply(),
-    })
-    expect(stub.deletedFindings).toEqual([])
-  })
-
-  /**
-   * The gap this commit closes: a check that failed, was retried, and now
-   * reports a verified actionable finding must create the task a first run
-   * would have given it. Before this, `retryFailedSteps` never called
-   * `emitTasks` at all, so this finding showed on screen and created nothing.
-   */
-  it('a retry that turns a failure into a verified actionable finding creates the task for it', async () => {
-    const stub = stubClientWithRun({
-      steps: [
-        { unit_id: '1', status: 'succeeded', sequence: 0 },
-        { unit_id: '2', status: 'failed', sequence: 1 },
-        { unit_id: '3', status: 'succeeded', sequence: 2 },
-      ],
-    })
-    const result = await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => actionableReply(),
-    })
-    expect(result).toEqual({ ok: true, retried: 1 })
-
-    const tasks = stub.tableRows('tasks')
-    expect(tasks).toHaveLength(1)
-    expect(tasks[0]).toMatchObject({
-      matter_id: 'm1',
-      source: 'prompt',
-      // Tags both the run and the unit — the retried check, "2" — so a
-      // later retry of a *different* unit in this same run never touches
-      // this task by mistake.
-      batch_tag: 'prompt:run-1#2',
-      title: 'Task',
-    })
-  })
-
-  /**
-   * The other half of the same gap: a retry must supersede only the unit it
-   * actually retried, never the tasks standing for units it left alone —
-   * `tasksToSupersedeForUnits`, not the first-run `tasksToSupersede`.
-   */
-  it('supersedes only that unit’s earlier task, leaving other units’ tasks alone', async () => {
-    const stub = stubClientWithRun({
-      steps: [
-        { unit_id: '1', status: 'succeeded', sequence: 0 },
-        { unit_id: '2', status: 'failed', sequence: 1 },
-        { unit_id: '3', status: 'succeeded', sequence: 2 },
-      ],
-      tasks: [
-        {
-          id: 'task-unit-2',
-          matter_id: 'm1',
-          source: 'prompt',
-          task_type: 'single',
-          auto: true,
-          batch_tag: 'prompt:run-1#2',
-          title: 'Old task for unit 2',
-          description: 'Stale.',
-          priority: 'high',
-          status: 'open',
-          assignee_id: null,
-        },
-        {
-          id: 'task-unit-1',
-          matter_id: 'm1',
-          source: 'prompt',
-          task_type: 'single',
-          auto: true,
-          batch_tag: 'prompt:run-1#1',
-          title: 'Task for unit 1',
-          description: 'Untouched by this retry.',
-          priority: 'high',
-          status: 'open',
-          assignee_id: null,
-        },
-      ],
-    })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => actionableReply(),
-    })
-
-    const tasks = stub.tableRows('tasks')
-    const byId = new Map(tasks.map((task) => [String(task.id), task]))
-
-    // The old task for the retried unit is archived — this retry replaced it.
-    expect(byId.get('task-unit-2')?.status).toBe('archived')
-    // Unit 1 never failed and was never retried: its task is untouched.
-    expect(byId.get('task-unit-1')?.status).toBe('open')
-    // And the new task the retry itself just created is not immediately
-    // superseded by its own insert — see emitTasks' read-before-insert order.
-    // (The fake table applies no DB default, so the freshly-inserted row
-    // carries no `status` at all rather than the real schema's `open`
-    // default — what matters here is that it is not `archived`.)
-    const newTaskForUnit2 = tasks.find((task) => task.id !== 'task-unit-2' && task.batch_tag === 'prompt:run-1#2')
-    expect(newTaskForUnit2).toBeDefined()
-    expect(newTaskForUnit2?.status).not.toBe('archived')
-  })
-})
-
-/**
- * The review half of retry — unproven until now. `retryFailedSteps` handles
- * both kinds, but every test above exercises only the field-audit branch: how
- * the retried units are picked out of the prompt body (`body.rules`), and how
- * the pinned evidence is rebuilt (the stored text layer, read back by
- * `text_layer_id`, never re-extracted from R2). See the header comment in
- * `lib/runs/retry.ts` for why those are the only two places the two kinds
- * differ at all.
- */
-
-const REVIEW_RULES: ReviewRule[] = ['1', '2'].map((number) => ({
-  number,
-  statement: `Rule ${number}.`,
-  risk: 'high',
-}))
-
-const REVIEW_BODY = {
-  kind: 'review' as const,
-  inputs: [],
-  rules: REVIEW_RULES,
-}
-
-// Distinctive text that only the *stored* text layer carries — never a value
-// a live re-extraction of the document could coincidentally reproduce. Its
-// presence in the request a retry sends is what proves the layer came back
-// from `document_text_layers`, not from anywhere else.
-const STORED_LAYER_TEXT = 'The stored paragraph nobody re-extracted.'
-
-function reviewRuleOf(request: ModelRequest): string {
-  const content = String((request.messages[0] as { content: unknown }).content)
-  const match = content.match(/Rule (\S+):/)
-  if (!match) throw new Error(`Could not find a rule number in the request: ${content}`)
-  return match[1]
-}
-
-function documentTextOf(request: ModelRequest): string {
-  const system = request.system as Array<{ text: string }>
-  // index 0 is the static instructions; index 1 is the cached document text.
-  return system[1]?.text ?? ''
-}
-
-function reviewReply(): ModelResponse {
-  return {
-    content: [
-      {
-        type: 'tool_use',
-        name: REVIEW_TOOL_NAME,
-        id: 'x',
-        input: {
-          outcome: 'compliant',
-          rationale: 'Fine.',
-          quote: null,
-          block_index: null,
-          proposed_language: null,
-        },
-      },
-    ],
-  } as unknown as ModelResponse
-}
-
-interface ReviewStubConfig {
-  steps: StepSeed[]
-  prompt_version_id?: string
-}
-
-/**
- * A review run, seeded with its steps, its own pinned prompt version, and the
- * text layer it actually reviewed — read back through the same `toLayer`
- * conversion `lib/review/history.ts` exports for exactly this purpose.
- * `makeFakeClient` already represents `document_text_layers` as a plain
- * table like any other, so nothing needed extending there.
- */
-function stubReviewClient(config: ReviewStubConfig) {
-  const promptVersionId = config.prompt_version_id ?? 'v1'
-  const base = makeFakeClient({
-    workflow_runs: [
-      {
-        id: 'run-1',
-        kind: 'review',
-        prompt_version_id: promptVersionId,
-        matter_id: 'm1',
-        resolved_inputs: null,
-        text_layer_id: 'layer-1',
-        document_version_id: 'docver-1',
-        model: null,
-      },
-    ],
-    workflow_run_steps: config.steps.map((step) => ({
-      run_id: 'run-1',
-      unit_id: step.unit_id,
-      status: step.status,
-      sequence: step.sequence,
-      attempts: 1,
-      finding_id: step.finding_id ?? null,
-    })),
-    workflow_findings: [],
-    prompts: [{ id: 'p1', slug: 'review-1', title: 'Review One', kind: 'review' }],
-    prompt_versions: [{ id: promptVersionId, version_number: 1, body: REVIEW_BODY, prompt_id: 'p1' }],
-    matters: [{ id: 'm1', name: 'Test matter' }],
-    document_text_layers: [
-      {
-        id: 'layer-1',
-        source_kind: 'docx',
-        status: 'ok',
-        extractor: 'test',
-        extractor_version: '1',
-        source_sha256: 'a'.repeat(64),
-        page_count: null,
-        text: STORED_LAYER_TEXT,
-        blocks: [
-          { index: 0, charStart: 0, charEnd: STORED_LAYER_TEXT.length, text: STORED_LAYER_TEXT, page: null, bbox: null },
-        ],
-        spans: [],
-      },
-    ],
     tasks: [],
   })
 
@@ -528,51 +131,251 @@ function stubReviewClient(config: ReviewStubConfig) {
   }
 }
 
-function reviewClient(config: ReviewStubConfig) {
-  return stubReviewClient(config) as unknown as SupabaseClient<WorkbenchDatabase>
+function stepsOf(stub: ReturnType<typeof stubClientWithRun>) {
+  return stub.tableRows('workflow_run_steps') as Array<{
+    unit_id: string
+    status: string
+    attempts: number
+    finding_id: string | null
+  }>
 }
 
-describe('retrying a review run', () => {
-  it('calls the model only for the failed rule', async () => {
-    const called: string[] = []
-    await retryFailedSteps(
-      reviewClient({
-        steps: [
-          { unit_id: '1', status: 'succeeded', sequence: 0 },
-          { unit_id: '2', status: 'failed', sequence: 1 },
-        ],
-      }),
-      'run-1',
-      {
-        callModel: async (request) => {
-          called.push(reviewRuleOf(request))
-          return reviewReply()
-        },
-      },
-    )
-    expect(called).toEqual(['2'])
+function stepFor(stub: ReturnType<typeof stubClientWithRun>, unitId: string) {
+  return stepsOf(stub).find((step) => step.unit_id === unitId)
+}
+
+describe('retrying a run', () => {
+  it('marks only the failed units pending, leaving the successful ones untouched', async () => {
+    // The whole point. A run that lost one check of three must requeue one
+    // check, not three — and the two that succeeded must not be re-paid for.
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0, attempts: 1, finding_id: 'f1' },
+        { unit_id: '2', status: 'failed', sequence: 1, attempts: 1 },
+        { unit_id: '3', status: 'succeeded', sequence: 2, attempts: 1, finding_id: 'f3' },
+      ],
+      findings: [
+        { id: 'f1', run_id: 'run-1', rule_number: '1' },
+        { id: 'f3', run_id: 'run-1', rule_number: '3' },
+      ],
+    })
+
+    const result = await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+
+    expect(result).toEqual({ ok: true, retried: 1 })
+
+    const retried = stepFor(stub, '2')
+    expect(retried?.status).toBe('pending')
+    expect(retried?.finding_id).toBeNull()
+
+    // Untouched in every field that proves nothing was re-paid for: still
+    // `succeeded`, still one attempt, still pointing at the finding it
+    // always did.
+    const unit1 = stepFor(stub, '1')
+    expect(unit1?.status).toBe('succeeded')
+    expect(unit1?.attempts).toBe(1)
+    expect(unit1?.finding_id).toBe('f1')
+
+    const unit3 = stepFor(stub, '3')
+    expect(unit3?.status).toBe('succeeded')
+    expect(unit3?.attempts).toBe(1)
+    expect(unit3?.finding_id).toBe('f3')
+  })
+
+  it('sets the run back to queued, so a tick claims it', async () => {
+    const stub = stubClientWithRun({
+      run_status: 'partial',
+      steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    const runs = stub.tableRows('workflow_runs')
+    expect(runs[0].status).toBe('queued')
+  })
+
+  it('uses the prompt version the run used, not whatever is published now', async () => {
+    // A retry finishes the run it belongs to. Silently upgrading it to a
+    // newer wording would make the run's findings answers to two questions.
+    // `retryFailedSteps` still confirms this through `loadRunContext` before
+    // touching anything, even though it no longer replays against the body.
+    const stub = stubClientWithRun({
+      prompt_version_id: 'v1',
+      steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(stub.versionsRead).toEqual(['v1'])
+  })
+
+  it('does nothing when no step failed', async () => {
+    const stub = stubClientWithRun({ steps: [{ unit_id: '1', status: 'succeeded', sequence: 0 }] })
+    const result = await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(result).toEqual({ ok: true, retried: 0 })
+    // Not even the run's own status was touched.
+    expect(stub.tableRows('workflow_runs')[0].status).toBe('partial')
+  })
+
+  it('replaces the finding its earlier attempt left, and only that one', async () => {
+    // workflow_findings has unique (run_id, rule_number), so a retried
+    // unit's new finding — once the tick writes it — would collide with the
+    // one its earlier attempt left. The old one is a superseded answer to
+    // the same question from the same run — keeping both would make the
+    // constraint a lie. Another unit's finding is untouched.
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0, finding_id: 'f1' },
+        { unit_id: '2', status: 'failed', sequence: 1, finding_id: 'f2' },
+      ],
+      findings: [
+        { id: 'f1', run_id: 'run-1', rule_number: '1' },
+        { id: 'f2', run_id: 'run-1', rule_number: '2' },
+      ],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(stub.deletedFindings).toEqual(['f2'])
+  })
+
+  it('deletes nothing when the retried step never produced a finding', async () => {
+    // The only step being retried here has finding_id: null — a genuine
+    // null, not an absent field a lenient check would let slide by.
+    const stub = stubClientWithRun({
+      steps: [{ unit_id: '1', status: 'failed', sequence: 0, finding_id: null }],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(stub.deletedFindings).toEqual([])
   })
 
   /**
-   * The layer this run actually reviewed, read back rather than
-   * re-extracted — nothing is re-fetched from storage. The request a retry
-   * sends must carry the *stored* layer's text, not a freshly re-extracted
-   * document (there is nowhere else for it to come from in this stub, which
-   * is exactly the point).
+   * Task creation moved to the tick, entirely — see `lib/runs/retry.ts`'s
+   * header comment. Before this, `retryFailedSteps` called `emitTasks`
+   * itself once its (inline) engine call came back; now it has no findings
+   * of its own to call it with, so nothing is ever written to `tasks` here,
+   * for a field audit or otherwise.
    */
-  it('rebuilds the layer from the run’s text_layer_id and does not re-read the document from storage', async () => {
-    let seen = ''
-    await retryFailedSteps(
-      reviewClient({ steps: [{ unit_id: '1', status: 'failed', sequence: 0 }] }),
-      'run-1',
+  it('creates no tasks itself — that is the tick’s job, once the requeued run finishes', async () => {
+    const stub = stubClientWithRun({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0 },
+        { unit_id: '2', status: 'failed', sequence: 1 },
+      ],
+    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(stub.tableRows('tasks')).toEqual([])
+  })
+})
+
+/**
+ * The review half of retry — every test above exercises only the
+ * field-audit branch's own data shape (`resolved_inputs`, no text layer).
+ * `retryFailedSteps` no longer branches on `context.kind` at all — see the
+ * header comment in `lib/runs/retry.ts` — so this exists to prove the same
+ * "only the failed unit, nothing else touched" property holds for a review
+ * run's steps too, not to re-prove anything already covered above.
+ */
+
+const REVIEW_RULES: ReviewRule[] = ['1', '2'].map((number) => ({
+  number,
+  statement: `Rule ${number}.`,
+  risk: 'high',
+}))
+
+const REVIEW_BODY = {
+  kind: 'review' as const,
+  inputs: [],
+  rules: REVIEW_RULES,
+}
+
+const STORED_LAYER_TEXT = 'The stored paragraph nobody re-extracted.'
+
+interface ReviewStubConfig {
+  steps: StepSeed[]
+  prompt_version_id?: string
+  run_status?: string
+}
+
+function stubReviewClient(config: ReviewStubConfig) {
+  const promptVersionId = config.prompt_version_id ?? 'v1'
+  const base = makeFakeClient({
+    workflow_runs: [
       {
-        callModel: async (request) => {
-          seen = documentTextOf(request)
-          return reviewReply()
-        },
+        id: 'run-1',
+        kind: 'review',
+        status: config.run_status ?? 'partial',
+        prompt_version_id: promptVersionId,
+        matter_id: 'm1',
+        resolved_inputs: null,
+        text_layer_id: 'layer-1',
+        document_version_id: 'docver-1',
+        model: null,
       },
-    )
-    expect(seen).toContain(STORED_LAYER_TEXT)
+    ],
+    workflow_run_steps: config.steps.map((step) => ({
+      run_id: 'run-1',
+      unit_id: step.unit_id,
+      status: step.status,
+      sequence: step.sequence,
+      attempts: step.attempts ?? 1,
+      finding_id: step.finding_id ?? null,
+    })),
+    workflow_findings: [],
+    prompts: [{ id: 'p1', slug: 'review-1', title: 'Review One', kind: 'review' }],
+    prompt_versions: [{ id: promptVersionId, version_number: 1, body: REVIEW_BODY, prompt_id: 'p1' }],
+    matters: [{ id: 'm1', name: 'Test matter' }],
+    document_text_layers: [
+      {
+        id: 'layer-1',
+        source_kind: 'docx',
+        status: 'ok',
+        extractor: 'test',
+        extractor_version: '1',
+        source_sha256: 'a'.repeat(64),
+        page_count: null,
+        text: STORED_LAYER_TEXT,
+        blocks: [
+          { index: 0, charStart: 0, charEnd: STORED_LAYER_TEXT.length, text: STORED_LAYER_TEXT, page: null, bbox: null },
+        ],
+        spans: [],
+      },
+    ],
+    tasks: [],
+  })
+
+  const versionsRead: string[] = []
+
+  return {
+    tableRows: base.tableRows,
+    versionsRead,
+    from(table: string) {
+      const builder = base.from(table) as unknown as {
+        eq: (column: string, value: unknown) => unknown
+      }
+      if (table === 'prompt_versions') {
+        const originalEq = builder.eq.bind(builder)
+        builder.eq = (column: string, value: unknown) => {
+          if (column === 'id') versionsRead.push(String(value))
+          return originalEq(column, value)
+        }
+      }
+      return builder
+    },
+  }
+}
+
+describe('retrying a review run', () => {
+  it('marks only the failed rule pending, leaving the succeeded one untouched', async () => {
+    const stub = stubReviewClient({
+      steps: [
+        { unit_id: '1', status: 'succeeded', sequence: 0, attempts: 1 },
+        { unit_id: '2', status: 'failed', sequence: 1, attempts: 1 },
+      ],
+    })
+    const result = await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(result).toEqual({ ok: true, retried: 1 })
+
+    const steps = stub.tableRows('workflow_run_steps') as Array<{ unit_id: string; status: string; attempts: number }>
+    const unit1 = steps.find((s) => s.unit_id === '1')
+    const unit2 = steps.find((s) => s.unit_id === '2')
+    expect(unit2?.status).toBe('pending')
+    expect(unit1?.status).toBe('succeeded')
+    expect(unit1?.attempts).toBe(1)
   })
 
   it('uses the run’s own prompt_version_id, not the published one', async () => {
@@ -580,24 +383,16 @@ describe('retrying a review run', () => {
       prompt_version_id: 'v1',
       steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
     })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => reviewReply(),
-    })
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
     expect(stub.versionsRead).toEqual(['v1'])
   })
 
-  /**
-   * Only a field audit's retry emits tasks — see `lib/runs/retry.ts`'s
-   * `fieldAuditTasks`, set on the field-audit branch only and left `null` on
-   * the review one. A review retry must write nothing to `tasks` at all.
-   */
-  it('creates no tasks — only a field audit does', async () => {
+  it('sets the run back to queued', async () => {
     const stub = stubReviewClient({
+      run_status: 'failed',
       steps: [{ unit_id: '1', status: 'failed', sequence: 0 }],
     })
-    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1', {
-      callModel: async () => reviewReply(),
-    })
-    expect(stub.tableRows('tasks')).toEqual([])
+    await retryFailedSteps(stub as unknown as SupabaseClient<WorkbenchDatabase>, 'run-1')
+    expect(stub.tableRows('workflow_runs')[0].status).toBe('queued')
   })
 })

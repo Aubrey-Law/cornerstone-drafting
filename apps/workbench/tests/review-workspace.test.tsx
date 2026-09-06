@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { Component, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -14,6 +15,29 @@ vi.mock('@aubrey-law/citations/react/PdfCitationViewer', () => ({
     return <div data-testid="pdf-viewer" />
   },
 }))
+
+// Follows tests/login-form.test.tsx's mock of next/navigation: a queued run
+// sends the browser to its own page rather than rendering a result the
+// response never carries.
+const routerPush = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}))
+
+/**
+ * Catches a render-phase throw and shows `data-testid="crashed"` instead of
+ * letting the whole tree unmount silently. Used only by the queued-response
+ * test below, to make a regression here fail loudly rather than time out.
+ */
+class ProbeBoundary extends Component<{ children: ReactNode }, { crashed: boolean }> {
+  state = { crashed: false }
+  static getDerivedStateFromError() {
+    return { crashed: true }
+  }
+  render() {
+    return this.state.crashed ? <div data-testid="crashed" /> : this.props.children
+  }
+}
 
 import { ReviewWorkspace } from '@/app/review/ReviewWorkspace'
 
@@ -84,6 +108,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  routerPush.mockClear()
 })
 
 describe('ReviewWorkspace', () => {
@@ -253,5 +278,39 @@ describe('ReviewWorkspace, whether the review was recorded', () => {
     render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     expect(await screen.findByTestId('save-state')).toHaveTextContent(/duplicate key/i)
+  })
+})
+
+/**
+ * A run against a filed document is now queued, not run in the same request
+ * (`app/api/staff/review/route.ts`) — the response carries `{ runId, queued:
+ * true }` and no `result` at all. `ReviewWorkspace` used to always call
+ * `setReview(payload)` and then read `review.result.findings` unconditionally,
+ * which throws for exactly this shape: a real anchored review would crash on
+ * screen for a real user. This must send the browser to the run's own page
+ * instead of pretending a result arrived.
+ */
+describe('ReviewWorkspace, a queued run', () => {
+  const QUEUED_PAYLOAD = {
+    filename: 'smith-trust.pdf',
+    anchor: { documentVersionId: 'v-1', documentId: 'd-1', matterId: 'm-1' },
+    runId: 'run-9',
+    saveError: null,
+    playbook: { slug: 'ma-trust-firm-qa', title: PLAYBOOK.title, version: 1 },
+    layer: PAYLOAD.layer,
+    queued: true,
+  }
+
+  it('sends the browser to the run’s page instead of rendering a result that was never sent', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(QUEUED_PAYLOAD), { status: 200 })))
+    render(
+      <ProbeBoundary>
+        <ReviewWorkspace playbook={PLAYBOOK} matters={[]} />
+      </ProbeBoundary>,
+    )
+    await upload()
+
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith('/review/run-9'))
+    expect(screen.queryByTestId('crashed')).toBeNull()
   })
 })

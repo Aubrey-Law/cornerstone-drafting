@@ -49,13 +49,14 @@ export async function runAudit(_previous: RunAuditState, form: FormData): Promis
   if (!slug) return { ...emptyState, ok: false, message: 'Choose a prompt to run.' }
   if (!matterId) return { ...emptyState, ok: false, message: 'Choose a matter to run it against.' }
 
-  let callModel
+  // Failed fast, before queueing a run the tick could never work: matches how
+  // app/api/staff/review/route.ts treats the same error. `runMatterAudit`
+  // itself no longer calls the model — the tick does, once it claims the
+  // run — so the caller isn't handed on; this is only the early check.
   try {
-    callModel = anthropicModelCaller()
+    anthropicModelCaller()
   } catch (error) {
     if (error instanceof AnthropicKeyMissingError) {
-      // Matches how app/api/staff/review/route.ts treats the same error: the
-      // app is fine, this feature is not configured.
       return { ...emptyState, ok: false, message: error.message }
     }
     throw error
@@ -65,15 +66,17 @@ export async function runAudit(_previous: RunAuditState, form: FormData): Promis
     slug,
     matterId,
     userId: user.id,
-    callModel,
   })
   if (!result.ok) return { ...emptyState, ok: false, message: result.message }
 
+  // Queued, not finished: the tick — not this request — is what will find
+  // any findings and create any tasks. `findingCount`/`tasksCreated` stay
+  // null until then; showing "3 of 40" instead is Task 9's job.
   return {
     ok: true,
     message: null,
     runId: result.runId,
-    findingCount: result.findingCount,
-    tasksCreated: result.tasksCreated,
+    findingCount: null,
+    tasksCreated: null,
   }
 }

@@ -6,6 +6,14 @@ const complete: Record<string, string> = Object.fromEntries(
 )
 
 describe('workbench environment validation', () => {
+  it('requires CRON_SECRET, so the tick route cannot silently run unauthenticated', () => {
+    // The other assertions below all derive their expectations from
+    // `REQUIRED_SERVER_ENV` itself, so they would pass unchanged no matter
+    // what the list contained — this is the one that actually pins down that
+    // the tick route's secret (`app/api/cron/tick/route.ts`) is on it.
+    expect(REQUIRED_SERVER_ENV).toContain('CRON_SECRET')
+  })
+
   it('names every missing required variable at once', () => {
     const result = checkEnv({})
     expect(result.ok).toBe(false)

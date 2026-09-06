@@ -16,7 +16,16 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
 
-const SOURCE_DIRS = ['app', 'lib', 'components']
+// The root app's own directories, plus the workbench's. The workbench calls
+// `ensure_user_profile` on its sign-in path, and scanning only the repository
+// root meant that call — and every one the workbench adds — went unverified.
+const SOURCE_DIRS = [
+  'app',
+  'lib',
+  'components',
+  'apps/workbench/app',
+  'apps/workbench/lib',
+]
 const SOURCE_EXTS = new Set(['.ts', '.tsx'])
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'build'])
 const RPC_PATTERN = /\.rpc\(\s*['"`]([A-Za-z0-9_]+)['"`]/g
