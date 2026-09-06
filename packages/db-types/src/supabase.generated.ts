@@ -7052,6 +7052,84 @@ export type Database = {
           },
         ]
       }
+      prompt_stage_triggers: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          matter_id: string
+          prompt_id: string
+          run_id: string | null
+          settled_at: string | null
+          stage_entered_at: string
+          status: string
+          to_stage: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          matter_id: string
+          prompt_id: string
+          run_id?: string | null
+          settled_at?: string | null
+          stage_entered_at: string
+          status?: string
+          to_stage: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          matter_id?: string
+          prompt_id?: string
+          run_id?: string | null
+          settled_at?: string | null
+          stage_entered_at?: string
+          status?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_stage_triggers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_stage_triggers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "prompt_stage_triggers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "prompt_stage_triggers_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_stage_triggers_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_versions: {
         Row: {
           body: Json
@@ -7116,6 +7194,7 @@ export type Database = {
       prompts: {
         Row: {
           created_at: string
+          fires_on_stage_entry: string[]
           id: string
           is_system: boolean
           kind: string
@@ -7126,6 +7205,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          fires_on_stage_entry?: string[]
           id?: string
           is_system?: boolean
           kind: string
@@ -7136,6 +7216,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          fires_on_stage_entry?: string[]
           id?: string
           is_system?: boolean
           kind?: string
@@ -9692,6 +9773,28 @@ export type Database = {
           p_payload: Json
         }
         Returns: string
+      }
+      claim_prompt_stage_trigger: {
+        Args: { p_worker: string }
+        Returns: {
+          claimed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          matter_id: string
+          prompt_id: string
+          run_id: string | null
+          settled_at: string | null
+          stage_entered_at: string
+          status: string
+          to_stage: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "prompt_stage_triggers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       claim_webhook_event: {
         Args: {
