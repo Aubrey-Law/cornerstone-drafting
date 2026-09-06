@@ -324,8 +324,34 @@ describe('planEmit', () => {
     expect(plan.insert).toHaveLength(1)
   })
 
-  /** A ticked item is progress, not a stale suggestion to overwrite. */
-  it('withdraws rather than silently rewrites a checklist someone has ticked', () => {
+  /**
+   * A ticked item is someone's progress. `planEmit` only inserts and archives,
+   * so "not matching" means archived-and-replaced-with-a-blank-copy, never
+   * rewritten in place — which is why `done` is outside the content key.
+   */
+  it('keeps a checklist someone has partly ticked, so their progress survives', () => {
+    const row = desiredRow({
+      batch_tag: 'prompt:run-new',
+      task_type: 'checklist',
+      checklist: [
+        { text: 'One', done: false },
+        { text: 'Two', done: false },
+      ],
+    })
+    const ticked = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-new',
+      taskType: 'checklist',
+      checklist: [
+        { text: 'One', done: true },
+        { text: 'Two', done: false },
+      ],
+    })
+    expect(planEmit([ticked], [row])).toEqual({ insert: [], keep: ['list'], supersede: [] })
+  })
+
+  /** But a checklist whose *items* changed is a different checklist. */
+  it('replaces a checklist whose item text changed, ticks or not', () => {
     const row = desiredRow({
       batch_tag: 'prompt:run-new',
       task_type: 'checklist',
@@ -335,11 +361,32 @@ describe('planEmit', () => {
       id: 'list',
       batchTag: 'prompt:run-new',
       taskType: 'checklist',
-      checklist: [{ text: 'One', done: true }],
+      checklist: [{ text: 'Something else', done: true }],
     })
     const plan = planEmit([ticked], [row])
+    expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['list'])
     expect(plan.insert).toHaveLength(1)
+  })
+
+  /** `priority` alone, because it is a *derived* value — the highest among the
+   *  contributing checks — which is the kind of field a later refactor gets
+   *  wrong without anything failing. */
+  it('replaces a task whose priority alone changed', () => {
+    const plan = planEmit([open({ priority: 'normal' })], [desiredRow()])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['task-1'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /** The mirror of the self-heal case: one existing row against two identical
+   *  desired rows must keep it once and insert the second, which is where an
+   *  off-by-one in `matched` would show. */
+  it('claims each twin at most once when two desired rows are identical', () => {
+    const plan = planEmit([open({ id: 'only' })], [desiredRow(), desiredRow()])
+    expect(plan.keep).toEqual(['only'])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.supersede).toEqual([])
   })
 })
 

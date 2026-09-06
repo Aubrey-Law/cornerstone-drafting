@@ -174,14 +174,29 @@ export interface EmitPlan {
 }
 
 /**
- * Everything this call compares, as one string. Tag, title, description,
- * priority, type and items together: two tasks are the same task only if an
- * attorney reading them would learn the same thing.
+ * Everything this call compares, as one string: tag, title, description,
+ * priority, type, and the checklist items' text. Byte-identical, not
+ * semantically equivalent — the description embeds the model's own rationale,
+ * so a re-executed unit churns even when the finding is substantively the
+ * same. That is the intended trade; a comparison that tried to judge
+ * "substantively the same" would be a second verifier with nothing to verify
+ * against.
  *
- * The items are part of it because a checklist whose items changed is a
- * different checklist — and because a checklist someone has *ticked* differs
- * from the freshly-built one, which is what makes the tick a withdrawal
- * rather than a silent rewrite of their progress.
+ * **An item's `done` flag is deliberately excluded.** `planEmit` only inserts
+ * and archives — it has no branch that rewrites a row in place. So including
+ * `done` would mean a partly-ticked checklist stops matching, gets archived,
+ * and is replaced by a blank copy, taking the attorney's progress out of the
+ * working queue. Excluding it means the keys match, the row is kept untouched,
+ * and the ticks survive along with its id and `created_at`. Nothing is lost:
+ * if the findings really changed, the rationales in the description changed
+ * with them and the key mismatches on its own merits. `done` differs only when
+ * a person changed it, which is the one case that must not cause a withdrawal.
+ *
+ * The item text is read positionally rather than by stringifying each item
+ * object, because `jsonb` sorts object keys on the way in — a stored item
+ * comes back as `{"done":…,"text":…}` whatever order it was written in, so
+ * stringifying the objects would make every checklist comparison fail
+ * forever, silently, from the first real run.
  */
 function contentKey(parts: {
   batchTag: string | null
@@ -197,7 +212,8 @@ function contentKey(parts: {
     parts.description,
     parts.priority,
     parts.taskType,
-    parts.checklist.map((item) => [item.text, item.done]),
+    // Text only — see the note above on why `done` is excluded.
+    parts.checklist.map((item) => item.text),
   ])
 }
 
@@ -215,12 +231,22 @@ function contentKey(parts: {
  *
  * Asking about content instead of about units removes the need for the hint
  * altogether, and is what makes this idempotent: run it twice over an
- * unchanged run and the second call does nothing at all. A retried unit whose
- * rationale changed no longer matches, so it is withdrawn and re-created; a
- * unit the retry never touched matches exactly, so it keeps its id and its
- * `created_at`. Both `batch_tag` shapes — `prompt:<runId>#<unitId>` for a
- * task set and `prompt:<runId>` for a checklist — fall out of this with
- * neither being special-cased, which is why `parseBatchTag` is gone too.
+ * unchanged run and the second call does nothing at all — provided nobody
+ * edited the tasks in between, since a hand-edited title or description is a
+ * content change like any other.
+ *
+ * Idempotent *within a run*, to be exact. The tag carries the run id, so a
+ * genuinely new run is new content and an unchanged finding still archives and
+ * re-inserts. That is what the advisory logic in `lib/runs/advisory.ts`
+ * expects — a newer run's answer replaces an older one's — but it means the
+ * anti-churn argument below holds only for a run re-emitting its own tasks.
+ *
+ * A retried unit whose rationale changed no longer matches, so it is withdrawn
+ * and re-created; a unit the retry never touched matches exactly, so it keeps
+ * its id and its `created_at`. Both `batch_tag` shapes —
+ * `prompt:<runId>#<unitId>` for a task set and `prompt:<runId>` for a
+ * checklist — fall out of this with neither being special-cased, which is why
+ * `parseBatchTag` is gone too.
  *
  * Narrow on the same three axes it always was, for the same reasons:
  *
