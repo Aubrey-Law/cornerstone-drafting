@@ -4,11 +4,13 @@ import { requireStaff } from '@/lib/auth/requireStaff'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
-import { saveRun } from '@/lib/review/persist'
-import { runDocumentReview } from '@/lib/review/run'
+import { saveFindings, saveTextLayer } from '@/lib/review/persist'
+import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
 import { readObject } from '@/lib/storage/r2'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { openRun, recordStep, finaliseRun } from '@/lib/runs/record'
+import type { RunStep } from '@/lib/runs/steps'
 
 /**
  * Runs one review playbook against one uploaded document.
@@ -82,8 +84,8 @@ export async function POST(request: Request) {
   }
 
   // Loaded here rather than through `loadReviewPlaybook`, which returns only
-  // the shape the runner needs: `saveRun` below needs the version's id too,
-  // to record exactly which wording produced these findings.
+  // the shape the runner needs: the persisted run below needs the version's
+  // id too, to record exactly which wording produced these findings.
   const prompt = await loadPublishedPrompt(getAdminClient(), REVIEW_PLAYBOOK_SLUG)
   if (!prompt || prompt.body.kind !== 'review') {
     // 503, matching the missing-Anthropic-key case above: the app is fine,
@@ -99,31 +101,89 @@ export async function POST(request: Request) {
     version: prompt.versionNumber,
     rules: prompt.body.rules,
   }
-  const startedAt = new Date().toISOString()
 
   try {
-    const { layer, result } = await runDocumentReview(bytes, filename, playbook, {
+    const kind = extractorFor(filename)
+    if (!kind) {
+      throw new Error(`${filename} is not a PDF or a DOCX. Those are the formats a citation can be anchored in.`)
+    }
+    const layer = await buildLayer(bytes, kind)
+
+    const admin = getAdminClient()
+
+    // Recorded only for a filed document, and only for a document with an
+    // actual text layer — a scan throws from `reviewLayer` below before any
+    // rule ever runs, and a run opened ahead of that would be a `running`
+    // row this request could never finish. Everything else about a failure
+    // to store is reported rather than swallowed: a review the attorney
+    // believes was saved and was not is worse than one they know was not.
+    let runId: string | null = null
+    let textLayerId: string | null = null
+    let saveError: string | null = null
+
+    if (anchor && layer.status !== 'no_text') {
+      try {
+        const savedLayer = await saveTextLayer(admin, {
+          documentVersionId: anchor.documentVersionId,
+          layer,
+        })
+        if (savedLayer.ok) {
+          textLayerId = savedLayer.layerId
+          runId = await openRun(admin, {
+            matterId: anchor.matterId,
+            kind: 'review',
+            promptVersionId: prompt.versionId,
+            model: null,
+            unitTotal: playbook.rules.length,
+            userId: auth.user.id,
+            resolvedInputs: null,
+            documentVersionId: anchor.documentVersionId,
+            textLayerId,
+          })
+        } else {
+          saveError = savedLayer.message
+        }
+      } catch (error) {
+        // A storage hiccup opening the run must not stop the review itself
+        // from running and being shown — only from being saved.
+        runId = null
+        saveError = error instanceof Error ? error.message : 'Could not open the run.'
+      }
+    }
+
+    // Filled in as each rule settles, in the order it settled — which is
+    // playbook order, since runPrompt runs one unit at a time. This is what
+    // `finaliseRun` reads the run's status and counts from.
+    const steps: RunStep[] = []
+    let sequence = 0
+
+    const result = await reviewLayer(layer, playbook, {
       callModel,
       userId: auth.user.id,
+      onUnitSettled: runId
+        ? async (unitId, outcome) => {
+            const stepSequence = sequence
+            sequence += 1
+            await recordStep(admin, runId!, unitId, stepSequence, outcome, 1)
+            steps.push({
+              unitId,
+              status: outcome.ok ? 'succeeded' : 'failed',
+              attempts: 1,
+              sequence: stepSequence,
+            })
+          }
+        : undefined,
     })
-    // Recorded only for a filed document. A failure to store is reported rather
-    // than swallowed: a review the attorney believes was saved and was not is
-    // worse than one they know was not.
-    let runId: string | null = null
-    let saveError: string | null = null
-    if (anchor) {
-      const saved = await saveRun(getAdminClient(), {
-        matterId: anchor.matterId,
-        documentVersionId: anchor.documentVersionId,
-        layer,
-        promptVersionId: prompt.versionId,
-        model: null,
+
+    if (runId) {
+      const saved = await saveFindings(admin, {
+        runId,
+        documentVersionId: anchor!.documentVersionId,
+        textLayerId: textLayerId!,
         result,
-        userId: auth.user.id,
-        startedAt,
       })
-      if (saved.ok) runId = saved.runId
-      else saveError = saved.message
+      if (!saved.ok) saveError = saved.message
+      await finaliseRun(admin, runId, steps)
     }
 
     return NextResponse.json({

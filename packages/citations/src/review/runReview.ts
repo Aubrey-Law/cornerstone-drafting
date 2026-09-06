@@ -1,5 +1,5 @@
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
-import { runPrompt } from '../prompt/runPrompt'
+import { runPrompt, type RunPromptDependencies } from '../prompt/runPrompt'
 import { verifyQuote } from '../textLayer/match'
 import type { TextLayer } from '../textLayer/types'
 import type { ModelCaller, ModelRequest } from './model'
@@ -80,6 +80,8 @@ export interface RunReviewDependencies {
   model?: string
   matterId?: string | null
   userId?: string | null
+  /** Forwarded straight through to `runPrompt` — see its own doc comment. */
+  onUnitSettled?: RunPromptDependencies['onUnitSettled']
 }
 
 function documentForPrompt(layer: TextLayer): string {
@@ -212,6 +214,7 @@ export async function runReviewPlaybook(
         userId: deps.userId ?? null,
         contextType: 'matter',
       },
+      onUnitSettled: deps.onUnitSettled,
     },
   )
 

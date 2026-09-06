@@ -1,7 +1,7 @@
 import { buildDocxTextLayer } from '@aubrey-law/citations/textLayer/docx'
 import { buildPdfTextLayer } from '@aubrey-law/citations/textLayer/pdf'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
-import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
+import { runReviewPlaybook, type RunReviewDependencies } from '@aubrey-law/citations/review/runReview'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
 import type { ReviewPlaybook, ReviewResult } from '@aubrey-law/citations/review/types'
 
@@ -30,6 +30,7 @@ export interface ReviewLayerOptions {
   callModel: ModelCaller
   model?: string
   userId?: string | null
+  onUnitSettled?: RunReviewDependencies['onUnitSettled']
 }
 
 /**
@@ -47,6 +48,7 @@ export async function reviewLayer(
     callModel: options.callModel,
     model: options.model,
     userId: options.userId ?? null,
+    onUnitSettled: options.onUnitSettled,
   })
 }
 
