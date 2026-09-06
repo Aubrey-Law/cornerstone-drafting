@@ -48,3 +48,25 @@ describe('the stage-trigger migration', () => {
     expect(sql).toContain('alter table public.prompt_stage_triggers enable row level security')
   })
 })
+
+describe('turning firing on for the design-sheet audit', () => {
+  const fireSql = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261103010000_fire_design_sheet_audit.sql'),
+    'utf8',
+  )
+
+  it('fires on design and drafting, and names the prompt by slug', () => {
+    expect(fireSql).toMatch(/array\['design', 'drafting'\]/)
+    expect(fireSql).toContain("slug = 'ma-design-sheet-audit'")
+  })
+
+  it('does not add a prompt version, because when a prompt runs is not what it says', () => {
+    // A new version here would make every existing run's findings look like
+    // they came from superseded wording when the wording never changed.
+    expect(fireSql).not.toMatch(/insert into public\.prompt_versions/)
+  })
+
+  it('leaves the review playbook alone', () => {
+    expect(fireSql).not.toContain('ma-trust-firm-qa')
+  })
+})
