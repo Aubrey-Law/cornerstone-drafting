@@ -724,6 +724,34 @@ caller. It must return before the query, not merely produce no rows: a `chat` ru
 `desired` is empty would otherwise withdraw every open prompt task on the matter, which is
 not "produces no objects" — it is "destroys other prompts' objects".
 
+**Two things Task 2 left for you, found while it ran:**
+
+1. `checklist: ChecklistItem[]` on `TaskRow` does not type-check at the `insert` call.
+   The generated column type is `Json`, and `ChecklistItem` is not assignable to it because
+   it has no index signature. Fix it at the type, not with `as never` at the boundary —
+   give the interface an index signature so the items stay a real type everywhere they are
+   read:
+
+   ```ts
+   export interface ChecklistItem {
+     text: string
+     done: boolean
+     /** `tasks.checklist` is a `Json` column in the generated types, and a plain
+      *  interface is not assignable to `Json` without this. Declared here rather
+      *  than cast away at the `insert` call, so the items keep a real type on
+      *  every path that reads them. */
+     [key: string]: string | boolean
+   }
+   ```
+
+   If that turns out not to satisfy the generated `Json` type, report
+   DONE_WITH_CONCERNS with the exact error rather than reaching for `as never` — a cast
+   there would hide a genuine mismatch between what this writes and what the column holds.
+
+2. `EmitTasksInput.unitIds` is still declared, and `emitTasks` still filters
+   `input.findings` by it. `planEmit` needs no such hint — that parameter *was* the bug.
+   Step 4 replaces the whole interface, so both go; make sure neither survives.
+
 **Files:**
 - Modify: `apps/workbench/lib/fieldAudit/tasks.ts`
 - Test: `apps/workbench/tests/field-audit-tasks.test.ts`
