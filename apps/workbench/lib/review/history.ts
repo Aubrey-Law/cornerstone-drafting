@@ -38,7 +38,13 @@ function toCitation(row: Row): Citation {
   }
 }
 
-function toLayer(row: Row | null): TextLayer | null {
+/**
+ * Exported for `lib/runs/retry.ts`: a review's pinned evidence is its
+ * `text_layer_id`, and retrying it means reading the same row back through
+ * this same conversion — never re-extracting from R2, and never duplicating
+ * the row shape this function already knows.
+ */
+export function toLayer(row: Row | null): TextLayer | null {
   if (!row) return null
   return {
     sourceKind: (str(row.source_kind) as TextLayer['sourceKind']) ?? 'plain',

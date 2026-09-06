@@ -126,6 +126,46 @@ export async function loadPublishedPrompt(
 }
 
 /**
+ * The prompt version a run was checked against, by *id* — never by slug, and
+ * never the version a slug currently publishes.
+ *
+ * `loadPublishedPrompt` answers "what does this prompt say right now", which
+ * is the wrong question for a retry: a retry finishes the run it belongs to,
+ * against the exact wording that produced its other findings, even if the
+ * prompt has since been edited and republished. `workflow_runs.prompt_version_id`
+ * is what pins that wording, so this loader reads `prompt_versions` directly
+ * by that id rather than going through `prompt_publications` at all.
+ */
+export async function loadPromptVersionById(
+  client: SupabaseClient<WorkbenchDatabase>,
+  versionId: string,
+): Promise<PublishedPrompt | null> {
+  const sb = client
+
+  const { data: versionRow, error: versionError } = await sb
+    .from('prompt_versions')
+    .select('id, version_number, body, prompt_id')
+    .eq('id', versionId)
+    .maybeSingle()
+  if (versionError) throw new Error(`Could not load prompt version ${versionId}: ${versionError.message}`)
+  if (!versionRow) return null
+
+  const { data: promptRow, error: promptError } = await sb
+    .from('prompts')
+    .select('slug, title, kind')
+    .eq('id', versionRow.prompt_id)
+    .maybeSingle()
+  if (promptError) throw new Error(`Could not load the prompt for version ${versionId}: ${promptError.message}`)
+
+  return toPublishedPrompt({
+    id: versionRow.id,
+    version_number: versionRow.version_number,
+    body: versionRow.body,
+    prompts: promptRow ? { slug: promptRow.slug, title: promptRow.title, kind: promptRow.kind } : null,
+  })
+}
+
+/**
  * Every prompt that currently has a publication — the library a picker
  * screen lists, once there is one.
  */
