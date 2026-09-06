@@ -7,37 +7,53 @@ import { unknownSources } from '@aubrey-law/citations/prompt/inputs'
 
 const MIGRATION_PATH = path.resolve(
   __dirname,
-  '../../../supabase/migrations/20261028020000_seed_design_sheet_audit.sql',
+  '../../../supabase/migrations/20261101000000_design_sheet_audit_v2.sql',
 )
 const MIGRATION = fs.readFileSync(MIGRATION_PATH, 'utf8')
 
+/** The same prompt id 20261028020000 seeded version 1 under — version 2 is a
+ * new version of that prompt, not a new prompt. */
+const PROMPT_ID = 'acd6881b-cfaa-4d44-ac24-8a47607d2d87'
+
 /**
  * Mirrors apps/workbench/tests/review-playbook.test.ts, for the design-sheet
- * audit's seed instead of the review playbook's. What is worth asserting
- * here is the seed itself: that its body parses (which, per
+ * audit's version-2 seed instead of the review playbook's. What is worth
+ * asserting here is the seed itself: that its body parses (which, per
  * promptBodySchema's superRefine in packages/citations/src/prompt/body.ts,
- * already proves every check's `reads` names a field one of the sixteen
- * declared inputs actually declares — a body where that failed would not
- * parse, so a successful parse is the proof), that every declared source is
- * one `resolveInputs` can actually resolve, and that the stated
- * `content_hash` is the real sha256 of the body being seeded rather than a
- * copied-and-forgotten string.
+ * already proves every check's `reads` names a field one of the declared
+ * inputs actually declares — a body where that failed would not parse, so a
+ * successful parse is the proof), that every declared source is one
+ * `resolveInputs` can actually resolve, that the stated `content_hash` is the
+ * real sha256 of the body being seeded rather than a copied-and-forgotten
+ * string, and — the reason version 2 exists — that checks 1 and 2 actually
+ * read a fiduciary field now, not only the beneficiary fields version 1 left
+ * them with.
+ *
+ * Version 1 (20261028020000_seed_design_sheet_audit.sql) is left exactly as
+ * it was: prompt_versions is immutable, and this file's own tests for it
+ * still run and still pass unchanged.
  */
-describe('the seed migration for the design-sheet audit', () => {
-  it('inserts a prompt with the expected slug, kind, stages, and system flag', () => {
-    expect(MIGRATION).toMatch(/insert into public\.prompts \(id, slug, title, kind, stages, is_system\)/)
-    expect(MIGRATION).toMatch(/'ma-design-sheet-audit'/)
-    expect(MIGRATION).toMatch(/'field_audit',\s*\n\s*array\['design','drafting'\],\s*\n\s*true\s*\n\)/)
+describe('the version-2 seed migration for the design-sheet audit', () => {
+  it('adds a new version of the same prompt, not a new one', () => {
+    expect(MIGRATION).toMatch(/insert into public\.prompt_versions \(/)
+    expect(MIGRATION).toContain(`'${PROMPT_ID}'`)
+    // No `insert into public.prompts`: version 2 is a version of the prompt
+    // 20261028020000 already created, not a second prompt row.
+    expect(MIGRATION).not.toMatch(/insert into public\.prompts\s*\(/)
   })
 
-  it('publishes the version it seeds', () => {
+  it('repoints the publication to the new version', () => {
     expect(MIGRATION).toMatch(/insert into public\.prompt_publications \(prompt_id, version_id\)/)
+    // `on conflict (prompt_id) do nothing` would leave the existing
+    // publication row pointed at version 1 forever — the exact bug this
+    // migration exists to fix would then survive its own fix. Repointing an
+    // existing row needs `do update`, not `do nothing`.
+    expect(MIGRATION).toMatch(/on conflict \(prompt_id\) do update/)
+    expect(MIGRATION).toMatch(/set\s+version_id\s*=\s*excluded\.version_id/)
   })
 
-  it('makes every insert idempotent', () => {
-    expect(MIGRATION).toMatch(/on conflict \(slug\) do nothing/)
+  it('makes the new version insert idempotent', () => {
     expect(MIGRATION).toMatch(/on conflict \(prompt_id, version_number\) do nothing/)
-    expect(MIGRATION).toMatch(/on conflict \(prompt_id\) do nothing/)
   })
 
   /** Extracts the seeded body's jsonb literal, unescaping SQL's doubled `''`. */
@@ -83,6 +99,50 @@ describe('the seed migration for the design-sheet audit', () => {
     if (parsed.kind !== 'field_audit') throw new Error('expected the seeded body to be a field_audit body')
     const numbers = parsed.checks.map((c) => c.number)
     expect(new Set(numbers).size).toBe(numbers.length)
+  })
+
+  /**
+   * The whole reason this version exists: checks 1 and 2 could not see a
+   * single fiduciary field in version 1, and both reported a real matter's
+   * named guardians as missing from the plan while the plan in fact named
+   * them. Version 2 has to actually fix that, not merely claim to.
+   */
+  it('has checks 1 and 2 read at least one fiduciary field now', () => {
+    const body = JSON.parse(seededBodyText())
+    const parsed = promptBodySchema.parse(body)
+    if (parsed.kind !== 'field_audit') throw new Error('expected the seeded body to be a field_audit body')
+
+    const fiduciaryFields = [
+      'guardian_primary',
+      'guardian_alt1',
+      'trustee_primary',
+      'trustee_alt1',
+      'executor_primary',
+      'hcp_primary',
+      'poa_primary',
+      'guardian_slots',
+      'temporary_guardian_slots',
+      'trustee_slots',
+      'executor_slots',
+      'hcp_slots',
+      'poa_slots',
+    ]
+
+    const check1 = parsed.checks.find((c) => c.number === '1')
+    const check2 = parsed.checks.find((c) => c.number === '2')
+    expect(check1).toBeDefined()
+    expect(check2).toBeDefined()
+    expect(check1!.reads.some((field) => fiduciaryFields.includes(field))).toBe(true)
+    expect(check2!.reads.some((field) => fiduciaryFields.includes(field))).toBe(true)
+
+    // Check 2 asks whether a person appears *anywhere* in the plan, so it has
+    // to see every place a person can be recorded — every name-bearing
+    // fiduciary field and every resolved slot, not just one of them.
+    const nameFields = ['guardian_primary', 'guardian_alt1', 'trustee_primary', 'trustee_alt1', 'executor_primary', 'hcp_primary', 'poa_primary', 'spouse_name', 'client_name']
+    const slotFields = ['guardian_slots', 'temporary_guardian_slots', 'trustee_slots', 'executor_slots', 'hcp_slots', 'poa_slots']
+    for (const field of [...nameFields, ...slotFields]) {
+      expect(check2!.reads).toContain(field)
+    }
   })
 
   /**
