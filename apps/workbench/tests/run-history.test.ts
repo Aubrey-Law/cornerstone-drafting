@@ -103,4 +103,23 @@ describe('toAnyRun', () => {
     expect(run.promptSlug).toBeNull()
     expect(run.promptVersionNumber).toBeNull()
   })
+
+  /**
+   * `lib/fieldAudit/persist.ts` stores a field audit's failures as
+   * `{ checkNumber, reason }` (`FieldAuditResult['failures']`), while
+   * `lib/review/persist.ts` stores a review's as `{ ruleNumber, reason }`.
+   * Both name the same unit that did not run; `AnyRun.failures` reads either
+   * key so a field audit's failed checks are not silently dropped by a
+   * reader that only ever knew the review's key.
+   */
+  it('reads a field audit\'s failures, stored under checkNumber rather than ruleNumber', () => {
+    const run = toAnyRun(
+      runRow({ failures: [{ checkNumber: '4', reason: 'overloaded' }] }),
+      [],
+      null,
+      null,
+      null,
+    )
+    expect(run.failures).toEqual([{ ruleNumber: '4', reason: 'overloaded' }])
+  })
 })

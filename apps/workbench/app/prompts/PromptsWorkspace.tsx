@@ -16,6 +16,16 @@ export interface MatterChoice {
   title: string
 }
 
+export interface FieldAuditRunChoice {
+  runId: string
+  matterTitle: string
+  promptTitle: string | null
+  status: string
+  findingCount: number
+  failedCount: number
+  finishedAt: string | null
+}
+
 // Kept here rather than imported from actions.ts: a "use server" file may
 // only export async functions, so the seed value for `useActionState` lives
 // on this side instead.
@@ -33,7 +43,15 @@ const INITIAL_STATE: RunAuditState = {
  * a picker in the header, the "what is about to happen" summary before
  * anything has run, and the result after it has.
  */
-export function PromptsWorkspace({ prompts, matters }: { prompts: PromptChoice[]; matters: MatterChoice[] }) {
+export function PromptsWorkspace({
+  prompts,
+  matters,
+  runs = [],
+}: {
+  prompts: PromptChoice[]
+  matters: MatterChoice[]
+  runs?: FieldAuditRunChoice[]
+}) {
   const [slug, setSlug] = useState(prompts[0]?.slug ?? '')
   const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
   const [state, formAction, pending] = useActionState(runAudit, INITIAL_STATE)
@@ -130,7 +148,40 @@ export function PromptsWorkspace({ prompts, matters }: { prompts: PromptChoice[]
               {state.findingCount} {state.findingCount === 1 ? 'finding' : 'findings'}, {state.tasksCreated}{' '}
               {state.tasksCreated === 1 ? 'task' : 'tasks'} created.
             </p>
-            {state.runId ? <p className="text-xs text-muted-foreground">Run {state.runId} recorded.</p> : null}
+            {state.runId ? (
+              <p className="text-xs text-muted-foreground">
+                <Link href={`/prompts/${state.runId}`} className="underline underline-offset-4">
+                  Run {state.runId}
+                </Link>{' '}
+                recorded.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {runs.length > 0 ? (
+          <div className="space-y-2" data-testid="run-history">
+            <h2 className="text-sm font-semibold">Recent audit runs</h2>
+            <ul className="divide-y divide-border border-y border-border">
+              {runs.map((run) => (
+                <li key={run.runId}>
+                  <Link
+                    href={`/prompts/${run.runId}`}
+                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-muted/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="font-medium">{run.promptTitle ?? 'Field audit'}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{run.matterTitle}</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {run.findingCount} findings
+                      {run.failedCount > 0 ? ` · ${run.failedCount} checks failed` : ''}
+                      {run.status === 'partial' ? ' · partial' : ''}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </section>

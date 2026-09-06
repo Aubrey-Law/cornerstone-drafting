@@ -16,7 +16,9 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
 
   const { runId } = await params
   const run = await loadRun(getAdminClient(), runId)
-  if (!run) notFound()
+  // A field-audit run has its own home at /prompts/[runId] — it has no
+  // document or text layer for this page to show it against.
+  if (!run || run.kind !== 'review') notFound()
 
   const cited = run.findings.filter(isCitable).length
   const refused = run.findings.filter((f) => f.citationRefusal !== null).length
@@ -45,7 +47,7 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
           </p>
         ) : null}
       </header>
-      <StoredFindings runId={run.runId} findings={run.findings} layer={run.layer} />
+      <StoredFindings runId={run.runId} findings={run.findings} layer={run.layer} steps={run.steps} />
     </div>
   )
 }

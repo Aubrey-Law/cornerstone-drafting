@@ -82,6 +82,17 @@ export function toAnyRun(
       }
     : null
 
+  // A review's failures are stored as `{ ruleNumber, reason }`
+  // (lib/review/persist.ts) and a field audit's as `{ checkNumber, reason }`
+  // (lib/fieldAudit/persist.ts) — the same information under a different key
+  // per kind, since a review checks rules and a field audit checks checks.
+  // Normalized to one shape here rather than in every reader of `AnyRun`.
+  const rawFailures = (runRow.failures as Array<Record<string, unknown>> | null) ?? []
+  const failures = rawFailures.map((f) => ({
+    ruleNumber: String(f.ruleNumber ?? f.checkNumber ?? ''),
+    reason: String(f.reason ?? ''),
+  }))
+
   return {
     runId: String(runRow.id),
     matterId: String(runRow.matter_id),
@@ -90,7 +101,7 @@ export function toAnyRun(
     status: String(runRow.status ?? ''),
     ruleTotal: Number(runRow.rule_total ?? 0),
     failedCount: Number(runRow.failed_count ?? 0),
-    failures: (runRow.failures as AnyRun['failures']) ?? [],
+    failures,
     finishedAt: str(runRow.finished_at),
     promptVersionId: runRow.prompt_version_id ? String(runRow.prompt_version_id) : null,
     promptSlug: promptRow ? str(promptRow.slug) : null,

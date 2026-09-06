@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { LOGIN_PATH } from '@/lib/auth/gate'
 import { loadPublishedPrompts } from '@/lib/prompts/repository'
 import { loadMattersWithDesignSheets } from '@/lib/prompts/designSheet'
+import { loadFieldAuditRunSummaries } from '@/lib/fieldAudit/history'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
 import { PromptsWorkspace } from './PromptsWorkspace'
@@ -36,6 +37,7 @@ export default async function PromptsPage() {
     (prompt): prompt is typeof prompt & { body: { kind: 'field_audit' } } => prompt.body.kind === 'field_audit',
   )
   const matters = await loadMattersWithDesignSheets(client)
+  const runs = await loadFieldAuditRunSummaries(client, 15)
 
   return (
     <PromptsWorkspace
@@ -45,6 +47,7 @@ export default async function PromptsPage() {
         checkCount: prompt.body.checks.length,
       }))}
       matters={matters}
+      runs={runs}
     />
   )
 }

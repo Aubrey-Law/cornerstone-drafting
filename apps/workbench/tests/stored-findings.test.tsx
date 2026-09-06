@@ -4,12 +4,13 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 
 // Typed so the submitted form can be read back: vi.fn infers an empty call
 // tuple from a zero-argument implementation.
-const { recordDisposition } = vi.hoisted(() => ({
+const { recordDisposition, retryRun } = vi.hoisted(() => ({
   recordDisposition: vi.fn(
     async (_previous: { message: string | null } | null, _form: FormData) => ({ message: null }),
   ),
+  retryRun: vi.fn(async (_previous: { message: string | null } | null, _form: FormData) => ({ message: null })),
 }))
-vi.mock('@/app/review/[runId]/actions', () => ({ recordDisposition }))
+vi.mock('@/app/review/[runId]/actions', () => ({ recordDisposition, retryRun }))
 
 import { StoredFindings } from '@/app/review/[runId]/StoredFindings'
 import type { StoredFinding } from '@/lib/review/persist'
@@ -18,6 +19,7 @@ import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 afterEach(() => {
   cleanup()
   recordDisposition.mockClear()
+  retryRun.mockClear()
 })
 
 const TEXT = 'The Trustee shall not be liable except for willful misconduct.'
@@ -55,6 +57,9 @@ const finding = (over: Partial<StoredFinding> = {}): StoredFinding => ({
   dispositionNote: null,
   ...over,
 })
+
+// Reused across the tests below, since only `steps` varies between them.
+const props = { runId: 'run-1', findings: [finding()], layer }
 
 describe('StoredFindings', () => {
   it('shows a recorded review with its findings', () => {
@@ -132,5 +137,42 @@ describe('StoredFindings', () => {
       />,
     )
     expect(within(screen.getByTestId('finding-1')).getByText(/words not present/)).toBeInTheDocument()
+  })
+
+  it('names how many units a retry will re-run, because it costs money', () => {
+    // A button that says only "Retry" invites being pressed without that
+    // being a decision. It calls the model again.
+    render(
+      <StoredFindings
+        {...props}
+        steps={[
+          { unitId: '1', status: 'succeeded', attempts: 1, sequence: 0, lastError: null },
+          { unitId: '2', status: 'failed', attempts: 1, sequence: 1, lastError: 'overloaded' },
+          { unitId: '3', status: 'failed', attempts: 2, sequence: 2, lastError: 'overloaded' },
+        ]}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /retry 2 failed/i })).toBeEnabled()
+  })
+
+  it('offers no retry when nothing failed', () => {
+    render(
+      <StoredFindings
+        {...props}
+        steps={[{ unitId: '1', status: 'succeeded', attempts: 1, sequence: 0, lastError: null }]}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+  })
+
+  it('shows why a step failed, and how many times it has been tried', () => {
+    render(
+      <StoredFindings
+        {...props}
+        steps={[{ unitId: '2', status: 'failed', attempts: 3, sequence: 0, lastError: 'overloaded' }]}
+      />,
+    )
+    expect(screen.getByText(/overloaded/)).toBeInTheDocument()
+    expect(screen.getByText(/3/)).toBeInTheDocument()
   })
 })
