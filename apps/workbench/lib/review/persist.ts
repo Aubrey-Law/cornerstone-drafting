@@ -3,6 +3,7 @@ import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { ReviewFinding, ReviewResult } from '@aubrey-law/citations/review/types'
 import type { Json } from '@aubrey-law/db-types'
+import type { RunStep } from '@/lib/runs/steps'
 
 /**
  * Recording a review so it outlives the page.
@@ -233,7 +234,8 @@ export interface StoredFinding extends ReviewFinding {
 export interface StoredRun {
   runId: string
   matterId: string
-  documentVersionId: string
+  /** Null only for a run recorded before this column existed — a review always has a document. */
+  documentVersionId: string | null
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null
@@ -247,4 +249,5 @@ export interface StoredRun {
   finishedAt: string | null
   findings: StoredFinding[]
   layer: TextLayer | null
+  steps: RunStep[]
 }

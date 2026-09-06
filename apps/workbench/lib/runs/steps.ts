@@ -15,6 +15,35 @@ export interface RunStep {
   status: StepStatus
   attempts: number
   sequence: number
+  /**
+   * Why the last attempt failed, when it did. Optional: the engine's own
+   * dispatch logic (`statusFromSteps`, `unitsToRetry`) never reads it, only
+   * a view showing a step to a person does.
+   */
+  lastError?: string | null
+  /** The finding this step's latest attempt produced, if any. */
+  findingId?: string | null
+}
+
+/** `Record<string, unknown>`, without importing it just for this. */
+type Row = Record<string, unknown>
+
+/**
+ * `workflow_run_steps` rows, in the order they ran rather than the order they
+ * happen to have been inserted or returned in — a run reads in playbook
+ * order, and `sequence` is what the migration recorded that order as.
+ */
+export function toRunSteps(rows: readonly Row[]): RunStep[] {
+  return rows
+    .map((row) => ({
+      unitId: String(row.unit_id),
+      status: row.status as StepStatus,
+      attempts: Number(row.attempts ?? 0),
+      sequence: Number(row.sequence ?? 0),
+      lastError: typeof row.last_error === 'string' ? row.last_error : null,
+      findingId: row.finding_id ? String(row.finding_id) : null,
+    }))
+    .sort((a, b) => a.sequence - b.sequence)
 }
 
 /**

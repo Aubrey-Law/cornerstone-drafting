@@ -3,6 +3,8 @@ import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { Citation, TextLayer } from '@aubrey-law/citations/textLayer/types'
 import type { FindingOutcome, ReviewRule } from '@aubrey-law/citations/review/types'
 import type { VerifyReason } from '@aubrey-law/citations/textLayer/match'
+import { ruleOrder } from '@/lib/runs/history'
+import { toRunSteps } from '@/lib/runs/steps'
 import type { Disposition, StoredFinding, StoredRun } from './persist'
 
 /**
@@ -19,12 +21,6 @@ type Row = Record<string, unknown>
 
 const str = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null
-
-/** Numeric where possible, so rule 10 sorts after rule 2 rather than before it. */
-function ruleOrder(ruleNumber: string): [number, string] {
-  const leading = Number.parseInt(ruleNumber, 10)
-  return [Number.isNaN(leading) ? Number.MAX_SAFE_INTEGER : leading, ruleNumber]
-}
 
 function toCitation(row: Row): Citation {
   return {
@@ -74,6 +70,10 @@ export function toLayer(row: Row | null): TextLayer | null {
  * would flag one. They are null whenever the run's `prompt_version_id` no
  * longer resolves to a real version — an edited-out version cannot be shown,
  * only reported as missing rather than invented.
+ *
+ * `stepRows` is optional and converted through `lib/runs/steps.ts`'s
+ * `toRunSteps` — the same ordering-by-sequence logic the field-audit view
+ * uses, rather than a second copy of it living here.
  */
 export function toStoredRun(
   runRow: Row,
@@ -82,6 +82,7 @@ export function toStoredRun(
   layerRow: Row | null,
   promptVersionRow: Row | null = null,
   promptRow: Row | null = null,
+  stepRows: readonly Row[] = [],
 ): StoredRun {
   const citationByFinding = new Map<string, Row>()
   for (const row of citationRows) {
@@ -116,7 +117,15 @@ export function toStoredRun(
   return {
     runId: String(runRow.id),
     matterId: String(runRow.matter_id),
-    documentVersionId: String(runRow.document_version_id),
+    // A review is always run against a filed document, but `document_version_id`
+    // is nullable on the column, and a run recorded before it existed — or of
+    // a different kind entirely — genuinely has none. `String(null)` would
+    // silently produce the literal string "null" here; this run has no
+    // document rather than a document named that.
+    documentVersionId:
+      runRow.document_version_id === null || runRow.document_version_id === undefined
+        ? null
+        : String(runRow.document_version_id),
     kind: String(runRow.kind ?? 'review'),
     promptVersionId: runRow.prompt_version_id ? String(runRow.prompt_version_id) : null,
     promptSlug: promptRow ? str(promptRow.slug) : null,
@@ -128,6 +137,7 @@ export function toStoredRun(
     finishedAt: str(runRow.finished_at),
     findings,
     layer: toLayer(layerRow),
+    steps: toRunSteps(stepRows),
   }
 }
 
@@ -142,7 +152,16 @@ export interface RunSummary {
   finishedAt: string | null
 }
 
-/** Recent runs, newest first — a review is returned to soon after it is made. */
+/**
+ * Recent review runs, newest first — a review is returned to soon after it is
+ * made.
+ *
+ * Scoped to `kind = 'review'`: `workflow_runs` now also holds field-audit
+ * runs, which have no document at all. Joining one of those to a document
+ * name the way this always has would produce a summary row for a run this
+ * page has no way to open (a review run's page assumes a document and a text
+ * layer) — a field audit gets its own list, on `/prompts`.
+ */
 export async function loadRunSummaries(
   client: SupabaseClient<WorkbenchDatabase>,
   limit = 25,
@@ -151,6 +170,7 @@ export async function loadRunSummaries(
   const { data: runs, error } = await sb
     .from('workflow_runs')
     .select('id, matter_id, document_version_id, status, rule_total, finding_count, failed_count, finished_at')
+    .eq('kind', 'review')
     .order('started_at', { ascending: false })
     .limit(limit)
   if (error) throw new Error(`Could not load runs: ${error.message}`)
@@ -200,11 +220,12 @@ export async function loadRun(
   const runRow = runs?.[0]
   if (!runRow) return null
 
-  const [{ data: findings }, { data: layers }] = await Promise.all([
+  const [{ data: findings }, { data: layers }, { data: stepRows }] = await Promise.all([
     sb.from('workflow_findings').select('*').eq('run_id', runId),
     runRow.text_layer_id
       ? sb.from('document_text_layers').select('*').eq('id', runRow.text_layer_id).limit(1)
       : Promise.resolve({ data: [] as Row[] }),
+    sb.from('workflow_run_steps').select('*').eq('run_id', runId),
   ])
 
   const findingIds = (findings ?? []).map((f) => String(f.id))
@@ -235,5 +256,13 @@ export async function loadRun(
     }
   }
 
-  return toStoredRun(runRow, findings ?? [], citations ?? [], layers?.[0] ?? null, promptVersionRow, promptRow)
+  return toStoredRun(
+    runRow,
+    findings ?? [],
+    citations ?? [],
+    layers?.[0] ?? null,
+    promptVersionRow,
+    promptRow,
+    stepRows ?? [],
+  )
 }
