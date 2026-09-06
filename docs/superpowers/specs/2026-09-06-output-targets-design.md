@@ -134,12 +134,28 @@ already solved, and removing it lets one function answer the whole question:
 > Of this tool's own open, unassigned tasks on this matter, which already say exactly what
 > this run now wants to say? Keep those. Insert what is missing. Withdraw the rest.
 
-Identity is by content — tag, title, description, priority, type and checklist items
-together. A retried unit whose rationale changed is superseded and re-inserted; a unit the
+Identity is by content — tag, title, description, priority, type and the checklist items'
+**text**. A retried unit whose rationale changed is superseded and re-inserted; a unit the
 retry never touched matches its existing task exactly and is left alone, keeping its id and
 its `created_at`. A second done-pass over an unchanged run inserts nothing and withdraws
 nothing. Both tag shapes fall out of this without either being special-cased, and
 `tasksToSupersede` and `tasksToSupersedeForUnits` both collapse into it.
+
+**An item's `done` flag is deliberately *not* part of that comparison, and the first draft
+of this design had it backwards.** The argument for including it was that a ticked checklist
+differs from the freshly-built one, so the tick should be "a withdrawal rather than a silent
+rewrite of someone's progress". That is a false choice: `planEmit` has no rewrite branch —
+it only inserts and archives. So including `done` means a partly-ticked checklist stops
+matching, gets **archived**, and is replaced by a blank copy; the attorney's progress leaves
+the working queue. Excluding it means the keys match, the task is **kept untouched**, and
+the ticks survive with the row's id and `created_at`.
+
+Nothing is lost by excluding it. If the findings genuinely changed, the rationales in the
+description changed with them, so the key mismatches anyway and the task is superseded on
+its merits. `done` only ever differs when a *person* changed it, which is precisely the case
+that must not trigger a withdrawal. This is reachable, not theoretical: toggling one item
+leaves the task `open` and unassigned (only all-items-done promotes it), so a partly-ticked
+prompt checklist is a live candidate every time the tick re-emits.
 
 It also self-heals: a duplicate pair left by the current bug has only one twin among the
 desired rows, so the other is withdrawn.
@@ -181,6 +197,7 @@ tokens, not chosen by eye — and no other source pill uses amber.
 - **A `chat` prompt creates no tasks**, asserted rather than assumed — this is the target whose whole content is an absence.
 - **A `checklist` run with no actionable findings creates no task**, not an empty one.
 - **A retried run's second done-pass creates no duplicate** — asserted for both a `task_set` run and a `checklist` run, since this is the regression the slice is built on top of. The reverse too: a retried unit whose rationale changed *is* replaced, and an untouched unit keeps its existing task id.
+- **A checklist someone has partly ticked is kept, not archived and replaced.** The test asserts the ticks survive a re-emit — the behaviour the first draft of this design got backwards.
 - **A duplicate pair left by the current bug is self-healed** rather than preserved.
 - **A `'prompt'` task renders a labelled, AA-contrast pill** in both themes — the existing contrast test covers it once the union admits it, plus an assertion that the label and pill entries exist at all, which is the thing that was missing.
 - A real run of version 4 against a real matter, reported before this is called done: one task, its items, and the previous run's tasks superseded correctly.
