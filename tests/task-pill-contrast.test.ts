@@ -82,6 +82,10 @@ describe('every task source pill is readable', () => {
   it('knows about tasks a prompt run created', () => {
     expect(TASK_SOURCES).toContain('prompt')
   })
+
+  it('knows about tasks the fiduciary matrix created', () => {
+    expect(TASK_SOURCES).toContain('fiduciary')
+  })
 })
 
 describe('the contrast helper the pills are measured with', () => {

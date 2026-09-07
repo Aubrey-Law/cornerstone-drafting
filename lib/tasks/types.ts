@@ -7,10 +7,14 @@ export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
  * `'prompt'` is a task a prompt run created — the database has allowed it
  * since 20261029000000_prompt_task_source.sql, and this union did not, so
  * every such task rendered with an empty source pill and could not be
- * filtered for. The workbench writes these rows and never reads them; this app
- * is the only place they are seen.
+ * filtered for. `'fiduciary'` is the same kind of value, added by
+ * 20261105000000_fiduciary_task_source.sql for the findings of the
+ * deterministic fiduciary matrix, and added here in the same commit for
+ * exactly that reason. The workbench writes both kinds of row and never reads
+ * them; this app is the only place they are seen, so a value the database
+ * allows and this union omits is a task nobody can see the origin of.
  */
-export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt'] as const
+export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt', 'fiduciary'] as const
 export const TASK_TYPES = ['single', 'checklist'] as const
 
 /**
@@ -301,6 +305,7 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   cadence: 'Cadence',
   sla: 'Plan',
   prompt: 'Prompt',
+  fiduciary: 'Fiduciary',
 }
 
 /**
@@ -322,6 +327,12 @@ export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   // source pills, so the chip carries information at a glance, and it reads
   // as "a machine suggested this, someone still has to agree".
   prompt: 'bg-amber-bg text-amber',
+  // 7.60:1 light, 6.26:1 dark, measured with lib/theme/contrast.ts against the
+  // theme tokens rather than picked by eye. Unused by the other source pills,
+  // and these are gaps in a plan rather than suggestions — `--red-strong` was
+  // the first choice and fails AA in light at 3.95:1, which is why the pair is
+  // measured and not assumed.
+  fiduciary: 'bg-red-bg text-red',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {
