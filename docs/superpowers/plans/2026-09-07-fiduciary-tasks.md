@@ -423,10 +423,31 @@ describe('fiduciaryTaskRows', () => {
     expect(fiduciaryTaskRows(MATTER, [issue({ kind: 'concentrated', severity: 'note', role: null, forParty: null })])).toEqual([])
   })
 
+  /**
+   * The same refusal, with severity as the *only* possible cause of it.
+   *
+   * The test above passes the real shape the matrix builds — `concentrated`
+   * with no role — and that issue is rejected by the role guard before the
+   * severity gate is ever consulted. So on its own it proves the role guard
+   * twice and the gate not at all: letting `note` through leaves it green.
+   * Measured, not supposed — adding `note` to the priority table failed
+   * nothing until this case existed.
+   *
+   * No note carries a role today. But `concentrated` is about a person, and
+   * naming the office they hold would be an unremarkable change — and on that
+   * day this gate is the only thing between a normal plan and a task calling
+   * it a fault.
+   */
+  it('never makes a task from a note even when the note has a role and a party', () => {
+    expect(
+      fiduciaryTaskRows(MATTER, [issue({ severity: 'note', role: 'trustee', forParty: 'client' })]),
+    ).toEqual([])
+  })
+
   it('makes tasks from both error and gap', () => {
     const rows = fiduciaryTaskRows(MATTER, [
       issue({ severity: 'gap' }),
-      issue({ kind: 'duplicate', severity: 'error', role: 'executor' }),
+      issue({ kind: 'duplicate', severity: 'error', role: 'personal_rep' }),
     ])
     expect(rows).toHaveLength(2)
   })
@@ -650,10 +671,10 @@ export function fiduciaryTaskRows(matterId: string, issues: MatrixIssue[]): Fidu
  * real work being done, and no sweep may close it.
  */
 export function planFiduciaryEmit(
+  matterId: string,
   existing: ExistingFiduciaryTask[],
   desired: FiduciaryTaskRow[],
 ): FiduciaryEmitPlan {
-  const prefix = desired.length > 0 ? desired[0].batch_tag.split('#')[0] : null
 
   const candidates = existing.filter(
     (task) =>
@@ -664,8 +685,13 @@ export function planFiduciaryEmit(
       // the rule should not depend on it having filtered correctly — and a tag
       // this module did not write is nobody's to retire.
       task.batchTag !== null &&
-      task.batchTag.startsWith('fiduciary:') &&
-      (prefix === null || task.batchTag.startsWith(`${prefix}#`)),
+      // This matter's own tags only, and exact: the `#` makes the matter
+      // segment a whole match rather than a prefix one, so `matter-1` cannot
+      // reach `matter-10`'s tasks. Derived from the same `tagPrefix` helper
+      // `tagFor` uses, so the emitter and the withdrawal rule cannot disagree
+      // about the tag shape — if they did, every task this module created
+      // would sit beyond its own reach, and nothing would say so.
+      task.batchTag.startsWith(`${tagPrefix(matterId)}#`),
   )
 
   const byTag = new Map(candidates.map((task) => [task.batchTag as string, task]))
@@ -691,9 +717,15 @@ export function planFiduciaryEmit(
 }
 ```
 
-**Note on `prefix`:** when `desired` is empty there is no tag to derive a matter prefix
-from, so the matter filter falls back to the caller's own scoping. Step 5 asks you to test
-that path specifically, because it is the one that retires tasks.
+**Why the matter id is a parameter.** An earlier draft derived the matter prefix from
+`desired[0].batch_tag`, with a fallback when `desired` was empty — and empty `desired` is
+exactly the call that retires tasks, so the one call that withdraws work would have been the
+one call with no matter scope. Passing it removes the fallback and the doubt: there is no
+code path where the matter filter is skipped.
+
+Use one `tagPrefix(matterId)` helper for both `tagFor` and the candidate filter. If the two
+ever disagreed about the tag's shape, every task this module created would sit outside its
+own reach — no keep, no retire, a fresh duplicate every sweep — and nothing would fail.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -701,11 +733,7 @@ that path specifically, because it is the one that retires tasks.
 cd apps/workbench && npx vitest run tests/fiduciary-tasks.test.ts
 ```
 
-Expected: PASS. If `never touches a task tagged for another matter` fails with an empty
-`desired`, that is the `prefix === null` fallback and it is a real defect — the caller must
-pass only this matter's tasks, **or** the signature must take the matter id. Prefer taking
-the matter id explicitly: it removes the fallback and the doubt. Report the change if you
-make it.
+Expected: PASS, with every `planFiduciaryEmit` call passing the matter id first.
 
 - [ ] **Step 5: Prove the guards bite**
 
