@@ -41,9 +41,23 @@ out. So `MatrixIssue` gains both, and the task's `batch_tag` becomes
 `fiduciary:<matterId>#<kind>:<role>:<forParty>` — stable across a rename, and one task per
 gap rather than per phrasing of it.
 
-`concentrated` carries no role, being about a person rather than a chain. It is also the one
-issue that never becomes a task, so it never needs a tag — but the type must still admit it,
-so `role` and `forParty` are nullable and the emitter refuses to build a tag without them.
+Both fields are nullable, and **the emitter requires a `role` while tolerating a null
+`forParty`.** That asymmetry is load-bearing and the first draft of this note got it wrong
+by saying the emitter refuses a tag "without them", plural.
+
+Two issues have no chain in scope. `concentrated` is about a person across every chain and
+gets both fields null — it is also the one issue that never becomes a task, so it never needs
+a tag at all. But `no_guardian` is built outside the chain loop too, from
+`facts.minorChildren` and a scan for any guardian, and it **is** a `gap`, so it must become a
+task. Requiring both fields would have dropped the highest-consequence finding on the screen
+with nothing failing to say so — the exact shape of silent defect this project keeps finding.
+
+So `no_guardian` carries `role: 'guardian'` with a null `forParty`: minor children belong to
+the couple, and a guardian named by either spouse satisfies it, so it is one gap per matter
+rather than one per party. Its tag reads
+`fiduciary:<matterId>#no_guardian:guardian:both`, where `both` is what a null `forParty`
+becomes — a fixed three-segment shape, so the tag stays parseable and no `null` ever appears
+in stored data.
 
 ## Only `error` and `gap` become tasks
 

@@ -439,9 +439,23 @@ describe('fiduciaryTaskRows', () => {
   })
 
   /** A tag with `undefined` in it is not an identity. */
-  it('refuses to build a row for a chain issue with no role', () => {
+  it('refuses to build a row for an issue with no role', () => {
     expect(fiduciaryTaskRows(MATTER, [issue({ role: null })])).toEqual([])
-    expect(fiduciaryTaskRows(MATTER, [issue({ forParty: null })])).toEqual([])
+  })
+
+  /**
+   * But a null party is not a failure. `no_guardian` is built outside the
+   * chain loop and has no party — minor children belong to the couple, and a
+   * guardian named by either spouse satisfies it — yet it is a `gap` and must
+   * become a task. Requiring both fields would have dropped the
+   * highest-consequence gap on the screen with nothing failing to say so.
+   */
+  it('tags an issue with no party as covering both', () => {
+    const rows = fiduciaryTaskRows(MATTER, [
+      issue({ kind: 'no_guardian', severity: 'gap', role: 'guardian', forParty: null }),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].batch_tag).toBe(`fiduciary:${MATTER}#no_guardian:guardian:both`)
   })
 
   /**
@@ -566,11 +580,23 @@ export interface FiduciaryEmitPlan {
 const PRIORITY_BY_SEVERITY: Record<string, string> = { error: 'high', gap: 'normal' }
 
 function tagFor(matterId: string, issue: MatrixIssue): string | null {
-  // No role means no identity. `concentrated` is the only issue in this shape
-  // and it never becomes a task anyway, but a tag reading
-  // `#concentrated:undefined:undefined` would be worse than no row at all.
-  if (!issue.role || !issue.forParty) return null
-  return `fiduciary:${matterId}#${issue.kind}:${issue.role}:${issue.forParty}`
+  // A `role` is required; a null `forParty` is not a failure.
+  //
+  // This asymmetry matters. Two issues are built outside the chain loop:
+  // `concentrated`, which has neither field and never becomes a task anyway,
+  // and `no_guardian`, which has no chain either but *is* a `gap` and must
+  // become one. Requiring both fields would drop the highest-consequence
+  // finding on the screen with nothing failing to say so, which is exactly
+  // the kind of silence this feature exists to remove. So `no_guardian`
+  // carries `role: 'guardian'` and no party — minor children belong to the
+  // couple, and a guardian named by either spouse satisfies it, so it is one
+  // gap per matter rather than one per party.
+  //
+  // `both` rather than an omitted segment, so the tag is always three
+  // segments and stays parseable — and so the string `null` never reaches
+  // stored data.
+  if (!issue.role) return null
+  return `fiduciary:${matterId}#${issue.kind}:${issue.role}:${issue.forParty ?? 'both'}`
 }
 
 /**
