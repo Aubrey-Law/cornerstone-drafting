@@ -96,6 +96,18 @@ export interface MatrixIssue {
   kind: IssueKind
   severity: IssueSeverity
   message: string
+  /**
+   * Which chain this issue is about, or `null` for an issue about a person
+   * across every chain (`concentrated`).
+   *
+   * Carried out so an issue has an identity independent of its `message`,
+   * which embeds names: `lib/fiduciary/tasks.ts` builds a task's `batch_tag`
+   * from these, and a tag built from the message would change whenever a
+   * contact was renamed — orphaning the task and creating a duplicate beside
+   * it.
+   */
+  role: FiduciaryRole | null
+  forParty: ForParty | null
 }
 
 export interface MatterFacts {
@@ -124,6 +136,8 @@ export function matrixIssues(matrix: Matrix, facts: MatterFacts): MatrixIssue[] 
         kind: 'no_successor',
         severity: 'gap',
         message: `${roleLabel(chain.role)} for ${partyLabel(chain.forParty)} has no successor. If ${chain.people[0].name} cannot serve, the office is empty and a court fills it.`,
+        role: chain.role,
+        forParty: chain.forParty,
       })
     }
 
@@ -134,6 +148,8 @@ export function matrixIssues(matrix: Matrix, facts: MatterFacts): MatrixIssue[] 
           kind: 'duplicate',
           severity: 'error',
           message: `${person.name} appears twice in the ${roleLabel(chain.role).toLowerCase()} chain for ${partyLabel(chain.forParty)}. One person cannot be both their own successor.`,
+          role: chain.role,
+          forParty: chain.forParty,
         })
       }
       seen.add(person.contactId)
@@ -146,6 +162,18 @@ export function matrixIssues(matrix: Matrix, facts: MatterFacts): MatrixIssue[] 
       kind: 'no_guardian',
       severity: 'gap',
       message: `There are minor children and no guardian is named. The choice falls to a judge who never met the family.`,
+      /**
+       * Named by the office it is missing from, since there is no guardian
+       * chain to read it off — that being the whole complaint. The role is
+       * still what identifies this issue, so it can carry one; without it the
+       * emitter would refuse to tag the highest-consequence gap on the screen.
+       *
+       * No party: minor children belong to the couple, and the check above
+       * accepts a guardian named by either spouse. One guardian gap per
+       * matter, not one per spouse.
+       */
+      role: 'guardian',
+      forParty: null,
     })
   }
 
@@ -156,6 +184,11 @@ export function matrixIssues(matrix: Matrix, facts: MatterFacts): MatrixIssue[] 
         kind: 'concentrated',
         severity: 'note',
         message: `${person.name} holds every role. That is a normal plan, and it means one illness empties every office at once.`,
+        // About a person across every chain rather than one chain, so there is
+        // no role to name. This is also the one issue that never becomes a
+        // task, so it never needs a tag.
+        role: null,
+        forParty: null,
       })
     }
   }
