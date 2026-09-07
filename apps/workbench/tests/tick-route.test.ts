@@ -216,6 +216,10 @@ describe('the tick’s field-audit branch', () => {
     },
     prompt: {
       versionId: 'version-1',
+      // The prompt, not the version. Only this prompt's own tasks are the
+      // run's to touch, and the version id would scope too narrowly — a
+      // republished prompt must still retire its earlier version's tasks.
+      promptId: 'prompt-1',
       versionNumber: 3,
       slug: 'ma-design-sheet-audit',
       title: 'MA design sheet audit',
@@ -347,6 +351,9 @@ describe('the tick’s field-audit branch', () => {
     expect(passed.findings).toHaveLength(2)
     expect(passed.findings.map((f) => f.outcome)).toContain('compliant')
     expect(passed.failedCheckNumbers).toEqual(['2'])
+    // From the pinned version's prompt, so a run can only ever touch the
+    // tasks of the prompt that produced it.
+    expect(passed.promptId).toBe('prompt-1')
   })
 
   /** Tasks belong to a run that is finished, never to one mid-flight. */
