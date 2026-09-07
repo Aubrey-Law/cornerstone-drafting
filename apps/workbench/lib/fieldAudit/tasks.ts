@@ -468,6 +468,12 @@ export interface EmitTasksInput {
   outputTarget: OutputTarget
   /** Titles a `checklist` task. Unused by `task_set`. */
   promptTitle: string
+  /**
+   * The prompt this run belongs to — only its own tasks are this run's to
+   * touch. Read off the run's pinned prompt version, so it is the prompt that
+   * actually produced this run rather than whatever is published now.
+   */
+  promptId: string
 }
 
 export interface EmitTasksResult {
@@ -512,10 +518,71 @@ export async function emitTasks(
     throw new Error(`Could not load this matter's earlier prompt tasks: ${existingError.message}`)
   }
 
+  // Which prompt each of these tasks came from. The tag carries the run id and
+  // the run carries the version, so the prompt is two hops away — and it is
+  // the database rather than the tag that is authoritative about it, which is
+  // why the tag was not given a third shape to carry it. A task whose run has
+  // gone resolves to nothing and is therefore nobody's to retire.
+  //
+  // Plain selects rather than one PostgREST embedded select, because
+  // `scripts/lib/queryReferences.mjs` cannot read columns through an embedded
+  // form — an embedded select here would drop these columns out of both
+  // `query-columns.test.ts` and the live `checkDbColumns.mjs` check. The same
+  // trade `loadPublishedPrompt` and `lib/review/history.ts` already make.
+  const candidateRunIds = [
+    ...new Set(
+      (existingRows ?? []).flatMap((row) => {
+        const parsed = parseBatchTag((row.batch_tag as string | null) ?? null)
+        return parsed ? [parsed.runId] : []
+      }),
+    ),
+  ]
+
+  const promptByRunId = new Map<string, string>()
+  if (candidateRunIds.length > 0) {
+    const { data: runRows, error: runsError } = await sb
+      .from('workflow_runs')
+      .select('id, prompt_version_id')
+      .in('id', candidateRunIds)
+    if (runsError) {
+      throw new Error(`Could not resolve the runs behind this matter's prompt tasks: ${runsError.message}`)
+    }
+
+    const versionIds = [
+      ...new Set(
+        (runRows ?? []).flatMap((row) => (row.prompt_version_id ? [String(row.prompt_version_id)] : [])),
+      ),
+    ]
+
+    if (versionIds.length > 0) {
+      const { data: versionRows, error: versionsError } = await sb
+        .from('prompt_versions')
+        .select('id, prompt_id')
+        .in('id', versionIds)
+      if (versionsError) {
+        throw new Error(`Could not resolve the prompts behind this matter's prompt tasks: ${versionsError.message}`)
+      }
+
+      const promptByVersionId = new Map(
+        (versionRows ?? []).map((row) => [String(row.id), String(row.prompt_id)]),
+      )
+      for (const row of runRows ?? []) {
+        const promptId = row.prompt_version_id
+          ? promptByVersionId.get(String(row.prompt_version_id))
+          : undefined
+        if (promptId) promptByRunId.set(String(row.id), promptId)
+      }
+    }
+  }
+
   const existing: ExistingPromptTask[] = (existingRows ?? []).map((row) => ({
     id: String(row.id),
     source: String(row.source),
     batchTag: (row.batch_tag as string | null) ?? null,
+    promptId: (() => {
+      const parsed = parseBatchTag((row.batch_tag as string | null) ?? null)
+      return parsed ? promptByRunId.get(parsed.runId) ?? null : null
+    })(),
     status: String(row.status),
     assigneeId: (row.assignee_id as string | null) ?? null,
     title: String(row.title ?? ''),
@@ -540,7 +607,7 @@ export async function emitTasks(
     input.promptTitle,
   )
 
-  const plan = planEmit(existing, desired, answers)
+  const plan = planEmit(existing, desired, { promptId: input.promptId, answers })
 
   if (plan.insert.length > 0) {
     const { error: insertError } = await sb.from('tasks').insert(plan.insert)

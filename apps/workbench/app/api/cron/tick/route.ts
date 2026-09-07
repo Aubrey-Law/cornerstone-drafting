@@ -140,6 +140,9 @@ export async function GET(req: Request) {
         // `loadRunContext` reads `prompt_version_id` for exactly this reason.
         outputTarget: body.outputTarget,
         promptTitle: context.prompt.title,
+        // Only this prompt's own tasks are this run's to touch. Two prompts
+        // emitting on one matter would otherwise each withdraw the other's.
+        promptId: context.prompt.promptId,
       })
     }
   }

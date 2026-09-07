@@ -726,13 +726,30 @@ describe('planEmit prompt scoping', () => {
  * Enough of a PostgREST client for `emitTasks`: a `select` chain that resolves
  * to `rows`, plus recorders for what was inserted and updated.
  */
-function fakeClient(rows: unknown[]) {
+/**
+ * `rows` are the matter's existing prompt tasks. `resolve` answers the two
+ * further queries `emitTasks` now makes to learn which prompt each of those
+ * tasks came from — the tag gives a run id, `workflow_runs` gives a version,
+ * `prompt_versions` gives the prompt. Left empty, every candidate resolves to
+ * no prompt and is therefore nobody's to retire, which is the intended
+ * fail-safe rather than an artefact of the fake.
+ */
+function fakeClient(
+  rows: unknown[],
+  resolve: { runs?: unknown[]; versions?: unknown[] } = {},
+) {
   const inserted: unknown[][] = []
   const updatedIds: string[][] = []
   const client = {
-    from() {
+    from(table: string) {
       return {
         select() {
+          if (table === 'workflow_runs') {
+            return { in: async () => ({ data: resolve.runs ?? [], error: null }) }
+          }
+          if (table === 'prompt_versions') {
+            return { in: async () => ({ data: resolve.versions ?? [], error: null }) }
+          }
           return {
             eq() {
               return { eq: async () => ({ data: rows, error: null }) }
@@ -783,6 +800,7 @@ describe('emitTasks', () => {
         failedCheckNumbers: [],
         outputTarget: 'chat',
         promptTitle: 'Audit',
+        promptId: PROMPT_ID,
       }),
     ).resolves.toEqual({ created: 0, kept: 0, superseded: 0 })
     expect(touched).toBe(false)
@@ -802,7 +820,12 @@ describe('emitTasks', () => {
         task_type: 'single',
         checklist: [],
       },
-    ])
+    ], {
+      // The old task belonged to this same prompt, an earlier run of it — so
+      // it is this run's to retire.
+      runs: [{ id: 'run-old', prompt_version_id: 'v3' }],
+      versions: [{ id: 'v3', prompt_id: PROMPT_ID }],
+    })
 
     const result = await emitTasks(client, {
       matterId: 'matter-1',
@@ -812,6 +835,7 @@ describe('emitTasks', () => {
       failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
     })
 
     expect(result).toEqual({ created: 1, kept: 0, superseded: 1 })
@@ -831,6 +855,7 @@ describe('emitTasks', () => {
       failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
     })
     const row = (first.inserted[0] as Array<Record<string, unknown>>)[0]
 
@@ -848,7 +873,10 @@ describe('emitTasks', () => {
         task_type: row.task_type,
         checklist: row.checklist,
       },
-    ])
+    ], {
+      runs: [{ id: 'run-1', prompt_version_id: 'v4' }],
+      versions: [{ id: 'v4', prompt_id: PROMPT_ID }],
+    })
 
     const result = await emitTasks(second.client, {
       matterId: 'matter-1',
@@ -858,6 +886,7 @@ describe('emitTasks', () => {
       failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
     })
 
     expect(result).toEqual({ created: 0, kept: 1, superseded: 0 })
@@ -884,7 +913,10 @@ describe('emitTasks', () => {
         task_type: 'checklist',
         checklist: [{ text: CHECK_1_TITLE, done: false }],
       },
-    ])
+    ], {
+      runs: [{ id: 'run-old', prompt_version_id: 'v4' }],
+      versions: [{ id: 'v4', prompt_id: PROMPT_ID }],
+    })
 
     const result = await emitTasks(client, {
       matterId: 'matter-1',
@@ -894,6 +926,7 @@ describe('emitTasks', () => {
       failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
     })
 
     expect(result).toEqual({ created: 0, kept: 0, superseded: 0 })
@@ -911,8 +944,100 @@ describe('emitTasks', () => {
       failedCheckNumbers: [],
       outputTarget: 'checklist',
       promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
     })
     expect(result.created).toBe(0)
     expect(inserted).toEqual([])
+  })
+
+  /**
+   * The failure this slice prevents, end to end. This run is authoritative and
+   * found nothing wrong, so under the old matter-wide scope it would have
+   * retired the row — which belongs to a different prompt entirely.
+   */
+  it('leaves another prompt’s task alone on the same matter', async () => {
+    const { client, inserted, updatedIds } = fakeClient(
+      [
+        {
+          id: 'theirs',
+          source: PROMPT_TASK_SOURCE,
+          batch_tag: 'prompt:their-run',
+          status: 'open',
+          assignee_id: null,
+          title: 'Funding review',
+          description: 'Something else entirely.',
+          priority: 'high',
+          task_type: 'checklist',
+          checklist: [{ text: 'Not our item', done: false }],
+        },
+      ],
+      {
+        runs: [{ id: 'their-run', prompt_version_id: 'their-version' }],
+        versions: [{ id: 'their-version', prompt_id: 'prompt-2' }],
+      },
+    )
+
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-new',
+      checks: CHECKS,
+      findings: [
+        finding({ checkNumber: '1', outcome: 'compliant' }),
+        finding({ checkNumber: '2', outcome: 'compliant' }),
+      ],
+      failedCheckNumbers: [],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
+    })
+
+    expect(result).toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(updatedIds).toEqual([])
+    expect(inserted).toEqual([])
+  })
+
+  /**
+   * And the other half: an earlier *version* of this same prompt is still this
+   * run's to retire, which is what distinguishes prompt-scoping from
+   * version-scoping.
+   */
+  it('still retires its own prompt’s task from an earlier run', async () => {
+    const { client, updatedIds } = fakeClient(
+      [
+        {
+          id: 'mine',
+          source: PROMPT_TASK_SOURCE,
+          batch_tag: 'prompt:my-old-run',
+          status: 'open',
+          assignee_id: null,
+          title: 'MA design sheet audit',
+          description: 'Older wording.',
+          priority: 'high',
+          task_type: 'checklist',
+          checklist: [{ text: CHECK_1_TITLE, done: false }],
+        },
+      ],
+      {
+        runs: [{ id: 'my-old-run', prompt_version_id: 'v3' }],
+        versions: [{ id: 'v3', prompt_id: PROMPT_ID }],
+      },
+    )
+
+    const result = await emitTasks(client, {
+      matterId: 'matter-1',
+      runId: 'run-new',
+      checks: CHECKS,
+      findings: [
+        finding({ checkNumber: '1', outcome: 'compliant' }),
+        finding({ checkNumber: '2', outcome: 'compliant' }),
+      ],
+      failedCheckNumbers: [],
+      outputTarget: 'checklist',
+      promptTitle: 'MA design sheet audit',
+      promptId: PROMPT_ID,
+    })
+
+    expect(result.superseded).toBe(1)
+    expect(updatedIds).toEqual([['mine']])
   })
 })
