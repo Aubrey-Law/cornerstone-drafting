@@ -256,8 +256,67 @@ describe('planEmit', () => {
     return existingTask({ batchTag: 'prompt:run-new#1', ...overrides })
   }
 
-  it('inserts everything and withdraws a previous run’s set on a first run', () => {
+  /**
+   * Changed 2026-09-08, and it used to assert the opposite.
+   *
+   * A previous run's task with byte-identical content is now **kept**, not
+   * archived and re-inserted. Identity is the unit a task is about; the run id
+   * in its tag is provenance. Comparing whole tags meant an unchanged finding
+   * read as new content on every run: measured on one unchanged sheet, 20 runs
+   * left 19 archived rows, and an item ticked by hand came back unticked on
+   * the next run. The behaviour was deliberate and was justified in `planEmit`
+   * as what `lib/runs/advisory.ts` expects — which that module does not, since
+   * it reads findings and never touches tasks.
+   */
+  it('keeps a previous run’s task when the finding has not changed', () => {
     const plan = planEmit([open({ id: 'old-1', batchTag: 'prompt:run-old#1' })], [desiredRow()], authoritative())
+    expect(plan.keep).toEqual(['old-1'])
+    expect(plan.insert).toEqual([])
+    expect(plan.supersede).toEqual([])
+  })
+
+  /** But only when it has not changed. A different rationale is a different
+   *  finding, and still replaces. */
+  it('still replaces a previous run’s task whose rationale changed', () => {
+    const stale = open({ id: 'old-1', batchTag: 'prompt:run-old#1', description: 'What it said before.' })
+    const plan = planEmit([stale], [desiredRow()], authoritative())
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['old-1'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /**
+   * The measured case, as a test: an attorney ticks an item, the audit runs
+   * again on an unchanged sheet, and the tick survives because the row is
+   * never archived. Before this change the plan archived it and inserted a
+   * blank copy.
+   */
+  it('keeps a partly-ticked checklist across runs, not only within one', () => {
+    const row = desiredRow({
+      batch_tag: 'prompt:run-new',
+      task_type: 'checklist',
+      checklist: [{ text: 'One', done: false }, { text: 'Two', done: false }],
+    })
+    const ticked = existingTask({
+      id: 'list',
+      batchTag: 'prompt:run-old',
+      taskType: 'checklist',
+      checklist: [{ text: 'One', done: true }, { text: 'Two', done: false }],
+    })
+    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
+  })
+
+  /** A tag this module did not write keeps its raw value, so a stranger's row
+   *  can never be mistaken for one of ours however alike the rest looks. */
+  it('never treats an unparseable tag as the same identity', () => {
+    const foreign = open({ id: 'foreign', batchTag: 'something-else' })
+    const plan = planEmit([foreign], [desiredRow()], authoritative())
+    expect(plan.keep).toEqual([])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  it('inserts a row for a unit no earlier task covers', () => {
+    const plan = planEmit([open({ id: 'old-1', batchTag: 'prompt:run-old#9' })], [desiredRow()], authoritative())
     expect(plan.insert).toHaveLength(1)
     expect(plan.keep).toEqual([])
     expect(plan.supersede).toEqual(['old-1'])
