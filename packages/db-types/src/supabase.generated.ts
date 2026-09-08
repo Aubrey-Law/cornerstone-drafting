@@ -9026,6 +9026,7 @@ export type Database = {
           model: string | null
           prompt_version_id: string | null
           reclaims: number
+          render_version: number | null
           resolved_inputs: Json | null
           rule_total: number
           started_at: string
@@ -9048,6 +9049,7 @@ export type Database = {
           model?: string | null
           prompt_version_id?: string | null
           reclaims?: number
+          render_version?: number | null
           resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
@@ -9070,6 +9072,7 @@ export type Database = {
           model?: string | null
           prompt_version_id?: string | null
           reclaims?: number
+          render_version?: number | null
           resolved_inputs?: Json | null
           rule_total?: number
           started_at?: string
@@ -9861,6 +9864,7 @@ export type Database = {
           model: string | null
           prompt_version_id: string | null
           reclaims: number
+          render_version: number | null
           resolved_inputs: Json | null
           rule_total: number
           started_at: string
