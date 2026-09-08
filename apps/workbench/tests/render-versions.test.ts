@@ -8,6 +8,14 @@ import {
 } from '@aubrey-law/citations/fieldAudit/render'
 import { runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import {
+  CURRENT_REVIEW_RENDER_VERSION,
+  REVIEW_RENDERS,
+  REVIEW_TOOL_NAME,
+  reviewRender,
+} from '@aubrey-law/citations/review/render'
+import type { ReviewRule } from '@aubrey-law/citations/review/types'
+import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 
 /** Two reads, so `checkMessage`'s join of the list is actually exercised. */
 const CHECK: FieldAuditCheck = {
@@ -268,5 +276,91 @@ describe('the engine renders the version the run pinned', () => {
     expect(FIELD_AUDIT_TOOL_NAME).toBe(
       FIELD_AUDIT_RENDERS[CURRENT_FIELD_AUDIT_RENDER_VERSION].tool.name,
     )
+  })
+})
+
+/**
+ * One block, so the ¶ hint the document formatter prints is a real block
+ * index the verifier can scope by. Built to `TextLayer` in
+ * `packages/citations/src/textLayer/types.ts` — `charStart`/`charEnd` index
+ * into `text`, and `blocks[0].index` is `0`, which is why the answers below
+ * hint block `0`.
+ */
+const LAYER_TEXT = 'The trustee shall distribute income annually.'
+const LAYER: TextLayer = {
+  sourceKind: 'docx',
+  status: 'ok',
+  extractor: 'test',
+  extractorVersion: '1',
+  sourceSha256: 'a'.repeat(64),
+  pageCount: null,
+  text: LAYER_TEXT,
+  blocks: [
+    { index: 0, charStart: 0, charEnd: LAYER_TEXT.length, text: LAYER_TEXT, page: null, bbox: null },
+  ],
+  spans: [],
+}
+
+/**
+ * `preferredLanguage` is `.optional()` on `reviewRuleSchema`, so it is
+ * `string | undefined` — set here rather than omitted, so `ruleMessage`'s
+ * preferred-language branch is actually rendered by the entry sweep below.
+ */
+const REVIEW_RULE: ReviewRule = {
+  number: '7',
+  statement: 'The indemnity is mutual.',
+  risk: 'high',
+  preferredLanguage: 'Each party indemnifies the other.',
+}
+
+describe('the review render registry', () => {
+  it('resolves the current version to a complete entry', () => {
+    const render = reviewRender(CURRENT_REVIEW_RENDER_VERSION)
+    expect(render.instructions.trim().length).toBeGreaterThan(0)
+    expect(render.tool.name.length).toBeGreaterThan(0)
+    expect(render.tool.input_schema).toBeTruthy()
+    expect(render.maxTokens).toBeGreaterThan(0)
+  })
+
+  /** A bumped CURRENT_ with no entry would render `undefined` as the system
+   *  prompt, and the model would answer anyway. */
+  it('has no half-built entry', () => {
+    // The loop below visits only the entries that exist, so this line is the
+    // half that earns the comment above it.
+    expect(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION]).toBeTruthy()
+
+    for (const [version, render] of Object.entries(REVIEW_RENDERS)) {
+      expect(render.instructions.trim().length, `v${version} instructions`).toBeGreaterThan(0)
+      expect(render.tool.name.length, `v${version} tool name`).toBeGreaterThan(0)
+      expect(render.maxTokens, `v${version} maxTokens`).toBeGreaterThan(0)
+      // Called, not type-checked: that these three *are* functions is already
+      // guaranteed by the interface, so asserting it proves nothing. What the
+      // type cannot say is that they return anything.
+      expect(render.ruleMessage(REVIEW_RULE).length, `v${version} ruleMessage`).toBeGreaterThan(0)
+      expect(render.document(LAYER).length, `v${version} document`).toBeGreaterThan(0)
+      expect(render.parse({}).quote, `v${version} parse`).toBeNull()
+    }
+  })
+
+  it('falls back to current for a run made before versioning', () => {
+    expect(reviewRender(null)).toBe(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION])
+    expect(reviewRender(undefined)).toBe(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION])
+  })
+
+  /**
+   * A hard error, not a fallback — the field-audit registry's reasoning,
+   * unchanged: substituting a different render would answer a different
+   * question while the run still reports its own version.
+   */
+  it('refuses a version it does not have, rather than substituting one', () => {
+    expect(() => reviewRender(99)).toThrow(/version 99/)
+  })
+
+  /**
+   * A bump that renames the tool and forgets this export would leave every
+   * test building mock responses under a name nothing matches.
+   */
+  it('exports the current render tool name', () => {
+    expect(REVIEW_TOOL_NAME).toBe(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION].tool.name)
   })
 })
