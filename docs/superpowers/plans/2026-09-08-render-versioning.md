@@ -1572,7 +1572,9 @@ notify pgrst, 'reload schema';
 
 - [ ] **Step 2: Dry-run, then apply by the documented route**
 
-Migrations reach the shared database automatically when they merge to `main`, but this one has to be in place before CI can go green: the *Generated types match the database* check compares the repo's regenerated types against the live database. So apply it by hand.
+Migrations reach the shared database automatically when they merge to `main`, and **CI does not force this one to be applied first** — the types-drift workflow deliberately skips the database comparison on `pull_request`, because a branch that adds a migration is supposed to carry types the database does not have yet. The PR gate is structural only. An earlier draft of this plan claimed the opposite; it was wrong.
+
+Apply it by hand anyway, for the reason `supabase/migrations/README.md` gives: it is the right move for a migration you want to watch land, and it means the schema is verified before the merge rather than a minute after it. Because the change is additive, applying it early is free.
 
 **Use `db push`, not raw `psql`.** `psql` applies the SQL but records nothing in `supabase_migrations.schema_migrations`, and the *Repo migrations match the database history* check would then fail on a migration that had in fact been applied. `db push` does both.
 

@@ -176,10 +176,14 @@ column the previous release is still selecting in
 `apps/workbench/lib/runs/context.ts`, and no amount of care about ordering fixes
 that, because the ordering is not ours to choose.
 
-The rule also cannot be dodged by applying the rename later: CI's
-*Generated types match the database* check compares the repo's regenerated types
-against the live database, so the schema change has to be in place before CI can
-go green.
+It is worth being precise about what does *not* force the issue, because an
+earlier draft of this design got it wrong. CI's types-drift workflow does **not**
+compare the repo against the live database on `pull_request` — deliberately, and
+its own header says why: "a branch that adds a migration is *supposed* to carry
+types the deployed database does not have yet." The PR gate is structural only
+(`PostgrestVersion:` present, no `AnyTable`, the generator atomic) and the
+database comparison runs on a schedule. So the rename is not forced by CI; it is
+forbidden by the deploy-ordering rule above, on its own.
 
 Additive removes the problem rather than managing it. Both columns exist during
 the transition, both releases find the column they select, and there is no window
