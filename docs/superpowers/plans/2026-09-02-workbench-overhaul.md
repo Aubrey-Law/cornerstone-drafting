@@ -874,6 +874,15 @@ finding.
 **`doc_scope` and `skill_ref` were never built.** Nothing needed them. Named here
 so their absence reads as a decision rather than an oversight.
 
+**`prompts.stages` exists and is read by nothing.** It was declared in
+`20261028000000_prompt_objects.sql` and no select list in either app includes
+it; the array that actually gates firing is `fires_on_stage_entry`, which the
+stage trigger checks. Found in 2026-09-08 while widening the audit's reach — and
+worth recording because the failure mode is not a missing feature but a
+convincing no-op: widening `stages`, the obviously-named column, would have
+looked like the change and done nothing at all. An unused column is worse than
+an absent one for exactly that reason.
+
 *Seven things the plan did not mention, built because running it demanded them.*
 A run queue and tick route (#412) — the 300s ceiling was not being hit, but a
 40-prompt library will. Stage-triggered runs (#416). Three separate corrections
