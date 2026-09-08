@@ -53,7 +53,19 @@ export const REVIEW_TOOL = {
   },
 }
 
-const SYSTEM_INSTRUCTIONS = `
+/**
+ * Every version of the review instructions, keyed by the number a run pins in
+ * `workflow_runs.instructions_version`. See
+ * `../fieldAudit/runFieldAudit.ts`'s registry for why old strings stay here
+ * and why earlier variants are not reconstructed.
+ *
+ * A separate registry from the field audit's because the instructions are per
+ * kind: these are about anchoring a citation in a document, those are about
+ * quoting a design-sheet field. `workflow_runs.kind` and
+ * `instructions_version` together name one text.
+ */
+export const REVIEW_INSTRUCTIONS: Record<number, string> = {
+  1: `
 You are reviewing a legal instrument against one firm position at a time.
 
 Rules for every answer:
@@ -69,9 +81,31 @@ Rules for every answer:
   than a missed one.
 
 ${PROMPT_INJECTION_GUARDRAIL}
-`.trim()
+`.trim(),
+}
+
+/** What `openRun` stamps on a new review run. */
+export const CURRENT_REVIEW_INSTRUCTIONS_VERSION = 1
+
+export function reviewInstructions(version: number | null | undefined): string {
+  if (version == null) return REVIEW_INSTRUCTIONS[CURRENT_REVIEW_INSTRUCTIONS_VERSION]
+  const text = REVIEW_INSTRUCTIONS[version]
+  if (!text) {
+    throw new Error(
+      `No review instructions recorded for version ${version}. ` +
+        'A run cannot be finished against instructions this build does not have.',
+    )
+  }
+  return text
+}
 
 export interface RunReviewDependencies {
+  /**
+   * Which instruction text to render, from
+   * `workflow_runs.instructions_version`. Null for a run made before the
+   * instructions were versioned.
+   */
+  instructionsVersion?: number | null
   /**
    * Required, not defaulted. See ./model — a package that falls back to one
    * app's client forks their retry behaviour and usage accounting silently.
@@ -183,6 +217,10 @@ export async function runReviewPlaybook(
     )
   }
 
+  // Resolved once, before any call: a run pinning a version this build does
+  // not have should fail before spending a model call.
+  const instructions = reviewInstructions(deps.instructionsVersion)
+
   const model = deps.model ?? 'claude-sonnet-5'
   const document = documentForPrompt(layer)
 
@@ -196,7 +234,7 @@ export async function runReviewPlaybook(
           model,
           max_tokens: 1024,
           system: [
-            { type: 'text', text: SYSTEM_INSTRUCTIONS },
+            { type: 'text', text: instructions },
             // Static prefix, cached. Everything that varies comes after it.
             { type: 'text', text: document, cache_control: { type: 'ephemeral' } },
           ],

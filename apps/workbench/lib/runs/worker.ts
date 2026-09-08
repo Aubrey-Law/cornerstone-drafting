@@ -106,6 +106,8 @@ export async function workRun(
         {
           promptSlug: prompt.slug,
           promptVersion: prompt.versionNumber,
+          // The run's own pinned instructions, not the deployed constant.
+          instructionsVersion: run.instructions_version,
           values,
           matterId: String(run.matter_id),
           userId: deps.userId ?? null,
@@ -121,7 +123,13 @@ export async function workRun(
       const result = await runReviewPlaybook(
         layer,
         { slug: prompt.slug, title: prompt.title, version: prompt.versionNumber, rules },
-        { callModel: deps.callModel, model: deps.model ?? run.model ?? undefined, userId: deps.userId ?? null, onUnitSettled },
+        {
+          callModel: deps.callModel,
+          model: deps.model ?? run.model ?? undefined,
+          userId: deps.userId ?? null,
+          instructionsVersion: run.instructions_version,
+          onUnitSettled,
+        },
       )
       findings.push(...result.findings)
       failures.push(...result.failures)

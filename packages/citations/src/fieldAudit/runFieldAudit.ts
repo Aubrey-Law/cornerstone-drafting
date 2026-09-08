@@ -54,7 +54,31 @@ export const FIELD_AUDIT_TOOL = {
   },
 }
 
-const SYSTEM_INSTRUCTIONS = `
+/**
+ * Every version of the field-audit instructions, keyed by the number a run
+ * pins in `workflow_runs.instructions_version`.
+ *
+ * The instructions are half of what a check is actually asked — its statement
+ * plus these — and they used to be a bare constant, read at the moment of the
+ * call. A run retried after they changed therefore got a different question
+ * for the retried unit than its siblings had answered, and nothing recorded
+ * that the two differed. `prompt_versions` is immutable for exactly this
+ * reason; this is the other half of the same guarantee.
+ *
+ * Old strings stay here rather than in git history, because replay is the
+ * point: a run pinning version 1 must still be answerable when version 4 is
+ * current. The file gets longer, which is the price of the property.
+ *
+ * Version 1 is the text as it stood when versioning was introduced. Earlier
+ * variants exist in git — the block changed in 0d42cc6a, 949771b3 and #410's
+ * successor — but nothing records which text any particular historical run
+ * used, so they are deliberately not reconstructed here. A run from before
+ * this registry carries a null version and falls back to the current text,
+ * which is what it would have got anyway; the null is there so the
+ * inconsistency can be reasoned about rather than discovered.
+ */
+export const FIELD_AUDIT_INSTRUCTIONS: Record<number, string> = {
+  1: `
 You are auditing a matter's design sheet against one firm check at a time.
 
 Rules for every answer:
@@ -81,11 +105,42 @@ Rules for every answer:
   rejected outright and asked again.
 
 ${PROMPT_INJECTION_GUARDRAIL}
-`.trim()
+`.trim(),
+}
+
+/** What `openRun` stamps on a new field-audit run. */
+export const CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION = 1
+
+/**
+ * The text a run pinned. A null version means the run predates this registry,
+ * so it gets the current text — the behaviour it would have had regardless.
+ *
+ * An unknown *number* is a hard error rather than a fallback. A run pinning a
+ * version this registry has lost is a run nobody can honestly finish, and
+ * quietly substituting different instructions would answer a different
+ * question while reporting the run's own version.
+ */
+export function fieldAuditInstructions(version: number | null | undefined): string {
+  if (version == null) return FIELD_AUDIT_INSTRUCTIONS[CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION]
+  const text = FIELD_AUDIT_INSTRUCTIONS[version]
+  if (!text) {
+    throw new Error(
+      `No field-audit instructions recorded for version ${version}. ` +
+        'A run cannot be finished against instructions this build does not have.',
+    )
+  }
+  return text
+}
 
 export interface FieldAuditContext {
   promptSlug: string
   promptVersion: number
+  /**
+   * Which instruction text to render, from
+   * `workflow_runs.instructions_version`. Null for a run made before the
+   * instructions were versioned.
+   */
+  instructionsVersion?: number | null
   values: Record<string, unknown>
   matterId?: string | null
   userId?: string | null
@@ -251,6 +306,9 @@ export async function runFieldAudit(
 ): Promise<FieldAuditResult> {
   const model = deps.model ?? 'claude-sonnet-5'
   const sheet = sheetForPrompt(context.values)
+  // Resolved once, before any call: a run that pins a version this build does
+  // not have should fail before spending a model call, not partway through.
+  const instructions = fieldAuditInstructions(context.instructionsVersion)
 
   const run = await runPrompt<FieldAuditCheck, FieldAuditFinding>(
     {
@@ -262,7 +320,7 @@ export async function runFieldAudit(
           model,
           max_tokens: 1024,
           system: [
-            { type: 'text', text: SYSTEM_INSTRUCTIONS },
+            { type: 'text', text: instructions },
             // Static prefix, cached. Everything that varies comes after it.
             { type: 'text', text: sheet, cache_control: { type: 'ephemeral' } },
           ],
