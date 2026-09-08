@@ -1,3 +1,4 @@
+import type Anthropic from '@anthropic-ai/sdk'
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import type { FieldAuditCheck } from '../prompt/body'
 import { collectLeaves } from './verify'
@@ -29,19 +30,47 @@ import type { FieldReferenceClaim } from './types'
  * `workflow_runs.model`; a second home for it could disagree with the first.
  *
  * **The gate is deliberately not here either** — see the note on `parse`.
+ *
+ * **Nor are three shared imports, and for the gate's reason, not by
+ * oversight.** An entry holds what code contributes to the *ask*; these three
+ * sit on the gate side of that boundary, where current code is the correct
+ * behaviour:
+ *
+ * - `PROMPT_INJECTION_GUARDRAIL` is interpolated into version 1's instruction
+ *   text, so editing it does rewrite what version 1 renders — and that is the
+ *   point. It is an injection defence, and a hardening fix has to reach a run
+ *   that opened before it, exactly like the reference verifier.
+ * - `quoteUserContent` wraps the sheet block and emits prompt text of its own.
+ *   Same defence, other end of the same attack, same conclusion.
+ * - `collectLeaves` decides the sheet's leaf lines and *must* stay shared with
+ *   `verifyFieldReference`. A version that forked the traversal would render
+ *   leaves the verifier could not match, failing every claim for the prompt's
+ *   reason rather than the model's — the ask and the gate have to agree on
+ *   what a leaf is.
+ *
+ * So "everything the code contributes", above, means everything on the ask
+ * side of that line. This is the rule `parse` states, applied to three more
+ * things — not an exception to it.
+ *
+ * The fields are `readonly`: an entry is the record of what some run was
+ * asked, so nothing may reassign one afterwards. `FIELD_AUDIT_RENDERS` itself
+ * stays writable, because a test needs to add an entry.
  */
 export interface FieldAuditRender {
-  instructions: string
-  tool: {
-    name: string
-    description: string
-    input_schema: Record<string, unknown>
-  }
-  maxTokens: number
+  readonly instructions: string
+  /**
+   * The SDK's own tool type, not a loose shape. This is the one field a new
+   * version is most likely to get subtly wrong — an omitted `type: 'object'`
+   * or a misspelt `properties` would typecheck against a
+   * `Record<string, unknown>` schema, pass every registry test, and then fail
+   * per-unit at the API in the middle of a run.
+   */
+  readonly tool: Anthropic.Tool
+  readonly maxTokens: number
   /** How one check's user message is worded. */
-  checkMessage: (check: FieldAuditCheck) => string
+  readonly checkMessage: (check: FieldAuditCheck) => string
   /** How the sheet block is built from resolved inputs. */
-  sheet: (values: Record<string, unknown>) => string
+  readonly sheet: (values: Record<string, unknown>) => string
   /**
    * Reads this version's tool input into claims.
    *
@@ -58,7 +87,7 @@ export interface FieldAuditRender {
    * outcome should still be refused by a build that does not know it. So
    * `outcome` comes back unvalidated.
    */
-  parse: (input: Record<string, unknown>) => ParsedFieldAuditAnswer
+  readonly parse: (input: Record<string, unknown>) => ParsedFieldAuditAnswer
 }
 
 export interface ParsedFieldAuditAnswer {
@@ -83,7 +112,7 @@ const TOOL_V1: FieldAuditRender['tool'] = {
   name: TOOL_NAME_V1,
   description: "Report the conclusion for exactly one check against the matter's design sheet.",
   input_schema: {
-    type: 'object' as const,
+    type: 'object',
     properties: {
       outcome: {
         type: 'string',
@@ -228,6 +257,13 @@ function parseV1(input: Record<string, unknown>): ParsedFieldAuditAnswer {
  *
  * Later versions should reference these same functions for whatever has not
  * changed, so an entry copies only what actually diverges.
+ *
+ * The `V1` suffix names the version that *introduced* a piece, not the only
+ * version that uses it — so a version 2 entry reading `sheet: sheetV1` is
+ * correct and expected, and says the sheet has not changed since version 1.
+ * A piece is never edited in place: editing `sheetV1` would retroactively
+ * rewrite what version 1 rendered, so divergence means a new constant with
+ * the new version's suffix, referenced from that entry on.
  */
 export const FIELD_AUDIT_RENDERS: Record<number, FieldAuditRender> = {
   1: {

@@ -174,7 +174,9 @@ function formatFieldValue(key: string, value: unknown): string {
   return leaves.map((leaf) => `  ${leaf.path} = ${String(leaf.value)}`).join('\n')
 }
 
-function sheetForPrompt(values: Record<string, unknown>): string {
+// Exported only so `render.ts`'s copy can be A/B-compared against this
+// original in a test; both this and that test go in the next commit.
+export function sheetForPrompt(values: Record<string, unknown>): string {
   // Field keys are what the model references with, and they have to be the
   // keys `verifyFieldReference` looks up — otherwise the label is noise and
   // every claim fails for citing a key the sheet never showed.
@@ -184,7 +186,9 @@ function sheetForPrompt(values: Record<string, unknown>): string {
   return quoteUserContent('design_sheet', lines)
 }
 
-function checkMessage(check: FieldAuditCheck): string {
+// Exported only so `render.ts`'s copy can be A/B-compared against this
+// original in a test; both this and that test go in the next commit.
+export function checkMessage(check: FieldAuditCheck): string {
   const lines = [
     `Check ${check.number}: ${check.statement}`,
     '',
