@@ -1475,46 +1475,25 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Rename the column *(controller-only — not for a subagent)*
+### Task 5: Add the column *(controller-only — not for a subagent)*
 
-This task touches production credentials and the production database. **The session owner runs it, not an implementer subagent.** No subagent should be given the connection string, and nothing in this task may print, echo or log it.
-
-### Sequencing hazard: a rename is not backward compatible
-
-Every migration in this slice's predecessors was additive, so applying it early
-was free. **This one is not.** `apps/workbench/lib/runs/context.ts` as deployed
-on `main` selects `instructions_version`; the moment the rename lands, that
-select names a column that does not exist.
-
-And it cannot simply be deferred to after the merge, because CI's *Generated
-types match the database* check compares the repo's generated types against the
-live database. The regenerated types say `render_version`, so the migration must
-already be applied for CI to pass. There is therefore an unavoidable window
-between applying the rename and the new code being deployed.
-
-What actually breaks in that window is narrow. `loadRunContext` is only called
-after `claim_workflow_run` returns a row, so with nothing queued or running the
-cron claims nothing each minute and the window is inert. So, immediately before
-applying:
-
-```sql
-select status, count(*) from public.workflow_runs
- where status in ('queued', 'running') group by 1;
-```
-
-Expected: **no rows.** If there are any, wait for them to settle rather than
-renaming under a run in flight — a tick that fails mid-run leaves steps
-`pending` and the reaper may mark the run failed, which is a real run lost for
-a schema convenience.
-
-A stage-entry or field-change trigger could still enqueue a run inside the
-window. That is a small, recoverable risk — such a run stays `queued` and works
-on the first tick after deploy — but it is a risk, so do not start this task
-while anyone is editing a design sheet or moving a matter's stage.
+This task touches the production database. **The session owner runs it, not an implementer subagent** — no subagent is given the connection string, and nothing here may print, echo or log it.
 
 **Files:**
 - Create: `supabase/migrations/20261109000000_run_render_version.sql`
 - Modify: `packages/db-types/src/supabase.generated.ts` (regenerated)
+
+**This migration is additive on purpose.** An earlier draft of this plan renamed
+`instructions_version`, which the repository forbids —
+`supabase/migrations/README.md` and the header of
+`.github/workflows/db-migrate-deploy.yml` both say to add nullable columns and
+backfill, and to leave drops and renames to a later migration once nothing reads
+the old shape. Merging applies the migration automatically while Vercel ships the
+code on the same push independently, so the two land in no guaranteed order, and
+a rename would remove the column the previous release still selects in
+`apps/workbench/lib/runs/context.ts`. Additive removes that problem instead of
+managing it: both columns exist, both releases find what they select, and there is
+no window to reason about. **Do not add a `drop column` to this migration.**
 
 - [ ] **Step 1: Write the migration**
 
@@ -1523,32 +1502,42 @@ while anyone is editing a design sheet or moving a matter's stage.
 --
 -- #424 added instructions_version, pinning the instruction text a run answers
 -- against so that a retry weeks later asks the same question. That left four
--- pieces of the same question as un-versioned module code: the tool schema,
--- the tool name, the per-unit message wrapper, the input formatter and
--- max_tokens. All of them are read at the moment of the call, and the call can
--- come much later -- retryFailedSteps sets failed steps back to pending and
--- the next tick works them against whatever is deployed then.
+-- pieces of the same question as un-versioned module code: the tool schema, the
+-- tool name, the per-unit message wrapper, the input formatter and max_tokens.
+-- All are read at the moment of the call, and the call can come much later --
+-- retryFailedSteps sets failed steps back to pending and the next tick works
+-- them against whatever is deployed then.
 --
 -- So the versioned unit widens from the instruction text to the whole render:
 -- everything the code contributes to a unit's call, as one object per version
--- per kind in packages/citations. A rename rather than a new column, because
--- every existing value is still correct -- version 1 of the render *is* the
--- render those runs used, with identical values. Nothing is guessed and
--- nothing is backfilled, the same discipline as #424's migration.
+-- per kind in packages/citations. Versioned together rather than on separate
+-- axes, because separate axes make combinations representable that never ran --
+-- instructions v1 with tool v3 -- and replay would construct them while
+-- reporting fidelity.
 --
--- Versioned together rather than on separate axes because separate axes make
--- combinations representable that never ran -- instructions v1 with tool v3 --
--- and replay would construct them while reporting fidelity.
+-- ADDITIVE, AND DELIBERATELY NOT A RENAME. Renaming instructions_version would
+-- have been tidier and is what this was first designed as. Merging a migration
+-- applies it automatically while Vercel ships the code on the same push
+-- independently, so schema and code land in no guaranteed order -- and a rename
+-- takes away the column the previous release is still selecting. The rule is
+-- written in supabase/migrations/README.md and in the deploy workflow's own
+-- header: add nullable columns, backfill, and leave drops and renames until
+-- nothing reads the old shape. So instructions_version stays, unused by new
+-- code, and a later migration drops it.
 --
--- Still nullable, with the meaning unchanged: null means the run predates
--- versioning, and a retry renders the current entry, which is what it would
--- have got anyway. The null is what lets that be reasoned about rather than
--- discovered.
+-- Backfilled rather than left null, because the value is known and not guessed:
+-- version 1 of the render *is* the render those runs used, with identical
+-- values. #424's migration refused to infer historical instruction text from
+-- deploy timestamps, and this refuses nothing of the kind -- it is a copy.
+--
+-- Null keeps its meaning for anything new that arrives without a version: the
+-- run predates versioning, and a retry renders the current entry, which is what
+-- it would have got anyway.
 --
 -- One column for both kinds. A render is per kind -- field_audit's is about
--- quoting design-sheet fields, review's about anchoring citations in a
--- document -- so `kind` and `render_version` together name one render, and a
--- run has exactly one kind.
+-- quoting design-sheet fields, review's about anchoring citations in a document
+-- -- so `kind` and `render_version` together name one render, and a run has
+-- exactly one kind.
 --
 -- What is deliberately NOT versioned: the gate. verifyFieldReference,
 -- verifyQuote and the refusal of a finding with no references stay at current
@@ -1557,7 +1546,7 @@ while anyone is editing a design sheet or moving a matter's stage.
 -- before a gate fix escape that fix on retry.
 
 alter table public.workflow_runs
-  rename column instructions_version to render_version;
+  add column if not exists render_version integer;
 
 comment on column public.workflow_runs.render_version is
   'Which entry of the per-kind render registry in packages/citations produced '
@@ -1566,44 +1555,72 @@ comment on column public.workflow_runs.render_version is
   'registry, in which case a retry renders the current entry. Read with '
   '`kind`, which selects the registry.';
 
+-- Known, not guessed: render version 1 is exactly the render every existing
+-- row was answered against.
+update public.workflow_runs
+   set render_version = instructions_version
+ where render_version is null;
+
+comment on column public.workflow_runs.instructions_version is
+  'Superseded by render_version, which pins the whole render rather than the '
+  'instruction text alone. Kept only so the previous release keeps working '
+  'across the deploy; a later migration drops it once nothing reads it. Do '
+  'not write it from new code.';
+
 notify pgrst, 'reload schema';
 ```
 
-- [ ] **Step 2: Apply it**
+- [ ] **Step 2: Dry-run, then apply by the documented route**
 
-Apply through the pooler URL from the main checkout's `.env.local`, copied into the worktree only for the operation and removed immediately — including on failure, via `trap … EXIT INT TERM`. Never print, echo, log or interpolate the password, and put no connection string in any report. `--db-url` is the only route that works from a worktree.
+Migrations reach the shared database automatically when they merge to `main`, but this one has to be in place before CI can go green: the *Generated types match the database* check compares the repo's regenerated types against the live database. So apply it by hand, using the route `supabase/migrations/README.md` documents, which records the history row properly:
+
+```bash
+./node_modules/.bin/supabase migration list --linked
+./node_modules/.bin/supabase db push --dry-run
+```
+
+Then push. Never run `db reset --linked`, and never repair migration history merely to force a green status.
+
+Credentials: the pooler URL is the only route that works from a worktree. Copy `.env.local` from the main checkout into the worktree only for the operation and remove it immediately, including on failure, via `trap … EXIT INT TERM`. Never print, echo, log or interpolate the password, and put no connection string in any report.
+
+Because the migration is additive, there is no need to check for in-flight runs and no window to protect — the previous release keeps selecting `instructions_version`, which is still there.
 
 - [ ] **Step 3: Verify from the catalog, not the migration history**
 
-This project has had phantom rows in `supabase_migrations.schema_migrations`, so that table proves nothing. Confirm from `information_schema` instead:
+This project has had phantom rows in `supabase_migrations.schema_migrations`, so that table proves nothing about what actually ran. Confirm from `information_schema`:
 
 ```sql
 select column_name, is_nullable, data_type
   from information_schema.columns
  where table_schema = 'public' and table_name = 'workflow_runs'
-   and column_name in ('render_version', 'instructions_version');
+   and column_name in ('render_version', 'instructions_version')
+ order by column_name;
 ```
 
-Expected: exactly one row, `render_version | YES | integer`. Also confirm the values carried over:
+Expected: **two** rows, both `YES | integer`. `instructions_version` still being present is the point, not a mistake.
+
+Then confirm the backfill copied rather than invented:
 
 ```sql
-select render_version, count(*) from public.workflow_runs group by 1 order by 1;
+select count(*) as rows,
+       count(*) filter (where render_version is distinct from instructions_version) as mismatched,
+       count(*) filter (where render_version is null) as still_null
+  from public.workflow_runs;
 ```
 
-Expected: the same distribution `instructions_version` had before the rename — no nulls appearing where there were none.
+Expected: `mismatched` = 0 and `still_null` = 0.
 
 - [ ] **Step 4: Regenerate the types**
 
 Regenerate with `supabase gen types --db-url`, then **hand-restore the `__InternalSupabase: { PostgrestVersion: "14.5" }` block**, which the `--db-url` route drops and `tests/supabase-types-drift.test.ts` requires.
 
-Confirm the generated file now says `render_version` and no longer says `instructions_version`:
-
 ```bash
 grep -c 'render_version' packages/db-types/src/supabase.generated.ts
 grep -c 'instructions_version' packages/db-types/src/supabase.generated.ts
+grep -c '__InternalSupabase' packages/db-types/src/supabase.generated.ts
 ```
 
-Expected: 4 and 0.
+Expected: 4, 4 and 1 — both columns are in the types, because both are in the database.
 
 - [ ] **Step 5: Commit**
 
@@ -1611,16 +1628,23 @@ Expected: 4 and 0.
 git add supabase/migrations/20261109000000_run_render_version.sql packages/db-types/src/supabase.generated.ts
 git commit -m "A run records which render produced it
 
-Renames workflow_runs.instructions_version to render_version. A rename, not a
-new column: version 1 of the render is exactly the render the existing rows
-used, so every value is still correct and nothing is guessed.
+Adds workflow_runs.render_version and backfills it from instructions_version,
+which is a copy rather than a guess: render version 1 is exactly the render the
+existing rows were answered against.
+
+Additive, not a rename, and not because a rename was harder. Merging applies a
+migration automatically while Vercel ships the code on the same push
+independently, so the two land in no guaranteed order -- a rename would remove
+the column the previous release is still selecting. instructions_version stays,
+unused by new code and marked superseded in its comment, and a later migration
+drops it once nothing reads it.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 6: Wire the workbench to the renamed column
+### Task 6: Wire the workbench to the new column
 
 **Files:**
 - Modify: `apps/workbench/lib/runs/context.ts:32,53`
@@ -1648,16 +1672,23 @@ Expected: FAIL — `render_version` is not a property of the run context type, a
 
 - [ ] **Step 3: Rename at the three call sites**
 
-`apps/workbench/lib/runs/context.ts` — line 32, the type:
+`apps/workbench/lib/runs/context.ts` — line 32, the type keeps **both** columns, because both exist during the transition:
 
 ```ts
   render_version: number | null
+  /**
+   * Superseded by `render_version`. Still selected so a run opened by the
+   * previous release — which wrote only this — is answered against the version
+   * it opened with rather than falling back to current. Goes away with the
+   * migration that drops the column.
+   */
+  instructions_version: number | null
 ```
 
-and line 53, the select list — replace `instructions_version` with `render_version`:
+and line 53, the select list — **add** `render_version`, keep `instructions_version`:
 
 ```ts
-    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model, render_version')
+    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model, render_version, instructions_version')
 ```
 
 `apps/workbench/lib/runs/record.ts` — the imports at lines 5-6:
@@ -1678,19 +1709,31 @@ and the insert at lines 119-122:
         input.kind === 'field_audit'
           ? CURRENT_FIELD_AUDIT_RENDER_VERSION
           : CURRENT_REVIEW_RENDER_VERSION,
+      // Written too, for the minute or two where the previous release may
+      // still pick up this run and read only this column. The values are the
+      // same number today, and the migration that drops the column drops this
+      // line with it.
+      instructions_version:
+        input.kind === 'field_audit'
+          ? CURRENT_FIELD_AUDIT_RENDER_VERSION
+          : CURRENT_REVIEW_RENDER_VERSION,
 ```
 
 `apps/workbench/lib/runs/worker.ts` — line 110, in the field-audit branch:
 
 ```ts
-          // The run's own pinned render, not the deployed constant.
-          renderVersion: run.render_version,
+          // The run's own pinned render, not the deployed constant. The
+          // fallback covers a run opened by the previous release, which wrote
+          // only instructions_version: without it such a run would resolve to
+          // "current", which is the drift this slice exists to remove. It goes
+          // away with the migration that drops the old column.
+          renderVersion: run.render_version ?? run.instructions_version,
 ```
 
 and line 130, in the review branch:
 
 ```ts
-          renderVersion: run.render_version,
+          renderVersion: run.render_version ?? run.instructions_version,
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -1704,10 +1747,12 @@ Expected: PASS, whole workbench suite.
 - [ ] **Step 5: Confirm nothing still refers to the old name**
 
 ```bash
-grep -rn 'instructions_version\|instructionsVersion\|INSTRUCTIONS_VERSION' --include='*.ts' --include='*.tsx' . 2>/dev/null | grep -v node_modules
+grep -rn 'instructionsVersion\|INSTRUCTIONS_VERSION' --include='*.ts' --include='*.tsx' . 2>/dev/null | grep -v node_modules
 ```
 
-Expected: **no output** except the historical migration `20261108000000_run_instructions_version.sql`, which stays exactly as it is — an applied migration is a record of what happened and is never edited.
+Expected: **no output.** The camel-case and constant forms are gone entirely — those were the engine's, and the engines now speak `renderVersion`.
+
+`instructions_version` (snake case) *should* still appear, in exactly four places: the run-context type and its select list, the `openRun` insert, and the worker's `??` fallback. Anything beyond those four is a leftover. The historical migration `20261108000000_run_instructions_version.sql` stays exactly as it is — an applied migration is a record of what happened and is never edited.
 
 - [ ] **Step 6: Typecheck and commit**
 
@@ -1750,10 +1795,13 @@ The tool schema was the named gap and is now closed: the versioned unit is the
 whole render — instructions, tool schema and name, `max_tokens`, the message
 wrapper and the input formatter — pinned on `workflow_runs.render_version`,
 with the gate deliberately left at current code so a fix to it still reaches a
-run that opened before it. What that leaves un-versioned is `runPrompt`'s loop:
-retry counts, concurrency and where the cache breakpoint sits. Those shape cost
-and latency rather than the question asked, which is why they were left, and
-naming them is how that stays a decision.
+run that opened before it. Two things that leaves. `runPrompt`'s loop is still
+un-versioned — retry counts, concurrency, where the cache breakpoint sits — and
+deliberately so: those shape cost and latency rather than the question asked.
+And `instructions_version` is still on the table, superseded but not dropped,
+because a migration that ships with code has to be safe against the release
+before it; dropping it and removing the `??` fallback in `workRun` is a separate
+change, owed once this one has deployed.
 ```
 
 Keep the rest of the paragraph — #419 and #421 being test-only, the three unexercised fiduciary kinds, and the drafting-notes measurement — unchanged.
@@ -1786,8 +1834,10 @@ git push -u origin claude/tool-schema-version-2
 | `parse` in the render, gate in the engine | 2, 4 |
 | `ParsedFieldAuditAnswer.outcome` unvalidated | 1, 2 |
 | `ReviewRender` and its engine | 3, 4 |
-| Column rename + comment | 5 |
+| Additive column + backfill + comments | 5 |
 | Types regenerated with the restored header | 5 |
+| Lossless transition (dual write, `??` read) | 5 (design), 6 |
+| The drop deferred to a later migration | named in 5 and 7, deliberately unbuilt |
 | `renderVersion` on both engines' inputs | 2, 4 |
 | Stamp / select / forward | 6 |
 | Synthetic v2 divergence tests | 2, 4 |

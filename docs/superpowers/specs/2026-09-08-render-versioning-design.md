@@ -145,24 +145,72 @@ so a new file needs no manifest change.
 import them to build mock tool_use blocks — but are **derived** from the
 current render's tool name rather than standing beside it as a second source.
 
-## Migration
+## Migration: additive, with the drop deferred
 
 ```sql
-alter table public.workflow_runs rename column instructions_version to render_version;
+alter table public.workflow_runs
+  add column if not exists render_version integer;
+
+update public.workflow_runs
+   set render_version = instructions_version
+ where render_version is null;
 ```
 
-A rename, not a new column: every existing value is still correct, because
-version 1 of the render *is* the render those runs used. Nothing is guessed and
-nothing is backfilled — the same discipline as #424's migration, which refused
-to infer historical instruction text from deploy timestamps.
+`instructions_version` **stays**, unused by new code, and a later migration
+drops it once nothing reads it.
 
-Still nullable, with the meaning unchanged: null means the run predates
-versioning and a retry renders the current entry, which is what it would have
-got anyway. The column comment is rewritten to say what a render is.
+### Why not a rename
+
+A rename was the first design, and the repository already forbids it. Both
+`supabase/migrations/README.md` and the header of
+`.github/workflows/db-migrate-deploy.yml` say the same thing:
+
+> Migrations must be additive and safe to run against the previous release: add
+> nullable columns and new tables, backfill, and leave drops and renames to a
+> later migration once nothing reads the old shape.
+
+The reason is in the same comment: merging applies the migration automatically,
+and Vercel ships the code on the same push independently, so the two land within
+a minute or two of each other **in no guaranteed order**. A rename removes the
+column the previous release is still selecting in
+`apps/workbench/lib/runs/context.ts`, and no amount of care about ordering fixes
+that, because the ordering is not ours to choose.
+
+The rule also cannot be dodged by applying the rename later: CI's
+*Generated types match the database* check compares the repo's regenerated types
+against the live database, so the schema change has to be in place before CI can
+go green.
+
+Additive removes the problem rather than managing it. Both columns exist during
+the transition, both releases find the column they select, and there is no window
+to reason about.
+
+### The transition is lossless by construction
+
+For the minute or two when the old code may still be running:
+
+- `openRun` writes **both** columns. A run opened in the window carries its
+  version in whichever column each release reads.
+- `workRun` reads `render_version ?? instructions_version`. A run opened by the
+  previous release has only `instructions_version`, and is still answered
+  against the version it opened with rather than falling back to "current".
+
+Without the fallback the transition would still be *harmless today* — the
+fallback for a null is the current entry, and the current entry is version 1, so
+nothing would actually drift. But that is harmless by coincidence, not by
+construction, and the whole point of this slice is that a run's question does not
+depend on when it is retried. One `??` makes it provable instead of lucky.
 
 Then regenerate types with the pooler URL and **hand-restore the
 `__InternalSupabase` block**, which `supabase gen types --db-url` drops and
 `tests/supabase-types-drift.test.ts` requires.
+
+### The contract migration, named rather than implied
+
+Dropping `instructions_version` and removing the `??` fallback is a separate,
+later change, gated on this one being deployed. It is deliberately not in this
+slice: bundling the drop with the add is precisely the mistake the rule exists to
+prevent.
 
 ## Testing
 
