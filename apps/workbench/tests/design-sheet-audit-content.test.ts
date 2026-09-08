@@ -301,3 +301,93 @@ describe('the version-4 seed migration for the design-sheet audit', () => {
     expect(promptBodySchema.safeParse(JSON.parse(bodyText())).success).toBe(true)
   })
 })
+
+/**
+ * Version 5 resolves an ambiguity in check 2 rather than changing what the
+ * audit checks.
+ *
+ * Version 4's statement contained two questions: a topic sentence asking
+ * whether a person named in free text appears in the structured decisions —
+ * any of them — and a second sentence narrowing to "no beneficiary or
+ * fiduciary field". Across six runs on one unchanged sheet the model answered
+ * the first five times and the second once, and the once was a false blocker:
+ * both runs cited identical evidence and differed only in which half they
+ * treated as the answer.
+ */
+describe('the version-5 seed migration for the design-sheet audit', () => {
+  const V5 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261107000000_design_sheet_audit_v5.sql'),
+    'utf8',
+  )
+  const V4 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261104000000_design_sheet_audit_v4.sql'),
+    'utf8',
+  )
+  const bodyOf = (sql: string) =>
+    JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'"))
+
+  it('publishes version 5, and repoints rather than doing nothing', () => {
+    expect(V5).toMatch(/version_number\s*\)?\s*\n?.*5,|,\s*\n\s*5,/)
+    expect(V5).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('makes the new version insert idempotent', () => {
+    expect(V5).toMatch(/on conflict \(prompt_id, version_number\) do nothing/)
+  })
+
+  it('finds the prompt by slug rather than a pasted id', () => {
+    expect(V5).toMatch(/where p\.slug = 'ma-design-sheet-audit'/)
+    expect(V5).not.toMatch(/insert into public\.prompts\s*\(/)
+  })
+
+  /**
+   * The whole claim of this version: it changes one statement and nothing
+   * else. Asserted by comparison rather than by reading, because a
+   * hand-edited copy would drift a `reads` entry and nobody would notice
+   * until a run behaved differently for a reason nobody chose.
+   */
+  it('changes only check 2’s statement, leaving every other check identical', () => {
+    const a = bodyOf(V4)
+    const b = bodyOf(V5)
+    expect(b.inputs).toEqual(a.inputs)
+    expect(b.outputTarget).toEqual(a.outputTarget)
+    expect(b.checks).toHaveLength(a.checks.length)
+    for (const [i, before] of a.checks.entries()) {
+      const after = b.checks[i]
+      if (before.number === '2') {
+        expect(after.statement).not.toEqual(before.statement)
+        // Everything about check 2 except its wording is untouched.
+        expect({ ...after, statement: '' }).toEqual({ ...before, statement: '' })
+      } else {
+        expect(after).toEqual(before)
+      }
+    }
+  })
+
+  /** The three things the new statement has to say, each tied to an observed
+   *  failure: a category is not a name, any structured field counts, and a
+   *  provision gap belongs to check 1. */
+  it('states the trigger, the satisfaction and the deferral', () => {
+    const check2 = bodyOf(V5).checks.find((c: { number: string }) => c.number === '2')
+    expect(check2.statement).toMatch(/descendants/)
+    expect(check2.statement).toMatch(/spouse_name/)
+    expect(check2.statement).toMatch(/check 1/)
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V5.match(/::jsonb,\s*\n\s*'([0-9a-f]{64})'/)![1]
+    const literal = V5.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+    expect(crypto.createHash('sha256').update(literal).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    const parsed = promptBodySchema.safeParse(bodyOf(V5))
+    expect(parsed.success).toBe(true)
+  })
+
+  it('declares no source outside the allow-list', () => {
+    const parsed = promptBodySchema.parse(bodyOf(V5))
+    if (parsed.kind !== 'field_audit') throw new Error('expected a field_audit body')
+    expect(unknownSources(parsed.inputs)).toEqual([])
+  })
+})
