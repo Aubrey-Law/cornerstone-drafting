@@ -2,20 +2,24 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   CURRENT_FIELD_AUDIT_RENDER_VERSION,
   FIELD_AUDIT_RENDERS,
-  FIELD_AUDIT_TOOL_NAME,
   fieldAuditRender,
   type FieldAuditRender,
 } from '@aubrey-law/citations/fieldAudit/render'
-import { runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+// The tool name deliberately comes from the *engine*, not from `render`, which
+// is where it is defined. See the case that asserts on it below.
+import {
+  FIELD_AUDIT_TOOL_NAME,
+  runFieldAudit,
+} from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 import {
   CURRENT_REVIEW_RENDER_VERSION,
   REVIEW_RENDERS,
-  REVIEW_TOOL_NAME,
   reviewRender,
   type ReviewRender,
 } from '@aubrey-law/citations/review/render'
-import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
+// As above: from the engine, not from `render`.
+import { REVIEW_TOOL_NAME, runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ReviewRule } from '@aubrey-law/citations/review/types'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 
@@ -109,6 +113,15 @@ const BODY: FieldAuditBody = {
  * Injected by assigning into the exported record and deleting the key
  * afterwards, so no production signature is bent to accept a test double.
  */
+/**
+ * Absurd on purpose: the fixture is keyed where no real registry entry will
+ * ever be, so adding a genuine version 2 cannot silently overwrite it — nor
+ * be overwritten by it, validated by the sweep above in its place, and then
+ * deleted in `afterAll`. If a real 9001 ever exists, the `beforeAll` guard
+ * below says so out loud instead.
+ */
+const SYNTHETIC_FIELD_AUDIT_VERSION = 9001
+
 const V2: FieldAuditRender = {
   instructions: 'Version two instructions.',
   tool: {
@@ -150,10 +163,14 @@ const V2: FieldAuditRender = {
 }
 
 beforeAll(() => {
-  FIELD_AUDIT_RENDERS[2] = V2
+  expect(
+    FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION],
+    're-key this fixture',
+  ).toBeUndefined()
+  FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION] = V2
 })
 afterAll(() => {
-  delete FIELD_AUDIT_RENDERS[2]
+  delete FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION]
 })
 
 /** Captures the request the engine built, and answers with `input`. */
@@ -169,7 +186,12 @@ function captor(input: Record<string, unknown>) {
 }
 
 describe('the engine renders the version the run pinned', () => {
-  it('sends version 1 wholesale for a run pinning 1', async () => {
+  // A regression guard on version 1's values, and no more: pinning 1 and
+  // pinning nothing resolve the identical object, because 1 *is* the current
+  // version — so nothing here can prove the engine reads the run's version
+  // rather than the current one. The routing claim is carried by the cases
+  // below, which pin a version the current one is not.
+  it("renders version 1's values", async () => {
     const { requests, callModel } = captor({
       outcome: 'compliant',
       rationale: 'Fine.',
@@ -190,7 +212,12 @@ describe('the engine renders the version the run pinned', () => {
   it('sends version 2 wholesale for a run pinning 2', async () => {
     const { requests, callModel } = captor({ outcome: 'compliant', rationale: 'Fine.', refs: [] })
     await runFieldAudit(
-      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      {
+        promptSlug: 's',
+        promptVersion: 1,
+        values: { concerns: 'x' },
+        renderVersion: SYNTHETIC_FIELD_AUDIT_VERSION,
+      },
       BODY,
       { callModel },
     )
@@ -212,7 +239,12 @@ describe('the engine renders the version the run pinned', () => {
     const v2Answer = { outcome: 'deviation', rationale: 'Missing.', refs: [{ field: 'concerns', value: 'x' }] }
 
     const underTwo = await runFieldAudit(
-      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      {
+        promptSlug: 's',
+        promptVersion: 1,
+        values: { concerns: 'x' },
+        renderVersion: SYNTHETIC_FIELD_AUDIT_VERSION,
+      },
       BODY,
       { callModel: captor(v2Answer).callModel },
     )
@@ -238,7 +270,12 @@ describe('the engine renders the version the run pinned', () => {
   it('applies the current gate whatever version the run pinned', async () => {
     const { requests, callModel } = captor({ outcome: 'deviation', rationale: 'Missing.', refs: [] })
     const result = await runFieldAudit(
-      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      {
+        promptSlug: 's',
+        promptVersion: 1,
+        values: { concerns: 'x' },
+        renderVersion: SYNTHETIC_FIELD_AUDIT_VERSION,
+      },
       BODY,
       { callModel },
     )
@@ -271,8 +308,16 @@ describe('the engine renders the version the run pinned', () => {
   })
 
   /**
-   * A bump that renames the tool and forgets this export would leave every
-   * test building mock responses under a name nothing matches.
+   * Imported from the engine, not from `render` — which is the whole point.
+   * `render.ts` *defines* `FIELD_AUDIT_TOOL_NAME` as
+   * `FIELD_AUDIT_RENDERS[CURRENT_…].tool.name`, so comparing the two through
+   * that module would be an expression against itself and could not go red.
+   * What is actually at risk is the re-export: `field-audit-run.test.ts` and
+   * `run-worker.test.ts` build their mock tool_use blocks from the engine's
+   * copy of the name, so a re-export that goes missing or is re-declared as a
+   * literal has to fail here rather than at the API, where a renamed tool
+   * reads nothing from every unit and fails the whole run for a reason that
+   * looks like a model problem.
    */
   it('exports the current render tool name', () => {
     expect(FIELD_AUDIT_TOOL_NAME).toBe(
@@ -359,8 +404,13 @@ describe('the review render registry', () => {
   })
 
   /**
-   * A bump that renames the tool and forgets this export would leave every
-   * test building mock responses under a name nothing matches.
+   * Imported from the engine, not from `render`, for the reason spelled out on
+   * the field-audit case above: `render.ts` derives `REVIEW_TOOL_NAME` from
+   * this very expression, so the comparison only says something when it
+   * crosses the re-export. The root app's `tests/review-slice.test.ts` reaches
+   * the name through `lib/reviewSlice/runReview`'s `export *` of this engine,
+   * so a re-export that goes missing or is re-declared as a literal fails
+   * here rather than at the API.
    */
   it('exports the current render tool name', () => {
     expect(REVIEW_TOOL_NAME).toBe(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION].tool.name)
@@ -389,6 +439,10 @@ const PLAYBOOK = { slug: 'p', title: 'P', version: 1, rules: [RUN_RULE] }
  * Injected by assigning into the exported record and deleting the key
  * afterwards, so no production signature is bent to accept a test double.
  */
+/** Absurd on purpose, for the reason given on `SYNTHETIC_FIELD_AUDIT_VERSION`:
+ *  it must never collide with a real registry entry. */
+const SYNTHETIC_REVIEW_VERSION = 9001
+
 const REVIEW_V2: ReviewRender = {
   instructions: 'Review version two.',
   tool: {
@@ -440,13 +494,17 @@ function reviewCaptor(input: Record<string, unknown>) {
 
 describe('the review engine renders the version the run pinned', () => {
   beforeAll(() => {
-    REVIEW_RENDERS[2] = REVIEW_V2
+    expect(REVIEW_RENDERS[SYNTHETIC_REVIEW_VERSION], 're-key this fixture').toBeUndefined()
+    REVIEW_RENDERS[SYNTHETIC_REVIEW_VERSION] = REVIEW_V2
   })
   afterAll(() => {
-    delete REVIEW_RENDERS[2]
+    delete REVIEW_RENDERS[SYNTHETIC_REVIEW_VERSION]
   })
 
-  it('sends version 1 wholesale for a run pinning 1', async () => {
+  // As on the field-audit side: a regression guard on version 1's values
+  // only. Pinning 1 and pinning nothing are the same object, so the routing
+  // claim is carried by the cases below.
+  it("renders version 1's values", async () => {
     const { requests, callModel } = reviewCaptor({
       outcome: 'compliant',
       rationale: 'Fine.',
@@ -464,7 +522,10 @@ describe('the review engine renders the version the run pinned', () => {
 
   it('sends version 2 wholesale for a run pinning 2', async () => {
     const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
-    await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    await runReviewPlaybook(LAYER, PLAYBOOK, {
+      renderVersion: SYNTHETIC_REVIEW_VERSION,
+      callModel,
+    })
     const request = requests[0]
     expect(request.max_tokens).toBe(55)
     expect((request.tools as Array<{ name: string }>)[0].name).toBe('report_finding_v2')
@@ -483,7 +544,7 @@ describe('the review engine renders the version the run pinned', () => {
     const v2Answer = { outcome: 'deviation', q: LAYER_TEXT, b: 0 }
 
     const underTwo = await runReviewPlaybook(LAYER, PLAYBOOK, {
-      renderVersion: 2,
+      renderVersion: SYNTHETIC_REVIEW_VERSION,
       callModel: reviewCaptor(v2Answer).callModel,
     })
     expect(underTwo.findings[0].citation?.quote).toBe(LAYER_TEXT)
@@ -502,7 +563,10 @@ describe('the review engine renders the version the run pinned', () => {
   /** The citation gate is current code, whatever version parsed the answer. */
   it('verifies a v2 quote with the current verifier', async () => {
     const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
-    const result = await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    const result = await runReviewPlaybook(LAYER, PLAYBOOK, {
+      renderVersion: SYNTHETIC_REVIEW_VERSION,
+      callModel,
+    })
     // Version 2 is what was actually asked, not merely what parsed the reply
     // — without this line the case would pass on a v1 render that happened to
     // produce the same conclusion.
@@ -521,7 +585,10 @@ describe('the review engine renders the version the run pinned', () => {
       q: 'The trustee shall distribute income quarterly.',
       b: 0,
     })
-    const result = await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    const result = await runReviewPlaybook(LAYER, PLAYBOOK, {
+      renderVersion: SYNTHETIC_REVIEW_VERSION,
+      callModel,
+    })
     expect(requests[0].max_tokens).toBe(55)
     expect(result.findings[0].citation).toBeNull()
     expect(result.findings[0].citationRefusal).not.toBeNull()

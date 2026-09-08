@@ -65,7 +65,18 @@ function findingForCheck(
     throw new Error(`Unrecognised outcome ${String(outcome)}`)
   }
 
-  const references: FieldReference[] = answer.claims.map(claim =>
+  // Dropped here, before verification, because the refusal below counts what
+  // the model offered and a claim naming no field offers nothing. Today's
+  // `parseV1` already filters these out, so this is behaviour-neutral against
+  // every entry currently in the registry — the point is that the gate must
+  // not depend on which version parsed the answer. A future parser that kept
+  // `[{ field: '', value: null }]` would otherwise hand the gate one claim and
+  // let an unsupported deviation through a gate whose own comment says it
+  // cannot. `verifyFieldReference` preserves `fieldKey`, so filtering before
+  // or after it is the same set.
+  const claims = answer.claims.filter(claim => claim.fieldKey !== '')
+
+  const references: FieldReference[] = claims.map(claim =>
     verifyFieldReference(values, check.reads, claim),
   )
 
@@ -96,7 +107,9 @@ function findingForCheck(
   // disagreement for a retry loop. Only `deviation` and `absent` are held to
   // this: a `compliant` or `not_applicable` conclusion legitimately rests on
   // nothing needing citation, and demanding references there would invite
-  // invented ones.
+  // invented ones. "Emitted" means emitted *naming a field*, which the filter
+  // above enforces in the engine rather than trusting the pinned version's
+  // parser to — so this promise holds whichever registry entry is in play.
   //
   // This is deliberately outside the render: a gate fix must reach a run that
   // opened before it, which is the opposite of how the question is treated.
