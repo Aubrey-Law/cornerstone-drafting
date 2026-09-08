@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { Json } from '@aubrey-law/db-types'
 import { statusFromSteps, type RunStep } from './steps'
-import { CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import { CURRENT_FIELD_AUDIT_RENDER_VERSION } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
 import { CURRENT_REVIEW_INSTRUCTIONS_VERSION } from '@aubrey-law/citations/review/runReview'
 
 /**
@@ -118,7 +118,7 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
       // for. Per kind, because the two registries hold different contracts.
       instructions_version:
         input.kind === 'field_audit'
-          ? CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION
+          ? CURRENT_FIELD_AUDIT_RENDER_VERSION
           : CURRENT_REVIEW_INSTRUCTIONS_VERSION,
       started_at: now,
       finished_at: null,

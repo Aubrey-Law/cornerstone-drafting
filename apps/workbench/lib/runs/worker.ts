@@ -106,8 +106,10 @@ export async function workRun(
         {
           promptSlug: prompt.slug,
           promptVersion: prompt.versionNumber,
-          // The run's own pinned instructions, not the deployed constant.
-          instructionsVersion: run.instructions_version,
+          // The run's own pinned render, not the deployed constant. The
+          // column is still named `instructions_version`; the render version
+          // is what it holds.
+          renderVersion: run.instructions_version,
           values,
           matterId: String(run.matter_id),
           userId: deps.userId ?? null,

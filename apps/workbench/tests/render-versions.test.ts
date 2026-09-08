@@ -1,16 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   CURRENT_FIELD_AUDIT_RENDER_VERSION,
   FIELD_AUDIT_RENDERS,
+  FIELD_AUDIT_TOOL_NAME,
   fieldAuditRender,
+  type FieldAuditRender,
 } from '@aubrey-law/citations/fieldAudit/render'
-import {
-  checkMessage,
-  FIELD_AUDIT_INSTRUCTIONS,
-  FIELD_AUDIT_TOOL,
-  sheetForPrompt,
-} from '@aubrey-law/citations/fieldAudit/runFieldAudit'
-import type { FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
+import { runFieldAudit } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import type { FieldAuditBody, FieldAuditCheck } from '@aubrey-law/citations/prompt/body'
 
 /** Two reads, so `checkMessage`'s join of the list is actually exercised. */
 const CHECK: FieldAuditCheck = {
@@ -71,57 +68,205 @@ describe('the field-audit render registry', () => {
 })
 
 /**
- * The extraction has to change nothing. These compare version 1's entry
- * against the constants the engine uses today; Task 2 removes the old
- * constants and these assertions go with them.
+ * A second check, distinct from `CHECK` above: the routing cases below assert
+ * on the wording of a rendered message ("V2 check 1"), so the check number
+ * has to be the one that wording names.
  */
-describe('version 1 is today behaviour, moved', () => {
-  it('carries the same instruction text', () => {
-    expect(FIELD_AUDIT_RENDERS[1].instructions).toBe(FIELD_AUDIT_INSTRUCTIONS[1])
+const RUN_CHECK: FieldAuditCheck = {
+  number: '1',
+  statement: 'Every concern has a provision.',
+  risk: 'blocker',
+  reads: ['concerns'],
+  taskTemplate: {
+    title: 'A concern is unanswered',
+    description: 'Confirm it.',
+    priority: 'high',
+  },
+}
+const BODY: FieldAuditBody = {
+  kind: 'field_audit',
+  inputs: [{ key: 'concerns', source: 'design_sheet.concerns', required: true }],
+  checks: [RUN_CHECK],
+  outputTarget: 'task_set',
+}
+
+/**
+ * A second version that differs in every way the registry is supposed to
+ * carry: a renamed tool, a renamed reference field, and different wrapper
+ * text. Without it, "the engine uses the run's version" is unfalsifiable —
+ * one entry means the pinned entry and the current entry are the same object.
+ *
+ * Injected by assigning into the exported record and deleting the key
+ * afterwards, so no production signature is bent to accept a test double.
+ */
+const V2: FieldAuditRender = {
+  instructions: 'Version two instructions.',
+  tool: {
+    name: 'report_check_v2',
+    description: 'Version two.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        outcome: { type: 'string', enum: ['compliant', 'deviation', 'absent', 'not_applicable'] },
+        rationale: { type: 'string' },
+        refs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { field: { type: 'string' }, value: { type: ['string', 'null'] } },
+            required: ['field', 'value'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['outcome', 'rationale', 'refs'],
+      additionalProperties: false,
+    },
+  },
+  maxTokens: 77,
+  checkMessage: check => `V2 check ${check.number}`,
+  sheet: () => 'V2 sheet',
+  parse: input => ({
+    outcome: input.outcome,
+    rationale: typeof input.rationale === 'string' ? input.rationale : null,
+    claims: (Array.isArray(input.refs) ? input.refs : [])
+      .filter((ref): ref is Record<string, unknown> => ref !== null && typeof ref === 'object')
+      .map(ref => ({
+        fieldKey: typeof ref.field === 'string' ? ref.field : '',
+        claimedValue: typeof ref.value === 'string' ? ref.value : null,
+      }))
+      .filter(claim => claim.fieldKey !== ''),
+  }),
+}
+
+beforeAll(() => {
+  FIELD_AUDIT_RENDERS[2] = V2
+})
+afterAll(() => {
+  delete FIELD_AUDIT_RENDERS[2]
+})
+
+/** Captures the request the engine built, and answers with `input`. */
+function captor(input: Record<string, unknown>) {
+  const requests: Array<Record<string, unknown>> = []
+  const callModel = async (request: unknown) => {
+    const typed = request as Record<string, unknown>
+    requests.push(typed)
+    const toolName = (typed.tools as Array<{ name: string }>)[0].name
+    return { content: [{ type: 'tool_use', id: 'tu_1', name: toolName, input }] } as never
+  }
+  return { requests, callModel }
+}
+
+describe('the engine renders the version the run pinned', () => {
+  it('sends version 1 wholesale for a run pinning 1', async () => {
+    const { requests, callModel } = captor({
+      outcome: 'compliant',
+      rationale: 'Fine.',
+      references: [],
+    })
+    await runFieldAudit(
+      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 1 },
+      BODY,
+      { callModel },
+    )
+    const request = requests[0]
+    expect(request.max_tokens).toBe(1024)
+    expect((request.tools as Array<{ name: string }>)[0].name).toBe('report_check')
+    expect((request.system as Array<{ text: string }>)[0].text).toBe(FIELD_AUDIT_RENDERS[1].instructions)
+    expect((request.tool_choice as { name: string }).name).toBe('report_check')
   })
 
-  it('carries the same tool', () => {
-    expect(FIELD_AUDIT_RENDERS[1].tool).toEqual(FIELD_AUDIT_TOOL)
+  it('sends version 2 wholesale for a run pinning 2', async () => {
+    const { requests, callModel } = captor({ outcome: 'compliant', rationale: 'Fine.', refs: [] })
+    await runFieldAudit(
+      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      BODY,
+      { callModel },
+    )
+    const request = requests[0]
+    expect(request.max_tokens).toBe(77)
+    expect((request.tools as Array<{ name: string }>)[0].name).toBe('report_check_v2')
+    expect((request.system as Array<{ text: string }>)[0].text).toBe('Version two instructions.')
+    expect((request.system as Array<{ text: string }>)[1].text).toBe('V2 sheet')
+    expect((request.messages as Array<{ content: string }>)[0].content).toBe('V2 check 1')
   })
 
   /**
-   * The literal, not `toBeGreaterThan(0)`. A typo — 1042 — satisfies every
-   * other assertion in this file and would ship, and unlike the instructions
-   * and the tool there is no constant left to compare it against once the
-   * originals go.
+   * The parse routes too, and this is the assertion that a single-version
+   * registry could never make: the same answer shape verifies under the
+   * version that declares it and produces nothing under the version that
+   * does not.
    */
-  it('carries the same max_tokens', () => {
-    expect(FIELD_AUDIT_RENDERS[1].maxTokens).toBe(1024)
+  it('parses with the pinned version, not the current one', async () => {
+    const v2Answer = { outcome: 'deviation', rationale: 'Missing.', refs: [{ field: 'concerns', value: 'x' }] }
+
+    const underTwo = await runFieldAudit(
+      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      BODY,
+      { callModel: captor(v2Answer).callModel },
+    )
+    expect(underTwo.findings[0].references).toHaveLength(1)
+    expect(underTwo.findings[0].references[0].verification).toBe('verified')
+
+    // Version 1's parser reads `references`, which this answer does not have,
+    // so it finds no claims — and an unsupported deviation fails its unit.
+    const underOne = await runFieldAudit(
+      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 1 },
+      BODY,
+      { callModel: captor(v2Answer).callModel },
+    )
+    expect(underOne.findings).toHaveLength(0)
+    expect(underOne.failures[0].reason).toMatch(/no field references/)
   })
 
   /**
-   * Compared against the live original rather than a transcribed expected
-   * string: a fixture would be written by reading the same file, and would
-   * prove only that it was copied accurately.
-   *
-   * The values exercise all three branches of `formatFieldValue` — a plain
-   * string, a null, and a jsonb-style array of objects whose leaves
-   * `collectLeaves` renders as indented `path = value` lines.
+   * The gate is not versioned, deliberately. A run's question must not change
+   * after it opens; its conclusion is allowed to improve. So #422's refusal of
+   * an unsupported finding applies to a v2 answer exactly as to a v1 one.
    */
-  it('formats the sheet identically', () => {
-    const values = {
-      testator_full_name: 'Jane Q. Public',
-      guardian_nominations: null,
-      children: [
-        { full_name: 'Alex Public', date_of_birth: '2015-04-02' },
-        { full_name: 'Sam Public', date_of_birth: '2018-11-30' },
-      ],
-    }
-
-    const rendered = FIELD_AUDIT_RENDERS[1].sheet(values)
-    expect(rendered).toBe(sheetForPrompt(values))
-    // Guards the fixture itself: an equal-to-original assertion still passes
-    // if the values stop reaching two of the three branches.
-    expect(rendered).toContain('(empty)')
-    expect(rendered).toContain('  children[0].full_name = Alex Public')
+  it('applies the current gate whatever version the run pinned', async () => {
+    const { requests, callModel } = captor({ outcome: 'deviation', rationale: 'Missing.', refs: [] })
+    const result = await runFieldAudit(
+      { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 2 },
+      BODY,
+      { callModel },
+    )
+    // Version 1's parser also finds no claims in a `refs` answer, so the
+    // refusal below fires under either render — which would make this case
+    // pass even if the engine ignored the pinned version entirely. This line
+    // is what makes it say what it means: the gate refused an answer to a
+    // question that was actually asked as version 2.
+    expect(requests[0].max_tokens).toBe(77)
+    expect(result.findings).toHaveLength(0)
+    expect(result.failures[0].reason).toMatch(/reported "deviation" with no field references/)
   })
 
-  it('words a check message identically', () => {
-    expect(FIELD_AUDIT_RENDERS[1].checkMessage(CHECK)).toBe(checkMessage(CHECK))
+  /** And it fails before spending a model call, not partway through a batch. */
+  it('throws before calling the model when the version is unknown', async () => {
+    let called = false
+    await expect(
+      runFieldAudit(
+        { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: 42 },
+        BODY,
+        {
+          callModel: async () => {
+            called = true
+            return { content: [] } as never
+          },
+        },
+      ),
+    ).rejects.toThrow(/version 42/)
+    expect(called).toBe(false)
+  })
+
+  /**
+   * A bump that renames the tool and forgets this export would leave every
+   * test building mock responses under a name nothing matches.
+   */
+  it('exports the current render tool name', () => {
+    expect(FIELD_AUDIT_TOOL_NAME).toBe(
+      FIELD_AUDIT_RENDERS[CURRENT_FIELD_AUDIT_RENDER_VERSION].tool.name,
+    )
   })
 })

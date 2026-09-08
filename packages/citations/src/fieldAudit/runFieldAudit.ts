@@ -1,146 +1,26 @@
-import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import type { FieldAuditBody, FieldAuditCheck } from '../prompt/body'
 import { runPrompt, type RunPromptDependencies } from '../prompt/runPrompt'
 import type { ModelCaller, ModelRequest } from '../review/model'
-import { collectLeaves, verifyFieldReference } from './verify'
+import { fieldAuditRender, type FieldAuditRender } from './render'
+import { verifyFieldReference } from './verify'
 import type { FieldAuditFinding, FieldAuditResult, FieldReference } from './types'
 
-export const FIELD_AUDIT_TOOL_NAME = 'report_check'
-
-/**
- * Forced tool use, not free text — the same reasoning as REVIEW_TOOL in
- * runReview.ts: a strict `input_schema` with `tool_choice` pinned to this
- * tool makes the response shape the model's problem, not a regex's.
- */
-export const FIELD_AUDIT_TOOL = {
-  name: FIELD_AUDIT_TOOL_NAME,
-  description: "Report the conclusion for exactly one check against the matter's design sheet.",
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      outcome: {
-        type: 'string',
-        enum: ['compliant', 'deviation', 'absent', 'not_applicable'],
-        description:
-          'compliant: the sheet meets the check. deviation: it addresses the point but not acceptably. absent: the sheet is silent on a point the check requires. not_applicable: the check does not bear on this matter.',
-      },
-      rationale: {
-        type: 'string',
-        description: 'One or two sentences. Say what the sheet records, not what it should record.',
-      },
-      references: {
-        type: 'array',
-        description:
-          'The fields this conclusion rests on. Every field named here must be one the check lists as its reads. A null claimed_value claims the field is empty.',
-        items: {
-          type: 'object',
-          properties: {
-            field_key: {
-              type: 'string',
-              description: 'One of the field keys this check may consult.',
-            },
-            claimed_value: {
-              type: ['string', 'null'],
-              description: 'What the field holds, copied exactly. Null claims the field is empty.',
-            },
-          },
-          required: ['field_key', 'claimed_value'],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ['outcome', 'rationale', 'references'],
-    additionalProperties: false,
-  },
-}
-
-/**
- * Every version of the field-audit instructions, keyed by the number a run
- * pins in `workflow_runs.instructions_version`.
- *
- * The instructions are half of what a check is actually asked — its statement
- * plus these — and they used to be a bare constant, read at the moment of the
- * call. A run retried after they changed therefore got a different question
- * for the retried unit than its siblings had answered, and nothing recorded
- * that the two differed. `prompt_versions` is immutable for exactly this
- * reason; this is the other half of the same guarantee.
- *
- * Old strings stay here rather than in git history, because replay is the
- * point: a run pinning version 1 must still be answerable when version 4 is
- * current. The file gets longer, which is the price of the property.
- *
- * Version 1 is the text as it stood when versioning was introduced. Earlier
- * variants exist in git — the block changed in 0d42cc6a, 949771b3 and #410's
- * successor — but nothing records which text any particular historical run
- * used, so they are deliberately not reconstructed here. A run from before
- * this registry carries a null version and falls back to the current text,
- * which is what it would have got anyway; the null is there so the
- * inconsistency can be reasoned about rather than discovered.
- */
-export const FIELD_AUDIT_INSTRUCTIONS: Record<number, string> = {
-  1: `
-You are auditing a matter's design sheet against one firm check at a time.
-
-Rules for every answer:
-- Quote field values exactly. Copy them as they appear; do not tidy
-  punctuation, fix spacing, correct spelling, or paraphrase. A claimed value
-  that does not match the field verbatim is discarded and your reference loses
-  its support.
-- Reference only the fields the check lists as its reads. A reference to any
-  other field can never be verified.
-- A field shown as several indented lines holds several values. Quote exactly
-  one of them, copied from the right of the "=" — never a summary of the
-  collection and never two values joined together. One value per reference;
-  use several references when a conclusion rests on several values.
-- Report what the sheet records, not what you would prefer it recorded.
-- If the sheet is silent on the point, the outcome is "absent" — reference the
-  field with a null claimed_value rather than referencing something adjacent.
-- A null claimed_value is how you reference an empty field, whatever the
-  outcome. A deviation often rests on emptiness: the notes ask for something
-  and the fields meant to carry it hold nothing. Reference each of those
-  fields with a null claimed_value. Naming them in your rationale is not
-  referencing them.
-- Do not report a deviation or an absence you cannot reference. An unsupported
-  finding is worse than a missed one, and one with no references at all is
-  rejected outright and asked again.
-
-${PROMPT_INJECTION_GUARDRAIL}
-`.trim(),
-}
-
-/** What `openRun` stamps on a new field-audit run. */
-export const CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION = 1
-
-/**
- * The text a run pinned. A null version means the run predates this registry,
- * so it gets the current text — the behaviour it would have had regardless.
- *
- * An unknown *number* is a hard error rather than a fallback. A run pinning a
- * version this registry has lost is a run nobody can honestly finish, and
- * quietly substituting different instructions would answer a different
- * question while reporting the run's own version.
- */
-export function fieldAuditInstructions(version: number | null | undefined): string {
-  if (version == null) return FIELD_AUDIT_INSTRUCTIONS[CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION]
-  const text = FIELD_AUDIT_INSTRUCTIONS[version]
-  if (!text) {
-    throw new Error(
-      `No field-audit instructions recorded for version ${version}. ` +
-        'A run cannot be finished against instructions this build does not have.',
-    )
-  }
-  return text
-}
+export {
+  CURRENT_FIELD_AUDIT_RENDER_VERSION,
+  FIELD_AUDIT_RENDERS,
+  FIELD_AUDIT_TOOL_NAME,
+  fieldAuditRender,
+} from './render'
+export type { FieldAuditRender, ParsedFieldAuditAnswer } from './render'
 
 export interface FieldAuditContext {
   promptSlug: string
   promptVersion: number
   /**
-   * Which instruction text to render, from
-   * `workflow_runs.instructions_version`. Null for a run made before the
-   * instructions were versioned.
+   * Which render to use, from `workflow_runs.render_version`. Null for a run
+   * made before the render was versioned.
    */
-  instructionsVersion?: number | null
+  renderVersion?: number | null
   values: Record<string, unknown>
   matterId?: string | null
   userId?: string | null
@@ -158,64 +38,24 @@ export interface RunFieldAuditDependencies {
   onUnitSettled?: RunPromptDependencies['onUnitSettled']
 }
 
-function formatFieldValue(key: string, value: unknown): string {
-  if (value === null || value === undefined) return '(empty)'
-  if (typeof value === 'string') return value
-  if (typeof value !== 'object') return JSON.stringify(value)
-
-  // A structured field is shown as the leaves it is made of, because those are
-  // the only things a reference can be verified against. Serialising it whole
-  // asks the model to quote a JSON document back character for character,
-  // which it will not do — it summarises instead, and every summary fails
-  // verification for a reason that is the prompt's fault rather than the
-  // model's.
-  const leaves = collectLeaves(value, key)
-  if (leaves.length === 0) return '(empty)'
-  return leaves.map((leaf) => `  ${leaf.path} = ${String(leaf.value)}`).join('\n')
-}
-
-// Exported only so `render.ts`'s copy can be A/B-compared against this
-// original in a test; both this and that test go in the next commit.
-export function sheetForPrompt(values: Record<string, unknown>): string {
-  // Field keys are what the model references with, and they have to be the
-  // keys `verifyFieldReference` looks up — otherwise the label is noise and
-  // every claim fails for citing a key the sheet never showed.
-  const lines = Object.entries(values)
-    .map(([key, value]) => `[field: ${key}]\n${formatFieldValue(key, value)}`)
-    .join('\n\n')
-  return quoteUserContent('design_sheet', lines)
-}
-
-// Exported only so `render.ts`'s copy can be A/B-compared against this
-// original in a test; both this and that test go in the next commit.
-export function checkMessage(check: FieldAuditCheck): string {
-  const lines = [
-    `Check ${check.number}: ${check.statement}`,
-    '',
-    `Fields you may reference: ${check.reads.join(', ')}`,
-    '',
-    `Report your conclusion for this check only, using the ${FIELD_AUDIT_TOOL_NAME} tool.`,
-  ]
-  return lines.join('\n')
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
 /**
- * Turns one check's tool input into a finding, verifying every claimed
- * reference against `values` on the way. Throws for an input `runPrompt`
- * should record as a failure rather than a finding — here, only an outcome
- * the tool schema does not actually allow through — so the specific reason
- * travels with it.
+ * Turns one check's parsed answer into a finding, verifying every claim
+ * against `values` on the way. Throws for an answer `runPrompt` should record
+ * as a failure rather than a finding, so the specific reason travels with it.
+ *
+ * The shape of the tool input is the render's business (see `render.ts`); what
+ * is left here is the gate, which is never versioned. `outcome` arrives
+ * unvalidated for that reason: a later schema offering a fifth outcome must
+ * still be refused by a build that does not know it.
  */
 function findingForCheck(
   check: FieldAuditCheck,
+  render: FieldAuditRender,
   input: Record<string, unknown>,
   values: Record<string, unknown>,
 ): FieldAuditFinding {
-  const outcome = input.outcome
+  const answer = render.parse(input)
+  const outcome = answer.outcome
   if (
     outcome !== 'compliant' &&
     outcome !== 'deviation' &&
@@ -225,16 +65,9 @@ function findingForCheck(
     throw new Error(`Unrecognised outcome ${String(outcome)}`)
   }
 
-  const rawReferences = Array.isArray(input.references) ? input.references : []
-  const references: FieldReference[] = rawReferences
-    .filter((ref): ref is Record<string, unknown> => ref !== null && typeof ref === 'object')
-    .map(ref =>
-      verifyFieldReference(values, check.reads, {
-        fieldKey: asString(ref.field_key) ?? '',
-        claimedValue: asString(ref.claimed_value),
-      }),
-    )
-    .filter(ref => ref.fieldKey !== '')
+  const references: FieldReference[] = answer.claims.map(claim =>
+    verifyFieldReference(values, check.reads, claim),
+  )
 
   // A deviation or an absence with nothing offered in support is not a
   // finding, it is an unanswered call.
@@ -264,6 +97,9 @@ function findingForCheck(
   // this: a `compliant` or `not_applicable` conclusion legitimately rests on
   // nothing needing citation, and demanding references there would invite
   // invented ones.
+  //
+  // This is deliberately outside the render: a gate fix must reach a run that
+  // opened before it, which is the opposite of how the question is treated.
   if ((outcome === 'deviation' || outcome === 'absent') && references.length === 0) {
     throw new Error(
       `Check ${check.number} reported "${outcome}" with no field references. ` +
@@ -276,7 +112,7 @@ function findingForCheck(
     checkNumber: check.number,
     outcome,
     severity: outcome === 'deviation' || outcome === 'absent' ? check.risk : null,
-    rationale: asString(input.rationale) ?? '',
+    rationale: answer.rationale ?? '',
     references,
   }
 }
@@ -309,30 +145,30 @@ export async function runFieldAudit(
   deps: RunFieldAuditDependencies,
 ): Promise<FieldAuditResult> {
   const model = deps.model ?? 'claude-sonnet-5'
-  const sheet = sheetForPrompt(context.values)
   // Resolved once, before any call: a run that pins a version this build does
   // not have should fail before spending a model call, not partway through.
-  const instructions = fieldAuditInstructions(context.instructionsVersion)
+  const render = fieldAuditRender(context.renderVersion)
+  const sheet = render.sheet(context.values)
 
   const run = await runPrompt<FieldAuditCheck, FieldAuditFinding>(
     {
       units: body.checks,
-      toolName: FIELD_AUDIT_TOOL_NAME,
+      toolName: render.tool.name,
       idFor: check => check.number,
       requestFor: check =>
         ({
           model,
-          max_tokens: 1024,
+          max_tokens: render.maxTokens,
           system: [
-            { type: 'text', text: instructions },
+            { type: 'text', text: render.instructions },
             // Static prefix, cached. Everything that varies comes after it.
             { type: 'text', text: sheet, cache_control: { type: 'ephemeral' } },
           ],
-          messages: [{ role: 'user', content: checkMessage(check) }],
-          tools: [FIELD_AUDIT_TOOL],
-          tool_choice: { type: 'tool', name: FIELD_AUDIT_TOOL_NAME },
+          messages: [{ role: 'user', content: render.checkMessage(check) }],
+          tools: [render.tool],
+          tool_choice: { type: 'tool', name: render.tool.name },
         }) as ModelRequest,
-      findingFor: (check, input) => findingForCheck(check, input, context.values),
+      findingFor: (check, input) => findingForCheck(check, render, input, context.values),
     },
     {
       callModel: deps.callModel,
