@@ -1572,16 +1572,22 @@ notify pgrst, 'reload schema';
 
 - [ ] **Step 2: Dry-run, then apply by the documented route**
 
-Migrations reach the shared database automatically when they merge to `main`, but this one has to be in place before CI can go green: the *Generated types match the database* check compares the repo's regenerated types against the live database. So apply it by hand, using the route `supabase/migrations/README.md` documents, which records the history row properly:
+Migrations reach the shared database automatically when they merge to `main`, but this one has to be in place before CI can go green: the *Generated types match the database* check compares the repo's regenerated types against the live database. So apply it by hand.
+
+**Use `db push`, not raw `psql`.** `psql` applies the SQL but records nothing in `supabase_migrations.schema_migrations`, and the *Repo migrations match the database history* check would then fail on a migration that had in fact been applied. `db push` does both.
+
+**`--linked` will not work from here**, and this was checked rather than assumed: there is no `SUPABASE_ACCESS_TOKEN` in the main checkout's `.env.local`, and this worktree has no `supabase/.temp` link state. So use `--db-url` with the pooler connection string, which needs neither:
 
 ```bash
-./node_modules/.bin/supabase migration list --linked
-./node_modules/.bin/supabase db push --dry-run
+./node_modules/.bin/supabase db push --db-url "$DB_URL" --dry-run
+./node_modules/.bin/supabase db push --db-url "$DB_URL"
 ```
 
-Then push. Never run `db reset --linked`, and never repair migration history merely to force a green status.
+`--db-url` requires the connection string to be **percent-encoded** — if the password contains a reserved character, an unencoded string fails with an unhelpful parse error rather than an auth error.
 
-Credentials: the pooler URL is the only route that works from a worktree. Copy `.env.local` from the main checkout into the worktree only for the operation and remove it immediately, including on failure, via `trap … EXIT INT TERM`. Never print, echo, log or interpolate the password, and put no connection string in any report.
+Never run `db reset --linked`, and never repair migration history merely to force a green status.
+
+Credentials: the pooler URL is the only route that reaches the database from a worktree. Copy `.env.local` from the main checkout into the worktree only for the operation and remove it immediately, including on failure, via `trap … EXIT INT TERM`. Build `$DB_URL` inside the script from the password variable; never print, echo, log or interpolate it, and put no connection string in any report.
 
 Because the migration is additive, there is no need to check for in-flight runs and no window to protect — the previous release keeps selecting `instructions_version`, which is still there.
 
