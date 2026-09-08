@@ -921,12 +921,49 @@ questions, fixed in v5.
 *Still owed, and named rather than implied.* #419's cross-prompt scoping and
 #421's field-trigger path are proven by tests alone — the first needs a second
 task-emitting prompt, the second needs a prompt that watches a field. Three of
-the four fiduciary issue kinds have never fired in production. `FIELD_AUDIT_TOOL`'s
-`input_schema` is still un-versioned code that shapes what the model can answer,
-and the missing `minItems` was the whole subject of #422 — the same argument as
-#424 applies to it. And the drafting-notes prompt has a written plan waiting on
-that field being populated: it is on 3 of 44 sheets, none at the firing stages,
-so re-measure before trusting the plan.
+the four fiduciary issue kinds have never fired in production. And the
+drafting-notes prompt has a written plan waiting on that field being populated:
+it is on 3 of 44 sheets, none at the firing stages, so re-measure before
+trusting the plan.
+
+**The tool schema was the named gap here, and it is closed — wider than
+named.** The versioned unit is the whole *render*: instructions, tool schema,
+tool name, `max_tokens`, the per-unit message wrapper and the input formatter,
+one object per version per kind, pinned on `workflow_runs.render_version`. Four
+pieces of a run's question had been un-versioned module code, not one, and
+versioning the schema alone would have bought a second integer to pin and made
+combinations representable that never ran.
+
+The line that fell out of it is worth more than the mechanism. **The ask is
+versioned; the gate never is.** `verifyFieldReference`, `verifyQuote` and #422's
+refusal of an unsupported finding stay at current code deliberately, because a
+run's *question* must not change after it opens while a run's *conclusion* is
+allowed to improve — versioning the gate would let a run opened before a gate
+fix escape that fix on retry. `findingForCheck` split along exactly that line:
+the render parses the tool input, since shape is what the schema decides, and
+everything after it is current code. The prompt-injection guardrail and the
+leaf traversal sit on the gate side too, the second because a version that
+forked it would render leaves the verifier could not match, failing every claim
+for the prompt's reason rather than the model's.
+
+What that leaves un-versioned, as a decision rather than an oversight, is
+`runPrompt`'s loop — retry counts, concurrency, where the cache breakpoint
+sits. Those shape cost and latency, not the question asked. And
+`instructions_version` is superseded but not dropped: a migration that ships
+with code has to be safe against the release before it, so dropping the column
+and removing `workRun`'s `??` fallback is a separate change, owed once this one
+has deployed.
+
+*What the slice cost in defects of its own,* recorded because the pattern
+repeated. Six of the fixes came from reviews rather than tests, and four were
+tests that could not fail: a gate case that passed with the mechanism broken,
+because both versions produced the same error message; a tool-name case that
+compared an expression to itself; a defensive filter with nothing guarding it;
+and a `max_tokens` pinned only by "greater than zero", where a typo of 1042
+would have shipped. Each was found by deliberately breaking the thing the test
+claimed to protect — which is now a required step, not an optional one. Two
+comments I wrote asserted consequences the code does not produce, both caught
+by someone checking the branch rather than the prose.
 
 ~~Do the cheap high-value fix here: move the hard-coded Massachusetts rate table out of
 `lib/estateTax.ts` into `firm_settings` with effective dates, so no prompt can quote a
