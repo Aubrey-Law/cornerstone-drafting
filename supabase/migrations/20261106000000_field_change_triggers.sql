@@ -96,9 +96,16 @@ drop trigger if exists trg_design_sheets_fire_field_prompts_update on public.des
 -- that was meant to let the insert case through -- cannot be written there at
 -- all. Splitting is the only way to give the two events different conditions:
 -- an insert needs none, and an update needs one.
+-- An insert only fires if the new sheet actually has notes in it. Most sheets
+-- are created empty, and without this condition every design-sheet creation
+-- would enqueue a trigger that the required-input path immediately records
+-- `skipped` -- a queue full of rows saying nothing happened. A sheet created
+-- with notes already in it does have notes worth reading, and nothing else
+-- would ever notice.
 create trigger trg_design_sheets_fire_field_prompts_insert
   after insert on public.design_sheets
   for each row
+  when (new.drafting_notes is not null and btrim(new.drafting_notes) <> '')
   execute function public.trg_design_sheets_fire_field_prompts();
 
 -- The `of drafting_notes` narrows which updates are considered and the `when`
