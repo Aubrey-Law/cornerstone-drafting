@@ -28,7 +28,14 @@ export interface RunRow {
   prompt_version_id: string | null
   matter_id: string
   resolved_inputs: unknown
-  /** Null for a run made before the instructions were versioned. */
+  /** Null for a run made before the render was versioned. */
+  render_version: number | null
+  /**
+   * Superseded by `render_version`. Still selected because a run opened by the
+   * previous release wrote only this column, and answering it against the
+   * version it opened with beats falling back to "current". Goes away with the
+   * migration that drops the column.
+   */
   instructions_version: number | null
   text_layer_id: string | null
   document_version_id: string | null
@@ -50,7 +57,7 @@ export async function loadRunContext(
 ): Promise<RunContextResult> {
   const { data: runRow, error: runError } = await client
     .from('workflow_runs')
-    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model, instructions_version')
+    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model, render_version, instructions_version')
     .eq('id', runId)
     .maybeSingle()
   if (runError) return { ok: false, message: `Could not load the run: ${runError.message}` }

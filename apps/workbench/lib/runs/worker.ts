@@ -106,8 +106,12 @@ export async function workRun(
         {
           promptSlug: prompt.slug,
           promptVersion: prompt.versionNumber,
-          // The run's own pinned instructions, not the deployed constant.
-          instructionsVersion: run.instructions_version,
+          // The run's own pinned render, not the deployed constant. The
+          // fallback is for a run opened by the previous release, which wrote
+          // only `instructions_version`: without it such a run resolves to
+          // "current", which is the drift this whole slice removes. It goes
+          // away with the migration that drops the old column.
+          renderVersion: run.render_version ?? run.instructions_version,
           values,
           matterId: String(run.matter_id),
           userId: deps.userId ?? null,
@@ -127,7 +131,9 @@ export async function workRun(
           callModel: deps.callModel,
           model: deps.model ?? run.model ?? undefined,
           userId: deps.userId ?? null,
-          instructionsVersion: run.instructions_version,
+          // The run's own pinned render, not the deployed constant. See the
+          // field-audit branch above for why the fallback is here.
+          renderVersion: run.render_version ?? run.instructions_version,
           onUnitSettled,
         },
       )

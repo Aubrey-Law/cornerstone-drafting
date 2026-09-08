@@ -79,6 +79,7 @@ function contextWith(n: number): RunContext {
       resolved_inputs: {},
       // The run's own pinned instructions — `workRun` forwards this to the
       // engine so a retry renders what the run was answering against.
+      render_version: 1,
       instructions_version: 1,
       text_layer_id: null,
       document_version_id: null,
@@ -153,7 +154,7 @@ describe('working a run', () => {
   /**
    * The one line joining a run's pinned instructions to the engine.
    *
-   * `workRun` reads `run.instructions_version` and hands it to
+   * `workRun` reads `run.render_version` and hands it to
    * `runFieldAudit`. With a single version in the registry, pinning 1 and
    * pinning null render identical text — so nothing about the rendered prompt
    * can tell them apart, and changing the worker to forward `null` passed all
@@ -166,12 +167,12 @@ describe('working a run', () => {
    * version it was given — which is only possible if the worker forwarded it.
    * Drop the forwarding and the unit succeeds instead.
    */
-  it('forwards the run’s pinned instruction version to the engine', async () => {
+  it('forwards the run’s pinned render version to the engine', async () => {
     const client = makeClientWithSteps(1)
     const context = contextWith(1)
     const pinned = {
       ...context,
-      run: { ...context.run, instructions_version: 7 },
+      run: { ...context.run, render_version: 7 },
     } as RunContext
 
     let called = false
@@ -189,6 +190,39 @@ describe('working a run', () => {
     // before the unit loop, so a version this build does not have fails the
     // whole run rather than each unit in turn with the same message — it is
     // not a per-unit problem, it is "this build cannot finish this run".
+    expect(called).toBe(false)
+  })
+
+  /**
+   * A run opened by the *previous* release, which wrote `instructions_version`
+   * and knew nothing about `render_version`.
+   *
+   * `workRun` reads `render_version ?? instructions_version`, so such a run is
+   * still answered against the version it opened with. Drop the fallback and
+   * this run resolves to "current" instead — silently, and only for runs that
+   * straddle one deploy, which is exactly the kind of drift that took two
+   * model calls on identical input to notice last time. Pinning 7, a version
+   * the registry does not have, is what makes the difference observable: the
+   * engine throws naming 7, which can only happen if the old column was read.
+   */
+  it('falls back to the old column for a run opened by the previous release', async () => {
+    const client = makeClientWithSteps(1)
+    const context = contextWith(1)
+    const straddling = {
+      ...context,
+      run: { ...context.run, render_version: null, instructions_version: 7 },
+    } as RunContext
+
+    let called = false
+    await expect(
+      workRun(asClient(client), straddling, {
+        callModel: async () => {
+          called = true
+          return reply()
+        },
+        now: () => 0,
+      }),
+    ).rejects.toThrow(/version 7/)
     expect(called).toBe(false)
   })
 

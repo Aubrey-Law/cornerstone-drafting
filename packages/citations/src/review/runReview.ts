@@ -1,111 +1,24 @@
-import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '../prompt'
 import { runPrompt, type RunPromptDependencies } from '../prompt/runPrompt'
 import { verifyQuote } from '../textLayer/match'
 import type { TextLayer } from '../textLayer/types'
 import type { ModelCaller, ModelRequest } from './model'
+import { reviewRender, type ReviewRender } from './render'
 import type { ReviewFinding, ReviewPlaybook, ReviewResult, ReviewRule } from './types'
 
-export const REVIEW_TOOL_NAME = 'report_finding'
-
-/**
- * Forced tool use, not free text.
- *
- * The route this replaces asks for JSON in prose and then runs
- * `raw.match(/\[[\s\S]*\]/)` over the reply — which parses a model's
- * conversational aside as data whenever it happens to contain a bracket. A
- * strict `input_schema` with `tool_choice` pinned to this tool makes the shape
- * the model's problem instead of the parser's.
- */
-export const REVIEW_TOOL = {
-  name: REVIEW_TOOL_NAME,
-  description:
-    'Report the conclusion for exactly one rule against the document under review.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      outcome: {
-        type: 'string',
-        enum: ['compliant', 'deviation', 'absent', 'not_applicable'],
-        description:
-          'compliant: the document meets the rule. deviation: it addresses the point but not acceptably. absent: the document is silent on a point the rule requires. not_applicable: the rule does not bear on this kind of document.',
-      },
-      rationale: {
-        type: 'string',
-        description: 'One or two sentences. Say what the document does, not what it should do.',
-      },
-      quote: {
-        type: ['string', 'null'],
-        description:
-          'The exact text from the document that supports this conclusion, copied character for character. Null when the outcome is absent or not_applicable, where by definition there is nothing to quote.',
-      },
-      block_index: {
-        type: ['integer', 'null'],
-        description: 'The ¶ number shown beside the quoted text in the document.',
-      },
-      proposed_language: {
-        type: ['string', 'null'],
-        description:
-          'Replacement text for the quoted span, when the quoted text should be rewritten. Null otherwise.',
-      },
-    },
-    required: ['outcome', 'rationale', 'quote', 'block_index', 'proposed_language'],
-    additionalProperties: false,
-  },
-}
-
-/**
- * Every version of the review instructions, keyed by the number a run pins in
- * `workflow_runs.instructions_version`. See
- * `../fieldAudit/runFieldAudit.ts`'s registry for why old strings stay here
- * and why earlier variants are not reconstructed.
- *
- * A separate registry from the field audit's because the instructions are per
- * kind: these are about anchoring a citation in a document, those are about
- * quoting a design-sheet field. `workflow_runs.kind` and
- * `instructions_version` together name one text.
- */
-export const REVIEW_INSTRUCTIONS: Record<number, string> = {
-  1: `
-You are reviewing a legal instrument against one firm position at a time.
-
-Rules for every answer:
-- Quote the document exactly. Copy the characters as they appear; do not tidy
-  punctuation, fix spacing, correct spelling, or paraphrase. A quote that does
-  not appear verbatim in the document is discarded and your finding loses its
-  support.
-- Give the paragraph number shown beside the text you quote.
-- Report what the document says, not what you would prefer it said.
-- If the document is silent on the point, the outcome is "absent" and there is
-  nothing to quote. Say so rather than quoting something adjacent.
-- Do not report a deviation you cannot quote. An unsupported finding is worse
-  than a missed one.
-
-${PROMPT_INJECTION_GUARDRAIL}
-`.trim(),
-}
-
-/** What `openRun` stamps on a new review run. */
-export const CURRENT_REVIEW_INSTRUCTIONS_VERSION = 1
-
-export function reviewInstructions(version: number | null | undefined): string {
-  if (version == null) return REVIEW_INSTRUCTIONS[CURRENT_REVIEW_INSTRUCTIONS_VERSION]
-  const text = REVIEW_INSTRUCTIONS[version]
-  if (!text) {
-    throw new Error(
-      `No review instructions recorded for version ${version}. ` +
-        'A run cannot be finished against instructions this build does not have.',
-    )
-  }
-  return text
-}
+export {
+  CURRENT_REVIEW_RENDER_VERSION,
+  REVIEW_RENDERS,
+  REVIEW_TOOL_NAME,
+  reviewRender,
+} from './render'
+export type { ReviewRender, ParsedReviewAnswer } from './render'
 
 export interface RunReviewDependencies {
   /**
-   * Which instruction text to render, from
-   * `workflow_runs.instructions_version`. Null for a run made before the
-   * instructions were versioned.
+   * Which render to use, from `workflow_runs.render_version`. Null for a run
+   * made before the render was versioned.
    */
-  instructionsVersion?: number | null
+  renderVersion?: number | null
   /**
    * Required, not defaulted. See ./model — a package that falls back to one
    * app's client forks their retry behaviour and usage accounting silently.
@@ -118,35 +31,25 @@ export interface RunReviewDependencies {
   onUnitSettled?: RunPromptDependencies['onUnitSettled']
 }
 
-function documentForPrompt(layer: TextLayer): string {
-  // Paragraph numbers are what the model cites with, and they have to be the
-  // block indexes the verifier scopes by — otherwise the hint is noise and
-  // every quote falls back to a whole-document search.
-  const numbered = layer.blocks.map(block => `[¶ ${block.index}] ${block.text}`).join('\n\n')
-  return quoteUserContent('document_under_review', numbered)
-}
-
-function ruleMessage(rule: ReviewRule): string {
-  const lines = [`Rule ${rule.number}: ${rule.statement}`]
-  if (rule.preferredLanguage) {
-    lines.push('', `The firm's preferred language for this point:`, rule.preferredLanguage)
-  }
-  lines.push('', `Report your conclusion for this rule only, using the ${REVIEW_TOOL_NAME} tool.`)
-  return lines.join('\n')
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
 /**
- * Turns one rule's tool input into a finding, verifying its quote against
- * `layer` on the way. Throws for an input `runPrompt` should record as a
- * failure rather than a finding — here, only an outcome the tool schema does
- * not actually allow through — so the specific reason travels with it.
+ * Turns one rule's parsed answer into a finding, verifying its quote against
+ * `layer` on the way. Throws for an answer `runPrompt` should record as a
+ * failure rather than a finding, so the specific reason travels with it.
+ *
+ * The tool input's shape is the render's business (see `render.ts`);
+ * verification is not, and is never versioned — a fix to the verifier must
+ * reach a run that opened before it. `outcome` arrives unvalidated for the
+ * same reason: a later schema offering a fifth outcome must still be refused
+ * by a build that does not know it.
  */
-function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer: TextLayer): ReviewFinding {
-  const outcome = input.outcome
+function findingForRule(
+  rule: ReviewRule,
+  render: ReviewRender,
+  input: Record<string, unknown>,
+  layer: TextLayer,
+): ReviewFinding {
+  const answer = render.parse(input)
+  const outcome = answer.outcome
   if (
     outcome !== 'compliant' &&
     outcome !== 'deviation' &&
@@ -156,21 +59,18 @@ function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer:
     throw new Error(`Unrecognised outcome ${String(outcome)}`)
   }
 
-  const quote = asString(input.quote)
-  const blockIndex = typeof input.block_index === 'number' ? input.block_index : null
-
   let citation: ReviewFinding['citation'] = null
   let citationRefusal: ReviewFinding['citationRefusal'] = null
   let attemptedQuote: ReviewFinding['attemptedQuote'] = null
 
-  if (quote) {
-    const verified = verifyQuote(layer, quote, blockIndex)
+  if (answer.quote) {
+    const verified = verifyQuote(layer, answer.quote, answer.blockIndex)
     if (verified.ok) {
       citation = verified.citation
     } else {
       citationRefusal = verified.reason
       // Kept only on refusal: a verified citation already holds the text.
-      attemptedQuote = quote
+      attemptedQuote = answer.quote
     }
   }
 
@@ -178,8 +78,8 @@ function findingForRule(rule: ReviewRule, input: Record<string, unknown>, layer:
     ruleNumber: rule.number,
     outcome,
     severity: outcome === 'deviation' || outcome === 'absent' ? rule.risk : null,
-    rationale: asString(input.rationale) ?? '',
-    proposedLanguage: asString(input.proposed_language),
+    rationale: answer.rationale ?? '',
+    proposedLanguage: answer.proposedLanguage,
     citation,
     citationRefusal,
     attemptedQuote,
@@ -219,30 +119,30 @@ export async function runReviewPlaybook(
 
   // Resolved once, before any call: a run pinning a version this build does
   // not have should fail before spending a model call.
-  const instructions = reviewInstructions(deps.instructionsVersion)
+  const render = reviewRender(deps.renderVersion)
 
   const model = deps.model ?? 'claude-sonnet-5'
-  const document = documentForPrompt(layer)
+  const document = render.document(layer)
 
   const run = await runPrompt<ReviewRule, ReviewFinding>(
     {
       units: playbook.rules,
-      toolName: REVIEW_TOOL_NAME,
+      toolName: render.tool.name,
       idFor: rule => rule.number,
       requestFor: rule =>
         ({
           model,
-          max_tokens: 1024,
+          max_tokens: render.maxTokens,
           system: [
-            { type: 'text', text: instructions },
+            { type: 'text', text: render.instructions },
             // Static prefix, cached. Everything that varies comes after it.
             { type: 'text', text: document, cache_control: { type: 'ephemeral' } },
           ],
-          messages: [{ role: 'user', content: ruleMessage(rule) }],
-          tools: [REVIEW_TOOL],
-          tool_choice: { type: 'tool', name: REVIEW_TOOL_NAME },
+          messages: [{ role: 'user', content: render.ruleMessage(rule) }],
+          tools: [render.tool],
+          tool_choice: { type: 'tool', name: render.tool.name },
         }) as ModelRequest,
-      findingFor: (rule, input) => findingForRule(rule, input, layer),
+      findingFor: (rule, input) => findingForRule(rule, render, input, layer),
     },
     {
       callModel: deps.callModel,
