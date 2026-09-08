@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import type { Json } from '@aubrey-law/db-types'
 import { statusFromSteps, type RunStep } from './steps'
+import { CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION } from '@aubrey-law/citations/fieldAudit/runFieldAudit'
+import { CURRENT_REVIEW_INSTRUCTIONS_VERSION } from '@aubrey-law/citations/review/runReview'
 
 /**
  * The three phases a run is now recorded in, replacing "run the engine, then
@@ -110,6 +112,14 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
       finding_count: 0,
       failed_count: 0,
       resolved_inputs: asJson(input.resolvedInputs),
+      // Which instruction text this run is answering against. Stamped now, so
+      // a retry weeks later renders the same text rather than whatever is
+      // deployed then — the other half of what pinning prompt_version_id is
+      // for. Per kind, because the two registries hold different contracts.
+      instructions_version:
+        input.kind === 'field_audit'
+          ? CURRENT_FIELD_AUDIT_INSTRUCTIONS_VERSION
+          : CURRENT_REVIEW_INSTRUCTIONS_VERSION,
       started_at: now,
       finished_at: null,
       created_by: input.userId,

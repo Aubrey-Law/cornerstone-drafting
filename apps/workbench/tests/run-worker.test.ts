@@ -77,6 +77,9 @@ function contextWith(n: number): RunContext {
       prompt_version_id: 'v1',
       matter_id: 'm1',
       resolved_inputs: {},
+      // The run's own pinned instructions — `workRun` forwards this to the
+      // engine so a retry renders what the run was answering against.
+      instructions_version: 1,
       text_layer_id: null,
       document_version_id: null,
       model: null,
@@ -145,6 +148,48 @@ describe('working a run', () => {
     expect(result.done).toBe(false)
     expect(result.worked).toBe(2)
     expect(await pendingSteps(client)).toEqual(['3', '4'])
+  })
+
+  /**
+   * The one line joining a run's pinned instructions to the engine.
+   *
+   * `workRun` reads `run.instructions_version` and hands it to
+   * `runFieldAudit`. With a single version in the registry, pinning 1 and
+   * pinning null render identical text — so nothing about the rendered prompt
+   * can tell them apart, and changing the worker to forward `null` passed all
+   * 1131 tests. Two earlier attempts at this test were themselves vacuous:
+   * one asserted on a fake that never reached the engine, the other built a
+   * second hand-rolled client this file's own header warns against.
+   *
+   * This pins a version the registry does not have. The engine then throws
+   * before spending a model call, the unit fails, and the reason names the
+   * version it was given — which is only possible if the worker forwarded it.
+   * Drop the forwarding and the unit succeeds instead.
+   */
+  it('forwards the run’s pinned instruction version to the engine', async () => {
+    const client = makeClientWithSteps(1)
+    const context = contextWith(1)
+    const pinned = {
+      ...context,
+      run: { ...context.run, instructions_version: 7 },
+    } as RunContext
+
+    let called = false
+    await expect(
+      workRun(asClient(client), pinned, {
+        callModel: async () => {
+          called = true
+          return reply()
+        },
+        now: () => 0,
+      }),
+    ).rejects.toThrow(/version 7/)
+
+    // And no model call was spent finding out. The instructions are resolved
+    // before the unit loop, so a version this build does not have fails the
+    // whole run rather than each unit in turn with the same message — it is
+    // not a per-unit problem, it is "this build cannot finish this run".
+    expect(called).toBe(false)
   })
 
   it('is done once every step has settled', async () => {

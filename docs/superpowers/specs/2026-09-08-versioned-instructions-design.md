@@ -13,7 +13,7 @@ asked, even if the prompt has since been edited. `prompt_versions` is immutable 
 reason.
 
 **Half of what produces a finding is not covered by that.** `SYSTEM_INSTRUCTIONS` in
-`packages/citations/src/fieldAaudit/runFieldAudit.ts` — and its counterpart in
+`packages/citations/src/fieldAudit/runFieldAudit.ts` — and its counterpart in
 `review/runReview.ts` — is a module constant, captured in the `requestFor` closure. So the
 question a check is actually asked is `body.checks[n].statement` **plus** whatever
 instructions are deployed at the moment of the call.
