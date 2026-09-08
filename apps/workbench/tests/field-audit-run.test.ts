@@ -205,12 +205,90 @@ describe('actionableFindings', () => {
     expect(actionableFindings(result)).toEqual([])
   })
 
-  it('excludes a finding carrying no references whatsoever', async () => {
+  /**
+   * This used to assert that the gate *excluded* such a finding, and it kept
+   * passing after the behaviour changed — because a failed unit produces no
+   * finding either, so `actionableFindings` is empty for a different reason
+   * than the one the name claimed. Rewritten to say what actually happens.
+   *
+   * A deviation with nothing offered in support is an unanswered call, not a
+   * finding: the unit fails, which makes it visible on the run page and
+   * retryable, instead of leaving a blocker-severity deviation in the
+   * database supported by nothing.
+   */
+  it('fails the unit for a deviation carrying no references whatsoever', async () => {
     const result = await runFieldAudit(CONTEXT, BODY, {
       callModel: async () =>
         respondWith({ outcome: 'deviation', rationale: 'Bare assertion.', references: [] }),
     })
+    expect(result.findings).toEqual([])
+    expect(result.failures).toHaveLength(1)
+    expect(result.failures[0].reason).toMatch(/no field references/)
+    expect(result.failures[0].reason).toMatch(/null claimed value/)
     expect(actionableFindings(result)).toEqual([])
+  })
+
+  it('fails the unit for an absence carrying no references either', async () => {
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({ outcome: 'absent', rationale: 'Nothing recorded.', references: [] }),
+    })
+    expect(result.findings).toEqual([])
+    expect(result.failures).toHaveLength(1)
+  })
+
+  /**
+   * The distinction the whole change turns on. A reference that was offered
+   * and failed verification means the model tried and got it wrong — which is
+   * exactly what the gate exists to catch, and it must stay a finding.
+   * Conflating it with "offered nothing" would trade a substantive
+   * disagreement for a retry loop.
+   */
+  it('keeps a deviation whose only reference failed verification', async () => {
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({
+          outcome: 'deviation',
+          rationale: 'Misquoted.',
+          references: [{ field_key: 'concerns', claimed_value: 'not what the field says' }],
+        }),
+    })
+    expect(result.failures).toEqual([])
+    expect(result.findings).toHaveLength(1)
+    expect(result.findings[0].references).toHaveLength(1)
+    expect(result.findings[0].references[0].verification).toBe('unverified')
+    // Still refused by the gate — refused, not absent.
+    expect(actionableFindings(result)).toEqual([])
+  })
+
+  /** A conclusion that needs no citation is not held to this. */
+  it.each(['compliant', 'not_applicable'] as const)(
+    'allows %s with no references',
+    async (outcome) => {
+      const result = await runFieldAudit(CONTEXT, BODY, {
+        callModel: async () => respondWith({ outcome, rationale: 'Fine.', references: [] }),
+      })
+      expect(result.failures).toEqual([])
+      expect(result.findings).toHaveLength(1)
+    },
+  )
+
+  /**
+   * A reference with no `field_key` is dropped before the count, so offering
+   * one is not offering support — otherwise `references: [{}]` would buy a
+   * finding past the check.
+   */
+  it('does not count a reference with no field key as support', async () => {
+    const result = await runFieldAudit(CONTEXT, BODY, {
+      callModel: async () =>
+        respondWith({
+          outcome: 'deviation',
+          rationale: 'Gamed.',
+          references: [{ field_key: '', claimed_value: null }],
+        }),
+    })
+    expect(result.findings).toEqual([])
+    expect(result.failures).toHaveLength(1)
   })
 
   it('includes a deviation whose every reference verified', async () => {

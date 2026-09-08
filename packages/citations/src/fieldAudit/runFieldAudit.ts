@@ -71,8 +71,14 @@ Rules for every answer:
 - Report what the sheet records, not what you would prefer it recorded.
 - If the sheet is silent on the point, the outcome is "absent" — reference the
   field with a null claimed_value rather than referencing something adjacent.
+- A null claimed_value is how you reference an empty field, whatever the
+  outcome. A deviation often rests on emptiness: the notes ask for something
+  and the fields meant to carry it hold nothing. Reference each of those
+  fields with a null claimed_value. Naming them in your rationale is not
+  referencing them.
 - Do not report a deviation or an absence you cannot reference. An unsupported
-  finding is worse than a missed one.
+  finding is worse than a missed one, and one with no references at all is
+  rejected outright and asked again.
 
 ${PROMPT_INJECTION_GUARDRAIL}
 `.trim()
@@ -170,6 +176,42 @@ function findingForCheck(
       }),
     )
     .filter(ref => ref.fieldKey !== '')
+
+  // A deviation or an absence with nothing offered in support is not a
+  // finding, it is an unanswered call.
+  //
+  // The instructions already say so — "do not report a deviation or an
+  // absence you cannot reference" — and nothing used to enforce it. The
+  // schema cannot: `references` is required but has no `minItems`, and
+  // `minItems` could not be made conditional on `outcome` anyway. So an empty
+  // array arrived here, became a finished finding, and was refused by
+  // `actionableFindings` later — leaving a blocker-severity deviation in the
+  // database supported by nothing, producing no task, and (before the
+  // withdrawal-scoping fix) retiring a previous run's real one. That is the
+  // measured cause of the reference-count drift's *consequence*: 4, 0, 5, 5
+  // verified references across five runs of one check against an unchanged
+  // sheet.
+  //
+  // Throwing is how a unit fails: `runPrompt` catches whatever `findingFor`
+  // threw, records the message as the failure reason and settles the step
+  // `ok: false`, so this becomes a visible, retryable failure rather than a
+  // silent one.
+  //
+  // The line is drawn on what was *emitted*, not on what verified. A
+  // reference that was offered and failed verification means the model tried
+  // and got it wrong, which is exactly what the gate exists to catch and must
+  // stay a finding — conflating the two would trade a substantive
+  // disagreement for a retry loop. Only `deviation` and `absent` are held to
+  // this: a `compliant` or `not_applicable` conclusion legitimately rests on
+  // nothing needing citation, and demanding references there would invite
+  // invented ones.
+  if ((outcome === 'deviation' || outcome === 'absent') && references.length === 0) {
+    throw new Error(
+      `Check ${check.number} reported "${outcome}" with no field references. ` +
+        'A deviation or absence must name at least one field it rests on — ' +
+        'an empty field is referenced with a null claimed value.',
+    )
+  }
 
   return {
     checkNumber: check.number,
