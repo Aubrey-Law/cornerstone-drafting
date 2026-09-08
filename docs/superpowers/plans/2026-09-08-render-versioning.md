@@ -1479,6 +1479,39 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 This task touches production credentials and the production database. **The session owner runs it, not an implementer subagent.** No subagent should be given the connection string, and nothing in this task may print, echo or log it.
 
+### Sequencing hazard: a rename is not backward compatible
+
+Every migration in this slice's predecessors was additive, so applying it early
+was free. **This one is not.** `apps/workbench/lib/runs/context.ts` as deployed
+on `main` selects `instructions_version`; the moment the rename lands, that
+select names a column that does not exist.
+
+And it cannot simply be deferred to after the merge, because CI's *Generated
+types match the database* check compares the repo's generated types against the
+live database. The regenerated types say `render_version`, so the migration must
+already be applied for CI to pass. There is therefore an unavoidable window
+between applying the rename and the new code being deployed.
+
+What actually breaks in that window is narrow. `loadRunContext` is only called
+after `claim_workflow_run` returns a row, so with nothing queued or running the
+cron claims nothing each minute and the window is inert. So, immediately before
+applying:
+
+```sql
+select status, count(*) from public.workflow_runs
+ where status in ('queued', 'running') group by 1;
+```
+
+Expected: **no rows.** If there are any, wait for them to settle rather than
+renaming under a run in flight — a tick that fails mid-run leaves steps
+`pending` and the reaper may mark the run failed, which is a real run lost for
+a schema convenience.
+
+A stage-entry or field-change trigger could still enqueue a run inside the
+window. That is a small, recoverable risk — such a run stays `queued` and works
+on the first tick after deploy — but it is a risk, so do not start this task
+while anyone is editing a design sheet or moving a matter's stage.
+
 **Files:**
 - Create: `supabase/migrations/20261109000000_run_render_version.sql`
 - Modify: `packages/db-types/src/supabase.generated.ts` (regenerated)
