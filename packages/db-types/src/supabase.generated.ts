@@ -7059,12 +7059,13 @@ export type Database = {
           id: string
           last_error: string | null
           matter_id: string
+          on_field: string | null
           prompt_id: string
           run_id: string | null
           settled_at: string | null
           stage_entered_at: string
           status: string
-          to_stage: string
+          to_stage: string | null
         }
         Insert: {
           claimed_at?: string | null
@@ -7072,12 +7073,13 @@ export type Database = {
           id?: string
           last_error?: string | null
           matter_id: string
+          on_field?: string | null
           prompt_id: string
           run_id?: string | null
           settled_at?: string | null
           stage_entered_at: string
           status?: string
-          to_stage: string
+          to_stage?: string | null
         }
         Update: {
           claimed_at?: string | null
@@ -7085,12 +7087,13 @@ export type Database = {
           id?: string
           last_error?: string | null
           matter_id?: string
+          on_field?: string | null
           prompt_id?: string
           run_id?: string | null
           settled_at?: string | null
           stage_entered_at?: string
           status?: string
-          to_stage?: string
+          to_stage?: string | null
         }
         Relationships: [
           {
@@ -7194,6 +7197,7 @@ export type Database = {
       prompts: {
         Row: {
           created_at: string
+          fires_on_field_change: string[]
           fires_on_stage_entry: string[]
           id: string
           is_system: boolean
@@ -7205,6 +7209,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          fires_on_field_change?: string[]
           fires_on_stage_entry?: string[]
           id?: string
           is_system?: boolean
@@ -7216,6 +7221,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          fires_on_field_change?: string[]
           fires_on_stage_entry?: string[]
           id?: string
           is_system?: boolean
@@ -9782,12 +9788,13 @@ export type Database = {
           id: string
           last_error: string | null
           matter_id: string
+          on_field: string | null
           prompt_id: string
           run_id: string | null
           settled_at: string | null
           stage_entered_at: string
           status: string
-          to_stage: string
+          to_stage: string | null
         }
         SetofOptions: {
           from: "*"
