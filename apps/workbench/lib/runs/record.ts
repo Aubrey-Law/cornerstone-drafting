@@ -120,14 +120,6 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
         input.kind === 'field_audit'
           ? CURRENT_FIELD_AUDIT_RENDER_VERSION
           : CURRENT_REVIEW_RENDER_VERSION,
-      // Written as well, for the minute or two after a deploy where the
-      // previous release may still pick this run up and read only this
-      // column. The two hold the same number today; the migration that drops
-      // the column drops this line with it.
-      instructions_version:
-        input.kind === 'field_audit'
-          ? CURRENT_FIELD_AUDIT_RENDER_VERSION
-          : CURRENT_REVIEW_RENDER_VERSION,
       started_at: now,
       finished_at: null,
       created_by: input.userId,
