@@ -45,8 +45,20 @@ describe('the field-audit render registry', () => {
     expect(render.maxTokens).toBeGreaterThan(0)
   })
 
-  /** A bumped CURRENT_ with no entry would render `undefined` as the system
-   *  prompt, and the model would answer anyway. */
+  /**
+   * The consequence of a bumped `CURRENT_` with no entry is a `TypeError`, not
+   * a rendered `undefined`. `fieldAuditRender(null)` — the path every run made
+   * before versioning takes — returns
+   * `FIELD_AUDIT_RENDERS[CURRENT_FIELD_AUDIT_RENDER_VERSION]`, which is
+   * `undefined`, and the next line, `render.sheet(context.values)` in
+   * `runFieldAudit`, throws on reading a property of `undefined` before any
+   * request is built. So no model is asked anything and the failure is loud;
+   * what it is not is diagnosable, because nothing in the stack names the
+   * missing version. (A run pinning the bumped *number* gets the registry's
+   * own error, which does name it — the two paths fail differently, and only
+   * one of them says why.) The line below catches the whole class at the
+   * commit that bumps the constant, rather than at some later run's tick.
+   */
   it('has no half-built entry', () => {
     // The loop below visits only the entries that exist, so this line is the
     // half that earns the comment above it.
@@ -62,6 +74,17 @@ describe('the field-audit render registry', () => {
       expect(render.checkMessage(CHECK).length, `v${version} checkMessage`).toBeGreaterThan(0)
       expect(render.sheet({}).length, `v${version} sheet`).toBeGreaterThan(0)
       expect(render.parse({}).claims, `v${version} parse`).toEqual([])
+      // The registry invites a later entry to reuse v1's pieces for whatever
+      // has not changed, and a renamed tool is the one case where that is a
+      // trap: `checkMessageV1` interpolates its own `TOOL_NAME_V1` into the
+      // sentence telling the model which tool to call, so an entry with a new
+      // `tool` and `checkMessage: checkMessageV1` would name the old tool in
+      // the message while `tools` and `tool_choice` carry the new one. The
+      // model would most likely answer against the schema regardless, which
+      // makes it the worst kind of defect — one that never surfaces.
+      expect(render.checkMessage(CHECK), `v${version} names its own tool`).toContain(
+        render.tool.name,
+      )
     }
   })
 
@@ -116,9 +139,15 @@ const BODY: FieldAuditBody = {
 /**
  * Absurd on purpose: the fixture is keyed where no real registry entry will
  * ever be, so adding a genuine version 2 cannot silently overwrite it — nor
- * be overwritten by it, validated by the sweep above in its place, and then
- * deleted in `afterAll`. If a real 9001 ever exists, the `beforeAll` guard
+ * be overwritten by it. If a real 9001 ever exists, the `beforeAll` guard
  * below says so out loud instead.
+ *
+ * It is injected inside the engine block below rather than at file level, so
+ * the registry sweep above iterates real entries only. A green sweep should
+ * say something about the registry; a fixture written to satisfy it says
+ * nothing — and the tool-name guard added to that sweep would have gone red on
+ * this double's `checkMessage`, which names no tool, rather than on any entry
+ * a run can pin.
  */
 const SYNTHETIC_FIELD_AUDIT_VERSION = 9001
 
@@ -162,18 +191,64 @@ const V2: FieldAuditRender = {
   }),
 }
 
-beforeAll(() => {
-  expect(
-    FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION],
-    're-key this fixture',
-  ).toBeUndefined()
-  FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION] = V2
-})
-afterAll(() => {
-  delete FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION]
-})
+/**
+ * A third entry, keyed out of production's reach exactly as the fixture above
+ * is, and differing from it in the one respect this case needs: its `parse`
+ * *keeps* a claim that names no field.
+ *
+ * `parseV1` filters those out, and so does the fixture above, so every other
+ * case here would still pass with `runFieldAudit`'s own empty-`fieldKey`
+ * filter deleted — the parser would be silently carrying a gate the gate is
+ * supposed to hold. This entry withdraws that cover, which is what makes the
+ * engine's filter independently load-bearing.
+ */
+const LEAKY_PARSE_VERSION = 9002
 
-/** Captures the request the engine built, and answers with `input`. */
+const LEAKY_PARSE: FieldAuditRender = {
+  instructions: 'Leaky-parse instructions.',
+  tool: {
+    name: 'report_check_leaky',
+    description: 'Reports a check, and keeps a claim that names no field.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        outcome: { type: 'string', enum: ['compliant', 'deviation', 'absent', 'not_applicable'] },
+        rationale: { type: 'string' },
+      },
+      required: ['outcome', 'rationale'],
+      additionalProperties: false,
+    },
+  },
+  maxTokens: 88,
+  checkMessage: check =>
+    `Check ${check.number}. Report your conclusion using the report_check_leaky tool.`,
+  sheet: () => 'Leaky-parse sheet',
+  /**
+   * A deviation supported by one claim naming nothing — the shape a future
+   * parser produces by dropping `parseV1`'s trailing
+   * `.filter(claim => claim.fieldKey !== '')`. Only for a `deviation`, so
+   * `parse({})` still returns no claims and this entry would satisfy the
+   * registry sweep if it were ever visible to it.
+   */
+  parse: input => ({
+    outcome: input.outcome,
+    rationale: typeof input.rationale === 'string' ? input.rationale : null,
+    claims: input.outcome === 'deviation' ? [{ fieldKey: '', claimedValue: null }] : [],
+  }),
+}
+
+/**
+ * Captures the request the engine built, and answers with `input` under
+ * whatever tool name that request actually asked for. Shared by both halves:
+ * `runFieldAudit` takes its `ModelCaller` from `../review/model`, so one
+ * function serves both engines and a second copy could only drift from it.
+ *
+ * Echoing the request's own tool name is deliberate: a mock hard-coded to a
+ * fixture's tool name would fail a broken engine merely because
+ * `readToolInput` matched nothing, which proves the name was sent and nothing
+ * about the rest of the entry. Answering whatever was asked forces the
+ * assertions below to carry the weight.
+ */
 function captor(input: Record<string, unknown>) {
   const requests: Array<Record<string, unknown>> = []
   const callModel = async (request: unknown) => {
@@ -186,6 +261,20 @@ function captor(input: Record<string, unknown>) {
 }
 
 describe('the engine renders the version the run pinned', () => {
+  beforeAll(() => {
+    expect(
+      FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION],
+      're-key this fixture',
+    ).toBeUndefined()
+    expect(FIELD_AUDIT_RENDERS[LEAKY_PARSE_VERSION], 're-key this fixture').toBeUndefined()
+    FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION] = V2
+    FIELD_AUDIT_RENDERS[LEAKY_PARSE_VERSION] = LEAKY_PARSE
+  })
+  afterAll(() => {
+    delete FIELD_AUDIT_RENDERS[SYNTHETIC_FIELD_AUDIT_VERSION]
+    delete FIELD_AUDIT_RENDERS[LEAKY_PARSE_VERSION]
+  })
+
   // A regression guard on version 1's values, and no more: pinning 1 and
   // pinning nothing resolve the identical object, because 1 *is* the current
   // version — so nothing here can prove the engine reads the run's version
@@ -289,6 +378,39 @@ describe('the engine renders the version the run pinned', () => {
     expect(result.failures[0].reason).toMatch(/reported "deviation" with no field references/)
   })
 
+  /**
+   * And the engine's own empty-`fieldKey` filter holds the gate up, not the
+   * pinned version's parser.
+   *
+   * Every case above passes with that filter deleted, because `parseV1` and
+   * the v2 fixture both drop an empty claim themselves — so the filter was
+   * dead code with no guard, which is the failure mode this slice keeps
+   * finding. `LEAKY_PARSE` keeps the claim, so the two behaviours separate:
+   * with the filter the gate counts nothing offered and refuses the deviation;
+   * without it the claim becomes one unverified reference (`reads` does not
+   * include `''`, so `verifyFieldReference` returns `unverified` rather than
+   * throwing), `references.length === 1`, and a deviation resting on no field
+   * at all comes back as a finding.
+   */
+  it('refuses an unsupported deviation when the pinned parser keeps an empty claim', async () => {
+    const { requests, callModel } = captor({ outcome: 'deviation', rationale: 'Missing.' })
+    const result = await runFieldAudit(
+      {
+        promptSlug: 's',
+        promptVersion: 1,
+        values: { concerns: 'x' },
+        renderVersion: LEAKY_PARSE_VERSION,
+      },
+      BODY,
+      { callModel },
+    )
+    // As on the case above: the question really was asked as this version, not
+    // merely parsed by it.
+    expect(requests[0].max_tokens).toBe(88)
+    expect(result.findings).toHaveLength(0)
+    expect(result.failures[0].reason).toMatch(/no field references/)
+  })
+
   /** And it fails before spending a model call, not partway through a batch. */
   it('throws before calling the model when the version is unknown', async () => {
     let called = false
@@ -369,8 +491,18 @@ describe('the review render registry', () => {
     expect(render.maxTokens).toBeGreaterThan(0)
   })
 
-  /** A bumped CURRENT_ with no entry would render `undefined` as the system
-   *  prompt, and the model would answer anyway. */
+  /**
+   * The consequence of a bumped `CURRENT_` with no entry is a `TypeError`, not
+   * a rendered `undefined` — the field-audit case's reasoning, unchanged.
+   * `reviewRender(null)` returns
+   * `REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION]`, which is `undefined`, and
+   * the next line, `render.document(layer)` in `runReviewPlaybook`, throws on
+   * reading a property of `undefined` before any request is built. Loud, but
+   * naming nothing: no part of that stack says which version is missing. (A
+   * run pinning the bumped *number* gets the registry's own error, which
+   * does.) The line below catches the whole class at the commit that bumps the
+   * constant.
+   */
   it('has no half-built entry', () => {
     // The loop below visits only the entries that exist, so this line is the
     // half that earns the comment above it.
@@ -386,6 +518,16 @@ describe('the review render registry', () => {
       expect(render.ruleMessage(REVIEW_RULE).length, `v${version} ruleMessage`).toBeGreaterThan(0)
       expect(render.document(LAYER).length, `v${version} document`).toBeGreaterThan(0)
       expect(render.parse({}).quote, `v${version} parse`).toBeNull()
+      // The field-audit sweep's reasoning, unchanged: `ruleMessageV1`
+      // interpolates its own `TOOL_NAME_V1` into the sentence telling the
+      // model which tool to call, so an entry with a new `tool` that reuses
+      // `ruleMessage: ruleMessageV1` would name the old tool in the message
+      // while `tools` and `tool_choice` carry the new one — and the model
+      // would most likely comply with the schema anyway, so nothing else
+      // would go red.
+      expect(render.ruleMessage(REVIEW_RULE), `v${version} names its own tool`).toContain(
+        render.tool.name,
+      )
     }
   })
 
@@ -471,27 +613,6 @@ const REVIEW_V2: ReviewRender = {
   }),
 }
 
-/**
- * Captures the request the engine built, and answers with `input` under
- * whatever tool name that request actually asked for.
- *
- * Echoing the request's own tool name is deliberate: a mock hard-coded to
- * `report_finding_v2` would fail a broken engine merely because
- * `readToolInput` matched nothing, which proves the name was sent and nothing
- * about the rest of the entry. Answering whatever was asked forces the
- * assertions below to carry the weight.
- */
-function reviewCaptor(input: Record<string, unknown>) {
-  const requests: Array<Record<string, unknown>> = []
-  const callModel = async (request: unknown) => {
-    const typed = request as Record<string, unknown>
-    requests.push(typed)
-    const toolName = (typed.tools as Array<{ name: string }>)[0].name
-    return { content: [{ type: 'tool_use', id: 'tu_1', name: toolName, input }] } as never
-  }
-  return { requests, callModel }
-}
-
 describe('the review engine renders the version the run pinned', () => {
   beforeAll(() => {
     expect(REVIEW_RENDERS[SYNTHETIC_REVIEW_VERSION], 're-key this fixture').toBeUndefined()
@@ -505,7 +626,7 @@ describe('the review engine renders the version the run pinned', () => {
   // only. Pinning 1 and pinning nothing are the same object, so the routing
   // claim is carried by the cases below.
   it("renders version 1's values", async () => {
-    const { requests, callModel } = reviewCaptor({
+    const { requests, callModel } = captor({
       outcome: 'compliant',
       rationale: 'Fine.',
       quote: null,
@@ -521,7 +642,7 @@ describe('the review engine renders the version the run pinned', () => {
   })
 
   it('sends version 2 wholesale for a run pinning 2', async () => {
-    const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
+    const { requests, callModel } = captor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
     await runReviewPlaybook(LAYER, PLAYBOOK, {
       renderVersion: SYNTHETIC_REVIEW_VERSION,
       callModel,
@@ -545,7 +666,7 @@ describe('the review engine renders the version the run pinned', () => {
 
     const underTwo = await runReviewPlaybook(LAYER, PLAYBOOK, {
       renderVersion: SYNTHETIC_REVIEW_VERSION,
-      callModel: reviewCaptor(v2Answer).callModel,
+      callModel: captor(v2Answer).callModel,
     })
     expect(underTwo.findings[0].citation?.quote).toBe(LAYER_TEXT)
 
@@ -554,7 +675,7 @@ describe('the review engine renders the version the run pinned', () => {
     // citation at all.
     const underOne = await runReviewPlaybook(LAYER, PLAYBOOK, {
       renderVersion: 1,
-      callModel: reviewCaptor(v2Answer).callModel,
+      callModel: captor(v2Answer).callModel,
     })
     expect(underOne.findings[0].citation).toBeNull()
     expect(underOne.findings[0].attemptedQuote).toBeNull()
@@ -562,7 +683,7 @@ describe('the review engine renders the version the run pinned', () => {
 
   /** The citation gate is current code, whatever version parsed the answer. */
   it('verifies a v2 quote with the current verifier', async () => {
-    const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
+    const { requests, callModel } = captor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
     const result = await runReviewPlaybook(LAYER, PLAYBOOK, {
       renderVersion: SYNTHETIC_REVIEW_VERSION,
       callModel,
@@ -580,7 +701,7 @@ describe('the review engine renders the version the run pinned', () => {
    * version's parser read it out.
    */
   it('applies the current gate whatever version the run pinned', async () => {
-    const { requests, callModel } = reviewCaptor({
+    const { requests, callModel } = captor({
       outcome: 'deviation',
       q: 'The trustee shall distribute income quarterly.',
       b: 0,
