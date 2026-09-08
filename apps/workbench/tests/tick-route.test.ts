@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/cron/tick/route'
 import type { EmitTasksInput } from '@/lib/fieldAudit/tasks'
+import type { FiduciarySweepResult } from '@/lib/fiduciary/sweep'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
@@ -29,6 +30,19 @@ import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 const callOrder = vi.hoisted(() => [] as string[])
 
 /**
+ * A sweep that considered nothing — the default, and what every test here but
+ * the sweep suite's own expects in the payload. Hoisted because `state`'s own
+ * factory reads it, and `vi.hoisted` factories run in source order.
+ */
+const SWEPT_NOTHING = vi.hoisted(() => ({
+  mattersConsidered: 0,
+  created: 0,
+  kept: 0,
+  superseded: 0,
+  skipped: 0,
+}))
+
+/**
  * What the stubs report, so a test can choose whether a run was claimed, what
  * context it has, and whether `workRun` finished it. The defaults are the
  * door suite's: nothing queued, nothing worked.
@@ -41,7 +55,20 @@ const state = vi.hoisted(() => ({
   findings: [] as FieldAuditFinding[],
   /** `workflow_run_steps` rows, as the route's own reload would read them. */
   stepRows: [] as Record<string, unknown>[],
+  /**
+   * What the fiduciary sweep does. An `Error` here is thrown rather than
+   * returned, which is how the "a failing sweep must not fail the tick" test
+   * below drives the route's own catch.
+   */
+  sweep: SWEPT_NOTHING as FiduciarySweepResult | Error,
 }))
+
+const sweepFiduciaryTasks = vi.hoisted(() =>
+  vi.fn(async (_client: unknown): Promise<FiduciarySweepResult> => {
+    if (state.sweep instanceof Error) throw state.sweep
+    return state.sweep
+  }),
+)
 
 /**
  * Typed with the real `EmitTasksInput` rather than as a bare `vi.fn()`, so
@@ -95,6 +122,8 @@ vi.mock('@/lib/fieldAudit/history', () => ({
 
 vi.mock('@/lib/fieldAudit/tasks', () => ({ emitTasks }))
 
+vi.mock('@/lib/fiduciary/sweep', () => ({ sweepFiduciaryTasks }))
+
 vi.mock('@/lib/anthropic', () => ({
   // The route catches this by identity to answer 503, so it has to be a real
   // class even though nothing here throws it.
@@ -143,6 +172,7 @@ describe('the tick route’s door', () => {
     expect(await res.json()).toEqual({
       reaped: 0,
       materialised: { claimed: false, runId: null, status: null },
+      fiduciary: SWEPT_NOTHING,
       claimedRunId: null,
       worked: 0,
       done: null,
@@ -264,6 +294,7 @@ describe('the tick’s field-audit branch', () => {
     expect(await res.json()).toEqual({
       reaped: 0,
       materialised: { claimed: false, runId: null, status: null },
+      fiduciary: SWEPT_NOTHING,
       claimedRunId: 'run-1',
       worked: 1,
       done: true,
@@ -364,5 +395,75 @@ describe('the tick’s field-audit branch', () => {
     const res = await tick()
     expect(res.status).toBe(200)
     expect(emitTasks).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The fiduciary sweep the tick carries.
+ *
+ * Two things to hold. Its counts reach the payload, so a tick that created or
+ * retired fiduciary tasks says so. And a sweep that throws is caught: the run
+ * queue is why this cron exists, and a sweep that cannot read the appointments
+ * this minute must cost the queue nothing — the failure is reported and left
+ * for the next tick, sixty seconds away.
+ */
+describe('the tick’s fiduciary sweep', () => {
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'right'
+    callOrder.length = 0
+    sweepFiduciaryTasks.mockClear()
+  })
+
+  afterEach(() => {
+    // Back to the default, so test order cannot matter.
+    state.sweep = SWEPT_NOTHING
+    if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = ORIGINAL_SECRET
+  })
+
+  const tick = () =>
+    GET(new Request('http://x/api/cron/tick', { headers: { authorization: 'Bearer right' } }))
+
+  it('reports what the sweep did', async () => {
+    state.sweep = { mattersConsidered: 72, created: 3, kept: 36, superseded: 1, skipped: 2 }
+
+    const res = await tick()
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.fiduciary).toEqual({
+      mattersConsidered: 72,
+      created: 3,
+      kept: 36,
+      superseded: 1,
+      skipped: 2,
+    })
+    expect(sweepFiduciaryTasks).toHaveBeenCalledTimes(1)
+  })
+
+  it('sweeps before claiming, so the commonest tick still sweeps', async () => {
+    // Nothing is queued in this suite's default, and the route returns early
+    // on that — which is the commonest tick by far. A sweep placed after the
+    // claim would be the sweep that mostly never runs, and this is the
+    // assertion that would notice: it would be called zero times.
+    await tick()
+
+    expect(sweepFiduciaryTasks).toHaveBeenCalledTimes(1)
+  })
+
+  it('works the queue anyway when the sweep throws, and says what failed', async () => {
+    state.sweep = new Error('Could not load appointments: connection reset by peer')
+
+    const res = await tick()
+
+    // Not a 500. The queue's own work is untouched by this.
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.fiduciary).toEqual({
+      error: 'Could not load appointments: connection reset by peer',
+    })
+    // The tick went on to do its own work rather than returning at the throw.
+    expect(callOrder).toEqual(['materialiseStageTrigger', 'claim_workflow_run'])
+    expect(body.claimedRunId).toBeNull()
   })
 })
