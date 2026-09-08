@@ -829,6 +829,105 @@ object (`stage`, `matter_types`, typed `inputs` with matter-record sources,
 tick route, reaper, tool-forced output, the citation verification gate, `ai_usage`
 wiring, Realtime progress. Stage-filtered surfacing on the matter page.
 
+**Built as of 2026-09-08.** Prompts are versioned database objects —
+`prompts` / `prompt_versions` / `prompt_publications`, immutable versions under a
+publication pointer, a composite FK holding a version's `kind` to its prompt's
+(`20261028000000_prompt_objects.sql`). Typed `inputs` resolve through the
+allow-list in `packages/citations/src/prompt/inputs.ts`, checked at publish time
+rather than run time. Run, step and finding tables with per-unit records
+(`workflow_runs`, `workflow_run_steps`, `workflow_findings`,
+`workflow_field_references`); a cron-driven queue with `claim_workflow_run`'s
+`for update skip locked`, a reaper, and surgical retry that re-pays for only the
+units that failed — measured at **1 model call to retry 1 of 6**. Tool-forced
+output with prompt caching. The verification gate: `verifyQuote` for citations,
+`verifyFieldReference` for design-sheet fields, both refusing on ambiguity.
+`ai_usage.workflow_run_id` wired. Runs fire on stage entry
+(`20261103000000`) and, since #421, on a watched field changing
+(`20261106000000`).
+
+*Four deviations from the design above, each taken deliberately.*
+
+**`output_target` is content, not a column** (#417). A run records only
+`prompt_version_id`, so a mutable column would leave an old run
+indistinguishable from one that produced something else. The rule that fell out:
+content changes make a version, configuration does not — `fires_on_stage_entry`
+is a column, `output_target` is in the body. Three of the five values are built:
+`chat`, `task_set`, `checklist`. `draft_doc` and `email_draft` are refused, and
+not for effort — the workbench's R2 client is read-only, and more to the point
+the safety model does not transfer. Everything trustworthy here rests on a claim
+being verified against its source, and generated prose has no source.
+
+**Realtime progress became a client poller.** `revalidate` was specified and did
+nothing: both run pages call `getSessionUser()`, which reads `cookies()` and
+forces fully dynamic rendering. `app/runs/RunProgressRefresh.tsx` polls and stops
+when the run settles.
+
+**Stage-filtered surfacing is in the workbench, not the matter page.** Stage
+transitions happen in the old app's matter screens, which is where an attorney
+stands when they move a matter — and which phase 15 deletes. Until phases 6 and
+10 move matters into the workbench, this surfaces a blocker to someone who has
+already moved it. Advisory only, never blocking: both v1 and v2 of the
+design-sheet audit produced blocker-level **false positives** on a real matter,
+and a hard gate would have stopped a well-drafted matter advancing on a wrong
+finding.
+
+**`doc_scope` and `skill_ref` were never built.** Nothing needed them. Named here
+so their absence reads as a decision rather than an oversight.
+
+*Seven things the plan did not mention, built because running it demanded them.*
+A run queue and tick route (#412) — the 300s ceiling was not being hit, but a
+40-prompt library will. Stage-triggered runs (#416). Three separate corrections
+to task withdrawal (#417, #418, #419): a retry duplicating instead of replacing,
+an uncitable finding retiring a cited one, and one prompt erasing another's
+tasks. The fiduciary matrix's gaps becoming tasks (#420). Unsupported findings
+failing their unit instead of vanishing (#422). And versioned instructions
+(#424), because the checks were versioned data while the instructions were
+un-versioned code, so half of what produced a finding could change under an old
+run on retry.
+
+*The check no test can stand in for* — **taken 2026-09-06 to 2026-09-08.**
+
+Every defect that mattered was invisible to a passing suite. `matters.title`, a
+column that never existed, had shipped in five features. `emitTasks` took a
+`unitIds` argument that nothing passed — `git log -S` showed #412 dropping it —
+so a retried run re-created a task for every unit including the ones that never
+failed. `'prompt'` had been a legal `tasks.source` since #410 and was never added
+to the root app's `TASK_SOURCES`, so every task the audit ever created rendered
+as an **empty, unstyled chip** in the only app that displays tasks.
+
+And the one worth remembering: on a live matter, the audit's check 1 returned the
+same blocker twice — once with **four verified references**, once with **none**.
+The gate correctly refused the uncitable one, and the withdrawal step retired the
+first run's task anyway, leaving the matter with no blocker at all. Nothing in
+1,100 tests could have found that; it needs two model calls on identical input
+disagreeing.
+
+Investigating it found the cause was not the model. The prompt said *"do not
+report a deviation or an absence you cannot reference"*, the tool schema had no
+`minItems` so `references: []` validated, and `findingForCheck` accepted it — **a
+prompt rule that nothing enforced.** Measured across seven runs on one unchanged
+sheet, the model omits references on check 1 roughly **2 in 7** runs. That rate
+is unchanged and inherent; what changed is that it is now a visible failed step
+carrying its reason rather than a silent finding.
+
+Two of the conclusions drawn while investigating were wrong, both from reasoning
+about a check's grammar without reading the sheet. Check 4's `absent` was called
+a false positive and is a **real finding** — the concerns say *"Include general
+disinheritance language"* and the field is empty. An instruction change was
+written, verified and nearly shipped that would have silenced it. Check 2's
+one-in-six `absent` **was** a false positive, from a statement containing two
+questions, fixed in v5.
+
+*Still owed, and named rather than implied.* #419's cross-prompt scoping and
+#421's field-trigger path are proven by tests alone — the first needs a second
+task-emitting prompt, the second needs a prompt that watches a field. Three of
+the four fiduciary issue kinds have never fired in production. `FIELD_AUDIT_TOOL`'s
+`input_schema` is still un-versioned code that shapes what the model can answer,
+and the missing `minItems` was the whole subject of #422 — the same argument as
+#424 applies to it. And the drafting-notes prompt has a written plan waiting on
+that field being populated: it is on 3 of 44 sheets, none at the firing stages,
+so re-measure before trusting the plan.
+
 ~~Do the cheap high-value fix here: move the hard-coded Massachusetts rate table out of
 `lib/estateTax.ts` into `firm_settings` with effective dates, so no prompt can quote a
 stale exemption.~~ **Done 2026-09-03**, ahead of the rest of phase 4 since it needed no
