@@ -840,7 +840,14 @@ never written. Reuse the archived + `skipped_at` + `closeout_reason` convention 
 must be one `tasks_closeout_reason_check` allows — **check the constraint before choosing
 one**, and if no suitable value exists, add it in the Task 2 migration and say so.
 
-A matter that throws while loading is counted in `skipped` and otherwise untouched.
+**Read `loadFiduciaries` before deciding what "skipped" means.** It throws on each query
+error and loads every matter in one batch, so a load failure names no matter — there is
+nothing to mark skipped, and absorbing it into an all-zero result would read as a clean
+pass over a quiet queue. That is the same "could not tell means nothing is wrong" lie the
+skip discipline exists to prevent, told one level up. So a load failure propagates out of
+the sweep and the tick reports it in the payload; `skipped` counts per-matter failures,
+where a matter whose own read, insert or withdrawal fails is skipped whole and the sweep
+continues.
 
 - [ ] **Step 4: Wire it into the tick**
 

@@ -81,8 +81,24 @@ necessary.
 **But there is still a way to be wrong, and it is the same shape.** If the appointments
 cannot be loaded — a query fails, or `contact_roles` returns nothing for a matter that has
 appointments — that is not "no gaps", it is "could not tell". Retiring on it would repeat
-#418's defect against a different data source. So a matter whose appointments fail to load
-is skipped entirely: no insert, no withdrawal.
+#418's defect against a different data source.
+
+`loadFiduciaries` settles how that is handled, and the answer is not the obvious one. It
+**throws** on each of its four query errors, and it loads **every matter in one batch** —
+so a load failure names no matter at all. There is nothing to mark skipped.
+
+Which means the failure has to **propagate out of the sweep**, not be absorbed into its
+counts. Every field in the returned shape is a number of matters acted upon, so an all-zero
+result reads as a clean pass over a quiet queue — and reporting a total load failure that
+way would be the same "could not tell" lie one level higher up, told by the very function
+written to prevent it. The tick catches it and puts the message in its payload.
+
+`skipped` therefore counts per-matter failures: a matter whose own task read, insert or
+withdrawal fails is skipped whole and the sweep carries on with the rest.
+
+This was verified by reintroducing the defect rather than reasoned about — removing the
+`throw` from `repository.ts`, so a failed appointments query looks like an absence of
+appointments, made the sweep archive a live task and report `superseded: 1`.
 
 Withdrawal is scoped to `source = 'fiduciary'` and to the matter, and it inherits the three
 narrowing axes unchanged — only open, unassigned, tool-created tasks are ever touched. A
