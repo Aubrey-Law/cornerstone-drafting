@@ -52,6 +52,13 @@ them had just absorbed three corrections. Here the logic is identical and only t
 differs. Two tables would mean two claim functions and two materialise call sites for one
 idea.
 
+**And the drain path already works for both, which was checked rather than hoped.**
+`materialiseStageTrigger` reads exactly three columns off a claimed row — `id`, `matter_id`
+and `prompt_id`. It never reads `to_stage`; nothing in the app does, outside one test
+fixture. So a field trigger materialises into a run through the existing code with **no
+change to that function at all**, and making `to_stage` nullable costs nothing. A second
+table would have meant reimplementing a path that already handles this.
+
 ### Additive, and deliberately not tidy
 
 `to_stage` becomes nullable, `on_field text` is added, and a CHECK requires exactly one of
@@ -79,10 +86,18 @@ The values are allow-listed source keys, not arbitrary column names — the same
 On `design_sheets`, `after insert or update of drafting_notes`, `when` the value is
 distinct from the old one — so re-saving a sheet without touching the notes fires nothing.
 
-The dedup timestamp is the sheet's own `updated_at`, which the existing
-`design_sheets` updated-at trigger sets. Two writes in one transaction cannot fire twice; a
-genuine later edit has a new timestamp and does re-audit, which is the behaviour worth
-having.
+The dedup timestamp is **`now()`, taken inside the trigger function** — not the sheet's
+`updated_at`. The first draft of this note said `updated_at` was "set by the existing
+`design_sheets` updated-at trigger", and that trigger does not exist: `design_sheets` has no
+triggers at all, and its `updated_at` carries a `now()` default that nothing maintains on
+update. Building the dedup key on it would have keyed every edit of a given sheet to the same
+frozen insert-time value, so the unique constraint would have suppressed **every** re-audit
+after the first, forever — and it would have looked like the de-duplication working.
+
+`now()` is the transaction timestamp, which gives exactly the property wanted: two writes in
+one transaction collide on the unique constraint and fire once, while a genuine later edit is
+a new transaction with a new timestamp and does re-audit. A sheet whose notes have changed
+deserves a fresh look.
 
 An insert counts as a change: a sheet created with notes already in it has notes worth
 reading, and nothing else would ever notice.
