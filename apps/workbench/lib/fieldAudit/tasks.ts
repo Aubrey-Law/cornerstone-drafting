@@ -199,8 +199,8 @@ export interface EmitPlan {
 }
 
 /**
- * Everything this call compares, as one string: tag, title, description,
- * priority, type, and the checklist items' text. Byte-identical, not
+ * Everything this call compares, as one string: the task's *stable identity*,
+ * title, description, priority, type, and the checklist items' text. Byte-identical, not
  * semantically equivalent — the description embeds the model's own rationale,
  * so a re-executed unit churns even when the finding is substantively the
  * same. That is the intended trade; a comparison that tried to judge
@@ -223,6 +223,27 @@ export interface EmitPlan {
  * stringifying the objects would make every checklist comparison fail
  * forever, silently, from the first real run.
  */
+/**
+ * What makes two tasks *the same task*, from a tag that also records which run
+ * produced one.
+ *
+ * `batch_tag` does two jobs: it says which unit a task is about, and which run
+ * noticed it. Only the first is identity. Comparing whole tags made every
+ * re-run of an unchanged finding a content change, so the keep path could
+ * never fire across runs and each run archived its predecessor's task and
+ * inserted a blank copy — taking any ticks with it. Measured 2026-09-08: 20
+ * runs on one unchanged sheet left 19 archived rows, and a deliberately ticked
+ * checklist came back unticked on the very next run.
+ *
+ * A tag this module did not write keeps its raw value, so a stranger's task
+ * can never collide with one of ours.
+ */
+function identityOf(tag: string | null): string {
+  const parsed = parseBatchTag(tag)
+  if (parsed === null) return `raw:${tag ?? ''}`
+  return parsed.unitId === null ? 'unit:(run-level)' : `unit:${parsed.unitId}`
+}
+
 function contentKey(parts: {
   batchTag: string | null
   title: string
@@ -232,7 +253,7 @@ function contentKey(parts: {
   checklist: ChecklistItem[]
 }): string {
   return JSON.stringify([
-    parts.batchTag,
+    identityOf(parts.batchTag),
     parts.title,
     parts.description,
     parts.priority,
@@ -345,11 +366,25 @@ export interface PlanEmitRun {
  * edited the tasks in between, since a hand-edited title or description is a
  * content change like any other.
  *
- * Idempotent *within a run*, to be exact. The tag carries the run id, so a
- * genuinely new run is new content and an unchanged finding still archives and
- * re-inserts. That is what the advisory logic in `lib/runs/advisory.ts`
- * expects — a newer run's answer replaces an older one's — but it means the
- * anti-churn argument below holds only for a run re-emitting its own tasks.
+ * Idempotent across runs, not merely within one. It used to be within-run
+ * only: the tag carries the run id, so an unchanged finding read as new
+ * content every time and each run archived its predecessor's task and inserted
+ * a blank copy. That was justified here as what `lib/runs/advisory.ts`
+ * expects — and it is not: that module reads `workflow_findings`,
+ * `workflow_runs`, `prompt_versions` and `matters`, and never touches `tasks`,
+ * `batch_tag` or a checklist at all. Nothing outside this module reads the run
+ * id in a tag.
+ *
+ * What the churn did cost is an attorney's ticks, every time. Measured
+ * 2026-09-08 on one unchanged sheet: 20 runs, 19 archived rows, and an item
+ * ticked by hand came back unticked on the next run. It mattered little while
+ * the whole database held a single run; the audit now fires on five stages, so
+ * a re-run is ordinary.
+ *
+ * `identityOf` is what changed. The tag still records which run produced a
+ * task — a kept task therefore names the run that *first* found the thing,
+ * which is the more useful fact anyway — but identity is the unit, so an
+ * unchanged finding keeps its row, its id, its `created_at` and its ticks.
  *
  * A retried unit whose rationale changed no longer matches, so it is withdrawn
  * and re-created; a unit the retry never touched matches exactly, so it keeps
