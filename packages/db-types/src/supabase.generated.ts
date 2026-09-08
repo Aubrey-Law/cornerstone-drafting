@@ -9018,7 +9018,6 @@ export type Database = {
           finding_count: number
           finished_at: string | null
           id: string
-          instructions_version: number | null
           kind: string
           last_tick_at: string | null
           locked_by: string | null
@@ -9041,7 +9040,6 @@ export type Database = {
           finding_count?: number
           finished_at?: string | null
           id?: string
-          instructions_version?: number | null
           kind?: string
           last_tick_at?: string | null
           locked_by?: string | null
@@ -9064,7 +9062,6 @@ export type Database = {
           finding_count?: number
           finished_at?: string | null
           id?: string
-          instructions_version?: number | null
           kind?: string
           last_tick_at?: string | null
           locked_by?: string | null
@@ -9856,7 +9853,6 @@ export type Database = {
           finding_count: number
           finished_at: string | null
           id: string
-          instructions_version: number | null
           kind: string
           last_tick_at: string | null
           locked_by: string | null
