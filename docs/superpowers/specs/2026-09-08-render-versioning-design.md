@@ -67,6 +67,11 @@ Version 1's fields are today's values verbatim. **No behaviour change ships
 with the mechanism** — the point of the slice is that a run's question stops
 drifting, not that the question changes.
 
+**The model id stays out of the render.** It is already pinned per run on
+`workflow_runs.model` and passed as a dependency, and moving it into the
+registry would give it two homes that can disagree. Same for anything else the
+run row already carries.
+
 Entries reference shared functions rather than copying them. A later version
 copies only what actually diverges; until something diverges, v2's `sheet` is
 the same function object as v1's. The registry file gets longer as versions
@@ -125,6 +130,11 @@ The review side's parser is the same idea with `quote`, `block_index` and
 | `apps/workbench/lib/runs/record.ts` | stamps `render_version` from `CURRENT_*_RENDER_VERSION` |
 | `apps/workbench/lib/runs/context.ts` | selects `render_version` |
 | `apps/workbench/lib/runs/worker.ts` | passes `renderVersion` to both engines |
+
+The engines' own inputs rename with the column: `FieldAuditContext.instructionsVersion`
+becomes `renderVersion`, and so does `RunReviewDependencies.instructionsVersion`.
+Both keep `number | null | undefined`, and null keeps meaning "predates
+versioning".
 | `supabase/migrations/20261109000000_run_render_version.sql` | **new** — the column rename |
 | `packages/db-types/src/supabase.generated.ts` | regenerated |
 
@@ -162,6 +172,14 @@ test-only. So the suite **constructs the divergence** rather than waiting for a
 second real version: a synthetic version 2, defined in the test file and
 injected into the registry, whose tool renames `field_key` to `field` and whose
 wrapper text differs.
+
+It is injected by assigning into the exported record in `beforeAll` and
+`delete`-ing the key in `afterAll` — the registry is a plain
+`Record<number, Render>` and the resolver reads it, so no production signature
+is bent to accept a test double. (`packages/citations` has no runner of its
+own; these live in `apps/workbench/tests/`, and a bare
+`npx vitest run apps/workbench/tests/x.test.ts` from the repo root matches no
+files and exits 0 — run them through the workbench project.)
 
 Tests that can fail:
 
