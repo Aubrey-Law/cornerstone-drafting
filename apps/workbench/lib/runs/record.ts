@@ -112,10 +112,18 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
       finding_count: 0,
       failed_count: 0,
       resolved_inputs: asJson(input.resolvedInputs),
-      // Which instruction text this run is answering against. Stamped now, so
-      // a retry weeks later renders the same text rather than whatever is
-      // deployed then — the other half of what pinning prompt_version_id is
-      // for. Per kind, because the two registries hold different contracts.
+      // Which render this run is answering against. Stamped now, so a retry
+      // weeks later builds the same call rather than whatever is deployed
+      // then — the other half of what pinning prompt_version_id is for. Per
+      // kind, because the two registries hold different contracts.
+      render_version:
+        input.kind === 'field_audit'
+          ? CURRENT_FIELD_AUDIT_RENDER_VERSION
+          : CURRENT_REVIEW_RENDER_VERSION,
+      // Written as well, for the minute or two after a deploy where the
+      // previous release may still pick this run up and read only this
+      // column. The two hold the same number today; the migration that drops
+      // the column drops this line with it.
       instructions_version:
         input.kind === 'field_audit'
           ? CURRENT_FIELD_AUDIT_RENDER_VERSION
