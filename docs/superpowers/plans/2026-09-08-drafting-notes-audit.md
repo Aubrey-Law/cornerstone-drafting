@@ -420,9 +420,16 @@ publication.
 
 - [ ] **Step 1: After merge and deploy, fire it**
 
-Pick a hired matter that **has** non-empty `drafting_notes` — there are three, in `revision`,
-`drafts_approved` and `client_review`. Record the notes' length and hash first, never the
-content. Touch the notes to fire the trigger (an idempotent rewrite of the same value will
+Pick a hired matter that **has** non-empty `drafting_notes`. Re-measured 2026-09-08 and
+unchanged from when this plan was written: **3 of 44 sheets**, all `hired`, at `revision`
+(194 characters), `client_review` (439) and `drafts_approved` (499). Record the notes'
+length and hash first, never the content.
+
+That 3-of-44 sparsity is not an argument against the prompt — it is the argument *for*
+the field-change trigger, and re-measuring strengthened it. None of the three stages is
+in the audit's `{design,drafting}`, so a stage-entry prompt would never reach any sheet
+that actually has notes. A change-triggered prompt fires when the attorney writes them,
+which is the only moment the notes are worth reading. Touch the notes to fire the trigger (an idempotent rewrite of the same value will
 **not** fire it, by design — so make a real, reversible edit, or set them to their own value
 plus a trailing space and restore after).
 
@@ -431,7 +438,30 @@ produced.
 
 - [ ] **Step 2: The coexistence test**
 
-This is the point. Get **both** prompts to have a task on one matter, then re-run each:
+This is the point. Get **both** prompts to have a task on one matter, then re-run each.
+
+**Getting there needs one step the plan originally assumed away.** Re-measured
+2026-09-08, after the render-versioning slice: the three notes-bearing matters sit at
+`revision`, `drafts_approved` and `client_review`, and the design-sheet audit's
+`stages` and `fires_on_stage_entry` are both `{design,drafting}`. The sets are
+**disjoint** — `stage = any(p.stages)` is false for all three — so the audit has never
+run on any of them (0 runs; 1 audit run exists in the whole database, on a `drafting`
+matter). Waiting for both prompts to hold a task on one matter naturally will never
+happen.
+
+So queue the audit deliberately, on whichever of the three you fire the notes prompt
+against: **run `ma-design-sheet-audit` against that matter from `/prompts`.**
+`runMatterAudit` applies no stage filter — stage entry is one way in, an attorney's
+choice on that page is the other, and both land in the same queue — so this is the
+supported path rather than a fixture, and it is the same route the attorney would use.
+
+Two alternatives were considered and rejected. Adding those stages to the audit's
+`stages` array changes what the audit does across every matter, which is the owner's
+judgment and not a test's to make. Writing notes onto a `design` or `drafting` matter
+means inventing the attorney's own words in a real client's sheet, and those words are
+the entire subject of the prompt.
+
+Then, with both tasks present:
 
 - the design-sheet audit's task must survive the drafting-notes prompt's run
 - the drafting-notes prompt's task must survive the audit's run
