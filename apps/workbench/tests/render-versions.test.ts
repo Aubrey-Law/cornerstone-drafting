@@ -731,3 +731,87 @@ describe('the review engine renders the version the run pinned', () => {
     expect(called).toBe(false)
   })
 })
+
+/**
+ * Two real versions now exist, so the routing property can be asserted
+ * against production entries rather than a synthetic fixture — which is what
+ * the fixture was always standing in for.
+ *
+ * Version 2 exists for one measured reason. On a client_review sheet, check 2
+ * reported a blocker on ten consecutive runs across three prompt versions
+ * while its own rationale concluded the opposite, and every rationale read as
+ * thinking-out-loud ("wait, actually…"). Version 1's schema asks for
+ * `outcome` first and `rationale` second, so the model commits to a
+ * conclusion and reasons underneath it. Version 2 asks in the other order.
+ */
+describe('field-audit render version 2', () => {
+  const propsOf = (v: number) =>
+    Object.keys(
+      (FIELD_AUDIT_RENDERS[v].tool.input_schema as { properties: Record<string, unknown> }).properties,
+    )
+
+  it('asks for the rationale before the outcome', () => {
+    const order = propsOf(2)
+    expect(order.indexOf('rationale')).toBeLessThan(order.indexOf('outcome'))
+    const required = (FIELD_AUDIT_RENDERS[2].tool.input_schema as { required: string[] }).required
+    expect(required.indexOf('rationale')).toBeLessThan(required.indexOf('outcome'))
+  })
+
+  /**
+   * Version 1 is a record of what earlier runs were actually asked, and ten of
+   * them are in the database. If a tidy-up ever reordered it, those runs would
+   * replay against a question they were never put.
+   */
+  it('leaves version 1 asking for the outcome first', () => {
+    const order = propsOf(1)
+    expect(order.indexOf('outcome')).toBeLessThan(order.indexOf('rationale'))
+  })
+
+  /** The reuse convention, asserted by identity: only the tool diverged. */
+  it('reuses every version 1 piece except the tool', () => {
+    const one = FIELD_AUDIT_RENDERS[1]
+    const two = FIELD_AUDIT_RENDERS[2]
+    expect(two.instructions).toBe(one.instructions)
+    expect(two.sheet).toBe(one.sheet)
+    expect(two.checkMessage).toBe(one.checkMessage)
+    expect(two.parse).toBe(one.parse)
+    expect(two.maxTokens).toBe(one.maxTokens)
+    expect(two.tool).not.toBe(one.tool)
+  })
+
+  it('is what a new run gets', () => {
+    expect(CURRENT_FIELD_AUDIT_RENDER_VERSION).toBe(2)
+  })
+
+  /** Same field names, so version 1's parser reads version 2 unchanged. */
+  it('keeps the input shape, so the parser did not have to move', () => {
+    expect(propsOf(2).sort()).toEqual(propsOf(1).sort())
+  })
+
+  /**
+   * The routing property, now on real entries: a run pinning 1 is sent
+   * version 1's schema and a run pinning 2 is sent version 2's. Break the
+   * engine to resolve the current version instead of the run's, and the first
+   * of these fails.
+   */
+  it('sends each run the schema its own version declares', async () => {
+    const seen: string[][] = []
+    for (const version of [1, 2]) {
+      await runFieldAudit(
+        { promptSlug: 's', promptVersion: 1, values: { concerns: 'x' }, renderVersion: version },
+        BODY,
+        {
+          callModel: async (request) => {
+            const tool = (request as { tools: Array<{ input_schema: { properties: Record<string, unknown> } }> }).tools[0]
+            seen.push(Object.keys(tool.input_schema.properties))
+            return {
+              content: [{ type: 'tool_use', id: 't', name: 'report_check', input: { outcome: 'compliant', rationale: 'Fine.', references: [] } }],
+            } as never
+          },
+        },
+      )
+    }
+    expect(seen[0].indexOf('outcome')).toBeLessThan(seen[0].indexOf('rationale'))
+    expect(seen[1].indexOf('rationale')).toBeLessThan(seen[1].indexOf('outcome'))
+  })
+})
