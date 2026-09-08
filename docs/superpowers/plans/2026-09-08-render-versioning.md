@@ -1191,19 +1191,27 @@ import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ReviewRender } from '@aubrey-law/citations/review/render'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 
+const LAYER_TEXT = 'The trustee shall distribute income annually.'
 const LAYER: TextLayer = {
+  sourceKind: 'docx',
   status: 'ok',
+  extractor: 'test',
+  extractorVersion: '1',
+  sourceSha256: 'a'.repeat(64),
+  pageCount: null,
+  text: LAYER_TEXT,
   blocks: [
-    { index: 1, text: 'The trustee shall distribute income annually.', start: 0, end: 44 },
+    { index: 0, charStart: 0, charEnd: LAYER_TEXT.length, text: LAYER_TEXT, page: null, bbox: null },
   ],
-  text: 'The trustee shall distribute income annually.',
+  spans: [],
 }
 
+// `preferredLanguage` is `.optional()` on `reviewRuleSchema`, so it is
+// `string | undefined` — omitted, not null.
 const RULE = {
   number: '1',
   statement: 'Income distribution is stated.',
   risk: 'high' as const,
-  preferredLanguage: null,
 }
 
 const REVIEW_V2: ReviewRender = {
@@ -1249,7 +1257,7 @@ describe('the review engine renders the version the run pinned', () => {
                 type: 'tool_use',
                 id: 'tu_1',
                 name: 'report_finding_v2',
-                input: { outcome: 'compliant', q: 'The trustee shall distribute income annually.', b: 1 },
+                input: { outcome: 'compliant', q: LAYER_TEXT, b: 0 },
               },
             ],
           } as never
@@ -1278,7 +1286,7 @@ describe('the review engine renders the version the run pinned', () => {
                 type: 'tool_use',
                 id: 'tu_1',
                 name: 'report_finding_v2',
-                input: { outcome: 'compliant', q: 'The trustee shall distribute income annually.', b: 1 },
+                input: { outcome: 'compliant', q: LAYER_TEXT, b: 0 },
               },
             ],
           }) as never,
@@ -1307,7 +1315,12 @@ describe('the review engine renders the version the run pinned', () => {
 })
 ```
 
-If `TextLayer`'s block or layer shape does not match the literal above, read `packages/citations/src/textLayer/types.ts` and build the fixture to the real type — do not change the type to fit the fixture.
+These two fixtures are the exact shapes as of this plan — `TextLayer` in
+`packages/citations/src/textLayer/types.ts` (note `charStart`/`charEnd`, not
+`start`/`end`, and that `blocks[0].index` is `0`, which is why the v2 answer's
+block hint is `0`) and `reviewRuleSchema` in
+`packages/citations/src/review/types.ts`. If either has moved on, read the type
+and build the fixture to it — never change the type to fit a fixture.
 
 - [ ] **Step 2: Run it to make sure it fails**
 
