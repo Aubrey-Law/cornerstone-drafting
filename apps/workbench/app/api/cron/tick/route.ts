@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { AnthropicKeyMissingError, anthropicModelCaller } from '@/lib/anthropic'
 import { loadFieldAuditFindings } from '@/lib/fieldAudit/history'
 import { emitTasks } from '@/lib/fieldAudit/tasks'
+import { type FiduciarySweepResult, sweepFiduciaryTasks } from '@/lib/fiduciary/sweep'
 import { loadRunContext } from '@/lib/runs/context'
 import { finaliseRun } from '@/lib/runs/record'
 import { reapAbandonedRuns } from '@/lib/runs/reaper'
@@ -19,8 +20,13 @@ import type { FieldAuditBody } from '@aubrey-law/citations/prompt/body'
  * minute (`vercel.json`'s `crons` entry), reaps whatever the previous
  * invocation left mid-flight, materialises one pending stage trigger into a
  * queued run (`materialiseStageTrigger` — see its own module for why that
- * happens before the claim below), claims one queued run, works it for up to
- * `TICK_BUDGET_MS`, and leaves the rest for the next tick if it isn't done.
+ * happens before the claim below), sweeps the fiduciary matrix's gaps into
+ * tasks, claims one queued run, works it for up to `TICK_BUDGET_MS`, and
+ * leaves the rest for the next tick if it isn't done.
+ *
+ * The sweep is the one thing here that is not the queue's own work, and it is
+ * carried rather than depended on: it makes no model call, and if it fails the
+ * tick reports that and gets on with the queue.
  *
  * `maxDuration` matches `workRun`'s own budget headroom — 300 seconds against
  * a 240-second budget — for the same reason `app/api/cron/workflow-jobs/route.ts`
@@ -57,9 +63,30 @@ export async function GET(req: Request) {
   // and `materialiseStageTrigger` already guards on the id, not falsiness.
   const materialised = await materialiseStageTrigger(admin, worker)
 
+  // The fiduciary sweep. Unqueued and run on every tick on purpose — see
+  // `sweepFiduciaryTasks` for why the machinery to schedule one sweep would
+  // cost more than the sweep. It sits after the queue's own ordering above and
+  // before the claim below: the commonest tick claims nothing and returns
+  // early, so a sweep placed after the claim would be the sweep that mostly
+  // never runs.
+  //
+  // A failing sweep must not fail the tick. The run queue is why this cron
+  // exists; the sweep is a cheap extra it carries. A sweep that could not read
+  // the appointments this minute is reported in the payload and left for the
+  // next one sixty seconds away, and it takes nothing else down with it. The
+  // error is *carried*, never dropped: a sweep that quietly reported an
+  // all-zero pass would say it found nothing wrong when what happened is that
+  // it could not tell.
+  let fiduciary: FiduciarySweepResult | { error: string }
+  try {
+    fiduciary = await sweepFiduciaryTasks(admin)
+  } catch (error) {
+    fiduciary = { error: error instanceof Error ? error.message : String(error) }
+  }
+
   const { data: claimed, error: claimError } = await admin.rpc('claim_workflow_run', { p_worker: worker })
   if (claimError) {
-    return NextResponse.json({ reaped, materialised, error: `Could not claim a run: ${claimError.message}` }, { status: 500 })
+    return NextResponse.json({ reaped, materialised, fiduciary, error: `Could not claim a run: ${claimError.message}` }, { status: 500 })
   }
 
   // An empty claim returns HTTP 200 and a full row whose every column is
@@ -74,14 +101,14 @@ export async function GET(req: Request) {
     // (this invocation's claim above may simply have lost the race for it,
     // or arrived too late in the same tick to see it) must not report
     // `claimedRunId: null` and read as having done nothing.
-    return NextResponse.json({ reaped, materialised, claimedRunId: null, worked: 0, done: null })
+    return NextResponse.json({ reaped, materialised, fiduciary, claimedRunId: null, worked: 0, done: null })
   }
 
   const runId = String(claimed.id)
 
   const context = await loadRunContext(admin, runId)
   if (!context.ok) {
-    return NextResponse.json({ reaped, materialised, claimedRunId: runId, error: context.message }, { status: 500 })
+    return NextResponse.json({ reaped, materialised, fiduciary, claimedRunId: runId, error: context.message }, { status: 500 })
   }
 
   let callModel
@@ -93,7 +120,7 @@ export async function GET(req: Request) {
       // the app is fine, this feature is not configured. The run stays
       // `running` and the claim's own heartbeat leaves it for the reaper to
       // hand back rather than lost.
-      return NextResponse.json({ reaped, materialised, claimedRunId: runId, error: error.message }, { status: 503 })
+      return NextResponse.json({ reaped, materialised, fiduciary, claimedRunId: runId, error: error.message }, { status: 503 })
     }
     throw error
   }
@@ -107,7 +134,7 @@ export async function GET(req: Request) {
       .eq('run_id', runId)
     if (stepsError) {
       return NextResponse.json(
-        { reaped, materialised, claimedRunId: runId, error: `Could not reload the run's steps: ${stepsError.message}` },
+        { reaped, materialised, fiduciary, claimedRunId: runId, error: `Could not reload the run's steps: ${stepsError.message}` },
         { status: 500 },
       )
     }
@@ -147,5 +174,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ reaped, materialised, claimedRunId: runId, worked: result.worked, done: result.done })
+  return NextResponse.json({ reaped, materialised, fiduciary, claimedRunId: runId, worked: result.worked, done: result.done })
 }

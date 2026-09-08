@@ -165,3 +165,59 @@ describe('matrixIssues', () => {
     expect(matrixIssues(buildMatrix([]), { minorChildren: 0 })).toEqual([])
   })
 })
+
+describe('issue identity', () => {
+  /**
+   * A task's `batch_tag` is built from these rather than from `message`,
+   * which embeds people's names — keyed off the message, renaming a contact
+   * would read as a new issue: the old task orphaned, a duplicate created,
+   * and the attorney's place in it lost.
+   */
+  it('names the role and party a chain issue belongs to', () => {
+    const matrix = buildMatrix([appointment()])
+    const issue = matrixIssues(matrix, { minorChildren: 0 }).find((i) => i.kind === 'no_successor')
+    expect(issue).toBeDefined()
+    expect(issue!.role).toBe(appointment().role)
+    expect(issue!.forParty).toBe(appointment().forParty)
+  })
+
+  it('names the role and party a duplicate belongs to', () => {
+    const matrix = buildMatrix([
+      appointment({ forParty: 'spouse', priority: 1 }),
+      appointment({ forParty: 'spouse', priority: 2 }),
+    ])
+    const issue = matrixIssues(matrix, { minorChildren: 0 }).find((i) => i.kind === 'duplicate')
+    expect(issue).toBeDefined()
+    expect(issue!.role).toBe('trustee')
+    expect(issue!.forParty).toBe('spouse')
+  })
+
+  /**
+   * A missing guardian is named by the office it is missing from, not by a
+   * chain — there is no guardian chain to read it off, that being the whole
+   * complaint. The party is null because minor children belong to the couple:
+   * one guardian gap per matter, not one per spouse.
+   */
+  it('names the office a missing guardian belongs to, with no party', () => {
+    const matrix = buildMatrix([appointment({ role: 'trustee' })])
+    const issue = matrixIssues(matrix, { minorChildren: 2 }).find((i) => i.kind === 'no_guardian')
+    expect(issue).toBeDefined()
+    expect(issue!.role).toBe('guardian')
+    expect(issue!.forParty).toBeNull()
+  })
+
+  /**
+   * `concentrated` is about a person across every chain, not one chain, so it
+   * has no role to name. It is also the one issue that never becomes a task,
+   * so it never needs a tag — but the type must still admit it, and the
+   * emitter refuses to build a tag without one rather than writing
+   * `fiduciary:...#concentrated:undefined:undefined`.
+   */
+  it('leaves role and party null for an issue about a person, not a chain', () => {
+    const matrix = buildMatrix(FIDUCIARY_ROLES.map((role) => appointment({ role, priority: 1 })))
+    const concentrated = matrixIssues(matrix, { minorChildren: 0 }).find((i) => i.kind === 'concentrated')
+    expect(concentrated).toBeDefined()
+    expect(concentrated!.role).toBeNull()
+    expect(concentrated!.forParty).toBeNull()
+  })
+})
