@@ -150,6 +150,71 @@ const TOOL_V1: FieldAuditRender['tool'] = {
   },
 }
 
+/**
+ * Version 2's tool. The only thing that differs from version 1 anywhere in the
+ * entry: `rationale` is asked for **before** `outcome`.
+ *
+ * Measured 2026-09-08, and this is the whole reason the entry exists. On one
+ * client_review sheet, check 2 reported a blocker on 10 consecutive runs
+ * across three prompt versions while its own rationale said the opposite —
+ * "no other named individuals appear ... that are missing" — and every
+ * rationale read as thinking-out-loud, opening with "wait, actually" or
+ * "actually check:". Two prompt-statement fixes (v6's scoping, v7's explicit
+ * one-way direction rule naming the exact wrong move) changed the outcome not
+ * at all.
+ *
+ * Because the statement was never the problem. Version 1 asks for `outcome`
+ * first and `rationale` second, so the model commits to a conclusion and then
+ * reasons underneath it, with nothing to revise. Asking for the reasoning
+ * first is the change; the field names, the enum and the reference shape are
+ * untouched, so `parseV1` reads this version unchanged.
+ *
+ * The descriptions say the order is deliberate, because a schema that merely
+ * happens to be ordered invites a future edit to tidy it back.
+ */
+const TOOL_V2: FieldAuditRender['tool'] = {
+  name: TOOL_NAME_V1,
+  description: "Report the conclusion for exactly one check against the matter's design sheet.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      rationale: {
+        type: 'string',
+        description:
+          'Write this first, before choosing an outcome. One or two sentences saying what the sheet records — not what it should record. Reason here, then let the outcome follow from what you wrote.',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['compliant', 'deviation', 'absent', 'not_applicable'],
+        description:
+          'Must follow from the rationale you just wrote; if it does not, the rationale is your answer and this field is wrong. compliant: the sheet meets the check. deviation: it addresses the point but not acceptably. absent: the sheet is silent on a point the check requires. not_applicable: the check does not bear on this matter.',
+      },
+      references: {
+        type: 'array',
+        description:
+          'The fields this conclusion rests on. Every field named here must be one the check lists as its reads. A null claimed_value claims the field is empty.',
+        items: {
+          type: 'object',
+          properties: {
+            field_key: {
+              type: 'string',
+              description: 'One of the field keys this check may consult.',
+            },
+            claimed_value: {
+              type: ['string', 'null'],
+              description: 'What the field holds, copied exactly. Null claims the field is empty.',
+            },
+          },
+          required: ['field_key', 'claimed_value'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['rationale', 'outcome', 'references'],
+    additionalProperties: false,
+  },
+}
+
 const INSTRUCTIONS_V1 = `
 You are auditing a matter's design sheet against one firm check at a time.
 
@@ -274,10 +339,24 @@ export const FIELD_AUDIT_RENDERS: Record<number, FieldAuditRender> = {
     sheet: sheetV1,
     parse: parseV1,
   },
+  // Version 2 differs from version 1 in exactly one field, and every other
+  // piece is the same function or constant object rather than a copy of it —
+  // which is the reuse the suffix convention above describes, and what keeps a
+  // later edit to `sheetV1` from silently rewriting what version 2 renders
+  // too. If that ever needs to diverge, it gets `sheetV2`; it is never edited
+  // in place.
+  2: {
+    instructions: INSTRUCTIONS_V1,
+    tool: TOOL_V2,
+    maxTokens: 1024,
+    checkMessage: checkMessageV1,
+    sheet: sheetV1,
+    parse: parseV1,
+  },
 }
 
 /** What `openRun` stamps on a new field-audit run. */
-export const CURRENT_FIELD_AUDIT_RENDER_VERSION = 1
+export const CURRENT_FIELD_AUDIT_RENDER_VERSION = 2
 
 /**
  * The tool name of the *current* render.
