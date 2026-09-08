@@ -13,7 +13,9 @@ import {
   REVIEW_RENDERS,
   REVIEW_TOOL_NAME,
   reviewRender,
+  type ReviewRender,
 } from '@aubrey-law/citations/review/render'
+import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ReviewRule } from '@aubrey-law/citations/review/types'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 
@@ -362,5 +364,182 @@ describe('the review render registry', () => {
    */
   it('exports the current render tool name', () => {
     expect(REVIEW_TOOL_NAME).toBe(REVIEW_RENDERS[CURRENT_REVIEW_RENDER_VERSION].tool.name)
+  })
+})
+
+/**
+ * A second rule, distinct from `REVIEW_RULE` above: the routing cases below
+ * assert on the wording of a rendered message ("V2 rule 1"), so the rule
+ * number has to be the one that wording names. `preferredLanguage` is
+ * `.optional()` on `reviewRuleSchema`, so it is omitted here, not null.
+ */
+const RUN_RULE: ReviewRule = {
+  number: '1',
+  statement: 'Income distribution is stated.',
+  risk: 'high',
+}
+const PLAYBOOK = { slug: 'p', title: 'P', version: 1, rules: [RUN_RULE] }
+
+/**
+ * A second review version that differs in every way the registry is supposed
+ * to carry: a renamed tool, renamed quote fields, and different wrapper text.
+ * Without it, "the engine uses the run's version" is unfalsifiable — one entry
+ * means the pinned entry and the current entry are the same object.
+ *
+ * Injected by assigning into the exported record and deleting the key
+ * afterwards, so no production signature is bent to accept a test double.
+ */
+const REVIEW_V2: ReviewRender = {
+  instructions: 'Review version two.',
+  tool: {
+    name: 'report_finding_v2',
+    description: 'Version two.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        outcome: { type: 'string', enum: ['compliant', 'deviation', 'absent', 'not_applicable'] },
+        q: { type: ['string', 'null'] },
+        b: { type: ['integer', 'null'] },
+      },
+      required: ['outcome', 'q', 'b'],
+      additionalProperties: false,
+    },
+  },
+  maxTokens: 55,
+  ruleMessage: rule => `V2 rule ${rule.number}`,
+  document: () => 'V2 document',
+  parse: input => ({
+    outcome: input.outcome,
+    rationale: null,
+    quote: typeof input.q === 'string' ? input.q : null,
+    blockIndex: typeof input.b === 'number' ? input.b : null,
+    proposedLanguage: null,
+  }),
+}
+
+/**
+ * Captures the request the engine built, and answers with `input` under
+ * whatever tool name that request actually asked for.
+ *
+ * Echoing the request's own tool name is deliberate: a mock hard-coded to
+ * `report_finding_v2` would fail a broken engine merely because
+ * `readToolInput` matched nothing, which proves the name was sent and nothing
+ * about the rest of the entry. Answering whatever was asked forces the
+ * assertions below to carry the weight.
+ */
+function reviewCaptor(input: Record<string, unknown>) {
+  const requests: Array<Record<string, unknown>> = []
+  const callModel = async (request: unknown) => {
+    const typed = request as Record<string, unknown>
+    requests.push(typed)
+    const toolName = (typed.tools as Array<{ name: string }>)[0].name
+    return { content: [{ type: 'tool_use', id: 'tu_1', name: toolName, input }] } as never
+  }
+  return { requests, callModel }
+}
+
+describe('the review engine renders the version the run pinned', () => {
+  beforeAll(() => {
+    REVIEW_RENDERS[2] = REVIEW_V2
+  })
+  afterAll(() => {
+    delete REVIEW_RENDERS[2]
+  })
+
+  it('sends version 1 wholesale for a run pinning 1', async () => {
+    const { requests, callModel } = reviewCaptor({
+      outcome: 'compliant',
+      rationale: 'Fine.',
+      quote: null,
+      block_index: null,
+      proposed_language: null,
+    })
+    await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 1, callModel })
+    const request = requests[0]
+    expect(request.max_tokens).toBe(1024)
+    expect((request.tools as Array<{ name: string }>)[0].name).toBe('report_finding')
+    expect((request.system as Array<{ text: string }>)[0].text).toBe(REVIEW_RENDERS[1].instructions)
+    expect((request.tool_choice as { name: string }).name).toBe('report_finding')
+  })
+
+  it('sends version 2 wholesale for a run pinning 2', async () => {
+    const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
+    await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    const request = requests[0]
+    expect(request.max_tokens).toBe(55)
+    expect((request.tools as Array<{ name: string }>)[0].name).toBe('report_finding_v2')
+    expect((request.system as Array<{ text: string }>)[0].text).toBe('Review version two.')
+    expect((request.system as Array<{ text: string }>)[1].text).toBe('V2 document')
+    expect((request.messages as Array<{ content: string }>)[0].content).toBe('V2 rule 1')
+  })
+
+  /**
+   * The parse routes too, and this is the assertion a single-version registry
+   * could never make: the same answer shape anchors a citation under the
+   * version that declares its field names and supports nothing under the
+   * version that does not.
+   */
+  it('parses with the pinned version, not the current one', async () => {
+    const v2Answer = { outcome: 'deviation', q: LAYER_TEXT, b: 0 }
+
+    const underTwo = await runReviewPlaybook(LAYER, PLAYBOOK, {
+      renderVersion: 2,
+      callModel: reviewCaptor(v2Answer).callModel,
+    })
+    expect(underTwo.findings[0].citation?.quote).toBe(LAYER_TEXT)
+
+    // Version 1's parser reads `quote`/`block_index`, which this answer does
+    // not have, so it finds nothing to verify and the finding carries no
+    // citation at all.
+    const underOne = await runReviewPlaybook(LAYER, PLAYBOOK, {
+      renderVersion: 1,
+      callModel: reviewCaptor(v2Answer).callModel,
+    })
+    expect(underOne.findings[0].citation).toBeNull()
+    expect(underOne.findings[0].attemptedQuote).toBeNull()
+  })
+
+  /** The citation gate is current code, whatever version parsed the answer. */
+  it('verifies a v2 quote with the current verifier', async () => {
+    const { requests, callModel } = reviewCaptor({ outcome: 'compliant', q: LAYER_TEXT, b: 0 })
+    const result = await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    // Version 2 is what was actually asked, not merely what parsed the reply
+    // — without this line the case would pass on a v1 render that happened to
+    // produce the same conclusion.
+    expect(requests[0].max_tokens).toBe(55)
+    expect(result.findings[0].citation?.verification).toBe('verified')
+  })
+
+  /**
+   * And the gate still refuses an unverifiable v2 quote: a quote absent from
+   * the document is kept as an attempt and carries no citation, whatever
+   * version's parser read it out.
+   */
+  it('applies the current gate whatever version the run pinned', async () => {
+    const { requests, callModel } = reviewCaptor({
+      outcome: 'deviation',
+      q: 'The trustee shall distribute income quarterly.',
+      b: 0,
+    })
+    const result = await runReviewPlaybook(LAYER, PLAYBOOK, { renderVersion: 2, callModel })
+    expect(requests[0].max_tokens).toBe(55)
+    expect(result.findings[0].citation).toBeNull()
+    expect(result.findings[0].citationRefusal).not.toBeNull()
+    expect(result.findings[0].attemptedQuote).toBe('The trustee shall distribute income quarterly.')
+  })
+
+  /** And it fails before spending a model call, not partway through a batch. */
+  it('throws before calling the model when the version is unknown', async () => {
+    let called = false
+    await expect(
+      runReviewPlaybook(LAYER, PLAYBOOK, {
+        renderVersion: 42,
+        callModel: async () => {
+          called = true
+          return { content: [] } as never
+        },
+      }),
+    ).rejects.toThrow(/version 42/)
+    expect(called).toBe(false)
   })
 })

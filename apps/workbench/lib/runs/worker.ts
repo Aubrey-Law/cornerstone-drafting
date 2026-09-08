@@ -129,7 +129,10 @@ export async function workRun(
           callModel: deps.callModel,
           model: deps.model ?? run.model ?? undefined,
           userId: deps.userId ?? null,
-          instructionsVersion: run.instructions_version,
+          // The run's own pinned render, not the deployed constant. The
+          // column is still named `instructions_version`; the render version
+          // is what it holds, and a later task renames the column.
+          renderVersion: run.instructions_version,
           onUnitSettled,
         },
       )
