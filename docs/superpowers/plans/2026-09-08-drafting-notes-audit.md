@@ -228,20 +228,58 @@ Then apply via the pooler and **verify from the catalog**: the CHECK from `pg_co
 the trigger from `pg_trigger`, and both new columns from `information_schema.columns`.
 Report what you actually saw.
 
-- [ ] **Step 5: Prove the trigger fires, and does not over-fire**
+- [ ] **Step 5: Prove the trigger fires, and does not over-fire — inside a rolled-back transaction**
 
-Against the real database, because it is a database object. Use a **hired matter that has a
-design sheet**, and record its current `drafting_notes` first so you can restore it exactly —
-**this is a client's real note, so do not print its content**; print its length and a hash.
+Against the real database, because it is a database object. **But never commit a change to a
+client's notes.** Do the whole proof inside a transaction and `rollback`: the trigger fires
+within it, the rows are observable, and the rollback undoes both the note edit and the
+trigger rows. Nothing is restored by hand because nothing is kept, which is strictly safer
+than editing and putting back — a restore can fail, a rollback cannot leave half of it.
 
-1. With no prompt watching the field yet, update the notes → **no** trigger rows.
-2. Set `fires_on_field_change` on any existing prompt temporarily, update the notes → exactly
-   one row, `on_field = 'design_sheet.drafting_notes'`, `to_stage` null.
-3. Re-save the sheet without changing the notes → no new row.
-4. Restore the notes to their exact original value, remove the temporary
-   `fires_on_field_change`, and delete the trigger rows you created.
+`now()` is the transaction timestamp, so everything in one transaction shares it. That is
+fine for observing, and it is also what makes case 3 below meaningful.
 
-Report each result, and confirm the notes are byte-identical to what you recorded.
+Pick a hired matter with a design sheet. **Print no note content** — lengths and an md5 only.
+
+```sql
+begin;
+
+-- 1. No prompt watches the field yet: a note change must fire nothing.
+update public.design_sheets
+   set drafting_notes = coalesce(drafting_notes, '') || ' x'
+ where matter_id = '<matter>';
+select count(*) as should_be_zero from public.prompt_stage_triggers where on_field is not null;
+
+-- 2. Have one prompt watch it, then change the notes again.
+update public.prompts
+   set fires_on_field_change = array['design_sheet.drafting_notes']
+ where slug = 'ma-design-sheet-audit';
+update public.design_sheets
+   set drafting_notes = coalesce(drafting_notes, '') || ' y'
+ where matter_id = '<matter>';
+select on_field, to_stage, count(*)
+  from public.prompt_stage_triggers where on_field is not null group by 1, 2;
+
+-- 3. Re-save without touching the notes: no new row. Same transaction, so the
+--    dedup timestamp is identical anyway -- which is exactly why this case
+--    needs the WHEN clause to be doing the work rather than the constraint.
+--    Check the row count is unchanged, and note that this test cannot
+--    distinguish "WHEN suppressed it" from "unique constraint suppressed it".
+--    Say so, and prove the WHEN clause separately by updating an unrelated
+--    column and confirming the trigger does not fire at all.
+update public.design_sheets set state = state where matter_id = '<matter>';
+select count(*) as unchanged from public.prompt_stage_triggers where on_field is not null;
+
+rollback;
+```
+
+Then confirm the rollback took: zero `on_field` trigger rows, `fires_on_field_change` back
+to `'{}'` on every prompt, and the sheet's `drafting_notes` md5 equal to what you recorded
+before starting.
+
+Report each case's result, and be explicit that case 3 inside one transaction cannot separate
+the `WHEN` clause from the unique constraint — the unrelated-column update is what isolates
+it.
 
 - [ ] **Step 6: Commit**
 
