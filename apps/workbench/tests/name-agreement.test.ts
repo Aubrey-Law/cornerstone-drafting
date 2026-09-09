@@ -337,6 +337,22 @@ describe('planIdentityEmit', () => {
     expect(planIdentityEmit('m1', [other], []).supersede).toEqual([])
   })
 
+  /**
+   * The `#` terminator, which the code comments claim stops `m1` claiming
+   * `m10`'s task. Task 3's implementer noticed the claim had no test, and on
+   * this branch two comments have already turned out to assert something
+   * false — a substring rule justified by `Anderson`, which does not contain
+   * `ann`, and a hyphen rule justified by a separator no matter uses. So the
+   * claim is now checked rather than believed.
+   */
+  it('never lets one matter claim a longer matter id’s task', () => {
+    const tenth = existing({ id: 'm10-task', batchTag: 'identity:m10#name' })
+    expect(planIdentityEmit('m1', [tenth], []).supersede).toEqual([])
+    // And the reverse: m10 does not reach m1's either.
+    const first = existing({ id: 'm1-task', batchTag: 'identity:m1#name' })
+    expect(planIdentityEmit('m10', [first], []).supersede).toEqual([])
+  })
+
   /** A tag this module did not write is nobody's to retire. */
   it('never touches a tag it cannot recognise', () => {
     const foreign = existing({ id: 'foreign', batchTag: 'something-else' })
