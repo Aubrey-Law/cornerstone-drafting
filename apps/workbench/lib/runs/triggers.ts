@@ -37,6 +37,34 @@ export function settlementFor(result: RunMatterAuditResult): Settlement {
   return { status: 'skipped', runId: null, lastError: result.message }
 }
 
+/**
+ * What a *thrown* error becomes.
+ *
+ * `runMatterAudit` returns `ok: false` for everything it anticipates, and
+ * throws for everything else — a query that fails, a column that rejects what
+ * it was handed. Nothing caught those, so the exception left the tick through
+ * `materialiseStageTrigger` and the trigger stayed `claimed`: no run, no
+ * `last_error`, no report, and `claim_prompt_stage_trigger` only ever selects
+ * `pending`, so nothing would ever pick it up again.
+ *
+ * Measured 2026-09-09. Six triggers were queued across six matters; the tick
+ * claimed one a minute exactly on schedule and settled four. Two threw and
+ * were stranded, and the only reason anybody noticed is that six triggers
+ * produced four results. Both were the same cause — a design sheet whose slot
+ * `contact_id` is the sentinel `__design_sheet_client__` rather than a uuid,
+ * which Postgres rejects when it reaches a uuid column — and 7 of 44 sheets
+ * carry such a value.
+ *
+ * `skipped`, deliberately, and for the reason the type's own comment already
+ * gives: this is not a run that failed, it is a run that never started. The
+ * difference from a missing required field is only that nobody anticipated it,
+ * which is an argument for recording it, not for hiding it.
+ */
+export function settlementForThrown(error: unknown): Settlement {
+  const message = error instanceof Error ? error.message : String(error)
+  return { status: 'skipped', runId: null, lastError: message }
+}
+
 export interface MaterialiseResult {
   claimed: boolean
   runId: string | null
@@ -82,20 +110,29 @@ export async function materialiseStageTrigger(
     throw new Error(`Stage trigger ${triggerId} names prompt ${promptId}, which no longer exists.`)
   }
 
-  const result = await runMatterAudit(client, {
-    slug: promptRow.slug,
-    matterId,
-    // No actor: the stage engine fired this, not an attorney — see
-    // `RunMatterAuditOptions.userId`'s own comment in lib/fieldAudit/run.ts.
-    userId: null,
-    // The tick materialises and then works the queue in the same
-    // invocation — see the tick route — so it is about to claim whatever run
-    // this becomes without needing to be asked. Poking here would only ask a
-    // second tick to start for work this one is already about to do.
-    poke: false,
-  })
-
-  const settlement = settlementFor(result)
+  // A throw here used to escape the tick and leave this trigger `claimed`
+  // forever. Caught rather than propagated so the trigger settles and says
+  // why — see `settlementForThrown`. The error is not swallowed: it lands in
+  // `last_error` on the row, which is where a person looking at why a matter
+  // was never audited will actually find it.
+  let settlement: Settlement
+  try {
+    const result = await runMatterAudit(client, {
+      slug: promptRow.slug,
+      matterId,
+      // No actor: the stage engine fired this, not an attorney — see
+      // `RunMatterAuditOptions.userId`'s own comment in lib/fieldAudit/run.ts.
+      userId: null,
+      // The tick materialises and then works the queue in the same
+      // invocation — see the tick route — so it is about to claim whatever run
+      // this becomes without needing to be asked. Poking here would only ask a
+      // second tick to start for work this one is already about to do.
+      poke: false,
+    })
+    settlement = settlementFor(result)
+  } catch (error) {
+    settlement = settlementForThrown(error)
+  }
 
   const { error: settleError } = await client
     .from('prompt_stage_triggers')

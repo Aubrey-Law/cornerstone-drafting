@@ -29,6 +29,18 @@ function nextId(prefix: string): string {
 
 class FakeTable {
   rows: Row[] = []
+  /**
+   * A message this table answers every read and write with, instead of rows.
+   *
+   * Added because nothing here could simulate a query *failing*, and the code
+   * under test is full of `if (error) throw` branches that therefore had no
+   * test reaching them. The one that mattered: a design sheet whose slot
+   * `contact_id` is the sentinel `__design_sheet_client__` rather than a uuid
+   * makes Postgres reject the contacts read, `loadSourceRows` throw, and — until
+   * 2026-09-09 — a stage trigger stay `claimed` forever. Seven of forty-four
+   * sheets carry such a value, and two matters were silently never audited.
+   */
+  failure: string | null = null
   constructor(public name: string) {}
 }
 
@@ -97,6 +109,10 @@ class FakeQueryBuilder {
     return true
   }
 
+  private failureOf(): { data: null; error: { message: string } } | null {
+    return this.table.failure === null ? null : { data: null, error: { message: this.table.failure } }
+  }
+
   private resolve(): { data: Row[]; error: null } {
     if (!this.pendingOp) {
       let rows = this.table.rows.filter((row) => this.matches(row))
@@ -148,11 +164,15 @@ class FakeQueryBuilder {
   }
 
   async maybeSingle() {
+    const failed = this.failureOf()
+    if (failed) return failed
     const { data } = this.resolve()
     return { data: data[0] ?? null, error: null }
   }
 
   async single() {
+    const failed = this.failureOf()
+    if (failed) return failed
     const { data } = this.resolve()
     if (!data[0]) return { data: null, error: { message: `no matching row in ${this.table.name}` } }
     return { data: data[0], error: null }
@@ -162,6 +182,8 @@ class FakeQueryBuilder {
     onfulfilled?: ((value: { data: Row[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
+    const failed = this.failureOf()
+    if (failed) return Promise.resolve(failed).then(onfulfilled as never, onrejected)
     return Promise.resolve(this.resolve()).then(onfulfilled, onrejected)
   }
 }
@@ -173,6 +195,11 @@ export interface FakeClient {
   from(table: string): FakeQueryBuilder
   tableRows(table: string): Row[]
   rpc(name: string, args?: Record<string, unknown>): Promise<RpcResult>
+  /**
+   * Make one table answer every query with a Postgres-style error, so the
+   * `if (error) throw` branches can be reached. See `FakeTable.failure`.
+   */
+  failTable(table: string, message: string): void
 }
 
 /**
@@ -194,6 +221,11 @@ export function makeFakeClient(seed: Record<string, Row[]> = {}, rpcHandlers: Re
     },
     tableRows(name: string) {
       return tables.get(name)?.rows ?? []
+    },
+    /** Make one table answer every query with a Postgres-style error. */
+    failTable(name: string, message: string) {
+      if (!tables.has(name)) tables.set(name, new FakeTable(name))
+      tables.get(name)!.failure = message
     },
     async rpc(name: string, args?: Record<string, unknown>) {
       const handler = rpcHandlers[name]
