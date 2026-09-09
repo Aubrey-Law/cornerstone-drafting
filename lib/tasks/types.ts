@@ -14,7 +14,7 @@ export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
  * them; this app is the only place they are seen, so a value the database
  * allows and this union omits is a task nobody can see the origin of.
  */
-export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt', 'fiduciary'] as const
+export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt', 'fiduciary', 'identity'] as const
 export const TASK_TYPES = ['single', 'checklist'] as const
 
 /**
@@ -306,6 +306,7 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   sla: 'Plan',
   prompt: 'Prompt',
   fiduciary: 'Fiduciary',
+  identity: 'Identity',
 }
 
 /**
@@ -333,6 +334,13 @@ export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   // the first choice and fails AA in light at 3.95:1, which is why the pair is
   // measured and not assumed.
   fiduciary: 'bg-red-bg text-red',
+  // 8.19:1 light, 8.30:1 dark, measured with lib/theme/contrast.ts. Violet was
+  // added to the theme for this pill because every AA-passing pair already
+  // there reads as a hue another source owns — stage-done is Plan's green,
+  // stage-closed is Manual's grey, amber-strong is Prompt's amber. A name
+  // disagreement is a fact about the file rather than a judgement about the
+  // drafting, and it should not look like either of those.
+  identity: 'bg-violet-bg text-violet',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {

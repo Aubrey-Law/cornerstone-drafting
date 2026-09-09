@@ -312,6 +312,15 @@ const lightExtended: Record<string, string> = {
   '--blue-strong-dark': '#1d4ed8',
   '--blue-strong-bg': '#dbeafe',
   '--blue-strong-border': '#93c5fd',
+  // Added 2026-09-09 for the Identity task pill, which needed a hue no other
+  // source pill uses: every AA-passing pair already in the theme reads as one
+  // that is taken — stage-done is Plan's green, stage-closed is Manual's grey,
+  // amber-strong is Prompt's amber. A chip indistinguishable from another
+  // source's carries no information, which is the whole point of the chip.
+  // 8.19:1 against its own background in light, measured with
+  // lib/theme/contrast.ts rather than picked by eye.
+  '--violet': '#5b21b6',
+  '--violet-bg': '#f5f3ff',
   '--gray-mid': '#71717b',
   '--gray-soft': '#d4d4da',
   '--gray-bg': '#f4f4f6',
@@ -376,6 +385,10 @@ const darkExtended: Record<string, string> = {
   '--blue-strong-dark': 'oklch(0.62 0.12 262)',
   '--blue-strong-bg': 'oklch(0.25 0.05 262)',
   '--blue-strong-border': 'oklch(0.42 0.08 262)',
+  // See the light record. 8.30:1 here, which sits alongside amber's 8.48 and
+  // is measured, not assumed.
+  '--violet': 'oklch(0.78 0.14 295)',
+  '--violet-bg': 'oklch(0.22 0.05 295)',
   '--gray-mid': '#9f9fa7',
   '--gray-soft': '#52525b',
   '--gray-bg': '#18181b',
