@@ -114,7 +114,7 @@ describe('matters-mcp is wired into the repository', () => {
 - [ ] **Step 2: Run it to make sure it fails**
 
 Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: FAIL — four failures, the last being `ENOENT` on `tools/matters-mcp/package.json`.
+Expected: FAIL — three failures, the last being `ENOENT` on `tools/matters-mcp/package.json`.
 
 - [ ] **Step 3: Create the package manifest**
 
