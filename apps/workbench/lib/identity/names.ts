@@ -23,8 +23,19 @@ const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v', 'md', 'esq', 'phd'
  */
 export function personPartOf(matterName: string | null | undefined): string | null {
   if (!matterName) return null
-  const [first] = matterName.replace(/[—–]/g, '-').split('-')
-  const trimmed = first.trim()
+  // An em or en dash, or a hyphen *with spaces around it*. Never a bare
+  // hyphen: it belongs to the name.
+  //
+  // An earlier version split on any hyphen, and a real client is filed as
+  // "Casey Ngo-Miller" — which became "Casey Ngo". That survived only because
+  // the surname-component rule then matched "ngo" inside "ngo-miller", so a
+  // second rule was quietly holding the first one up. Measured 2026-09-09
+  // across all 98 matter names: 39 separate with an em or en dash, 58 have no
+  // separator at all, **none** uses a hyphen as one, and one has a hyphen
+  // inside a person's name. The spaced form is kept because it costs nothing
+  // and a person might type it.
+  const [first] = matterName.split(/\s[—–-]\s|[—–]/)
+  const trimmed = (first ?? '').trim()
   return trimmed.length > 0 ? trimmed : null
 }
 

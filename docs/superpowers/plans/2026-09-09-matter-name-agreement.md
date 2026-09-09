@@ -64,9 +64,16 @@ describe('personPartOf', () => {
     expect(personPartOf('Can Cheng — Estate Planning')).toBe('Can Cheng')
   })
 
-  it('accepts an en dash or a hyphen as the separator', () => {
+  it('accepts an en dash, or a hyphen with spaces around it', () => {
     expect(personPartOf('Karen Wong – Estate Planning')).toBe('Karen Wong')
     expect(personPartOf('Sam Ensslin - Trust Review')).toBe('Sam Ensslin')
+  })
+
+  /** A bare hyphen belongs to the name. A real client is filed as
+   *  "Casey Ngo-Miller", and no matter uses a hyphen as a separator. */
+  it('keeps a hyphen that is inside the name', () => {
+    expect(personPartOf('Casey Ngo-Miller')).toBe('Casey Ngo-Miller')
+    expect(personPartOf('Mary-Jane Ellsworth — Estate Planning')).toBe('Mary-Jane Ellsworth')
   })
 
   /** Most matter names carry no separator at all. */
@@ -190,8 +197,12 @@ const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v', 'md', 'esq', 'phd'
  */
 export function personPartOf(matterName: string | null | undefined): string | null {
   if (!matterName) return null
-  const [first] = matterName.replace(/[—–]/g, '-').split('-')
-  const trimmed = first.trim()
+  // An em or en dash, or a hyphen *with spaces around it*. Never a bare
+  // hyphen: it belongs to the name. Measured 2026-09-09 across all 98 matter
+  // names — 39 use an em or en dash, 58 have no separator, none uses a hyphen
+  // as one, and one is filed as "Casey Ngo-Miller".
+  const [first] = matterName.split(/\s[—–-]\s|[—–]/)
+  const trimmed = (first ?? '').trim()
   return trimmed.length > 0 ? trimmed : null
 }
 
