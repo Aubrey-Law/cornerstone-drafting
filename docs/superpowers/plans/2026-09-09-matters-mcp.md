@@ -95,10 +95,6 @@ describe('matters-mcp is wired into the repository', () => {
     expect(readJson('package.json').workspaces).toContain('tools/matters-mcp')
   })
 
-  it('is linted, since the lint script names its directories', () => {
-    expect(readJson('package.json').scripts.lint).toContain('tools/matters-mcp/src')
-  })
-
   it('has its RPC calls cross-checked against the database', () => {
     const checker = readFileSync(join(root, 'scripts/checkDbRpcs.mjs'), 'utf8')
     const dirs = checker.match(/const SOURCE_DIRS = \[([\s\S]*?)\]/)?.[1] ?? ''
@@ -146,15 +142,20 @@ Create `tools/matters-mcp/package.json`:
 }
 ```
 
-- [ ] **Step 4: Add the workspace and the lint directory**
+- [ ] **Step 4: Add the workspace**
 
 In the root `package.json`, add `"tools/matters-mcp"` to the end of the `workspaces` array.
 
-In the same file's `scripts.lint`, append ` tools/matters-mcp/src` immediately before ` eslint.config.mjs`, so the value reads:
+**Do not touch the lint script here.** ESLint 9 exits 2 on a path that does not
+resolve — not a warning, not a skip — so naming `tools/matters-mcp/src` before
+any source file exists breaks `npm run lint` for the *whole repository*, `app`
+and `lib` included. Measured: `npm run lint` → `exit=2`,
+`No files matching the pattern "tools/matters-mcp/src" were found`. Pointing at
+`tools/matters-mcp` instead does not help either. The lint registration is
+therefore Task 2's, landing in the same commit as the first `.ts` file.
 
-```
-eslint app components hooks lib types packages/citations/src packages/db-types/src packages/drafting-engine/src packages/ui/src tools/matters-mcp/src eslint.config.mjs
-```
+(The `checkDbRpcs.mjs` entry in the next step is safe to add now: that script
+wraps `readdirSync` in try/catch and returns `[]` for a missing directory.)
 
 - [ ] **Step 5: Teach the RPC checker about the new directory**
 
@@ -174,7 +175,7 @@ npm install
 npx vitest run tests/matters-mcp.test.ts
 ```
 
-Expected: PASS, 4 tests. `npm install` creates `node_modules/@aubrey-law/matters-mcp` as a symlink and installs the MCP SDK.
+Expected: PASS, 3 tests. `npm install` creates `node_modules/@aubrey-law/matters-mcp` as a symlink and installs the MCP SDK.
 
 - [ ] **Step 7: Commit**
 
@@ -297,21 +298,50 @@ export function createMattersClient(config: MattersClientConfig): MattersClient 
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 4: Register the directory for linting, now that it has a file in it**
 
-Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: PASS, 8 tests.
+This is Task 1's leftover, deferred to here on purpose. In the root
+`package.json`'s `scripts.lint`, insert ` tools/matters-mcp/src` immediately
+before ` eslint.config.mjs`, so the value reads:
 
-- [ ] **Step 5: Typecheck and commit**
+```
+eslint app components hooks lib types packages/citations/src packages/db-types/src packages/drafting-engine/src packages/ui/src tools/matters-mcp/src eslint.config.mjs
+```
+
+Add its guard to `tests/matters-mcp.test.ts`, inside the existing
+`describe('matters-mcp is wired into the repository', …)` block:
+
+```ts
+  it('is linted, since the lint script names its directories', () => {
+    expect(readJson('package.json').scripts.lint).toContain('tools/matters-mcp/src')
+  })
+```
+
+- [ ] **Step 5: Run the tests, and confirm lint actually passes**
+
+```bash
+npx vitest run tests/matters-mcp.test.ts
+npm run lint; echo "exit=$?"
+```
+
+Expected: PASS, 9 tests; lint `exit=0`. The `exit=` line is the point — ESLint
+prints warnings and still exits 0, so eyeballing the output does not tell you
+whether it passed.
+
+- [ ] **Step 6: Typecheck and commit**
 
 ```bash
 npm run typecheck
-git add tools/matters-mcp/src/client.ts tests/matters-mcp.test.ts
+git add package.json tools/matters-mcp/src/client.ts tests/matters-mcp.test.ts
 git commit -m "A typed client for the matters MCP, refusing a blank key up front
 
 Configuration is a pure function of an environment object so the refusal is
 testable without mutating process.env. A server that starts with a missing
 key and fails on the first tool call reports the problem far from its cause.
+
+Registers the directory for linting too. That belongs here rather than with
+the rest of the wiring: ESLint 9 exits 2 on a path that does not resolve, so
+the entry is only safe once a source file exists.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1398,6 +1428,7 @@ Report what came back.
 | cannot set a field to null | 4 |
 | error text for stale read, unknown matter, disallowed field, CHECK, PGRST202 | 4, 5 |
 | `tools/matters-mcp/src` added to `checkDbRpcs.mjs` SOURCE_DIRS | 1 |
+| `tools/matters-mcp/src` added to the lint script | 2 (not 1 — see Task 1 Step 4) |
 | tool-layer unit tests against a fake client | 3, 5 |
 | RPC behaviour proven in a rolled-back transaction | 6 |
 | out of scope: create, delete, contacts, stage/relationship transitions | not implemented anywhere |
