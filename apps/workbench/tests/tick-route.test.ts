@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/cron/tick/route'
 import type { EmitTasksInput } from '@/lib/fieldAudit/tasks'
 import type { FiduciarySweepResult } from '@/lib/fiduciary/sweep'
+import type { IdentitySweepResult } from '@/lib/identity/sweep'
 import type { FieldAuditFinding } from '@aubrey-law/citations/fieldAudit/types'
 
 /**
@@ -43,6 +44,17 @@ const SWEPT_NOTHING = vi.hoisted(() => ({
 }))
 
 /**
+ * The same for the name check, which has no `skipped` — every matter it loads
+ * is one it can compare, so there is no third outcome to count.
+ */
+const NAMES_AGREED = vi.hoisted(() => ({
+  mattersConsidered: 0,
+  created: 0,
+  kept: 0,
+  superseded: 0,
+}))
+
+/**
  * What the stubs report, so a test can choose whether a run was claimed, what
  * context it has, and whether `workRun` finished it. The defaults are the
  * door suite's: nothing queued, nothing worked.
@@ -61,12 +73,21 @@ const state = vi.hoisted(() => ({
    * below drives the route's own catch.
    */
   sweep: SWEPT_NOTHING as FiduciarySweepResult | Error,
+  /** The same, for the name check. */
+  identitySweep: NAMES_AGREED as IdentitySweepResult | Error,
 }))
 
 const sweepFiduciaryTasks = vi.hoisted(() =>
   vi.fn(async (_client: unknown): Promise<FiduciarySweepResult> => {
     if (state.sweep instanceof Error) throw state.sweep
     return state.sweep
+  }),
+)
+
+const sweepNameAgreement = vi.hoisted(() =>
+  vi.fn(async (_client: unknown): Promise<IdentitySweepResult> => {
+    if (state.identitySweep instanceof Error) throw state.identitySweep
+    return state.identitySweep
   }),
 )
 
@@ -124,6 +145,8 @@ vi.mock('@/lib/fieldAudit/tasks', () => ({ emitTasks }))
 
 vi.mock('@/lib/fiduciary/sweep', () => ({ sweepFiduciaryTasks }))
 
+vi.mock('@/lib/identity/sweep', () => ({ sweepNameAgreement }))
+
 vi.mock('@/lib/anthropic', () => ({
   // The route catches this by identity to answer 503, so it has to be a real
   // class even though nothing here throws it.
@@ -173,6 +196,7 @@ describe('the tick route’s door', () => {
       reaped: 0,
       materialised: { claimed: false, runId: null, status: null },
       fiduciary: SWEPT_NOTHING,
+      identity: NAMES_AGREED,
       claimedRunId: null,
       worked: 0,
       done: null,
@@ -295,6 +319,7 @@ describe('the tick’s field-audit branch', () => {
       reaped: 0,
       materialised: { claimed: false, runId: null, status: null },
       fiduciary: SWEPT_NOTHING,
+      identity: NAMES_AGREED,
       claimedRunId: 'run-1',
       worked: 1,
       done: true,
@@ -465,5 +490,80 @@ describe('the tick’s fiduciary sweep', () => {
     // The tick went on to do its own work rather than returning at the throw.
     expect(callOrder).toEqual(['materialiseStageTrigger', 'claim_workflow_run'])
     expect(body.claimedRunId).toBeNull()
+  })
+})
+
+/**
+ * The name check the tick carries, beside the fiduciary sweep and held to the
+ * same two things.
+ *
+ * The throw case matters more here than it does there. This sweep *withdraws*
+ * tasks when it finds a matter's names now agree, so a query failure absorbed
+ * into a zeroed result would not merely under-report — it would report that
+ * every flagged name had been resolved. `sweepNameAgreement` throws instead,
+ * and this is the assertion that the route carries the throw in the payload
+ * rather than dropping the tick on it.
+ */
+describe('the tick’s name check', () => {
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'right'
+    callOrder.length = 0
+    sweepNameAgreement.mockClear()
+  })
+
+  afterEach(() => {
+    state.identitySweep = NAMES_AGREED
+    if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = ORIGINAL_SECRET
+  })
+
+  const tick = () =>
+    GET(new Request('http://x/api/cron/tick', { headers: { authorization: 'Bearer right' } }))
+
+  it('reports what the check did', async () => {
+    state.identitySweep = { mattersConsidered: 39, created: 3, kept: 0, superseded: 1 }
+
+    const res = await tick()
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.identity).toEqual({
+      mattersConsidered: 39,
+      created: 3,
+      kept: 0,
+      superseded: 1,
+    })
+    expect(sweepNameAgreement).toHaveBeenCalledTimes(1)
+  })
+
+  it('checks before claiming, so the commonest tick still checks', async () => {
+    await tick()
+
+    expect(sweepNameAgreement).toHaveBeenCalledTimes(1)
+  })
+
+  it('works the queue anyway when the check throws, and says what failed', async () => {
+    state.identitySweep = new Error('Could not load matters: connection reset by peer')
+
+    const res = await tick()
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.identity).toEqual({
+      error: 'Could not load matters: connection reset by peer',
+    })
+    // Reported, not swallowed — and emphatically not reported as a clean pass,
+    // which is what a zeroed result would have looked like.
+    expect(body.identity.mattersConsidered).toBeUndefined()
+    expect(callOrder).toEqual(['materialiseStageTrigger', 'claim_workflow_run'])
+    expect(body.claimedRunId).toBeNull()
+  })
+
+  it('does not take the fiduciary sweep down with it', async () => {
+    state.identitySweep = new Error('the name check failed')
+
+    const body = await (await tick()).json()
+
+    expect(body.fiduciary).toEqual(SWEPT_NOTHING)
   })
 })
