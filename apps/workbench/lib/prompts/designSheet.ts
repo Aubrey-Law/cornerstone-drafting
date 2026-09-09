@@ -90,17 +90,56 @@ interface RawSlot {
   contact_id?: unknown
 }
 
-/** Every `contact_id` any slot column on this sheet points at, deduplicated. */
+/**
+ * A slot's `contact_id` is not always a contact.
+ *
+ * Two sentinels stand in for people the sheet already names itself rather than
+ * through the contacts table: the client, and their spouse. They are stored in
+ * the same field as a foreign key, so anything reading that field has to know
+ * the difference.
+ *
+ * Measured 2026-09-09: 7 of 44 design sheets carry one, `__design_sheet_spouse__`
+ * in 16 slots across 5 matters and `__design_sheet_client__` in 5 slots across
+ * 5. Five of those matters sit at stages the audit fires on.
+ */
+const SENTINEL_NAME_COLUMN: Record<string, 'client_name' | 'spouse_name'> = {
+  __design_sheet_client__: 'client_name',
+  __design_sheet_spouse__: 'spouse_name',
+}
+
+/**
+ * `contacts.id` is a uuid column, so only a uuid may be asked about.
+ *
+ * Until 2026-09-09 this returned every `contact_id` verbatim, sentinels
+ * included, and `.in('id', ...)` handed them to Postgres — which rejects
+ * `__design_sheet_client__` outright. `loadSourceRows` threw, the exception
+ * left the tick through `materialiseStageTrigger`, and the stage trigger stayed
+ * `claimed` with no run and no recorded error. Two matters were silently never
+ * audited; five could not have been.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function slotContactIds(sheet: Record<string, unknown>): string[] {
   const ids = new Set<string>()
   for (const column of SLOT_COLUMNS) {
     const raw = sheet[column]
     if (!Array.isArray(raw)) continue
     for (const entry of raw as RawSlot[]) {
-      if (entry?.contact_id != null) ids.add(String(entry.contact_id))
+      if (entry?.contact_id == null) continue
+      const id = String(entry.contact_id)
+      // A sentinel is resolved from the sheet's own columns (see
+      // `resolveSlots`); anything else that is not a uuid is a reference this
+      // table cannot answer, and asking would fail the whole query.
+      if (UUID.test(id)) ids.add(id)
     }
   }
   return [...ids]
+}
+
+/** A sheet column holding a person's name, when it holds one. */
+function sheetName(sheet: Record<string, unknown>, column: 'client_name' | 'spouse_name'): string | null {
+  const value = sheet[column]
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
 /**
@@ -125,10 +164,20 @@ function resolveSlots(
     if (!Array.isArray(raw)) continue
     resolved[column] = (raw as RawSlot[]).map((entry) => {
       const contactId = entry?.contact_id != null ? String(entry.contact_id) : null
+      const sentinel = contactId ? SENTINEL_NAME_COLUMN[contactId] : undefined
       return {
         order: entry?.order ?? null,
         is_co: entry?.is_co ?? null,
-        name: contactId ? (contactNameById.get(contactId) ?? null) : null,
+        // A sentinel names the client or the spouse, and the sheet holds both
+        // already. Leaving it `null` instead would be worse than the crash it
+        // replaced: check 2 asks whether a person named in the free text
+        // appears in the structured decisions, so a spouse serving as trustee
+        // would read as an unnamed slot and be reported missing from the plan.
+        name: sentinel
+          ? sheetName(sheet, sentinel)
+          : contactId
+            ? (contactNameById.get(contactId) ?? null)
+            : null,
       }
     })
   }

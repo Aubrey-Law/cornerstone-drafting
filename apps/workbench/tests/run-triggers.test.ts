@@ -196,21 +196,25 @@ describe('materialiseStageTrigger', () => {
     const client = seededClient(
       { claim_prompt_stage_trigger: () => ({ data: claimedTriggerRow(), error: null }) },
       {
-        // A sheet carrying the sentinel, which is what makes `loadSourceRows`
-        // read `contacts` at all — with no slot populated it never queries and
-        // never throws, so the fixture has to be the real shape.
+        // A slot has to be populated for `loadSourceRows` to read `contacts` at
+        // all — with none, it never queries and never throws, so the fixture
+        // has to be the real shape. A real uuid, because the sentinel that
+        // caused the original incident no longer reaches the query: see
+        // `tests/design-sheet-slots.test.ts`. What is being tested here is the
+        // general case — any failing query inside the audit — not that one bug.
         design_sheets: [
           {
             matter_id: 'm1',
             version: 1,
             concerns: 'Some concern text',
-            trustee_slots: [{ order: 1, is_co: false, contact_id: '__design_sheet_client__' }],
+            trustee_slots: [
+              { order: 1, is_co: false, contact_id: '11111111-1111-4111-8111-111111111111' },
+            ],
           },
         ],
       },
     )
-    // Postgres rejects that sentinel when it reaches a uuid column.
-    client.failTable('contacts', 'invalid input syntax for type uuid: "__design_sheet_client__"')
+    client.failTable('contacts', 'connection reset by peer')
 
     const result = await materialiseStageTrigger(client as unknown as SupabaseClient<WorkbenchDatabase>, 'worker-1')
 
@@ -221,7 +225,7 @@ describe('materialiseStageTrigger', () => {
 
     const [trigger] = client.tableRows('prompt_stage_triggers')
     expect(trigger.status).toBe('skipped')
-    expect(trigger.last_error).toMatch(/invalid input syntax for type uuid/)
+    expect(trigger.last_error).toMatch(/connection reset by peer/)
     // Not left claimed, which is the whole point.
     expect(trigger.status).not.toBe('claimed')
   })
