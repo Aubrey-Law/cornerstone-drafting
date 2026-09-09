@@ -50,7 +50,7 @@ The answer is a string comparison. A prompt would buy a model call, per-run vari
 - Create: `apps/workbench/lib/identity/names.ts`
 - Create: `apps/workbench/tests/name-agreement.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `apps/workbench/tests/name-agreement.test.ts`. **Every case below is a real matter measured on 2026-09-09** — the four refinements each exist because the simpler rule flagged a real person wrongly.
 
@@ -159,7 +159,7 @@ describe('namesAgree', () => {
 })
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**
+- [x] **Step 2: Run it to make sure it fails**
 
 ```bash
 npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
@@ -167,7 +167,7 @@ npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
 
 Expected: FAIL — `Cannot find package '@/lib/identity/names'` (vitest 4 words it "package", not "module").
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `apps/workbench/lib/identity/names.ts`:
 
@@ -248,7 +248,7 @@ export function namesAgree(a: string | null | undefined, b: string | null | unde
 }
 ```
 
-- [ ] **Step 4: Run the tests, typecheck, commit**
+- [x] **Step 4: Run the tests, typecheck, commit**
 
 ```bash
 npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
@@ -277,7 +277,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `apps/workbench/lib/identity/matrix.ts`
 - Modify: `apps/workbench/tests/name-agreement.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `apps/workbench/tests/name-agreement.test.ts`:
 
@@ -331,11 +331,11 @@ describe('nameIssueFor', () => {
 })
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Expected: FAIL — `Cannot find package '@/lib/identity/matrix'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `apps/workbench/lib/identity/matrix.ts`:
 
@@ -409,7 +409,7 @@ export function nameIssueFor(
 }
 ```
 
-- [ ] **Step 4: Run, typecheck, commit**
+- [x] **Step 4: Run, typecheck, commit**
 
 ```bash
 npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
@@ -439,7 +439,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `apps/workbench/lib/identity/tasks.ts`
 - Modify: `apps/workbench/tests/name-agreement.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append:
 
@@ -549,11 +549,11 @@ describe('planIdentityEmit', () => {
 })
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Expected: FAIL — `Cannot find package '@/lib/identity/tasks'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `apps/workbench/lib/identity/tasks.ts`:
 
@@ -671,7 +671,7 @@ export function planIdentityEmit(
 }
 ```
 
-- [ ] **Step 4: Run, typecheck, commit**
+- [x] **Step 4: Run, typecheck, commit**
 
 ```bash
 npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
@@ -703,7 +703,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `apps/workbench/lib/identity/sweep.ts`
 - Modify: `apps/workbench/tests/name-agreement.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append. The fake client is the shared helper the fiduciary and trigger tests use.
 
@@ -776,11 +776,11 @@ describe('sweepNameAgreement', () => {
 })
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Expected: FAIL — `Cannot find package '@/lib/identity/sweep'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `apps/workbench/lib/identity/sweep.ts`. `MATTER_SELECT` and `SHEET_SELECT` are same-file string constants so `tests/query-columns.test.ts` and `scripts/checkDbColumns.mjs` can see them — the same reason `lib/prompts/designSheet.ts` does it.
 
@@ -935,11 +935,11 @@ export async function sweepNameAgreement(
 }
 ```
 
-- [ ] **Step 4: Prove the failure path bites**
+- [x] **Step 4: Prove the failure path bites**
 
 Remove the `if (sheetError) throw` line, run the tests, and confirm `throws rather than reporting an all-clear when a query fails` goes red. Restore it.
 
-- [ ] **Step 5: Run, typecheck, commit**
+- [x] **Step 5: Run, typecheck, commit**
 
 ```bash
 npm run test --workspace apps/workbench -- tests/name-agreement.test.ts
@@ -968,7 +968,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `supabase/migrations/20261117000000_identity_task_source.sql`
 - Modify: `lib/tasks/types.ts` (root app)
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 ```sql
 -- A fourth automatic task source: the name check.
@@ -1023,7 +1023,7 @@ comment on column public.tasks.closeout_reason is
 notify pgrst, 'reload schema';
 ```
 
-- [ ] **Step 2: Teach the display app the source — this is not optional**
+- [x] **Step 2: Teach the display app the source — this is not optional**
 
 `lib/tasks/types.ts` in the **root** app. It is the only thing that renders tasks, and a source it does not know renders as an **empty, unstyled chip**. That shipped once: `'prompt'` was a legal source for weeks and every audit task rendered blank.
 
@@ -1039,7 +1039,7 @@ Add to the label map beside `fiduciary: 'Fiduciary'`:
 
 And to the pill map beside `fiduciary: 'bg-red-bg text-red'`. Pick a token that is not already used by another source and that meets contrast against its background — the existing entries record their measured ratios, so measure the new one the same way rather than guessing.
 
-- [ ] **Step 3: Apply the migration *(controller-only — not for a subagent)*
+- [x] **Step 3: Apply the migration *(controller-only — not for a subagent)*
 
 The session owner applies this; no subagent gets the connection string, and nothing here may print it. Use `supabase db push --db-url "$DB_URL"` (dry-run first) — **not `psql`**, which applies the SQL and records nothing in `supabase_migrations.schema_migrations`, failing the migration-history check on a migration that genuinely ran. `--db-url` needs the string percent-encoded.
 
@@ -1054,7 +1054,7 @@ select conname, pg_get_constraintdef(oid)
 
 Expected: both definitions contain `'identity'` and `'identity_resolved'` respectively.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/migrations/20261117000000_identity_task_source.sql lib/tasks/types.ts
@@ -1079,7 +1079,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `apps/workbench/app/api/cron/tick/route.ts`
 
-- [ ] **Step 1: Call the sweep beside the fiduciary one**
+- [x] **Step 1: Call the sweep beside the fiduciary one**
 
 Mirror the existing block exactly — including its `try/catch` into a union, so a sweep failure reports itself in the response instead of taking the whole tick down and stranding whatever it was about to claim. That failure mode cost five matters an audit today.
 
@@ -1098,7 +1098,7 @@ import { type IdentitySweepResult, sweepNameAgreement } from '@/lib/identity/swe
 
 Add `identity` to every `NextResponse.json({ … })` in the route that already carries `fiduciary`.
 
-- [ ] **Step 2: Run the whole suite and both typechecks**
+- [x] **Step 2: Run the whole suite and both typechecks**
 
 ```bash
 npm run test --workspace apps/workbench
@@ -1131,13 +1131,19 @@ select left(matter_id::text, 8), priority, title
  order by created_at;
 ```
 
+**Measured 2026-09-09, before the deploy** — the first query, with the `hired`
+filter this sweep applies: **39 considered, 35 agreeing with the client, 1 with
+the spouse, 3 flagged.** `0528d2db`, `90551be8`, `e543cdd7`. The spec's number
+survives its own filter. The second half of this step — reading the tasks a
+real tick created — still needs the deploy.
+
 **Report the count and every title.** If it is far above three, the rule is wrong for this data and the right response is to narrow it and re-measure — not to ship it and let the queue fill. If it is zero, check the `hired` filter before concluding the check does nothing.
 
 - [ ] **Step 4: Prove the sweep is idempotent against the real database**
 
 Note each task's `id` and `created_at`, wait for a second tick, and read them again. They must be **identical** — same ids, `created_at` untouched, nothing archived. That is what the stable tag buys, and it is the property the prompt path lacked for a day while it discarded attorneys' ticks.
 
-- [ ] **Step 5: Commit and push**
+- [x] **Step 5: Commit and push**
 
 ```bash
 git add apps/workbench/app/api/cron/tick/route.ts
