@@ -97,3 +97,97 @@ describe('namesAgree', () => {
     expect(namesAgree('Cher', 'Cher')).toBe(true)
   })
 })
+
+import { nameIssueFor } from '@/lib/identity/matrix'
+
+const sheet = (overrides: Partial<{ clientName: string | null; spouseName: string | null }> = {}) => ({
+  clientName: 'Jie Cheng',
+  spouseName: null,
+  ...overrides,
+})
+
+describe('nameIssueFor', () => {
+  it('is null when the matter name agrees with the client', () => {
+    expect(nameIssueFor({ id: 'm1', name: 'Jie Cheng — Estate Planning' }, sheet())).toBeNull()
+  })
+
+  /** Measured: a couples matter named for the spouse. `Siobhan Creedon` is the
+   *  `spouse_name` on a sheet whose client is `Kevin McGurgan`. */
+  it('is null when the matter name agrees with the spouse', () => {
+    expect(
+      nameIssueFor(
+        { id: 'm1', name: 'Siobhan Creedon — Estate Planning' },
+        sheet({ clientName: 'Kevin McGurgan', spouseName: 'Siobhan Creedon' }),
+      ),
+    ).toBeNull()
+  })
+
+  /** The measured discrepancy: filed as Can Cheng, drafts for Jie Cheng. */
+  it('reports the disagreement, carrying both names', () => {
+    const issue = nameIssueFor({ id: 'm1', name: 'Can Cheng — Estate Planning' }, sheet())
+    expect(issue).toEqual({
+      matterId: 'm1',
+      kind: 'name_disagreement',
+      matterPerson: 'Can Cheng',
+      sheetClientName: 'Jie Cheng',
+      sheetSpouseName: null,
+    })
+  })
+
+  /**
+   * Nothing to compare is not a disagreement. A matter with no usable name, or
+   * a sheet with no client name, says nothing either way — and reporting it
+   * would put a task on every half-filled sheet in the practice.
+   */
+  it('is null when either side has nothing to compare', () => {
+    expect(nameIssueFor({ id: 'm1', name: null }, sheet())).toBeNull()
+    expect(nameIssueFor({ id: 'm1', name: 'Can Cheng' }, sheet({ clientName: null }))).toBeNull()
+    expect(nameIssueFor({ id: 'm1', name: 'Can Cheng' }, sheet({ clientName: '   ' }))).toBeNull()
+  })
+
+  /**
+   * A hyphen inside the person's own name defeats `personPartOf`, which splits
+   * on plain hyphens because a hyphen is one of the matter-name separators.
+   * Checked here rather than assumed: Task 1 flagged the risk as probably
+   * harmless, and it is harmless only while the sheet keeps the whole
+   * hyphenated surname — `Alexandra Purdue-Smithe` truncates to `Alexandra
+   * Purdue`, which still agrees by the surname-component rule.
+   *
+   * In two other shapes it is a false positive. Both are pinned below as the
+   * behaviour that exists, not the behaviour that is wanted, and both belong
+   * to `personPartOf` in names.ts — another task's already-reviewed file — so
+   * this records them for whoever fixes it, and inverts when they do.
+   *
+   *   1. A hyphenated given name: `Mary-Jane Ellsworth` truncates to `Mary`,
+   *      whose first token no longer matches `mary-jane`, so a matter and a
+   *      sheet whose names are character-identical are reported as disagreeing.
+   *   2. A hyphenated surname where the sheet carries only the later
+   *      component: `Alexandra Purdue-Smithe` and `Alexandra Smithe` agree by
+   *      the component rule, but the truncated `Alexandra Purdue` does not.
+   */
+  it('still mis-reports a hyphen inside the person’s own name', () => {
+    // Harmless: the truncation still agrees with the full hyphenated surname.
+    expect(
+      nameIssueFor(
+        { id: 'm1', name: 'Alexandra Purdue-Smithe — Estate Planning' },
+        sheet({ clientName: 'Alexandra Purdue-Smithe' }),
+      ),
+    ).toBeNull()
+
+    // 1. Identical names on both sides, reported as a disagreement.
+    expect(
+      nameIssueFor(
+        { id: 'm1', name: 'Mary-Jane Ellsworth — Estate Planning' },
+        sheet({ clientName: 'Mary-Jane Ellsworth' }),
+      ),
+    ).toMatchObject({ kind: 'name_disagreement', matterPerson: 'Mary' })
+
+    // 2. A surname component the un-truncated comparison would have accepted.
+    expect(
+      nameIssueFor(
+        { id: 'm1', name: 'Alexandra Purdue-Smithe — Estate Planning' },
+        sheet({ clientName: 'Alexandra Smithe' }),
+      ),
+    ).toMatchObject({ kind: 'name_disagreement', matterPerson: 'Alexandra Purdue' })
+  })
+})
