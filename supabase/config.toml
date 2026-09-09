@@ -152,9 +152,9 @@ enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
 site_url = "env(SUPABASE_AUTH_SITE_URL)"
-# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# Include every environment + the /auth/callback path so magic links and signup
-# confirmations land on the right host regardless of where the email is opened.
+# The URL patterns auth providers are permitted to redirect to post authentication.
+# Include every environment so magic links and signup confirmations land on the
+# right host regardless of where the email is opened.
 #
 # A host missing from this list does not fail loudly. Supabase discards the
 # `redirect_to` it was given and sends the browser to `site_url` instead — so
@@ -163,21 +163,36 @@ site_url = "env(SUPABASE_AUTH_SITE_URL)"
 # until 2026-09-09: its Google button worked, and deposited the user in the
 # root app.
 #
+# **Every entry ends in `/**`, and that is load-bearing.** These are glob
+# patterns, not prefixes: an exact entry matches that URL and nothing else,
+# query string included. Both apps append `?redirectTo=<path>` to the callback
+# whenever the visitor was sent to the login page from a gated URL, so an exact
+# `…/auth/callback` entry works when you navigate to `/auth/login` directly and
+# fails the moment you arrive there by being bounced — the same host, signed in
+# the same way, silently landing somewhere else. The workbench was fixed once
+# with an exact entry on 2026-09-09 and was still broken afterwards for exactly
+# this reason.
+#
+# Measured against the live project the same day: with `…-20.vercel.app/auth/callback`
+# listed exactly, `…/auth/callback` was honoured and
+# `…/auth/callback?redirectTo=%2F` was discarded, while the root app — already
+# wildcarded — honoured a query string and every other path on its host.
+#
 # Both apps are served from one Supabase project, so every host of both belongs
 # here. `tests/auth-redirect-allowlist.test.ts` asserts that.
 additional_redirect_urls = [
   # The root app — dev on 3002, production on cornerstone.aubreylegal.com.
-  "http://localhost:3002/auth/callback",
-  "http://127.0.0.1:3002/auth/callback",
-  "https://portal.aubreylegal.com/auth/callback",
-  "https://cornerstone.aubreylegal.com/auth/callback",
-  "https://cornerstone-drafting.vercel.app/auth/callback",
+  "http://localhost:3002/**",
+  "http://127.0.0.1:3002/**",
+  "https://portal.aubreylegal.com/**",
+  "https://cornerstone.aubreylegal.com/**",
+  "https://cornerstone-drafting.vercel.app/**",
   # The workbench — dev on 3003 (`apps/workbench`'s own `next dev -p 3003`),
   # production on the `cornerstone-drafting-2.0` Vercel project, whose default
   # domain drops the dot: cornerstone-drafting-20.vercel.app.
-  "http://localhost:3003/auth/callback",
-  "http://127.0.0.1:3003/auth/callback",
-  "https://cornerstone-drafting-20.vercel.app/auth/callback",
+  "http://localhost:3003/**",
+  "http://127.0.0.1:3003/**",
+  "https://cornerstone-drafting-20.vercel.app/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

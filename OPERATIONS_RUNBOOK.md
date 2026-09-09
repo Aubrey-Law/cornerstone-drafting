@@ -89,6 +89,34 @@ Note the workbench's production domain drops the dot from the Vercel project
 name: the project is `cornerstone-drafting-2.0`, the domain is
 `cornerstone-drafting-20.vercel.app`.
 
+**Use the wildcard form — an exact URL is not a safer version of the same
+entry, it is a broken one.** Redirect URLs are glob patterns. An entry of
+`https://host/auth/callback` matches that URL and nothing else, query string
+included, and both apps append `?redirectTo=<path>` to the callback whenever
+the visitor reached the login page by being bounced off a gated URL. So an
+exact entry works when you type `/auth/login` yourself and fails when you click
+a link into the app — the same host, the same account, silently landing in the
+other app. Write it as:
+
+```
+https://cornerstone-drafting-20.vercel.app/**
+```
+
+**How to check the list without guessing.** `auth.flow_state.referrer` stores
+the redirect Supabase actually *validated*, and stores `site_url` instead when
+it rejects one. Start a sign-in (you can stop at Google's page — the row is
+already written) and read the newest row:
+
+```sql
+select created_at, referrer from auth.flow_state order by created_at desc limit 5;
+```
+
+The full URL means the pattern matched. Bare `site_url` means it did not. This
+is the only external read of the hosted allow-list there is; the dashboard
+cannot be queried, and the `/auth/v1/authorize` response is no use — it echoes
+`redirect_to` back unvalidated, so even `https://evil.example` looks accepted
+there.
+
 ---
 
 ### Scenario B — Draft generation fails for all matters
