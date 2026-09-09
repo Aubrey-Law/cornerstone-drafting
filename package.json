@@ -6,7 +6,8 @@
     "apps/*",
     "packages/*",
     "tools/aubreylaw-docgeneration",
-    "tools/workflows"
+    "tools/workflows",
+    "tools/matters-mcp"
   ],
   "engines": {
     "node": ">=22 <26"

@@ -1,0 +1,19 @@
+{
+  "name": "@aubrey-law/matters-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stdio MCP server for inspecting and correcting cornerstone matter records. Replaces the aubreylaw-matters server, which belongs to a different application with a different schema.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/stdio.ts"
+  },
+  "dependencies": {
+    "@aubrey-law/db-types": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@supabase/supabase-js": "^2.100.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}

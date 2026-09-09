@@ -25,6 +25,10 @@ const SOURCE_DIRS = [
   'components',
   'apps/workbench/app',
   'apps/workbench/lib',
+  // The matters MCP server. Not part of either app, and its one RPC
+  // (`correct_matter`) is the only write path an agent has into matters — so
+  // an unverified call here is the failure this script exists to catch.
+  'tools/matters-mcp/src',
 ]
 const SOURCE_EXTS = new Set(['.ts', '.tsx'])
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'build'])
