@@ -45,8 +45,16 @@ export function normaliseName(name: string | null | undefined): string[] {
 /** Whether one surname is a hyphen-delimited component of the other. */
 function surnamesAgree(a: string, b: string): boolean {
   if (a === b) return true
-  // Only a whole component counts. Substring matching would make "Ann" agree
-  // with "Anderson", which are two different surnames.
+  // Only a whole component counts, never a substring. "Ann" would agree with
+  // "Annette" under a substring rule, and they are different surnames.
+  //
+  // No matter in the practice distinguishes the two rules today — checked
+  // 2026-09-09 across every matter with both names, and none has one surname
+  // as a non-component substring of the other. So unlike every other rule in
+  // this file, this one is prophylactic rather than measured, and its test
+  // says so. An earlier draft of this comment offered "Ann" and "Anderson" as
+  // the example, which is simply wrong: Anderson contains "and", not "ann",
+  // so that pair agrees under neither rule and proved nothing.
   return a.split('-').includes(b) || b.split('-').includes(a)
 }
 

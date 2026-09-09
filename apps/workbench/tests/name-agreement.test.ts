@@ -71,11 +71,23 @@ describe('namesAgree', () => {
   })
 
   /**
-   * A surname component match must not become a substring free-for-all. `Ann`
-   * and `Anderson` share letters and are different surnames; only a
-   * hyphen-delimited component counts.
+   * A surname component match must not become a substring free-for-all.
+   *
+   * **Constructed, not measured** — and deliberately marked as such, because
+   * every other case in this file is named after the real matter that
+   * falsified a simpler rule. Checked 2026-09-09: no matter in the practice
+   * has one surname as a non-component substring of the other, so nothing real
+   * distinguishes the two rules yet. The rule is still right — a substring
+   * match would agree "Ann" with "Annette" — and this is the pair that proves
+   * it, because `'annette'.includes('ann')` is true.
+   *
+   * An earlier draft used `Ann` and `Anderson`, which cannot fail either way:
+   * Anderson contains "and", not "ann". A test that passes under the rule and
+   * its opposite guards nothing.
    */
-  it('does not treat an unrelated surname as a component', () => {
+  it('does not treat a substring surname as a component', () => {
+    expect(namesAgree('Mary Ann', 'Mary Annette')).toBe(false)
+    // And the pair the earlier draft used, which is correct but unrevealing.
     expect(namesAgree('Mary Ann', 'Mary Anderson')).toBe(false)
   })
 

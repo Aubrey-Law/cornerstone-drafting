@@ -128,11 +128,19 @@ describe('namesAgree', () => {
   })
 
   /**
-   * A surname component match must not become a substring free-for-all. `Ann`
-   * and `Anderson` share letters and are different surnames; only a
-   * hyphen-delimited component counts.
+   * A surname component match must not become a substring free-for-all.
+   *
+   * **Constructed, not measured.** Checked 2026-09-09: no matter in the
+   * practice has one surname as a non-component substring of the other, so
+   * nothing real distinguishes the two rules yet. The rule is still right — a
+   * substring match would agree "Ann" with "Annette", because
+   * `'annette'.includes('ann')` is true — and that is the pair that proves it.
+   *
+   * `Ann` vs `Anderson` cannot fail either way: Anderson contains "and", not
+   * "ann". A test that passes under a rule and its opposite guards nothing.
    */
-  it('does not treat an unrelated surname as a component', () => {
+  it('does not treat a substring surname as a component', () => {
+    expect(namesAgree('Mary Ann', 'Mary Annette')).toBe(false)
     expect(namesAgree('Mary Ann', 'Mary Anderson')).toBe(false)
   })
 
@@ -204,8 +212,12 @@ export function normaliseName(name: string | null | undefined): string[] {
 /** Whether one surname is a hyphen-delimited component of the other. */
 function surnamesAgree(a: string, b: string): boolean {
   if (a === b) return true
-  // Only a whole component counts. Substring matching would make "Ann" agree
-  // with "Anderson", which are two different surnames.
+  // Only a whole component counts, never a substring. "Ann" would agree with
+  // "Annette" under a substring rule, and they are different surnames.
+  //
+  // No matter in the practice distinguishes the two rules today — checked
+  // 2026-09-09 — so unlike every other rule in this file, this one is
+  // prophylactic rather than measured, and its test says so.
   return a.split('-').includes(b) || b.split('-').includes(a)
 }
 
@@ -1138,7 +1150,7 @@ git push -u origin claude/name-agreement
 | first+last comparison, middle names ignored | 1 |
 | suffixes stripped (`Frank J. Lombardi Jr.`) | 1 |
 | hyphenated surname component (`Purdue-Smithe`) | 1 |
-| component, not substring (`Ann` ≠ `Anderson`) | 1 |
+| component, not substring (`Ann` ≠ `Annette`, constructed) | 1 |
 | person part of the matter name | 1 |
 | client **or** spouse counts (`Siobhan Creedon`) | 2 |
 | nothing to compare is not a disagreement | 2 |
