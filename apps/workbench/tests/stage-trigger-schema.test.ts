@@ -70,3 +70,69 @@ describe('turning firing on for the design-sheet audit', () => {
     expect(fireSql).not.toContain('ma-trust-firm-qa')
   })
 })
+
+/**
+ * The reclaim, added 2026-09-09 after two triggers were stranded in `claimed`
+ * for ever: no run, no `last_error`, and a claim function that selected only
+ * `pending`, so nothing would ever look at them again. Two matters were simply
+ * never audited and no screen said so.
+ */
+describe('the stale-claim reclaim migration', () => {
+  const sql = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261115000000_reclaim_stale_stage_triggers.sql'),
+    'utf8',
+  )
+
+  it('counts abandonments on the row itself', () => {
+    expect(sql).toMatch(/add column if not exists reclaims integer not null default 0/)
+  })
+
+  it('claims a stale claim as well as a pending one', () => {
+    expect(sql).toMatch(/status = 'pending'/)
+    expect(sql).toMatch(/status = 'claimed'/)
+    expect(sql).toMatch(/claimed_at < statement_timestamp\(\) - v_stale_after/)
+  })
+
+  /**
+   * The cap is the point. The throw that stranded those two was deterministic —
+   * a sentinel `contact_id` Postgres rejects at a uuid column — so an uncapped
+   * reclaim would have retried them once a minute for ever, turning a silent
+   * loss into a silent loop.
+   */
+  it('caps the reclaims rather than retrying for ever', () => {
+    expect(sql).toMatch(/v_max_reclaims constant integer := 3/)
+    expect(sql).toMatch(/reclaims < v_max_reclaims/)
+  })
+
+  /**
+   * And gives up *visibly*. The original defect was a row that said "someone is
+   * working on this" while nobody was; an over-cap row left `claimed` would be
+   * the same defect with extra steps.
+   */
+  it('settles an over-cap row skipped, with a reason, rather than leaving it claimed', () => {
+    expect(sql).toMatch(/set status = 'skipped'/)
+    expect(sql).toMatch(/reclaims >= v_max_reclaims/)
+    expect(sql).toMatch(/last_error = 'Abandoned by '/)
+  })
+
+  /** Only a reclaim increments, so the cap measures abandonment and not
+   *  attempts — a first claim has to leave the counter alone. */
+  it('increments only when it is re-claiming', () => {
+    expect(sql).toMatch(/case when t\.status = 'claimed' then 1 else 0 end/)
+  })
+
+  /** Oldest first, so a reclaim cannot starve a fresh signal. */
+  it('still takes the oldest first, and still skips locked rows', () => {
+    expect(sql).toMatch(/order by created_at/)
+    expect(sql).toMatch(/for update skip locked/)
+  })
+
+  /** The same patience the run reaper uses, rather than a second opinion about
+   *  how long is too long. */
+  it('agrees with the run reaper on what stale means', () => {
+    expect(sql).toMatch(/interval '10 minutes'/)
+    const reaper = fs.readFileSync(path.resolve(__dirname, '../lib/runs/reaper.ts'), 'utf8')
+    expect(reaper).toMatch(/STALE_AFTER_MS = 10 \* 60_000/)
+    expect(reaper).toMatch(/MAX_RECLAIMS = 3/)
+  })
+})

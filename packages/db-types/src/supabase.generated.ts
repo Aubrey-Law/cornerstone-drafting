@@ -7061,6 +7061,7 @@ export type Database = {
           matter_id: string
           on_field: string | null
           prompt_id: string
+          reclaims: number
           run_id: string | null
           settled_at: string | null
           stage_entered_at: string
@@ -7075,6 +7076,7 @@ export type Database = {
           matter_id: string
           on_field?: string | null
           prompt_id: string
+          reclaims?: number
           run_id?: string | null
           settled_at?: string | null
           stage_entered_at: string
@@ -7089,6 +7091,7 @@ export type Database = {
           matter_id?: string
           on_field?: string | null
           prompt_id?: string
+          reclaims?: number
           run_id?: string | null
           settled_at?: string | null
           stage_entered_at?: string
@@ -9793,6 +9796,7 @@ export type Database = {
           matter_id: string
           on_field: string | null
           prompt_id: string
+          reclaims: number
           run_id: string | null
           settled_at: string | null
           stage_entered_at: string
