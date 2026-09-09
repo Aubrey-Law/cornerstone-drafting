@@ -580,3 +580,88 @@ describe('the version-7 seed migration for the design-sheet audit', () => {
     expect(promptBodySchema.safeParse(bodyOf(V7)).success).toBe(true)
   })
 })
+
+/**
+ * Version 8 resolves an ambiguity rather than changing an answer.
+ *
+ * Measured on one `client_review` sheet, 29 runs, input unchanged: check 1
+ * answered `deviation` 28 times and `not_applicable` once. Both answers name
+ * the same problem — the sheet's `concerns` field holds an asset inventory
+ * rather than stated goals, and `goals_notes` is empty — so the check asks
+ * something the statement did not settle: is property the client described a
+ * concern the client stated?
+ *
+ * The dissenting run cited **10** verified references against the others' 5,
+ * so it was the more thorough answer, not a lazy one. A second reading a
+ * careful reader reaches has to be closed by wording.
+ *
+ * The owner's ruling, 2026-09-09: a described asset counts.
+ */
+describe('the version-8 seed migration for the design-sheet audit', () => {
+  const V8 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261114000000_design_sheet_audit_v8.sql'),
+    'utf8',
+  )
+  const V7 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261113000000_design_sheet_audit_v7.sql'),
+    'utf8',
+  )
+  const bodyOf = (sql: string) =>
+    JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'"))
+
+  it('publishes version 8, and repoints rather than doing nothing', () => {
+    expect(V8).toMatch(/version_number\s*\)?\s*\n?.*8,|,\s*\n\s*8,/)
+    expect(V8).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('makes the new version insert idempotent', () => {
+    expect(V8).toMatch(/on conflict \(prompt_id, version_number\) do nothing/)
+  })
+
+  it('changes only check 1’s statement, leaving every other check identical', () => {
+    const a = bodyOf(V7)
+    const b = bodyOf(V8)
+    expect(b.inputs).toEqual(a.inputs)
+    expect(b.outputTarget).toEqual(a.outputTarget)
+    for (const [i, before] of a.checks.entries()) {
+      const after = b.checks[i]
+      if (before.number === '1') {
+        expect(after.statement).not.toEqual(before.statement)
+        expect({ ...after, statement: '' }).toEqual({ ...before, statement: '' })
+      } else {
+        expect(after).toEqual(before)
+      }
+    }
+  })
+
+  /** The reading that lost, named so it cannot be reached again: a goal need
+   *  not be written for an undisposed asset to count. */
+  it('says a described asset counts and an empty goals_notes does not excuse', () => {
+    const check1 = bodyOf(V8).checks.find((c: { number: string }) => c.number === '1')
+    expect(check1.statement).toMatch(/need not be phrased as a goal/)
+    expect(check1.statement).toMatch(/goals_notes is not a reason to pass/)
+  })
+
+  /**
+   * Resolved, not widened. Check 1's other boundary is the one v3 drew: a
+   * person named in the concerns who is missing from the structured decisions
+   * is check 2's finding, not this one. Two blockers for one gap is what that
+   * prevents, and a statement edit is exactly how it would come back.
+   */
+  it('still defers a missing person to check 2', () => {
+    const check1 = bodyOf(V8).checks.find((c: { number: string }) => c.number === '1')
+    expect(check1.statement).toMatch(/check 2/)
+    expect(check1.statement).toMatch(/Report the substance only/)
+    expect(check1.risk).toBe('blocker')
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V8.match(/::jsonb,\s*\n\s*'([0-9a-f]{64})'/)![1]
+    const literal = V8.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+    expect(crypto.createHash('sha256').update(literal).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    expect(promptBodySchema.safeParse(bodyOf(V8)).success).toBe(true)
+  })
+})
