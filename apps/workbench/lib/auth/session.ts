@@ -22,11 +22,17 @@ export type ClaimsReadingClient = {
  * unusable — as opposed to failing to answer at all.
  *
  * Measured against the live project on 2026-09-09: a JWT whose `kid` is absent
- * from the project's JWKS (what a token signed before a key rotation looks
- * like) returns `bad_jwt` with status 403, and a token that is not a JWT at all
- * returns `invalid_jwt` with status 400. Matching on the code rather than on
- * "any 4xx" is deliberate — a 429 or a misconfiguration is also a 4xx, and
- * neither is a reason to sign someone out.
+ * from the project's JWKS — what a token signed before a key rotation looks
+ * like — returns `bad_jwt` with status 403. So does a string that is not a JWT
+ * at all; `bad_jwt` is the only code this project was observed to return.
+ *
+ * `invalid_jwt` is carried as a documented Supabase code that means the same
+ * thing, **not** as something reproduced here. It costs nothing as a superset,
+ * but it is not evidence, and the test that covers it says so.
+ *
+ * Matching on the code rather than on "any 4xx" is deliberate — a 429 or a
+ * misconfiguration is also a 4xx, and neither is a reason to sign someone
+ * out.
  */
 const UNUSABLE_TOKEN_CODES = new Set(['bad_jwt', 'invalid_jwt'])
 

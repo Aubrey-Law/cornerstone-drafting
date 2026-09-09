@@ -89,6 +89,14 @@ describe('resolveSession', () => {
     expect(result).toEqual({ ok: true, userId: null, claimRole: null })
   })
 
+  /**
+   * Unlike every other case here, this one is **constructed, not measured**.
+   * Probing the live project on 2026-09-09 returned `bad_jwt` for a non-JWT
+   * string as well, so `invalid_jwt` was never observed from this project. It
+   * is a documented Supabase code meaning the same thing, carried as a cheap
+   * superset — and this comment is here so nobody later reads the test as
+   * proof that the project emits it.
+   */
   it('treats a structurally invalid token as anonymous', async () => {
     const result = await resolveSession(
       errorReturning({ status: 400, code: 'invalid_jwt', message: 'Invalid JWT structure' }),
