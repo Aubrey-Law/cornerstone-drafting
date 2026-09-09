@@ -359,3 +359,70 @@ describe('planIdentityEmit', () => {
     expect(planIdentityEmit('m1', [foreign], []).supersede).toEqual([])
   })
 })
+
+import { sweepNameAgreement } from '@/lib/identity/sweep'
+import { makeFakeClient } from './helpers/fakeSupabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
+
+describe('sweepNameAgreement', () => {
+  /**
+   * `makeFakeClient` returns the client itself — not `{ client, … }`, which is
+   * the shape of the *local* helper in `tests/field-audit-tasks.test.ts`. It
+   * carries `tableRows` and `failTable` on the same object, and an `insert`
+   * lands in the table's own rows, so `tableRows('tasks')` sees what was
+   * written.
+   */
+  function client(rows: {
+    matters?: Array<Record<string, unknown>>
+    design_sheets?: Array<Record<string, unknown>>
+    tasks?: Array<Record<string, unknown>>
+  }) {
+    return makeFakeClient({
+      matters: rows.matters ?? [],
+      design_sheets: rows.design_sheets ?? [],
+      tasks: rows.tasks ?? [],
+    })
+  }
+
+  it('creates one task for a disagreement and none for agreement', async () => {
+    const fake = client({
+      matters: [
+        { id: 'm1', name: 'Can Cheng — Estate Planning', relationship_status: 'hired' },
+        { id: 'm2', name: 'Jie Cheng — Estate Planning', relationship_status: 'hired' },
+      ],
+      design_sheets: [
+        { matter_id: 'm1', version: 1, client_name: 'Jie Cheng', spouse_name: null },
+        { matter_id: 'm2', version: 1, client_name: 'Jie Cheng', spouse_name: null },
+      ],
+    })
+
+    const result = await sweepNameAgreement(fake as unknown as SupabaseClient<WorkbenchDatabase>)
+
+    expect(result.created).toBe(1)
+    expect(result.mattersConsidered).toBe(2)
+    const inserted = (fake.tableRows('tasks') as Array<Record<string, unknown>>)
+    expect(inserted).toHaveLength(1)
+    expect(inserted[0].matter_id).toBe('m1')
+    expect(inserted[0].priority).toBe('high')
+  })
+
+  /**
+   * The failure that matters. `loadNameCandidates` throws on a query error
+   * rather than returning what it managed to read, because an empty candidate
+   * list from a failed query is indistinguishable from "every name agrees" —
+   * and this sweep withdraws tasks when nothing is desired. Absorbing the
+   * error would retire every identity task in the practice on one bad query.
+   */
+  it('throws rather than reporting an all-clear when a query fails', async () => {
+    const fake = client({
+      matters: [{ id: 'm1', name: 'Can Cheng — Estate Planning', relationship_status: 'hired' }],
+      design_sheets: [{ matter_id: 'm1', version: 1, client_name: 'Jie Cheng', spouse_name: null }],
+    })
+    fake.failTable('design_sheets', 'connection reset by peer')
+
+    await expect(
+      sweepNameAgreement(fake as unknown as SupabaseClient<WorkbenchDatabase>),
+    ).rejects.toThrow(/design sheet/i)
+  })
+})
