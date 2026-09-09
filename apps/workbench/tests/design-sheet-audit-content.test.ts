@@ -665,3 +665,98 @@ describe('the version-8 seed migration for the design-sheet audit', () => {
     expect(promptBodySchema.safeParse(bodyOf(V8)).success).toBe(true)
   })
 })
+
+/**
+ * Version 9 scopes whose absence counts, and is narrow on purpose.
+ *
+ * Measured 2026-09-09 across three fresh `client_review` sheets: check 2
+ * reported a deviation on all three and **two were right** — a successor the
+ * client named for the spouse's DPOA/HCP who appears in no slot, and a person
+ * named in the concerns who appears nowhere. The third was an insurance agent,
+ * named for having written a policy, reported as missing from an estate plan
+ * he was never meant to be in.
+ */
+describe('the version-9 seed migration for the design-sheet audit', () => {
+  const V9 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261116000000_design_sheet_audit_v9.sql'),
+    'utf8',
+  )
+  const V8 = fs.readFileSync(
+    path.resolve(__dirname, '../../../supabase/migrations/20261114000000_design_sheet_audit_v8.sql'),
+    'utf8',
+  )
+  const bodyOf = (sql: string) =>
+    JSON.parse(sql.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'"))
+  const check2 = () => bodyOf(V9).checks.find((c: { number: string }) => c.number === '2')
+
+  it('publishes version 9, and repoints rather than doing nothing', () => {
+    expect(V9).toMatch(/version_number\s*\)?\s*\n?.*9,|,\s*\n\s*9,/)
+    expect(V9).toMatch(/on conflict \(prompt_id\) do update/)
+  })
+
+  it('changes only check 2’s statement, leaving every other check identical', () => {
+    const a = bodyOf(V8)
+    const b = bodyOf(V9)
+    expect(b.inputs).toEqual(a.inputs)
+    expect(b.outputTarget).toEqual(a.outputTarget)
+    for (const [i, before] of a.checks.entries()) {
+      const after = b.checks[i]
+      if (before.number === '2') {
+        expect(after.statement).not.toEqual(before.statement)
+        expect({ ...after, statement: '' }).toEqual({ ...before, statement: '' })
+      } else {
+        expect(after).toEqual(before)
+      }
+    }
+  })
+
+  it('excuses a third party named for their relationship to an asset', () => {
+    expect(check2().statement).toMatch(/professional relationship to an asset/)
+    expect(check2().statement).toMatch(/is not a person the instrument omits/)
+  })
+
+  /**
+   * The load-bearing half, asserted separately from the first because the
+   * tempting version of this fix — "professionals do not count" — is wrong. On
+   * the same sheet as the insurance agent, the **accountant** is
+   * `trustee_primary` and `executor_primary`. A rule keyed to occupation would
+   * drop a named accountant-trustee and silence the client who writes "my
+   * brother the accountant should be the successor".
+   */
+  it('keeps anyone named for a role in scope, however they are described', () => {
+    expect(check2().statement).toMatch(/why the name is there, not what the person does/)
+    expect(check2().statement).toMatch(/successor or\s+an alternate/)
+    expect(check2().statement).toMatch(/including where the description is a profession/)
+    expect(check2().statement).toMatch(/my brother the accountant/)
+  })
+
+  /**
+   * This is check 2's third narrowing in two days — v5 resolved its two
+   * questions, v7 stated its direction, this scopes whose absence counts. The
+   * cumulative risk is a check that no longer fires, so what it must still
+   * catch is asserted here: the measured `cb5bb5ef` case, a successor the
+   * client named who appears in no slot.
+   */
+  it('still catches a free-text name that no structured field mentions', () => {
+    expect(check2().statement).toMatch(/Every person whose name appears in the client's free text/)
+    expect(check2().statement).toMatch(/the structured decisions never mention/)
+    expect(check2().statement).toMatch(/absent from the drafted instrument/)
+    expect(check2().risk).toBe('blocker')
+  })
+
+  /** And keeps the two rules the earlier versions added. */
+  it('keeps v5’s category rule and v7’s direction rule', () => {
+    expect(check2().statement).toMatch(/descendants/)
+    expect(check2().statement).toMatch(/one-way/)
+  })
+
+  it('states the real sha256 of the body it seeds', () => {
+    const stated = V9.match(/::jsonb,\s*\n?\s*'([0-9a-f]{64})'/)![1]
+    const literal = V9.match(/'((?:[^']|'')*)'::jsonb/)![1].replace(/''/g, "'")
+    expect(crypto.createHash('sha256').update(literal).digest('hex')).toBe(stated)
+  })
+
+  it('still parses, which is what proves every read is a declared input', () => {
+    expect(promptBodySchema.safeParse(bodyOf(V9)).success).toBe(true)
+  })
+})
