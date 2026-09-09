@@ -155,12 +155,29 @@ site_url = "env(SUPABASE_AUTH_SITE_URL)"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 # Include every environment + the /auth/callback path so magic links and signup
 # confirmations land on the right host regardless of where the email is opened.
+#
+# A host missing from this list does not fail loudly. Supabase discards the
+# `redirect_to` it was given and sends the browser to `site_url` instead — so
+# the symptom is a successful sign-in that lands the user in the *wrong app*,
+# with nothing in any log to say why. That is exactly what the workbench did
+# until 2026-09-09: its Google button worked, and deposited the user in the
+# root app.
+#
+# Both apps are served from one Supabase project, so every host of both belongs
+# here. `tests/auth-redirect-allowlist.test.ts` asserts that.
 additional_redirect_urls = [
+  # The root app — dev on 3002, production on cornerstone.aubreylegal.com.
   "http://localhost:3002/auth/callback",
   "http://127.0.0.1:3002/auth/callback",
   "https://portal.aubreylegal.com/auth/callback",
   "https://cornerstone.aubreylegal.com/auth/callback",
   "https://cornerstone-drafting.vercel.app/auth/callback",
+  # The workbench — dev on 3003 (`apps/workbench`'s own `next dev -p 3003`),
+  # production on the `cornerstone-drafting-2.0` Vercel project, whose default
+  # domain drops the dot: cornerstone-drafting-20.vercel.app.
+  "http://localhost:3003/auth/callback",
+  "http://127.0.0.1:3003/auth/callback",
+  "https://cornerstone-drafting-20.vercel.app/auth/callback",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

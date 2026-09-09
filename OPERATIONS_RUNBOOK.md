@@ -67,6 +67,28 @@ Re-verify quarterly.
 4. Confirm Supabase **Redirect URLs** include `https://<your-host>/auth/callback` for every deployment host.
 5. Account must be `role IN ('attorney','admin')` in `public.users` with an `@aubreylegal.com` email.
 
+#### Google sign-in succeeds but lands you in the *other* app
+
+**Symptom:** you click "Continue with Google" on the workbench, authenticate
+normally, and arrive signed in — at the root Cornerstone app instead.
+
+This is the same missing **Redirect URLs** entry as item 4 above, but it does
+not look like a failure, so it is worth its own line. When Supabase is handed a
+`redirect_to` that is not on the allow-list it does not error and does not log
+anything: it silently discards it and uses **Site URL**, which is the root app.
+Sign-in genuinely succeeded; only the destination was overridden.
+
+Fix: Supabase Dashboard → Authentication → **URL Configuration** → *Redirect
+URLs*. Both apps share one Supabase project, so every host of **both** must be
+listed. `supabase/config.toml`'s `additional_redirect_urls` is the written
+record of what that list should contain, and
+`tests/auth-redirect-allowlist.test.ts` keeps it from drifting again — but
+neither can read the dashboard, so the dashboard is a manual step.
+
+Note the workbench's production domain drops the dot from the Vercel project
+name: the project is `cornerstone-drafting-2.0`, the domain is
+`cornerstone-drafting-20.vercel.app`.
+
 ---
 
 ### Scenario B — Draft generation fails for all matters
