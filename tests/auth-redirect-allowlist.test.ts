@@ -3,18 +3,45 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Every host that signs a user in must be on Supabase's redirect allow-list.
+ * Every host that signs a user in must be on Supabase's redirect allow-list,
+ * as a pattern that tolerates a query string.
  *
- * This is not a style rule. A host that is missing does not fail loudly and
- * does not appear in any log: Supabase throws away the `redirect_to` the app
- * asked for and sends the browser to `site_url` instead. Sign-in *succeeds*
- * and drops the user into a different application. The workbench shipped
- * Google sign-in in #396 without an entry here, and every attempt to sign in
- * to the workbench landed in the root app until 2026-09-09.
+ * Two separate failures live here, and the second one bit *after* the first was
+ * fixed, so both are worth stating.
+ *
+ * **A missing host.** Supabase throws away the `redirect_to` the app asked for
+ * and sends the browser to `site_url` instead. Sign-in *succeeds* and drops the
+ * user into a different application, with nothing in any log. The workbench
+ * shipped Google sign-in in #396 with no entry here, and every attempt landed
+ * in the root app.
+ *
+ * **An exact host.** These are glob patterns, not prefixes. An entry of
+ * `https://host/auth/callback` matches that URL and nothing else — a query
+ * string included. Both apps append `?redirectTo=<path>` to the callback
+ * whenever the visitor reached the login page by being bounced off a gated URL,
+ * so an exact entry works when you navigate to `/auth/login` yourself and fails
+ * when you arrive there any other way. Adding the workbench's exact callback
+ * URL therefore fixed nothing, and the earlier version of this test passed
+ * while production was still broken, because it asserted the exact string that
+ * does not work.
+ *
+ * Measured against the live project on 2026-09-09, reading
+ * `auth.flow_state.referrer`, which stores the redirect Supabase *validated*
+ * (and stores `site_url` when it rejects one):
+ *
+ * | asked for | recorded |
+ * | --- | --- |
+ * | `…-20.vercel.app/auth/callback` | honoured |
+ * | `…-20.vercel.app/auth/callback?redirectTo=%2F` | rejected |
+ * | `cornerstone.aubreylegal.com/auth/callback?redirectTo=%2Fadmin` | honoured |
+ * | `cornerstone.aubreylegal.com/zzz-not-a-real-path` | honoured |
+ *
+ * The last row is how the working shape was identified rather than guessed: the
+ * root app's entry is a `/**` wildcard, so that is what the workbench needs.
  *
  * The dev ports are read from each app's own `dev` script rather than written
- * out, so moving a port moves this test with it instead of quietly making it
- * a check of a port nobody serves.
+ * out, so moving a port moves this test with it instead of quietly leaving it
+ * checking a port nobody serves.
  *
  * **What this test cannot do.** `supabase/config.toml` configures the *local*
  * stack; production is the hosted project's Authentication → URL Configuration,
@@ -24,6 +51,9 @@ import { describe, expect, it } from 'vitest'
  */
 
 const root = join(__dirname, '..')
+
+/** The suffix that makes an entry match any path and any query on its host. */
+const WILDCARD = '/**'
 
 function devPortOf(packageJsonPath: string): string {
   const pkg = JSON.parse(readFileSync(join(root, packageJsonPath), 'utf8')) as {
@@ -48,8 +78,8 @@ describe('the Supabase redirect allow-list', () => {
     for (const pkg of ['package.json', 'apps/workbench/package.json']) {
       const port = devPortOf(pkg)
       for (const host of ['localhost', '127.0.0.1']) {
-        const url = `http://${host}:${port}/auth/callback`
-        if (!allowList.includes(url)) missing.push(`${pkg} -> ${url}`)
+        const entry = `http://${host}:${port}${WILDCARD}`
+        if (!allowList.includes(entry)) missing.push(`${pkg} -> ${entry}`)
       }
     }
     expect(missing).toEqual([])
@@ -59,14 +89,26 @@ describe('the Supabase redirect allow-list', () => {
     // Measured 2026-09-09: cornerstone-drafting-20.vercel.app serves "Sign in ·
     // Aubrey Law Workbench", and cornerstone-drafting.vercel.app serves the root
     // app. The Vercel project is named `cornerstone-drafting-2.0`; its default
-    // domain drops the dot, which is the easiest of the two to leave out.
-    expect(allowList).toContain('https://cornerstone-drafting-20.vercel.app/auth/callback')
-    expect(allowList).toContain('https://cornerstone-drafting.vercel.app/auth/callback')
+    // domain drops the dot, which is the easier of the two to leave out.
+    expect(allowList).toContain(`https://cornerstone-drafting-20.vercel.app${WILDCARD}`)
+    expect(allowList).toContain(`https://cornerstone-drafting.vercel.app${WILDCARD}`)
+    expect(allowList).toContain(`https://cornerstone.aubreylegal.com${WILDCARD}`)
   })
 
-  it('lists only /auth/callback URLs, which is the only path either app returns to', () => {
-    // Both apps build the callback as `new URL('/auth/callback', origin)`. An
-    // entry on any other path is either a typo or a host nobody returns to.
-    expect(allowList.filter(url => !url.endsWith('/auth/callback'))).toEqual([])
+  it('gives every entry a wildcard, so a ?redirectTo= query still matches', () => {
+    // The defect this file exists for. An entry without the wildcard is not a
+    // narrower version of the same rule — it is a rule that fails precisely
+    // when the user was bounced to the login page, which is the common case.
+    expect(allowList.filter(entry => !entry.endsWith(WILDCARD))).toEqual([])
+  })
+
+  it('wildcards a whole host, never a bare scheme or a path fragment', () => {
+    // `https:/**` or `https://host/auth/**` would both satisfy the rule above
+    // while meaning something quite different. Every entry must be an origin
+    // followed by the wildcard and nothing else.
+    const wrong = allowList.filter(
+      entry => !/^https?:\/\/[^/]+\/\*\*$/.test(entry),
+    )
+    expect(wrong).toEqual([])
   })
 })
