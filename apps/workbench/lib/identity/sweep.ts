@@ -11,6 +11,17 @@ import {
 const MATTER_SELECT = 'id, name'
 const SHEET_SELECT = 'matter_id, version, client_name, spouse_name'
 
+/**
+ * No `skipped`, unlike `FiduciarySweepResult`, and the asymmetry is deliberate.
+ *
+ * The fiduciary sweep skips a matter it *chose* not to judge and counts that.
+ * Here there is nothing to choose: a matter without a sheet, or a sheet without
+ * a client name, is not a candidate at all and never reaches the loop. What is
+ * left is a query failing, and this sweep does not continue past one — it
+ * throws, because it withdraws tasks when nothing is desired, so carrying on
+ * after a failed read risks retiring a task on the strength of a query that
+ * did not answer. There is no state in between worth counting.
+ */
 export interface IdentitySweepResult {
   mattersConsidered: number
   created: number

@@ -408,6 +408,30 @@ describe('sweepNameAgreement', () => {
   })
 
   /**
+   * Hired matters only. A name disagreement on a lead is not drafting
+   * anything yet, and a lead's sheet is routinely a sketch.
+   *
+   * Task 4's implementer noticed this rule was exercised only incidentally —
+   * the filter is in the select, so nothing would have gone red if it were
+   * dropped. Three rules on this branch turned out to be unguarded that way
+   * and each one mattered, so it gets its own case.
+   */
+  it('leaves a matter that is not hired alone', async () => {
+    const fake = client({
+      matters: [
+        { id: 'm1', name: 'Can Cheng — Estate Planning', relationship_status: 'lead' },
+      ],
+      design_sheets: [{ matter_id: 'm1', version: 1, client_name: 'Jie Cheng', spouse_name: null }],
+    })
+
+    const result = await sweepNameAgreement(fake as unknown as SupabaseClient<WorkbenchDatabase>)
+
+    expect(result.mattersConsidered).toBe(0)
+    expect(result.created).toBe(0)
+    expect(fake.tableRows('tasks')).toEqual([])
+  })
+
+  /**
    * The failure that matters. `loadNameCandidates` throws on a query error
    * rather than returning what it managed to read, because an empty candidate
    * list from a failed query is indistinguishable from "every name agrees" —
