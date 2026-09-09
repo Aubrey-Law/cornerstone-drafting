@@ -53,6 +53,78 @@ describe('resolveSession', () => {
     })
     expect(result).toEqual({ ok: false })
   })
+
+  /**
+   * The other half of that decision, and the one it took an outage-shaped bug
+   * to notice: a token the backend *answered about* is not an outage.
+   *
+   * When Supabase says `bad_jwt`, it was reachable, it read the token, and it
+   * told us the token is unusable. Treating that as "the backend is down"
+   * answers 503 — and the login page is behind the same gate, so the holder of
+   * a stale cookie cannot reach the page that would replace it. They are locked
+   * out until they clear cookies by hand, and nothing on screen suggests that.
+   *
+   * Reproduced against the deployed workbench on 2026-09-09: a JWT whose `kid`
+   * is not in the project's JWKS returned 503 from `/auth/login` itself. That
+   * is what a token signed before the project rotated to its ES256 key looks
+   * like.
+   *
+   * Both error shapes below are copied from a real `getClaims()` call against
+   * the live project, not invented.
+   */
+  const errorReturning = (error: { message: string; code?: string; status?: number }) => ({
+    auth: { getClaims: async () => ({ data: null, error }) },
+  })
+
+  it('treats a token signed by a rotated key as anonymous, not as an outage', async () => {
+    const result = await resolveSession(
+      errorReturning({
+        name: 'AuthApiError',
+        status: 403,
+        code: 'bad_jwt',
+        message:
+          'invalid JWT: unable to parse or verify signature, token is unverifiable: error while executing keyfunc: unrecognized JWT kid dead-beef for algorithm ES256',
+      } as { message: string; code?: string; status?: number }),
+    )
+    expect(result).toEqual({ ok: true, userId: null, claimRole: null })
+  })
+
+  it('treats a structurally invalid token as anonymous', async () => {
+    const result = await resolveSession(
+      errorReturning({ status: 400, code: 'invalid_jwt', message: 'Invalid JWT structure' }),
+    )
+    expect(result).toEqual({ ok: true, userId: null, claimRole: null })
+  })
+
+  /**
+   * The guard on the guard. Widening "bad token" must not swallow the outage
+   * case it was carved out of, so anything the backend did not answer about —
+   * a 5xx, a retryable fetch failure, an error with no code at all — still
+   * fails closed.
+   */
+  it('still fails closed on a 5xx, which is the backend failing rather than judging', async () => {
+    const result = await resolveSession(
+      errorReturning({ status: 503, code: 'service_unavailable', message: 'upstream is down' }),
+    )
+    expect(result).toEqual({ ok: false })
+  })
+
+  it('still fails closed on a retryable fetch failure', async () => {
+    const result = await resolveSession(
+      errorReturning({ status: 0, code: undefined, message: 'Failed to fetch' }),
+    )
+    expect(result).toEqual({ ok: false })
+  })
+
+  it('still fails closed on a 4xx that is not about the token', async () => {
+    // A 4xx alone is not the signal — only one that names the token is. An
+    // unrecognised 4xx could be a misconfigured key or a rate limit, neither of
+    // which is a reason to sign a user out.
+    const result = await resolveSession(
+      errorReturning({ status: 429, code: 'over_request_rate_limit', message: 'slow down' }),
+    )
+    expect(result).toEqual({ ok: false })
+  })
 })
 
 describe('resolveRole', () => {
