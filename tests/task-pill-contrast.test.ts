@@ -57,6 +57,21 @@ describe('every task source pill is readable', () => {
     }
   })
 
+  /**
+   * No two sources share a pill.
+   *
+   * The case below guards `sla` specifically, which was the one that had gone
+   * invisible. This generalises it, and it is what makes the reasoning behind
+   * the Identity pill enforceable rather than a claim in a comment: violet was
+   * added to the theme on 2026-09-09 because every AA-passing pair already
+   * there reads as a hue another source owns, and a chip indistinguishable
+   * from another source's carries no information at all.
+   */
+  it('gives every source a pill no other source uses', () => {
+    const pills = TASK_SOURCES.map(source => TASK_SOURCE_PILL[source])
+    expect(new Set(pills).size, `duplicate pill among ${pills.join(' | ')}`).toBe(pills.length)
+  })
+
   it('gives the Plan pill a hue of its own, not another pill’s', () => {
     // Plan is the highest-volume source in the queue; if it matched Manual's
     // neutral chip the pill would stop carrying any information at all.
@@ -85,6 +100,16 @@ describe('every task source pill is readable', () => {
 
   it('knows about tasks the fiduciary matrix created', () => {
     expect(TASK_SOURCES).toContain('fiduciary')
+  })
+
+  /**
+   * Same gap, third time it could have opened: a source legal in the database
+   * and absent from this union renders as an empty chip, and the contrast
+   * cases above iterate `TASK_SOURCES` so they cannot see what the union does
+   * not know.
+   */
+  it('knows about tasks the name check created', () => {
+    expect(TASK_SOURCES).toContain('identity')
   })
 })
 
