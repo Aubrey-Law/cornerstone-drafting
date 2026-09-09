@@ -1109,7 +1109,7 @@ npm test
 
 If the root suite reports `Failed to start forks worker` or runs implausibly long, check `uptime` — this machine has hit load average 246, and that failure is the machine rather than the code.
 
-- [ ] **Step 3: Measure against the real database, before trusting the spec's number**
+- [x] **Step 3: Measure against the real database, before trusting the spec's number**
 
 The spec's **3 of 39** was measured *without* the `hired` filter this sweep applies. Re-measure with it, because the number decides whether this is signal or noise:
 
@@ -1139,9 +1139,31 @@ real tick created — still needs the deploy.
 
 **Report the count and every title.** If it is far above three, the rule is wrong for this data and the right response is to narrow it and re-measure — not to ship it and let the queue fill. If it is zero, check the `hired` filter before concluding the check does nothing.
 
-- [ ] **Step 4: Prove the sweep is idempotent against the real database**
+**Measured after the deploy (#441, `cac9e677`), 2026-09-09 16:27Z.** The first
+read came back **zero**, and this step's own warning is the reason that was not
+reported as "the check does nothing": the `hired` count was 39, so the filter
+was not the cause, and the tick simply had not fired yet. Ninety seconds later
+it had, and wrote exactly three:
+
+| matter | priority | title |
+| --- | --- | --- |
+| `0528d2db` | high | Matter is filed as "Can Cheng" but the design sheet drafts for "Jie Cheng" |
+| `90551be8` | high | Matter is filed as "Laura Coakley" but the design sheet drafts for "Kayleigh Marie Coakley" |
+| `e543cdd7` | high | Matter is filed as "Veronica Pace" but the design sheet drafts for "Matteo Lorenzo Neretti" |
+
+Three of 39, on the same three matters the pre-deploy query predicted. The
+deployed sweep and the query agree.
+
+- [x] **Step 4: Prove the sweep is idempotent against the real database**
 
 Note each task's `id` and `created_at`, wait for a second tick, and read them again. They must be **identical** — same ids, `created_at` untouched, nothing archived. That is what the stable tag buys, and it is the property the prompt path lacked for a day while it discarded attorneys' ticks.
+
+**Proven 2026-09-09.** Read at 16:27:21Z, read again at 16:31:39Z after roughly
+four further ticks. `diff` of the two `(id, created_at, title)` readings is
+empty: the same three ids, `created_at` to the microsecond unchanged, all three
+still `open` with a null `closeout_reason`, and 3 rows against 3 distinct
+`batch_tag`s — so no tick created a second row for a matter it had already
+flagged.
 
 - [x] **Step 5: Commit and push**
 
