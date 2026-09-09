@@ -194,6 +194,23 @@ export interface EmitPlan {
   insert: TaskRow[]
   /** Ids left exactly as they are, because they already say this. */
   keep: string[]
+  /**
+   * The same task, saying it differently — rewritten in place.
+   *
+   * Only the description can land here, because everything else `contentKey`
+   * ever compared is identity: change the title, the priority, the type or an
+   * item's text and it is a different task, replaced as before. The
+   * description is different in kind — it embeds the model's own rationale,
+   * which is rephrased on essentially every run even when the finding is
+   * identical.
+   *
+   * Without this branch that rephrasing archived the row and inserted a blank
+   * copy, and the attorney's ticks went with it. Measured 2026-09-08: two runs
+   * on an unchanged sheet produced identical outcomes and identical titles,
+   * priorities and items, differing only in a 599-vs-572-character
+   * description — and a hand-ticked item came back unticked.
+   */
+  update: Array<{ id: string; description: string }>
   /** Ids to withdraw. */
   supersede: string[]
 }
@@ -244,10 +261,9 @@ function identityOf(tag: string | null): string {
   return parsed.unitId === null ? 'unit:(run-level)' : `unit:${parsed.unitId}`
 }
 
-function contentKey(parts: {
+function identityKey(parts: {
   batchTag: string | null
   title: string
-  description: string
   priority: string
   taskType: string
   checklist: ChecklistItem[]
@@ -255,7 +271,6 @@ function contentKey(parts: {
   return JSON.stringify([
     identityOf(parts.batchTag),
     parts.title,
-    parts.description,
     parts.priority,
     parts.taskType,
     // Text only — see the note above on why `done` is excluded.
@@ -430,30 +445,31 @@ export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[], run
       task.promptId === run.promptId,
   )
 
-  const byContent = new Map<string, string[]>()
+  const byIdentity = new Map<string, string[]>()
+  const byId = new Map<string, ExistingPromptTask>()
   for (const task of candidates) {
-    const key = contentKey({
+    byId.set(task.id, task)
+    const key = identityKey({
       batchTag: task.batchTag,
       title: task.title,
-      description: task.description,
       priority: task.priority,
       taskType: task.taskType,
       checklist: task.checklist,
     })
-    const ids = byContent.get(key)
+    const ids = byIdentity.get(key)
     if (ids) ids.push(task.id)
-    else byContent.set(key, [task.id])
+    else byIdentity.set(key, [task.id])
   }
 
   const keep: string[] = []
+  const update: Array<{ id: string; description: string }> = []
   const insert: TaskRow[] = []
   const matched = new Set<string>()
 
   for (const row of desired) {
-    const key = contentKey({
+    const key = identityKey({
       batchTag: row.batch_tag,
       title: row.title,
-      description: row.description,
       priority: row.priority,
       taskType: row.task_type,
       checklist: row.checklist,
@@ -461,10 +477,14 @@ export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[], run
     // The first twin not already claimed. A duplicate pair left by the
     // pre-fix bug therefore keeps one and withdraws the other, which is how
     // this self-heals rather than preserving the damage.
-    const twin = byContent.get(key)?.find((id) => !matched.has(id))
+    const twin = byIdentity.get(key)?.find((id) => !matched.has(id))
     if (twin) {
       matched.add(twin)
-      keep.push(twin)
+      // Same task. Either it already says this, or it says it differently and
+      // the wording is rewritten in place — never archived, so the row keeps
+      // its id, its `created_at` and whatever the attorney has ticked.
+      if (byId.get(twin)?.description === row.description) keep.push(twin)
+      else update.push({ id: twin, description: row.description })
     } else {
       insert.push(row)
     }
@@ -483,7 +503,7 @@ export function planEmit(existing: ExistingPromptTask[], desired: TaskRow[], run
     .filter((task) => !matched.has(task.id))
     .filter((task) => mayRetire(task, run.answers, desiredTags, desiredUnits, desiredItemText))
     .map((task) => task.id)
-  return { insert, keep, supersede }
+  return { insert, keep, update, supersede }
 }
 
 export interface EmitTasksInput {
@@ -515,6 +535,8 @@ export interface EmitTasksResult {
   created: number
   /** Already said exactly this, so left alone — id and `created_at` intact. */
   kept: number
+  /** The same task, rephrased in place — id, `created_at` and ticks intact. */
+  updated: number
   superseded: number
 }
 
@@ -540,7 +562,7 @@ export async function emitTasks(
   // `desired` would make `planEmit` withdraw every open prompt task on the
   // matter, which is not "produces nothing", it is "destroys someone else's
   // something".
-  if (input.outputTarget === 'chat') return { created: 0, kept: 0, superseded: 0 }
+  if (input.outputTarget === 'chat') return { created: 0, kept: 0, updated: 0, superseded: 0 }
 
   const sb = client
 
@@ -649,6 +671,19 @@ export async function emitTasks(
     if (insertError) throw new Error(`Could not create tasks for this run: ${insertError.message}`)
   }
 
+  // One statement per row rather than an upsert: an upsert would need the
+  // whole row, and sending a fresh `checklist` is exactly how the ticks would
+  // be lost again. Only the description moves.
+  for (const change of plan.update) {
+    const { error: rewriteError } = await sb
+      .from('tasks')
+      .update({ description: change.description })
+      .eq('id', change.id)
+    if (rewriteError) {
+      throw new Error(`Could not update the wording of task ${change.id}: ${rewriteError.message}`)
+    }
+  }
+
   if (plan.supersede.length > 0) {
     const { error: updateError } = await sb
       .from('tasks')
@@ -665,5 +700,10 @@ export async function emitTasks(
     if (updateError) throw new Error(`Could not withdraw superseded tasks: ${updateError.message}`)
   }
 
-  return { created: plan.insert.length, kept: plan.keep.length, superseded: plan.supersede.length }
+  return {
+    created: plan.insert.length,
+    kept: plan.keep.length,
+    updated: plan.update.length,
+    superseded: plan.supersede.length,
+  }
 }

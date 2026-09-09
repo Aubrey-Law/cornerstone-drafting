@@ -275,14 +275,22 @@ describe('planEmit', () => {
     expect(plan.supersede).toEqual([])
   })
 
-  /** But only when it has not changed. A different rationale is a different
-   *  finding, and still replaces. */
-  it('still replaces a previous run’s task whose rationale changed', () => {
+  /**
+   * A rephrased rationale rewrites the row rather than replacing it.
+   *
+   * This asserted a replacement until the update path existed, and replacing
+   * was the whole problem: the description embeds the model's rationale, which
+   * is reworded on essentially every run, so an identical finding archived the
+   * task and inserted a blank copy. Nothing is archived here, so the ticks and
+   * the id survive and the wording is still current.
+   */
+  it('rewrites a previous run’s task whose rationale changed', () => {
     const stale = open({ id: 'old-1', batchTag: 'prompt:run-old#1', description: 'What it said before.' })
     const plan = planEmit([stale], [desiredRow()], authoritative())
+    expect(plan.update).toEqual([{ id: 'old-1', description: 'Whatever it said last time.' }])
     expect(plan.keep).toEqual([])
-    expect(plan.supersede).toEqual(['old-1'])
-    expect(plan.insert).toHaveLength(1)
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toEqual([])
   })
 
   /**
@@ -303,7 +311,7 @@ describe('planEmit', () => {
       taskType: 'checklist',
       checklist: [{ text: 'One', done: true }, { text: 'Two', done: false }],
     })
-    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
+    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], update: [], supersede: [] })
   })
 
   /** A tag this module did not write keeps its raw value, so a stranger's row
@@ -336,7 +344,7 @@ describe('planEmit', () => {
     expect(plan.supersede).toEqual([])
   })
 
-  it('replaces a task whose rationale changed, and only that one', () => {
+  it('rewrites the task whose rationale changed, and only that one', () => {
     const plan = planEmit(
       [
         open({ id: 'unit-1', batchTag: 'prompt:run-new#1' }),
@@ -354,8 +362,11 @@ describe('planEmit', () => {
     )
     // Unit 1 is untouched: same id, same created_at, no churn.
     expect(plan.keep).toEqual(['unit-1'])
-    expect(plan.supersede).toEqual(['unit-2'])
-    expect(plan.insert.map((row) => row.batch_tag)).toEqual(['prompt:run-new#2'])
+    // Unit 2 said it differently, so its row is rewritten — not archived and
+    // replaced, which is what this asserted before the update path existed.
+    expect(plan.update).toEqual([{ id: 'unit-2', description: 'Now it says something else.' }])
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toEqual([])
   })
 
   it('withdraws a task for a finding this run no longer makes', () => {
@@ -401,7 +412,7 @@ describe('planEmit', () => {
       taskType: 'checklist',
       checklist: [{ text: 'One', done: false }],
     })
-    expect(planEmit([same], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
+    expect(planEmit([same], [row], authoritative())).toEqual({ insert: [], keep: ['list'], update: [], supersede: [] })
 
     const changed = existingTask({
       id: 'list',
@@ -438,7 +449,7 @@ describe('planEmit', () => {
         { text: 'Two', done: false },
       ],
     })
-    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], supersede: [] })
+    expect(planEmit([ticked], [row], authoritative())).toEqual({ insert: [], keep: ['list'], update: [], supersede: [] })
   })
 
   /** But a checklist whose *items* changed is a different checklist. */
@@ -546,8 +557,11 @@ describe('planEmit retirement scoping', () => {
       [checklistRow(['A stated concern is not answered by the plan'])],
       { promptId: PROMPT_ID, answers },
     )
-    expect(plan.supersede).toEqual(['list'])
-    expect(plan.insert).toHaveLength(1)
+    // Same items, so the same checklist: rewritten in place rather than
+    // archived and re-inserted. It used to assert supersede.
+    expect(plan.update).toHaveLength(1)
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toEqual([])
   })
 
   /**
@@ -597,8 +611,11 @@ describe('planEmit retirement scoping', () => {
       [checklistRow(['A stated concern is not answered by the plan'])],
       { promptId: PROMPT_ID, answers },
     )
-    expect(plan.supersede).toEqual(['mine'])
-    expect(plan.insert).toHaveLength(1)
+    // Still makes its own task say the new thing without being authoritative —
+    // the property this guards — but by rewriting it, not archiving it.
+    expect(plan.update).toEqual([{ id: 'mine', description: expect.any(String) }])
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toEqual([])
     expect(plan.keep).toEqual([])
   })
 
@@ -611,8 +628,9 @@ describe('planEmit retirement scoping', () => {
       description: 'Newer wording.', priority: 'high', checklist: [],
     }
     const plan = planEmit([mine], [row], { promptId: PROMPT_ID, answers })
-    expect(plan.supersede).toEqual(['unit'])
-    expect(plan.insert).toHaveLength(1)
+    expect(plan.update).toEqual([{ id: 'unit', description: 'Newer wording.' }])
+    expect(plan.supersede).toEqual([])
+    expect(plan.insert).toEqual([])
   })
 
   /**
@@ -799,6 +817,9 @@ function fakeClient(
 ) {
   const inserted: unknown[][] = []
   const updatedIds: string[][] = []
+  /** Description rewrites: the payload matters as much as the id, because
+   *  sending a `checklist` here is how the ticks would be lost again. */
+  const rewrites: Array<{ id: string; payload: Record<string, unknown> }> = []
   const client = {
     from(table: string) {
       return {
@@ -819,10 +840,14 @@ function fakeClient(
           inserted.push(values)
           return { error: null }
         },
-        update() {
+        update(payload: Record<string, unknown>) {
           return {
             async in(_column: string, ids: string[]) {
               updatedIds.push(ids)
+              return { error: null }
+            },
+            async eq(_column: string, id: string) {
+              rewrites.push({ id, payload })
               return { error: null }
             },
           }
@@ -830,7 +855,7 @@ function fakeClient(
       }
     },
   }
-  return { client: client as never, inserted, updatedIds }
+  return { client: client as never, inserted, updatedIds, rewrites }
 }
 
 describe('emitTasks', () => {
@@ -861,7 +886,7 @@ describe('emitTasks', () => {
         promptTitle: 'Audit',
         promptId: PROMPT_ID,
       }),
-    ).resolves.toEqual({ created: 0, kept: 0, superseded: 0 })
+    ).resolves.toEqual({ created: 0, kept: 0, updated: 0, superseded: 0 })
     expect(touched).toBe(false)
   })
 
@@ -897,13 +922,61 @@ describe('emitTasks', () => {
       promptId: PROMPT_ID,
     })
 
-    expect(result).toEqual({ created: 1, kept: 0, superseded: 1 })
+    expect(result).toEqual({ created: 1, kept: 0, updated: 0, superseded: 1 })
     expect(inserted).toHaveLength(1)
     expect(inserted[0]).toHaveLength(1)
     expect(updatedIds).toEqual([['old-1']])
   })
 
   /** The regression, end to end through `emitTasks` rather than `planEmit`. */
+  /**
+   * The measured case end to end: the same finding, reworded, on a task
+   * someone has ticked.
+   *
+   * The write must be the description and nothing else. An upsert, or any
+   * payload carrying a fresh `checklist`, would put the ticks back to false
+   * and reintroduce exactly what the update path exists to stop — which is why
+   * this asserts the payload's keys and not merely that a write happened.
+   */
+  it('rewrites only the description, leaving a ticked checklist untouched', async () => {
+    const first = fakeClient([])
+    await emitTasks(first.client, {
+      matterId: 'matter-1', runId: 'run-1', checks: CHECKS,
+      findings: [FINDING_1, FINDING_2], failedCheckNumbers: [],
+      outputTarget: 'checklist', promptTitle: 'MA design sheet audit', promptId: PROMPT_ID,
+    })
+    const row = (first.inserted[0] as Array<Record<string, unknown>>)[0]
+
+    // The same task, but an attorney has ticked its first item and the model
+    // has since reworded the rationale the description embeds.
+    const ticked = (row.checklist as Array<Record<string, unknown>>).map((item, index) =>
+      index === 0 ? { ...item, done: true } : item,
+    )
+    const second = fakeClient([
+      {
+        id: 'list-1', source: row.source, batch_tag: row.batch_tag, status: 'open',
+        assignee_id: null, title: row.title, description: 'What it said last time.',
+        priority: row.priority, task_type: row.task_type, checklist: ticked,
+      },
+    ], { runs: [{ id: 'run-1', prompt_version_id: 'v4' }], versions: [{ id: 'v4', prompt_id: PROMPT_ID }] })
+
+    const result = await emitTasks(second.client, {
+      matterId: 'matter-1', runId: 'run-2', checks: CHECKS,
+      findings: [FINDING_1, FINDING_2], failedCheckNumbers: [],
+      outputTarget: 'checklist', promptTitle: 'MA design sheet audit', promptId: PROMPT_ID,
+    })
+
+    expect(result).toEqual({ created: 0, kept: 0, updated: 1, superseded: 0 })
+    // Nothing archived and nothing inserted: the row survives.
+    expect(second.updatedIds).toEqual([])
+    expect(second.inserted).toEqual([])
+    // And the write touched one column.
+    expect(second.rewrites).toHaveLength(1)
+    expect(second.rewrites[0].id).toBe('list-1')
+    expect(Object.keys(second.rewrites[0].payload)).toEqual(['description'])
+    expect(second.rewrites[0].payload.description).toBe(row.description)
+  })
+
   it('is idempotent: a second pass over the same run writes nothing', async () => {
     const first = fakeClient([])
     await emitTasks(first.client, {
@@ -948,7 +1021,7 @@ describe('emitTasks', () => {
       promptId: PROMPT_ID,
     })
 
-    expect(result).toEqual({ created: 0, kept: 1, superseded: 0 })
+    expect(result).toEqual({ created: 0, kept: 1, updated: 0, superseded: 0 })
     expect(second.inserted).toEqual([])
     expect(second.updatedIds).toEqual([])
   })
@@ -988,7 +1061,7 @@ describe('emitTasks', () => {
       promptId: PROMPT_ID,
     })
 
-    expect(result).toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(result).toEqual({ created: 0, kept: 0, updated: 0, superseded: 0 })
     expect(inserted).toEqual([])
     expect(updatedIds).toEqual([])
   })
@@ -1050,7 +1123,7 @@ describe('emitTasks', () => {
       promptId: PROMPT_ID,
     })
 
-    expect(result).toEqual({ created: 0, kept: 0, superseded: 0 })
+    expect(result).toEqual({ created: 0, kept: 0, updated: 0, superseded: 0 })
     expect(updatedIds).toEqual([])
     expect(inserted).toEqual([])
   })
