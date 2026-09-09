@@ -324,7 +324,7 @@ npx vitest run tests/matters-mcp.test.ts
 npm run lint; echo "exit=$?"
 ```
 
-Expected: PASS, 9 tests; lint `exit=0`. The `exit=` line is the point — ESLint
+Expected: PASS, 8 tests (3 wiring + 1 lint + 4 config); lint `exit=0`. The `exit=` line is the point — ESLint
 prints warnings and still exits 0, so eyeballing the output does not tell you
 whether it passed.
 
