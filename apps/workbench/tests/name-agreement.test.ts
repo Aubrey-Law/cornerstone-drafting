@@ -240,3 +240,106 @@ describe('nameIssueFor', () => {
     ).toMatchObject({ kind: 'name_disagreement', matterPerson: 'Mary-Jane Ellsworth' })
   })
 })
+
+import {
+  IDENTITY_TASK_SOURCE,
+  identityTaskRowFor,
+  planIdentityEmit,
+  type ExistingIdentityTask,
+} from '@/lib/identity/tasks'
+
+const ISSUE = {
+  matterId: 'm1',
+  kind: 'name_disagreement' as const,
+  matterPerson: 'Can Cheng',
+  sheetClientName: 'Jie Cheng',
+  sheetSpouseName: null,
+}
+
+const existing = (overrides: Partial<ExistingIdentityTask> = {}): ExistingIdentityTask => ({
+  id: 'task-1',
+  source: IDENTITY_TASK_SOURCE,
+  batchTag: 'identity:m1#name',
+  status: 'open',
+  assigneeId: null,
+  title: identityTaskRowFor(ISSUE).title,
+  priority: 'high',
+  ...overrides,
+})
+
+describe('identityTaskRowFor', () => {
+  it('names both names in the title, because the point is the comparison', () => {
+    const row = identityTaskRowFor(ISSUE)
+    expect(row.title).toContain('Can Cheng')
+    expect(row.title).toContain('Jie Cheng')
+    expect(row.priority).toBe('high')
+    expect(row.source).toBe(IDENTITY_TASK_SOURCE)
+    expect(row.task_type).toBe('single')
+    expect(row.auto).toBe(true)
+  })
+
+  /**
+   * The tag carries the matter and the kind, never a name and never a run id.
+   * A run-keyed tag is what made the prompt path churn every task on every run
+   * and discard attorneys' ticks until #433 and #434; a name in the tag would
+   * put privileged content in a column read for grouping.
+   */
+  it('tags by matter and kind, so a re-sweep matches itself', () => {
+    expect(identityTaskRowFor(ISSUE).batch_tag).toBe('identity:m1#name')
+    expect(identityTaskRowFor(ISSUE).batch_tag).not.toContain('Cheng')
+  })
+})
+
+describe('planIdentityEmit', () => {
+  it('inserts when the matter has no task yet', () => {
+    const plan = planIdentityEmit('m1', [], [identityTaskRowFor(ISSUE)])
+    expect(plan.insert).toHaveLength(1)
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual([])
+  })
+
+  /** Idempotent, which is the whole reason the tag is stable. */
+  it('keeps an unchanged task, touching nothing', () => {
+    const plan = planIdentityEmit('m1', [existing()], [identityTaskRowFor(ISSUE)])
+    expect(plan).toEqual({ insert: [], keep: ['task-1'], supersede: [] })
+  })
+
+  /** The names changed, so the wording did: replace it. */
+  it('replaces a task whose title no longer matches', () => {
+    const plan = planIdentityEmit('m1', [existing({ title: 'Something older' })], [identityTaskRowFor(ISSUE)])
+    expect(plan.keep).toEqual([])
+    expect(plan.supersede).toEqual(['task-1'])
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  /** Resolved: the names now agree, so no row is desired and the task retires. */
+  it('withdraws the task when the disagreement is gone', () => {
+    const plan = planIdentityEmit('m1', [existing()], [])
+    expect(plan.supersede).toEqual(['task-1'])
+    expect(plan.insert).toEqual([])
+  })
+
+  /**
+   * The three narrowings the fiduciary path already learned, and for the same
+   * reasons: a tool may withdraw its own suggestion, never a person's work.
+   */
+  it('never touches a task someone made, holds, or has picked up', () => {
+    const manual = existing({ id: 'manual', source: 'manual' })
+    const done = existing({ id: 'done', status: 'done' })
+    const mine = existing({ id: 'mine', assigneeId: 'user-1' })
+    const plan = planIdentityEmit('m1', [manual, done, mine], [])
+    expect(plan.supersede).toEqual([])
+  })
+
+  /** Another matter's tag is not this sweep's to retire. */
+  it('never touches another matter’s task', () => {
+    const other = existing({ id: 'other', batchTag: 'identity:m2#name' })
+    expect(planIdentityEmit('m1', [other], []).supersede).toEqual([])
+  })
+
+  /** A tag this module did not write is nobody's to retire. */
+  it('never touches a tag it cannot recognise', () => {
+    const foreign = existing({ id: 'foreign', batchTag: 'something-else' })
+    expect(planIdentityEmit('m1', [foreign], []).supersede).toEqual([])
+  })
+})
