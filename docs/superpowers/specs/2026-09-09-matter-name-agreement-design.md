@@ -1,7 +1,7 @@
 # Does the matter's name agree with the sheet it drafts from — design
 
 **Date:** 2026-09-09
-**Status:** drafted, awaiting the owner's review
+**Status:** approved by the owner, ready to plan
 **Found by:** #438's investigation of a check-2 finding on one matter
 
 ## The problem, from the matter that exposed it
@@ -121,15 +121,18 @@ fiduciary shape.
 here — this reads no contacts — but the same class of bug stranded five matters
 today, and the reviewer of this work should check it anyway.
 
-## Severity, and the one judgment the owner still owes
+## Severity
 
-The issue's severity decides the task's priority. A name disagreement is not a
-drafting defect; it is a file-integrity problem that *can become* one — the
-wrong name on an executed instrument. `high`, on the reading that it must be
-resolved before signing but blocks nothing today.
+`high`. **Owner's ruling, 2026-09-09.** A name disagreement is not a drafting
+defect; it is a file-integrity problem that *can become* one — the wrong name on
+an executed instrument. It must be resolved before signing, and blocks nothing
+today.
 
-That is a guess about practice, and the owner should confirm it or say
-otherwise before this is built.
+So the issue carries one severity and one priority, and there is no severity
+ladder to map: unlike the fiduciary matrix, which grades `error` / `gap` / `note`
+and drops `note` before it ever becomes a task, every issue this checker
+produces is worth the same attention. `PRIORITY_BY_SEVERITY` has no analogue
+here, and inventing one would be a lookup with a single key.
 
 ## Out of scope, named
 
