@@ -398,6 +398,29 @@ describe('the correct_matter migration', () => {
     expect(sql).toContain("jsonb_typeof(p_set -> v_key) is distinct from 'string'")
   })
 
+  /**
+   * The event type the function writes must be one the table accepts.
+   *
+   * `matter_activity_event_type_check` lists its allowed values, and
+   * `matter_corrected` was not among them — so the audit insert failed, and
+   * because it shares the function's transaction, every correction rolled
+   * back. The function did not work at all on its happy path.
+   *
+   * Every test above passed while that was true, because they all read the
+   * migration's SQL text and the SQL text was right. This one crosses the two
+   * files.
+   */
+  it('writes an event_type the matter_activity constraint allows', () => {
+    const widened = readFileSync(
+      join(root, 'supabase/migrations/20261119000000_matter_corrected_activity_type.sql'),
+      'utf8',
+    )
+    const written = sql.match(/'(matter_corrected)'/)?.[1]
+    expect(written).toBe('matter_corrected')
+    expect(widened).toContain(`'${written}'`)
+    expect(widened).toContain('matter_activity_event_type_check')
+  })
+
   it('reloads PostgREST, which otherwise cannot resolve a brand-new function', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'")
   })
