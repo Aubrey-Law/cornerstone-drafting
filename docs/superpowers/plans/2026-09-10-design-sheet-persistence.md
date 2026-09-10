@@ -795,7 +795,32 @@ clean.** A cast left behind after the reason for it is gone is the kind of
 thing that survives for years and then hides a real error — and `as never` in
 particular would silently accept a column name that no longer exists.
 
-- [ ] **Step 5: Publish a prompt version carrying the new inputs**
+- [ ] **Step 5: Publish a prompt version carrying the new inputs — ONLY AFTER THE DEPLOY**
+
+**Order matters here and it is not the same order as the migrations.** A
+migration is safe to apply before the merge: the database is shared, and an
+added column or folded blob changes nothing for the running app. A prompt
+version is NOT, because its inputs are resolved by *code* — the
+`SOURCE_ALLOW_LIST` that ships with the app.
+
+Publishing v10 while the deployed workbench still runs the old allow-list makes
+every declared `jsonKey` source unresolvable, and `resolveInputs` then refuses
+the whole prompt:
+
+```
+"Massachusetts design sheet — issue spotter" references fields that no longer
+exist: design_sheet.residuary_spouse_survives, design_sheet.residuary_no_spouse.
+That is a broken prompt, not an incomplete design sheet.
+```
+
+Not just for the seven matters — for **every** design-sheet audit on every
+matter, until the publication is rolled back. Done by accident on 2026-09-10
+and live for about twenty minutes before a canary caught it.
+
+So: merge, wait for the `cornerstone-drafting-2.0` deploy of the merge commit
+to report success, and only then publish. If it goes wrong, the recovery is to
+point `prompt_publications` back at the previous version — the versions
+themselves are immutable, so nothing is lost.
 
 The four `design_sheet.residuary_*` sources are now in the allow-list; a prompt version must declare them for the audit to receive them. Publish v10 of `ma-design-sheet-audit` as a copy of v9 with `residuary_spouse_survives` and `residuary_no_spouse` added to `inputs`, and to check 1's `reads`. Change no statement text — this version is about what the check can see, not what it asks.
 
