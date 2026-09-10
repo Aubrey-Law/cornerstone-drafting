@@ -31,3 +31,40 @@ describe('the lock_version migration', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'")
   })
 })
+
+/**
+ * Moving the residuary to where the audit can see it.
+ *
+ * `ResiduarySection.tsx` writes `residuary_spouse_survives` and
+ * `residuary_no_spouse` into `matters.li_design_sheet_data`. The audit reads
+ * `design_sheet.residuary_beneficiary`, a column nothing writes. Seven of the
+ * nine blocker findings raised on 2026-09-08/09 were against matters that DO
+ * have a residuary recorded.
+ */
+describe('the li_design_sheet_data fold', () => {
+  const sql = sqlOf('20261121000000_fold_li_design_sheet_data.sql')
+
+  it('merges the blob into the latest sheet’s decisions', () => {
+    expect(sql).toMatch(/decisions\s*=\s*coalesce\(d\.decisions, '\{\}'::jsonb\)\s*\|\|/i)
+  })
+
+  it('targets the latest version only, since readers take max(version)', () => {
+    expect(sql).toMatch(/max\(version\)/i)
+  })
+
+  it('refuses rather than merging when a key already exists', () => {
+    // Measured at zero collisions on 2026-09-10 — asserted here rather than
+    // trusted, because a merge that silently overwrote a decision would be
+    // undetectable afterwards.
+    expect(sql).toMatch(/raise exception/i)
+    expect(sql).toMatch(/\?\|/)
+  })
+
+  it('does not drop the column it reads from', () => {
+    // 17 code sites still read it. The repo's rule, from
+    // 20261013000000_drop_twenty_sync_columns.sql: a column is never dropped
+    // in the same PR as its last code reference, because migrations and code
+    // deploy in no guaranteed order.
+    expect(sql).not.toMatch(/drop column .*li_design_sheet_data/i)
+  })
+})
