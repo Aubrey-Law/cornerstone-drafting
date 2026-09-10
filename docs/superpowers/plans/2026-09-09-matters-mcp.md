@@ -687,6 +687,14 @@ function assembleName(contact: {
 Run: `npx vitest run tests/matters-mcp.test.ts`
 Expected: PASS, 16 tests.
 
+**Amended after review:** three more tests and a `total` field were added in a
+follow-up commit (`94238ca4`). The fake recorded neither `.order()` nor
+`.limit()`, so deleting either call from `listMatters` kept all 16 green; and
+the spec's "count of any remainder" had been dropped from this plan, leaving a
+caller unable to tell 100 rows from the whole practice. `listMatters` now
+returns `{ matters, total }`. Task 3 ends at **19** tests, and the counts below
+include that.
+
 - [ ] **Step 5: Typecheck, lint, and commit**
 
 ```bash
@@ -907,7 +915,7 @@ notify pgrst, 'reload schema';
 - [ ] **Step 4: Run the tests**
 
 Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: PASS, 23 tests.
+Expected: PASS, 26 tests.
 
 - [ ] **Step 5: Prove the field guard is load-bearing**
 
@@ -1305,7 +1313,7 @@ npm run typecheck
 npm run lint
 ```
 
-Expected: PASS, 30 tests; typecheck and lint clean.
+Expected: PASS, 33 tests; typecheck and lint clean.
 
 - [ ] **Step 6: Commit**
 
