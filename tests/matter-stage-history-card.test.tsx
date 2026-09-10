@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { buildStageTimeline, type MatterStageHistoryRow } from '@/lib/matters/stageTimeline'
@@ -39,14 +39,34 @@ describe('MatterStageHistoryCard', () => {
     expect(items[2].textContent).not.toContain('current')
   })
 
+  /**
+   * The clock is pinned, and that is the point of this test rather than an
+   * incidental detail.
+   *
+   * The open stage's duration is measured against now, so it grows every day.
+   * On 2026-09-10 it reached 35 days, and `getByText(/5 days/)` — meant for
+   * the finished stage's 5 — matched "35 days so far" as well and failed on
+   * "multiple elements". The assertion had been passing for a month by
+   * accident, and would have started failing again at 45, 50, 51 days.
+   *
+   * With now fixed, both durations are exact and can be asserted as whole
+   * strings instead of loose fragments.
+   */
   it('shows how long a finished stage lasted and how long the open one has run', () => {
-    render(<MatterStageHistoryCard entries={timeline([
-      row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
-      row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
-    ])} />)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-09T12:00:00Z'))
+    try {
+      render(<MatterStageHistoryCard entries={timeline([
+        row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
+        row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
+      ])} />)
 
-    expect(screen.getByText(/5 days/)).toBeTruthy()
-    expect(screen.getByText(/so far/)).toBeTruthy()
+      // intake ran 08-01 to 08-06; design has been open since 08-06.
+      expect(screen.getByText(/\b5 days\b/)).toBeTruthy()
+      expect(screen.getByText(/3 days so far/)).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('names the stage a matter moved from, and does not invent one for the first entry', () => {
