@@ -51,12 +51,33 @@ begin
     if v_key not in ('name', 'matter_number', 'matter_type') then
       raise exception 'Field % cannot be corrected through this function', v_key;
     end if;
+    -- Every value must be a JSON string. `->>` yields SQL NULL for a JSON
+    -- null, so `{"name": null}` would slip past the emptiness check above,
+    -- coalesce back to the old value, change nothing — and still write an
+    -- audit row whose before and after are identical, reporting a correction
+    -- that did not happen. A number or an object is worse: `->>` stringifies
+    -- it, and `name` has no CHECK to stop `{"a": 1}` becoming a client's name.
+    if jsonb_typeof(p_set -> v_key) is distinct from 'string' then
+      raise exception 'Field % must be a string, got %', v_key, jsonb_typeof(p_set -> v_key);
+    end if;
   end loop;
 
   -- Optimistic concurrency. The caller states what it believes it read; a
   -- mismatch means the read is stale and the write would clobber whatever
   -- changed in between.
+  --
+  -- The same allow-list applies here, and it is not redundant. Without it this
+  -- loop compares — and, on mismatch, echoes back — *any* column of `matters`,
+  -- `li_design_sheet_data` included. That makes p_expect a read oracle for the
+  -- whole row. Nothing can reach it today: the zod schema above is `.strict()`
+  -- and only service_role may execute this. But that is security resting on
+  -- the caller and the grant, which is exactly the arrangement that already
+  -- failed once in this file when `anon` kept EXECUTE. A second entry point,
+  -- or the grant drifting again, would turn this into a cross-tenant read.
   for v_key in select jsonb_object_keys(p_expect) loop
+    if v_key not in ('name', 'matter_number', 'matter_type') then
+      raise exception 'Field % cannot be used in p_expect', v_key;
+    end if;
     if to_jsonb(v_before) -> v_key is distinct from p_expect -> v_key then
       raise exception 'Stale read on %: expected %, found %',
         v_key, p_expect -> v_key, to_jsonb(v_before) -> v_key;

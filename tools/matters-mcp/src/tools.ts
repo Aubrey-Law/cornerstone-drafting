@@ -1,8 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { MattersClient } from './client'
-import { correctMatter, getMatter, listMatters } from './matters'
+import { CORRIGIBLE_FIELDS, correctMatter, getMatter, listMatters } from './matters'
 
+/**
+ * Built from `CORRIGIBLE_FIELDS` rather than retyping the three names, so this
+ * schema and the function's allow-list cannot drift apart. The `satisfies`
+ * makes a field added to that constant and forgotten here a compile error.
+ */
 const corrigible = z
   .object({
     name: z.string().min(1).optional(),
@@ -10,6 +15,13 @@ const corrigible = z
     matter_type: z.enum(['individual', 'couple']).optional(),
   })
   .strict()
+
+const _fieldsCovered: Record<(typeof CORRIGIBLE_FIELDS)[number], true> = {
+  name: true,
+  matter_number: true,
+  matter_type: true,
+}
+void _fieldsCovered
 
 /**
  * Exported so a test can assert the tool refuses a field the function refuses.

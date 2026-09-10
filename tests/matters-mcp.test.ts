@@ -371,6 +371,33 @@ describe('the correct_matter migration', () => {
     }
   })
 
+  /**
+   * `p_expect` needs the same allow-list as `p_set`, and this test exists
+   * because the first applied version did not have one.
+   *
+   * Without it the loop compares — and echoes back in its exception — any
+   * column of `matters`, `li_design_sheet_data` included, making `p_expect` a
+   * read oracle for the whole row. Unreachable today behind a `.strict()` zod
+   * schema and a service_role-only grant, which is precisely the arrangement
+   * that already failed once here when `anon` kept EXECUTE.
+   */
+  it('allow-lists p_expect too, not just p_set', () => {
+    expect(sql).toContain("raise exception 'Field % cannot be used in p_expect'")
+    // Both loops guard, not just the one.
+    expect(sql.match(/not in \('name', 'matter_number', 'matter_type'\)/g)).toHaveLength(2)
+  })
+
+  /**
+   * `->>` returns SQL NULL for a JSON null, so `{"name": null}` would pass the
+   * emptiness check, coalesce back to the old value, change nothing — and
+   * still write an audit row whose before and after match, reporting a
+   * correction that never happened. A number or object is worse: `->>`
+   * stringifies it, and `name` has no CHECK to stop that.
+   */
+  it('requires every p_set value to be a JSON string', () => {
+    expect(sql).toContain("jsonb_typeof(p_set -> v_key) is distinct from 'string'")
+  })
+
   it('reloads PostgREST, which otherwise cannot resolve a brand-new function', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'")
   })
