@@ -48,8 +48,20 @@ describe('the li_design_sheet_data fold', () => {
     expect(sql).toMatch(/decisions\s*=\s*coalesce\(d\.decisions, '\{\}'::jsonb\)\s*\|\|/i)
   })
 
-  it('targets the latest version only, since readers take max(version)', () => {
-    expect(sql).toMatch(/max\(version\)/i)
+  /**
+   * Scoped on the UPDATE statement, not merely somewhere in the file.
+   *
+   * The first version of this test asserted `/max\(version\)/` against the
+   * whole migration — and passed even with the scoping deleted from the
+   * update, because the collision-check block legitimately contains the same
+   * clause. A test that cannot fail for the reason it names is worse than no
+   * test: it reports the guard as covered. Caught by mutation, not review.
+   */
+  it('scopes the update itself to the latest version, since readers take max(version)', () => {
+    const start = sql.indexOf('update public.design_sheets')
+    expect(start).toBeGreaterThan(-1)
+    const statement = sql.slice(start, sql.indexOf(';', start))
+    expect(statement).toMatch(/d\.version\s*=\s*\(select max\(version\)/i)
   })
 
   it('refuses rather than merging when a key already exists', () => {
