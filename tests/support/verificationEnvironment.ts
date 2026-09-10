@@ -29,8 +29,15 @@ export function integrationEnvironment(source: Environment): Environment {
     || target.pathname !== '/') {
     throw new Error('Integration tests require a loopback Supabase URL')
   }
+  if (source.INTEGRATION_DATABASE_URL) {
+    const database = new URL(source.INTEGRATION_DATABASE_URL)
+    if (!['postgres:', 'postgresql:'].includes(database.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(database.hostname)) {
+      throw new Error('Integration database must be loopback')
+    }
+  }
   return {
     ...unitEnvironment(source),
+    INTEGRATION_DATABASE_URL: source.INTEGRATION_DATABASE_URL,
     NEXT_PUBLIC_SUPABASE_URL: target.origin,
     SUPABASE_SERVICE_ROLE_KEY: key,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: source.INTEGRATION_SUPABASE_ANON_KEY,

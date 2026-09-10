@@ -9829,6 +9829,39 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_workflow_jobs_v2: {
+        Args: { p_lease_seconds?: number; p_limit: number; p_worker: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          claim_token: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      finish_workflow_job_v2: {
+        Args: { p_claim_token: string; p_error?: string; p_job_id: string }
+        Returns: boolean
+      }
       claim_workflow_jobs: {
         Args: { p_limit: number; p_worker: string }
         Returns: {

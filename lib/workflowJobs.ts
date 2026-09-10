@@ -1,4 +1,3 @@
-import { loadInvoiceBalances } from '@/lib/queries/invoiceBalances'
 import 'server-only'
 
 import os from 'node:os'
@@ -8,7 +7,8 @@ import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesig
 import { ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import type { GeneratedDatabase, Json } from '@/types/supabase'
-import { firmTodayKey } from '@/lib/firmDate'
+import { prepareInvoiceReminderDrafts } from '@/lib/billing/prepareInvoiceReminders'
+export { prepareInvoiceReminderDrafts } from '@/lib/billing/prepareInvoiceReminders'
 
 export type WorkflowJobType =
   | 'seed_design_sheet'
@@ -25,6 +25,8 @@ export interface WorkflowJob {
   payload: Record<string, unknown>
   attempts: number
   max_attempts: number
+  claim_token: string
+  lease_expires_at: string
 }
 
 function generatedAdmin(): SupabaseClient<GeneratedDatabase> {
@@ -138,86 +140,51 @@ async function runJob(job: WorkflowJob) {
   }
   // Reminder drafting is intentionally separate from sending. The approval
   // endpoint is the only path that can deliver a reminder.
-  if (job.job_type === 'prepare_invoice_reminders') return
+  if (job.job_type === 'prepare_invoice_reminders') {
+    const result = await prepareInvoiceReminderDrafts()
+    if (result.unavailable) throw new Error('Reminder preparation unavailable')
+    return
+  }
   const exhaustive: never = job.job_type
   throw new Error(`Unsupported workflow job: ${exhaustive}`)
 }
 
-const REMINDER_COPY = {
-  friendly: 'A quick reminder that this invoice is now due. If payment is already on its way, thank you and please disregard this note.',
-  firm: 'This invoice remains past due. Please arrange payment or let us know when we should expect it.',
-  final: 'This invoice remains unpaid and is significantly past due. Please arrange payment or contact the firm to discuss the account.',
-} as const
-
-function mondayKey(dateKey: string): string {
-  const date = new Date(`${dateKey}T12:00:00Z`)
-  const day = date.getUTCDay() || 7
-  date.setUTCDate(date.getUTCDate() - day + 1)
-  return date.toISOString().slice(0, 10)
-}
-
-/** Drafts at most one reminder per overdue invoice per firm week. Never sends. */
-export async function prepareInvoiceReminderDrafts() {
-  const admin = getAdminClient()
-  const today = firmTodayKey()
-  const cadenceWeek = mondayKey(today)
-  const { data, error } = await admin
-    .from('invoices')
-    .select('id, number, subtotal_cents, due_date, bill_to_email, kind')
-    .in('status', ['issued', 'partial'])
-    .not('due_date', 'is', null)
-    .lt('due_date', today)
-  if (error) {
-    // Feature may be disabled and its migration intentionally unapplied.
-    return { drafted: 0, unavailable: true }
-  }
-  const balances = await loadInvoiceBalances(admin, data ?? [])
-  let drafted = 0
-  for (const invoice of data ?? []) {
-    if (!invoice.bill_to_email || !invoice.due_date) continue
-    if ((balances.get(invoice.id) ?? 0) <= 0) continue
-    const days = Math.max(1, Math.floor((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${invoice.due_date}T12:00:00Z`)) / 86_400_000))
-    const level = days >= 28 ? 'final' : days >= 14 ? 'firm' : 'friendly'
-    const { error: insertError } = await admin.from('invoice_reminders').insert({
-      invoice_id: invoice.id,
-      cadence_week: cadenceWeek,
-      escalation_level: level,
-      recipient_email: invoice.bill_to_email,
-      subject: `Reminder: invoice ${invoice.number ?? ''}`.trim(),
-      body: REMINDER_COPY[level],
-    })
-    if (!insertError) drafted += 1
-    else if (insertError.code !== '23505') console.error('[workflow-jobs] reminder draft:', insertError.message)
-  }
-  return { drafted, unavailable: false }
-}
-
-export async function processWorkflowJobs(limit = 10) {
-  const reminders = await prepareInvoiceReminderDrafts()
+/** Claim one job at a time, reserving ten seconds of the route for cleanup. */
+export async function processWorkflowJobs(limit = 10, options: {
+  now?: () => number; run?: (job: WorkflowJob) => Promise<void>; budgetMs?: number
+} = {}) {
+  if (!await durableWorkflowJobsEnabled()) return { claimed: 0, succeeded: 0, failed: 0, disabled: true }
+  const now = options.now ?? Date.now
+  const deadline = now() + Math.min(options.budgetMs ?? 50_000, 50_000)
   const admin = generatedAdmin()
   const worker = `${os.hostname()}:${process.pid}`
-  const { data, error } = await admin.rpc('claim_workflow_jobs', {
-    p_limit: limit,
-    p_worker: worker,
-  } as never)
-  if (error) throw new Error(error.message)
-  const jobs = (data ?? []) as unknown as WorkflowJob[]
-  let succeeded = 0
-  let failed = 0
-  for (const job of jobs) {
+  let claimed = 0, succeeded = 0, failed = 0
+  while (claimed < Math.max(0, Math.min(limit, 50)) && deadline - now() >= 10_000) {
+    const { data, error } = await admin.rpc('claim_workflow_jobs_v2', {
+      p_limit: 1, p_worker: worker, p_lease_seconds: 120,
+    })
+    if (error) throw new Error(error.message)
+    const job = (data as unknown as WorkflowJob[] | null)?.[0]
+    if (!job) break
+    claimed += 1
     let failure: string | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      await runJob(job)
-      succeeded += 1
-    } catch (error) {
-      failure = error instanceof Error ? error.message : 'Workflow job failed'
-      failed += 1
-    }
-    const { error: finishError } = await admin.rpc('finish_workflow_job', {
-      p_job_id: job.id,
-      p_error: failure,
-    } as never)
+      const remaining = deadline - now() - 1000
+      if (remaining <= 0) throw new Error('Worker time budget exhausted before execution')
+      await Promise.race([
+        (options.run ?? runJob)(job),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Workflow execution timed out')), remaining) }),
+      ])
+    } catch (error) { failure = error instanceof Error ? error.message : 'Workflow job failed' }
+    finally { if (timer) clearTimeout(timer) }
+    const { data: finished, error: finishError } = await admin.rpc('finish_workflow_job_v2', {
+      p_job_id: job.id, p_claim_token: job.claim_token, p_error: failure ?? undefined,
+    })
     if (finishError) throw new Error(finishError.message)
+    if (!finished) throw new Error('Workflow claim expired or was replaced; completion was not recorded')
+    if (failure) failed += 1
+    else succeeded += 1
   }
-  return { claimed: jobs.length, succeeded, failed, reminderDrafts: reminders.drafted }
+  return { claimed, succeeded, failed, disabled: false }
 }
