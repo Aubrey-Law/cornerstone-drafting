@@ -105,7 +105,23 @@ comment on function public.correct_matter(uuid, jsonb, jsonb, text) is
 
 -- The service role only. This bypasses RLS by design and must not be reachable
 -- from a browser session.
+--
+-- `anon` is revoked explicitly and that is NOT redundant. Supabase ships a
+-- default privilege granting EXECUTE on every new function in this schema to
+-- anon, authenticated and service_role, so a new security definer function is
+-- callable with the publishable key the moment it is created. Revoking from
+-- `public` does not remove it, because it is a grant to those roles by name.
+--
+-- Measured here on 2026-09-09: after the first apply, which revoked only
+-- `public` and `authenticated`,
+-- `has_function_privilege('anon', 'public.correct_matter(...)', 'EXECUTE')`
+-- returned true. That is worse than an unauthorised write. The stale-read
+-- exception reports the *current* value, so an anonymous caller holding any
+-- matter id could read its name by deliberately failing the check — straight
+-- past row-level security. `claim_workflow_run` and `claim_prompt_stage_trigger`
+-- both hold service_role alone; this now matches them.
 revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from public;
+revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from anon;
 revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from authenticated;
 grant execute on function public.correct_matter(uuid, jsonb, jsonb, text) to service_role;
 

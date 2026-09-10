@@ -341,6 +341,35 @@ describe('the correct_matter migration', () => {
     expect(sql).not.toMatch(/grant execute on function public\.correct_matter[^\n]*to authenticated/)
   })
 
+  /**
+   * `anon` needs its own revoke, and this test exists because the first applied
+   * version of this migration did not have one.
+   *
+   * Supabase ships a default privilege granting EXECUTE on every new function
+   * in `public` to anon, authenticated and service_role. Revoking from `public`
+   * does not touch those, because they are grants to named roles. Measured
+   * against the live database on 2026-09-09 after the first apply:
+   * `has_function_privilege('anon', …, 'EXECUTE')` was **true**.
+   *
+   * For a security definer function that bypasses RLS, that is worse than an
+   * unauthorised write. The stale-read exception reports the current value, so
+   * anyone holding the publishable key and a matter id could read that matter's
+   * name by deliberately failing the check.
+   */
+  it('revokes anon explicitly, which revoking from public does not do', () => {
+    expect(sql).toContain('revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from anon')
+  })
+
+  it('revokes every role Supabase grants by default before granting service_role', () => {
+    // Order matters: a grant that precedes its revoke is undone by it.
+    const grant = sql.indexOf('grant execute on function public.correct_matter(uuid, jsonb, jsonb, text) to service_role')
+    for (const role of ['public', 'anon', 'authenticated']) {
+      const revoke = sql.indexOf(`revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from ${role}`)
+      expect(revoke).toBeGreaterThan(-1)
+      expect(revoke).toBeLessThan(grant)
+    }
+  })
+
   it('reloads PostgREST, which otherwise cannot resolve a brand-new function', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'")
   })
