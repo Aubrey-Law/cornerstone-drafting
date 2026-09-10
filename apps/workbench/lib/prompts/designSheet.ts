@@ -41,7 +41,7 @@ const MATTER_COLUMNS = Object.values(SOURCE_ALLOW_LIST)
 // is itself a single string-literal AST node — a `'...' + '...'` join is a
 // binary expression and would be invisible to it just the same as a runtime
 // `.join(', ')` would be.
-const DESIGN_SHEET_SELECT = 'concerns, goals_notes, drafting_notes, children, assets, specific_bequests, disinheritances, residuary_beneficiary, residual_beneficiary_individuals, residuary_distribution, spouse_citizenship, include_qdot, marital_trust_type, real_property_transfer, state, client_domicile, marital_status, trust_name, plan_type, guardian_primary, guardian_alt1, trustee_primary, trustee_alt1, executor_primary, hcp_primary, poa_primary, spouse_name, client_name, guardian_slots, temporary_guardian_slots, trustee_slots, executor_slots, hcp_slots, poa_slots'
+export const DESIGN_SHEET_SELECT = 'concerns, goals_notes, drafting_notes, children, assets, specific_bequests, disinheritances, residuary_beneficiary, residual_beneficiary_individuals, residuary_distribution, spouse_citizenship, include_qdot, marital_trust_type, real_property_transfer, state, client_domicile, marital_status, trust_name, plan_type, guardian_primary, guardian_alt1, trustee_primary, trustee_alt1, executor_primary, hcp_primary, poa_primary, spouse_name, client_name, guardian_slots, temporary_guardian_slots, trustee_slots, executor_slots, hcp_slots, poa_slots, decisions'
 
 const MATTER_SELECT = 'name'
 

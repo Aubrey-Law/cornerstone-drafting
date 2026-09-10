@@ -11,7 +11,10 @@ import type { PromptInput } from './body'
  *
  * Checked at publish time, not run time — see `unknownSources`.
  */
-export const SOURCE_ALLOW_LIST: Record<string, { table: 'design_sheet' | 'matter'; column: string }> = {
+export const SOURCE_ALLOW_LIST: Record<
+  string,
+  { table: 'design_sheet' | 'matter'; column: string; jsonKey?: string }
+> = {
   'design_sheet.concerns': { table: 'design_sheet', column: 'concerns' },
   'design_sheet.goals_notes': { table: 'design_sheet', column: 'goals_notes' },
   'design_sheet.drafting_notes': { table: 'design_sheet', column: 'drafting_notes' },
@@ -57,6 +60,14 @@ export const SOURCE_ALLOW_LIST: Record<string, { table: 'design_sheet' | 'matter
   'design_sheet.hcp_slots': { table: 'design_sheet', column: 'hcp_slots' },
   'design_sheet.poa_slots': { table: 'design_sheet', column: 'poa_slots' },
   'matter.name': { table: 'matter', column: 'name' },
+  // Written by ResiduarySection.tsx into the decisions blob, not into a
+  // column. The four columns named `residuary_*` are never written by
+  // anything; reading them is what made the audit report no residuary on
+  // matters that had one.
+  'design_sheet.residuary_spouse_survives': { table: 'design_sheet', column: 'decisions', jsonKey: 'residuary_spouse_survives' },
+  'design_sheet.residuary_no_spouse': { table: 'design_sheet', column: 'decisions', jsonKey: 'residuary_no_spouse' },
+  'design_sheet.residuary_other_instructions': { table: 'design_sheet', column: 'decisions', jsonKey: 'residuary_other_instructions' },
+  'design_sheet.residuary_specific_gifts': { table: 'design_sheet', column: 'decisions', jsonKey: 'residuary_specific_gifts' },
 }
 
 export type SourceRows = {
@@ -115,7 +126,14 @@ export function resolveInputs(declarations: PromptInput[], rows: SourceRows): Re
       unresolvable.push(declaration.source)
       continue
     }
-    const value = rows[entry.table]?.[entry.column] ?? null
+    // A `jsonKey` entry names a key inside a jsonb column rather than the
+    // column itself. `?? null` on both reads keeps a missing column and a
+    // missing key indistinguishable to `isEmpty`, which is correct: both mean
+    // the attorney has not recorded it.
+    const raw = rows[entry.table]?.[entry.column] ?? null
+    const value = entry.jsonKey
+      ? ((raw as Record<string, unknown> | null)?.[entry.jsonKey] ?? null)
+      : raw
     if (declaration.required && isEmpty(value)) {
       missing.push(declaration.source)
       continue
