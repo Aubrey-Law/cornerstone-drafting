@@ -83,10 +83,13 @@ function rather than at that line.
 1. Migrate the ten blobs into `design_sheets.decisions`, and stop writing the
    column.
 2. Port the persistence layer into `apps/workbench`, with compare-and-swap.
-3. Port `lib/designSheet/seedFromIntake.ts` and
-   `lib/contacts/intakeFiduciarySnapshot.ts` **verbatim** — the plan's
-   instruction, because that mapping is the intake→drafting bridge and
-   rewriting it silently breaks generation.
+3. ~~Port `lib/designSheet/seedFromIntake.ts` and
+   `lib/contacts/intakeFiduciarySnapshot.ts` verbatim.~~ **Withdrawn
+   2026-09-10 on attempting it.** Those two files stand on eleven modules
+   absent from `apps/workbench`, so the port is not a copy — it needs the
+   overhaul plan's *Shared-code extraction* first, which is its own phase.
+   The bridge is not required until something in the workbench seeds a sheet
+   from intake, which is 6b's work.
 4. Point the audit's input resolution at `decisions`.
 5. Re-run check 1 against the seven and record whether it stops firing.
 

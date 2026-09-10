@@ -681,95 +681,41 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Port the intake bridge verbatim
+### Task 5: Withdrawn — the intake bridge cannot be ported yet
 
-**Files:**
-- Create: `apps/workbench/lib/designSheet/seedFromIntake.ts`
-- Create: `apps/workbench/lib/contacts/intakeFiduciarySnapshot.ts`
-- Test: `apps/workbench/tests/design-sheet-persistence.test.ts`
+**Attempted 2026-09-10 and stopped, deliberately.**
 
-The overhaul plan is explicit: **port these verbatim** — "that mapping is the intake→drafting bridge and rewriting it silently breaks generation." `lib/designSheet/seedFromIntake.ts` is 305 lines; `lib/contacts/intakeFiduciarySnapshot.ts` is 252.
+This task said to copy `lib/designSheet/seedFromIntake.ts` (305 lines) and
+`lib/contacts/intakeFiduciarySnapshot.ts` (252) into the workbench verbatim,
+fixing only import specifiers. That was wrong about the shape of the work.
 
-- [ ] **Step 1: Write the failing test**
+Those two files stand on **eleven modules that do not exist under
+`apps/workbench`**: `lib/queries`, `types/database`, `types/supabase`,
+`lib/phone`, `lib/intakePlanType`, `lib/sharedFields`,
+`lib/sharedFields/fiduciaries`, `lib/adminIntakeFiduciaries`,
+`lib/designSheetImport/shared`, `lib/designSheet/buildInitialSheet` and
+`lib/designSheet/seedCollegePrep`. Copying the files yields 12 `TS2307`
+errors, one per unresolved import.
 
-Append to `apps/workbench/tests/design-sheet-persistence.test.ts`:
+Some of the named helpers do exist in shared packages, at different paths —
+`formatPhoneDisplay` in `packages/drafting-engine/src/phone.ts`,
+`designSlotKeyForContactRole` and `normalizeCitizenshipStatus` in
+`packages/estate-fields/src/core/` — and `joinFiduciaryName` exists in no
+package at all. Repointing the imports at package copies that are *probably*
+the same implementation is exactly the silent rewrite this task's own reason
+forbids: the failure mode is not a crash, it is a document that is merely
+wrong with a real client's name on it.
 
-```ts
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+**Withdrawn from 6a rather than forced.** The bridge is only needed once
+something in the workbench seeds a design sheet from intake, which is 6b's
+work. What it actually requires first is the overhaul plan's own
+*Shared-code extraction* — its own phase, not a step inside a persistence
+change.
 
-/**
- * These two are ported verbatim, and this test is what makes "verbatim" a
- * fact rather than an intention.
- *
- * The overhaul plan's reason: this mapping is the intake→drafting bridge, and
- * rewriting it silently breaks generation — silently, because a wrong mapping
- * produces a document that is merely wrong rather than an error.
- *
- * Import paths are the one permitted difference, so they are normalised out
- * before comparing.
- */
-describe('the intake bridge is a verbatim port', () => {
-  const repoRoot = join(__dirname, '..', '..', '..')
-  const normalise = (s: string) => s.replace(/from '[^']*'/g, "from '<path>'").trim()
+Tasks 1–4 are a complete phase without it: one home for the sheet, one safe
+write path, and the audit reading where the data is.
 
-  for (const [source, ported] of [
-    ['lib/designSheet/seedFromIntake.ts', 'apps/workbench/lib/designSheet/seedFromIntake.ts'],
-    ['lib/contacts/intakeFiduciarySnapshot.ts', 'apps/workbench/lib/contacts/intakeFiduciarySnapshot.ts'],
-  ]) {
-    it(`${ported} matches ${source} apart from import paths`, () => {
-      expect(normalise(readFileSync(join(repoRoot, ported), 'utf8'))).toBe(
-        normalise(readFileSync(join(repoRoot, source), 'utf8')),
-      )
-    })
-  }
-})
-```
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `npm run test --workspace apps/workbench -- tests/design-sheet-persistence.test.ts`
-Expected: FAIL — `ENOENT` on both ported files.
-
-- [ ] **Step 3: Copy both files**
-
-```bash
-cp lib/designSheet/seedFromIntake.ts apps/workbench/lib/designSheet/seedFromIntake.ts
-mkdir -p apps/workbench/lib/contacts
-cp lib/contacts/intakeFiduciarySnapshot.ts apps/workbench/lib/contacts/intakeFiduciarySnapshot.ts
-```
-
-Then fix **only** the import specifiers so they resolve under `apps/workbench`. Change nothing else — no reformatting, no renaming, no "while I'm here" improvements. If a copied file imports something the workbench does not have, stop and report it rather than reimplementing the dependency.
-
-- [ ] **Step 4: Run the tests and both typechecks**
-
-```bash
-npm run test --workspace apps/workbench -- tests/design-sheet-persistence.test.ts
-npm run typecheck --workspace apps/workbench
-npm run lint --workspace apps/workbench; echo "exit=$?"
-```
-
-Expected: 6 tests pass; typecheck clean; lint `exit=0`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/workbench/lib/designSheet/seedFromIntake.ts apps/workbench/lib/contacts/intakeFiduciarySnapshot.ts apps/workbench/tests/design-sheet-persistence.test.ts
-git commit -m "Port the intake bridge verbatim, and assert that it is verbatim
-
-The overhaul plan's instruction and its reason: this mapping is the
-intake to drafting bridge, and rewriting it silently breaks generation —
-silently, because a wrong mapping yields a document that is merely wrong.
-
-A test compares both files against their originals with import paths
-normalised out, so 'verbatim' is checked rather than intended.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-```
-
----
-
-### Task 6: Apply, publish, and prove *(controller-only — not for a subagent)*
+### Task 5 (final): Apply, publish, and prove *(controller-only — not for a subagent)*
 
 - [ ] **Step 1: Run every suite and open the PR**
 
@@ -893,8 +839,8 @@ Re-run check 1 on the seven matters whose findings were archived as false:
 | the select carries `decisions` | 3 |
 | port persistence with compare-and-swap | 4 |
 | a lost race is reported, not swallowed | 4 |
-| port `seedFromIntake` + `intakeFiduciarySnapshot` verbatim | 5 |
-| remove Task 4's type shims once types are regenerated | 6 (Step 4) |
-| measure every allow-list source against real data | 6 (Step 6) |
-| re-run check 1 on the seven | 6 (Step 7) |
+| port `seedFromIntake` + `intakeFiduciarySnapshot` verbatim | **withdrawn** — needs the shared-code extraction first, see Task 5 |
+| remove Task 4's type shims once types are regenerated | final (Step 4) |
+| measure every allow-list source against real data | final (Step 6) |
+| re-run check 1 on the seven | final (Step 7) |
 | out of scope: dropping the column, the sections, the drafting run | not implemented anywhere |
