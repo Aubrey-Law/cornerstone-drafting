@@ -1,25 +1,30 @@
 'use client'
 
 import Link from 'next/link'
-import { Loader2, Upload, FileText } from 'lucide-react'
+import { Loader2, Upload, FileText, Download } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
-import {
-  fiduciaryReviewTitle,
-  intakeReviewRow,
-  isIntakeReviewFieldKey,
-  type IntakeReviewFieldKey,
-} from '@/lib/sharedFields/reviewDisplay'
+import { fiduciaryReviewTitle } from '@/lib/sharedFields/reviewDisplay'
 import {
   getActiveSteps,
   getStepIssues,
   type IntakeRow,
 } from '@/lib/intakeSections'
 import { collegePrepReviewSections } from '@/lib/collegePrepReview'
+import {
+  fiduciaryLabel,
+  reviewRows,
+  summarizeAssetTotals,
+  summarizeItemList,
+  summarizeRealEstate,
+  type AdditionalContactEntry,
+  type ChildEntry,
+  type FiduciaryEntry,
+} from '@/lib/intake/portalReviewSections'
 import { getIntakeTrack } from '@/lib/intakeTrack'
 import {
   INTAKE_DOCUMENT_KIND_LABELS,
@@ -28,104 +33,12 @@ import {
 } from '@/lib/intake/intakeDocumentColumns'
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from '@/lib/documentUpload'
 
-interface FiduciaryEntry {
-  first_name: string
-  last_name: string
-  relationship: string
-  priority: number
-  is_coagent?: boolean
-}
-
-interface ChildEntry {
-  id?: string
-  first_name: string
-  last_name: string
-  date_of_birth: string
-}
-
-interface AdditionalContactEntry {
-  id: string
-  first_name: string
-  last_name: string
-  relationship?: string
-  phone?: string
-  email?: string
-  street?: string
-  city?: string
-  state?: string
-  zip?: string
-  address?: string
-}
-
 const ACCEPT_ATTR = '.pdf,.doc,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.tif,.tiff'
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-interface RealEstateItem {
-  id: string
-}
-
-interface AssetTotals {
-  client_total: string
-  spouse_total: string
-  joint_total: string
-}
-
-function formatLegacyReviewValue(value: unknown): string {
-  if (value == null || value === '') return ''
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  return String(value).trim()
-}
-
-function reviewRows(entries: Array<[IntakeReviewFieldKey, unknown] | [string, unknown]>): [string, string][] {
-  return entries
-    .map((entry) => {
-      const [key, value] = entry
-      if (isIntakeReviewFieldKey(key)) {
-        return intakeReviewRow(key, value)
-      }
-      const text = formatLegacyReviewValue(value)
-      if (!text) return null
-      return [key, text] as [string, string]
-    })
-    .filter((row): row is [string, string] => row !== null)
-}
-
-function summarizeRealEstate(data: Record<string, unknown>): string | null {
-  const items = data.financial_real_estate as RealEstateItem[] | undefined
-  if (!items?.length) return null
-  return `${items.length} ${items.length === 1 ? 'property' : 'properties'} listed`
-}
-
-function summarizeItemList(
-  data: Record<string, unknown>,
-  key: string,
-  singular: string,
-  plural: string,
-): string | null {
-  const items = data[`financial_${key}`]
-  if (!Array.isArray(items) || items.length === 0) return null
-  return `${items.length} ${items.length === 1 ? singular : plural} listed`
-}
-
-function summarizeAssetTotals(data: Record<string, unknown>, key: string): string | null {
-  const totals = data[`financial_${key}`] as AssetTotals | undefined
-  if (!totals) return null
-  const parts = [
-    totals.client_total && `Client: ${totals.client_total}`,
-    totals.spouse_total && `Spouse: ${totals.spouse_total}`,
-    totals.joint_total && `Joint: ${totals.joint_total}`,
-  ].filter(Boolean)
-  return parts.length ? parts.join(' / ') : null
-}
-
-function fiduciaryLabel(entry: FiduciaryEntry): string {
-  if (entry.is_coagent) return `Co-agent ${entry.priority}`
-  return entry.priority === 1 ? 'Primary' : `Alternate ${entry.priority - 1}`
 }
 
 function EditControl({
@@ -436,6 +349,46 @@ export function IntakeQuestionnaireReview({
   intakeId,
   publicIntakeToken,
 }: IntakeQuestionnaireReviewProps) {
+  const [exporting, setExporting] = useState(false)
+
+  const exportAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    if (publicIntakeToken) return { 'X-Intake-Token': publicIntakeToken }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error('Not authenticated')
+    return { Authorization: `Bearer ${session.access_token}` }
+  }, [publicIntakeToken])
+
+  // Downloads the same answers this screen shows, as a Word document the
+  // client can keep. Available before submit too: the point is to have a copy
+  // of what was entered, not a receipt for having sent it.
+  const handleDownloadAnswers = useCallback(async () => {
+    if (!intakeId) return
+    setExporting(true)
+    try {
+      const headers = await exportAuthHeaders()
+      const response = await fetch(`/api/intake/${intakeId}/export`, { headers })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? 'Could not download your answers')
+      }
+      const blob = await response.blob()
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'my-intake.docx'
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not download your answers')
+    } finally {
+      setExporting(false)
+    }
+  }, [exportAuthHeaders, intakeId])
+
   const isCollegePrep = getIntakeTrack(data) === 'college_prep'
   const reviewSteps = getActiveSteps(data as IntakeRow).filter((step) => step.id !== 'review')
   const checklist = reviewSteps.map((step) => {
@@ -502,11 +455,26 @@ export function IntakeQuestionnaireReview({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <p className="text-sm text-muted-foreground">
-        {isCollegePrep
-          ? 'This is a summary of everything entered in the College Preparation Plan questionnaire. Review each section together and edit anything that needs updating before submitting.'
-          : 'This is your estate plan organizer — a summary of everything you entered in the questionnaire. Review each section and edit anything that needs updating before submitting.'}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {isCollegePrep
+            ? 'This is a summary of everything entered in the College Preparation Plan questionnaire. Review each section together and edit anything that needs updating before submitting.'
+            : 'This is your estate plan organizer — a summary of everything you entered in the questionnaire. Review each section and edit anything that needs updating before submitting.'}
+        </p>
+        {intakeId && (
+          <button
+            type="button"
+            onClick={() => void handleDownloadAnswers()}
+            disabled={exporting}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            {exporting
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              : <Download className="h-3.5 w-3.5" aria-hidden />}
+            {exporting ? 'Preparing…' : 'Download a copy (Word)'}
+          </button>
+        )}
+      </div>
 
       <div className="rounded-lg border border-border bg-muted/40 p-4">
         <h4 className="mb-3 text-sm font-semibold text-foreground">Submission checklist</h4>
