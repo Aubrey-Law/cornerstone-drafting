@@ -1,3 +1,4 @@
+import { formatDateOnly } from '@/lib/dob'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { formatPhoneDisplay } from '@/lib/phone'
 import {
@@ -108,6 +109,38 @@ export function summarizeAssetTotals(data: Record<string, unknown>, key: string)
     totals.joint_total && `Joint: ${totals.joint_total}`,
   ].filter(Boolean)
   return parts.length ? parts.join(' / ') : null
+}
+
+/**
+ * Render a stored date answer as a readable one — `1972-04-08` → `Apr 8, 1972`.
+ *
+ * Only a value that is *entirely* an ISO date is treated as a date. Prose that
+ * merely mentions one ("we signed on 2020-01-15") is a client's own wording and
+ * is left exactly as they typed it.
+ */
+export function formatReviewDateValue(value: string): string {
+  const trimmed = value.trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (!match) return value
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+
+  // An out-of-range value rolls over rather than failing — Date.UTC turns
+  // 2020-13-45 into 14 Feb 2021. Showing a client a date of birth they never
+  // entered is worse than showing them the value as stored, so anything that
+  // does not round-trip is passed through untouched.
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    return value
+  }
+
+  return formatDateOnly(trimmed)
 }
 
 export function fiduciaryLabel(entry: FiduciaryEntry): string {
@@ -256,7 +289,9 @@ export function buildPortalReviewSections(
           .map((p) => (p ?? '').trim())
           .filter(Boolean)
           .join(' ')
-        return child.date_of_birth ? `${name} (DOB: ${child.date_of_birth})` : name
+        return child.date_of_birth
+          ? `${name} (DOB: ${formatReviewDateValue(child.date_of_birth)})`
+          : name
       })))
     }
   }
@@ -316,5 +351,19 @@ export function buildPortalReviewSections(
     sections.push(fiduciarySection('_fid_excluded_guardian'))
   }
 
-  return sections.filter((section): section is PortalReviewSection => section !== null)
+  // Dates print readably in the client's copy. The review screen shows them as
+  // stored; this is the one place the download deliberately reads better than
+  // the screen, so the parity test compares titles and labels, not values.
+  return sections
+    .filter((section): section is PortalReviewSection => section !== null)
+    .map((section) =>
+      section.kind === 'fields'
+        ? {
+            ...section,
+            rows: section.rows.map(
+              ([label, value]) => [label, formatReviewDateValue(value)] as [string, string],
+            ),
+          }
+        : section,
+    )
 }

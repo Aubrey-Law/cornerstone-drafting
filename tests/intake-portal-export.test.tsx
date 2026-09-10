@@ -8,6 +8,7 @@ import { Packer } from 'docx'
 import PizZip from 'pizzip'
 import {
   buildPortalReviewSections,
+  formatReviewDateValue,
   type PortalReviewSection,
 } from '@/lib/intake/portalReviewSections'
 import { IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
@@ -179,6 +180,62 @@ describe('portal review sections', () => {
   })
 })
 
+describe('portal review export — dates', () => {
+  it('prints stored dates readably in the client copy', () => {
+    const sections = buildPortalReviewSections(estateIntake())
+
+    expect(valueOf(sections, 'Personal Information', 'Date of birth')).toBe('Apr 8, 1972')
+    expect(valueOf(sections, 'Spouse', 'Date of birth')).toBe('Feb 2, 1974')
+    expect(entriesOf(sections, 'Children')).toEqual(['Robin Smith (DOB: Jun 1, 2014)'])
+  })
+
+  it('formats the College Preparation Plan date answers too', () => {
+    const sections = buildPortalReviewSections({
+      id: 'cp',
+      intake_track: 'college_prep',
+      first_name: 'Robin',
+      last_name: 'Smith',
+      date_of_birth: '2008-03-30',
+      college_move_in_date: '2026-08-24',
+      college_hipaa_expiration_date: '2030-08-24',
+    })
+    const allValues = sections.flatMap((section) =>
+      section.kind === 'fields' ? section.rows.map(([, value]) => value) : section.entries,
+    )
+
+    expect(allValues).toContain('Aug 24, 2026')
+    expect(allValues).toContain('Aug 24, 2030')
+    expect(allValues).toContain('Mar 30, 2008')
+    // Nothing is left in the stored form.
+    expect(allValues.some((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))).toBe(false)
+  })
+
+  it('leaves a client\'s own prose alone even when it mentions a date', () => {
+    // Only a value that is entirely a date is a date answer. Rewriting text
+    // the client typed would be putting words in their mouth.
+    expect(formatReviewDateValue('we signed on 2020-01-15')).toBe('we signed on 2020-01-15')
+    expect(formatReviewDateValue('2020-01-15')).toBe('Jan 15, 2020')
+    expect(formatReviewDateValue('sometime in 2019')).toBe('sometime in 2019')
+    // Out-of-range values roll over in Date.UTC (2020-13-45 would land on
+    // 14 Feb 2021). They must pass through, never print as a date the client
+    // never entered.
+    expect(formatReviewDateValue('2020-13-45')).toBe('2020-13-45')
+    expect(formatReviewDateValue('2021-02-30')).toBe('2021-02-30')
+    expect(formatReviewDateValue('2020-00-10')).toBe('2020-00-10')
+    // A real leap day still formats.
+    expect(formatReviewDateValue('2020-02-29')).toBe('Feb 29, 2020')
+  })
+
+  it('keeps the free-text answers verbatim', () => {
+    const sections = buildPortalReviewSections(estateIntake({
+      special_notes: 'We bought the cabin on 1998-07-04 and want it to stay in the family',
+    }))
+
+    expect(valueOf(sections, 'Goals & wishes', 'Additional notes'))
+      .toBe('We bought the cabin on 1998-07-04 and want it to stay in the family')
+  })
+})
+
 describe('portal review export — parity with the screen', () => {
   it('exports the same sections and labels the review renders', () => {
     const data = estateIntake()
@@ -193,7 +250,9 @@ describe('portal review export — parity with the screen', () => {
     expect(rendered).toEqual(titles(buildPortalReviewSections(data)))
 
     // And the field labels inside them line up too, so a renamed question on
-    // screen cannot silently keep its old wording in the download.
+    // screen cannot silently keep its old wording in the download. Values are
+    // deliberately excluded: the download formats dates readably where the
+    // screen shows them as stored.
     const renderedLabels = Array.from(document.querySelectorAll('dt'))
       .map((node) => node.textContent?.trim() ?? '')
     const builtLabels = buildPortalReviewSections(data)
