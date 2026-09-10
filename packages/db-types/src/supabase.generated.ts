@@ -9949,6 +9949,65 @@ export type Database = {
           matter_number: string
         }[]
       }
+      correct_matter: {
+        Args: {
+          p_expect: Json
+          p_matter_id: string
+          p_reason: string
+          p_set: Json
+        }
+        Returns: {
+          client_id: string | null
+          client_intake_id: string
+          closed_at: string | null
+          created_at: string
+          creation_request_id: string | null
+          declined_at: string | null
+          declined_reason: string | null
+          design_meeting_at: string | null
+          discovery_call_at: string | null
+          documents_executed_at: string | null
+          drafts_sent_at: string | null
+          engagement_signed_at: string | null
+          fit_decided_at: string | null
+          fit_decision: string | null
+          flags: string[] | null
+          hired_at: string | null
+          hold_reason: string | null
+          id: string
+          intake_submitted_at: string | null
+          li_design_sheet_approved: boolean | null
+          li_design_sheet_data: Json | null
+          li_plan_coverage: string | null
+          lost_at: string | null
+          lost_reason: string | null
+          matter_number: string | null
+          matter_number_manual: boolean
+          matter_type: string | null
+          name: string
+          on_hold_at: string | null
+          pmps_at: string | null
+          portal_uploads_reviewed_at: string | null
+          recommendations_sent_at: string | null
+          relationship_status: string
+          review_responded_at: string | null
+          revision_round: number
+          signing_date: string | null
+          stage: string
+          stage_entered_at: string | null
+          status: string
+          track: string
+          unread_attorney_messages: number
+          unread_client_messages: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_billing_item: {
         Args: {
           p_actor_id: string

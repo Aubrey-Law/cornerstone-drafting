@@ -95,10 +95,6 @@ describe('matters-mcp is wired into the repository', () => {
     expect(readJson('package.json').workspaces).toContain('tools/matters-mcp')
   })
 
-  it('is linted, since the lint script names its directories', () => {
-    expect(readJson('package.json').scripts.lint).toContain('tools/matters-mcp/src')
-  })
-
   it('has its RPC calls cross-checked against the database', () => {
     const checker = readFileSync(join(root, 'scripts/checkDbRpcs.mjs'), 'utf8')
     const dirs = checker.match(/const SOURCE_DIRS = \[([\s\S]*?)\]/)?.[1] ?? ''
@@ -118,7 +114,7 @@ describe('matters-mcp is wired into the repository', () => {
 - [ ] **Step 2: Run it to make sure it fails**
 
 Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: FAIL — four failures, the last being `ENOENT` on `tools/matters-mcp/package.json`.
+Expected: FAIL — three failures, the last being `ENOENT` on `tools/matters-mcp/package.json`.
 
 - [ ] **Step 3: Create the package manifest**
 
@@ -146,15 +142,20 @@ Create `tools/matters-mcp/package.json`:
 }
 ```
 
-- [ ] **Step 4: Add the workspace and the lint directory**
+- [ ] **Step 4: Add the workspace**
 
 In the root `package.json`, add `"tools/matters-mcp"` to the end of the `workspaces` array.
 
-In the same file's `scripts.lint`, append ` tools/matters-mcp/src` immediately before ` eslint.config.mjs`, so the value reads:
+**Do not touch the lint script here.** ESLint 9 exits 2 on a path that does not
+resolve — not a warning, not a skip — so naming `tools/matters-mcp/src` before
+any source file exists breaks `npm run lint` for the *whole repository*, `app`
+and `lib` included. Measured: `npm run lint` → `exit=2`,
+`No files matching the pattern "tools/matters-mcp/src" were found`. Pointing at
+`tools/matters-mcp` instead does not help either. The lint registration is
+therefore Task 2's, landing in the same commit as the first `.ts` file.
 
-```
-eslint app components hooks lib types packages/citations/src packages/db-types/src packages/drafting-engine/src packages/ui/src tools/matters-mcp/src eslint.config.mjs
-```
+(The `checkDbRpcs.mjs` entry in the next step is safe to add now: that script
+wraps `readdirSync` in try/catch and returns `[]` for a missing directory.)
 
 - [ ] **Step 5: Teach the RPC checker about the new directory**
 
@@ -174,7 +175,7 @@ npm install
 npx vitest run tests/matters-mcp.test.ts
 ```
 
-Expected: PASS, 4 tests. `npm install` creates `node_modules/@aubrey-law/matters-mcp` as a symlink and installs the MCP SDK.
+Expected: PASS, 3 tests. `npm install` creates `node_modules/@aubrey-law/matters-mcp` as a symlink and installs the MCP SDK.
 
 - [ ] **Step 7: Commit**
 
@@ -297,21 +298,50 @@ export function createMattersClient(config: MattersClientConfig): MattersClient 
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 4: Register the directory for linting, now that it has a file in it**
 
-Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: PASS, 8 tests.
+This is Task 1's leftover, deferred to here on purpose. In the root
+`package.json`'s `scripts.lint`, insert ` tools/matters-mcp/src` immediately
+before ` eslint.config.mjs`, so the value reads:
 
-- [ ] **Step 5: Typecheck and commit**
+```
+eslint app components hooks lib types packages/citations/src packages/db-types/src packages/drafting-engine/src packages/ui/src tools/matters-mcp/src eslint.config.mjs
+```
+
+Add its guard to `tests/matters-mcp.test.ts`, inside the existing
+`describe('matters-mcp is wired into the repository', …)` block:
+
+```ts
+  it('is linted, since the lint script names its directories', () => {
+    expect(readJson('package.json').scripts.lint).toContain('tools/matters-mcp/src')
+  })
+```
+
+- [ ] **Step 5: Run the tests, and confirm lint actually passes**
+
+```bash
+npx vitest run tests/matters-mcp.test.ts
+npm run lint; echo "exit=$?"
+```
+
+Expected: PASS, 8 tests (3 wiring + 1 lint + 4 config); lint `exit=0`. The `exit=` line is the point — ESLint
+prints warnings and still exits 0, so eyeballing the output does not tell you
+whether it passed.
+
+- [ ] **Step 6: Typecheck and commit**
 
 ```bash
 npm run typecheck
-git add tools/matters-mcp/src/client.ts tests/matters-mcp.test.ts
+git add package.json tools/matters-mcp/src/client.ts tests/matters-mcp.test.ts
 git commit -m "A typed client for the matters MCP, refusing a blank key up front
 
 Configuration is a pure function of an environment object so the refusal is
 testable without mutating process.env. A server that starts with a missing
 key and fails on the first tool call reports the problem far from its cause.
+
+Registers the directory for linting too. That belongs here rather than with
+the rest of the wiring: ESLint 9 exits 2 on a path that does not resolve, so
+the entry is only safe once a source file exists.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -657,6 +687,14 @@ function assembleName(contact: {
 Run: `npx vitest run tests/matters-mcp.test.ts`
 Expected: PASS, 16 tests.
 
+**Amended after review:** three more tests and a `total` field were added in a
+follow-up commit (`94238ca4`). The fake recorded neither `.order()` nor
+`.limit()`, so deleting either call from `listMatters` kept all 16 green; and
+the spec's "count of any remainder" had been dropped from this plan, leaving a
+caller unable to tell 100 rows from the whole practice. `listMatters` now
+returns `{ matters, total }`. Task 3 ends at **19** tests, and the counts below
+include that.
+
 - [ ] **Step 5: Typecheck, lint, and commit**
 
 ```bash
@@ -877,7 +915,7 @@ notify pgrst, 'reload schema';
 - [ ] **Step 4: Run the tests**
 
 Run: `npx vitest run tests/matters-mcp.test.ts`
-Expected: PASS, 23 tests.
+Expected: PASS, 26 tests.
 
 - [ ] **Step 5: Prove the field guard is load-bearing**
 
@@ -889,7 +927,7 @@ npx vitest run tests/matters-mcp.test.ts
 
 Expected: the `refuses every field except the three that are corrigible` test goes RED. Restore the line and re-run to confirm green. A guard whose test passes either way guards nothing.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit the migration**
 
 ```bash
 git add supabase/migrations/20261118000000_correct_matter.sql tests/matters-mcp.test.ts
@@ -902,6 +940,83 @@ Three matters renamed by hand today are in exactly that state.
 stage and relationship_status are absent by construction rather than
 rejected by a check — a stage change fires trg_matters_fire_stage_prompts,
 which enqueues real drafting runs.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 7: Apply the migration and regenerate the types *(controller-only — not for a subagent)***
+
+**This cannot be deferred to Task 6, and Task 5 will not compile without it.**
+Measured on 2026-09-09: `SupabaseClient<Database>['rpc']` types its first
+argument as a union of the generated function-name literals, so
+`client.rpc('correct_matter', …)` is a **hard compile error** — not a silent
+`any` — until `correct_matter` exists in
+`packages/db-types/src/supabase.generated.ts`:
+
+```
+error TS2345: Argument of type '"correct_matter"' is not assignable to parameter of type
+'"approve_invoice_reminder" | "assert_billing_actor" | … | "void_invoice"'.
+```
+
+CI forces the same order independently: `db-types-drift.yml` links the project,
+regenerates, and fails on any diff, so the committed types must already
+describe the applied function.
+
+Apply it. The pooler is the only route from a worktree (`--linked` fails
+because a worktree is never linked). Copy `.env.local` in only for the
+operation and delete it immediately, including on failure. Never print, echo,
+or log the password.
+
+```bash
+WT=$(pwd)
+cp /Users/scottaubrey/Desktop/GitHub/cornerstone-drafting/.env.local "$WT/.env.local.tmp"
+trap 'rm -f "$WT/.env.local.tmp"' EXIT INT TERM
+PW=$(grep -m1 '^SUPABASE_DB_PASSWORD=' "$WT/.env.local.tmp" | cut -d= -f2- | tr -d '"')
+PWE=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$PW")
+D="postgresql://postgres.qifunlovuwaryzsyfbnh:${PWE}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+unset PW PWE
+psql "$D" -v ON_ERROR_STOP=1 -f supabase/migrations/20261118000000_correct_matter.sql
+```
+
+Verify from the **catalog**, never from `supabase_migrations.schema_migrations`
+— this project has had a migration recorded as applied whose body never ran:
+
+```bash
+psql "$D" -At -c "select proname, pg_get_function_identity_arguments(oid) from pg_proc where proname = 'correct_matter';"
+```
+
+Expected: `correct_matter|p_matter_id uuid, p_expect jsonb, p_set jsonb, p_reason text`
+
+Then regenerate the types:
+
+```bash
+npx supabase gen types typescript --db-url "$D" --schema public > /tmp/regen.ts
+```
+
+**The trap:** `--linked` emits a leading `__InternalSupabase: { PostgrestVersion: … }`
+block and `--db-url` does **not**. `tests/supabase-types-drift.test.ts` asserts
+`PostgrestVersion:` is present, and `db-types-drift.yml` regenerates with
+`--linked` — so a `--db-url` regeneration that drops it fails the test and would
+report permanent drift. Re-add the block by hand, copying it verbatim from the
+current `packages/db-types/src/supabase.generated.ts`, before overwriting that
+file.
+
+```bash
+npm test -- tests/supabase-types-drift.test.ts
+grep -c 'correct_matter' packages/db-types/src/supabase.generated.ts   # expect >= 1
+npm run typecheck
+```
+
+- [ ] **Step 8: Commit the regenerated types**
+
+```bash
+git add packages/db-types/src/supabase.generated.ts
+git commit -m "Regenerate the types for correct_matter
+
+client.rpc() types its first argument as a union of generated function-name
+literals, so the call Task 5 adds is a compile error until the function is
+in here. CI's db-types-drift check forces the same order from the other
+side.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1198,7 +1313,7 @@ npm run typecheck
 npm run lint
 ```
 
-Expected: PASS, 30 tests; typecheck and lint clean.
+Expected: PASS, 33 tests; typecheck and lint clean.
 
 - [ ] **Step 6: Commit**
 
@@ -1275,30 +1390,11 @@ gh pr create --base main --title "A cornerstone-native matters MCP server" --bod
 
 Wait for all four required checks to **appear and finish**, then merge. Do not read the absence of the word "pending" as completion — a check that has not registered yet looks identical to one that passed.
 
-- [ ] **Step 4: Apply the migration *(controller-only — not for a subagent)***
+- [ ] **Step 4: Prove the behaviour inside a rolled-back transaction *(controller-only)***
 
-The pooler URL is the only route from a worktree; `--linked` fails because a worktree is never linked. Copy `.env.local` in only for the operation and remove it immediately, including on failure. Never print, echo, or log the password.
-
-```bash
-WT=$(pwd)
-cp /Users/scottaubrey/Desktop/GitHub/cornerstone-drafting/.env.local "$WT/.env.local.tmp"
-trap 'rm -f "$WT/.env.local.tmp"' EXIT INT TERM
-PW=$(grep -m1 '^SUPABASE_DB_PASSWORD=' "$WT/.env.local.tmp" | cut -d= -f2- | tr -d '"')
-PWE=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$PW")
-D="postgresql://postgres.qifunlovuwaryzsyfbnh:${PWE}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
-unset PW PWE
-psql "$D" -v ON_ERROR_STOP=1 -f supabase/migrations/20261118000000_correct_matter.sql
-```
-
-Verify from the **catalog**, never from `supabase_migrations.schema_migrations`:
-
-```bash
-psql "$D" -At -c "select proname, pg_get_function_identity_arguments(oid) from pg_proc where proname = 'correct_matter';"
-```
-
-Expected: `correct_matter|p_matter_id uuid, p_expect jsonb, p_set jsonb, p_reason text`
-
-- [ ] **Step 5: Prove the behaviour inside a rolled-back transaction**
+The migration was already applied in Task 4 Step 7, because Task 5 could not
+compile otherwise. Rebuild the connection string the same way (copy `.env.local`
+in, `trap` its removal, never print the password) and use it below as `$D`.
 
 Client data is privileged: this proves the rules without editing and restoring a real record. Every case below must be run **against the function directly**, not through the tool layer — a test that reaches these through the server would pass with the database enforcing nothing.
 
@@ -1352,7 +1448,7 @@ rollback;
 
 **Report all seven outcomes.** If case 1 writes zero or two audit rows, or if any of 2–7 succeeds, stop and fix the function — those are the guarantees the whole design rests on.
 
-- [ ] **Step 6: Point the MCP registration at the new server**
+- [ ] **Step 5: Point the MCP registration at the new server**
 
 In `~/.claude.json`, replace the `aubreylaw-matters` entry under `mcpServers` with:
 
@@ -1372,7 +1468,7 @@ The path points at the **primary checkout**, not a worktree, so the registration
 
 Ask the user to copy the two values in themselves, or to confirm before you read them out of `.env.local` — they are credentials, and this file is not in the repository.
 
-- [ ] **Step 7: Confirm the tools answer**
+- [ ] **Step 6: Confirm the tools answer**
 
 Restart the session so the server is picked up, then call `get_matter` on a matter with a known design sheet. It must return the matter, the latest sheet version, and the contacts in one response. Confirm `list_matters` with `relationship_status: "hired"` returns rows.
 
@@ -1398,7 +1494,9 @@ Report what came back.
 | cannot set a field to null | 4 |
 | error text for stale read, unknown matter, disallowed field, CHECK, PGRST202 | 4, 5 |
 | `tools/matters-mcp/src` added to `checkDbRpcs.mjs` SOURCE_DIRS | 1 |
+| `tools/matters-mcp/src` added to the lint script | 2 (not 1 — see Task 1 Step 4) |
 | tool-layer unit tests against a fake client | 3, 5 |
+| migration applied + types regenerated | 4 (Steps 7–8) |
 | RPC behaviour proven in a rolled-back transaction | 6 |
 | out of scope: create, delete, contacts, stage/relationship transitions | not implemented anywhere |
 
