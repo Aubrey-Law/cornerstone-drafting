@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SOURCE_ALLOW_LIST, resolveInputs, unknownSources } from '@aubrey-law/citations/prompt/inputs'
 import { schemaColumns } from './helpers/schemaColumns'
+import { DESIGN_SHEET_SELECT } from '@/lib/prompts/designSheet'
 
 const declarations = [
   { key: 'concerns', source: 'design_sheet.concerns', required: true },
@@ -56,9 +57,11 @@ describe('resolving a prompt’s declared inputs', () => {
   it('agrees with itself about what each path means', () => {
     // The key and the value restate each other, so they can disagree. A
     // transposed entry names two real columns and would pass every other test
-    // here while feeding a prompt the wrong fact.
+    // here while feeding a prompt the wrong fact. A `jsonKey` entry's source
+    // names the key inside the blob, not the blob's own column — `decisions`
+    // in that case — so the agreement is with `jsonKey` when one is present.
     for (const [source, entry] of Object.entries(SOURCE_ALLOW_LIST)) {
-      expect(source).toBe(`${entry.table}.${entry.column}`)
+      expect(source).toBe(`${entry.table}.${entry.jsonKey ?? entry.column}`)
     }
   })
 
@@ -73,5 +76,58 @@ describe('resolving a prompt’s declared inputs', () => {
       expect(columns, `no table for ${source}`).toBeDefined()
       expect(columns!, `${source} names a column that does not exist`).toContain(entry.column)
     }
+  })
+})
+
+/**
+ * An input that lives inside the `decisions` blob rather than in a column.
+ *
+ * The residuary is written there by `ResiduarySection.tsx`. Before this, the
+ * allow-list could only name a column, so the audit resolved
+ * `design_sheet.residuary_beneficiary` — always empty — and reported no
+ * residuary on matters that had one.
+ */
+describe('inputs that resolve through decisions', () => {
+  it('reads the named key out of the decisions blob', () => {
+    const resolved = resolveInputs(
+      [{ key: 'residuary_spouse_survives', source: 'design_sheet.residuary_spouse_survives', required: false }],
+      { design_sheet: { decisions: { residuary_spouse_survives: 'to my spouse outright' } }, matter: {} },
+    )
+    expect(resolved).toEqual({ ok: true, values: { residuary_spouse_survives: 'to my spouse outright' } })
+  })
+
+  it('treats a missing key as absent, not as a broken prompt', () => {
+    // Absent is an answer — the attorney has not recorded it yet.
+    // Unresolvable means the prompt names something the allow-list does not
+    // have, which is a different and louder failure.
+    const resolved = resolveInputs(
+      [{ key: 'residuary_no_spouse', source: 'design_sheet.residuary_no_spouse', required: false }],
+      { design_sheet: { decisions: {} }, matter: {} },
+    )
+    expect(resolved).toEqual({ ok: true, values: { residuary_no_spouse: null } })
+  })
+
+  it('reports a required decisions key that is missing', () => {
+    const resolved = resolveInputs(
+      [{ key: 'residuary_no_spouse', source: 'design_sheet.residuary_no_spouse', required: true }],
+      { design_sheet: { decisions: {} }, matter: {} },
+    )
+    expect(resolved).toEqual({ ok: false, missing: ['design_sheet.residuary_no_spouse'], unresolvable: [] })
+  })
+
+  it('survives a null decisions column rather than throwing', () => {
+    // `decisions` is nullable, and 4 of 45 sheets have no blob at all.
+    const resolved = resolveInputs(
+      [{ key: 'residuary_no_spouse', source: 'design_sheet.residuary_no_spouse', required: false }],
+      { design_sheet: { decisions: null }, matter: {} },
+    )
+    expect(resolved).toEqual({ ok: true, values: { residuary_no_spouse: null } })
+  })
+
+  it('still selects the decisions column, or every such read returns null', () => {
+    // designSheet.ts's literal select must carry `decisions`, otherwise the
+    // row handed to resolveInputs has no such property and every jsonKey
+    // input resolves to null — indistinguishable from an empty field.
+    expect(DESIGN_SHEET_SELECT).toContain('decisions')
   })
 })
