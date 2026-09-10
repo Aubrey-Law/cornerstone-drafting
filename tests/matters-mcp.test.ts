@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { mattersClientConfig } from '../tools/matters-mcp/src/client'
 import { correctMatter, getMatter, listMatters } from '../tools/matters-mcp/src/matters'
 import { CORRECT_MATTER_SHAPE } from '../tools/matters-mcp/src/tools'
+import { mergeEnvFile, repoRootFrom } from '../tools/matters-mcp/src/env'
 
 const root = join(__dirname, '..')
 const readJson = (p: string) => JSON.parse(readFileSync(join(root, p), 'utf8'))
@@ -535,5 +536,53 @@ describe('the correct_matter tool shape', () => {
         reason: 'r',
       }).success,
     ).toBe(true)
+  })
+})
+
+/**
+ * Where the service-role key comes from.
+ *
+ * Not `~/.claude.json`: that file is backed up and synced, and the key
+ * bypasses row-level security on every table. It already lives in
+ * `.env.local`, and one copy is the right number.
+ */
+describe('the env loader', () => {
+  it('finds the repository root from this module, not the working directory', () => {
+    // An MCP server is launched by the editor from whatever directory it is
+    // in, so `process.cwd()` — which scripts/validateOAuth.mjs uses — would
+    // resolve to somewhere unrelated. `tools/matters-mcp/src` is three deep.
+    expect(repoRootFrom('/repo/tools/matters-mcp/src')).toBe('/repo')
+  })
+
+  it('reads values out of the file when the environment has none', () => {
+    const merged = mergeEnvFile({}, 'SUPABASE_URL=https://from-file.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=file-key\n')
+    expect(merged.SUPABASE_URL).toBe('https://from-file.supabase.co')
+    expect(merged.SUPABASE_SERVICE_ROLE_KEY).toBe('file-key')
+  })
+
+  it('lets a real environment value win, so one run can point elsewhere', () => {
+    const merged = mergeEnvFile({ SUPABASE_URL: 'https://override.supabase.co' }, 'SUPABASE_URL=https://from-file.supabase.co')
+    expect(merged.SUPABASE_URL).toBe('https://override.supabase.co')
+  })
+
+  it('does not let a blank environment value shadow the file', () => {
+    // An empty string is how a half-filled config presents itself. Letting it
+    // win would fail in a way that looks like the file is wrong.
+    for (const blank of ['', '   ']) {
+      expect(mergeEnvFile({ SUPABASE_URL: blank }, 'SUPABASE_URL=https://from-file.supabase.co').SUPABASE_URL).toBe(
+        'https://from-file.supabase.co',
+      )
+    }
+  })
+
+  it('returns the environment untouched when there is no file', () => {
+    const env = { SUPABASE_URL: 'https://only-env.supabase.co' }
+    expect(mergeEnvFile(env, null)).toBe(env)
+  })
+
+  it('keeps unrelated variables rather than replacing the environment', () => {
+    const merged = mergeEnvFile({ PATH: '/usr/bin' }, 'SUPABASE_URL=https://from-file.supabase.co')
+    expect(merged.PATH).toBe('/usr/bin')
+    expect(merged.SUPABASE_URL).toBe('https://from-file.supabase.co')
   })
 })
