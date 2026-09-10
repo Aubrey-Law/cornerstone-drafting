@@ -45,7 +45,10 @@ describe('MatterStageHistoryCard', () => {
       row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
     ])} />)
 
-    expect(screen.getByText(/5 days/)).toBeTruthy()
+    // Anchored: the open stage renders "N days so far", and an unanchored
+    // /5 days/ also matches "35 days" on the 35th day, which made this assert
+    // "found multiple elements" on one calendar day in every ten.
+    expect(screen.getByText(/\b5 days/)).toBeTruthy()
     expect(screen.getByText(/so far/)).toBeTruthy()
   })
 
