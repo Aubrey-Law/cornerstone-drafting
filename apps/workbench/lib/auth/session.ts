@@ -79,15 +79,30 @@ export async function resolveSession(client: ClaimsReadingClient): Promise<Sessi
   try {
     const { data, error } = await client.auth.getClaims()
     if (error) {
-      return error.code && UNUSABLE_TOKEN_CODES.has(error.code)
-        ? { ok: true, userId: null, claimRole: null }
-        : { ok: false }
+      if (error.code && UNUSABLE_TOKEN_CODES.has(error.code)) {
+        return { ok: true, userId: null, claimRole: null }
+      }
+      // Every other error fails closed — but it is logged, because the code is
+      // the only thing that tells us whether it belongs in the set above.
+      console.error(
+        `[auth] getClaims failed, failing closed: code=${error.code ?? '(none)'} status=${
+          error.status ?? '(none)'
+        } ${error.message}`,
+      )
+      return { ok: false }
     }
     const claims = data?.claims
     const sub = typeof claims?.sub === 'string' ? claims.sub : null
     const claimRole = typeof claims?.user_role === 'string' ? claims.user_role : null
     return { ok: true, userId: sub, claimRole }
-  } catch {
+  } catch (error) {
+    // Say why. This branch fails closed, and a closed door that reports
+    // nothing is a door nobody can diagnose — a real lockout on 2026-09-10 was
+    // invisible in every log because this catch was bare, so there was no way
+    // to tell an unreadable cookie from an unreachable backend.
+    //
+    // stderr, not a thrown error: this must stay a fail-closed path.
+    console.error('[auth] getClaims threw, failing closed:', error)
     return { ok: false }
   }
 }
