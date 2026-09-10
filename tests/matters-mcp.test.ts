@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { mattersClientConfig } from '../tools/matters-mcp/src/client'
-import { getMatter, listMatters } from '../tools/matters-mcp/src/matters'
+import { correctMatter, getMatter, listMatters } from '../tools/matters-mcp/src/matters'
+import { CORRECT_MATTER_SHAPE } from '../tools/matters-mcp/src/tools'
 
 const root = join(__dirname, '..')
 const readJson = (p: string) => JSON.parse(readFileSync(join(root, p), 'utf8'))
@@ -372,5 +373,117 @@ describe('the correct_matter migration', () => {
 
   it('reloads PostgREST, which otherwise cannot resolve a brand-new function', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'")
+  })
+})
+
+function fakeRpcClient(result: { data: unknown; error: { message: string; code?: string } | null }) {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = []
+  return {
+    calls,
+    rpc: (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args })
+      return Promise.resolve(result)
+    },
+  }
+}
+
+describe('correctMatter', () => {
+  it('calls the RPC with the parameter names the function declares', async () => {
+    const client = fakeRpcClient({ data: { ...MATTER_ROW, name: 'Jie Cheng — Estate Planning' }, error: null })
+    await correctMatter(client as never, {
+      matterId: MATTER_ROW.id,
+      expect: { name: 'Can Cheng — Estate Planning' },
+      set: { name: 'Jie Cheng — Estate Planning' },
+      reason: 'sheet and every contact say Jie Cheng',
+    })
+    expect(client.calls[0]).toEqual({
+      name: 'correct_matter',
+      args: {
+        p_matter_id: MATTER_ROW.id,
+        p_expect: { name: 'Can Cheng — Estate Planning' },
+        p_set: { name: 'Jie Cheng — Estate Planning' },
+        p_reason: 'sheet and every contact say Jie Cheng',
+      },
+    })
+  })
+
+  it('refuses an empty expect before the round trip', async () => {
+    const client = fakeRpcClient({ data: null, error: null })
+    await expect(
+      correctMatter(client as never, {
+        matterId: MATTER_ROW.id,
+        expect: {},
+        set: { name: 'x' },
+        reason: 'r',
+      }),
+    ).rejects.toThrow(/expect/)
+    // Refused locally, so the database was never asked.
+    expect(client.calls).toEqual([])
+  })
+
+  it('refuses an empty set and an empty reason before the round trip', async () => {
+    const client = fakeRpcClient({ data: null, error: null })
+    await expect(
+      correctMatter(client as never, { matterId: MATTER_ROW.id, expect: { name: 'a' }, set: {}, reason: 'r' }),
+    ).rejects.toThrow(/set/)
+    await expect(
+      correctMatter(client as never, {
+        matterId: MATTER_ROW.id,
+        expect: { name: 'a' },
+        set: { name: 'b' },
+        reason: '   ',
+      }),
+    ).rejects.toThrow(/reason/)
+    expect(client.calls).toEqual([])
+  })
+
+  it('explains a missing RPC as a deploy problem, not a bad argument', async () => {
+    const client = fakeRpcClient({ data: null, error: { message: 'Not Found', code: 'PGRST202' } })
+    await expect(
+      correctMatter(client as never, {
+        matterId: MATTER_ROW.id,
+        expect: { name: 'a' },
+        set: { name: 'b' },
+        reason: 'r',
+      }),
+    ).rejects.toThrow(/correct_matter is not exposed/)
+  })
+
+  it('passes the database’s own refusal through verbatim', async () => {
+    const client = fakeRpcClient({
+      data: null,
+      error: { message: 'Stale read on name: expected "A", found "B"' },
+    })
+    await expect(
+      correctMatter(client as never, {
+        matterId: MATTER_ROW.id,
+        expect: { name: 'A' },
+        set: { name: 'C' },
+        reason: 'r',
+      }),
+    ).rejects.toThrow(/Stale read on name: expected "A", found "B"/)
+  })
+})
+
+describe('the correct_matter tool shape', () => {
+  it('accepts only the three corrigible fields, matching the function', () => {
+    const parsed = CORRECT_MATTER_SHAPE.safeParse({
+      matter_id: MATTER_ROW.id,
+      expect: { stage: 'drafting' },
+      set: { name: 'x' },
+      reason: 'r',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('accepts a well-formed correction', () => {
+    expect(
+      CORRECT_MATTER_SHAPE.safeParse({
+        matter_id: MATTER_ROW.id,
+        expect: { name: 'a' },
+        set: { name: 'b' },
+        reason: 'r',
+      }).success,
+    ).toBe(true)
   })
 })

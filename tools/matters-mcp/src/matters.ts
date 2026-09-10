@@ -150,3 +150,54 @@ function assembleName(contact: {
     .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
     .join(' ')
 }
+
+/** The only fields `correct_matter` will accept. Kept in step with the function. */
+export const CORRIGIBLE_FIELDS = ['name', 'matter_number', 'matter_type'] as const
+export type CorrigibleField = (typeof CORRIGIBLE_FIELDS)[number]
+export type CorrigibleValues = Partial<Record<CorrigibleField, string>>
+
+export interface CorrectMatterInput {
+  matterId: string
+  expect: CorrigibleValues
+  set: CorrigibleValues
+  reason: string
+}
+
+/**
+ * Correct a matter through the RPC.
+ *
+ * The local checks below are duplicates of the function's own. They exist to
+ * skip a round trip and to give a clearer message, never as the enforcement —
+ * the database refuses these cases whoever calls it, which is the point of
+ * putting them there.
+ */
+export async function correctMatter(client: MattersClient, input: CorrectMatterInput) {
+  if (Object.keys(input.expect).length === 0) {
+    throw new Error('expect is required: state the value you read, so a stale read is refused rather than applied')
+  }
+  if (Object.keys(input.set).length === 0) throw new Error('set is empty: nothing would change')
+  if (input.reason.trim().length === 0) {
+    throw new Error('reason is required: it is the only record of why this changed')
+  }
+
+  const { data, error } = await client.rpc('correct_matter', {
+    p_matter_id: input.matterId,
+    p_expect: input.expect,
+    p_set: input.set,
+    p_reason: input.reason,
+  })
+
+  if (error) {
+    // PostgREST answers PGRST202 for a function it cannot resolve. That is a
+    // deploy or schema-cache problem, not a bad argument, and this project has
+    // had a migration recorded as applied whose body never ran.
+    if (error.code === 'PGRST202') {
+      throw new Error(
+        'correct_matter is not exposed by PostgREST. Check pg_proc and the OpenAPI document — not supabase_migrations.schema_migrations, which has been wrong here before.',
+      )
+    }
+    throw new Error(error.message)
+  }
+
+  return data
+}
