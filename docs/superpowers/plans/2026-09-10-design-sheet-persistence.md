@@ -834,13 +834,26 @@ grep -c 'lock_version' packages/db-types/src/supabase.generated.ts   # expect >=
 npm run typecheck
 ```
 
-- [ ] **Step 4: Publish a prompt version carrying the new inputs**
+- [ ] **Step 4: Remove the type shims Task 4 needed**
+
+`design_sheets.lock_version` did not exist in the generated types while Task 4
+was written, so `apps/workbench/lib/designSheet/persistence.ts` carries two
+narrow casts — a local `Update & { lock_version: number }` type, and
+`'lock_version' as never` on the `.eq()` column argument.
+
+Step 3 has just regenerated the types, so both are now unnecessary. **Delete
+them and confirm `npm run typecheck --workspace apps/workbench` is still
+clean.** A cast left behind after the reason for it is gone is the kind of
+thing that survives for years and then hides a real error — and `as never` in
+particular would silently accept a column name that no longer exists.
+
+- [ ] **Step 5: Publish a prompt version carrying the new inputs**
 
 The four `design_sheet.residuary_*` sources are now in the allow-list; a prompt version must declare them for the audit to receive them. Publish v10 of `ma-design-sheet-audit` as a copy of v9 with `residuary_spouse_survives` and `residuary_no_spouse` added to `inputs`, and to check 1's `reads`. Change no statement text — this version is about what the check can see, not what it asks.
 
 Follow the shape of `supabase/migrations/20261116000000_design_sheet_audit_v9.sql`: insert into `prompt_versions`, then upsert `prompt_publications`.
 
-- [ ] **Step 5: Measure what every allow-list source actually resolves to**
+- [ ] **Step 6: Measure what every allow-list source actually resolves to**
 
 The bug this phase fixes was invisible to every gate the repo has, and it is
 worth being precise about why: `unknownSources` checks only that a declared
@@ -857,7 +870,7 @@ reached yet — which is fine and expected, per the ruling of 2026-09-10 — or
 another input pointed at a place nothing writes. The two are indistinguishable
 from inside the code, and only this table separates them.
 
-- [ ] **Step 6: Prove the fix against the thing that motivated it**
+- [ ] **Step 7: Prove the fix against the thing that motivated it**
 
 Re-run check 1 on the seven matters whose findings were archived as false:
 `0528d2db`, `10904a59`, `48aac2c1`, `590a0498`, `d11717cd`, `e10908ee`, `fadd6263`.
@@ -881,6 +894,7 @@ Re-run check 1 on the seven matters whose findings were archived as false:
 | port persistence with compare-and-swap | 4 |
 | a lost race is reported, not swallowed | 4 |
 | port `seedFromIntake` + `intakeFiduciarySnapshot` verbatim | 5 |
-| measure every allow-list source against real data | 6 (Step 5) |
-| re-run check 1 on the seven | 6 (Step 6) |
+| remove Task 4's type shims once types are regenerated | 6 (Step 4) |
+| measure every allow-list source against real data | 6 (Step 6) |
+| re-run check 1 on the seven | 6 (Step 7) |
 | out of scope: dropping the column, the sections, the drafting run | not implemented anywhere |
