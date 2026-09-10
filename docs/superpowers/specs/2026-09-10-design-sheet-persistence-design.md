@@ -160,12 +160,21 @@ what the schema says it means.
 `packages/citations/src/prompt/inputs.ts` maps a prompt input key to
 `{ table, column }`. It needs to express "a key inside `decisions`" as well.
 
-The mapping gains a `jsonPath` form alongside `column`, so
+The mapping gains a `jsonKey` form alongside `column`, so
 `design_sheet.residuary_spouse_survives` resolves to
-`decisions->>'residuary_spouse_survives'`. Input resolution is validated at
-publish time rather than run time, so a mapping that names a key nothing writes
-fails when the prompt version is published — which is where this class of error
-should have surfaced the first time.
+`decisions->>'residuary_spouse_survives'`.
+
+**Correction to an earlier draft of this spec.** It said publish-time
+validation would catch a mapping that names a key nothing writes. It would
+not, and could not: `unknownSources` checks only that a declared source exists
+in the allow-list, and it has no access to data. That is exactly why the
+original bug survived — `design_sheet.residuary_beneficiary` *was* in the
+allow-list, naming a real column that happened to be empty on every row.
+
+So nothing in the system catches "an input resolving to something nothing
+writes". Only measurement against real data does, which is what found it. The
+plan therefore ends by measuring how many rows populate every allow-list
+source, rather than pretending a gate exists.
 
 A new prompt version publishes the changed inputs. Content changes make a
 version; that rule is already established (#417).
