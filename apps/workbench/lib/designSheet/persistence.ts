@@ -13,19 +13,6 @@ import type { WorkbenchDatabase } from '@/lib/supabase/database'
  * and is reported, not swallowed.
  */
 
-type DesignSheetsTable = WorkbenchDatabase['public']['Tables']['design_sheets']
-
-/**
- * `lock_version` is added to `design_sheets` by the migration written in
- * Task 1 of this plan (not yet applied), so it is absent from the generated
- * types this file otherwise relies on — those are regenerated in Task 6,
- * once every migration in this phase has landed. Rather than reach for
- * `any`, the two spots that touch `lock_version` are widened by exactly
- * this one column; every other field stays checked against the real,
- * generated shape.
- */
-type DesignSheetsUpdateWithLockVersion = DesignSheetsTable['Update'] & { lock_version: number }
-
 export interface SaveDesignSheetInput {
   matterId: string
   expectedLockVersion: number
@@ -49,23 +36,9 @@ export async function saveDesignSheet(
 
   const { data, error } = await client
     .from('design_sheets')
-    .update({ ...input.fields, lock_version: input.expectedLockVersion + 1 } as DesignSheetsUpdateWithLockVersion)
+    .update({ ...input.fields, lock_version: input.expectedLockVersion + 1 })
     .eq('matter_id', input.matterId)
-    // Same reason as the `Update` cast above: `lock_version` is a real column
-    // the query builder's generated column-name union does not know about
-    // yet.
-    //
-    // This cast is WIDER than it looks, and saying so is the point of this
-    // comment. `.eq()` infers its value type from the column name, so
-    // casting the name to `never` collapses that inference and the *value*
-    // argument stops being checked too — `.eq('lock_version' as never, {})`
-    // typechecks. Nothing is wrong today, because the only value passed is a
-    // number. But do not copy this pattern somewhere the value is not
-    // obviously correct; patch the client's Database type instead, which
-    // keeps inference on both arguments.
-    //
-    // Both casts go away in the task that regenerates the types.
-    .eq('lock_version' as never, input.expectedLockVersion)
+    .eq('lock_version', input.expectedLockVersion)
     .select('id')
 
   if (error) throw new Error(`Could not save design sheet ${input.matterId}: ${error.message}`)

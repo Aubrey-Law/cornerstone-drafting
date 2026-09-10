@@ -2666,6 +2666,7 @@ export type Database = {
           include_qdot: string | null
           intake_review_flags: Json
           is_joint: boolean | null
+          lock_version: number
           marital_status: string | null
           marital_status_clause: string | null
           marital_trust_remarriage: string | null
@@ -2778,6 +2779,7 @@ export type Database = {
           include_qdot?: string | null
           intake_review_flags?: Json
           is_joint?: boolean | null
+          lock_version?: number
           marital_status?: string | null
           marital_status_clause?: string | null
           marital_trust_remarriage?: string | null
@@ -2890,6 +2892,7 @@ export type Database = {
           include_qdot?: string | null
           intake_review_flags?: Json
           is_joint?: boolean | null
+          lock_version?: number
           marital_status?: string | null
           marital_status_clause?: string | null
           marital_trust_remarriage?: string | null
