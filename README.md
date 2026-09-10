@@ -122,3 +122,13 @@ See [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md) for Supabase, R2, Resend,
 ## Sharing PDFs with clients
 
 On the Review step: **Convert PDF** (LibreOffice worker) or **Upload PDF to share**. Word stays internal. Clients see `review` / `signed` / `final` PDFs on `/documents` and can upload to the `client` folder.
+
+### Verification commands
+
+- `npm run build`: real Next production build, including theme generation.
+- `npm run typecheck`: incremental TypeScript check (not a build).
+- `npm run build:ci`: production build with synthetic configuration; requires a clean checkout without Next environment files.
+- `npm test`: unit suite with synthetic credentials; ignores local environment files.
+- `npm run test:integration`: opt-in loopback Supabase tests; see `tests/README.md`.
+
+CI keeps the main-only deployment policy and now checks the root production build before release.

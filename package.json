@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev": "next dev --webpack -p 3002 -H 127.0.0.1",
-    "build": "node -e \"const fs=require('fs'),s=fs.statSync('tsconfig.typecheck.tsbuildinfo',{throwIfNoEntry:false});if(!s||Date.now()-s.mtimeMs>3600000){process.exit(1)}\" && echo 'TypeScript OK (incremental cache fresh)' || node --max-old-space-size=2048 ./node_modules/typescript/bin/tsc --noEmit --skipLibCheck -p tsconfig.typecheck.json",
+    "build": "npm run build:next",
     "build:next": "next build --webpack",
     "build:analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
@@ -48,7 +48,9 @@
     "supabase": "supabase",
     "supabase:status": "supabase status",
     "supabase:db:push": "supabase db push",
-    "styleSets:seed": "tsx scripts/seedStyleSets.ts"
+    "styleSets:seed": "tsx scripts/seedStyleSets.ts",
+    "build:ci": "node scripts/ciBuild.mjs",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -1,4 +1,4 @@
-import { config } from 'dotenv'
+import { replaceEnvironment, unitEnvironment } from './support/verificationEnvironment'
 
 // jsdom implements no layout, so `Element.prototype.scrollIntoView` does not
 // exist. Any component that calls it — 20-odd of ours do, to keep a keyboard
@@ -14,15 +14,6 @@ if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !=
   Element.prototype.scrollIntoView = function scrollIntoView() {}
 }
 
-// Tests load `.env.test` if present; fall back to `.env.local`.
-config({ path: '.env.test', override: false })
-config({ path: '.env.local', override: false })
-
-// Static analysis tests do not need a live Supabase project. Integration tests
-// that require real credentials should skip when env is missing.
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://placeholder.supabase.co'
-}
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'placeholder-service-role-key'
-}
+// Unit tests use synthetic configuration, even when the invoking shell has
+// production keys or the checkout contains ignored environment files.
+replaceEnvironment(unitEnvironment(process.env))
