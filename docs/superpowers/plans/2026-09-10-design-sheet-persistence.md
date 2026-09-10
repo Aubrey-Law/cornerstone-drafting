@@ -796,8 +796,17 @@ PW=$(grep -m1 '^SUPABASE_DB_PASSWORD=' "$WT/.env.local.tmp" | cut -d= -f2- | tr 
 PWE=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$PW")
 D="postgresql://postgres.qifunlovuwaryzsyfbnh:${PWE}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
 unset PW PWE
-psql "$D" -v ON_ERROR_STOP=1 -f supabase/migrations/20261120000000_design_sheet_lock_version.sql
-psql "$D" -v ON_ERROR_STOP=1 -f supabase/migrations/20261121000000_fold_li_design_sheet_data.sql
+# -1 wraps each file in a single transaction. It matters for the fold: its
+# collision count and its merge are two statements, and without one
+# transaction there is a wider window in which a concurrent save to one of
+# those ten matters' residuary could be overwritten by the merge.
+psql "$D" -1 -v ON_ERROR_STOP=1 -f supabase/migrations/20261120000000_design_sheet_lock_version.sql
+psql "$D" -1 -v ON_ERROR_STOP=1 -f supabase/migrations/20261121000000_fold_li_design_sheet_data.sql
+
+# Re-run the fold to prove it is a no-op rather than a failure. This
+# repository re-applies migrations by hand when the history is not trusted,
+# and a raise here would abort every migration behind it in the same push.
+psql "$D" -1 -v ON_ERROR_STOP=1 -f supabase/migrations/20261121000000_fold_li_design_sheet_data.sql
 ```
 
 Verify from the catalog, never from `supabase_migrations.schema_migrations`:

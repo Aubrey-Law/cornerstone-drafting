@@ -72,6 +72,21 @@ describe('the li_design_sheet_data fold', () => {
     expect(sql).toMatch(/\?\|/)
   })
 
+  /**
+   * Re-running the migration must be a no-op, not a failure.
+   *
+   * The blob is left in place, so after a successful fold the keys exist in
+   * `decisions` too. A bare "does this key exist" check would then raise
+   * against the very rows it just folded — and in this repository migrations
+   * do get re-applied by hand when the history is not trusted, where a raise
+   * aborts every migration behind it in the same push.
+   *
+   * So the check asks whether a key exists carrying a *different* value.
+   */
+  it('treats an already-folded key as done rather than as a collision', () => {
+    expect(sql).toMatch(/not coalesce\(d\.decisions, '\{\}'::jsonb\) @> m\.li_design_sheet_data/)
+  })
+
   it('does not drop the column it reads from', () => {
     // 17 code sites still read it. The repo's rule, from
     // 20261013000000_drop_twenty_sync_columns.sql: a column is never dropped
