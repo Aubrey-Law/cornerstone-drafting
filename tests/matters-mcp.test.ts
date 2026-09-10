@@ -287,3 +287,61 @@ describe('getMatter', () => {
     await expect(getMatter(client as never, MATTER_ROW.id)).rejects.toThrow(/No matter/)
   })
 })
+
+/**
+ * The migration's SQL text.
+ *
+ * CI's test job gets no Supabase environment, so nothing here can call the
+ * function. These assertions cover the structural facts that would be silently
+ * wrong — the guardrails being present, the audit insert being in the same
+ * statement block, the uuid-to-text cast — and the behaviour is verified by
+ * hand against the real database in a rolled-back transaction later.
+ *
+ * This is the idiom `tests/engagement-repository.test.ts` already uses.
+ */
+describe('the correct_matter migration', () => {
+  const sql = readFileSync(join(root, 'supabase/migrations/20261118000000_correct_matter.sql'), 'utf8')
+
+  it('is a security definer function with a pinned search_path', () => {
+    expect(sql).toContain('security definer set search_path = pg_catalog, public')
+  })
+
+  it('refuses every field except the three that are corrigible', () => {
+    expect(sql).toMatch(/not in \('name', 'matter_number', 'matter_type'\)/)
+    // Absent by construction: a stage change fires trg_matters_fire_stage_prompts,
+    // which enqueues real drafting runs.
+    expect(sql).not.toMatch(/set[\s\S]{0,80}\bstage\s*=/)
+    expect(sql).not.toMatch(/set[\s\S]{0,80}\brelationship_status\s*=/)
+  })
+
+  it('requires a reason, a non-empty expect, and a non-empty set', () => {
+    expect(sql).toContain("coalesce(btrim(p_reason), '') = ''")
+    expect(sql).toMatch(/p_expect is null or p_expect = '\{\}'::jsonb/)
+    expect(sql).toMatch(/p_set is null or p_set = '\{\}'::jsonb/)
+  })
+
+  it('compares every expected value before writing', () => {
+    expect(sql).toMatch(/to_jsonb\(v_before\) -> v_key is distinct from p_expect -> v_key/)
+  })
+
+  it('writes the audit row in the same function as the update', () => {
+    expect(sql).toContain('insert into public.matter_activity')
+    expect(sql).toContain("'matter_corrected'")
+    // matter_activity.matter_id is text while matters.id is uuid.
+    expect(sql).toContain('p_matter_id::text')
+    const update = sql.indexOf('update public.matters set')
+    const audit = sql.indexOf('insert into public.matter_activity')
+    expect(update).toBeGreaterThan(-1)
+    expect(audit).toBeGreaterThan(update)
+  })
+
+  it('is callable by the service role and by nobody else', () => {
+    expect(sql).toContain('revoke all on function public.correct_matter(uuid, jsonb, jsonb, text) from public')
+    expect(sql).toContain('grant execute on function public.correct_matter(uuid, jsonb, jsonb, text) to service_role')
+    expect(sql).not.toMatch(/grant execute on function public\.correct_matter[^\n]*to authenticated/)
+  })
+
+  it('reloads PostgREST, which otherwise cannot resolve a brand-new function', () => {
+    expect(sql).toContain("notify pgrst, 'reload schema'")
+  })
+})
