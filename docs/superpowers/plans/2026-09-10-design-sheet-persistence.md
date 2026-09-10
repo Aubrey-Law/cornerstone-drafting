@@ -207,8 +207,20 @@ describe('the li_design_sheet_data fold', () => {
     expect(sql).toMatch(/decisions\s*=\s*coalesce\(d\.decisions, '\{\}'::jsonb\)\s*\|\|/i)
   })
 
-  it('targets the latest version only, since readers take max(version)', () => {
-    expect(sql).toMatch(/max\(version\)/i)
+  /**
+   * Scoped on the UPDATE statement, not merely somewhere in the file.
+   *
+   * An earlier version of this test asserted `/max\(version\)/` against the
+   * whole migration, and passed even with the scoping deleted from the update
+   * — because the collision-check block legitimately contains the same
+   * clause. A test that cannot fail for the reason it names is worse than
+   * none: it reports the guard as covered.
+   */
+  it('scopes the update itself to the latest version, since readers take max(version)', () => {
+    const start = sql.indexOf('update public.design_sheets')
+    expect(start).toBeGreaterThan(-1)
+    const statement = sql.slice(start, sql.indexOf(';', start))
+    expect(statement).toMatch(/d\.version\s*=\s*\(select max\(version\)/i)
   })
 
   it('refuses rather than merging when a key already exists', () => {
@@ -290,7 +302,27 @@ notify pgrst, 'reload schema';
 Run: `npx vitest run tests/design-sheet-persistence.test.ts`
 Expected: PASS, 7 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Falsify two of the guards**
+
+A guard whose test passes either way guards nothing. For each mutation below:
+apply it, re-run the test file, note which test goes red, then restore the file
+exactly and re-run to confirm 7 pass.
+
+1. Replace the `?|` collision condition with `and false` — `refuses rather
+   than merging` must go red.
+2. Delete the `and d.version = (select max(version) …)` line from **the
+   `update` statement only**, leaving the collision block's copy in place —
+   `scopes the update itself` must go red.
+
+Mutation 2 is why that test slices the update statement out before asserting.
+The first version of it matched the clause anywhere in the file and passed with
+the update unscoped; the mutation is what exposed that, and it is why the
+mutation is specified this precisely.
+
+If a mutation is NOT caught, say so plainly rather than adjusting the test to
+make it look caught.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/20261121000000_fold_li_design_sheet_data.sql tests/design-sheet-persistence.test.ts
