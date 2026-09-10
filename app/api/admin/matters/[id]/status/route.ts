@@ -36,7 +36,8 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const admin = getAdminClient()
-    const matterId = await resolveMatterId(rawId, admin)
+    const matterId = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
 
     const holdReason =
       status === 'on_hold' && typeof body?.holdReason === 'string' && body.holdReason.trim()

@@ -115,7 +115,7 @@ const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'assets', label: 'Assets' },
   { value: 'documents', label: 'Documents' },
   { value: 'billing', label: 'Billing' },
-  { value: 'communications', label: 'Communications' },
+  { value: 'communications', label: 'Portal messages' },
   { value: 'notes', label: 'Notes' },
   { value: 'activity', label: 'Activity' },
 ]
@@ -235,7 +235,7 @@ function MatterDetailClientInner({
   const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
-  const { documents, folders: documentFolders, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
+  const { documents, folders: documentFolders, loading: docsLoading, documentsError, foldersError, reload: loadDocuments } = useMatterDocuments(matter.matter_id, activeTab === 'documents')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   // Set when the server refuses a first-click delete because the matter is
@@ -259,7 +259,10 @@ function MatterDetailClientInner({
   const {
     items: communicationItems,
     sendOnChannel,
-    portalMessages,
+    unreadPortalCount,
+    lastPortalMessage,
+    readError: messagesError,
+    retry: retryMessages,
     portalLoading,
     portalSending,
     smsLoading,
@@ -278,6 +281,7 @@ function MatterDetailClientInner({
     matterId: matter.matter_id,
     token,
     initialEmailTo: initialMatter.client_email || '',
+    enabled: activeTab === 'communications',
   })
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
@@ -781,15 +785,10 @@ function MatterDetailClientInner({
   const lastContactAt = useMemo(
     () => communicationItems.reduce<string | null>(
       (latest, item) => (!latest || item.created_at > latest ? item.created_at : latest),
-      null,
+      lastPortalMessage?.created_at ?? null,
     ),
-    [communicationItems],
+    [communicationItems, lastPortalMessage],
   )
-  const unreadPortalCount = useMemo(
-    () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
-    [portalMessages],
-  )
-  const lastPortalMessage = portalMessages.length > 0 ? portalMessages[portalMessages.length - 1] : null
   const draftingHref = `/admin/drafting/${matter.matter_id}`
   const blockerCount = reviewFlags.length + unreviewedUploadCounts.total + unreadPortalCount
   const readinessItems = useMemo(
@@ -823,6 +822,7 @@ function MatterDetailClientInner({
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
+      {messagesError && <p role="alert" className="px-4 text-sm text-destructive">{messagesError} <Button variant="link" onClick={() => void retryMessages()}>Retry messages</Button></p>}
       <MatterDetailHeader
         matter={matter}
         matterNumber={matterNum}
@@ -948,7 +948,7 @@ function MatterDetailClientInner({
                 </TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="communications" className="gap-1.5">
-                  Communications
+                  Portal messages
                   {unreadPortalCount > 0 && (
                     <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
                       {unreadPortalCount}
@@ -1087,6 +1087,12 @@ function MatterDetailClientInner({
               />
 
               <TabsContent value="documents" className="space-y-4">
+                {(documentsError || foldersError) && (
+                  <div role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm">
+                    <p>{documentsError || foldersError}</p>
+                    <Button variant="outline" size="sm" disabled={docsLoading} onClick={() => void loadDocuments()}>Retry</Button>
+                  </div>
+                )}
                 <MatterDocumentsTab
                   matterId={matterId}
                   clientName={matter.client_name}
@@ -1094,6 +1100,7 @@ function MatterDetailClientInner({
                   documents={documents}
                   folders={documentFolders}
                   loading={docsLoading}
+                  loadError={documentsError}
                   onDocumentsChanged={loadDocuments}
                   unreviewedUploadCounts={unreviewedUploadCounts}
                   onReviewPortalUploads={handleMarkPortalUploadsReviewed}

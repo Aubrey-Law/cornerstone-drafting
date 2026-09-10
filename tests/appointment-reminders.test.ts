@@ -207,14 +207,13 @@ describe('sendDueReminders', () => {
     expect(state.updates[1].values.reminder_sent_at).toBeNull()
   })
 
-  it('also texts the reminder when SMS reminders are enabled', async () => {
+  it('keeps email reminders but never texts even when the legacy SMS setting is enabled', async () => {
     state.smsEnabled = true
     state.rows = [dueRow()]
     const result = await sendDueReminders(NOW)
     expect(result.sent).toBe(1)
-    expect(state.smsSends).toHaveLength(1)
-    expect(state.smsSends[0].to).toBe('+15551234567')
-    expect(state.smsSends[0].body).toContain('Discovery Call')
+    expect(state.smsSends).toHaveLength(0)
+    expect(state.emails).toHaveLength(1)
   })
 
   it('sends no SMS when disabled or when there is no usable phone', async () => {

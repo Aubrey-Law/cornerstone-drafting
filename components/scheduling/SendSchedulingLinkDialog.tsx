@@ -72,7 +72,7 @@ export function SendSchedulingLinkDialog({
         setData(json)
         const firstConfigured = json.types.find(t => t.configured)
         setTypeKey(firstConfigured?.key ?? '')
-        setChannel(json.recipient.email ? 'email' : 'sms')
+        setChannel(json.recipient.email ? 'email' : 'portal')
         setDirty(false)
         setSubjectDirty(false)
       })
@@ -144,7 +144,7 @@ export function SendSchedulingLinkDialog({
     : null
 
   const disabledReasons = data
-    ? (['email', 'sms', 'portal'] as const)
+    ? (['email', 'portal'] as const)
         .map(c => {
           const reason = channelDisabled(c)
           return reason ? `${CHANNEL_LABELS[c]} unavailable — ${reason}` : null
@@ -202,7 +202,7 @@ export function SendSchedulingLinkDialog({
             <div className="min-w-0 space-y-1.5">
               <Label>Send via</Label>
               <div className="flex flex-col gap-2 sm:flex-row">
-                {(['email', 'sms', 'portal'] as const).map(c => {
+                {(['email', 'portal'] as const).map(c => {
                   const reason = channelDisabled(c)
                   return (
                     <Button

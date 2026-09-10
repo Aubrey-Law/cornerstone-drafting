@@ -13,7 +13,8 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Explain the financial close-out exception' }, { status: 400 })
   const admin = getAdminClient()
-  const matterId = await resolveMatterId((await params).id, admin)
+  const matterId = await resolveMatterId((await params).id, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+  if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
   const { data, error } = await admin.rpc('document_matter_financial_exception', {
     p_matter_id: matterId,
     p_reason: parsed.data.reason,

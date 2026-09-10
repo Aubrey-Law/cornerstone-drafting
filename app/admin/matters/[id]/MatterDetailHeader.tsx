@@ -5,7 +5,6 @@ import {
   ClipboardList,
   Loader as Loader2,
   Mail,
-  MessageSquare,
   MoreHorizontal,
   PanelRight,
   Trash2,
@@ -87,7 +86,6 @@ export function MatterDetailHeader({
   factsRailOpen,
   onToggleFactsRail,
   onEmail,
-  onText,
   onOpenIntake,
   onImportIntake,
   onUnlockIntake,
@@ -168,17 +166,7 @@ export function MatterDetailHeader({
           <Mail className="size-3.5" />
           Email
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="gap-1.5"
-          onClick={onText}
-          disabled={!matter.client_phone}
-        >
-          <MessageSquare className="size-3.5" />
-          Text
-        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" size="sm" variant="outline" className="gap-1.5">
@@ -259,10 +247,7 @@ export function MatterDetailHeader({
             <Mail className="mr-2 size-3.5" />
             Email client
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!matter.client_phone} onClick={onText}>
-            <MessageSquare className="mr-2 size-3.5" />
-            Text client
-          </DropdownMenuItem>
+
           <DropdownMenuItem onClick={onOpenIntake}>
             <ClipboardList className="mr-2 size-3.5" />
             {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}

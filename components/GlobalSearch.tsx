@@ -33,7 +33,7 @@ interface MatterResult {
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
-  { label: 'CRM', href: '/admin/crm/opportunities', icon: UsersRound },
+  { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters', icon: Briefcase },
   { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },
   { label: 'Assistant', href: '/admin/assistant', icon: Sparkles },

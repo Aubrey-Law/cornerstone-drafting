@@ -1,3 +1,4 @@
+import { loadInvoiceBalances } from '@/lib/queries/invoiceBalances'
 import 'server-only'
 
 import os from 'node:os'
@@ -162,7 +163,7 @@ export async function prepareInvoiceReminderDrafts() {
   const cadenceWeek = mondayKey(today)
   const { data, error } = await admin
     .from('invoices')
-    .select('id, number, subtotal_cents, due_date, bill_to_email')
+    .select('id, number, subtotal_cents, due_date, bill_to_email, kind')
     .in('status', ['issued', 'partial'])
     .not('due_date', 'is', null)
     .lt('due_date', today)
@@ -170,12 +171,11 @@ export async function prepareInvoiceReminderDrafts() {
     // Feature may be disabled and its migration intentionally unapplied.
     return { drafted: 0, unavailable: true }
   }
+  const balances = await loadInvoiceBalances(admin, data ?? [])
   let drafted = 0
   for (const invoice of data ?? []) {
     if (!invoice.bill_to_email || !invoice.due_date) continue
-    const { data: payments } = await admin.from('billing_payments').select('amount').eq('invoice_id', invoice.id)
-    const collected = (payments ?? []).reduce((sum, payment) => sum + payment.amount, 0)
-    if (collected >= invoice.subtotal_cents) continue
+    if ((balances.get(invoice.id) ?? 0) <= 0) continue
     const days = Math.max(1, Math.floor((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${invoice.due_date}T12:00:00Z`)) / 86_400_000))
     const level = days >= 28 ? 'final' : days >= 14 ? 'firm' : 'friendly'
     const { error: insertError } = await admin.from('invoice_reminders').insert({

@@ -3,7 +3,6 @@
 import {
   ClipboardList,
   Mail,
-  MessageSquare,
   MoreHorizontal,
   PanelRight,
   Phone,
@@ -53,7 +52,6 @@ export function LeadTopActions({
   onBookForClient,
   onCall,
   onEmail,
-  onText,
   onIntake,
   onToggleRail,
   railOpen,
@@ -79,10 +77,7 @@ export function LeadTopActions({
           <Mail className="h-3.5 w-3.5" aria-hidden />
           Email
         </Button>
-        <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onText} disabled={busy || !hasPhone}>
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-          Text
-        </Button>
+
         <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onIntake} disabled={busy}>
           <ClipboardList className="h-3.5 w-3.5" aria-hidden />
           Intake
@@ -177,10 +172,7 @@ export function LeadTopActions({
             <Mail className="mr-2 h-3.5 w-3.5" />
             Email
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasPhone} onClick={onText}>
-            <MessageSquare className="mr-2 h-3.5 w-3.5" />
-            Text
-          </DropdownMenuItem>
+
           <DropdownMenuItem onClick={onIntake}>
             <ClipboardList className="mr-2 h-3.5 w-3.5" />
             Intake

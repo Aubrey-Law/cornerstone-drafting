@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: 'Matters' }
 
 export default async function MattersDashboardPage() {
   const auth = await getCachedClaims()
-  const { snapshot, aging, tasks, error } = await fetchMatterDashboard(auth?.id ?? null)
+  const { snapshot, aging, tasks, tasksError, error } = await fetchMatterDashboard(auth?.id ?? null)
 
   return (
     <div className="space-y-4">
@@ -43,7 +43,7 @@ export default async function MattersDashboardPage() {
           slices={snapshot.stages}
           emptyLabel="No open matters."
         />
-        <OpenTasksCard tasks={tasks} />
+        <OpenTasksCard tasks={tasks} error={tasksError} />
         <MatterSliceCard
           title="Practice areas"
           description="How the open book divides up"

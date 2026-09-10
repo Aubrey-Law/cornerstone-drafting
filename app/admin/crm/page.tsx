@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'CRM' }
 
 export default async function AdminCrmPage() {
   const auth = await getCachedClaims()
-  const { snapshot, tasks, truncated, peopleCeiling, error } = await fetchCrmDashboard(auth?.id ?? null)
+  const { snapshot, tasks, tasksError, truncated, peopleCeiling, error } = await fetchCrmDashboard(auth?.id ?? null)
 
   return (
     <div className="space-y-4">
@@ -42,7 +42,7 @@ export default async function AdminCrmPage() {
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <LeadSourcesCard sources={snapshot.leadSources} />
-        <OpenTasksCard tasks={tasks} />
+        <OpenTasksCard tasks={tasks} error={tasksError} />
         <CrmPipelineCard stages={snapshot.pipeline} />
       </div>
 

@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, FilePlus, Mail, MessageSquare, Phone, X } from 'lucide-react'
+import { ExternalLink, FilePlus, Mail, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
 import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { openExternalPhone } from '@/lib/clientPhone'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { ContactCard } from '@/components/contacts/ContactCard'
 import {
@@ -140,7 +140,7 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
             {contact.phone && (
               <Button
                 type="button" size="sm" variant="outline"
-                onClick={() => openStaffSoftphone({ number: contact.phone ?? undefined })}
+                onClick={() => openExternalPhone({ number: contact.phone ?? undefined })}
               >
                 <Phone className="h-3.5 w-3.5" />
                 Call
@@ -154,15 +154,7 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
               <Mail className="h-3.5 w-3.5" />
               Email
             </Button>
-            <Button
-              type="button" size="sm" variant="outline"
-              disabled={!contact.phone || !smsEnabled}
-              title={smsEnabled ? undefined : 'Texting is not configured yet'}
-              onClick={() => setComposerChannel('sms')}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Text
-            </Button>
+
           </div>
         )}
 

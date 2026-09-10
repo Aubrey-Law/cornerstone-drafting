@@ -1,10 +1,12 @@
-import { smsProvider, voiceProvider } from '@/lib/communications/providers'
-import { isTelnyxSmsConfigured, isTelnyxVoiceConfigured } from '@/lib/telnyx/config'
-import { isTwilioSmsConfigured, isTwilioVoiceConfigured } from '@/lib/twilio/config'
+import { voiceProvider } from '@/lib/communications/providers'
+import { isTelnyxVoiceConfigured } from '@/lib/telnyx/config'
+import { isTwilioVoiceConfigured } from '@/lib/twilio/config'
 
+/** SMS delivery has been retired; historical provider settings are retained. */
 export function isSmsConfigured(): boolean {
-  return smsProvider() === 'telnyx' ? isTelnyxSmsConfigured() : isTwilioSmsConfigured()
+  return false
 }
 export function isVoiceConfigured(): boolean {
+  if (voiceProvider() === 'none') return false
   return voiceProvider() === 'telnyx' ? isTelnyxVoiceConfigured() : isTwilioVoiceConfigured()
 }

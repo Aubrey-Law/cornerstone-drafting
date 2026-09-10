@@ -53,8 +53,8 @@ async function checkR2(): Promise<Check> {
 }
 
 function checkCommunications(): Check {
-  const smsSelected = Boolean(process.env.SMS_PROVIDER?.trim())
-  const voiceSelected = Boolean(process.env.VOICE_PROVIDER?.trim())
+  const smsSelected = false // SMS delivery is retired.
+  const voiceSelected = Boolean(process.env.VOICE_PROVIDER?.trim()) && voiceProvider() !== 'none'
   if (!smsSelected && !voiceSelected) return { status: 'skip' }
   const missing = [
     ...(smsSelected && !isSmsConfigured() ? [`${smsProvider()} SMS`] : []),

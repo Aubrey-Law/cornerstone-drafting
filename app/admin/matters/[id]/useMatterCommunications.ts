@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/clientApi'
 import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
@@ -30,120 +30,109 @@ interface EmailSendResponse {
   provider?: string
 }
 
-export function useMatterCommunications({
-  matterId,
-  token,
-  initialEmailTo,
-}: {
-  matterId: string
-  token: string | null
-  initialEmailTo: string
+export function useMatterCommunications({ matterId, token, initialEmailTo, enabled = true }: {
+  matterId: string; token: string | null; initialEmailTo: string; enabled?: boolean
 }) {
-  const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
+  const identity = useRef(matterId)
+  useEffect(() => { identity.current = matterId }, [matterId])
+  const [history, setHistory] = useState<{ id: string; portal: PortalMessage[]; sms: SmsMessage[] }>({ id: matterId, portal: [], sms: [] })
+  const [summary, setSummary] = useState<{ id: string; latest: PortalMessage | null; unread: number } | null>(null)
+  const [readError, setReadError] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
-  const [portalDraft, setPortalDraft] = useState('')
-  const [portalSending, setPortalSending] = useState(false)
-  const [smsMessages, setSmsMessages] = useState<SmsMessage[]>([])
   const [smsLoading, setSmsLoading] = useState(false)
-  const [smsDraft, setSmsDraft] = useState('')
+  const [portalSending, setPortalSending] = useState(false)
+  const [portalDraft, setPortalDraft] = useState('')
   const [smsRecipient, setSmsRecipient] = useState<'client' | 'spouse'>('client')
-  const [smsSending, setSmsSending] = useState(false)
   const [emailTo, setEmailTo] = useState(initialEmailTo)
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailSending, setEmailSending] = useState(false)
-
-  useEffect(() => setEmailTo(initialEmailTo), [initialEmailTo])
-
-  const loadPortalMessages = useCallback(async () => {
-    if (!token) return
-    setPortalLoading(true)
-    try {
-      const messages = await apiRequest<unknown>(
-        `/api/messages?matter_id=${encodeURIComponent(matterId)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      setPortalMessages(Array.isArray(messages) ? messages as PortalMessage[] : [])
-    } catch {
-      // The page remains usable if message history is temporarily unavailable.
-    } finally {
-      setPortalLoading(false)
-    }
-  }, [matterId, token])
-
-  const loadSmsMessages = useCallback(async () => {
-    if (!token) return
-    setSmsLoading(true)
-    try {
-      const messages = await apiRequest<unknown>(
-        `/api/admin/matters/${matterId}/sms-messages`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      setSmsMessages(Array.isArray(messages) ? messages as SmsMessage[] : [])
-    } catch {
-      // SMS history is non-blocking for the rest of the matter workspace.
-    } finally {
-      setSmsLoading(false)
-    }
-  }, [matterId, token])
+  const fetched = useRef<string | null>(null)
+  const summaryGeneration = useRef(0)
+  const historyGeneration = useRef(0)
+  const portalMessages = useMemo(() => history.id === matterId ? history.portal : [], [history, matterId])
+  const smsMessages = useMemo(() => history.id === matterId ? history.sms : [], [history, matterId])
 
   useEffect(() => {
-    void loadPortalMessages()
-    void loadSmsMessages()
-  }, [loadPortalMessages, loadSmsMessages])
+    setEmailTo(initialEmailTo)
+    setPortalDraft('')
+    setEmailSubject('')
+    setEmailBody('')
+    return () => { summaryGeneration.current += 1; historyGeneration.current += 1; fetched.current = null }
+  }, [matterId, initialEmailTo])
 
-  const handlePortalMessageInsert = useCallback((message: PortalMessage) => {
-    setPortalMessages(current => (
-      current.some(row => row.id === message.id) ? current : [...current, message]
-    ))
-  }, [])
+  const loadSummary = useCallback(async () => {
+    if (!token) return
+    const generation = ++summaryGeneration.current
+    try {
+      const result = await apiRequest<{ latest: PortalMessage | null; unread: number }>(
+        `/api/messages?matter_id=${encodeURIComponent(matterId)}&summary=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (identity.current === matterId && generation === summaryGeneration.current) {
+        setSummary({ id: matterId, ...result })
+      }
+    } catch {
+      if (identity.current === matterId) setReadError('Message counts are unavailable. Please retry.')
+    }
+  }, [matterId, token])
 
-  useMessagesRealtime(matterId, handlePortalMessageInsert)
+  const loadHistory = useCallback(async () => {
+    if (!token) return
+    const generation = ++historyGeneration.current
+    fetched.current = matterId
+    setPortalLoading(true); setSmsLoading(true); setReadError(null)
+    const [portal, sms] = await Promise.allSettled([
+      apiRequest<PortalMessage[]>(`/api/messages?matter_id=${encodeURIComponent(matterId)}`, { headers: { Authorization: `Bearer ${token}` } }),
+      apiRequest<SmsMessage[]>(`/api/admin/matters/${matterId}/sms-messages`, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+    if (identity.current !== matterId || generation !== historyGeneration.current) return
+    setHistory(previous => ({ id: matterId,
+      portal: portal.status === 'fulfilled' ? portal.value : previous.id === matterId ? previous.portal : [],
+      sms: sms.status === 'fulfilled' ? sms.value : previous.id === matterId ? previous.sms : [],
+    }))
+    if (portal.status === 'rejected' || sms.status === 'rejected') setReadError('Some message history is unavailable. Please retry.')
+    setPortalLoading(false); setSmsLoading(false)
+  }, [matterId, token])
 
-  async function sendPortalMessage() {
-    if (!token || !portalDraft.trim()) return
+  useEffect(() => { void loadSummary() }, [loadSummary])
+  useEffect(() => { if (enabled && fetched.current !== matterId) void loadHistory() }, [enabled, matterId, loadHistory])
+  const handleInsert = useCallback(() => { void loadSummary(); if (enabled) void loadHistory() }, [enabled, loadHistory, loadSummary])
+  useMessagesRealtime(matterId, handleInsert)
+
+  // This effect runs after displayed history commits. Inactive tabs never
+  // acknowledge messages, and historical pages not fetched remain unread.
+  useEffect(() => {
+    if (!enabled || !token || history.id !== matterId) return
+    const ids = history.portal.filter(row => row.sender_role === 'client' && !row.read_at).map(row => row.id)
+    if (!ids.length) return
+    let cancelled = false
+    void apiRequest('/api/messages', {
+      method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matter_id: matterId, message_ids: ids }),
+    }).then(() => {
+      if (cancelled || identity.current !== matterId) return
+      setHistory(previous => ({ ...previous, portal: previous.portal.map(row => ids.includes(row.id) ? { ...row, read_at: new Date().toISOString() } : row) }))
+      void loadSummary()
+    }).catch(() => { if (!cancelled) setReadError('Messages could not be marked read. Please retry.') })
+    return () => { cancelled = true }
+  }, [enabled, history, matterId, token, loadSummary])
+
+  const sendOnChannel = useCallback(async (channel: 'portal' | 'sms', body: string): Promise<boolean> => {
+    if (channel !== 'portal' || !token || !body.trim()) return false
     setPortalSending(true)
     try {
       await apiRequest('/api/messages', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ matter_id: matterId, body: portalDraft.trim() }),
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matter_id: matterId, body: body.trim() }),
       }, 'Send failed')
-      setPortalDraft('')
       toast.success('Message sent')
-      await loadPortalMessages()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not send message')
-    } finally {
-      setPortalSending(false)
-    }
-  }
-
-  async function sendSms() {
-    if (!token || !smsDraft.trim()) return
-    setSmsSending(true)
-    try {
-      await apiRequest(`/api/admin/matters/${matterId}/send-sms`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ recipient: smsRecipient, body: smsDraft.trim() }),
-      }, 'SMS failed')
-      setSmsDraft('')
-      toast.success('Text sent')
-      await loadSmsMessages()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not send SMS')
-    } finally {
-      setSmsSending(false)
-    }
-  }
-
+      await Promise.all([loadHistory(), loadSummary()])
+      return true
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not send'); return false }
+    finally { setPortalSending(false) }
+  }, [token, matterId, loadHistory, loadSummary])
+  const sendPortalMessage = async () => { if (await sendOnChannel('portal', portalDraft)) setPortalDraft('') }
   async function sendEmail() {
     if (!token || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return
     setEmailSending(true)
@@ -170,9 +159,6 @@ export function useMatterCommunications({
     }
   }
 
-  // One merged timeline over the arrays already fetched above — the tab's
-  // interleaved view reads this; the per-channel arrays stay for callers that
-  // still want a single channel.
   const items: CommunicationItem[] = useMemo(() => mergeCommunicationItems(
     portalMessages.map(m => ({
       id: m.id,
@@ -193,58 +179,14 @@ export function useMatterCommunications({
     })),
   ), [portalMessages, smsMessages])
 
-  /** Locked-composer send: same endpoints as the per-channel senders above. */
-  const sendOnChannel = useCallback(async (channel: 'portal' | 'sms', body: string): Promise<boolean> => {
-    if (!token || !body.trim()) return false
-    try {
-      if (channel === 'portal') {
-        await apiRequest('/api/messages', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ matter_id: matterId, body: body.trim() }),
-        }, 'Send failed')
-        toast.success('Message sent')
-        await loadPortalMessages()
-      } else {
-        await apiRequest(`/api/admin/matters/${matterId}/send-sms`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recipient: smsRecipient, body: body.trim() }),
-        }, 'SMS failed')
-        toast.success('Text sent')
-        await loadSmsMessages()
-      }
-      return true
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not send')
-      return false
-    }
-  }, [token, matterId, smsRecipient, loadPortalMessages, loadSmsMessages])
-
   return {
-    items,
-    sendOnChannel,
-    portalMessages,
-    portalLoading,
-    portalDraft,
-    portalSending,
-    smsMessages,
-    smsLoading,
-    smsDraft,
-    smsRecipient,
-    smsSending,
-    emailTo,
-    emailSubject,
-    emailBody,
-    emailSending,
-    setPortalDraft,
-    setSmsDraft,
-    setSmsRecipient,
-    setEmailTo,
-    setEmailSubject,
-    setEmailBody,
-    sendPortalMessage,
-    sendSms,
-    sendEmail,
+    items, sendOnChannel, portalMessages, portalLoading, portalDraft, portalSending,
+    smsMessages, smsLoading, smsRecipient, smsSending: false,
+    emailTo, emailSubject, emailBody, emailSending,
+    setPortalDraft, setSmsRecipient, setEmailTo, setEmailSubject, setEmailBody,
+    sendPortalMessage, sendEmail, readError,
+    retry: async () => { setReadError(null); await Promise.all([loadSummary(), ...(enabled ? [loadHistory()] : [])]) },
+    unreadPortalCount: summary?.id === matterId ? summary.unread : 0,
+    lastPortalMessage: summary?.id === matterId ? summary.latest : null,
   }
 }

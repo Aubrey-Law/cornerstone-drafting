@@ -4,8 +4,6 @@ import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { formatWhen, locationLine } from './emailFormat'
 import { getSchedulingSettings, listAppointmentTypes } from './settings'
-import { getFirmConfig } from '@/lib/firmConfig'
-import { normalizeSmsRecipient, sendSmsMessage } from '@/lib/twilio/sms'
 import { resolveLocationType, type AppointmentType } from './types'
 import { getRawBoolean } from '@/lib/appointments/rawMetadata'
 
@@ -110,10 +108,6 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
     })
     if (ok) {
       sent++
-      // SMS is additive — an SMS failure never rolls back the email claim.
-      if (settings.smsRemindersEnabled) {
-        await sendReminderSms(row, type ?? null, settings.timezone)
-      }
     } else {
       failed++
       // Release the claim so the next run retries.
@@ -125,36 +119,6 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
   }
 
   return { sent, skipped, failed, disabled: false }
-}
-
-/** Best-effort SMS nudge alongside the email reminder. */
-async function sendReminderSms(
-  row: DueReminderRow,
-  type: AppointmentType | null,
-  timezone: string,
-): Promise<void> {
-  try {
-    const to = normalizeSmsRecipient(row.attendee_phone)
-    if (!to) return
-    const firm = getFirmConfig()
-    const when = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(new Date(row.start_time))
-    const result = await sendSmsMessage({
-      to,
-      body: `Reminder from ${firm.firmName}: ${type?.label ?? 'appointment'} on ${when}. Questions? Call ${firm.phone}.`,
-    })
-    if (!result.ok) {
-      console.error('[appointments] reminder SMS failed for', row.id, result.error)
-    }
-  } catch (err) {
-    console.error('[appointments] reminder SMS failed for', row.id, err)
-  }
 }
 
 async function sendReminderEmail(input: {

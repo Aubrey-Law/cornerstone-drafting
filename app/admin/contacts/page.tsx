@@ -1,3 +1,4 @@
+import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { fetchContactsDirectory } from '@/lib/queries/contactsDirectory'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { ContactsClient } from './ContactsClient'
@@ -16,5 +17,5 @@ export default async function ContactsPage() {
     )
   }
 
-  return <ContactsClient contacts={rows} smsEnabled={isSmsConfigured()} />
+  return <ContactsClient contacts={rows} smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()} />
 }

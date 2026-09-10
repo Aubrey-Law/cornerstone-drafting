@@ -131,6 +131,7 @@ interface MatterDocumentsTabProps {
   /** Attorney-created folders. Derived folders come from the documents themselves. */
   folders?: MatterDocumentFolder[]
   loading: boolean
+  loadError?: string | null
   onDocumentsChanged: () => void | Promise<void>
   unreviewedUploadCounts?: UnreviewedUploadCounts
   onReviewPortalUploads?: () => void | Promise<void>
@@ -145,6 +146,7 @@ export function MatterDocumentsTab({
   documents,
   folders: customFolders = [],
   loading,
+  loadError = null,
   onDocumentsChanged,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   onReviewPortalUploads,
@@ -807,7 +809,9 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        {loading ? (
+        {loadError && documents.length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground">Documents are currently unavailable.</p>
+        ) : loading ? (
           <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading documents...

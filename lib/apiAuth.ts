@@ -40,7 +40,7 @@ export async function getBearerUser(req: Request) {
 }
 
 // Verifies the user against Supabase Auth (remote hop) AND checks role.
-export async function requireAdmin(_req: Request) {
+async function verifyAdmin(_req: Request) {
   const token = getBearerToken(_req)
   if (token) {
     const user = await userFromBearer(token)
@@ -70,6 +70,17 @@ export async function requireAdmin(_req: Request) {
   }
 
   return { err: null, userId: user.id, user }
+}
+
+// Requests are weak keys: no token-keyed or process-wide user/role cache.
+const adminRequests = new WeakMap<Request, ReturnType<typeof verifyAdmin>>()
+export function requireAdmin(req: Request): ReturnType<typeof verifyAdmin> {
+  let pending = adminRequests.get(req)
+  if (!pending) {
+    pending = verifyAdmin(req)
+    adminRequests.set(req, pending)
+  }
+  return pending
 }
 
 /** Strict administrator gate for destructive firm-wide settings. */

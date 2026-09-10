@@ -1,9 +1,8 @@
 import 'server-only'
+import { allAccountingRows, loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 
 import {
   invoiceOverdue,
-  adjustedInvoiceBalance,
-  type InvoiceBalanceAdjustment,
   type Invoice,
   type InvoiceDetail,
   type InvoiceLine,
@@ -163,36 +162,6 @@ export interface InvoiceListRow extends Invoice {
   daysPastDue: number
 }
 
-function withBalances(
-  invoices: Invoice[],
-  payments: InvoicePaymentRow[],
-  todayKey: string,
-  adjustments: InvoiceBalanceAdjustment[] = [],
-): InvoiceListRow[] {
-  const collectedByInvoice = new Map<string, number>()
-  for (const payment of payments) {
-    if (!payment.invoice_id) continue
-    collectedByInvoice.set(
-      payment.invoice_id,
-      (collectedByInvoice.get(payment.invoice_id) ?? 0) + payment.amount,
-    )
-  }
-  return invoices.map(invoice => {
-    const collected = collectedByInvoice.get(invoice.id) ?? 0
-    const balance = invoice.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
-      invoice.subtotalCents,
-      collected,
-      adjustments.filter(row => row.invoice_id === invoice.id),
-    )
-    return {
-      ...invoice,
-      collected,
-      balance,
-      ...invoiceOverdue(invoice, balance, todayKey),
-    }
-  })
-}
-
 /** Every invoice, newest first. Optionally narrowed to one matter or status. */
 export async function fetchInvoices(
   filter: { matterId?: string; status?: InvoiceStatus } = {},
@@ -207,25 +176,12 @@ export async function fetchInvoices(
   if (error) throw new Error(error.message)
 
   const rows = (data ?? []) as InvoiceRow[]
-  const invoices = await attachContext(rows)
   if (rows.length === 0) return []
-
-  const [paymentResult, adjustmentResult] = await Promise.all([
-    admin.from('billing_payments')
-      .select('id, invoice_id, payment_group_id, amount, method, note, received_at, external_reference')
-      .in('invoice_id', rows.map(row => row.id)),
-    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
-      .in('invoice_id', rows.map(row => row.id)),
-  ])
-  if (paymentResult.error) throw new Error(paymentResult.error.message)
-
-  return withBalances(
-    invoices,
-    (paymentResult.data ?? []) as InvoicePaymentRow[],
-    firmTodayKey(now),
-    adjustmentResult.error ? [] : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
-      .filter(row => row.status === 'posted'),
-  )
+  const [invoices, accounting] = await Promise.all([attachContext(rows), loadInvoiceAccounting(admin, rows)])
+  return invoices.map(invoice => {
+    const { balance, collected } = accounting.get(invoice.id)!
+    return { ...invoice, balance, collected, ...invoiceOverdue(invoice, balance, firmTodayKey(now)) }
+  })
 }
 
 /** One invoice with its frozen lines and its grouped payments. */
@@ -245,30 +201,19 @@ export async function fetchInvoice(
   const row = data as InvoiceRow
   const [invoice] = await attachContext([row])
 
-  const [lineResult, paymentResult, adjustmentResult] = await Promise.all([
+  const [lineResult, payments, accounting] = await Promise.all([
     admin
       .from('invoice_items')
       .select('id, invoice_id, billing_item_id, position, kind, description, amount_cents')
       .eq('invoice_id', invoiceId)
       .order('position', { ascending: true }),
-    admin
-      .from('billing_payments')
+    allAccountingRows<InvoicePaymentRow>(offset => admin.from('billing_payments')
       .select('id, invoice_id, payment_group_id, amount, method, note, received_at, external_reference')
-      .eq('invoice_id', invoiceId),
-    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
-      .eq('invoice_id', invoiceId),
+      .eq('invoice_id', invoiceId).order('id').range(offset, offset + 999)),
+    loadInvoiceAccounting(admin, [row]),
   ])
   if (lineResult.error) throw new Error(lineResult.error.message)
-  if (paymentResult.error) throw new Error(paymentResult.error.message)
-
-  const payments = (paymentResult.data ?? []) as InvoicePaymentRow[]
-  const collected = payments.reduce((sum, payment) => sum + payment.amount, 0)
-  const balance = invoice.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
-    invoice.subtotalCents,
-    collected,
-    adjustmentResult.error ? [] : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
-      .filter(row => row.status === 'posted'),
-  )
+  const { balance, collected } = accounting.get(invoice.id)!
 
   const lines: InvoiceLine[] = ((lineResult.data ?? []) as InvoiceItemRow[]).map(line => ({
     id: line.id,

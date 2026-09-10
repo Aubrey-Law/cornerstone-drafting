@@ -1,3 +1,4 @@
+import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { fetchContactsDirectory } from '@/lib/queries/contactsDirectory'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { ContactsClient } from '@/app/admin/contacts/ContactsClient'
@@ -12,7 +13,7 @@ export default async function CrmPeoplePage() {
   return (
     <ContactsClient
       contacts={rows}
-      smsEnabled={isSmsConfigured()}
+      smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
       title="People"
       eyebrow="CRM directory"
       description="Leads, clients, related people, and standalone contacts in one firm directory."

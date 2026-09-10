@@ -19,7 +19,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { id: matterId } = await params
 
   try {
-    const canonicalMatterId = await resolveMatterId(matterId)
+    const canonicalMatterId = await resolveMatterId(matterId).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!canonicalMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     let payload
 
     try {

@@ -73,7 +73,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
         bufferMinutes: row.buffer_minutes ?? base.bufferMinutes,
         reminderHoursBefore: row.reminder_hours_before ?? base.reminderHoursBefore,
         bookingPaused: row.booking_paused ?? base.bookingPaused,
-        smsRemindersEnabled: row.sms_reminders_enabled ?? base.smsRemindersEnabled,
+        smsRemindersEnabled: false,
         autoIntakeInvite: row.auto_intake_invite ?? base.autoIntakeInvite,
         dateOverrides: sanitizeDateOverrides(row.date_overrides),
         calendlyUrls: sanitizeCalendlyUrls(row.calendly_urls),
@@ -110,7 +110,7 @@ export async function updateSchedulingSettings(
   if (input.bufferMinutes !== undefined) patch.buffer_minutes = input.bufferMinutes
   if (input.reminderHoursBefore !== undefined) patch.reminder_hours_before = input.reminderHoursBefore
   if (input.bookingPaused !== undefined) patch.booking_paused = input.bookingPaused
-  if (input.smsRemindersEnabled !== undefined) patch.sms_reminders_enabled = input.smsRemindersEnabled
+  if (input.smsRemindersEnabled !== undefined) patch.sms_reminders_enabled = false
   if (input.autoIntakeInvite !== undefined) patch.auto_intake_invite = input.autoIntakeInvite
   if (input.dateOverrides !== undefined) patch.date_overrides = sanitizeDateOverrides(input.dateOverrides)
   if (input.calendlyUrls !== undefined) patch.calendly_urls = sanitizeCalendlyUrls(input.calendlyUrls)

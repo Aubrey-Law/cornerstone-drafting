@@ -1,85 +1,51 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-export async function resolveMatterId(inputId: string, admin = getAdminClient()): Promise<string> {
-  const { data: matter } = await admin
-    .from('matters')
-    .select('id')
-    .eq('id', inputId)
-    .eq('relationship_status', 'hired')
-    .maybeSingle()
+export type MatterRef = { kind: 'matter' | 'number' | 'design-sheet' | 'intake'; value: string }
+export type ResolvedMatter = { matterId: string; source: MatterRef['kind'] }
+export class MatterReferenceNotFoundError extends Error {
+  constructor() { super('Matter not found'); this.name = 'MatterReferenceNotFoundError' }
+}
+type Admin = ReturnType<typeof getAdminClient>
+async function row<T>(query: PromiseLike<{ data: T | null; error: { message: string; code?: string } | null }>): Promise<T | null> {
+  const result = await query
+  // Legacy URLs can be a matter number rather than a UUID. A UUID cast miss
+  // is a reference mismatch; connection, permission and schema errors are not.
+  if (result.error?.code === '22P02') return null
+  if (result.error) throw new Error(`Matter lookup unavailable: ${result.error.message}`)
+  return result.data
+}
 
-  if (matter?.id) return matter.id
-
-  const { data: numberedMatter } = await admin
-    .from('matters')
-    .select('id')
-    .eq('matter_number', inputId)
-    .eq('relationship_status', 'hired')
-    .maybeSingle()
-
-  if (numberedMatter?.id) return numberedMatter.id
-
-  const { data: sheet } = await admin
-    .from('design_sheets')
-    .select('matter_id')
-    .eq('id', inputId)
-    .maybeSingle()
-
-  if (sheet?.matter_id) {
-    const { data: sheetMatter } = await admin
-      .from('matters')
-      .select('id')
-      .eq('id', sheet.matter_id as string)
-      .eq('relationship_status', 'hired')
-      .maybeSingle()
-
-    if (sheetMatter?.id) return sheetMatter.id
+export async function resolveMatterRef(ref: MatterRef, admin: Admin = getAdminClient()): Promise<ResolvedMatter | null> {
+  if (!ref.value.trim()) return null
+  if (ref.kind === 'design-sheet') {
+    const sheet = await row<{ matter_id: string }>(admin.from('design_sheets').select('matter_id').eq('id', ref.value).maybeSingle())
+    if (!sheet?.matter_id) return null
+    const resolved = await resolveMatterRef({ kind: 'matter', value: sheet.matter_id }, admin)
+    return resolved ? { ...resolved, source: ref.kind } : null
   }
+  const column = ref.kind === 'matter' ? 'id' : ref.kind === 'number' ? 'matter_number' : 'client_intake_id'
+  const matter = await row<{ id: string }>(admin.from('matters').select('id').eq(column, ref.value).eq('relationship_status', 'hired').maybeSingle())
+  return matter?.id ? { matterId: matter.id, source: ref.kind } : null
+}
 
-  const { data: legacySheet } = await admin
-    .from('design_sheets')
-    .select('client_intake_id')
-    .eq('matter_id', inputId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
+/** Compatibility for existing external URLs. Successful precedence is unchanged. */
+export async function resolveMatterId(inputId: string, admin: Admin = getAdminClient()): Promise<string> {
+  for (const kind of ['matter', 'number', 'design-sheet'] as const) {
+    const resolved = await resolveMatterRef({ kind, value: inputId }, admin)
+    if (resolved) return resolved.matterId
+  }
+  const legacySheet = await row<{ client_intake_id: string | null }>(admin.from('design_sheets').select('client_intake_id').eq('matter_id', inputId)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle())
   if (legacySheet?.client_intake_id) {
-    const { data: canonicalMatter } = await admin
-      .from('matters')
-      .select('id')
-      .eq('client_intake_id', legacySheet.client_intake_id)
-      .eq('relationship_status', 'hired')
-      .maybeSingle()
-
-    if (canonicalMatter?.id) return canonicalMatter.id
+    const resolved = await resolveMatterRef({ kind: 'intake', value: legacySheet.client_intake_id }, admin)
+    if (resolved) return resolved.matterId
   }
-
-  const { data: intakeMatter } = await admin
-    .from('matters')
-    .select('id')
-    .eq('client_intake_id', inputId)
-    .eq('relationship_status', 'hired')
-    .maybeSingle()
-
-  if (intakeMatter?.id) return intakeMatter.id
-
-  const { data: legacyIntake } = await admin
-    .from('client_intake')
-    .select('id')
-    .eq('matter_id', inputId)
-    .maybeSingle()
-
+  const intake = await resolveMatterRef({ kind: 'intake', value: inputId }, admin)
+  if (intake) return intake.matterId
+  const legacyIntake = await row<{ id: string }>(admin.from('client_intake').select('id').eq('matter_id', inputId).maybeSingle())
   if (legacyIntake?.id) {
-    const { data: matterFromLegacyIntake } = await admin
-      .from('matters')
-      .select('id')
-      .eq('client_intake_id', legacyIntake.id)
-      .eq('relationship_status', 'hired')
-      .maybeSingle()
-
-    if (matterFromLegacyIntake?.id) return matterFromLegacyIntake.id
+    const resolved = await resolveMatterRef({ kind: 'intake', value: legacyIntake.id }, admin)
+    if (resolved) return resolved.matterId
   }
-
-  return inputId
+  throw new MatterReferenceNotFoundError()
 }

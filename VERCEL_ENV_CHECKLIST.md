@@ -145,7 +145,7 @@ after the fact.
 
 | Variable | Purpose |
 |----------|---------|
-| `PAYMENTS_PROVIDER` | `stripe` or `lawpay`. Unset disables online payment entirely |
+| `PAYMENTS_PROVIDER` | `stripe`. Unset disables online payment; LawPay is not implemented. |
 | `STRIPE_SECRET_KEY` | Stripe server API key, for creating checkout sessions |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…`, verifies the webhook signature |
 
@@ -154,8 +154,7 @@ to `checkout.session.completed`, `checkout.session.expired` and
 `checkout.session.async_payment_failed`. `NEXT_PUBLIC_APP_URL` and
 `NEXT_PUBLIC_PORTAL_URL` already exist and supply the return URLs.
 
-LawPay is a stub with the same interface: choosing it means implementing three
-methods in `lib/payments/lawpay.ts` and flipping `PAYMENTS_PROVIDER`.
+Stripe is the implemented online processor. LawPay is unsupported; changing the environment variable does not add an integration.
 
 ## Optional — Resend (lite alerts)
 

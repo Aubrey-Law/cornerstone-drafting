@@ -1,3 +1,4 @@
+import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { notFound } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey } from '@/lib/firmDate'
@@ -215,7 +216,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         id: user?.id ?? '',
         role: user ? await getCachedUserRole(user.id) ?? '' : '',
       }}
-      smsEnabled={isSmsConfigured()}
+      smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
     />
   )
 }

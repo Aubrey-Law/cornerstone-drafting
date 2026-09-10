@@ -7,7 +7,6 @@
 // Path separators, reserved filename characters, and control characters are
 // replaced with a space so the segment stays readable. Spaces, hyphens, and
 // ampersands (used in "Jane & John") are intentionally preserved.
-// eslint-disable-next-line no-control-regex
 const ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\x00-\x1f]+/g
 
 export function sanitizeDraftNameSegment(value: string): string {

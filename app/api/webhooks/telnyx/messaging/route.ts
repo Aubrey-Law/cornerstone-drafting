@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { unwrapTelnyxWebhook } from '@/lib/telnyx/client'
 import {
-  isSmsOptOutMessage,
   recordInboundSms,
-  smsOptOutConfirmation,
 } from '@/lib/sms/inbound'
-import { sendTelnyxSmsMessage } from '@/lib/telnyx/sms'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -99,9 +96,7 @@ export async function POST(req: Request) {
         provider: 'telnyx',
       })
       if (!result.ok) throw new Error(result.error)
-      if (!result.duplicate && isSmsOptOutMessage(body)) {
-        await sendTelnyxSmsMessage({ to: from, body: smsOptOutConfirmation() })
-      }
+
     } else if (eventType === 'message.sent' || eventType === 'message.finalized') {
       const status = payload.to?.[0]?.status?.trim() ||
         (eventType === 'message.sent' ? 'sent' : 'unknown')

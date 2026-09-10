@@ -135,6 +135,7 @@ export function AdminSidebar({
 
   return (
     <nav className="flex min-h-0 flex-1 flex-col p-2">
+      {!!badgeCounts.errors?.length && <p role="status" className="px-3 py-1 text-xs text-muted-foreground" title="Some attention counts could not be refreshed">{compact ? '!' : 'Some counts unavailable'}</p>}
       {navGroups.map(group => (
         <div key={group} className={cn('flex flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
           {!compact ? (
@@ -147,6 +148,8 @@ export function AdminSidebar({
             .map(item => {
               const active =
                 pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
+                || (item.href === '/admin/matters/list' && pathname.startsWith('/admin/matters/'))
+                || (item.href === '/admin/crm/opportunities' && pathname.startsWith('/admin/leads/'))
               const Icon = item.icon
               const badge = getNavBadge(item.href, badgeCounts)
               return (

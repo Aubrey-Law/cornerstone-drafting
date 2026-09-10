@@ -63,15 +63,8 @@ describe('no call surface remains in the app', () => {
     }
   })
 
-  it('drops the unlinked-call scope and the calls channel from the inbox', () => {
-    const inbox = source('app/admin/inbox/InboxClient.tsx')
-    expect(inbox).not.toMatch(/unlinked_calls/)
-    expect(inbox).not.toMatch(/'calls'/)
-    expect(source('app/admin/inbox/page.tsx')).not.toMatch(/fetchUnlinkedInboxCalls/)
-  })
-
   it('stops counting unlinked calls anywhere', () => {
-    for (const file of ['lib/queries/inbox.ts', 'lib/queries/sidebarCounts.ts', 'lib/queries/today.ts']) {
+    for (const file of ['lib/queries/sidebarCounts.ts', 'lib/queries/today.ts']) {
       expect(source(file)).not.toMatch(/from\('calls'\)/)
     }
     expect(source('lib/sidebarBadges.ts')).not.toMatch(/unassignedCallsCount/)
@@ -81,16 +74,6 @@ describe('no call surface remains in the app', () => {
     expect(source('lib/comms/thread.ts')).toMatch(/export type CommChannel = 'portal' \| 'sms' \| 'email'/)
     expect(source('lib/matterPageTabs.ts'))
       .toMatch(/COMMUNICATION_CHANNELS = \['all', 'portal', 'sms', 'email'\]/)
-  })
-
-  it('logs a softphone wrap-up without attaching it to a record', () => {
-    // The call-summary route still takes a record for AI drafting context —
-    // that is context for the follow-up note, not a link on the call row.
-    const route = source('app/api/admin/phone/call-log/route.ts')
-    expect(route).not.toMatch(/matterId|leadId/)
-    const softphone = source('components/softphone/Softphone.tsx')
-    const callLogPost = softphone.slice(softphone.indexOf("'/api/admin/phone/call-log'"))
-    expect(callLogPost.slice(0, 600)).not.toMatch(/matterId|leadId/)
   })
 
   it('stops deleting calls when a matter is deleted', () => {

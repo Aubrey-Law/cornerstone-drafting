@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, Circle, ClipboardList, Copy, Mail, MessageSquare, RefreshCw, ShieldX } from 'lucide-react'
+import { CheckCircle2, Circle, ClipboardList, Copy, Mail, RefreshCw, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { type IntakeRow } from '@/lib/intakeSections'
 import { INTAKE_TRACK_OPTIONS, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
@@ -29,7 +29,7 @@ function stateLine(intake: IntakeRow, completed: number, total: number): string 
 }
 
 export function LeadIntakeCard({
-  intake, intakeUrl, linkRevoked = false, onOpen, onCopy, onEmail, onText, onRotate, onRevoke,
+  intake, intakeUrl, linkRevoked = false, onOpen, onCopy, onEmail, onRotate, onRevoke,
   onTrackChange, busy = false,
 }: LeadIntakeCardProps) {
   const segments = getLeadIntakeProgress(intake)
@@ -69,11 +69,6 @@ export function LeadIntakeCard({
           {onEmail && (
             <Button type="button" size="sm" variant="outline" onClick={onEmail} disabled={!intakeUrl || busy}>
               <Mail className="h-3.5 w-3.5" /> Email link
-            </Button>
-          )}
-          {onText && (
-            <Button type="button" size="sm" variant="outline" onClick={onText} disabled={!intakeUrl || busy}>
-              <MessageSquare className="h-3.5 w-3.5" /> Text link
             </Button>
           )}
           {onRotate && (

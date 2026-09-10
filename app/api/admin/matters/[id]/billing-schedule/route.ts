@@ -12,7 +12,8 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = createFeeScheduleSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'A valid package and agreed fee are required' }, { status: 400 })
   try {
-    const matterId = await resolveMatterId((await params).id, getAdminClient())
+    const matterId = await resolveMatterId((await params).id, getAdminClient()).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const schedule = await createMatterFeeSchedule({
       matterId,
       packageId: parsed.data.packageId,

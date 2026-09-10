@@ -1,3 +1,4 @@
+import { loadInvoiceBalances } from '@/lib/queries/invoiceBalances'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterAging, type MatterAgingRow } from '@/lib/queries/pipelineAging'
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
@@ -87,6 +88,7 @@ export interface TodayOverdueInvoice {
 }
 
 export interface TodayBilling {
+  error?: string | null
   /** Client charges not yet on any invoice. */
   unbilledCount: number
   unbilledCents: number
@@ -351,12 +353,12 @@ async function fetchTodayBilling(
         .neq('status', 'paid'),
       admin
         .from('invoices')
-        .select('id, number, matter_id, subtotal_cents, due_date, status')
+        .select('id, number, matter_id, subtotal_cents, due_date, status, kind')
         .in('status', ['issued', 'partial'])
         .not('due_date', 'is', null)
         .lt('due_date', todayKey),
     ])
-    if (chargeRes.error || invoiceRes.error) return EMPTY_BILLING
+    if (chargeRes.error || invoiceRes.error) throw new Error('Billing unavailable')
 
     const charges = (chargeRes.data ?? []) as { id: string; amount_billed: number }[]
     const invoices = (invoiceRes.data ?? []) as {
@@ -364,6 +366,7 @@ async function fetchTodayBilling(
       number: string | null
       matter_id: string
       subtotal_cents: number
+      kind: string
       due_date: string
     }[]
 
@@ -375,6 +378,7 @@ async function fetchTodayBilling(
       admin.from('billing_adjustments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       admin.from('billing_items').select('status').eq('kind', 'plan_claim').neq('status', 'paid'),
     ])
+    if ([milestones, reminders, jobs, exceptions, claims].some(result => result.error)) supplemental.error = 'Some billing attention counts are unavailable. Please retry.'
     supplemental.milestonesReadyCount = milestones.error ? 0 : milestones.count ?? 0
     supplemental.reminderDraftCount = reminders.error ? 0 : reminders.count ?? 0
     supplemental.failedWorkflowJobCount = jobs.error ? 0 : jobs.count ?? 0
@@ -390,21 +394,14 @@ async function fetchTodayBilling(
       }
     }
 
-    const [paymentRes, pipelineRes] = await Promise.all([
-      admin
-        .from('billing_payments')
-        .select('invoice_id, amount')
-        .in('invoice_id', invoices.map(invoice => invoice.id)),
+    const [balances, pipelineRes] = await Promise.all([
+      loadInvoiceBalances(admin, invoices),
       admin
         .from('v_matter_pipeline')
         .select('matter_id, client_name, matter_name')
         .in('matter_id', [...new Set(invoices.map(invoice => invoice.matter_id))]),
     ])
 
-    const collected = new Map<string, number>()
-    for (const payment of (paymentRes.data ?? []) as { invoice_id: string; amount: number }[]) {
-      collected.set(payment.invoice_id, (collected.get(payment.invoice_id) ?? 0) + payment.amount)
-    }
     const nameById = new Map(
       ((pipelineRes.data ?? []) as {
         matter_id: string
@@ -415,7 +412,7 @@ async function fetchTodayBilling(
 
     const overdueInvoices = invoices
       .map(invoice => {
-        const balanceCents = Math.max(0, invoice.subtotal_cents - (collected.get(invoice.id) ?? 0))
+        const balanceCents = balances.get(invoice.id)!
         // invoiceOverdue owns the "past due" rule and its calendar arithmetic;
         // re-deriving it here is how the two surfaces would drift apart.
         const { daysPastDue } = invoiceOverdue(
@@ -436,6 +433,7 @@ async function fetchTodayBilling(
       .sort((a, b) => b.daysPastDue - a.daysPastDue)
 
     return {
+      error: supplemental.error,
       unbilledCount: charges.length,
       unbilledCents: charges.reduce((sum, row) => sum + row.amount_billed, 0),
       overdueInvoices,
@@ -448,6 +446,6 @@ async function fetchTodayBilling(
       claimsAwaitingReimbursementCount: supplemental.claimsAwaitingReimbursementCount,
     }
   } catch {
-    return EMPTY_BILLING
+    return { ...EMPTY_BILLING, error: 'Billing is unavailable. Please retry.' }
   }
 }

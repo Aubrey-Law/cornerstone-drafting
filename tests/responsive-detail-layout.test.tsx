@@ -106,7 +106,7 @@ describe('responsive admin detail layout', () => {
 
     expect(screen.getByRole('menuitem', { name: 'Call' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Email' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Text' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Text' })).toBeNull()
     expect(screen.getByRole('menuitem', { name: 'Open details' })).toBeTruthy()
   })
 

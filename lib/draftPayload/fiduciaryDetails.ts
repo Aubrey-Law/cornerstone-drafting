@@ -269,15 +269,6 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
   const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
   const details = emptyRoleDetails()
 
-  function slotContact(slots: FiduciarySlotRow[], order: number, co = false): ContactRow | null {
-    const priorityOrder = principalOrderByPriority(slots, order)
-    if (priorityOrder == null) return null
-    // Require a named slot — a stray empty placeholder at the same order must
-    // not shadow the appointed person.
-    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co && Boolean(item.contact_id))
-    return slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
-  }
-
   function slotDetail(
     slots: FiduciarySlotRow[],
     order: number,

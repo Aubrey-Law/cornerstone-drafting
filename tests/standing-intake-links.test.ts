@@ -44,7 +44,7 @@ describe('standing intake link integration', () => {
     expect(detail).toContain("'manual', 'intake_invite', 'intake_invite_college_prep'")
     expect(detail).toContain('intake_link: intakeUrl')
     expect(card).toContain('Email link')
-    expect(card).toContain('Text link')
+    expect(card).not.toContain('Text link')
     expect(detail).toContain('rotateIntakeUrl')
     expect(detail).toContain('revokeIntakeUrl')
   })

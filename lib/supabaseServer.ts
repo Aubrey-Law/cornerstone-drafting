@@ -3,8 +3,8 @@ import { cookies } from 'next/headers'
 import { cache } from 'react'
 import type { Database } from '@/types/supabase'
 
-// Per-request cached auth claims. getClaims() verifies the JWT locally
-// (no network round-trip), unlike getUser() which calls Supabase Auth.
+// Per-request cached auth claims. Asymmetric signing can verify locally using
+// cached JWKS; symmetric signing and key refresh may still require a network hop.
 // Use this anywhere you only need the authenticated user id / email.
 export const getCachedClaims = cache(async () => {
   const supabase = await createServerSupabase()

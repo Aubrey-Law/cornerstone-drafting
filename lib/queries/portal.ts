@@ -1,6 +1,6 @@
+import { loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { firmTodayKey } from '@/lib/firmDate'
-import { adjustedInvoiceBalance, type InvoiceBalanceAdjustment } from '@/lib/billing/invoices'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { MatterDocument } from '@/types/database'
 
@@ -13,20 +13,18 @@ import type { MatterDocument } from '@/types/database'
  */
 
 /** Everything the firm has shared with the client, newest first. */
-export async function fetchSharedDocuments(matterId: string): Promise<MatterDocument[]> {
+export async function fetchSharedDocuments(matterId: string, limit?: number): Promise<MatterDocument[]> {
   const admin = getAdminClient()
 
-  const { data, error } = await admin
+  let query = admin
     .from('matter_documents')
     .select(MATTER_DOCUMENT_COLUMNS)
     .eq('matter_id', matterId)
     .not('shared_at', 'is', null)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('fetchSharedDocuments error:', error)
-    return []
-  }
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+  if (limit !== undefined) query = query.limit(limit)
+  const { data, error } = await query
+  if (error) throw new Error('Shared documents are unavailable. Please retry.')
   return (data ?? []) as MatterDocument[]
 }
 
@@ -34,20 +32,19 @@ export async function fetchSharedDocuments(matterId: string): Promise<MatterDocu
 export async function fetchClientUploads(
   matterId: string,
   userId: string,
+  limit?: number,
 ): Promise<MatterDocument[]> {
   const admin = getAdminClient()
-  const { data, error } = await admin
+  let query = admin
     .from('matter_documents')
     .select(MATTER_DOCUMENT_COLUMNS)
     .eq('matter_id', matterId)
     .eq('source', 'client')
     .eq('uploaded_by', userId)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('fetchClientUploads error:', error)
-    return []
-  }
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+  if (limit !== undefined) query = query.limit(limit)
+  const { data, error } = await query
+  if (error) throw new Error('Uploaded documents are unavailable. Please retry.')
   return (data ?? []) as MatterDocument[]
 }
 
@@ -61,11 +58,11 @@ export async function fetchRecentPortalDocuments(
   limit = 2,
 ): Promise<MatterDocument[]> {
   const [shared, uploads] = await Promise.all([
-    fetchSharedDocuments(matterId),
-    fetchClientUploads(matterId, userId),
+    fetchSharedDocuments(matterId, limit),
+    fetchClientUploads(matterId, userId, limit),
   ])
-  return [...shared, ...uploads]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  return [...new Map([...shared, ...uploads].map(row => [row.id, row])).values()]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
     .slice(0, limit)
 }
 
@@ -233,8 +230,7 @@ export async function fetchPortalAccount(
     .order('issue_date', { ascending: false })
 
   if (error) {
-    console.error('fetchPortalAccount error:', error)
-    return { invoices: [], balanceCents: 0, nextDueDate: null }
+    throw new Error('Your account could not be loaded. Please retry.')
   }
 
   type Row = {
@@ -252,30 +248,9 @@ export async function fetchPortalAccount(
   const rows = (data ?? []) as Row[]
   if (rows.length === 0) return { invoices: [], balanceCents: 0, nextDueDate: null }
 
-  const [paymentResult, adjustmentResult] = await Promise.all([
-    admin.from('billing_payments').select('invoice_id, amount').in('invoice_id', rows.map(row => row.id)),
-    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
-      .in('invoice_id', rows.map(row => row.id)),
-  ])
-  if (paymentResult.error) {
-    console.error('fetchPortalAccount payments error:', paymentResult.error)
-  }
-
-  const collected = new Map<string, number>()
-  for (const payment of (paymentResult.data ?? []) as { invoice_id: string; amount: number }[]) {
-    collected.set(payment.invoice_id, (collected.get(payment.invoice_id) ?? 0) + payment.amount)
-  }
-
+  const accounting = await loadInvoiceAccounting(admin, rows)
   const invoices: PortalInvoice[] = rows.map(row => {
-    const collectedCents = collected.get(row.id) ?? 0
-    const balanceCents = row.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
-      row.subtotal_cents,
-      collectedCents,
-      adjustmentResult.error
-        ? []
-        : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
-            .filter(item => item.invoice_id === row.id && item.status === 'posted'),
-    )
+    const { collected: collectedCents, balance: balanceCents } = accounting.get(row.id)!
     return {
       id: row.id,
       number: row.number ?? '',

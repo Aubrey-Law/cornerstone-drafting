@@ -220,6 +220,7 @@ export async function sendOutboundSms(
     }
   }
 
+  if (smsProvider() === 'none') return { ok: false, error: 'SMS delivery is disabled.', status: 409 }
   const admin = getAdminClient()
   const baseRow = {
     matter_id: target.matterId,

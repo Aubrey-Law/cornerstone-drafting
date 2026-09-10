@@ -1,3 +1,4 @@
+import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { notFound } from 'next/navigation'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { fetchMatterAgingSummary, fetchMatterEstateSnapshot } from '@/lib/queries/matterOverview'
@@ -242,24 +243,17 @@ async function loadLinkedLeadHistory(admin: ReturnType<typeof getAdminClient>, i
 export default async function MatterDetailPage({ params }: Params) {
   const { id: rawId } = await params
   const admin = getAdminClient()
-  const id = await resolveMatterId(rawId, admin)
-  const [matter, contacts, agingSummary] = await Promise.all([
+  const id = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+  if (!id) notFound()
+  // Identity is resolved first. All independent reads then overlap rather
+  // than waiting for a second round trip after the matter overview.
+  const [matter, contacts, agingSummary, matterRow,
+    { data: detailsRow, error: detailsError }, notes, designSheet,
+    intakeSnapshot, matterActivity, stageHistory, initialTasks,
+  ] = await Promise.all([
     fetchMatter(id),
     fetchMatterContacts(id),
     fetchMatterAgingSummary(id),
-  ])
-
-  if (!matter) notFound()
-
-  const [
-    matterRow,
-    { data: detailsRow, error: detailsError },
-    notes,
-    designSheet,
-    intakeSnapshot,
-    matterActivity,
-    stageHistory,
-  ] = await Promise.all([
     loadMatterShell(admin, id),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     loadMatterNotes(admin, id),
@@ -267,20 +261,21 @@ export default async function MatterDetailPage({ params }: Params) {
     loadIntakeSnapshotOptional(id),
     loadMatterActivity(admin, id),
     fetchMatterStageHistory(id),
+    fetchTasksForMatter(id, 'open'),
   ])
+  if (!matter) notFound()
 
   const coreLoadError = detailsError
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
-  const initialEstateSnapshot = await fetchMatterEstateSnapshot(intakeId)
-  let clientIntakeRow: ClientIntakeShellRow | null = null
-
-  if (intakeId) {
-    clientIntakeRow = await loadClientIntakeShell(admin, intakeId)
-  }
-
-  const { leadNotes, leadMeetingNotes, leadActivity } = await loadLinkedLeadHistory(admin, intakeId)
+  const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent] = await Promise.all([
+    fetchMatterEstateSnapshot(intakeId),
+    intakeId ? loadClientIntakeShell(admin, intakeId) : Promise.resolve(null),
+    loadLinkedLeadHistory(admin, intakeId),
+    loadMarketingConsent(admin, intakeId),
+  ])
+  const { leadNotes, leadMeetingNotes, leadActivity } = linkedHistory
 
   const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
 
@@ -311,8 +306,7 @@ export default async function MatterDetailPage({ params }: Params) {
     portalUploadsReviewedAt,
   ).catch(() => ({ intake: 0, portal: 0, total: 0 }))
 
-  const initialTaskCounts = recordTaskCounts(await fetchTasksForMatter(id, 'open'))
-  const marketingConsent = await loadMarketingConsent(admin, intakeId)
+  const initialTaskCounts = recordTaskCounts(initialTasks)
 
   // Plan composition and fiduciaries belong to the design sheet; the matter
   // page renders them read-only, so resolve them to names here rather than
@@ -353,7 +347,7 @@ export default async function MatterDetailPage({ params }: Params) {
       designSheetSeeded={designSheetSeeded}
       reviewFlags={reviewFlags}
       resyncPreviewCount={resyncPreviewCount}
-      smsEnabled={isSmsConfigured()}
+      smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
       esignEnabled={isEsignConfigured()}
       emailSendEnabled={isMicrosoftConfigured() || Boolean(process.env.RESEND_API_KEY)}
     />

@@ -248,17 +248,6 @@ export function SchedulingSettingsSection() {
           <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
-              checked={settings.smsRemindersEnabled}
-              onChange={e => setSettings({ ...settings, smsRemindersEnabled: e.target.checked })}
-            />
-            Also send reminders by text message
-            <span className="text-xs text-muted-foreground">
-              — uses the firm Twilio number when the client left a phone number
-            </span>
-          </label>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
               checked={settings.autoIntakeInvite}
               onChange={e => setSettings({ ...settings, autoIntakeInvite: e.target.checked })}
             />

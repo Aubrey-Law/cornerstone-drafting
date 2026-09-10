@@ -1,9 +1,7 @@
 import { parseTwilioForm } from '@/lib/twilio/form'
 import { verifyTwilioRequest } from '@/lib/twilio/verify'
 import {
-  isSmsOptOutMessage,
   recordInboundSms,
-  smsOptOutConfirmation,
   twilioInboundSmsResponse,
 } from '@/lib/sms/inbound'
 
@@ -42,10 +40,6 @@ export async function POST(req: Request) {
 
   if (result.duplicate) {
     return twilioInboundSmsResponse()
-  }
-
-  if (isSmsOptOutMessage(body)) {
-    return twilioInboundSmsResponse(smsOptOutConfirmation())
   }
 
   return twilioInboundSmsResponse()

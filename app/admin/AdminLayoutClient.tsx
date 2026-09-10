@@ -11,7 +11,6 @@ import {
   FilePenLine,
   ListTodo,
   LogOut,
-  Mail,
   Menu,
   PanelLeftClose,
   PanelLeft,
@@ -29,7 +28,6 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
 import { AdminRail, RailToggleButton, useAdminRail } from '@/components/rail/AdminRail'
-import { SoftphoneProvider } from '@/components/softphone/SoftphoneProvider'
 import { useMatterDisplayName } from './components/useMatterDisplayName'
 import {
   EMPTY_SIDEBAR_COUNTS,
@@ -70,9 +68,8 @@ export const adminNavItems: {
 }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, group: 'Daily', exact: true },
-  { href: '/admin/inbox', label: 'Inbox', icon: Mail, group: 'Daily' },
-  { href: '/admin/crm', label: 'CRM', icon: Send, group: 'Clients' },
-  { href: '/admin/matters', label: 'Matters', icon: Briefcase, group: 'Clients' },
+  { href: '/admin/crm/opportunities', label: 'Leads', icon: Send, group: 'Clients' },
+  { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
@@ -187,7 +184,7 @@ export default function AdminLayoutClient({
   return (
     // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
     // can be a full-height column beside it instead of floating over content.
-    <SoftphoneProvider voiceEnabled={voiceEnabled}>
+    <>
     <div className="flex h-screen overflow-hidden bg-background">
       <aside
         className={cn(
@@ -299,6 +296,6 @@ export default function AdminLayoutClient({
       </Sheet>
 
     </div>
-    </SoftphoneProvider>
+    </>
   )
 }

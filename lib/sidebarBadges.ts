@@ -1,4 +1,6 @@
 export interface SidebarCounts {
+  /** Categories whose latest refresh failed; never display these as confirmed zero. */
+  errors?: string[]
   inboxNeedsReplyCount: number
   intakeReviewCount: number
   draftingNeedsDesignCount: number
@@ -27,10 +29,14 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
 }
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
-  if (href === '/admin/inbox' && counts.inboxNeedsReplyCount > 0) {
+  const category = href === '/admin' ? 'inboxNeedsReplyCount' : href.startsWith('/admin/matters') ? 'intakeReviewCount'
+    : href === '/admin/tasks' ? 'tasksOverdueCount' : href === '/admin/billing' ? 'overdueInvoiceCount' : null
+  if (category && counts.errors?.includes(category)) return null
+  if (href === '/admin/drafting' && counts.errors?.some(key => key === 'aging' || key === 'draftingNeedsDesignCount')) return null
+  if (href === '/admin' && counts.inboxNeedsReplyCount > 0) {
     return { value: counts.inboxNeedsReplyCount, tone: 'accent' }
   }
-  if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
+  if ((href === '/admin/matters' || href === '/admin/matters/list') && counts.intakeReviewCount > 0) {
     return { value: counts.intakeReviewCount, tone: 'destructive' }
   }
   if (href === '/admin/drafting') {
@@ -56,6 +62,7 @@ export function mergeSidebarCounts(
 ): SidebarCounts {
   if (!next) return prev
   return {
+    errors: next.errors ?? [],
     inboxNeedsReplyCount: next.inboxNeedsReplyCount ?? prev.inboxNeedsReplyCount,
     intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
     draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,

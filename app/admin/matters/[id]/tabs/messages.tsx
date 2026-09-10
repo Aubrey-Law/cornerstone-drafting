@@ -4,13 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ResizableTextarea } from '@/components/ui/drag-resize'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { TabsContent } from '@/components/ui/tabs'
 import { FilterChip } from '@/components/FilterChip'
 import { SetupBanner } from '@/components/SetupBanner'
@@ -126,7 +119,7 @@ export function EmailMessagesSection({
 const CHANNEL_CHIPS: Array<{ key: CommunicationChannel; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'portal', label: 'Portal' },
-  { key: 'sms', label: 'SMS' },
+  { key: 'sms', label: 'SMS history' },
   { key: 'email', label: 'Email' },
 ]
 
@@ -167,20 +160,18 @@ export function MatterCommunicationsTab({
   const {
     portalLoading,
     smsLoading,
-    smsRecipient,
     portalSending,
     smsSending,
     smsEnabled,
-    setSmsRecipient,
   } = messageProps
 
   return (
     <TabsContent value="communications" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Communications</h3>
+          <h3 className="text-sm font-semibold">Portal messages</h3>
           <p className="text-xs text-muted-foreground">
-            Portal messages, SMS and email for this matter — one timeline.
+            Secure portal messages and correspondence history for this matter.
           </p>
         </div>
         <div className="flex justify-end gap-2">
@@ -213,7 +204,7 @@ export function MatterCommunicationsTab({
       {!nurtureAllowed && (
         <p className="text-xs text-muted-foreground">
           Nurture email is blocked: marketing consent is{' '}
-          {MARKETING_CONSENT_LABEL[marketingConsent].toLowerCase()}. Portal messages, SMS
+          {MARKETING_CONSENT_LABEL[marketingConsent].toLowerCase()}. Portal messages
           and one-to-one email about this matter are unaffected.
         </p>
       )}
@@ -230,20 +221,7 @@ export function MatterCommunicationsTab({
             </FilterChip>
           ))}
         </div>
-        {smsEnabled && (
-          <div className="flex items-center gap-1.5">
-            <Label className="text-[11px] text-muted-foreground">Text to</Label>
-            <Select value={smsRecipient} onValueChange={v => setSmsRecipient(v as 'client' | 'spouse')}>
-              <SelectTrigger className="h-8 w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="client">Client</SelectItem>
-                <SelectItem value="spouse">Spouse</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+
       </div>
 
       <CommunicationThread

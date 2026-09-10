@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 
-import { OPEN_STAFF_SOFTPHONE_EVENT, type OpenSoftphoneDetail } from '@/app/admin/components/StaffSoftphone'
+const { openExternalPhone } = vi.hoisted(() => ({ openExternalPhone: vi.fn() }))
+vi.mock('@/lib/clientPhone', () => ({ openExternalPhone }))
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 
 const notes = [
@@ -152,19 +153,12 @@ describe('lead notes', () => {
     expect(screen.queryByText('Note added')).toBeNull()
   })
 
-  it('dispatches the softphone open event carrying the lead phone number', async () => {
-    const openPhone = vi.fn()
-    window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
+  it('opens the external calling application with the lead number', async () => {
+    openExternalPhone.mockClear()
     const user = userEvent.setup()
     render(<LeadTimelineCard leadId="l1" leadPhone="+16175551212" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
-
     await user.click(screen.getByRole('button', { name: 'Log call' }))
-
-    expect(openPhone).toHaveBeenCalledTimes(1)
-    expect((openPhone.mock.calls[0][0] as CustomEvent<OpenSoftphoneDetail>).detail).toEqual({
-      number: '+16175551212',
-    })
-    window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
+    expect(openExternalPhone).toHaveBeenCalledWith({ number: '+16175551212' })
   })
 
   it('keeps Log call disabled for a nonblank malformed phone number', () => {
@@ -183,23 +177,6 @@ describe('lead notes', () => {
     expect(logCall.disabled).toBe(true)
     expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
     expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
-  })
-
-  it('focuses the rail phone with the lead number when Log call is clicked', async () => {
-    const user = userEvent.setup()
-    const detail: OpenSoftphoneDetail[] = []
-    const listener = (event: Event) => {
-      detail.push((event as CustomEvent<OpenSoftphoneDetail>).detail)
-    }
-    window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, listener)
-
-    render(
-      <LeadTimelineCard leadId="l1" leadPhone="+16175551212" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />,
-    )
-    await user.click(screen.getByRole('button', { name: 'Log call' }))
-    window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, listener)
-
-    expect(detail).toEqual([{ number: '+16175551212' }])
   })
 
 })

@@ -24,7 +24,8 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     const compatibilityAdmin = getAdminClient()
     const { id: rawId } = await params
-    const matterId = await resolveMatterId(rawId, compatibilityAdmin)
+    const matterId = await resolveMatterId(rawId, compatibilityAdmin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const admin = compatibilityAdmin as unknown as SupabaseClient<GeneratedDatabase>
     const { data, error } = await admin
       .from('matters')
