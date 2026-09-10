@@ -85,18 +85,36 @@ describe('mattersClientConfig', () => {
  * any shape resolves, and the object is thenable so `await` on the chain
  * yields the result.
  */
-function fakeClient(byTable: Record<string, { data: unknown; error: { message: string } | null }>) {
-  const calls: Array<{ table: string; filters: Array<[string, unknown]> }> = []
+function fakeClient(
+  byTable: Record<string, { data: unknown; error: { message: string } | null; count?: number }>,
+) {
+  const calls: Array<{
+    table: string
+    filters: Array<[string, unknown]>
+    order: string | null
+    limit: number | null
+  }> = []
   return {
     calls,
     from(table: string) {
-      const record = { table, filters: [] as Array<[string, unknown]> }
+      const record = {
+        table,
+        filters: [] as Array<[string, unknown]>,
+        order: null as string | null,
+        limit: null as number | null,
+      }
       calls.push(record)
       const result = byTable[table] ?? { data: [], error: null }
       const chain: Record<string, unknown> = {
         select: () => chain,
-        order: () => chain,
-        limit: () => chain,
+        order: (column: string) => {
+          record.order = column
+          return chain
+        },
+        limit: (n: number) => {
+          record.limit = n
+          return chain
+        },
         maybeSingle: () => Promise.resolve(result),
         eq: (column: string, value: unknown) => {
           record.filters.push([column, value])
@@ -162,6 +180,34 @@ describe('listMatters', () => {
     // An empty list from a failed query is indistinguishable from "no matters
     // match", and the caller would act on the wrong one.
     await expect(listMatters(client as never, {})).rejects.toThrow(/connection reset/)
+  })
+
+  it('asks for name order', async () => {
+    const client = fakeClient({ matters: { data: [], error: null } })
+    await listMatters(client as never, {})
+    expect(client.calls[0].order).toBe('name')
+  })
+
+  it('caps the result at 100 rows', async () => {
+    const client = fakeClient({ matters: { data: [], error: null } })
+    await listMatters(client as never, {})
+    expect(client.calls[0].limit).toBe(100)
+  })
+
+  it('reports the total so a truncated answer is not mistaken for a complete one', async () => {
+    // 100 rows back and 137 in the table: without `total` the caller cannot
+    // tell a capped list from the whole practice.
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      id: `id-${i}`,
+      name: `Matter ${i}`,
+      matter_number: null,
+      stage: 'drafting',
+      relationship_status: 'hired',
+    }))
+    const client = fakeClient({ matters: { data: rows, error: null, count: 137 } })
+    const result = await listMatters(client as never, {})
+    expect(result.matters).toHaveLength(100)
+    expect(result.total).toBe(137)
   })
 })
 

@@ -42,25 +42,32 @@ export interface ListMattersFilter {
   nameContains?: string
 }
 
-/** Enough rows to survey the practice, few enough not to dump every client name. */
+/**
+ * Enough rows to survey the practice, few enough not to dump every client
+ * name. The cap is not silent: `listMatters` returns `total` alongside, so a
+ * caller can see that it is looking at part of the answer.
+ */
 const LIST_LIMIT = 100
 
 export async function listMatters(
   client: MattersClient,
   filter: ListMattersFilter,
-): Promise<{ matters: MatterSummary[] }> {
-  let query = client.from('matters').select(MATTER_SUMMARY_SELECT)
+): Promise<{ matters: MatterSummary[]; total: number }> {
+  let query = client.from('matters').select(MATTER_SUMMARY_SELECT, { count: 'exact' })
   if (filter.relationshipStatus) query = query.eq('relationship_status', filter.relationshipStatus)
   if (filter.stage) query = query.eq('stage', filter.stage)
   if (filter.nameContains) query = query.ilike('name', `%${filter.nameContains}%`)
 
-  const { data, error } = await query.order('name').limit(LIST_LIMIT)
+  const { data, error, count } = await query.order('name').limit(LIST_LIMIT)
   // Throw rather than return an empty list. "No matters match" and "the query
   // failed" look identical to a caller that only sees rows, and the caller
   // would act on the wrong one.
   if (error) throw new Error(`Could not list matters: ${error.message}`)
 
-  return { matters: (data ?? []).map(summaryOf) }
+  // `total` is the count before the cap. Without it a caller seeing 100 rows
+  // cannot tell a truncated answer from the whole practice — which is the
+  // difference between "these are the hired matters" and "here are some".
+  return { matters: (data ?? []).map(summaryOf), total: count ?? (data ?? []).length }
 }
 
 export async function getMatter(client: MattersClient, matterId: string): Promise<MatterDetail> {
