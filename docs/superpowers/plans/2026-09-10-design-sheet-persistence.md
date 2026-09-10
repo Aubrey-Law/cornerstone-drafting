@@ -4,6 +4,8 @@
 
 **Goal:** Give the design sheet one home and one safe write path, and make the audit read where the data actually is.
 
+**Scope note, 2026-09-10:** Task 5 was withdrawn on attempting it — see its section. This phase is Tasks 1–4 plus the controller-only Task 6.
+
 **Architecture:** Fold `matters.li_design_sheet_data` into `design_sheets.decisions`; add a `lock_version` column and a compare-and-swap write; teach the prompt input allow-list to resolve a key inside `decisions`; port the persistence helpers and the intake bridge into `apps/workbench`.
 
 **Tech Stack:** TypeScript, Supabase JS, plpgsql, vitest.
@@ -715,7 +717,7 @@ change.
 Tasks 1–4 are a complete phase without it: one home for the sheet, one safe
 write path, and the audit reading where the data is.
 
-### Task 5 (final): Apply, publish, and prove *(controller-only — not for a subagent)*
+### Task 6: Apply, publish, and prove *(controller-only — not for a subagent)*
 
 - [ ] **Step 1: Run every suite and open the PR**
 
@@ -840,7 +842,7 @@ Re-run check 1 on the seven matters whose findings were archived as false:
 | port persistence with compare-and-swap | 4 |
 | a lost race is reported, not swallowed | 4 |
 | port `seedFromIntake` + `intakeFiduciarySnapshot` verbatim | **withdrawn** — needs the shared-code extraction first, see Task 5 |
-| remove Task 4's type shims once types are regenerated | final (Step 4) |
-| measure every allow-list source against real data | final (Step 6) |
-| re-run check 1 on the seven | final (Step 7) |
+| remove Task 4's type shims once types are regenerated | 6 (Step 4) |
+| measure every allow-list source against real data | 6 (Step 6) |
+| re-run check 1 on the seven | 6 (Step 7) |
 | out of scope: dropping the column, the sections, the drafting run | not implemented anywhere |
