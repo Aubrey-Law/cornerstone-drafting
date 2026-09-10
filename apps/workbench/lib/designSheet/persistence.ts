@@ -51,11 +51,20 @@ export async function saveDesignSheet(
     .from('design_sheets')
     .update({ ...input.fields, lock_version: input.expectedLockVersion + 1 } as DesignSheetsUpdateWithLockVersion)
     .eq('matter_id', input.matterId)
-    // Same reason as the `Update` cast above: `lock_version` is a real
-    // column the query builder's generated column-name union doesn't know
-    // about yet. `never` is the narrowest thing assignable to whatever
-    // that union turns out to be, so a typo in any *other* `.eq()` call in
-    // this file is still caught.
+    // Same reason as the `Update` cast above: `lock_version` is a real column
+    // the query builder's generated column-name union does not know about
+    // yet.
+    //
+    // This cast is WIDER than it looks, and saying so is the point of this
+    // comment. `.eq()` infers its value type from the column name, so
+    // casting the name to `never` collapses that inference and the *value*
+    // argument stops being checked too — `.eq('lock_version' as never, {})`
+    // typechecks. Nothing is wrong today, because the only value passed is a
+    // number. But do not copy this pattern somewhere the value is not
+    // obviously correct; patch the client's Database type instead, which
+    // keeps inference on both arguments.
+    //
+    // Both casts go away in the task that regenerates the types.
     .eq('lock_version' as never, input.expectedLockVersion)
     .select('id')
 
