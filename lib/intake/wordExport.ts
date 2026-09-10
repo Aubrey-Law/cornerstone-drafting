@@ -39,6 +39,8 @@ export interface IntakeExportSection {
   rows: IntakeExportRow[]
   /** Repeating entries (children, fiduciaries) printed as their own grid. */
   table?: IntakeExportTable
+  /** Free-form entries printed one per line, for list-shaped sections. */
+  lines?: string[]
 }
 
 export interface IntakeExportMeta {
@@ -49,6 +51,8 @@ export interface IntakeExportMeta {
   status: string | null
   /** ISO date (YYYY-MM-DD) stamped on the cover line. */
   exportedOn: string
+  /** Heading on page one. Defaults to the attorney form's title. */
+  documentTitle?: string
 }
 
 // ── Value formatting ─────────────────────────────────────────────────────────
@@ -375,7 +379,12 @@ export function buildIntakeWordDocument(
       heading: HeadingLevel.HEADING_1,
       alignment: AlignmentType.CENTER,
       spacing: { after: 80 },
-      children: [new TextRun({ text: 'Client Intake Form', font: FONT, size: 32, bold: true })],
+      children: [new TextRun({
+        text: meta.documentTitle ?? 'Client Intake Form',
+        font: FONT,
+        size: 32,
+        bold: true,
+      })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -404,8 +413,18 @@ export function buildIntakeWordDocument(
       children: [new TextRun({ text: section.title, font: FONT, size: 24, bold: true })],
     }))
     if (section.rows.length) children.push(fieldTable(section.rows))
+    if (section.lines?.length) {
+      for (const line of section.lines) {
+        children.push(new Paragraph({
+          children: [bodyRun(line)],
+          spacing: { before: 0, after: 40 },
+        }))
+      }
+    }
     if (section.table) {
-      if (section.rows.length) children.push(new Paragraph({ text: '', spacing: { after: 80 } }))
+      if (section.rows.length || section.lines?.length) {
+        children.push(new Paragraph({ text: '', spacing: { after: 80 } }))
+      }
       children.push(gridTable(section.table))
     }
   }
