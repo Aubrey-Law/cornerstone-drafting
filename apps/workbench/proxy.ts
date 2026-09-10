@@ -67,7 +67,25 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Could not determine who is asking. Serve nothing rather than serving it
   // ungated, and do not read it as "anonymous" — that would sign every user out
   // during an auth outage.
-  if (!session.ok) return unavailableResponse(request)
+  //
+  // The login page is the one exception, and it has to be. It is the only
+  // public path that reaches this code at all (see the short-circuit above),
+  // and its only reason for resolving a session is the convenience of bouncing
+  // an already-signed-in visitor to their home. That convenience must never
+  // cost somebody the ability to sign in.
+  //
+  // A 503 here is a closed door with the key behind it: whoever holds a cookie
+  // this app cannot read is shut out of the one page that would replace it,
+  // with nothing on screen suggesting they clear cookies. Reported from
+  // production on 2026-09-10 by the only person who uses this app.
+  //
+  // Serving it is safe. The login page renders no client data and makes no
+  // privileged query; the worst case is that a signed-in visitor sees a login
+  // form instead of being redirected onward.
+  if (!session.ok) {
+    if (pathname === LOGIN_PATH) return supabaseResponse
+    return unavailableResponse(request)
+  }
 
   const role = session.userId
     ? await resolveRole((id) => readUserRole(supabase, id), session.userId, session.claimRole)
