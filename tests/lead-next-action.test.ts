@@ -15,7 +15,7 @@ describe('computeNextAction', () => {
   beforeEach(() => vi.useFakeTimers().setSystemTime(new Date('2026-07-25T16:00:00Z')))
   afterEach(() => vi.useRealTimers())
 
-  it.each(['hired', 'lost'])('suppresses next actions for a %s lead', leadStatus => {
+  it.each(['hired', 'lost', 'declined'])('suppresses next actions for a %s lead', leadStatus => {
     expect(computeNextAction({
       ...baseInput,
       leadStatus,
@@ -209,5 +209,26 @@ describe('computeNextAction', () => {
     })).toMatchObject({
       detail: 'Meeting is July 25, 2026 (0 days out). Intake has never been sent.',
     })
+  })
+})
+
+describe('engagement and meeting next steps', () => {
+  beforeEach(() => vi.useFakeTimers().setSystemTime(new Date('2026-07-25T16:00:00Z')))
+  afterEach(() => vi.useRealTimers())
+
+  it.each(['sent', 'signed', 'completed', 'viewed', 'partially_signed'])('does not draft again for %s engagement', engagementStatus => {
+    const action = computeNextAction({ ...baseInput, engagementStatus, feeQuoted: 2500 })
+    expect(action.key).toBe('review_engagement')
+    expect(action.actions[0].intent).toBe('review_engagement')
+  })
+
+  it('prepares for an upcoming planning session before quoting the fee', () => {
+    const action = computeNextAction({ ...baseInput, intakeCompletedAt: '2026-07-24', planningSessionAt: '2026-07-28', nextAppointmentAt: '2026-07-28' })
+    expect(action).toMatchObject({ key: 'prepare_meeting', title: 'Prepare for the planning session' })
+  })
+
+  it('schedules a planning session after discovery with completed intake', () => {
+    const action = computeNextAction({ ...baseInput, intakeCompletedAt: '2026-07-24', discoveryCallAt: '2026-07-23', planningSessionAt: null })
+    expect(action).toMatchObject({ key: 'schedule_meeting', actions: [expect.objectContaining({ intent: 'schedule_meeting' })] })
   })
 })

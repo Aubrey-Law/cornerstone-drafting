@@ -46,7 +46,7 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset(); searchParams.current = new URLSearchParams() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
-function showTab(name: 'Intake' | 'Assets' | 'Tasks' | 'Communications' | 'Documents' | 'Notes') {
+function showTab(name: 'Overview' | 'Intake' | 'Assets' | 'Tasks' | 'Communications' | 'Documents' | 'Notes') {
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }
@@ -54,6 +54,11 @@ function showTab(name: 'Intake' | 'Assets' | 'Tasks' | 'Communications' | 'Docum
 /** Overflow actions moved off the 48px header row into the More menu. */
 async function openOverflow(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'More actions' }))
+}
+
+function openRailGroup(name: string) {
+  const group = screen.getByRole('button', { name })
+  if (group.getAttribute('aria-expanded') !== 'true') act(() => { fireEvent.click(group) })
 }
 
 function header() {
@@ -101,9 +106,10 @@ describe('lead detail page', () => {
     expect(main?.previousElementSibling).toBe(screen.getByRole('complementary', { name: 'Lead details' }))
     expect(main?.querySelector('.xl\\:grid-cols-\\[1\\.6fr_1fr\\]')).toBeNull()
     expect(screen.getByRole('tab', { name: 'Intake' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Intake' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('data-state')).toBe('active')
 
-    // Intake is the landing tab now, so its card is on screen from the start.
+    // The questionnaire remains available from Intake.
+    showTab('Intake')
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
@@ -182,6 +188,23 @@ describe('lead detail page', () => {
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('shows suppressed intake delivery without advancing client contact', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      if (String(input).endsWith('/activity')) {
+        return { ok: true, json: async () => ({ activity: [] }) } as Response
+      }
+      return { ok: true, json: async () => ({ url: 'https://example.test/intake?invite=abc', email: 'suppressed' }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} lastTouchAt="2026-07-23T12:00:00Z" />)
+    await user.click(screen.getByRole('button', { name: 'Send intake' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/email delivery was suppressed/i)
+    expect(screen.getByText('Last contact 2d ago')).toBeTruthy()
+    showTab('Intake')
+    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('keeps a committed intake send successful when the activity refresh fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       if (String(input).includes('/activity')) {
@@ -200,7 +223,7 @@ describe('lead detail page', () => {
     showTab('Intake')
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
-    showTab('Intake')
+    showTab('Overview')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
@@ -254,7 +277,7 @@ describe('lead detail page', () => {
       created_at: `2026-07-${String(13 - index).padStart(2, '0')}T12:00:00Z`,
     }))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={rows} />)
-    showTab('Intake')
+    showTab('Overview')
     expect(screen.getByText('Event 9')).toBeTruthy()
   })
 
@@ -274,7 +297,7 @@ describe('lead detail page', () => {
       />,
     )
 
-    showTab('Intake')
+    showTab('Overview')
     expect(screen.getByText('Actor names unavailable: actor lookup failed')).toBeTruthy()
     expect(screen.getByText('Phone updated')).toBeTruthy()
     expect(screen.getByText(/System ·/)).toBeTruthy()
@@ -287,17 +310,17 @@ describe('lead detail page', () => {
     expect(screen.getAllByText('Lead · day 4')).toHaveLength(1)
     // The two-row header and its subtitle paragraph are gone.
     expect(screen.queryByText(/Estate Planning · Referral/)).toBeNull()
-    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(screen.getByRole('heading', { level: 1, name: 'Jane Doe' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Call' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Email' })).toBeTruthy()
     expect(within(header()).queryByRole('button', { name: 'Text' })).toBeNull()
-    expect(within(header()).getByRole('button', { name: 'Intake' })).toBeTruthy()
-    expect(within(header()).getByRole('button', { name: 'Resume engagement' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Add note' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Schedule' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'More actions' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Toggle details rail' })).toBeTruthy()
     expect(within(header()).queryByRole('combobox')).toBeNull()
     // Scoped to the header: the subtitle is what this guards. The lead score
-    // card states its own "Last touch …" as a scoring reason further down.
+    // card states its own "Last contact …" as a scoring reason further down.
     expect(within(header()).queryByText(/Last touch/)).toBeNull()
 
     await openOverflow(user)
@@ -386,7 +409,7 @@ describe('lead detail page', () => {
     })
   })
 
-  it('renders the optional last-touch pill only when the timestamp prop is supplied', () => {
+  it('renders the optional last-contact pill only when the timestamp prop is supplied', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(
       <LeadDetailClient
@@ -397,10 +420,10 @@ describe('lead detail page', () => {
       />,
     )
 
-    expect(screen.getByText('Last touch 2d ago')).toBeTruthy()
+    expect(screen.getByText('Last contact 2d ago')).toBeTruthy()
   })
 
-  it('uses current activity as the effective last touch instead of stale loader or lead timestamps', () => {
+  it('does not count internal field activity as client contact', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(
       <LeadDetailClient
@@ -417,11 +440,11 @@ describe('lead detail page', () => {
       />,
     )
 
-    expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
-    expect(screen.queryByText('Follow up with this lead')).toBeNull()
+    expect(screen.getByText('Last contact 10d ago')).toBeTruthy()
+    expect(screen.getByText('Follow up with this lead')).toBeTruthy()
   })
 
-  it('clamps a future last-touch timestamp to zero calendar days ago', () => {
+  it('clamps a future last-contact timestamp to zero calendar days ago', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(
       <LeadDetailClient
@@ -432,7 +455,7 @@ describe('lead detail page', () => {
       />,
     )
 
-    expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
+    expect(screen.getByText('Last contact 0d ago')).toBeTruthy()
   })
 
   it('calculates lead age by firm-local calendar day near UTC midnight', () => {
@@ -506,7 +529,7 @@ describe('lead detail page', () => {
       body: JSON.stringify({ nextActionSnoozedUntil: null }),
     }))
     expect(await screen.findByText('Send intake to get the facts')).toBeTruthy()
-    showTab('Intake')
+    showTab('Overview')
     expect(screen.getByText('Next action snooze cleared')).toBeTruthy()
   })
 
@@ -541,7 +564,7 @@ describe('lead detail page', () => {
         initialActivity={[]}
       />,
     )
-    await user.click(screen.getByRole('button', { name: 'Review intake' }))
+    await user.click(within(screen.getByRole('status')).getByRole('button', { name: 'Review intake' }))
     expect(await screen.findByRole('dialog', { name: /Intake — Jane Doe/ })).toBeTruthy()
   })
 
@@ -661,7 +684,7 @@ describe('lead detail page', () => {
 
     expect(await screen.findByText('Lost · day 4')).toBeTruthy()
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
-    showTab('Intake')
+    showTab('Overview')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
@@ -717,6 +740,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
@@ -724,7 +748,7 @@ describe('lead detail page', () => {
       body: JSON.stringify({ nextActionSnoozedUntil: until }),
     }))
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
-    showTab('Intake')
+    showTab('Overview')
     expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
@@ -781,12 +805,13 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     // 9 of 14 fields plus the intake and engagement gates.
-    expect(screen.getByLabelText('Lead readiness 56 percent').textContent).toBe('Not ready yet')
+    expect(screen.getByLabelText('Intake completeness 56 percent').textContent).toBe('Intake completeness')
     expect(screen.getByText('Missing Intake')).toBeTruthy()
     expect(screen.queryByText('9 of 14 complete')).toBeNull()
     expect(screen.queryByRole('progressbar', { name: 'Lead details completeness' })).toBeNull()
 
     const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    openRailGroup('Household'); openRailGroup('Qualification')
     for (const group of ['Contact', 'Household', 'Qualification']) {
       expect(within(rail).getByRole('heading', { name: group })).toBeTruthy()
     }
@@ -824,6 +849,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={sparseLead} spouse={null} initialActivity={[]} />)
 
     const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    openRailGroup('Household'); openRailGroup('Qualification')
     // Middle and preferred name are optional, so their pills wait behind "+ More"
     // rather than reading as two unfinished fields on every lead.
     // By aria-label, so this reads the field pills rather than every button in
@@ -910,6 +936,7 @@ describe('lead detail page', () => {
     showTab('Intake')
     expect(screen.getByLabelText('Household: complete')).toBeTruthy()
     expect(screen.getByLabelText('Fiduciaries: complete')).toBeTruthy()
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1005,7 +1032,7 @@ describe('lead detail page', () => {
     expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
   })
 
-  it('keeps an inline write committed and advances last touch when activity refresh fails', async () => {
+  it('keeps an inline write committed without advancing client contact when activity refresh fails', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input).endsWith('/activity')) {
@@ -1047,9 +1074,9 @@ describe('lead detail page', () => {
 
     await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
     expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
-    expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
-    expect(screen.queryByText('Follow up with this lead')).toBeNull()
-    showTab('Intake')
+    expect(screen.getByText('Last contact 10d ago')).toBeTruthy()
+    expect(screen.getByText('Follow up with this lead')).toBeTruthy()
+    showTab('Overview')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
     expect(toastError).not.toHaveBeenCalled()
   })
@@ -1080,7 +1107,7 @@ describe('lead detail page', () => {
     await user.type(phone, '617-555-0111{Enter}')
 
     await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
-    showTab('Intake')
+    showTab('Overview')
     expect(await screen.findByText(
       'Lead data refresh unavailable: Saved, but refreshed spouse data is unavailable.',
     )).toBeTruthy()
@@ -1138,6 +1165,7 @@ describe('lead detail page', () => {
     await user.type(phone, '999')
 
     const emailTrigger = screen.getByRole('button', { name: 'Edit Email' }) as HTMLButtonElement
+    openRailGroup('Household')
     const dobChip = screen.getByRole('button', { name: 'Add Date of birth' }) as HTMLButtonElement
     expect(emailTrigger.disabled).toBe(true)
     expect(dobChip.disabled).toBe(true)
@@ -1185,7 +1213,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
-    const topControls = ['Call', 'Email', 'Intake', 'Draft engagement', 'More actions']
+    const topControls = ['Call', 'Email', 'Add note', 'Schedule', 'More actions']
       .map(name => within(header()).getByRole('button', { name })) as HTMLButtonElement[]
     const ribbonControls = ['Send intake', 'Fill it myself', 'Import', 'Snooze']
       .map(name => screen.getByRole('button', { name })) as HTMLButtonElement[]
@@ -1214,7 +1242,8 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Draft engagement' }))
+    await openOverflow(user)
+    await user.click(screen.getByRole('menuitem', { name: 'Draft engagement' }))
 
     for (const name of ['Send intake', 'Fill it myself', 'Import', 'Snooze']) {
       expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
@@ -1238,9 +1267,10 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
 
-    for (const name of ['Call', 'Email', 'Intake', 'Draft engagement', 'More actions']) {
-      expect((within(header()).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    for (const name of ['Call', 'Email', 'Add note', 'Schedule', 'More actions']) {
+      expect((within(header()).getByRole('button', { name, hidden: true }) as HTMLButtonElement).disabled).toBe(true)
     }
 
     resolveSnooze({
@@ -1259,31 +1289,28 @@ describe('lead detail page', () => {
     await waitFor(() => expect(
       (within(header()).getByRole('button', { name: 'More actions' }) as HTMLButtonElement).disabled,
     ).toBe(false))
-    showTab('Intake')
+    showTab('Overview')
     expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
-  it('rolls back, closes, restores trigger focus, and toasts when the server rejects a field', async () => {
+  it('retains a rejected field draft with retry and cancel controls', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
       json: async () => ({ error: 'Phone is invalid' }),
     } as Response)
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
     await user.clear(phone)
-    await user.type(phone, 'bad{Enter}')
-
-    const trigger = await screen.findByRole('button', { name: 'Edit Phone' })
-    expect(trigger.textContent).toContain('617')
-    await waitFor(() => expect(trigger).toBe(document.activeElement))
-    const alert = screen.getByRole('alert')
+    await user.type(phone, '999{Enter}')
+    const alert = await screen.findByRole('alert')
     expect(alert.id).toBe('lead-phone-error')
     expect(alert.textContent).toBe('Phone is invalid')
-    expect(trigger.getAttribute('aria-invalid')).toBe('true')
-    expect(trigger.getAttribute('aria-describedby')).toBe('lead-phone-error')
+    expect((screen.getByRole('textbox', { name: 'Phone' }) as HTMLInputElement).value).toBe('(999')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617')
     expect(toastError).toHaveBeenCalledWith('Phone is invalid')
   })
 
@@ -1331,6 +1358,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1353,6 +1381,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1384,6 +1413,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1424,6 +1454,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1463,6 +1494,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
+    openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
     await user.clear(firstName)
@@ -1486,5 +1518,55 @@ describe('lead detail page', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.id).toBe('lead-phone-error')
     expect(alert.textContent).toBe('Phone is invalid')
+  })
+})
+
+
+describe('lead overview workflow improvements', () => {
+  it('starts on Overview with an accessible client heading', () => {
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('heading', { level: 1, name: 'Jane Doe' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Lead overview' })).toBeTruthy()
+  })
+
+  it('reveals the closed rail when quoting a fee from the next action', async () => {
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={{ ...lead, intake_completed_at: '2026-07-25T00:00:00Z', engagement_fee_quoted: null }} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
+    expect(screen.queryByRole('complementary', { name: 'Lead details' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Quote fee' }))
+    expect(await screen.findByRole('spinbutton', { name: 'Quoted fee' })).toBeTruthy()
+  })
+
+  it('shares saved internal notes across tabs without changing client contact', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, options) => {
+      if (String(input).endsWith('/notes') && options?.method === 'POST') {
+        return { ok: true, json: async () => ({ note: { id: 'note-1', body: 'Attorney preparation note', actorId: 'actor-1', createdAt: '2026-07-25T12:00:00Z', updatedAt: '2026-07-25T12:00:00Z' } }) } as Response
+      }
+      return { ok: true, json: async () => ({ activity: [] }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} lastTouchAt="2026-07-23T12:00:00Z" />)
+    await user.click(within(header()).getByRole('button', { name: 'Add note' }))
+    await user.type(screen.getByRole('textbox', { name: 'New note' }), 'Attorney preparation note')
+    await user.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: 'Add note' }))
+    expect(await screen.findByText('Attorney preparation note')).toBeTruthy()
+    expect(screen.getByText('Last contact 2d ago')).toBeTruthy()
+    showTab('Overview')
+    expect(screen.getByText('Attorney preparation note')).toBeTruthy()
+    showTab('Notes')
+    expect(screen.getByText('Attorney preparation note')).toBeTruthy()
+  })
+
+  it('offers a snooze date before writing anything', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as Response)
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    expect(screen.getByRole('dialog', { name: 'Snooze next action' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Tomorrow' })).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(false)
   })
 })

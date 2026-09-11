@@ -49,8 +49,10 @@ import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
-import { computeLeadScore, leadScoreInputFromRow } from '@/lib/leads/score'
-import { computeLeadReadiness } from '@/lib/leads/readiness'
+import { computeLeadScore, leadScoreInputFromRow, type LeadScoreInput } from '@/lib/leads/score'
+import { clientContactTimestamps } from '@/lib/leads/contactEvents'
+import { LeadOverview, leadProgressLabel, leadDisplayDate } from '@/components/leads/LeadOverview'
+import { LeadSnoozeDialog } from '@/components/leads/LeadSnoozeDialog'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
@@ -85,7 +87,11 @@ type LeadRecord = LeadDetailRecord
 type LeadSpouse = LeadSpouseRecord
 type LeadActivityRow = LeadActivityViewRow
 
+const EMPTY_NOTES: LeadTimelineNote[] = []
+const EMPTY_MEETINGS: LeadTimelineMeeting[] = []
+
 const LEAD_SECTION_OPTIONS: readonly { value: LeadTab; label: string }[] = [
+  { value: 'overview', label: 'Overview' },
   { value: 'intake', label: 'Intake' },
   { value: 'assets', label: 'Assets' },
   { value: 'tasks', label: 'Tasks' },
@@ -106,7 +112,10 @@ type LeadDetailClientProps = {
   lastTouchAt?: string | null
   actorError?: string | null
   currentUser?: { id: string; role: string }
-  activeAgreement?: { id: string } | null
+  activeAgreement?: { id: string; status?: string } | null
+  initialScoreInput?: LeadScoreInput | null
+  lastClientResponseAt?: string | null
+  recordUpdatedAt?: string | null
   /** Null when the opportunity has no matter row to hang the SLA clock on. */
   initialKeyDates?: LeadKeyDates | null
   peopleMatter?: PipelineMatter | null
@@ -130,7 +139,6 @@ type SnoozeResponse = {
   activity: LeadActivityRow
 }
 
-const DAY_MS = 86_400_000
 
 function calendarDaysAgo(value: string | null | undefined, timeZone: string): number | null {
   if (!value) return null
@@ -170,12 +178,15 @@ export function LeadDetailClient({
   lead: initialLead,
   spouse: initialSpouse,
   initialActivity,
-  initialNotes = [],
-  initialMeetingNotes = [],
+  initialNotes = EMPTY_NOTES,
+  initialMeetingNotes = EMPTY_MEETINGS,
   actorNames = {},
   firmTimezone = FIRM_TIMEZONE,
   nextAppointmentAt = null,
   lastTouchAt,
+  lastClientResponseAt = null,
+  recordUpdatedAt = null,
+  initialScoreInput = null,
   actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
@@ -196,6 +207,12 @@ export function LeadDetailClient({
   const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activity, setActivity] = useState(initialActivity)
+  const [notes, setNotes] = useState(initialNotes)
+  const [meetingNotes, setMeetingNotes] = useState(initialMeetingNotes)
+  const [noteRequest, setNoteRequest] = useState(0)
+  const [tasksVersion, setTasksVersion] = useState(0)
+  const [snoozeOpen, setSnoozeOpen] = useState(false)
+  const [intakeSection, setIntakeSection] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [busyIntent, setBusyIntent] = useState<string | null>(null)
   const [railOpen, setRailOpen] = useState(false)
@@ -230,6 +247,7 @@ export function LeadDetailClient({
     documents,
     folders: documentFolders,
     loading: documentsLoading,
+    error: documentsError,
     reload: reloadDocuments,
   } = useLeadDocuments(lead.matter_id)
   const taskCounts = useRecordTaskCounts(lead.id, initialTaskCounts)
@@ -244,7 +262,7 @@ export function LeadDetailClient({
   function changeTab(tab: LeadTab) {
     setActiveTab(tab)
     const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (tab === 'intake') params.delete('tab')
+    if (tab === 'overview') params.delete('tab')
     else params.set('tab', tab)
     if (tab !== 'tasks') params.delete('view')
     const qs = params.toString()
@@ -276,6 +294,11 @@ export function LeadDetailClient({
     setLead(initialLead)
   }, [initialLead])
 
+  useEffect(() => { setKeyDates(initialKeyDates) }, [initialKeyDates])
+  useEffect(() => { setActivity(initialActivity) }, [initialActivity])
+  useEffect(() => { setNotes(initialNotes) }, [initialNotes])
+  useEffect(() => { setMeetingNotes(initialMeetingNotes) }, [initialMeetingNotes])
+
   async function call<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
     const response = await fetch(path, {
       method,
@@ -287,6 +310,22 @@ export function LeadDetailClient({
       throw Object.assign(new Error(json.error || 'Request failed'), { fieldErrors: json.fieldErrors })
     }
     return json
+  }
+
+  function openField(field: LeadEditableField | null) {
+    if (field) setRailOpen(true)
+    if (field !== 'spouse') setSpouseRemovalError(null)
+    setActiveField(field)
+  }
+
+  function addQuickNote() {
+    changeTab('notes')
+    setNoteRequest(value => value + 1)
+  }
+
+  function tasksChanged() {
+    setTasksVersion(value => value + 1)
+    void taskCounts.refresh()
   }
 
   async function refreshActivity() {
@@ -319,26 +358,31 @@ export function LeadDetailClient({
         json.activity!,
         ...current.filter(row => row.id !== json.activity!.id),
       ])
-      recordTouch(json.activity.created_at)
-    } else {
-      recordTouch(null)
     }
     setDataRefreshWarning(json.refreshWarning ?? null)
+    router.refresh()
   }
 
   async function sendIntake() {
     setSendingIntake(true)
     setError(null)
     try {
-      const json = await call<{ url?: string }>('/api/admin/intake/send', { intakeId: lead.id })
+      const json = await call<{ url?: string; email?: string }>('/api/admin/intake/send', { intakeId: lead.id })
       if (typeof json.url === 'string') setIntakeUrl(json.url)
       setLead(current => ({
         ...current,
         intake_sent_at: new Date().toISOString(),
         intake_status: current.intake_status === 'completed' ? current.intake_status : 'sent',
       }))
-      recordTouch(null)
       await refreshActivityBestEffort()
+      router.refresh()
+      const deliveryWarnings: Record<string, string> = {
+        suppressed: 'The intake link is ready, but email delivery was suppressed. Review delivery settings before retrying.',
+        redirected: 'The intake email was redirected to a test inbox. It was not sent to the client.',
+        logged: 'The intake link is ready, but email was only logged. Configure email delivery before retrying.',
+        error: 'The intake link is ready, but the email could not be sent. Please retry sending it.',
+      }
+      if (json.email && deliveryWarnings[json.email]) setError(deliveryWarnings[json.email])
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not send intake')
     } finally {
@@ -474,6 +518,7 @@ export function LeadDetailClient({
       if (target === 'client') setLead(current => ({ ...current, [field]: saved }))
       else setSpouse(current => (current ? { ...current, [field]: saved } : current))
       toast.success('Saved')
+      router.refresh()
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Could not save')
     }
@@ -504,6 +549,8 @@ export function LeadDetailClient({
           : 'Saved',
       )
       await refreshActivityBestEffort()
+      tasksChanged()
+      router.refresh()
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Could not save the key date')
     } finally {
@@ -555,7 +602,6 @@ export function LeadDetailClient({
       json.activity,
       ...current.filter(row => row.id !== json.activity.id),
     ])
-    recordTouch(json.activity.created_at)
   }
 
   async function clearNextActionSnooze() {
@@ -589,7 +635,7 @@ export function LeadDetailClient({
           setImportIntakeOpen(true)
           return
         case 'quote_fee':
-          setActiveField('fee')
+          openField('fee')
           return
         case 'draft_engagement':
           await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
@@ -600,8 +646,15 @@ export function LeadDetailClient({
         case 'email':
           setCommunicationChannel('email')
           return
+        case 'review_engagement':
+          if (activeAgreement?.id) router.push(`/admin/engagements/${activeAgreement.id}`)
+          else changeTab('documents')
+          return
+        case 'schedule_meeting':
+          setBookForClientOpen(true)
+          return
         case 'snooze':
-          await snoozeNextAction(new Date(Date.now() + 7 * DAY_MS).toISOString())
+          setSnoozeOpen(true)
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Request failed')
@@ -655,21 +708,11 @@ export function LeadDetailClient({
   const clientInitial = clientName.trim().charAt(0).toUpperCase() || '—'
   const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
   const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
-  const effectiveLastTouchAt = newestTimestamp([
-    lastTouchAt,
-    localTouchAt,
-    ...activity.map(row => row.created_at),
-    ...initialNotes.map(note => note.createdAt),
-    ...initialMeetingNotes.map(note => note.createdAt),
-  ])
+  const contacts = clientContactTimestamps(activity)
+  const effectiveLastTouchAt = newestTimestamp([lastTouchAt, localTouchAt, contacts.lastClientContactAt])
+  const effectiveLastResponseAt = newestTimestamp([lastClientResponseAt, contacts.lastClientResponseAt])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
-  // The record page knows more than the list does — readiness and the meeting
-  // anchors — so its score is computed from the fuller input.
-  const leadScore = computeLeadScore(leadScoreInputFromRow(lead, {
-    lastTouchAt: effectiveLastTouchAt,
-    nextAppointmentAt,
-    readinessPercent: computeLeadReadiness(lead, spouse).percent,
-  }))
+  const leadScore = computeLeadScore(initialScoreInput ?? leadScoreInputFromRow(lead))
   const computedAction = computeNextAction({
     leadStatus: lead.lead_status,
     intakeSentAt: lead.intake_sent_at ?? null,
@@ -677,6 +720,11 @@ export function LeadDetailClient({
     nextAppointmentAt,
     feeQuoted: lead.engagement_fee_quoted,
     hasActiveAgreement: Boolean(activeAgreement),
+    engagementStatus: activeAgreement?.status ?? lead.engagement_status,
+    engagementSentAt: lead.engagement_sent_at,
+    engagementSignedAt: lead.engagement_signed_at,
+    discoveryCallAt: keyDates?.discoveryCallAt,
+    planningSessionAt: keyDates?.pmpsAt,
     lastTouchAt: effectiveLastTouchAt,
     timeZone: firmTimezone,
   })
@@ -704,15 +752,18 @@ export function LeadDetailClient({
     <LeadTimelineCard
       leadId={lead.id}
       leadPhone={lead.phone}
-      initialNotes={initialNotes}
-      initialMeetingNotes={initialMeetingNotes}
+      initialNotes={notes}
+      initialMeetingNotes={meetingNotes}
       initialActivity={activity}
       actorNames={actorNames}
       actorError={actorError}
       dataRefreshWarning={dataRefreshWarning}
       activityRefreshWarning={activityRefreshWarning}
       currentUser={currentUser}
-      onActivityChange={refreshActivity}
+      onActivityChange={async () => { await refreshActivity(); tasksChanged() }}
+      onNotesChange={setNotes}
+      onMeetingNotesChange={setMeetingNotes}
+      addNoteRequest={noteRequest}
       onCommittedTouch={recordTouch}
       variant="plain"
     />
@@ -720,30 +771,31 @@ export function LeadDetailClient({
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-card px-4 py-3">
         <Link href="/admin/crm/opportunities" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" />
           Opportunities
         </Link>
         <span aria-hidden className="text-xs text-muted-foreground">/</span>
-        <span className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 basis-40 items-center gap-1.5">
           <span
             aria-hidden
             className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-[10px] font-semibold text-muted-foreground"
           >
             {clientInitial}
           </span>
-          <span className="truncate text-sm font-semibold">{clientName}</span>
-        </span>
+          <h1 className="break-words text-base font-semibold">{clientName}</h1>
+        </div>
         <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground lg:inline">
           {provisionalLeadNumber(lead)}
         </span>
         <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
           {statusLabel} · day {leadDay}
         </span>
+        <span className="text-xs text-muted-foreground">{leadProgressLabel(lead, activeAgreement?.status)}</span>
         {effectiveLastTouchAt !== null && lastTouchDays !== null && (
           <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground md:inline">
-            Last touch {lastTouchDays}d ago
+            Last contact {lastTouchDays}d ago
           </span>
         )}
         <div className="ml-auto shrink-0">
@@ -762,8 +814,9 @@ export function LeadDetailClient({
             onCall={() => openExternalPhone({ number: lead.phone ?? undefined })}
             onEmail={() => setCommunicationChannel('email')}
             onText={() => setCommunicationChannel('sms')}
-            onIntake={() => setIntakeSheetOpen(true)}
-            onToggleRail={() => setRailOpen(current => !current)}
+            onIntake={() => { setIntakeSection(null); setIntakeSheetOpen(true) }}
+            onAddNote={addQuickNote}
+            onToggleRail={() => { setRailOpen(current => !current); if (railOpen) setActiveField(null) }}
             railOpen={railOpen}
             hasEmail={Boolean(lead.email?.trim())}
             hasPhone={Boolean(lead.phone?.trim())}
@@ -780,7 +833,7 @@ export function LeadDetailClient({
       <div className="flex min-h-0 flex-1">
         <ResponsiveDetailRail
           open={railOpen}
-          onOpenChange={setRailOpen}
+          onOpenChange={open => { setRailOpen(open); if (!open) setActiveField(null) }}
           label="Lead details"
           desktopClassName={`${LEAD_DETAIL_RAIL_WIDTH} border-r border-border bg-card`}
           mobileClassName="bg-card"
@@ -798,7 +851,7 @@ export function LeadDetailClient({
           />
         </ResponsiveDetailRail>
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+        <main className="@container flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
           {visibleAction && (
             <div className="mb-4">
               <LeadNextAction
@@ -806,6 +859,12 @@ export function LeadDetailClient({
                 busy={interactionBusy}
                 onIntent={intent => void handleNextAction(intent)}
               />
+            </div>
+          )}
+          {snoozed && lead.lead_status === 'lead' && (
+            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+              <span>Next action snoozed until {leadDisplayDate(lead.lead_next_action_snoozed_until, firmTimezone)}</span>
+              <Button variant="outline" size="sm" disabled={interactionBusy} onClick={() => void clearNextActionSnooze()}>Undo snooze</Button>
             </div>
           )}
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
@@ -821,7 +880,8 @@ export function LeadDetailClient({
               options={LEAD_SECTION_OPTIONS}
               onValueChange={changeTab}
             />
-            <TabsList className="hidden w-full justify-start overflow-x-auto bg-background md:flex">
+            <TabsList className="sticky top-0 z-10 hidden w-full justify-start overflow-x-auto bg-background py-2 md:flex">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
               <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="tasks" className="gap-1.5">
@@ -834,8 +894,41 @@ export function LeadDetailClient({
               </TabsTrigger>
               <TabsTrigger value="communications">Communications</TabsTrigger>
               <TabsTrigger value="documents">Documents ({documentsCount})</TabsTrigger>
-              <TabsTrigger value="notes">Notes ({initialNotes.length})</TabsTrigger>
+              <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="overview" className="mt-4 space-y-4">
+              <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt}
+                lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
+                updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
+                agreementStatus={activeAgreement?.status ?? lead.engagement_status} timeZone={firmTimezone}
+                taskCount={taskCounts.open} tasksVersion={tasksVersion}
+                onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
+                onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />
+              <LeadScoreCard
+                leadId={lead.id}
+                score={leadScore}
+                leadStatus={lead.lead_status}
+                onFillField={openField}
+                onIntent={intent => void handleNextAction(intent)}
+                /*
+                 * The banner above already owns the pipeline step. When it is
+                 * telling the reader to quote the fee, the card must not say
+                 * the same thing one panel lower.
+                 */
+                coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
+              />
+
+              {keyDates && (
+                <LeadKeyDatesCard
+                  keyDates={keyDates}
+                  onSaveKeyDate={saveKeyDate}
+                  saving={keyDatesSaving}
+                />
+              )}
+
+              {timeline}
+            </TabsContent>
 
             <TabsContent value="intake" className="mt-4 space-y-4">
               <div>
@@ -843,7 +936,8 @@ export function LeadDetailClient({
                   intake={lead}
                   intakeUrl={intakeUrl}
                   linkRevoked={intakeLinkRevoked}
-                  onOpen={() => setIntakeSheetOpen(true)}
+                  onOpen={() => { setIntakeSection(null); setIntakeSheetOpen(true) }}
+                  onOpenSection={section => { setIntakeSection(section); setIntakeSheetOpen(true) }}
                   onCopy={() => void copyIntakeUrl()}
                   onEmail={() => void sendIntake()}
                   onText={() => {
@@ -862,28 +956,6 @@ export function LeadDetailClient({
                 </div>
               </div>
 
-              <LeadScoreCard
-                leadId={lead.id}
-                score={leadScore}
-                leadStatus={lead.lead_status}
-                onFillField={setActiveField}
-                onIntent={intent => void handleNextAction(intent)}
-                /*
-                 * The banner above already owns the pipeline step. When it is
-                 * telling the reader to quote the fee, the card must not say
-                 * the same thing one panel lower.
-                 */
-                coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
-              />
-
-              {keyDates && (
-                <LeadKeyDatesCard
-                  keyDates={keyDates}
-                  onSaveKeyDate={saveKeyDate}
-                  saving={keyDatesSaving}
-                />
-              )}
-
               <div className="space-y-4">
                 {peopleMatter && lead.matter_id ? (
                   <MatterPeopleTabContent
@@ -900,7 +972,6 @@ export function LeadDetailClient({
                 <LeadChannelsCard lead={lead} spouse={spouse} onSaveChannels={saveChannels} />
               </div>
 
-              {timeline}
             </TabsContent>
 
             <TabsContent value="tasks" className="mt-4">
@@ -908,7 +979,7 @@ export function LeadDetailClient({
                 recordId={lead.id}
                 recordKind="lead"
                 recordName={clientName}
-                onTasksChanged={() => void taskCounts.refresh()}
+                onTasksChanged={tasksChanged}
                 // The dated plan lives on the `matters` row this opportunity
                 // owns; without one there is nothing to show, so the Plan view
                 // does not appear at all.
@@ -919,14 +990,16 @@ export function LeadDetailClient({
             </TabsContent>
 
             <TabsContent value="communications" className="mt-4 space-y-4">
-              <MarketingProfileCard intakeId={lead.id} />
+
               <RecordCommunicationsCard
                 record={{ type: 'lead', id: lead.id }}
                 recipientName={clientName}
                 recipientEmail={lead.email ?? null}
                 recipientPhone={lead.phone ?? null}
                 smsEnabled={smsEnabled}
+                onClientContact={async () => { await refreshActivityBestEffort(); router.refresh() }}
               />
+              <details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Marketing preferences</summary><div className="mt-3"><MarketingProfileCard intakeId={lead.id} /></div></details>
             </TabsContent>
 
             <TabsContent value="assets" className="mt-4">
@@ -947,6 +1020,8 @@ export function LeadDetailClient({
                 documents={documents}
                 folders={documentFolders}
                 loading={documentsLoading}
+                error={documentsError}
+                agreementStatus={activeAgreement?.status}
                 matterId={lead.matter_id ?? null}
                 agreementId={activeAgreement?.id ?? null}
                 clientName={clientName}
@@ -958,15 +1033,18 @@ export function LeadDetailClient({
               <LeadTimelineCard
                 leadId={lead.id}
                 leadPhone={lead.phone}
-                initialNotes={initialNotes}
-                initialMeetingNotes={initialMeetingNotes}
+                initialNotes={notes}
+                initialMeetingNotes={meetingNotes}
                 initialActivity={activity}
                 actorNames={actorNames}
                 actorError={actorError}
                 dataRefreshWarning={dataRefreshWarning}
                 activityRefreshWarning={activityRefreshWarning}
                 currentUser={currentUser}
-                onActivityChange={refreshActivity}
+                onActivityChange={async () => { await refreshActivity(); tasksChanged() }}
+      onNotesChange={setNotes}
+      onMeetingNotesChange={setMeetingNotes}
+      addNoteRequest={noteRequest}
                 onCommittedTouch={recordTouch}
                 variant="plain"
                 lockedFilter="notes"
@@ -976,6 +1054,12 @@ export function LeadDetailClient({
         </main>
       </div>
 
+      <LeadSnoozeDialog open={snoozeOpen} onOpenChange={setSnoozeOpen} onSnooze={async until => {
+        if (!beginInteraction()) throw new Error('Wait for the current action to finish.')
+        setBusyIntent('snooze')
+        try { await snoozeNextAction(until) }
+        finally { setBusyIntent(null); endInteraction() }
+      }} />
       <ImportIntakeDialog
         open={importIntakeOpen}
         onOpenChange={setImportIntakeOpen}
@@ -1027,8 +1111,8 @@ export function LeadDetailClient({
         }}
         onSent={async () => {
           toast.success(communicationChannel === 'sms' ? 'Text sent' : 'Email sent')
-          recordTouch(new Date().toISOString())
           await refreshActivityBestEffort()
+          router.refresh()
         }}
       />
 
@@ -1039,6 +1123,7 @@ export function LeadDetailClient({
           clientUserId={lead.client_user_id ?? lead.user_id ?? null}
           practiceArea={practiceAreaLabel(lead.practice_area)}
           clientName={clientName}
+          initialSection={intakeSection}
           open={intakeSheetOpen}
           onClose={() => setIntakeSheetOpen(false)}
           onIntakeIdChange={setLiveIntakeId}

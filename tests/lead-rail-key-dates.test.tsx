@@ -175,6 +175,7 @@ describe('opportunity rail extra addresses', () => {
 
     render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
 
+    await user.click(screen.getByRole('tab', { name: 'Intake' }))
     await user.click(screen.getByRole('button', { name: 'Add Client emails' }))
     await user.type(screen.getByLabelText('Client emails label 1'), 'Work')
     await user.type(screen.getByLabelText('Client emails 1'), 'jane@firm.example.com')
@@ -195,9 +196,11 @@ describe('opportunity rail extra addresses', () => {
     expect(await screen.findByText('Work · jane@firm.example.com')).toBeTruthy()
   })
 
-  it('offers the spouse lists only when there is a spouse on file', () => {
+  it('offers the spouse lists only when there is a spouse on file', async () => {
+    const user = userEvent.setup()
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as Response)
     render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
+    await user.click(screen.getByRole('tab', { name: 'Intake' }))
     expect(screen.queryByRole('button', { name: 'Add Spouse emails' })).toBeNull()
 
     cleanup()
@@ -208,6 +211,7 @@ describe('opportunity rail extra addresses', () => {
         initialActivity={[]}
       />,
     )
+    await user.click(screen.getByRole('tab', { name: 'Intake' }))
     expect(screen.getByRole('button', { name: 'Add Spouse emails' })).toBeTruthy()
   })
 })

@@ -1,7 +1,7 @@
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
 
 export type NextAction = {
-  key: 'send_intake' | 'review_intake' | 'quote_fee' | 'draft_engagement' | 'follow_up' | 'nothing'
+  key: 'send_intake' | 'review_intake' | 'quote_fee' | 'draft_engagement' | 'follow_up' | 'nothing' | 'review_engagement' | 'prepare_meeting' | 'schedule_meeting'
   title: string
   detail: string
   actions: { label: string; kind: 'primary' | 'secondary'; intent: string }[]
@@ -15,6 +15,11 @@ type NextActionInput = {
   feeQuoted: number | null
   hasActiveAgreement: boolean
   lastTouchAt: string | null
+  engagementStatus?: string | null
+  engagementSentAt?: string | null
+  engagementSignedAt?: string | null
+  discoveryCallAt?: string | null
+  planningSessionAt?: string | null
   timeZone?: string
 }
 
@@ -123,12 +128,23 @@ function followUpAction(days: number): NextAction {
 }
 
 export function computeNextAction(input: NextActionInput): NextAction {
-  if (input.leadStatus === 'hired' || input.leadStatus === 'lost') return copyAction(NOTHING)
+  if (['hired', 'lost', 'declined'].includes(input.leadStatus)) return copyAction(NOTHING)
 
   const timeZone = input.timeZone ?? FIRM_TIMEZONE
   const appointmentDays = input.nextAppointmentAt
     ? calendarDayDifference(input.nextAppointmentAt, Date.now(), timeZone)
     : null
+
+  const engagementStatus = input.engagementStatus?.toLowerCase()
+  const signed = Boolean(input.engagementSignedAt) || engagementStatus === 'signed' || engagementStatus === 'completed'
+  if (signed || input.engagementSentAt || ['sent', 'sending', 'viewed', 'partially_signed'].includes(engagementStatus ?? '')) {
+    return {
+      key: 'review_engagement',
+      title: signed ? 'Review the signed engagement' : 'Check the engagement agreement',
+      detail: signed ? 'The agreement is signed. Confirm the engagement before converting this lead.' : 'An agreement is already in progress. Review its status before contacting the client.',
+      actions: [{ label: 'Review engagement', kind: 'primary', intent: 'review_engagement' }],
+    }
+  }
 
   if (!input.intakeCompletedAt && !input.intakeSentAt) {
     const soon = appointmentDays !== null && appointmentDays >= 0 && appointmentDays <= 14
@@ -138,6 +154,31 @@ export function computeNextAction(input: NextActionInput): NextAction {
   if (!input.intakeCompletedAt && input.intakeSentAt
     && appointmentDays !== null && appointmentDays >= 0 && appointmentDays <= 3) {
     return unansweredIntakeAction(input.nextAppointmentAt!, appointmentDays, timeZone)
+  }
+
+  const planningDays = input.planningSessionAt
+    ? calendarDayDifference(input.planningSessionAt, Date.now(), timeZone)
+    : null
+  if (input.intakeCompletedAt && planningDays !== null && planningDays >= 0) {
+    return {
+      key: 'prepare_meeting',
+      title: 'Prepare for the planning session',
+      detail: 'Review the completed intake before the scheduled planning session.',
+      actions: [{ label: 'Review intake', kind: 'primary', intent: 'review_intake' }],
+    }
+  }
+  const discoveryDays = input.discoveryCallAt
+    ? calendarDayDifference(input.discoveryCallAt, Date.now(), timeZone)
+    : null
+  if (input.intakeCompletedAt && discoveryDays !== null && discoveryDays < 0
+    && !input.planningSessionAt && (appointmentDays === null || appointmentDays < 0)
+    && input.feeQuoted === null && !input.hasActiveAgreement) {
+    return {
+      key: 'schedule_meeting',
+      title: 'Schedule the planning session',
+      detail: 'Discovery and intake are complete. Set the planning session date.',
+      actions: [{ label: 'Schedule planning session', kind: 'primary', intent: 'schedule_meeting' }],
+    }
   }
 
   if (input.intakeCompletedAt && input.feeQuoted === null) return copyAction(QUOTE_FEE)

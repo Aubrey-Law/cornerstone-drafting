@@ -11,10 +11,12 @@ import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 export function useLeadDocuments(matterId: string | null | undefined) {
   const [documents, setDocuments] = useState<MatterDocument[]>([])
   const [folders, setFolders] = useState<MatterDocumentFolder[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(matterId))
 
   const reload = useCallback(async () => {
     if (!matterId) {
+      setError(null)
       setDocuments([])
       setFolders([])
       setLoading(false)
@@ -23,11 +25,14 @@ export function useLeadDocuments(matterId: string | null | undefined) {
     setLoading(true)
     try {
       const [nextDocuments, nextFolders] = await Promise.all([
-        listDocuments(matterId).catch(() => [] as MatterDocument[]),
-        listDocumentFolders(matterId).catch(() => [] as MatterDocumentFolder[]),
+        listDocuments(matterId),
+        listDocumentFolders(matterId),
       ])
       setDocuments(nextDocuments)
       setFolders(nextFolders)
+      setError(null)
+    } catch {
+      setError('Could not load documents. Please retry.')
     } finally {
       setLoading(false)
     }
@@ -37,14 +42,16 @@ export function useLeadDocuments(matterId: string | null | undefined) {
     void reload()
   }, [reload])
 
-  return { documents, folders, loading, reload }
+  return { documents, folders, loading, error, reload }
 }
 
 type LeadDocumentsTabProps = {
   documents: MatterDocument[]
   folders?: MatterDocumentFolder[]
   loading: boolean
+  error?: string | null
   matterId: string | null
+  agreementStatus?: string | null
   agreementId: string | null
   clientName?: string | null
   onDocumentsChanged: () => void | Promise<void>
@@ -54,8 +61,10 @@ export function LeadDocumentsTab({
   documents,
   folders = [],
   loading,
+  error = null,
   matterId,
   agreementId,
+  agreementStatus,
   clientName,
   onDocumentsChanged,
 }: LeadDocumentsTabProps) {
@@ -74,14 +83,20 @@ export function LeadDocumentsTab({
           <FileText aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">Engagement agreement</p>
-            <p className="text-[11px] text-muted-foreground">Draft in progress</p>
+            <p className="text-[11px] text-muted-foreground">{agreementStatus === 'completed' || agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'partially_signed' ? 'Partially signed' : agreementStatus === 'viewed' ? 'Viewed by recipient' : agreementStatus === 'sent' ? 'Sent for signature' : agreementStatus === 'sending' ? 'Sending' : 'Draft in progress'}</p>
           </div>
           <Button asChild type="button" size="sm" variant="outline">
             <Link href={`/admin/engagements/${agreementId}?step=design`}>Open</Link>
           </Button>
         </div>
       )}
-      <MatterDocumentsTab
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-3 text-sm">
+          <p>{error}{documents.length > 0 ? ' Showing previously loaded documents.' : ''}</p>
+          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void onDocumentsChanged()}>Retry</Button>
+        </div>
+      )}
+      {(!error || documents.length > 0) && <MatterDocumentsTab
         matterId={matterId}
         documents={documents}
         folders={folders}
@@ -89,7 +104,7 @@ export function LeadDocumentsTab({
         onDocumentsChanged={onDocumentsChanged}
         clientName={clientName}
         recordLabel="lead"
-      />
+      />}
     </div>
   )
 }

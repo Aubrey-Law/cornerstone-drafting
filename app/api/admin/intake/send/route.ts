@@ -84,6 +84,9 @@ export async function POST(req: Request) {
   const invite = isCollegePrep ? COLLEGE_PREP_INTAKE_INVITE : ESTATE_INTAKE_INVITE
 
   const emailResult = await sendEmail({
+    // Preserve record scope in email_log for history and confirmed-contact reads.
+    // Delivery controls still record their own status; only "sent" counts as contact.
+    ...(matterId ? { matterId } : { leadId: intakeId }),
     to: clientEmail,
     category: isCollegePrep ? 'intake_invite_college_prep' : 'intake_invite',
     subject: invite.subject,

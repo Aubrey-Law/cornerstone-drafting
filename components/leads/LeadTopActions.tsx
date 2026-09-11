@@ -2,6 +2,8 @@
 
 import {
   ClipboardList,
+  CalendarDays,
+  MessageSquareText,
   Mail,
   MoreHorizontal,
   PanelRight,
@@ -32,6 +34,7 @@ type Props = {
   onEmail: () => void
   onText: () => void
   onIntake: () => void
+  onAddNote?: () => void
   onToggleRail: () => void
   railOpen: boolean
   hasEmail: boolean
@@ -53,6 +56,7 @@ export function LeadTopActions({
   onCall,
   onEmail,
   onIntake,
+  onAddNote,
   onToggleRail,
   railOpen,
   hasEmail,
@@ -69,35 +73,25 @@ export function LeadTopActions({
   return (
     <>
       <div aria-label="Lead actions" className="hidden items-center gap-1 md:flex">
-        <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onCall} disabled={busy || !hasPhone}>
+        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2 text-xs" onClick={onCall} disabled={busy || !hasPhone}>
           <Phone className="h-3.5 w-3.5" aria-hidden />
           Call
         </Button>
-        <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onEmail} disabled={busy || !hasEmail}>
+        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2 text-xs" onClick={onEmail} disabled={busy || !hasEmail}>
           <Mail className="h-3.5 w-3.5" aria-hidden />
           Email
         </Button>
 
-        <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onIntake} disabled={busy}>
-          <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-          Intake
-        </Button>
-        {canViewMatter ? (
-          <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={onConvert} disabled={busy}>
-            View matter
-          </Button>
-        ) : (
-          <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={onDraft} disabled={busy || !active}>
-            {hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}
-          </Button>
-        )}
+        {onAddNote && <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2" onClick={onAddNote} disabled={busy}><MessageSquareText className="h-3.5 w-3.5" aria-hidden />Add note</Button>}
+        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2" onClick={onBookForClient} disabled={busy}><CalendarDays className="h-3.5 w-3.5" aria-hidden />Schedule</Button>
+        {canViewMatter && <Button type="button" size="sm" onClick={onConvert} disabled={busy}>View matter</Button>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-7 px-2"
+              className="h-9 px-2"
               aria-label="More actions"
               disabled={busy}
             >
@@ -105,6 +99,8 @@ export function LeadTopActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onIntake}>Open intake</DropdownMenuItem>
+            {!canViewMatter && <DropdownMenuItem onClick={onDraft} disabled={!active}>{hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}</DropdownMenuItem>}
             <DropdownMenuItem onClick={onSendSchedulingLink}>
               Send scheduling link
             </DropdownMenuItem>
@@ -142,7 +138,7 @@ export function LeadTopActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 px-2"
+          className="h-9 px-2"
           aria-label="Toggle details rail"
           aria-pressed={railOpen}
           onClick={onToggleRail}
@@ -173,6 +169,7 @@ export function LeadTopActions({
             Email
           </DropdownMenuItem>
 
+          {onAddNote && <DropdownMenuItem onClick={onAddNote}>Add note</DropdownMenuItem>}
           <DropdownMenuItem onClick={onIntake}>
             <ClipboardList className="mr-2 h-3.5 w-3.5" />
             Intake

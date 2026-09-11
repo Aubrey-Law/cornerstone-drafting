@@ -43,6 +43,7 @@ export interface RecordCommunicationsCardProps {
   smsSendable?: boolean
   smsDisabledReason?: string
   defaultChannel?: 'sms' | 'email'
+  onClientContact?: () => void | Promise<void>
 }
 
 /**
@@ -64,12 +65,14 @@ function RecordCommunicationsContent({
   smsSendable = true,
   smsDisabledReason,
   defaultChannel,
+  onClientContact,
 }: RecordCommunicationsCardProps) {
   const token = useAccessToken()
   const [channel, setChannel] = useState<ThreadChannelFilter>(
     defaultChannel && defaultChannel !== 'sms' ? defaultChannel : 'all',
   )
   const [messages, setMessages] = useState<SmsMessageRow[]>([])
+  const [emails, setEmails] = useState<CommunicationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [readError, setReadError] = useState<string | null>(null)
 
@@ -80,16 +83,22 @@ function RecordCommunicationsContent({
     setLoading(true)
     setReadError(null)
     try {
-      const smsRows = await apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setMessages(Array.isArray(smsRows) ? smsRows : [])
+      const headers = { Authorization: `Bearer ${token}` }
+      const [smsResult, emailResult] = await Promise.allSettled([
+        apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, { headers }),
+        apiRequest<CommunicationItem[]>(`/api/admin/comms/email-history?type=${record.type}&id=${record.id}`, { headers }),
+      ])
+      if (smsResult.status === 'fulfilled') setMessages(Array.isArray(smsResult.value) ? smsResult.value : [])
+      if (emailResult.status === 'fulfilled') setEmails(Array.isArray(emailResult.value) ? emailResult.value : [])
+      if (smsResult.status === 'rejected' || emailResult.status === 'rejected') {
+        setReadError(`${smsResult.status === 'rejected' ? 'SMS' : ''}${smsResult.status === 'rejected' && emailResult.status === 'rejected' ? ' and ' : ''}${emailResult.status === 'rejected' ? 'Email' : ''} history is unavailable. Please retry.`)
+      }
     } catch {
       setReadError('Message history is unavailable. Please retry.')
     } finally {
       setLoading(false)
     }
-  }, [token, recordBase])
+  }, [token, recordBase, record.type, record.id])
 
   useEffect(() => {
     setLoading(true)
@@ -106,7 +115,8 @@ function RecordCommunicationsContent({
       sender: m.direction === 'inbound' ? recipientName : m.recipient_name ? `To ${m.recipient_name}` : 'Firm',
       created_at: m.created_at,
     })),
-  ), [messages, recipientName])
+    emails,
+  ), [messages, emails, recipientName])
 
   const chips: Array<{ key: ThreadChannelFilter; label: string }> = [
     { key: 'all', label: 'All' },
@@ -137,10 +147,11 @@ function RecordCommunicationsContent({
         )}
       </div>
 
+      <p className="text-xs text-muted-foreground">Client messages: SMS history and recorded outbound email. Inbound email is not included. Internal notes are in Notes.</p>
       {readError && <p role="alert">{readError} <Button variant="link" onClick={() => void loadMessages()}>Retry history</Button></p>}
       <CommunicationThread
         items={items}
-        loading={loading || (!!readError && messages.length === 0)}
+        loading={loading}
         recordType={record.type}
         recordLabel={recipientName}
         recipientName={recipientName}
@@ -167,7 +178,11 @@ function RecordCommunicationsContent({
                 alternateEmails: [],
                 documents: [],
               }}
-              onSent={() => { toast.success('Email sent') }}
+              onSent={async () => {
+                toast.success('Email processed; see history for delivery status')
+                await loadMessages()
+                await onClientContact?.()
+              }}
             />
           </div>
         ) : (

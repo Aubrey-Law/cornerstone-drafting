@@ -55,6 +55,7 @@ interface AdminIntakeSheetProps {
   practiceArea: string
   clientName: string
   open: boolean
+  initialSection?: string | null
   onClose: () => void
   onSubmitted: () => void
   onIntakeIdChange?: (intakeId: string) => void
@@ -78,9 +79,9 @@ function emptyChild(): AdminIntakeChild {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function GroupLabel({ children }: { children: React.ReactNode }) {
+function GroupLabel({ children, section }: { children: React.ReactNode; section?: string }) {
   return (
-    <div className="mt-6 mb-2.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+    <div role="heading" aria-level={3} tabIndex={section ? -1 : undefined} data-intake-section={section} className="mt-6 mb-2.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
       {children}
     </div>
   )
@@ -227,6 +228,7 @@ export default function AdminIntakeSheet({
   practiceArea,
   clientName,
   open,
+  initialSection = null,
   onClose,
   onSubmitted,
   onIntakeIdChange,
@@ -242,6 +244,7 @@ export default function AdminIntakeSheet({
   const [showDiscard, setShowDiscard] = useState(false)
   const [manualAddress, setManualAddress] = useState(false)
   const [addressSearch, setAddressSearch] = useState('')
+  const reviewRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const checkboxId = useId()
 
@@ -318,6 +321,24 @@ export default function AdminIntakeSheet({
     },
     [setValue],
   )
+
+  // Resolve progress segments to sections this staff form actually exposes.
+  // College-only questions remain in the guided questionnaire.
+  useEffect(() => {
+    if (!open || loading || !initialSection) return
+    const anchors: Record<string, string> = isCollegePrep
+      ? { student: 'contact', agents: 'fiduciaries', school: 'guided', parents: 'guided', documents: 'guided' }
+      : { contact: 'contact', household: 'family', assets: 'assets', real_estate: 'assets', fiduciaries: 'fiduciaries', wishes: 'goals' }
+    const frame = requestAnimationFrame(() => {
+      const anchor = anchors[initialSection]
+      const target = initialSection === 'review'
+        ? reviewRef.current
+        : anchor ? bodyRef.current?.querySelector<HTMLElement>(`[data-intake-section="${anchor}"]`) : null
+      target?.scrollIntoView?.({ block: 'start' })
+      target?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [open, loading, initialSection, isCollegePrep])
 
   // ── Load initial data when sheet opens ────────────────────────────────────
   useEffect(() => {
@@ -517,15 +538,15 @@ export default function AdminIntakeSheet({
           ) : (
             <>
               {isCollegePrep && (
-                <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                <div data-intake-section="guided" tabIndex={-1} className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
                   <span className="font-medium text-foreground">College Preparation Plan intake.</span>{' '}
-                  The student is the client. School, HIPAA, and living-will answers are captured in
+                  The student is the client. School, parent, HIPAA, and living-will answers are captured in
                   the guided questionnaire — this sheet edits the student&apos;s details and agents.
                 </div>
               )}
 
               {/* ── Section: Client information ── */}
-              <GroupLabel>Client Information</GroupLabel>
+              <GroupLabel section="contact">Client Information</GroupLabel>
 
               <Row2>
                 <Field>
@@ -759,7 +780,7 @@ export default function AdminIntakeSheet({
               {/* ── Section: Family (not asked on the College Prep track) ── */}
               {!isCollegePrep && (
                 <>
-                  <GroupLabel>Family</GroupLabel>
+                  <GroupLabel section="family">Family</GroupLabel>
                   <Row2>
                     <Field>
                       <FieldLabel>Children?</FieldLabel>
@@ -858,7 +879,7 @@ export default function AdminIntakeSheet({
               {/* ── Section: Assets (not asked on the College Prep track) ── */}
               {!isCollegePrep && (
                 <>
-                  <GroupLabel>Assets</GroupLabel>
+                  <GroupLabel section="assets">Assets</GroupLabel>
                   <div className="mb-3">
                     <FieldLabel>Approximate estate value</FieldLabel>
                     <select
@@ -945,7 +966,7 @@ export default function AdminIntakeSheet({
               {/* ── Section: Estate Planning Goals (EP only) ── */}
               {showEP && (
                 <>
-                  <GroupLabel>Estate Planning Goals</GroupLabel>
+                  <GroupLabel section="goals">Estate Planning Goals</GroupLabel>
                   <div>
                     <FieldLabel>Goals &amp; wishes</FieldLabel>
                     <Textarea
@@ -1023,7 +1044,7 @@ export default function AdminIntakeSheet({
               {/* ── Section: Fiduciaries (EP + College Prep) ── */}
               {(showEP || isCollegePrep) && (
                 <>
-                  <GroupLabel>{isCollegePrep ? 'Agents' : 'Fiduciaries'}</GroupLabel>
+                  <GroupLabel section="fiduciaries">{isCollegePrep ? 'Agents' : 'Fiduciaries'}</GroupLabel>
                   {(isCollegePrep
                     ? [
                         { label: 'Financial agent (DPOA)', primary: 'poa_primary' as const, primaryPronouns: 'poa_primary_pronouns' as const, alt: 'poa_alternate' as const, altPronouns: 'poa_alternate_pronouns' as const },
@@ -1169,7 +1190,7 @@ export default function AdminIntakeSheet({
         </div>
 
         {/* ── Footer ── */}
-        <div className="shrink-0 border-t border-border bg-card px-6 py-3.5">
+        <div ref={reviewRef} tabIndex={-1} aria-label="Review and submit intake" className="shrink-0 border-t border-border bg-card px-6 py-3.5">
           {/* Unsaved changes guard */}
           {showDiscard ? (
             <div>

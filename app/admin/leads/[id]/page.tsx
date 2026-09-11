@@ -7,7 +7,8 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { newestTimestamp } from '@/lib/leads/timeline'
-import { scoringAppointmentAt } from '@/lib/leads/score'
+import { clientContactTimestamps } from '@/lib/leads/contactEvents'
+import { leadScoreInputFromRow, scoringAppointmentAt } from '@/lib/leads/score'
 import { fetchRecordTaskCounts, isUuid } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
@@ -82,6 +83,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     meetingsResult,
     appointmentResult,
     initialTaskCounts,
+    scoreRowResult,
+    emailContactResult,
+    smsResponseResult,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
@@ -95,6 +99,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .limit(1)
       .maybeSingle(),
     fetchRecordTaskCounts(id),
+    admin.from('v_lead_list').select('*').eq('id', id).maybeSingle(),
+    admin.from('email_log').select('sent_at, created_at').eq('lead_id', id).eq('status', 'sent').order('created_at', { ascending: false }).limit(1),
+    admin.from('sms_messages').select('created_at').eq('lead_id', id).eq('direction', 'inbound').order('created_at', { ascending: false }).limit(1),
   ])
 
   const { data: lead, error: leadError } = leadResult
@@ -147,10 +154,23 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       actor.display_name?.trim() || actor.email?.trim() || 'System',
     ]),
   )
+  const contactTimes = clientContactTimestamps(activityRows)
+  if (emailContactResult.error) console.error('Could not load lead email contact', { leadId: id, error: emailContactResult.error })
+  if (smsResponseResult.error) console.error('Could not load lead SMS response', { leadId: id, error: smsResponseResult.error })
+  const lastClientResponseAt = newestTimestamp([
+    contactTimes.lastClientResponseAt,
+    ...(smsResponseResult.data ?? []).map(row => row.created_at),
+  ])
   const lastTouchAt = newestTimestamp([
+    contactTimes.lastClientContactAt,
+    lastClientResponseAt,
+    ...(emailContactResult.data ?? []).map(row => row.sent_at ?? row.created_at),
+  ])
+  const recordUpdatedAt = newestTimestamp([
+    lead.updated_at,
     ...activityRows.map(row => row.created_at),
-    ...noteRows.map(row => row.created_at),
-    ...meetingRows.map(row => row.created_at),
+    ...noteRows.map(row => row.updated_at ?? row.created_at),
+    ...meetingRows.map(row => row.updated_at ?? row.created_at),
   ])
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
@@ -191,8 +211,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const nextAppointmentAt = (appointment?.start_time as string | undefined)
     ?? scoringAppointmentAt(anchorRow?.discovery_call_at, anchorRow?.pmps_at)
   const { data: agreement } = lead.matter_id
-    ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    ? await admin.from('engagement_agreements').select('id, status').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed', 'sending', 'sent', 'viewed', 'partially_signed', 'completed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
+
+  if (scoreRowResult.error) console.error('Could not load canonical lead score', { leadId: id, error: scoreRowResult.error })
+  // Mirror list inputs even on a view-read failure: raw intake fields, all lead
+  // activity, matter milestone dates and no detail-only readiness points.
+  const initialScoreInput = leadScoreInputFromRow(scoreRowResult.data?.id ? scoreRowResult.data : {
+    ...lead,
+    last_activity_at: newestTimestamp(activityRows.map(row => row.created_at)),
+    next_appointment_at: scoringAppointmentAt(anchorRow?.discovery_call_at, anchorRow?.pmps_at),
+  })
 
   return (
     <LeadDetailClient
@@ -208,6 +237,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       firmTimezone={schedulingSettings.timezone}
       nextAppointmentAt={nextAppointmentAt}
       lastTouchAt={lastTouchAt}
+      lastClientResponseAt={lastClientResponseAt}
+      recordUpdatedAt={recordUpdatedAt}
+      initialScoreInput={initialScoreInput}
       actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}
       initialKeyDates={initialKeyDates}

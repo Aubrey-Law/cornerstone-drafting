@@ -100,6 +100,9 @@ export function LeadFieldsRail({
   const [savedField, setSavedField] = useState<LeadEditableField | null>(null)
   const [fieldError, setFieldError] = useState<FieldErrorState | null>(null)
   const [showOptionalNames, setShowOptionalNames] = useState(false)
+  const [openGroups, setOpenGroups] = useState<string[]>(['Contact'])
+  const initializedFieldRef = useRef<LeadEditableField | null>(null)
+  const activeRowRef = useRef<HTMLDivElement | null>(null)
   const lastPersistedRef = useRef<unknown>(null)
   const savingRef = useRef(false)
   const suppressSpouseBlurRef = useRef(false)
@@ -107,7 +110,19 @@ export function LeadFieldsRail({
   const triggerRefs = useRef<Partial<Record<LeadEditableField, HTMLButtonElement | null>>>({})
 
   useEffect(() => {
-    if (!activeField) return
+    if (!activeField) {
+      initializedFieldRef.current = null
+      return
+    }
+    if (initializedFieldRef.current === activeField) return
+    initializedFieldRef.current = activeField
+    setFieldError(null)
+    const group = LEAD_FIELD_GROUPS.find(group => group.keys.includes(isNameField(activeField) ? 'firstName' : activeField))
+    if (group) setOpenGroups(current => current.includes(group.title) ? current : [...current, group.title])
+    requestAnimationFrame(() => {
+      activeRowRef.current?.scrollIntoView?.({ block: 'nearest' })
+      activeRowRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
+    })
     const rawPersisted = valueForLeadField(activeField, lead, spouse)
     const persisted = activeField === 'phone'
       ? formatPhoneInput(String(rawPersisted ?? ''))
@@ -143,6 +158,7 @@ export function LeadFieldsRail({
 
   function cancelField(field: LeadEditableField) {
     setDraft(lastPersistedRef.current)
+    setFieldError(null)
     onActiveFieldChange(null)
     restoreTrigger(field)
   }
@@ -168,15 +184,12 @@ export function LeadFieldsRail({
       onActiveFieldChange(null)
       restoreTrigger(field)
     } catch (error) {
-      setDraft(lastPersistedRef.current)
       setSavingField(null)
       setSavedField(null)
       setFieldError({
         field,
         message: error instanceof Error ? error.message : 'Could not save field',
       })
-      onActiveFieldChange(null)
-      restoreTrigger(field)
     } finally {
       savingRef.current = false
     }
@@ -188,7 +201,7 @@ export function LeadFieldsRail({
       suppressSpouseBlurRef.current = false
       return
     }
-    void commitField(field)
+    if (!fieldError) void commitField(field)
   }
 
   function handleEditorKeyDown(field: LeadEditableField, event: React.KeyboardEvent<HTMLDivElement>) {
@@ -435,19 +448,28 @@ export function LeadFieldsRail({
     return (
       <div
         className={cn(
-          'flex min-h-[30px] items-start gap-2 border-b border-muted py-1.5 last:border-b-0',
+          'flex min-h-10 flex-wrap items-start gap-2 border-b border-muted py-2 last:border-b-0',
           // Editors (address, spouse) need the full row even in the two-column
           // layout the rail uses once it is wide enough.
           active && '@2xl/rail:col-span-2',
         )}
         key={field.key}
+        ref={active ? activeRowRef : undefined}
       >
-        <span className="w-[118px] shrink-0 pt-1 text-xs text-muted-foreground">{field.label}</span>
+        <span className="w-[108px] shrink-0 pt-1 text-sm text-muted-foreground">{field.label}</span>
         <div className="min-w-0 flex-1">
           {active ? (
             <>
               {renderEditor(editedField)}
-              <p className="mt-1 text-[10px] text-muted-foreground">Enter to save · Esc to cancel</p>
+              {fieldError?.field === editedField.key ? (
+                <div className="mt-2 space-y-2">
+                  <p id={`lead-${editedField.key}-error`} role="alert" className="text-sm text-destructive">{fieldError.message}</p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" disabled={savingField !== null} onClick={() => void commitField(editedField.key)}>Retry</Button>
+                    <Button type="button" size="sm" variant="outline" disabled={savingField !== null} onClick={() => cancelField(editedField.key)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : <p className="mt-1 text-xs text-muted-foreground">Enter to save · Esc to cancel</p>}
             </>
           ) : isName ? (
             renderNameValue()
@@ -539,10 +561,12 @@ export function LeadFieldsRail({
           if (definitions.length === 0) return null
           return (
             <section key={group.title}>
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {group.title}
+              <h3>
+                <button type="button" className="flex min-h-10 w-full items-center justify-between text-sm font-semibold" aria-expanded={openGroups.includes(group.title)} onClick={() => setOpenGroups(current => current.includes(group.title) ? current.filter(title => title !== group.title) : [...current, group.title])}>
+                  {group.title}<span aria-hidden>{openGroups.includes(group.title) ? '−' : '+'}</span>
+                </button>
               </h3>
-              <div className="mt-1 @2xl/rail:grid @2xl/rail:grid-cols-2 @2xl/rail:gap-x-6">
+              <div hidden={!openGroups.includes(group.title)} className={cn("mt-1", openGroups.includes(group.title) && "@2xl/rail:grid @2xl/rail:grid-cols-2 @2xl/rail:gap-x-6")}>
                 {definitions.map(renderRow)}
               </div>
             </section>
@@ -558,7 +582,7 @@ export function LeadFieldsRail({
         </span>
       )}
 
-      {displayedFieldError && (
+      {displayedFieldError && (spouseRemovalError || displayedFieldError.field !== activeField) && (
         <p className="mt-2 text-xs text-destructive" id={`lead-${displayedFieldError.field}-error`} role="alert">
           {displayedFieldError.message}
         </p>

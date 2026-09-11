@@ -1,15 +1,14 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, CircleDot, MessageSquareText } from 'lucide-react'
-import { openExternalPhone } from '@/lib/clientPhone'
+import { LeadLogCallDialog } from './LeadLogCallDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormattedNote } from '@/components/notes/FormattedNote'
 import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { phoneTelHref } from '@/lib/phone'
 import {
   buildLeadTimeline,
   filterLeadTimeline,
@@ -58,6 +57,9 @@ type Props = {
   currentUser: { id: string; role: string }
   onActivityChange?: () => void | Promise<void>
   onCommittedTouch?: (timestamp: string) => void
+  onNotesChange?: (notes: LeadTimelineNote[]) => void
+  onMeetingNotesChange?: (notes: LeadTimelineMeeting[]) => void
+  addNoteRequest?: number
   /** `plain` drops the card chrome so the workspace tab owns the frame. */
   variant?: 'card' | 'plain'
   /** Pins the timeline to one filter and hides the filter row (Notes tab). */
@@ -101,7 +103,6 @@ function markerIcon(kind: LeadTimelineItem['kind']) {
 
 export function LeadTimelineCard({
   leadId,
-  leadPhone,
   initialNotes,
   initialMeetingNotes,
   initialActivity = [],
@@ -112,6 +113,9 @@ export function LeadTimelineCard({
   currentUser,
   onActivityChange,
   onCommittedTouch,
+  onNotesChange,
+  onMeetingNotesChange,
+  addNoteRequest,
   variant = 'card',
   lockedFilter,
 }: Props) {
@@ -129,7 +133,13 @@ export function LeadTimelineCard({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [localActivityRefreshWarning, setLocalActivityRefreshWarning] = useState<string | null>(null)
-  const hasCallablePhone = phoneTelHref(leadPhone) !== null
+  const [callOpen, setCallOpen] = useState(false)
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { setNotes(sortNotes(initialNotes)) }, [initialNotes])
+  useEffect(() => { setMeetings(sortMeetings(initialMeetingNotes)) }, [initialMeetingNotes])
+  useEffect(() => { if (addNoteRequest) noteRef.current?.focus() }, [addNoteRequest])
+  function updateNotes(rows: LeadTimelineNote[]) { setNotes(rows); onNotesChange?.(rows) }
+  function updateMeetings(rows: LeadTimelineMeeting[]) { setMeetings(rows); onMeetingNotesChange?.(rows) }
 
   const effectiveFilter = lockedFilter ?? filter
   const items = useMemo(() => buildLeadTimeline({
@@ -179,26 +189,23 @@ export function LeadTimelineCard({
     await mutate(async () => {
       const json = await call(`/api/admin/leads/${leadId}/notes`, 'POST', { body })
       const added = json.note as LeadTimelineNote
-      setNotes(current => sortNotes([...current, added]))
+      updateNotes(sortNotes([...notes, added]))
       setBody('')
-      onCommittedTouch?.(added.createdAt)
     })
   }
 
   async function saveNote(id: string) {
     await mutate(async () => {
       const json = await call(`/api/admin/leads/${leadId}/notes/${id}`, 'PATCH', { body: editBody })
-      setNotes(current => sortNotes(current.map(note => note.id === id ? json.note : note)))
+      updateNotes(sortNotes(notes.map(note => note.id === id ? json.note : note)))
       setEditingNoteId(null)
-      onCommittedTouch?.((json.note as LeadTimelineNote).updatedAt || new Date().toISOString())
     })
   }
 
   async function removeNote(id: string) {
     await mutate(async () => {
       await call(`/api/admin/leads/${leadId}/notes/${id}`, 'DELETE')
-      setNotes(current => current.filter(note => note.id !== id))
-      onCommittedTouch?.(new Date().toISOString())
+      updateNotes(notes.filter(note => note.id !== id))
     })
   }
 
@@ -211,15 +218,9 @@ export function LeadTimelineCard({
         body: meeting.body,
       })
       const added = mapMeetingNoteApiRow(json.meetingNote as LeadMeetingNoteApiRow)
-      setMeetings(current => sortMeetings([...current, added]))
+      updateMeetings(sortMeetings([...meetings, added]))
       setMeetingOpen(false)
-      onCommittedTouch?.(added.createdAt)
     })
-  }
-
-  function openSoftphone() {
-    // The rail switches to Phone and prefills the lead's number.
-    openExternalPhone({ number: leadPhone ?? undefined })
   }
 
   function renderBody(item: LeadTimelineItem) {
@@ -260,24 +261,17 @@ export function LeadTimelineCard({
             type="button"
             size="sm"
             variant="outline"
-            disabled={!hasCallablePhone}
-            aria-describedby={hasCallablePhone ? undefined : 'lead-log-call-help'}
-            title={hasCallablePhone ? undefined : 'Add a lead phone number before logging a call'}
-            onClick={openSoftphone}
+            onClick={() => setCallOpen(true)}
           >
             Log call
           </Button>
-          {!hasCallablePhone && (
-            <span id="lead-log-call-help" className="sr-only">
-              Add a lead phone number before logging a call
-            </span>
-          )}
         </div>
       </div>
 
       <div className="mt-4 flex items-end gap-2">
         <div className="min-w-0 flex-1">
           <FormattedNoteEditor
+          textareaRef={noteRef}
           ariaLabel="New note"
           value={body}
           onChange={setBody}
@@ -420,6 +414,11 @@ export function LeadTimelineCard({
         </p>
       )}
 
+      <LeadLogCallDialog leadId={leadId} open={callOpen} onOpenChange={setCallOpen}
+        onSaved={async (timestamp, contacted) => {
+          if (contacted) onCommittedTouch?.(timestamp)
+          await onActivityChange?.()
+        }} />
       {granolaOpen && (
         <AddMeetingNotesDialog
           open={granolaOpen}
@@ -427,11 +426,10 @@ export function LeadTimelineCard({
           target={{ kind: 'lead', id: leadId }}
           onImported={note => {
             const imported = mapMeetingNoteApiRow(note as LeadMeetingNoteApiRow)
-            setMeetings(current => sortMeetings([
-              ...current.filter(existing => existing.id !== imported.id),
+            updateMeetings(sortMeetings([
+              ...meetings.filter(existing => existing.id !== imported.id),
               imported,
             ]))
-            onCommittedTouch?.(imported.createdAt)
             void (async () => {
               try {
                 await onActivityChange?.()

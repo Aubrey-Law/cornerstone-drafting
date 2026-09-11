@@ -303,7 +303,7 @@ export async function sendOutboundSms(
       .from('lead_activity')
       .insert({
         lead_id: target.leadId,
-        event_type: 'sms_sent',
+        event_type: result.ok ? 'sms_sent' : 'sms_failed',
         title,
         detail,
         actor_id: actor.id,
