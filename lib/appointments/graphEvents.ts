@@ -314,6 +314,9 @@ const CALENDAR_VIEW_MAX_PAGES = 5
 const SECONDARY_CALENDAR_MAX_PAGES = 2
 const CALENDAR_VIEW_PAGE_SIZE = 200
 const MAX_SECONDARY_CALENDARS = 15
+// Outlook allows four concurrent requests per app/mailbox. Leave capacity for
+// primary-calendar/booking reads instead of starting every extra calendar at once.
+const SECONDARY_CALENDAR_CONCURRENCY = 2
 const CALENDAR_VIEW_SELECT = 'id,seriesMasterId,subject,isAllDay,isCancelled,showAs,start,end'
 
 /**
@@ -383,11 +386,15 @@ async function fetchCalendarViewPages(
   token: string,
   firstUrl: string,
   maxPages: number,
+  deadline?: number,
 ): Promise<{ items: unknown[]; truncated: boolean }> {
   let url: string | null = firstUrl
   const items: unknown[] = []
   for (let page = 0; url && page < maxPages; page++) {
+    const remaining = deadline === undefined ? GRAPH_TIMEOUT_MS : deadline - Date.now()
+    if (remaining <= 0) throw new Error('calendar read budget exhausted')
     const r = await graphFetch(url, {
+      signal: AbortSignal.timeout(Math.min(GRAPH_TIMEOUT_MS, remaining)),
       headers: {
         Authorization: `Bearer ${token}`,
         Prefer: 'outlook.timezone="UTC"',
@@ -491,17 +498,29 @@ export async function listCalendarView(
     .map(calendar => calendar.name)
   const deadline = Date.now() + SECONDARY_CALENDAR_BUDGET_MS
 
-  const settled = await Promise.allSettled(
-    secondary.map(async calendar => {
-      if (Date.now() > deadline) throw new Error('calendar read budget exhausted')
-      const { items, truncated } = await fetchCalendarViewPages(
-        token,
-        calendarViewUrl(calendar.id, fromIso, toIso),
-        SECONDARY_CALENDAR_MAX_PAGES,
-      )
-      return { calendar, truncated, items: tagWithCalendar(items, calendar.id, calendar.name) }
-    }),
-  )
+  const settled: Array<PromiseSettledResult<{
+    calendar: OutlookCalendarRef; truncated: boolean; items: unknown[]
+  }>> = new Array(secondary.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(SECONDARY_CALENDAR_CONCURRENCY, secondary.length) }, async () => {
+    while (next < secondary.length) {
+      const index = next++
+      const calendar = secondary[index]
+      try {
+        const { items, truncated } = await fetchCalendarViewPages(
+          token,
+          calendarViewUrl(calendar.id, fromIso, toIso),
+          SECONDARY_CALENDAR_MAX_PAGES,
+          deadline,
+        )
+        settled[index] = { status: 'fulfilled', value: {
+          calendar, truncated, items: tagWithCalendar(items, calendar.id, calendar.name),
+        } }
+      } catch (reason) {
+        settled[index] = { status: 'rejected', reason }
+      }
+    }
+  }))
 
   const readCalendars: OutlookCalendarRef[] = defaultCalendar ? [defaultCalendar] : []
   let truncated = primary.truncated
