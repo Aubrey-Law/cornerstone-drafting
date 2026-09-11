@@ -48,3 +48,11 @@ P1 remains blocked on an authenticated live browser session. Consequently measur
 Docker is available, but no local DB containers were running when checked. No existing container or linked firm database was reset. No migration was created/applied and generated database types were not changed in this batch.
 
 See [navigation benchmark status](2026-09-10-navigation-benchmark.md), [communications inventory](../operations/communications-retirement.md), and [editing ownership](../operations/firm-workspace-boundaries.md). Unchecked plan acceptance items remain open; this report is not a claim that the whole remediation program is complete.
+
+## R5: prepared queue recovery and separate reminder cadence
+
+Additive migration `20261123000000_workflow_job_leases.sql` retains legacy RPCs and introduces token-fenced, expiring claims. Created with the Supabase CLI, then allocated after verified local and remote migration history. Read-only production metadata confirmed the queue disabled and empty; no production migration or flag change was performed.
+
+A disposable Postgres 17 fixture using the existing workflow-jobs table definition passed four integration tests: two independent connections skip locked rows, expired claims are replaced, stale workers cannot complete jobs, and exhausted/retry/privilege behavior is correct. Unit coverage also verifies the disabled fast path, bounded one-at-a-time claims, rejected completion, and independently authorized reminder preparation. The generated queue table and new RPC types were extracted from this actual fixture; the full database was not regenerated from an incomplete schema.
+
+Deployment order: apply the additive migration, deploy compatible code, keep `durable_workflow_jobs_enabled=false`. Reminder preparation runs hourly and retains its existing weekly unique draft key; it never sends. The queue remains subject to a separate activation gate: side-effect replay safety (including annual-review task creation) and production execution evidence are not established by lease tests. Reverting the worker leaves old RPC compatibility and retained data.

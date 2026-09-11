@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/workflow-jobs",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/invoice-reminders",
+      "schedule": "15 * * * *"
     }
   ]
 }
