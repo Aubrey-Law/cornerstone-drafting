@@ -24,7 +24,7 @@ All nine invariants in the spec apply. In particular:
 
 **Interfaces:** Extend provider type to `'twilio' | 'telnyx' | 'none'`; undefined retains the historical Twilio default during transition, invalid nonempty values fail configuration rather than silently selecting Twilio. Add `manualCommunicationsEnabled(): boolean` from `MANUAL_COMMUNICATIONS_ENABLED`, accepting only `true`/`false` with absent value disabling manual communications. The owner subsequently retired automated SMS too. Manual capability defaults to off; all application SMS delivery is disabled regardless of legacy provider settings. Portal messages, transactional emails, and verified callbacks remain separate.
 
-- [ ] Inventory every sender, token route, directory/context route, webhook, scheduled reminder, Retell alert, phone-number/routing dependency, env variable, and SDK consumer. Record exact path, producer, remaining consumer, replacement, and cutover state in the retirement document. Include appointment reminders and `lib/retell/notify.ts`; do not infer usage only from visible buttons.
+- [x] Inventory every sender, token route, directory/context route, webhook, scheduled reminder, Retell alert, phone-number/routing dependency, env variable, and SDK consumer. Record exact path, producer, remaining consumer, replacement, and cutover state in the retirement document. Include appointment reminders and `lib/retell/notify.ts`; do not infer usage only from visible buttons.
 - [ ] Add tests for unset/default provider, both supported providers, `none`, typo rejection, manual disabled with transport retained, no token issuance when manual calling is disabled, and portal messages still enabled.
 
   ```ts
@@ -37,7 +37,7 @@ All nine invariants in the spec apply. In particular:
   ```
 
 - [ ] Run tests to expose the current fallback. Implement strict parsing; every sender handles `none` before initializing a provider client. Gate manual APIs server-side with an explicit disabled response, not just hidden buttons. Preserve normal authentication and do not change inbound routing/callback validation.
-- [ ] Document the exact retirement setting `MANUAL_COMMUNICATIONS_ENABLED=false`. Automated SMS dependencies are now explicitly retired. `SMS_PROVIDER=none` is supported; retain webhook-verification and voice-routing credentials until external routing is separately verified. Expose capability booleans to the UI without secrets.
+- [x] Document the exact retirement setting `MANUAL_COMMUNICATIONS_ENABLED=false`. Automated SMS dependencies are now explicitly retired. `SMS_PROVIDER=none` is supported; retain webhook-verification and voice-routing credentials until external routing is separately verified. Expose capability booleans to the UI without secrets.
 - [ ] Run `npx vitest run tests/communication-capabilities.test.ts tests/telnyx-communications.test.ts tests/lead-sms-route.test.ts`, then master checks. Commit as `feat: add explicit manual communication off switch`.
 
 ## C2: Portal workflow and removal of phone/text/inbox surfaces
@@ -49,8 +49,8 @@ All nine invariants in the spec apply. In particular:
 - [ ] Add a synthetic end-to-end workflow: client A sends, attorney sees unread summary, opens the correct matter, replies, client A reads; client B cannot read or write A's thread. Verify unread updates after read/reply and duplicate realtime events do not duplicate rows. Use local/test accounts, not live client sends.
 - [ ] Add negative tests asserting no softphone mount/directory/token request during admin navigation, no manual SMS controls on leads/matters/contacts, and disabled manual endpoints cannot send when invoked directly. Preserve ordinary `tel:` links and copyable contact details for external communication.
 - [ ] Run the tests before removal. Split portal live thread reads from read-only historical SMS/email readers. Remove SMS realtime subscriptions and eager SMS fetches from the normal matter mount. Keep portal unread summaries lightweight and available on Today.
-- [ ] Remove the phone rail/panes, composers, call controls, and standalone inbox navigation/badge. Redirect `/admin/inbox` to Today without forwarding arbitrary URLs. Preserve recognized legacy matter links only after validating the referenced authorized record.
-- [ ] Remove the two browser voice SDK dependencies (`@twilio/voice-sdk`, `@telnyx/webrtc`) and their lockfile entries once C1 confirms no remaining browser consumer. Retain server `twilio`/`telnyx` dependencies until C5. Keep callbacks, history rows, consent and unsubscribe state.
+- [x] Remove the phone rail/panes, composers, call controls, and standalone inbox navigation/badge. Redirect `/admin/inbox` to Today without forwarding arbitrary URLs. Preserve recognized legacy matter links only after validating the referenced authorized record.
+- [x] Remove the two browser voice SDK dependencies (`@twilio/voice-sdk`, `@telnyx/webrtc`) and their lockfile entries once C1 confirms no remaining browser consumer. Retain server `twilio`/`telnyx` dependencies until C5. Keep callbacks, history rows, consent and unsubscribe state.
 - [ ] Run `npx vitest run tests/communications-retirement.test.tsx tests/portal-reply-workflow.test.tsx tests/portal-message-thread.test.tsx tests/matter-header-comms-actions.test.tsx tests/today-decision-queue.test.tsx`, master checks, and the synthetic browser workflow. Compare route request counts/bundles and P1 timings. Commit as `refactor: retire phone sms and unified inbox surfaces`.
 
 ## C3: Daily workspace and portal progress
@@ -85,7 +85,7 @@ export type PortalProgress = {
 - [ ] Test direct navigation to `/admin/leads` and `/admin/matters/list`, preserving old URLs, back button, filters, and active-nav state. Keep Today, Leads, Matters, Tasks, Billing, and Drafting primary; move Calendar, Assistant, Library, and Settings to a reachable secondary tools group. Keep contextual drafting assistance in the drafting workspace. Update the actual `adminNavItems` literal in `AdminLayoutClient.tsx`, its source-text tests, and global search destinations together.
 - [ ] Reduce the matter overview to identity, stage, next action, important recorded dates, and balance. Keep People, Documents, Tasks, Billing, and Portal messages one click away. Load history, consent, and full intake/design comparisons only in secondary sections using P2 boundaries.
 - [ ] Keep one underlying task across Today/Tasks/matter views. Show attorney actions for deadlines, intake/document review, portal replies, and billing exceptions from existing domain state; do not create duplicate tasks merely to populate a dashboard.
-- [ ] Add estate-plan, probate, other-track, missing-data, and partially completed milestone fixtures. Use existing probate essentials fields as source facts, but expose only client-appropriate milestones; do not expose internal notes or all court/deadline fields by default. Unknown track displays neutral “Your matter” and recorded stage. Estate/probate labels reflect actual workflow, and the automatic two-week promise is removed.
+- [x] Add estate-plan, probate, other-track, missing-data, and partially completed milestone fixtures. Use existing probate essentials fields as source facts, but expose only client-appropriate milestones; do not expose internal notes or all court/deadline fields by default. Unknown track displays neutral “Your matter” and recorded stage. Estate/probate labels reflect actual workflow, and the automatic two-week promise is removed.
 
   ```ts
   // Fixture expectations for the pure presentation adapter:
@@ -94,7 +94,7 @@ export type PortalProgress = {
   // recorded milestone -> completed only when persisted facts support it
   ```
 
-- [ ] Document an editing ownership map: intake facts → intake editor; drafting decisions → existing authoritative design editor; matter identity/stage → matter controls; invoices/payments → billing. Summary views link to those editors. Preserve the newer design-sheet persistence implementation; do not create a new editing surface or port code from `aubrey-law-app`.
+- [x] Document an editing ownership map: intake facts → intake editor; drafting decisions → existing authoritative design editor; matter identity/stage → matter controls; invoices/payments → billing. Summary views link to those editors. Preserve the newer design-sheet persistence implementation; do not create a new editing surface or port code from `aubrey-law-app`.
 - [ ] Run `npx vitest run tests/portal-practice-progress.test.ts tests/firm-navigation.test.tsx tests/matter-overview-hierarchy.test.ts tests/today-decision-queue.test.tsx tests/portal-account.test.ts`, master checks, and a keyboard/mobile browser pass using synthetic estate/probate matters. Commit navigation and portal changes separately if reviewable independently.
 
 ## C4: Proven unused code and documentation
