@@ -5,7 +5,7 @@ vi.mock('@/lib/portal/getMatterForUser',()=>({getMatterForUser:mock.matter}))
 vi.mock('@/lib/supabaseAdmin',()=>({getAdminClient:()=>({from:mock.from}),ADMIN_EMAIL:'synthetic@example.invalid'}))
 vi.mock('@/lib/messages/history',()=>({readMessageHistory:mock.read}))
 vi.mock('@/lib/email/send',()=>({sendEmail:vi.fn()}))
-import { acknowledgeMessages, loadOlderMessages } from '@/app/(portal)/messages/actions'
+import { acknowledgeMessages, loadOlderMessages, loadRecentMessages } from '@/app/(portal)/messages/actions'
 const matter='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 beforeEach(()=>{
   vi.clearAllMocks()
@@ -25,6 +25,11 @@ describe('portal displayed-message authorization',()=>{
     mock.matter.mockResolvedValue({id:'other-matter'})
     await expect(acknowledgeMessages(matter,[id])).rejects.toThrow('Matter access required')
     expect(mock.from).not.toHaveBeenCalled()
+  })
+  it('rechecks matter ownership before reconnect history is read',async()=>{
+    mock.matter.mockResolvedValue({id:'other-matter'})
+    await expect(loadRecentMessages(matter)).rejects.toThrow('Matter access required')
+    expect(mock.read).not.toHaveBeenCalled()
   })
   it('acknowledges only supplied IDs inside the owned matter',async()=>{
     await acknowledgeMessages(matter,[id])

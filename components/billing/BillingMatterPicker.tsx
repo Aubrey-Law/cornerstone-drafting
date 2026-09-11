@@ -6,7 +6,7 @@ import type { BillingMatterOption } from '@/components/billing/AddChargeDialog'
 export function BillingMatterPicker({id,value,onChange,initialOptions,disabled=false}:{id:string;value:string;onChange:(id:string,hasLegalFee?:boolean)=>void;initialOptions:BillingMatterOption[];disabled?:boolean}) {
   const [query,setQuery]=useState(''),[options,setOptions]=useState(initialOptions),[error,setError]=useState(false),[loading,setLoading]=useState(false),[retry,setRetry]=useState(0)
   useEffect(()=>{
-    if(!query && (!value || initialOptions.some(option=>option.id===value))) {setOptions(initialOptions);setError(false);setLoading(false);return}
+    if(initialOptions.length>0 && !query && (!value || initialOptions.some(option=>option.id===value))) {setOptions(initialOptions);setError(false);setLoading(false);return}
     const abort=new AbortController()
     const timer=setTimeout(()=>{
       setLoading(true);setError(false)

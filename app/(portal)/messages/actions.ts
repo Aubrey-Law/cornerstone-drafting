@@ -95,6 +95,12 @@ export async function loadOlderMessages(matterId: string, before: MessageCursor)
   return readMessageHistory(supabase, matterId, before)
 }
 
+/** Reconcile the newest page after realtime reconnects, covering inserts missed while offline. */
+export async function loadRecentMessages(matterId: string): Promise<MessageHistoryPage> {
+  const supabase = await requirePortalMessageMatter(matterId)
+  return readMessageHistory(supabase, matterId)
+}
+
 async function requirePortalMessageMatter(matterId: string) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()

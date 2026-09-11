@@ -30,13 +30,10 @@ export default async function BillingPage({
   if(params.tab !== 'insights') {
     const month=selectedMonth(params.month)
     const filter=typeof params.filter==='string' ? params.filter as BillingFilter : 'open'
-    const [ledger,matterOptions]=await Promise.all([
-      fetchLedgerPage({...pageRequest({page:params.page}),filter,search:typeof params.search==='string' ? params.search : '',month}),
-      fetchBillingMatterOptions(),
-    ])
+    const ledger=await fetchLedgerPage({...pageRequest({page:params.page}),filter,search:typeof params.search==='string' ? params.search : '',month})
     const snapshot=buildBillingSnapshot({items:[],payments:[],selectedMonth:month,annualGoalCents:0,dismissedNudgeKeys:[],unpreparedClaims:[]})
     snapshot.rows=ledger.rows
-    return <BillingClient initialSnapshot={snapshot} loadError={null} weekStart="" matterOptions={matterOptions} invoices={[]} pagination={ledger}
+    return <BillingClient initialSnapshot={snapshot} loadError={null} weekStart="" matterOptions={[]} invoices={[]} pagination={ledger}
       summary={<Suspense fallback={<p className="text-sm text-muted-foreground">Loading financial summary…</p>}><BillingSummary userId={auth.id} month={month} /></Suspense>} />
   }
   const [data, matterOptions] = await Promise.all([

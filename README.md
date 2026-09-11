@@ -11,7 +11,7 @@ Drafting (design sheet → generate → review) lives in this repo and is the so
 - Supabase Postgres/Auth (greenfield baseline + lite migrations)
 - Cloudflare R2 private document storage
 - Node estate document generator (data in `tools/aubreylaw-docgeneration`)
-- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Google (Calendar + Gmail send), Retell (AI receptionist)
+- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Google (Calendar + Gmail send/triage), Retell (AI receptionist)
 
 ## Local setup
 

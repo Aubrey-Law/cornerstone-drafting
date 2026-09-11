@@ -5,6 +5,7 @@ import {
   safeAdminRedirectPath,
   safeClientRedirectPath,
 } from '@/lib/auth/safeRedirect'
+import { profileServerRequest } from '@/lib/performance/serverRequestTiming'
 
 const ADMIN_ROLES = ['attorney', 'admin']
 const CLIENT_ROLE = 'client'
@@ -140,7 +141,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  let supabaseResponse = NextResponse.next({ request })
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -148,64 +148,69 @@ export async function proxy(request: NextRequest) {
     return supabaseUnavailable(pathname)
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
+  const profiled = await profileServerRequest('proxy', async measure => {
+    let supabaseResponse = NextResponse.next({ request })
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
+          )
+        },
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-        supabaseResponse = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options),
-        )
-      },
-    },
+    })
+
+    const { data: claimsData } = await measure('auth', () => supabase.auth.getClaims())
+    const userId = claimsData?.claims.sub
+    const claimRole = (claimsData?.claims as Record<string, unknown> | undefined)?.user_role as
+      | string
+      | undefined
+
+    if (requiresSession && !userId) {
+      return redirectToLogin(request, pathname)
+    }
+
+    if (userId && (requiresSession || shouldRedirectAuthenticatedLogin)) {
+      const role = await measure('role', () => resolveRole(supabase, userId, claimRole))
+
+      if (pathname === '/auth/login') {
+        const adminRedirect = safeAdminRedirectPath(searchParams.get('redirectTo'))
+        const clientRedirect = safeClientRedirectPath(searchParams.get('redirectTo'))
+        let destinationPath = '/auth/login'
+        if (role && ADMIN_ROLES.includes(role)) {
+          destinationPath = adminRedirect ?? DEFAULT_ADMIN_HOME
+        } else if (role === CLIENT_ROLE) {
+          destinationPath = clientRedirect ?? '/dashboard'
+        }
+        return NextResponse.redirect(new URL(destinationPath, request.url))
+      }
+
+      if (isAdminPath(pathname) && (!role || !ADMIN_ROLES.includes(role))) {
+        if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
+        if (role === CLIENT_ROLE) {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
+        }
+        return redirectToLogin(request, pathname)
+      }
+
+      if (isPortalPath(pathname) && role !== CLIENT_ROLE) {
+        if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
+        if (role && ADMIN_ROLES.includes(role)) {
+          return NextResponse.redirect(new URL(DEFAULT_ADMIN_HOME, request.url))
+        }
+        return redirectToLogin(request, pathname)
+      }
+    }
+
+    return supabaseResponse
   })
-
-  const { data: claimsData } = await supabase.auth.getClaims()
-  const userId = claimsData?.claims.sub
-  const claimRole = (claimsData?.claims as Record<string, unknown> | undefined)?.user_role as
-    | string
-    | undefined
-
-  if (requiresSession && !userId) {
-    return redirectToLogin(request, pathname)
-  }
-
-  if (userId && (requiresSession || shouldRedirectAuthenticatedLogin)) {
-    const role = await resolveRole(supabase, userId, claimRole)
-
-    if (pathname === '/auth/login') {
-      const adminRedirect = safeAdminRedirectPath(searchParams.get('redirectTo'))
-      const clientRedirect = safeClientRedirectPath(searchParams.get('redirectTo'))
-      let destinationPath = '/auth/login'
-      if (role && ADMIN_ROLES.includes(role)) {
-        destinationPath = adminRedirect ?? DEFAULT_ADMIN_HOME
-      } else if (role === CLIENT_ROLE) {
-        destinationPath = clientRedirect ?? '/dashboard'
-      }
-      return NextResponse.redirect(new URL(destinationPath, request.url))
-    }
-
-    if (isAdminPath(pathname) && (!role || !ADMIN_ROLES.includes(role))) {
-      if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
-      if (role === CLIENT_ROLE) {
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
-      return redirectToLogin(request, pathname)
-    }
-
-    if (isPortalPath(pathname) && role !== CLIENT_ROLE) {
-      if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
-      if (role && ADMIN_ROLES.includes(role)) {
-        return NextResponse.redirect(new URL(DEFAULT_ADMIN_HOME, request.url))
-      }
-      return redirectToLogin(request, pathname)
-    }
-  }
-
-  return supabaseResponse
+  profiled.value.headers.append('Server-Timing', profiled.serverTiming)
+  return profiled.value
 }
 
 export const config = {

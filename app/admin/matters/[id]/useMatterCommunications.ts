@@ -94,7 +94,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
   useEffect(() => { void loadSummary() }, [loadSummary])
   useEffect(() => { if (enabled && fetched.current !== matterId) void loadHistory() }, [enabled, matterId, loadHistory])
   const handleInsert = useCallback(() => { void loadSummary(); if (enabled) void loadHistory() }, [enabled, loadHistory, loadSummary])
-  useMessagesRealtime(matterId, handleInsert)
+  useMessagesRealtime(matterId, handleInsert, handleInsert)
 
   // This effect runs after displayed history commits. Inactive tabs never
   // acknowledge messages, and historical pages not fetched remain unread.

@@ -234,7 +234,8 @@ voice is ready, and the fixed SIP/fallback routing values validate.
 
 The firm's calendar and mailbox. One OAuth client and one consent cover both:
 appointments and holds are written to Google Calendar, availability is read
-from it, and email categories set to *Gmail* send from the connected mailbox.
+from it, email categories set to *Gmail* send from the connected mailbox, and
+email triage reads recent inbox threads and creates attorney-reviewed drafts.
 
 | Variable | Purpose |
 |----------|---------|
@@ -251,10 +252,14 @@ matches it exactly, including scheme and any trailing slash.
 
 **Scopes requested:** `openid`, `email`, `profile`,
 `https://www.googleapis.com/auth/calendar` and
-`https://www.googleapis.com/auth/gmail.send`. The mail scope is send-only —
-Cornerstone never reads the mailbox. A connection made before Gmail was wired
-in carries only the calendar scope and cannot send; Settings → Google flags it
-and a reconnect fixes it.
+`https://www.googleapis.com/auth/gmail.send`, plus
+`https://www.googleapis.com/auth/gmail.modify`. The modify scope lets email
+triage inspect recent threads and save a draft on the thread being answered;
+Cornerstone does not request the broader `mail.google.com` scope that permits
+permanent deletion. It persists Gmail's snippet, not message bodies, and never
+sends a triage draft without the attorney sending it from Gmail. A connection
+made before either Gmail feature may be missing its required scope; Settings →
+Google flags the missing send or triage permission and a reconnect fixes it.
 
 **If a connection reports no refresh token:** Google issues one only on an
 account's first consent, and Cornerstone asks for `prompt=consent` to force it.
