@@ -17,6 +17,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   Send,
   Sparkles,
   Trash2,
@@ -61,6 +62,10 @@ import { logMatterActivity } from '@/lib/matterActivity'
 import { formatDateTime } from '@/lib/utils'
 import { type MatterDocument } from '@/types/database'
 import type { DraftingHubDocument, DraftingHubMatter } from '@/lib/queries/drafting'
+import { groupDraftHistory, nextUnreviewedDraft, runSelectedConversion, type ConversionResult } from '@/lib/drafting/reviewWorkflow'
+import { DocumentComparisonDialog } from '@/components/drafting/DocumentComparisonDialog'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import type { ShareCheck } from '@/lib/documents/shareGate'
 import { TabularReviewSection } from '@/components/drafting/TabularReviewSection'
 import { MatterAssistantPanel } from '@/components/drafting/MatterAssistantPanel'
 
@@ -108,12 +113,11 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [promotedIds, setPromotedIds] = useState<Set<string>>(() => new Set())
 
   const [showPrevious, setShowPrevious] = useState(false)
-  const autoExpandedSuperseded = useRef(false)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string; quote?: string | null } | null>(null)
-  const [assistantOpen, setAssistantOpen] = useState(true)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [previewTarget, setPreviewTarget] = useState<{ id: string; name: string } | null>(null)
   const [maximized, setMaximized] = useState(false)
   const [assistantWidth, setAssistantWidth] = useState(340)
@@ -128,7 +132,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
       return
     }
     setViewerDoc({ id: doc.id, name: doc.name, quote: quote ?? null })
-    setAssistantOpen(true)
     setScrollToViewer(true)
   }
 
@@ -191,18 +194,59 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
 
   // Optimistic review-state overrides keyed by document id (ISO string when
   // reviewed, null when cleared) so the checkbox + gate update before refresh.
-  const [reviewedOverride, setReviewedOverride] = useState<Record<string, string | null>>({})
+  const [reviewedOverride, setReviewedOverride] = useState<Record<string, { revision: string; reviewedAt: string | null }>>({})
+  const loadedRevisions = useRef<Record<string, string | null>>({})
+  const [viewedRevisions, setViewedRevisions] = useState<Record<string, string | null>>({})
+  const [eligibilities, setEligibilities] = useState<Record<string, ShareCheck>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [conversionResults, setConversionResults] = useState<ConversionResult[]>([])
+  const [batchConverting, setBatchConverting] = useState(false)
+  const conversionLock = useRef(false)
+  const [comparison, setComparison] = useState<{ current: DraftingHubDocument; previous?: DraftingHubDocument } | null>(null)
 
-  const effectiveReviewedAt = (doc: DraftingHubDocument): string | null =>
-    doc.id in reviewedOverride ? reviewedOverride[doc.id] : doc.reviewedAt
+  const loadedRevision = (documentId: string, revision: string | null) => {
+    loadedRevisions.current[documentId] = revision
+    setViewedRevisions(prev => ({ ...prev, [documentId]: revision }))
+    setEligibilities(prev => { const next = { ...prev }; delete next[documentId]; return next })
+    if (revision && accessToken) {
+      void fetch(`/api/documents/${documentId}/review`, { headers: { Authorization: `Bearer ${accessToken}` } })
+        .then(async res => {
+          if (!res.ok) throw new Error('Could not check this version for unfilled fields')
+          const state = await res.json()
+          if (loadedRevisions.current[documentId] !== revision) return
+          if (state.reviewRevision !== revision) {
+            setViewedRevisions(prev => ({ ...prev, [documentId]: null }))
+            setEligibilities(prev => ({ ...prev, [documentId]: { shareable: false, reason: 'unverifiable', detail: 'This document changed. Close and reopen the viewer to load its current version.' } }))
+          } else {
+            setEligibilities(prev => ({ ...prev, [documentId]: state.eligibility }))
+            setReviewedOverride(prev => ({ ...prev, [documentId]: { revision, reviewedAt: state.reviewedAt ?? null } }))
+          }
+        }).catch(() => {
+          if (loadedRevisions.current[documentId] === revision) setEligibilities(prev => ({ ...prev, [documentId]: { shareable: false, reason: 'unverifiable', detail: 'Could not check this version. Close and reopen the viewer to retry.' } }))
+        })
+    }
+  }
+
+
+  const effectiveReviewedAt = (doc: DraftingHubDocument): string | null => {
+    const override = reviewedOverride[doc.id]
+    return override && override.revision === (doc.reviewRevision ?? viewedRevisions[doc.id]) ? override.reviewedAt : doc.reviewedAt
+  }
+  const currentEligibility = (doc: DraftingHubDocument) =>
+    !doc.reviewRevision || doc.reviewRevision === viewedRevisions[doc.id] ? eligibilities[doc.id] : undefined
+  const hasCurrentBytes = (doc: DraftingHubDocument) => Boolean(viewedRevisions[doc.id] && (!doc.reviewRevision || doc.reviewRevision === viewedRevisions[doc.id]))
 
   const handleToggleReviewed = async (doc: DraftingHubDocument, reviewed: boolean) => {
-    if (reviewingId) return
+    if (reviewingId || !hasCurrentBytes(doc)) return
     setReviewingId(doc.id)
     try {
-      await setDocumentReviewed(doc.id, reviewed)
-      setReviewedOverride(prev => ({ ...prev, [doc.id]: reviewed ? new Date().toISOString() : null }))
+      const revision = viewedRevisions[doc.id]!
+      await setDocumentReviewed(doc.id, reviewed, revision)
+      setReviewedOverride(prev => ({ ...prev, [doc.id]: { revision, reviewedAt: reviewed ? new Date().toISOString() : null } }))
+      router.refresh()
     } catch (e) {
+      loadedRevision(doc.id, null)
+      router.refresh()
       toast.error(e instanceof Error ? e.message : 'Could not update review status')
     } finally {
       setReviewingId(null)
@@ -219,29 +263,12 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [combineOpen, setCombineOpen] = useState(false)
   const combinableDrafts = recentDrafts.filter(d => d.name.toLowerCase().endsWith('.docx'))
 
-  // Bulk actions: a full plan is many documents; reviewing and sharing them
-  // one at a time is needless clicking.
-  const [bulkBusy, setBulkBusy] = useState<'review' | 'share' | null>(null)
+  // Sharing is explicit and still rechecked server-side for each PDF.
+  const [bulkBusy, setBulkBusy] = useState<'share' | null>(null)
   const [pendingBulkShare, setPendingBulkShare] = useState<DraftingHubDocument[] | null>(null)
-  const bulkReviewables = recentDrafts.filter(d => !isWordDocument(d.name) && !effectiveReviewedAt(d))
-  const bulkShareables = recentDrafts.filter(d => isPdfDocument(d.name))
-
-  const handleMarkAllReviewed = async () => {
-    if (bulkBusy) return
-    setBulkBusy('review')
-    let done = 0
-    for (const doc of bulkReviewables) {
-      try {
-        await setDocumentReviewed(doc.id, true)
-        setReviewedOverride(prev => ({ ...prev, [doc.id]: new Date().toISOString() }))
-        done += 1
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : `Could not mark ${doc.name} reviewed`)
-      }
-    }
-    setBulkBusy(null)
-    if (done > 0) toast.success(`Marked ${done} draft${done === 1 ? '' : 's'} reviewed`)
-  }
+  const bulkShareables = recentDrafts.filter(d => isPdfDocument(d.name) && (d.missingCount ?? 0) === 0)
+  const groups = groupDraftHistory(recentDrafts, supersededDrafts)
+  const nextUnreviewed = nextUnreviewedDraft(recentDrafts.map(d => ({ ...d, reviewedAt: effectiveReviewedAt(d) })), viewerDoc?.id ?? null)
 
   const confirmBulkShare = async () => {
     const docs = pendingBulkShare ?? []
@@ -261,20 +288,13 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     setBulkBusy(null)
     if (done > 0) {
       void logMatterActivity(matterId, 'draft_promoted_to_review', 'Drafts shared with client', {
-        detail: `Shared ${done} reviewed PDF${done === 1 ? '' : 's'} with the client`,
+        detail: `Shared ${done} eligible PDF${done === 1 ? '' : 's'} with the client`,
         metadata: { count: done, documentIds: docs.map(d => d.id) },
       })
       toast.success(`Shared ${done} PDF${done === 1 ? '' : 's'} with client`)
       router.refresh()
     }
   }
-
-  useEffect(() => {
-    if (!autoExpandedSuperseded.current && supersededDrafts.length > 0) {
-      setShowPrevious(true)
-      autoExpandedSuperseded.current = true
-    }
-  }, [supersededDrafts.length])
 
   const openDocument = async (id: string, action: 'view' | 'download', name?: string) => {
     // Drafts are Word documents; preview them in-app rather than handing a
@@ -284,7 +304,14 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
       return
     }
     try {
-      const url = await getDocumentUrl(id, action)
+      let url: string
+      if (action === 'view' && accessToken) {
+        const response = await fetch(`/api/documents/${id}`, { headers: { Authorization: `Bearer ${accessToken}` } })
+        if (!response.ok) throw new Error('Could not load document')
+        const body = await response.json()
+        url = body.url
+        loadedRevision(id, body.reviewRevision)
+      } else url = await getDocumentUrl(id, action)
       if (action === 'view') {
         window.open(url, '_blank')
         return
@@ -311,6 +338,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     try {
       await deleteDocument(doc.id)
       setDeletedIds(prev => new Set(prev).add(doc.id))
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(doc.id); return next })
       toast.success('Draft deleted')
       router.refresh()
     } catch (e) {
@@ -356,28 +384,41 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
   }
 
+  const convertOne = async (doc: DraftingHubDocument) => {
+    if (!accessToken) throw new Error('Not authenticated')
+    const res = await fetch(`/api/documents/${doc.id}/convert-pdf`, {
+      method: 'POST', headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error ?? 'Conversion failed')
+  }
+
   const handleConvertPdf = async (doc: DraftingHubDocument) => {
-    if (!accessToken || convertingId) return
+    if (conversionLock.current) return
+    conversionLock.current = true
     setConvertingId(doc.id)
     try {
-      const res = await fetch(`/api/documents/${doc.id}/convert-pdf`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-      const body = await res.json().catch(() => ({}))
-      if (res.status === 501) {
-        toast.message('Convert not configured', {
-          description: 'Set DOCX_PDF_CONVERT_URL or use Upload PDF to share.',
-        })
-        return
-      }
-      if (!res.ok) throw new Error(body.error ?? 'Conversion failed')
-      toast.success('PDF created — use the share toggle to send it to the client')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not convert to PDF')
+      const results = await runSelectedConversion([doc], new Set([doc.id]), convertOne)
+      setConversionResults(results)
+      if (results[0]?.status === 'converted') router.refresh()
     } finally {
+      conversionLock.current = false
       setConvertingId(null)
+    }
+  }
+
+  const convertSelected = async () => {
+    if (conversionLock.current) return
+    conversionLock.current = true
+    setBatchConverting(true)
+    try {
+      const results = await runSelectedConversion(recentDrafts, selectedIds, convertOne)
+      setConversionResults(results)
+      setSelectedIds(new Set(results.filter(r => r.status === 'failed').map(r => r.id)))
+      if (results.some(r => r.status === 'converted')) router.refresh()
+    } finally {
+      conversionLock.current = false
+      setBatchConverting(false)
     }
   }
 
@@ -404,30 +445,21 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
       <GuidedIntroCard
         pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
         title="Review and share drafts"
-        subtitle="Mark Word drafts reviewed, convert or upload PDFs, open a draft in-app to redline, then share PDFs with the client."
+        subtitle="Read the current version, mark it reviewed, and convert selected Word drafts to PDF. Conversion does not mark a document reviewed or share it."
       />
 
       <section style={{ ...guidedCardStyle, padding: 0, overflow: 'hidden' }}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--gi-divider)' }}>
           <div>
-            <h3 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Internal Word drafts</h3>
+            <h3 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Current documents</h3>
             <p className="mt-1 text-[12px]" style={{ color: 'var(--gi-muted)' }}>
-              Open in-app to redline, convert to PDF via the LibreOffice worker, or upload a PDF.
+              Review status and missing-field eligibility are separate. Sharing checks unfilled fields again.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {bulkReviewables.length > 1 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-[11px]"
-                disabled={bulkBusy !== null}
-                onClick={() => void handleMarkAllReviewed()}
-              >
-                {bulkBusy === 'review' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Mark all {bulkReviewables.length} reviewed
-              </Button>
-            )}
+            <Button size="sm" variant="outline" disabled={batchConverting || convertingId !== null || selectedIds.size === 0} onClick={() => void convertSelected()}>
+              {batchConverting ? 'Converting…' : `Convert selected (${selectedIds.size})`}
+            </Button>
             {bulkShareables.length > 1 && (
               <Button
                 size="sm"
@@ -437,7 +469,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 onClick={() => setPendingBulkShare(bulkShareables)}
               >
                 {bulkBusy === 'share' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Share all {bulkShareables.length} ready
+                Share {bulkShareables.length} eligible PDFs
               </Button>
             )}
             {combinableDrafts.length > 1 && (
@@ -490,7 +522,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           <div className="p-6 text-sm" style={{ color: 'var(--gi-muted)' }}>No internal drafts have been generated yet. Use the Generate step to produce drafts.</div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--gi-divider)' }}>
-            {recentDrafts.map(doc => {
+            {groups.map(({ current: doc, previous }) => {
               const reviewedAt = effectiveReviewedAt(doc)
               const isWord = isWordDocument(doc.name)
               const isPdf = isPdfDocument(doc.name)
@@ -500,12 +532,13 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   key={doc.id}
                   className={`flex flex-wrap items-center gap-3 px-4 py-3 ${isOpen ? 'bg-primary/5' : ''}`}
                 >
+                  {doc.name.toLowerCase().endsWith('.docx') && <Checkbox aria-label={`Select ${doc.name} for conversion`} checked={selectedIds.has(doc.id)} disabled={batchConverting || convertingId !== null} onCheckedChange={checked => setSelectedIds(prev => { const next = new Set(prev); if (checked) next.add(doc.id); else next.delete(doc.id); return next })} />}
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.name}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {formatSize(doc.size)} · Generated {formatDateTime(doc.created_at)}
-                      {reviewedAt ? ` · Reviewed ${formatDateTime(reviewedAt)}` : ''}
+                      {reviewedAt ? ` · Reviewed ${formatDateTime(reviewedAt)}` : ' · Needs review'}
                     </p>
                   </div>
                   {isModelDrafted(doc.generationEngine) && (
@@ -519,7 +552,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   )}
                   {doc.markerCount === 0 ? (
                     <Badge variant="outline" className="gap-1 border-success/30 text-[11px] text-success">
-                      <CheckCircle2 className="h-3 w-3" /> Clean
+                      <CheckCircle2 className="h-3 w-3" /> No recorded markers
                     </Badge>
                   ) : typeof doc.markerCount === 'number' && doc.markerCount > 0 ? (
                     <Badge variant="outline" className="gap-1 border-destructive/30 text-[11px] text-destructive">
@@ -528,15 +561,10 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   ) : (
                     <Badge variant="outline" className="text-[11px] text-muted-foreground">Not scanned</Badge>
                   )}
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
-                    <Checkbox
-                      checked={!!reviewedAt}
-                      disabled={reviewingId === doc.id || isWord}
-                      onCheckedChange={checked => void handleToggleReviewed(doc, checked === true)}
-                      aria-label={`Mark ${doc.name} reviewed`}
-                    />
-                    Reviewed
-                  </label>
+                  <Badge variant="outline" className={doc.missingCount ? 'text-destructive' : 'text-muted-foreground'}>
+                    {currentEligibility(doc)?.shareable ? 'Missing-field check passed' : currentEligibility(doc)?.shareable === false ? 'Sharing blocked' : doc.missingCount ? `${doc.missingCount} unfilled fields · sharing blocked` : isPdf ? 'Eligible to share' : 'Check fields in viewer'}
+                  </Badge>
+                  {!isWord && <Button size="sm" variant="outline" disabled={reviewingId !== null || !hasCurrentBytes(doc)} onClick={() => void handleToggleReviewed(doc, !reviewedAt)} title="Open this version before marking it reviewed">{reviewedAt ? 'Clear review' : 'Mark reviewed'}</Button>}
                   {isWord ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -556,44 +584,17 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                       <Eye className="h-3.5 w-3.5" /> View
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'download', doc.name)}>
-                    <Download className="h-3.5 w-3.5" /> Download
-                  </Button>
-                  {isWord ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1.5 text-xs"
-                      disabled={convertingId === doc.id}
-                      title="Convert DOCX→PDF via convert worker (or configure DOCX_PDF_CONVERT_URL)"
-                      onClick={() => void handleConvertPdf(doc)}
-                    >
-                      {convertingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType2 className="h-3.5 w-3.5" />}
-                      Convert PDF
-                    </Button>
-                  ) : null}
-                  {isPdf ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1.5 text-xs text-green hover:bg-green-bg"
-                      disabled={approvingId === doc.id}
-                      onClick={() => void handleApprove(doc)}
-                    >
-                      {approvingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                      Share PDF
-                    </Button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs text-red-strong hover:bg-red-bg"
-                    disabled={deletingId === doc.id}
-                    onClick={() => handleDelete(doc)}
-                  >
-                    {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    Delete
-                  </Button>
+                  {isPdf && <Button size="sm" variant="outline" disabled={approvingId === doc.id || currentEligibility(doc)?.shareable === false || (!currentEligibility(doc) && (doc.missingCount ?? 0) > 0)} onClick={() => void handleApprove(doc)}><Send className="mr-1 h-3.5 w-3.5" />Share PDF</Button>}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`More actions for ${doc.name}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => void openDocument(doc.id, 'download', doc.name)}><Download className="mr-2 h-4 w-4" />Download</DropdownMenuItem>
+                      {doc.name.toLowerCase().endsWith('.docx') && <DropdownMenuItem disabled={batchConverting || convertingId !== null} onSelect={() => void handleConvertPdf(doc)}><FileType2 className="mr-2 h-4 w-4" />Convert to PDF</DropdownMenuItem>}
+                      {isWord && <DropdownMenuItem onSelect={() => setComparison({ current: doc, previous: previous[0] })}>Compare with previous</DropdownMenuItem>}
+                      <DropdownMenuItem disabled={deletingId === doc.id} onSelect={() => handleDelete(doc)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {previous.length > 0 && <details className="w-full pl-7 text-xs"><summary className="cursor-pointer text-muted-foreground">Previous generations ({previous.length})</summary><ul className="mt-2 space-y-2">{previous.map(old => <li key={old.id} className="flex flex-wrap items-center gap-2"><span>{formatDateTime(old.created_at)} · {old.name}</span><Button size="sm" variant="ghost" onClick={() => void openDocument(old.id, 'view', old.name)}>View</Button>{isWord && <Button size="sm" variant="ghost" onClick={() => setComparison({ current: doc, previous: old })}>Compare</Button>}</li>)}</ul></details>}
                 </div>
               )
             })}
@@ -646,6 +647,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         )}
       </section>
 
+      {conversionResults.length > 0 && <section className="rounded-lg border p-4" aria-live="polite"><h3 className="text-sm font-medium">PDF conversion results</h3><p className="text-xs text-muted-foreground">Created PDFs are unreviewed and unshared. Failed documents remain selected for retry.</p><ul className="mt-2 space-y-1 text-sm">{conversionResults.map(result => <li key={result.id}>{result.name}: {result.status === 'converted' ? 'PDF created' : `Failed — ${result.error}`}</li>)}</ul></section>}
+
       {/* In-app document review — viewer + assistant side-by-side below drafts list */}
       {viewerDoc ? (
         <section
@@ -653,7 +656,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           className={
             maximized
               ? 'fixed inset-0 z-50 flex flex-col overflow-hidden border-0 bg-card'
-              : 'overflow-hidden rounded-lg border border-border bg-card'
+              : 'scroll-mt-24 overflow-hidden rounded-lg border border-border bg-card'
           }
         >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -703,7 +706,9 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 <span className="shrink-0 text-xs text-muted-foreground"> · citation highlight active</span>
               ) : null}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {viewerDraft && <Button size="sm" disabled={reviewingId !== null || !hasCurrentBytes(viewerDraft)} onClick={() => void handleToggleReviewed(viewerDraft, !effectiveReviewedAt(viewerDraft))}>{effectiveReviewedAt(viewerDraft) ? 'Clear review' : 'Mark this version reviewed'}</Button>}
+              <Button size="sm" variant="outline" disabled={!nextUnreviewed} onClick={() => { if (nextUnreviewed) switchToDraft(nextUnreviewed.id) }}>Next unreviewed</Button>
               <Button
                 type="button"
                 size="sm"
@@ -740,25 +745,31 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               </Button>
             </div>
           </div>
+          <div className="border-b px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+            {(() => { const check = eligibilities[viewerDoc.id]; return !check ? viewedRevisions[viewerDoc.id] ? 'Checking this version for unfilled fields…' : 'Load this version before recording a review.' : check.shareable ? 'Missing-field check passed. Mark reviewed only after reading this version.' : check.reason === 'missing_fields' ? `Sharing blocked by unfilled fields: ${check.missingFields.join(', ')}` : `Sharing eligibility could not be verified: ${check.detail}` })()}
+          </div>
           <div
             className={
               maximized
                 ? 'flex min-h-0 flex-1 flex-col lg:flex-row'
-                : assistantOpen
-                  ? 'flex h-[min(78vh,920px)] min-h-[520px] flex-col lg:flex-row'
-                  : 'flex h-[min(78vh,920px)] min-h-[520px] flex-col'
+                : 'flex h-[min(78vh,920px)] min-h-[520px] flex-col lg:flex-row'
             }
           >
+            <nav aria-label="Documents to review" className="max-h-36 shrink-0 overflow-y-auto border-b p-2 lg:max-h-none lg:w-48 lg:border-r lg:border-b-0">
+              {wordDrafts.map(doc => <button key={doc.id} type="button" aria-current={doc.id === viewerDoc.id ? 'true' : undefined} onClick={() => switchToDraft(doc.id)} className={`mb-1 block w-full rounded p-2 text-left text-xs ${doc.id === viewerDoc.id ? 'bg-primary/10' : 'hover:bg-muted'}`}><span className="block break-words font-medium">{doc.name}</span><span className="text-muted-foreground">{effectiveReviewedAt(doc) ? 'Reviewed' : 'Needs review'}</span></button>)}
+            </nav>
             <div className="min-h-0 min-w-0 flex-1 border-b border-border lg:border-b-0 lg:border-r">
               <DocxViewerPanel
                 documentId={viewerDoc.id}
+                key={`${viewerDoc.id}:${viewerDraft?.reviewRevision ?? ''}`}
+                onRevisionLoaded={loadedRevision}
                 documentName={viewerDoc.name}
                 quote={viewerDoc.quote}
                 maximized={maximized}
-                onConvert={viewerDraft ? () => void handleConvertPdf(viewerDraft) : undefined}
-                converting={viewerDraft ? convertingId === viewerDraft.id : false}
+                onConvert={viewerDraft?.name.toLowerCase().endsWith('.docx') ? () => void handleConvertPdf(viewerDraft) : undefined}
+                converting={batchConverting || convertingId !== null}
                 onClose={closeViewer}
-                onMutated={() => router.refresh()}
+                onMutated={() => { loadedRevision(viewerDoc.id, null); setReviewedOverride(prev => { const next = { ...prev }; delete next[viewerDoc.id]; return next }); router.refresh() }}
               />
             </div>
             {assistantOpen ? (
@@ -791,6 +802,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         </section>
       ) : null}
 
+      {comparison && <DocumentComparisonDialog current={comparison.current} previous={comparison.previous} onClose={() => setComparison(null)} />}
+
       <TabularReviewSection
         matterId={matterId}
         documentIds={recentDrafts.map(d => d.id)}
@@ -813,7 +826,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Share {pendingBulkShare?.length ?? 0} reviewed PDF{(pendingBulkShare?.length ?? 0) === 1 ? '' : 's'} with the client?
+              Share {pendingBulkShare?.length ?? 0} eligible PDF{(pendingBulkShare?.length ?? 0) === 1 ? '' : 's'} with the client?
             </AlertDialogTitle>
             <AlertDialogDescription>
               These become visible in the client portal and the client is notified by email.

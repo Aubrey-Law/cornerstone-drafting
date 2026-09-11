@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, CheckCircle2, Clock3, Download, FileText, Loader2, X } from 'lucide-react'
@@ -33,8 +33,12 @@ import {
 import { logMatterActivity } from '@/lib/matterActivity'
 import { cn, formatDate } from '@/lib/utils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
+import type { DraftingMetrics } from '@/lib/drafting/metrics'
+import { DraftingEfficiency } from '@/components/drafting/DraftingEfficiency'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
+import { DraftRunStatus, type VisibleDraftRun } from '@/components/drafting/DraftRunStatus'
+import { stableDraftKey } from '@/lib/drafting/supersede'
 import { ClauseOverridesPanel } from './ClauseOverridesPanel'
 
 type DocumentReport = {
@@ -82,6 +86,7 @@ type DraftPreflightMissingField = {
 }
 
 type DraftPreflight = {
+  sourceRevision: string | null
   matterId: string
   designSheetId: string | null
   engine: 'node'
@@ -102,17 +107,14 @@ function formatElapsed(totalSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-// The generator runs as a single batch request server-side, so per-document
-// completion isn't observable. Estimate progress from elapsed time instead.
-const EST_SECONDS_PER_DOC = 8
 type DraftDeliveryMode = 'save' | 'download'
 
 function computeGenerationDiff(priorNames: string[], generated: string[]) {
-  const prior = new Set(priorNames)
-  const next = new Set(generated)
-  const newDocuments = generated.filter(name => !prior.has(name))
-  const replacedDocuments = generated.filter(name => prior.has(name))
-  const unchanged = priorNames.filter(name => !next.has(name))
+  const prior = new Set(priorNames.map(stableDraftKey))
+  const next = new Set(generated.map(stableDraftKey))
+  const newDocuments = generated.filter(name => !prior.has(stableDraftKey(name)))
+  const replacedDocuments = generated.filter(name => prior.has(stableDraftKey(name)))
+  const unchanged = priorNames.filter(name => !next.has(stableDraftKey(name)))
   return { newDocuments, replacedDocuments, unchangedPrior: unchanged }
 }
 
@@ -165,6 +167,7 @@ function normalizePreflightResponse(value: unknown, matterId: string): DraftPref
     : []
   const missing = stringArray(raw.missing)
   return {
+    sourceRevision: typeof raw.sourceRevision === 'string' ? raw.sourceRevision : null,
     matterId: typeof raw.matterId === 'string' ? raw.matterId : matterId,
     designSheetId: typeof raw.designSheetId === 'string' ? raw.designSheetId : null,
     engine: 'node',
@@ -189,6 +192,7 @@ interface GenerateStepProps {
     contacts: MatterContact[]
     intakeSnapshot: IntakeSnapshot | null
   }
+  beforePreflight: () => Promise<boolean>
   onAdvance: () => void
 }
 
@@ -196,7 +200,7 @@ function sourceStatus(value: boolean) {
   return value ? 'Ready' : 'Missing'
 }
 
-export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdvance }: GenerateStepProps) {
+export default function GenerateStep({ matterId, hubMatter, sourcePreview, beforePreflight, onAdvance }: GenerateStepProps) {
   const router = useRouter()
   const accessToken = useAccessToken()
   const [, startTransition] = useTransition()
@@ -213,7 +217,32 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     { documentsToSave: string[]; docsBeingGenerated: DraftPreflightDocument[]; mode: DraftDeliveryMode } | null
   >(null)
 
-  const isGenerating = busy === 'generate'
+  const [run, setRun] = useState<VisibleDraftRun | null>(null)
+  const [metrics, setMetrics] = useState<DraftingMetrics | null>(null)
+  const [runError, setRunError] = useState<string | null>(null)
+  const activeRunId = useRef<string | null>(null)
+  const requestBusy = useRef(false)
+  const statusRequest = useRef(0)
+  const refreshRun = useCallback(async () => {
+    if (!accessToken) return
+    const request = ++statusRequest.current
+    try {
+      const response = await fetch(`/api/admin/matters/${matterId}/draft`, { cache: 'no-store', headers: { Authorization: `Bearer ${accessToken}` } })
+      const data = await response.json()
+      if (request !== statusRequest.current) return
+      if (!response.ok) throw new Error(data.error ?? 'Could not load draft run status.')
+      setRun(data.run ?? null)
+      setMetrics(data.metrics ?? null)
+      setRunError(null)
+    } catch (error) { if (request === statusRequest.current) setRunError((error as Error).message) }
+  }, [accessToken, matterId])
+  useEffect(() => { void refreshRun() }, [refreshRun])
+  useEffect(() => {
+    if (run?.status !== 'running' && busy !== 'generate') return
+    const interval = setInterval(() => void refreshRun(), 2000)
+    return () => clearInterval(interval)
+  }, [run?.status, busy, refreshRun])
+  const isGenerating = busy === 'generate' || (run?.status === 'running' && !run.retryable)
   useEffect(() => {
     setCachedZip(loadDraftZipDownload(matterId))
   }, [matterId])
@@ -248,7 +277,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     hasDesignSheet &&
     hubMatter.includedDocumentLabels.length > 0
   const authReady = Boolean(accessToken)
-  const preflightReady = preflight?.matterId === matterId
+  const preflightReady = preflight?.matterId === matterId && Boolean(preflight?.sourceRevision)
   const selectedCount = preflight
     ? preflight.documentsToGenerate.filter(d => selectedDocs.has(d.filename)).length
     : 0
@@ -258,13 +287,16 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
       const next = new Set(prev)
       if (next.has(filename)) next.delete(filename)
       else next.add(filename)
+      try { sessionStorage.setItem(`draft-selection:${matterId}`, JSON.stringify([...next])) } catch {}
       return next
     })
   }
   const toggleAllDocs = () => {
     if (!preflight) return
     const all = preflight.documentsToGenerate.map(d => d.filename)
-    setSelectedDocs(selectedCount === all.length ? new Set() : new Set(all))
+    const next = selectedCount === all.length ? new Set<string>() : new Set(all)
+    setSelectedDocs(next)
+    try { sessionStorage.setItem(`draft-selection:${matterId}`, JSON.stringify([...next])) } catch {}
   }
 
   const handleClauseOverridesMutated = () => {
@@ -287,6 +319,10 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     setPreflight(null)
     startTransition(async () => {
       try {
+        if (!(await beforePreflight())) {
+          setResult({ success: false, error: 'Save your latest decisions or resolve the conflict in Design before checking drafts.' })
+          return
+        }
         const response = await fetch(`/api/admin/matters/${matterId}/draft/preflight`, {
           // Re-runs happen right after the attorney edits the design sheet, so a
           // cached response would keep reporting fields they just filled in.
@@ -302,7 +338,10 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
         }
         const next = normalizePreflightResponse(data, matterId)
         setPreflight(next)
-        setSelectedDocs(new Set(next.documentsToGenerate.map(d => d.filename)))
+        let remembered: string[] | null = null
+        try { const stored = sessionStorage.getItem(`draft-selection:${matterId}`); if (stored) remembered = JSON.parse(stored) } catch {}
+        const available = next.documentsToGenerate.map(d => d.filename)
+        setSelectedDocs(new Set(Array.isArray(remembered) ? remembered.filter(name => available.includes(name)) : available))
         if (!next.canGenerate) {
           toast.error(next.error ?? 'Resolve generator issues before saving drafts.')
         } else if (
@@ -342,16 +381,19 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     }
     const docsBeingGenerated = preflight.documentsToGenerate.filter(d => selectedDocs.has(d.filename))
 
-    // Always confirm via the dialog; when required fields are blank it also
-    // lists what will be left as [[ MISSING ]].
-    setConfirmGenerate({ documentsToSave, docsBeingGenerated, mode: deliveryMode })
+    if (preflight.missingFields.length > 0) setConfirmGenerate({ documentsToSave, docsBeingGenerated, mode: deliveryMode })
+    else runGeneration(documentsToSave, docsBeingGenerated, deliveryMode)
   }
 
-  const runGeneration = (documentsToSave: string[], docsBeingGenerated: DraftPreflightDocument[], mode: DraftDeliveryMode) => {
+  const runGeneration = (documentsToSave: string[], docsBeingGenerated: DraftPreflightDocument[], mode: DraftDeliveryMode, retry?: VisibleDraftRun) => {
+    if (requestBusy.current) return
     if (!accessToken) {
       toast.error('Your session expired. Refresh and try again.')
       return
     }
+    requestBusy.current = true
+    statusRequest.current += 1
+    activeRunId.current = retry?.id ?? crypto.randomUUID()
     setGeneratingDocs(docsBeingGenerated)
     setBusy('generate')
     setResult(null)
@@ -364,7 +406,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ documents: documentsToSave, mode }),
+          body: JSON.stringify({ documents: retry?.requested_documents ?? documentsToSave, mode, runId: activeRunId.current, sourceRevision: retry?.source_revision ?? preflight?.sourceRevision }),
         })
         if (mode === 'download') {
           if (!response.ok) {
@@ -432,6 +474,8 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
         }
 
         const data = await response.json().catch(() => ({})) as {
+          run?: VisibleDraftRun
+          success?: boolean
           error?: string
           detail?: string
           documents?: string[]
@@ -441,20 +485,28 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           documentReports?: DocumentReport[]
           hasBlockingMarkers?: boolean
         }
+        if (data.run) { statusRequest.current += 1; setRun(data.run) }
+        if (response.status === 202) return
         const warnings = Array.isArray(data.warnings) ? data.warnings : []
         const missing = Array.isArray(data.missing) ? data.missing : []
         const documentReports = Array.isArray(data.documentReports) ? data.documentReports : []
         const hasBlockingMarkers = data.hasBlockingMarkers === true
         if (!response.ok) {
           const message = data.detail ?? data.error ?? 'Draft generation failed.'
-          // The generator runs as one batch, so a failure means none of the
-          // selected documents were saved.
+          // Some files may already be saved. The run ledger is authoritative.
           setResult({
             success: false,
             error: message,
             failedDocuments: docsBeingGenerated.map(d => d.title),
           })
-          toast.error(`Draft generation failed — no documents were saved. ${message}`)
+          toast.error(`Draft generation needs attention. ${message}`)
+          if (response.status === 409) setPreflight(null)
+          void refreshRun()
+          return
+        }
+        if (data.run && data.run.status !== 'completed') {
+          setResult({ success: false, error: 'Some documents were not saved. Review the run status and retry the remaining documents.' })
+          router.refresh()
           return
         }
         const documents = data.documents ?? []
@@ -493,7 +545,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
         }
         setPreflight(null)
         router.refresh()
-        onAdvance()
+        // Keep the result visible until the attorney chooses to review it.
       } catch {
         toast.error('Network error. Please try again.')
         setResult({
@@ -502,27 +554,29 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           failedDocuments: docsBeingGenerated.map(d => d.title),
         })
       } finally {
+        requestBusy.current = false
         setBusy(null)
         setGeneratingDocs([])
+        if (mode === 'save') void refreshRun()
       }
     })
   }
 
-  const simulatedCompleted = isGenerating
-    ? Math.min(generatingDocs.length, Math.max(0, Math.floor((elapsed + EST_SECONDS_PER_DOC / 2) / EST_SECONDS_PER_DOC)))
-    : 0
-
   return (
     <div className="guided-interview guided-zinc space-y-4">
-      <section style={guidedCardStyle}>
+      {run && <DraftRunStatus run={run} busy={busy !== null} onReview={onAdvance} onRetry={() => runGeneration(run.requested_documents, run.requested_documents.map(filename => ({ filename, title: filename, packageName: '' })), 'save', run)} />}
+      {runError && <p role="alert" className="text-sm text-destructive">{runError} <button className="underline" onClick={() => void refreshRun()}>Retry status check</button></p>}
+      {metrics && <DraftingEfficiency metrics={metrics} />}
+      <details style={guidedCardStyle}>
+        <summary className="cursor-pointer text-sm font-medium">Source details</summary>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Draft source data</h2>
+            <h2 className="mt-3 text-base font-medium">Information used for these drafts</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              These records feed the document payload before the generator runs.
+              Drafts use the saved design decisions, intake, and matter contacts.
             </p>
           </div>
-          <Badge variant="outline" className="text-[11px]">R2 drafts stay internal</Badge>
+          <Badge variant="outline" className="text-[11px]">Drafts stay internal</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-md border border-border bg-background px-3 py-2">
@@ -554,16 +608,16 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
             </p>
           </div>
         </div>
-      </section>
+      </details>
 
-      <ClauseOverridesPanel matterId={matterId} onMutated={handleClauseOverridesMutated} />
+      <details className="rounded-lg border bg-card p-4"><summary className="cursor-pointer text-sm font-medium">Custom clauses</summary><ClauseOverridesPanel matterId={matterId} onMutated={handleClauseOverridesMutated} /></details>
 
       <section style={guidedCardStyle}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Generate drafts</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Run the document generator using the saved design sheet data and selected document set.
+              Create the selected Word drafts from your saved decisions.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -597,17 +651,17 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
               onClick={() => handlePreflight()}
-              disabled={!authReady || !canGenerate || busy !== null}
+              disabled={!authReady || !canGenerate || busy !== null || isGenerating}
               variant="outline"
               className="gap-1.5 text-xs"
               title={!authReady ? 'Signing in...' : !canGenerate ? 'Complete design sheet and document selections first' : 'Check source data before generating drafts'}
             >
               {busy === 'preflight' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-              {busy === 'preflight' ? 'Checking…' : !authReady ? 'Signing in…' : preflightReady ? 'Re-run preflight' : 'Run Preflight'}
+              {busy === 'preflight' ? 'Checking…' : !authReady ? 'Signing in…' : preflightReady ? 'Check again' : 'Save and check drafts'}
             </Button>
             <Button
               onClick={handleGenerate}
-              disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null}
+              disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null || isGenerating}
               className="gap-1.5 bg-brand-navy text-xs text-white hover:bg-brand-navy/90"
               title={!authReady ? 'Signing in...' : preflightReady && selectedCount === 0 ? 'Select at least one document to generate' : undefined}
             >
@@ -647,7 +701,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 <p className="font-semibold">
-                  Generating document {Math.min(simulatedCompleted + 1, generatingDocs.length)} of {generatingDocs.length}…
+                  Preparing {generatingDocs.length} document{generatingDocs.length === 1 ? '' : 's'}…
                 </p>
               </div>
               <span className="flex items-center gap-1.5 text-xs font-medium tabular-nums text-muted-foreground">
@@ -655,17 +709,11 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                 {formatElapsed(elapsed)}
               </span>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${Math.round((simulatedCompleted / generatingDocs.length) * 100)}%` }}
-              />
-            </div>
             <p className="mt-1 text-xs text-muted-foreground">{generationStatusCopy(elapsed, deliveryMode)}</p>
             <div className="mt-3 grid gap-1.5 md:grid-cols-2">
-              {generatingDocs.map((d, index) => {
-                const done = index < simulatedCompleted
-                const active = index === simulatedCompleted
+              {generatingDocs.map((d) => {
+                const done = run?.outcomes.some(o => o.filename === d.filename && o.status === 'saved') ?? false
+                const active = !done
                 return (
                   <div
                     key={`${d.packageName}-${d.filename}`}
@@ -779,13 +827,12 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
               <div>
                 <div className="flex items-center gap-2">
                   {preflight.canGenerate ? <CheckCircle2 className="h-4 w-4 text-success" /> : <AlertTriangle className="h-4 w-4 text-destructive" />}
-                  <p className="font-semibold">Preflight Review</p>
+                  <p className="font-semibold">Document check</p>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {selectedCount} of {preflight.documentsToGenerate.length} document{preflight.documentsToGenerate.length === 1 ? '' : 's'} selected.
                 </p>
               </div>
-              <Badge variant="outline" className="text-[11px]">{preflight.engine}</Badge>
             </div>
             {preflight.documentsToGenerate.length > 0 && (
               <>
@@ -817,8 +864,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                           aria-label={`Generate ${d.title}`}
                         />
                         <span className="min-w-0">
-                          <span className="block truncate text-xs font-medium">{d.title}</span>
-                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{d.filename}</span>
+                          <span className="block break-words text-xs font-medium">{d.title}</span>
                         </span>
                       </label>
                     )
@@ -868,62 +914,6 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </div>
         )}
       </section>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold">Readiness</h3>
-          </div>
-          <div className="grid gap-3 p-4 md:grid-cols-2">
-            <ReadinessCard
-              label="Design Sheet"
-              value={hubMatter.designSheet ? (hubMatter.designSheet.status ?? 'Draft') : 'Missing'}
-              hint={hubMatter.designSheet?.updatedAt ? `Updated ${formatDate(hubMatter.designSheet.updatedAt)}` : 'Required before drafting'}
-              warn={!hubMatter.designSheet}
-            />
-            <ReadinessCard
-              label="Documents"
-              value={`${hubMatter.includedDocumentLabels.length} included`}
-              hint={`${hubMatter.selectedTemplateCount} selected template${hubMatter.selectedTemplateCount === 1 ? '' : 's'}`}
-              warn={hubMatter.includedDocumentLabels.length === 0}
-            />
-          </div>
-          {(!hasDesignSheet || hubMatter.includedDocumentLabels.length === 0) && (
-            <div className="border-t border-border px-4 py-3">
-              <div className="flex gap-2 rounded-md border border-warning/20 bg-warning/10 p-3 text-xs text-warning">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-semibold">Complete before drafting</p>
-                  <p className="mt-1">
-                    {[
-                      !hasDesignSheet && 'Design sheet',
-                      hubMatter.includedDocumentLabels.length === 0 && 'Document selections',
-                    ].filter(Boolean).join(', ')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold">Included Documents</h3>
-          </div>
-          <div className="space-y-2 p-4">
-            {hubMatter.includedDocumentLabels.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No documents selected. <Link href={`/admin/drafting/${matterId}?step=design`} className="text-primary hover:underline">Open design sheet →</Link></p>
-            ) : (
-              hubMatter.includedDocumentLabels.map(label => (
-                <div key={label} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                  <span>{label}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
 
       <AlertDialog open={confirmGenerate !== null} onOpenChange={open => { if (!open) setConfirmGenerate(null) }}>
         <AlertDialogContent>
@@ -978,19 +968,6 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  )
-}
-
-function ReadinessCard({ label, value, hint, warn }: { label: string; value: string; hint: string; warn?: boolean }) {
-  return (
-    <div className={cn(
-      'rounded-md border bg-background p-3',
-      warn ? 'border-warning/30' : 'border-border',
-    )}>
-      <p className="text-[11px] font-medium uppercase text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
     </div>
   )
 }

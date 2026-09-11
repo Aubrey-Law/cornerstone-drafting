@@ -188,6 +188,8 @@ export async function createDocumentVersion(args: {
       .from('matter_documents')
       .update({
         current_version_id: data.id,
+        reviewed_at: null,
+        reviewed_by: null,
         r2_key: r2Key,
         size: args.bytes.byteLength,
         name: args.filename,

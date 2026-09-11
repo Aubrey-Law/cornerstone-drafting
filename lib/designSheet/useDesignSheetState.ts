@@ -101,6 +101,11 @@ export function useDesignSheetState({
   const [isPending, startTransition] = useTransition()
   const [contactsState, setContactsState] = useState(contactsProp)
   const [lpDataState, setLpDataState] = useState(lpDataProp)
+  const lpDataRef = useRef(lpDataProp)
+  const auxiliaryQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const failedAuxiliaryRef = useRef(new Map<string, () => Promise<unknown>>())
+  const auxiliaryPendingRef = useRef(0)
+  const [auxiliaryStatus, setAuxiliaryStatus] = useState<'saved' | 'saving' | 'error'>('saved')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
   const expectedUpdatedAtRef = useRef<string | null>(sheetProp?.updated_at ?? null)
@@ -110,6 +115,7 @@ export function useDesignSheetState({
   const [saveRetryCount, setSaveRetryCount] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistInFlightRef = useRef(false)
+  const persistPromiseRef = useRef<Promise<boolean> | null>(null)
   const pendingSaveRef = useRef(false)
   const sheetRef = useRef(sheet)
   const changeGenerationRef = useRef(0)
@@ -261,6 +267,8 @@ export function useDesignSheetState({
 
   const saveStatusText = useMemo(() => {
     if (conflict) return 'Unsaved changes — resolve conflicting versions'
+    if (auxiliaryStatus === 'error') return 'Plan changes could not be saved. Retry saving before drafting.'
+    if (auxiliaryStatus === 'saving') return 'Saving plan changes…'
     if (saveStatus === 'saving') return saveRetryCount > 0 ? `Retrying save (${saveRetryCount})…` : 'Saving…'
     if (saveStatus === 'error') return 'Save failed — will retry'
     if (saveStatus === 'dirty') return 'Unsaved changes'
@@ -272,7 +280,7 @@ export function useDesignSheetState({
       return today ? `Saved at ${time}` : `Saved ${date} ${time}`
     }
     return 'All changes saved'
-  }, [conflict, lastSavedAt, saveRetryCount, saveStatus])
+  }, [auxiliaryStatus, conflict, lastSavedAt, saveRetryCount, saveStatus])
 
   // ── Field updates with override tracking ─────────────────────────────────────
   const markDirty = useCallback((field: string) => {
@@ -405,7 +413,7 @@ export function useDesignSheetState({
   }, [finishPersist, loadConflictLatest, matterId, storeConflict])
 
   // ── Persistence ──────────────────────────────────────────────────────────────
-  const persistSheet = useCallback(async (): Promise<boolean> => {
+  const performPersist = useCallback(async (): Promise<boolean> => {
     if (conflictRef.current) return false
     if (persistInFlightRef.current) {
       pendingSaveRef.current = true
@@ -506,6 +514,56 @@ export function useDesignSheetState({
     }
   }, [commitSheet, finishPersist, flushSheetRef, loadConflictLatest, matterId, sheetProp?.id])
 
+  // All callers share the active save. The drafting barrier additionally drains
+  // edits made during that request before it allows preflight to read the server.
+  const persistSheet = useCallback((): Promise<boolean> => {
+    if (persistPromiseRef.current) return persistPromiseRef.current
+    const promise = performPersist().finally(() => { persistPromiseRef.current = null })
+    persistPromiseRef.current = promise
+    return promise
+  }, [performPersist])
+
+  const queueAuxiliarySave = useCallback((key: string, save: () => Promise<unknown>) => {
+    auxiliaryPendingRef.current += 1
+    setAuxiliaryStatus('saving')
+    auxiliaryQueueRef.current = auxiliaryQueueRef.current.then(async () => {
+      try {
+        await save()
+        failedAuxiliaryRef.current.delete(key)
+        setLastSavedAt(new Date().toISOString())
+      } catch {
+        failedAuxiliaryRef.current.set(key, save)
+      } finally {
+        auxiliaryPendingRef.current -= 1
+        setAuxiliaryStatus(auxiliaryPendingRef.current ? 'saving' : failedAuxiliaryRef.current.size ? 'error' : 'saved')
+      }
+    })
+  }, [])
+
+  const flushAndSave = useCallback(async (): Promise<boolean> => {
+    await flushSheetRef()
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    if (conflictRef.current) return false
+    // LP design and coverage use separate actions. Include their queued writes,
+    // and retry retained failures, before preflight reads either source.
+    // Let newer queued patches settle before deciding what failed. Otherwise
+    // retrying an older failed snapshot behind a newer patch can overwrite it.
+    do { await auxiliaryQueueRef.current } while (auxiliaryPendingRef.current)
+    for (const [key, save] of failedAuxiliaryRef.current) queueAuxiliarySave(key, save)
+    while (true) {
+      do { await auxiliaryQueueRef.current } while (auxiliaryPendingRef.current)
+      if (conflictRef.current || failedAuxiliaryRef.current.size) return false
+      if (persistPromiseRef.current && !(await persistPromiseRef.current)) return false
+      await flushSheetRef()
+      if (!sheetRef.current.id || changeGenerationRef.current !== savedGenerationRef.current) {
+        if (!(await persistSheet())) return false
+        continue
+      }
+      if (auxiliaryPendingRef.current) continue
+      return !conflictRef.current && !failedAuxiliaryRef.current.size
+    }
+  }, [flushSheetRef, persistSheet, queueAuxiliarySave])
+
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })
   }, [persistSheet])
@@ -527,11 +585,11 @@ export function useDesignSheetState({
   // Warn before unload when there are unsaved changes
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (saveStatus === 'dirty' || saveStatus === 'saving' || saveStatus === 'error') e.preventDefault()
+      if (saveStatus !== 'saved' || auxiliaryStatus !== 'saved') e.preventDefault()
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [saveStatus])
+  }, [auxiliaryStatus, saveStatus])
 
   // ── Contacts ──────────────────────────────────────────────────────────────────
   const handleAddContact = useCallback(async (data: Omit<MatterContact, 'id'>) => {
@@ -571,41 +629,19 @@ export function useDesignSheetState({
   // ── LP-specific data ──────────────────────────────────────────────────────────
   const updateLpPatch = useCallback((patch: Record<string, unknown>) => {
     if (conflictRef.current) return
-    const previousData = lpDataState?.li_design_sheet_data ?? {}
+    const previousData = lpDataRef.current?.li_design_sheet_data ?? {}
     const nextData = formatPhoneFieldsDeep({ ...previousData, ...patch })
-    setLpDataState(prev => prev ? { ...prev, li_design_sheet_data: nextData } : prev)
-    setSaveStatus('saving')
-    startTransition(async () => {
-      try {
-        await saveLiDesignSheet(matterId, nextData)
-        setSaveStatus('saved')
-        setLastSavedAt(new Date().toISOString())
-      } catch (err) {
-        console.error(err)
-        // 'dirty' was misleading here: the sheet autosave loop persists the
-        // *regular* design sheet, succeeds, and flips the header back to
-        // "Saved" — so this LP-only failure was reported as a successful save
-        // and the edit was silently dropped on navigation. Roll the optimistic
-        // value back so the attorney sees the edit did not take, and surface it.
-        setLpDataState(prev => prev ? { ...prev, li_design_sheet_data: previousData } : prev)
-        setSaveStatus('error')
-        toast.error('Could not save that change. Please try again.')
-      }
-    })
-  }, [matterId, lpDataState])
+    if (lpDataRef.current) lpDataRef.current = { ...lpDataRef.current, li_design_sheet_data: nextData }
+    setLpDataState(lpDataRef.current)
+    queueAuxiliarySave('design', () => saveLiDesignSheet(matterId, nextData))
+  }, [matterId, queueAuxiliarySave])
 
   const handlePlanCoverageChange = useCallback((coverage: 'no_trust' | 'trust_included') => {
     if (conflictRef.current) return
-    setLpDataState(prev => prev ? { ...prev, li_plan_coverage: coverage } : prev)
-    startTransition(async () => {
-      try {
-        await updatePlanCoverage(matterId, coverage)
-      } catch (err) {
-        console.error(err)
-        toast.error('Failed to update plan coverage')
-      }
-    })
-  }, [matterId])
+    if (lpDataRef.current) lpDataRef.current = { ...lpDataRef.current, li_plan_coverage: coverage }
+    setLpDataState(lpDataRef.current)
+    queueAuxiliarySave('coverage', () => updatePlanCoverage(matterId, coverage))
+  }, [matterId, queueAuxiliarySave])
 
   // ── Import / Export ─────────────────────────────────────────────────────────
   /**
@@ -720,7 +756,7 @@ export function useDesignSheetState({
     reloadConflictLatest: loadConflictLatest,
     sheet,
     setSheet: commitSheet,
-    saveStatus,
+    saveStatus: auxiliaryStatus !== 'saved' ? auxiliaryStatus : saveStatus,
     saveStatusText,
     lastSavedAt,
     isPending,
@@ -730,6 +766,7 @@ export function useDesignSheetState({
     validationValue,
     // persistence
     persistSheet,
+    flushAndSave,
     handleSave,
     // contacts
     contactsState,

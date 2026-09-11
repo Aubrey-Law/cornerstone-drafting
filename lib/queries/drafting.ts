@@ -1,3 +1,6 @@
+import { documentReviewRevision } from '@/lib/documents/reviewRevision'
+import { DEFAULT_HUB_VIEW, HUB_PAGE_SIZE, type HubPageQuery } from '@/lib/drafting/hubView'
+import { EMPTY_HUB_COUNTS, type DraftingHubPage } from '@/lib/drafting/hub'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { docSelectionTemplateKey } from '@/lib/drafting/docSelectionKey'
 import { getDocumentInclusions, DESIGN_DOCUMENT_LABELS, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
@@ -34,6 +37,7 @@ interface DocSelectionRow {
 }
 
 export interface DraftingHubDocument {
+  reviewRevision?: string
   id: string
   name: string
   size: number
@@ -95,6 +99,8 @@ function inclusionLabels(inclusions: DesignDocumentInclusions | null) {
 }
 
 function mapHubDraftRow(doc: {
+  r2_key?: string
+  current_version_id?: string | null
   id: string
   name: string
   size: number
@@ -108,6 +114,7 @@ function mapHubDraftRow(doc: {
   reviewedBy?: string | null
 }): DraftingHubDocument {
   return {
+    reviewRevision: doc.r2_key ? documentReviewRevision({ r2_key: doc.r2_key, current_version_id: doc.current_version_id }) : undefined,
     id: doc.id,
     name: doc.name,
     size: doc.size,
@@ -122,201 +129,44 @@ function mapHubDraftRow(doc: {
   }
 }
 
-interface DraftHubRollupRow {
-  matter_id: string
-  current_draft_count: number
-  superseded_draft_count: number
-  recent_drafts: Array<{
-    id: string
-    name: string
-    size: number
-    created_at: string
-    generationId?: string | null
-    generationEngine?: string | null
-    markerCount?: number | null
-    missingCount?: number | null
-    supersededAt?: string | null
-    reviewedAt?: string | null
-    reviewedBy?: string | null
-  }>
+interface HubPageRow {
+  matter: PipelineMatter
+  sheet: DesignSheetSummaryRow | null
+  matterNumber: string | null
+  selections: DocSelectionRow[]
+  currentDraftCount: number
+  supersededDraftCount: number
+  recentDrafts: Array<DraftingHubDocument & { r2_key: string; current_version_id: string | null }>
 }
 
-async function fetchHubDraftRollups(
-  admin: ReturnType<typeof getAdminClient>,
-  matterIds: string[],
-): Promise<Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>> {
-  const rollups = new Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>()
-  if (matterIds.length === 0) return rollups
-
-  const { data, error } = await admin.rpc('drafting_hub_draft_rollups', { p_matter_ids: matterIds })
-  if (error) {
-    console.error('fetchDraftingHubMatters draft rollups error:', error)
-    return fetchHubDraftRollupsLegacy(admin, matterIds)
-  }
-
-  for (const row of (data ?? []) as DraftHubRollupRow[]) {
-    rollups.set(row.matter_id, {
-      currentDraftCount: row.current_draft_count ?? 0,
-      supersededDraftCount: row.superseded_draft_count ?? 0,
-      recentDrafts: (row.recent_drafts ?? []).map(mapHubDraftRow),
-    })
-  }
-  return rollups
-}
-
-/** Fallback when the rollup RPC is not deployed yet. */
-async function fetchHubDraftRollupsLegacy(
-  admin: ReturnType<typeof getAdminClient>,
-  matterIds: string[],
-): Promise<Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>> {
-  const { data, error } = await admin
-    .from('matter_documents')
-    .select('id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by')
-    .in('matter_id', matterIds)
-    .eq('source', 'firm')
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('fetchDraftingHubMatters legacy draft docs error:', error)
-    return new Map()
-  }
-
-  const draftsByMatter = new Map<string, DraftingHubDocument[]>()
-  for (const doc of (data ?? []) as Array<Pick<
-    MatterDocument,
-    'id' | 'matter_id' | 'name' | 'size' | 'created_at' | 'generation_id' | 'generation_engine' | 'marker_count' | 'missing_count' | 'superseded_at' | 'reviewed_at' | 'reviewed_by'
-  >>) {
-    const list = draftsByMatter.get(doc.matter_id) ?? []
-    list.push(mapHubDraftRow({
-      id: doc.id,
-      name: doc.name,
-      size: doc.size,
-      created_at: doc.created_at,
-      generationId: doc.generation_id ?? null,
-      generationEngine: doc.generation_engine ?? null,
-      markerCount: doc.marker_count ?? null,
-      missingCount: doc.missing_count ?? null,
-      supersededAt: doc.superseded_at ?? null,
-      reviewedAt: doc.reviewed_at ?? null,
-      reviewedBy: doc.reviewed_by ?? null,
-    }))
-    draftsByMatter.set(doc.matter_id, list)
-  }
-
-  const rollups = new Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>()
-  for (const [matterId, drafts] of draftsByMatter) {
-    const currentDrafts = drafts.filter(draft => !draft.supersededAt)
-    rollups.set(matterId, {
-      currentDraftCount: currentDrafts.length,
-      supersededDraftCount: drafts.length - currentDrafts.length,
-      recentDrafts: currentDrafts.slice(0, 5),
-    })
-  }
-  return rollups
-}
-
-export async function fetchDraftingHubMatters(): Promise<{
-  matters: DraftingHubMatter[]
-  error: string | null
-}> {
+/** One database snapshot owns facets, total, ordering, page clamping and rows. */
+export async function fetchDraftingHubMatters(
+  query: HubPageQuery = { ...DEFAULT_HUB_VIEW, page: 1 },
+): Promise<DraftingHubPage> {
   const admin = getAdminClient()
-  const { data: mattersRaw, error: mattersError } = await admin
-    .from('v_matter_pipeline')
-    .select('*')
-    .in('stage', [...DRAFTING_QUEUE_STAGES])
-    .order('matter_created', { ascending: false })
-
-  if (mattersError) {
-    console.error('fetchDraftingHubMatters matters error:', mattersError)
-    return { matters: [], error: mattersError.message }
+  // The additive RPC is deployed with this release; keep its boundary explicit
+  // until the next generated Database refresh includes the new function.
+  const rpc = admin.rpc.bind(admin) as unknown as (name: 'drafting_hub_page', args: {
+    p_search: string; p_action: string; p_practice: string; p_sort: string; p_page: number; p_page_size: number
+  }) => Promise<{ data: (Omit<DraftingHubPage, 'matters' | 'error'> & { rows: HubPageRow[] }) | null; error: { message: string } | null }>
+  const { data, error } = await rpc('drafting_hub_page', {
+    p_search: query.search, p_action: query.action, p_practice: query.practice,
+    p_sort: query.sort, p_page: query.page, p_page_size: HUB_PAGE_SIZE,
+  })
+  if (error || !data) {
+    return { matters: [], total: 0, page: 1, pageSize: HUB_PAGE_SIZE,
+      actionCounts: { ...EMPTY_HUB_COUNTS }, practiceCounts: [], error: error?.message ?? 'No worklist response' }
   }
-
-  const matters = ((mattersRaw ?? []) as PipelineMatter[]).map(normalizeFlags)
-  const matterIds = matters.map(matter => matter.matter_id)
-  if (matterIds.length === 0) return { matters: [], error: null }
-
-  const [
-    designSheetsRes,
-    detailsRes,
-    draftRollups,
-    matterNumbersRes,
-  ] = await Promise.all([
-    admin
-      .from('design_sheets')
-      .select('id, matter_id, status, version, plan_type, decisions, created_at, updated_at')
-      .in('matter_id', matterIds)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('matter_details')
-      .select('*')
-      .in('client_id', matterIds),
-    fetchHubDraftRollups(admin, matterIds),
-    admin
-      .from('matters')
-      .select('id, matter_number')
-      .in('id', matterIds),
-  ])
-
-  if (designSheetsRes.error) console.error('fetchDraftingHubMatters design sheets error:', designSheetsRes.error)
-  if (detailsRes.error) console.error('fetchDraftingHubMatters matter details error:', detailsRes.error)
-  if (matterNumbersRes.error) console.error('fetchDraftingHubMatters matter numbers error:', matterNumbersRes.error)
-
-  const designSheets = (designSheetsRes.data ?? []) as DesignSheetSummaryRow[]
-  const latestDesignByMatter = new Map<string, DesignSheetSummaryRow>()
-  for (const sheet of designSheets) {
-    if (!latestDesignByMatter.has(sheet.matter_id)) latestDesignByMatter.set(sheet.matter_id, sheet)
-  }
-
-  const designSheetIds = Array.from(latestDesignByMatter.values()).map(sheet => sheet.id)
-  const selectionsRes = designSheetIds.length
-    ? await admin
-        .from('doc_selections')
-        .select('design_sheet_id, doc_type, variant, party, selected')
-        .in('design_sheet_id', designSheetIds)
-        .eq('selected', true)
-    : { data: [] as DocSelectionRow[], error: null }
-
-  if (selectionsRes.error) console.error('fetchDraftingHubMatters doc selections error:', selectionsRes.error)
-
-  const selectionsBySheet = new Map<string, string[]>()
-  for (const selection of (selectionsRes.data ?? []) as DocSelectionRow[]) {
-    const templateKey = docSelectionTemplateKey(selection)
-    if (!templateKey) continue
-    const list = selectionsBySheet.get(selection.design_sheet_id) ?? []
-    list.push(templateKey)
-    selectionsBySheet.set(selection.design_sheet_id, list)
-  }
-
-  const detailsByMatter = new Map<string, MatterDetailsRow>()
-  for (const detail of (detailsRes.data ?? []) as MatterDetailsRow[]) {
-    if (detail.client_id) detailsByMatter.set(detail.client_id, detail)
-  }
-
-  const matterNumberById = new Map<string, string | null>()
-  for (const row of (matterNumbersRes.data ?? []) as Array<{ id: string; matter_number: string | null }>) {
-    matterNumberById.set(row.id, row.matter_number)
-  }
-
-  const draftsByMatter = draftRollups
-
   return {
-    matters: matters.map(matter => {
-      const rollup = draftsByMatter.get(matter.matter_id)
-      return assembleDraftingHubMatter({
-        matter,
-        sheet: latestDesignByMatter.get(matter.matter_id) ?? null,
-        details: detailsByMatter.get(matter.matter_id) ?? null,
-        matterNumber: matterNumberById.get(matter.matter_id) ?? null,
-        selectedTemplates: (() => {
-          const sheet = latestDesignByMatter.get(matter.matter_id)
-          return sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
-        })(),
-        currentDraftCount: rollup?.currentDraftCount ?? 0,
-        recentDrafts: rollup?.recentDrafts ?? [],
-        supersededDrafts: [],
-        supersededDraftCount: rollup?.supersededDraftCount ?? 0,
-      })
-    }),
+    total: data.total, page: data.page, pageSize: data.pageSize,
+    actionCounts: { ...EMPTY_HUB_COUNTS, ...data.actionCounts }, practiceCounts: data.practiceCounts,
+    matters: data.rows.map(row => assembleDraftingHubMatter({
+      matter: normalizeFlags(row.matter), sheet: row.sheet, details: null,
+      matterNumber: row.matterNumber,
+      selectedTemplates: row.selections.map(docSelectionTemplateKey).filter((key): key is string => Boolean(key)),
+      currentDraftCount: row.currentDraftCount, recentDrafts: row.recentDrafts.map(mapHubDraftRow),
+      supersededDraftCount: row.supersededDraftCount, supersededDrafts: [],
+    })),
     error: null,
   }
 }
@@ -405,7 +255,7 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
     admin
       .from('matter_documents')
       .select(
-        'id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by',
+        'id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by, r2_key, current_version_id',
       )
       .eq('matter_id', matterId)
       .eq('source', 'firm')
@@ -448,9 +298,12 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
         | 'superseded_at'
         | 'reviewed_at'
         | 'reviewed_by'
+        | 'r2_key'
+        | 'current_version_id'
       >
     >
   ).map(doc => ({
+    reviewRevision: doc.r2_key ? documentReviewRevision({ r2_key: doc.r2_key, current_version_id: doc.current_version_id }) : undefined,
     id: doc.id,
     name: doc.name,
     size: doc.size,

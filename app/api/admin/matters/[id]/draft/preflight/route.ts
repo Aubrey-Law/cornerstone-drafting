@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { loadDraftSourceSnapshot } from '@/lib/drafting/sourceSnapshot'
 import { requireAdmin } from '@/lib/apiAuth'
-import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
+import { resolveMatterId } from '@/lib/buildDraftPayload'
 import { buildEstateDraftPreflight } from '@/lib/estateGenerator/preflight'
 import { publishedTemplatePreflightError } from '@/lib/documentTemplates/preflight'
 
@@ -22,9 +23,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     const canonicalMatterId = await resolveMatterId(matterId).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!canonicalMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     let payload
+    let revision
 
     try {
-      payload = await buildDraftPayload(canonicalMatterId)
+      const snapshot = await loadDraftSourceSnapshot(canonicalMatterId)
+      payload = snapshot.payload
+      revision = snapshot.revision
     } catch (error) {
       return NextResponse.json({ error: (error as Error).message }, { status: 400, headers: NO_STORE })
     }
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       preflight.canGenerate = false
       preflight.error = templateError
     }
-    return NextResponse.json(preflight, { headers: NO_STORE })
+    return NextResponse.json({ ...preflight, sourceRevision: revision }, { headers: NO_STORE })
   } catch (error) {
     console.error('[draft preflight route]', matterId, error)
     return NextResponse.json(

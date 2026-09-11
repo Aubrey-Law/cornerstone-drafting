@@ -34,10 +34,13 @@ interface PendingEdit {
 interface DocxViewerPanelProps {
   documentId: string
   documentName: string
+  versionId?: string
+  readOnly?: boolean
+  onRevisionLoaded?: (documentId: string, revision: string | null) => void
   quote?: string | null
   /** When true, the panel lays the redline/edits controls in a right rail. */
   maximized?: boolean
-  /** Convert this DOCX to a shareable PDF (in-viewer "I'm done" action). */
+  /** Convert this DOCX to an unreviewed PDF. */
   onConvert?: () => void
   converting?: boolean
   onClose: () => void
@@ -49,6 +52,9 @@ const ZOOM_STORAGE_KEY = 'docx-viewer-zoom'
 export function DocxViewerPanel({
   documentId,
   documentName,
+  versionId,
+  readOnly = false,
+  onRevisionLoaded,
   quote,
   maximized = false,
   onConvert,
@@ -58,6 +64,9 @@ export function DocxViewerPanel({
 }: DocxViewerPanelProps) {
   const token = useAccessToken()
   const hostRef = useRef<HTMLDivElement>(null)
+  const loadSequence = useRef(0)
+  const revisionCallback = useRef(onRevisionLoaded)
+  useEffect(() => { revisionCallback.current = onRevisionLoaded }, [onRevisionLoaded])
   const [loading, setLoading] = useState(true)
   const [docReady, setDocReady] = useState(false)
   const [edits, setEdits] = useState<PendingEdit[]>([])
@@ -82,27 +91,32 @@ export function DocxViewerPanel({
 
   const loadDocx = useCallback(async () => {
     if (!token || !hostRef.current) return
+    const sequence = ++loadSequence.current
+    revisionCallback.current?.(documentId, null)
     setLoading(true)
     setDocReady(false)
     try {
-      const res = await fetch(`/api/documents/${documentId}/docx`, {
+      const res = await fetch(`/api/documents/${documentId}/docx${versionId ? `?version_id=${encodeURIComponent(versionId)}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error('Failed to load DOCX')
       const buf = await res.arrayBuffer()
-      hostRef.current.innerHTML = ''
-      await renderAsync(buf, hostRef.current, undefined, {
+      const rendered = document.createElement('div')
+      await renderAsync(buf, rendered, undefined, {
         className: 'docx-preview-body',
         inWrapper: true,
         ignoreWidth: false,
         breakPages: true,
       })
 
+      if (sequence !== loadSequence.current || !hostRef.current) return
+      hostRef.current.replaceChildren(...Array.from(rendered.childNodes))
+
       // Stamp w:ids onto ins/del in document order
       const idsRes = await fetch(`/api/documents/${documentId}/tracked-change-ids`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (idsRes.ok) {
+      if (idsRes.ok && sequence === loadSequence.current && hostRef.current) {
         const { ids } = (await idsRes.json()) as {
           ids: Array<{ kind: 'ins' | 'del'; w_id: string }>
         }
@@ -113,13 +127,15 @@ export function DocxViewerPanel({
         })
       }
 
+      if (sequence !== loadSequence.current) return
       setDocReady(true)
+      revisionCallback.current?.(documentId, res.headers.get('X-Document-Revision'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not render document')
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
-  }, [token, documentId])
+  }, [token, documentId, versionId])
 
   useEffect(() => {
     if (!hostRef.current || !docReady || !quote?.trim()) return
@@ -140,8 +156,9 @@ export function DocxViewerPanel({
 
   useEffect(() => {
     void loadDocx()
-    void loadEdits()
-  }, [loadDocx, loadEdits])
+    if (!readOnly) void loadEdits()
+    return () => { loadSequence.current += 1 }
+  }, [loadDocx, loadEdits, readOnly])
 
   // Scroll a tracked change into view and pulse it. Uses the w:id already
   // stamped onto the rendered ins/del nodes by loadDocx.
@@ -416,7 +433,7 @@ export function DocxViewerPanel({
                   Convert to PDF
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Export a shareable PDF, then review and share it with the client.</TooltipContent>
+              <TooltipContent>Create an unreviewed PDF. Conversion does not mark either document reviewed.</TooltipContent>
             </Tooltip>
           ) : null}
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} aria-label="Close viewer">
@@ -443,8 +460,8 @@ export function DocxViewerPanel({
               : 'order-1 flex flex-col'
           }
         >
-          {redlineBlock}
-          {editsBlock}
+          {!readOnly && redlineBlock}
+          {!readOnly && editsBlock}
         </div>
       </div>
     </div>

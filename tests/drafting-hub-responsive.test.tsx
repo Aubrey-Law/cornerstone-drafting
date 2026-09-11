@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
@@ -8,6 +8,7 @@ import type { PipelineMatter } from '@/types/database'
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
+  replace: vi.fn(),
   prefetch: vi.fn(),
   refresh: vi.fn(),
 }))
@@ -21,6 +22,12 @@ const preferences = vi.hoisted(() => ({ loadPreferences: async () => ({}), saveP
 vi.mock('@/lib/userPreferencesClient', () => ({ useUserPreferences: () => preferences }))
 
 import DraftingHubClient from '@/app/admin/drafting/DraftingHubClient'
+import { EMPTY_HUB_COUNTS, type DraftingHubPage } from '@/lib/drafting/hub'
+import { parseHubPage, type HubPageQuery } from '@/lib/drafting/hubView'
+
+function hubProps(matters: DraftingHubMatter[], overrides: Partial<DraftingHubPage> = {}, query = parseHubPage(new URLSearchParams(window.location.search))) {
+  return { query, result: { matters, total: matters.length, page: query.page, pageSize: 50, error: null, actionCounts: { ...EMPTY_HUB_COUNTS, all: matters.length, review: matters.length }, practiceCounts: [{ name: 'Estate Planning', count: matters.length }], ...overrides } }
+}
 
 const matter: DraftingHubMatter = {
   matter: {
@@ -87,6 +94,7 @@ beforeEach(() => { window.history.replaceState(null, '', '/admin/drafting'); ses
 afterEach(() => {
   cleanup()
   router.push.mockReset()
+  router.replace.mockReset()
   router.prefetch.mockReset()
   router.refresh.mockReset()
   vi.useRealTimers()
@@ -95,7 +103,7 @@ afterEach(() => {
 describe('drafting hub responsive matter list', () => {
   it('offers a complete tappable mobile card while retaining the desktop table', async () => {
     const user = userEvent.setup()
-    render(<DraftingHubClient matters={[matter]} />)
+    render(<DraftingHubClient {...hubProps([matter])} />)
 
     const mobileList = screen.getByRole('list', { name: 'Drafting matters' })
     const card = within(mobileList).getByRole('link', {
@@ -132,7 +140,7 @@ describe('drafting hub responsive matter list', () => {
 
   it('preserves slash search and arrow navigation when a mobile card has focus', async () => {
     const user = userEvent.setup()
-    render(<DraftingHubClient matters={[secondMatter, matter]} />)
+    render(<DraftingHubClient {...hubProps([matter, secondMatter])} />)
 
     const cards = within(screen.getByRole('list', { name: 'Drafting matters' })).getAllByRole('link')
     cards[0].focus()
@@ -149,7 +157,7 @@ describe('drafting hub responsive matter list', () => {
 
   it('debounces card prefetch and cancels it when focus leaves', async () => {
     vi.useFakeTimers()
-    render(<DraftingHubClient matters={[matter, secondMatter]} />)
+    render(<DraftingHubClient {...hubProps([matter, secondMatter])} />)
 
     const cards = within(screen.getByRole('list', { name: 'Drafting matters' })).getAllByRole('link')
     fireEvent.mouseEnter(cards[0])
@@ -169,7 +177,7 @@ describe('drafting hub responsive matter list', () => {
 
 it('offers native desktop links and does not steal arrow keys from controls', async () => {
   const user = userEvent.setup()
-  render(<DraftingHubClient matters={[matter, secondMatter]} />)
+  render(<DraftingHubClient {...hubProps([matter, secondMatter])} />)
   const table = screen.getByRole('table', { name: 'Drafting matters table' })
   const link = within(table).getByRole('link', { name: /Jane Doe/ })
   expect(link.getAttribute('href')).toBe('/admin/drafting/matter-1')
@@ -184,35 +192,69 @@ it('offers native desktop links and does not steal arrow keys from controls', as
 
 it('loads URL filters and scopes action counts to practice area', async () => {
   window.history.replaceState(null, '', '/admin/drafting?practice=Estate+Planning&action=review&sort=client')
-  render(<DraftingHubClient matters={[matter, { ...secondMatter, matter: { ...secondMatter.matter, practice_area: 'Probate' } }]} />)
+  render(<DraftingHubClient {...hubProps([matter], { practiceCounts: [{ name: 'Estate Planning', count: 1 }, { name: 'Probate', count: 120 }] })} />)
   expect((screen.getByRole('combobox', { name: 'Practice area' }) as HTMLSelectElement).value).toBe('Estate Planning')
   expect(screen.getByRole('button', { name: /Review\s*· 1/ })).toBeTruthy()
   expect(screen.queryByText('Alex Smith')).toBeNull()
 })
 
-it('updates the bookmark URL and restores the selected matter and scroll position on return', async () => {
+it('navigates debounced search to the server and preserves page context when returning', async () => {
   const user = userEvent.setup()
-  const first = render(<DraftingHubClient matters={[matter, secondMatter]} />)
+  const first = render(<DraftingHubClient {...hubProps([matter, secondMatter])} />)
   await user.type(screen.getByRole('searchbox', { name: 'Search matters' }), 'Doe')
-  expect(new URLSearchParams(window.location.search).get('search')).toBe('Doe')
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/admin/drafting?view=all&search=Doe', { scroll: false }))
+  // Receiving an RSC response is the only point at which rows change.
+  expect(screen.getAllByText('Alex Smith').length).toBeGreaterThan(0)
+  const query: HubPageQuery = { search: 'Doe', sort: 'updated', action: 'all', practice: 'all', page: 2 }
+  window.history.replaceState(null, '', '/admin/drafting?view=all&search=Doe&page=2')
+  first.rerender(<DraftingHubClient {...hubProps([matter], { total: 51, page: 2 }, query)} />)
   const worklist = screen.getByRole('region', { name: 'Drafting worklist' })
   worklist.scrollTop = 210
   fireEvent.scroll(worklist)
-  const link = within(screen.getByRole('table')).getByRole('link', { name: /Jane Doe/ })
-  fireEvent.focus(link)
+  fireEvent.focus(within(screen.getByRole('table')).getByRole('link', { name: /Jane Doe/ }))
   first.unmount()
   window.history.replaceState(null, '', '/admin/drafting')
-  render(<DraftingHubClient matters={[matter, secondMatter]} />)
-  expect((screen.getByRole('searchbox', { name: 'Search matters' }) as HTMLInputElement).value).toBe('Doe')
+  const second = render(<DraftingHubClient {...hubProps([secondMatter])} />)
+  expect(router.replace).toHaveBeenLastCalledWith('/admin/drafting?view=all&search=Doe&page=2', { scroll: false })
+  expect(screen.getByRole('region', { name: 'Drafting worklist' }).scrollTop).toBe(0)
+  window.history.replaceState(null, '', '/admin/drafting?view=all&search=Doe&page=2')
+  second.rerender(<DraftingHubClient {...hubProps([matter], { total: 51, page: 2 }, query)} />)
   expect(screen.getByRole('region', { name: 'Drafting worklist' }).scrollTop).toBe(210)
+  expect(within(screen.getByRole('table')).getByRole('link', { name: /Jane Doe/ }).closest('tr')?.getAttribute('data-state')).toBe('selected')
 })
 
-it('restores selection after applying a saved ordering on a bare return URL', () => {
-  sessionStorage.setItem('cornerstone.drafting.worklist-return', JSON.stringify({
-    url: '/admin/drafting?view=all&sort=client', matterId: 'matter-1', scrollTop: 120,
-  }))
-  render(<DraftingHubClient matters={[matter, secondMatter]} />)
-  const link = within(screen.getByRole('table')).getByRole('link', { name: /Jane Doe/ })
-  expect(link.closest('tr')?.getAttribute('data-state')).toBe('selected')
-  expect(screen.getByRole('region', { name: 'Drafting worklist' }).scrollTop).toBe(120)
+it('uses server totals for pagination and resets the page for saved views', async () => {
+  const user = userEvent.setup()
+  render(<DraftingHubClient {...hubProps([matter], { total: 130, actionCounts: { ...EMPTY_HUB_COUNTS, all: 200, review: 130 } })} />)
+  expect(screen.getByRole('button', { name: /Review\s*· 130/ })).toBeTruthy()
+  expect(screen.getByRole('status').textContent).toBe('1–50 of 130 matters')
+  await user.click(screen.getByRole('button', { name: /^Next$/ }))
+  expect(router.replace).toHaveBeenLastCalledWith('/admin/drafting?view=all&page=2', { scroll: false })
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Saved drafting views' }), 'review')
+  expect(router.replace).toHaveBeenLastCalledWith('/admin/drafting?view=all&action=review', { scroll: false })
+})
+
+it('does not let a pending debounced search overwrite a later saved view', async () => {
+  const user = userEvent.setup()
+  render(<DraftingHubClient {...hubProps([matter])} />)
+  await user.type(screen.getByRole('searchbox', { name: 'Search matters' }), 'Doe')
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Saved drafting views' }), 'review')
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(router.replace).toHaveBeenCalledTimes(1)
+  expect(router.replace).toHaveBeenCalledWith('/admin/drafting?view=all&action=review', { scroll: false })
+})
+
+it('normalizes a stale page URL to the last available server page', () => {
+  window.history.replaceState(null, '', '/admin/drafting?page=999')
+  render(<DraftingHubClient {...hubProps([matter], { total: 51, page: 2 }, { search: '', sort: 'updated', action: 'all', practice: 'all', page: 2 })} />)
+  expect(router.replace).toHaveBeenCalledWith('/admin/drafting?view=all&page=2', { scroll: false })
+})
+
+it('keeps new search text when an older server response arrives during the debounce', async () => {
+  const user = userEvent.setup()
+  const rendered = render(<DraftingHubClient {...hubProps([matter])} />)
+  await user.type(screen.getByRole('searchbox', { name: 'Search matters' }), 'Smith')
+  rendered.rerender(<DraftingHubClient {...hubProps([secondMatter])} />)
+  expect((screen.getByRole('searchbox', { name: 'Search matters' }) as HTMLInputElement).value).toBe('Smith')
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/admin/drafting?view=all&search=Smith', { scroll: false }))
 })

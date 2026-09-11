@@ -58,7 +58,7 @@ describe('draft route generation-run wiring', () => {
   )
 
   it('stamps one generation id per request with engine and marker counts', () => {
-    expect(routeSource).toContain('const generationId = randomUUID()')
+    expect(routeSource).toContain('const generationId = run?.id ?? randomUUID()')
     // The provenance branch inserts directly; the standard branch registers via
     // the shared lib/drafting/persistGeneratedDocument helper.
     expect(routeSource).toContain('generation_id: generationId')

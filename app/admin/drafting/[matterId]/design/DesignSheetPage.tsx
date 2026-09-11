@@ -25,6 +25,8 @@ import {
   ResponsiveDetailRail,
   useIsMobileDetailViewport,
 } from '@/components/layout/ResponsiveDetailRail'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { dockClausePreview } from '@/lib/designSheet/workspaceLayout'
 import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { cn } from '@/lib/utils'
@@ -181,6 +183,8 @@ function DesignSheetPageContent({
   const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
   const [hideUnusedDecisions, setHideUnusedDecisions] = useState(true)
   const [clausePreviewOpen, setClausePreviewOpen] = useState(true)
+  const [clauseDrawerOpen, setClauseDrawerOpen] = useState(false)
+  const [containerWidth, setContainerWidth] = useState(0)
   // Desktop keeps a persisted docked/hidden preference; the phone sheet is
   // transient and always starts closed so the form is what you land on.
   const [navCollapsed, setNavCollapsed] = useState(false)
@@ -208,6 +212,15 @@ function DesignSheetPageContent({
     })
     return () => { active = false }
   }, [loadPreferences])
+
+  useEffect(() => {
+    const node = scrollContainerRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(entries => setContainerWidth(entries[0]?.contentRect.width ?? 0))
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  const clausesDocked = dockClausePreview(containerWidth, !navCollapsed)
 
   const handleAttorneyPresetChange = useCallback((preset: AttorneyDesignPreset) => {
     attorneyPresetVersionRef.current += 1
@@ -294,12 +307,13 @@ function DesignSheetPageContent({
   }, [savePreferences])
 
   const handleClausePreviewToggle = useCallback(() => {
+    if (!clausesDocked) { setClauseDrawerOpen(open => !open); return }
     setClausePreviewOpen(current => {
       const next = !current
       void savePreferences({ drafting: { clausePreviewOpen: next } })
       return next
     })
-  }, [savePreferences])
+  }, [clausesDocked, savePreferences])
 
   const navOpen = isMobile ? mobileNavOpen : !navCollapsed
 
@@ -401,9 +415,11 @@ function DesignSheetPageContent({
     })
   }, [setContainerScrollTop])
 
+  const lastBlockerKey = useRef<string | null>(null)
   const handleBlockerSelect = useCallback((item: { sectionId: string; targetField: string | null }) => {
     const groupId = designSectionAnchorId(item.sectionId)
     if (!groupId) return
+    lastBlockerKey.current = `${item.sectionId}:${item.targetField}`
     selectGroup(groupId, { targetField: item.targetField })
     // Fiduciary blockers target a grid role column, not a single input — tint
     // the whole column so the missing assignment is obvious.
@@ -457,13 +473,14 @@ function DesignSheetPageContent({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [handleSave])
 
-  const openDrafting = useCallback(() => {
+  const openDrafting = useCallback(async () => {
     if (onOpenDrafting) {
       onOpenDrafting()
       return
     }
+    if (!(await state.flushAndSave())) return
     router.push(`/admin/drafting/${matterId}?step=generate`, { scroll: false })
-  }, [matterId, onOpenDrafting, router])
+  }, [matterId, onOpenDrafting, router, state])
 
   const matterLabel = `${matter.matter_name || 'Matter'} · ${[matter.client_name, matter.spouse_name].filter(Boolean).join(' & ')}`
   const pageHeight = embedded ? '100%' : 'calc(100vh - 64px)'
@@ -485,7 +502,7 @@ function DesignSheetPageContent({
     : [
         navOpen ? '244px' : null,
         'minmax(0, 1fr)',
-        clausePreviewOpen ? '400px' : null,
+        clausePreviewOpen && clausesDocked ? 'minmax(320px, 360px)' : null,
       ].filter(Boolean).join(' ')
 
   return (
@@ -570,6 +587,12 @@ function DesignSheetPageContent({
             />
           </header>
 
+          {!clausesDocked && <Sheet open={clauseDrawerOpen} onOpenChange={setClauseDrawerOpen}>
+            <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+              <SheetTitle>Clause preview</SheetTitle>
+              <ClausePreview matterId={matterId} sheet={sheet} />
+            </SheetContent>
+          </Sheet>}
           <div
             className="mx-auto grid w-full max-w-[1680px] gap-5 px-4"
             style={{ gridTemplateColumns }}
@@ -601,7 +624,7 @@ function DesignSheetPageContent({
                 style={{ top: APP_HEADER_HEIGHT, minHeight: READINESS_STRIP_HEIGHT }}
                 aria-label="Draft readiness"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className={cn('text-sm font-semibold', blockingCount > 0 ? 'text-warning' : 'text-success')}>
                       {blockingCount > 0
@@ -612,7 +635,7 @@ function DesignSheetPageContent({
                       {optionalCount} optional refinement{optionalCount === 1 ? '' : 's'} remaining.
                     </p>
                     {blockingCount > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <details className="mt-2"><summary className="cursor-pointer text-xs">Show unresolved decisions by section</summary><div className="mt-2 flex flex-wrap gap-1.5">
                         {blockingDetails.flatMap(detail => detail.blockers).map(item => {
                           const groupId = designSectionAnchorId(item.sectionId)
                           if (!groupId) return null
@@ -623,14 +646,20 @@ function DesignSheetPageContent({
                               onClick={() => handleBlockerSelect(item)}
                               className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning hover:bg-warning/15"
                             >
-                              {item.label}
+                              {groups.find(group => group.id === groupId)?.title}: {item.label}
                             </button>
                           )
                         })}
-                      </div>
+                      </div></details>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    {blockingCount > 0 && <Button type="button" size="sm" variant="outline" onClick={() => {
+                      const blockers = blockingDetails.flatMap(detail => detail.blockers)
+                      const current = blockers.findIndex(item => `${item.sectionId}:${item.targetField}` === lastBlockerKey.current)
+                      const next = blockers[(current + 1) % blockers.length]
+                      if (next) handleBlockerSelect(next)
+                    }}>Next unresolved decision</Button>}
                     <Button
                       type="button"
                       variant="outline"
@@ -652,15 +681,14 @@ function DesignSheetPageContent({
                       type="button"
                       variant="outline"
                       size="sm"
-                      aria-pressed={clausePreviewOpen}
+                      aria-pressed={clausesDocked ? clausePreviewOpen : clauseDrawerOpen}
                       onClick={handleClausePreviewToggle}
-                      // The preview column is not rendered on phones, so the
-                      // control that governs it is hidden there too.
-                      className="hidden md:inline-flex"
+                      // Narrow workspaces show clauses in a drawer.
+                      className="inline-flex"
                     >
-                      {clausePreviewOpen ? 'Hide clauses' : 'Preview clauses'}
+                      {clausesDocked && clausePreviewOpen ? 'Hide clauses' : 'Preview clauses'}
                     </Button>
-                    <Button size="sm" onClick={openDrafting}>Generate drafts</Button>
+                    <Button size="sm" onClick={() => void openDrafting()}>Save and check drafts</Button>
                   </div>
                 </div>
               </section>
@@ -736,7 +764,7 @@ function DesignSheetPageContent({
               </div>
             </main>
 
-            {clausePreviewOpen && !isMobile ? (
+            {clausePreviewOpen && clausesDocked && !isMobile ? (
               <aside
                 aria-label="Clause preview"
                 className="border-l border-border"

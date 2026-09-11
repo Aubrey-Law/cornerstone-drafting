@@ -32,13 +32,14 @@ vi.mock('@/lib/documents/shareGate', async () => {
   return { ...actual, checkDocumentShareable: mocks.checkDocumentShareable }
 })
 
+import { documentReviewRevision } from '@/lib/documents/reviewRevision'
 import { PATCH as patchDocument } from '@/app/api/documents/[id]/route'
 
 const DOC_ID = '33333333-3333-4333-8333-333333333333'
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {}
-  for (const method of ['select', 'eq']) builder[method] = () => builder
+  for (const method of ['select', 'eq', 'is']) builder[method] = () => builder
   builder.update = (...args: unknown[]) => {
     mocks.update(...args)
     return builder
@@ -154,5 +155,36 @@ describe('PATCH /api/documents/[id] share toggle', () => {
     })
     expect(response.status).toBe(200)
     expect(mocks.checkDocumentShareable).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('version-bound review', () => {
+  it('records explicit review of the displayed version', async () => {
+    const response = await patchDocument(request({ reviewed: true, reviewRevision: documentReviewRevision(EXISTING) }), { params: Promise.resolve({ id: DOC_ID }) })
+    expect(response.status).toBe(200)
+    expect(mocks.update).toHaveBeenCalledWith({ reviewed_at: expect.any(String), reviewed_by: 'user-1' })
+  })
+  it('rejects a version changed between read and conditional write', async () => {
+    mocks.from.mockReturnValueOnce(chain({ data: EXISTING, error: null })).mockReturnValueOnce(chain({ data: null, error: null }))
+    const response = await patchDocument(request({ reviewed: true, reviewRevision: documentReviewRevision(EXISTING) }), { params: Promise.resolve({ id: DOC_ID }) })
+    expect(response.status).toBe(409)
+  })
+  it('rejects historical generations even with a matching revision', async () => {
+    mocks.from.mockReturnValue(chain({ data: { ...EXISTING, superseded_at: '2026-09-11' }, error: null }))
+    const response = await patchDocument(request({ reviewed: true, reviewRevision: documentReviewRevision(EXISTING) }), { params: Promise.resolve({ id: DOC_ID }) })
+    expect(response.status).toBe(409)
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects review without the displayed revision', async () => {
+    const response = await patchDocument(request({ reviewed: true }), { params: Promise.resolve({ id: DOC_ID }) })
+    expect(response.status).toBe(409)
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+  it('rejects a stale displayed revision', async () => {
+    const response = await patchDocument(request({ reviewed: true, reviewRevision: 'old' }), { params: Promise.resolve({ id: DOC_ID }) })
+    expect(response.status).toBe(409)
+    expect(mocks.update).not.toHaveBeenCalled()
   })
 })
