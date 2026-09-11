@@ -21,8 +21,12 @@ describe('task detail workflow', () => {
   it('supports post-save subtask replacement and derives checklist task type', () => {
     expect(taskRoute).toContain('if (body.checklist !== undefined)')
     expect(taskRoute).toContain("patch.task_type = checklist.length > 0 ? 'checklist' : 'single'")
-    expect(taskRoute).toContain("patch.status = 'done'")
-    expect(taskRoute).toContain("patch.status = 'open'")
+    // A checklist still decides the status — but only when the request did not
+    // say outright, and only when there are items to decide from. What each
+    // branch writes is exercised in tests/task-completion-persists.test.ts.
+    expect(taskRoute).toContain("Object.assign(patch, statusStamps('done', existing, auth.userId))")
+    expect(taskRoute).toContain("Object.assign(patch, statusStamps('open', existing, auth.userId))")
+    expect(taskRoute).toContain('if (!statusRequested && checklist.length > 0)')
   })
 
   it('requires confirmation before invoking the existing delete action', () => {

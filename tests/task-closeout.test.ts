@@ -152,6 +152,16 @@ describe('restoring a reopened record’s tasks', () => {
     expect(marked?.args).toEqual(['closeout_reason', 'is', null])
   })
 
+  it('puts back only the rows the sweep left archived', async () => {
+    await restoreTasksForReopenedRecord(admin(), { matterId: MATTER })
+
+    const statusFilter = taskUpdate()?.filters.find(f => f.op === 'eq' && f.args[0] === 'status')
+    // A task the sweep archived can be finished by hand afterwards — the plan
+    // board still shows archived rows — and the marker stays on it. Without
+    // this filter the next reopen would drag that completed task back to open.
+    expect(statusFilter?.args[1]).toBe('archived')
+  })
+
   it('clears both the skip stamp and the marker on the way back', async () => {
     await restoreTasksForReopenedRecord(admin(), { matterId: MATTER })
 
