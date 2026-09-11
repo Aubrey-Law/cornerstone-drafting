@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import {
   MAX_ADDITIONAL_CHANNELS,
@@ -32,6 +32,8 @@ export function ChannelListField({
   hideWhenEmpty?: boolean
   onSave: (next: ContactChannel[]) => void | Promise<void>
 }) {
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<ContactChannel[]>(channels)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +50,8 @@ export function ChannelListField({
     setDraft(current => current.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
-  function commit() {
+  async function commit() {
+    if (savingRef.current) return
     const cleaned = draft
       .map(row => ({ label: row.label.trim(), value: row.value.trim() }))
       .filter(row => row.value)
@@ -61,8 +64,17 @@ export function ChannelListField({
       return
     }
     setError(null)
-    setEditing(false)
-    void onSave(cleaned)
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await onSave(cleaned)
+      setEditing(false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save. Try again.')
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
   }
 
   if (!editing) {
@@ -100,6 +112,7 @@ export function ChannelListField({
       {draft.map((row, index) => (
         <div key={index} className="flex items-center gap-1">
           <input
+            disabled={saving}
             aria-label={`${label} label ${index + 1}`}
             value={row.label}
             placeholder={kind === 'email' ? 'Work' : 'Mobile'}
@@ -107,6 +120,7 @@ export function ChannelListField({
             className="h-7 w-16 shrink-0 rounded-md border border-input bg-background px-1.5 text-[11.5px] outline-none focus:border-ring"
           />
           <input
+            disabled={saving}
             aria-label={`${label} ${index + 1}`}
             value={row.value}
             placeholder={placeholder}
@@ -117,9 +131,9 @@ export function ChannelListField({
             onKeyDown={event => {
               if (event.key === 'Enter') {
                 event.preventDefault()
-                commit()
+                void commit()
               }
-              if (event.key === 'Escape') {
+              if (event.key === 'Escape' && !saving) {
                 event.preventDefault()
                 setDraft(channels)
                 setError(null)
@@ -130,6 +144,7 @@ export function ChannelListField({
           />
           <button
             type="button"
+            disabled={saving}
             aria-label={`Remove ${label} ${index + 1}`}
             onClick={() => setDraft(current => current.filter((_, i) => i !== index))}
             className="shrink-0 text-muted-foreground hover:text-destructive"
@@ -144,7 +159,7 @@ export function ChannelListField({
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
-          disabled={draft.length >= MAX_ADDITIONAL_CHANNELS}
+          disabled={saving || draft.length >= MAX_ADDITIONAL_CHANNELS}
           onClick={() => setDraft(current => [...current, { label: '', value: '' }])}
           className={cn(
             'inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline',
@@ -157,6 +172,7 @@ export function ChannelListField({
         <span className="flex items-center gap-2">
           <button
             type="button"
+            disabled={saving}
             onClick={() => {
               setDraft(channels)
               setError(null)
@@ -168,10 +184,11 @@ export function ChannelListField({
           </button>
           <button
             type="button"
-            onClick={commit}
+            disabled={saving}
+            onClick={() => void commit()}
             className="text-[11.5px] font-semibold text-primary hover:underline"
           >
-            Save
+            {saving ? 'Saving…' : error ? 'Retry' : 'Save'}
           </button>
         </span>
       </div>

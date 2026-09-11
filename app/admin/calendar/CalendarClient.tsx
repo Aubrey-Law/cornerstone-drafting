@@ -1,5 +1,6 @@
 'use client'
 
+import { calendarAnchorDate } from '@/lib/calendarDay'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -168,15 +169,15 @@ function calendarEventsByDay(events: ExternalCalendarEvent[]): Map<string, Exter
   return map
 }
 
-export function CalendarClient() {
+export function CalendarClient({ initialDay }: { initialDay?: string | null } = {}) {
   const token = useAccessToken()
   const today = useMemo(() => new Date(), [])
   const [view, setView] = useState<CalendarView>('week')
-  const [anchor, setAnchor] = useState<Date>(startOfDay(today))
+  const [anchor, setAnchor] = useState<Date>(() => startOfDay(calendarAnchorDate(initialDay, today)))
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([])
   const [types, setTypes] = useState<BookableType[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDay, setSelectedDay] = useState<string>(dayKey(today))
+  const [selectedDay, setSelectedDay] = useState<string>(() => dayKey(calendarAnchorDate(initialDay, today)))
   const [quickBookOpen, setQuickBookOpen] = useState(false)
   const [quickBookPrefill, setQuickBookPrefill] = useState<string | null>(null)
   const [reschedule, setReschedule] = useState<RescheduleDraft | null>(null)
@@ -196,6 +197,12 @@ export function CalendarClient() {
   const [previewEvents, setPreviewEvents] = useState<ExternalCalendarEvent[]>([])
   const [planBlock, setPlanBlock] = useState<PlanBlockDraft | null>(null)
   const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
+
+  useEffect(() => {
+    const requested = startOfDay(calendarAnchorDate(initialDay, today))
+    setAnchor(current => current.getTime() === requested.getTime() ? current : requested)
+    setSelectedDay(dayKey(requested))
+  }, [initialDay, today])
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined

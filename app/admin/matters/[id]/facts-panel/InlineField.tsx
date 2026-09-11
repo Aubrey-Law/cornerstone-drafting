@@ -70,6 +70,9 @@ export function InlineText({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
   // Escape fires before blur; without this the blur handler would still save.
   const settled = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -82,15 +85,26 @@ export function InlineText({
     if (editing) inputRef.current?.focus()
   }, [editing])
 
-  function commit() {
+  async function commit() {
     if (settled.current) return
     settled.current = true
-    setEditing(false)
-    if (draft !== value) void onSave(draft)
+    if (draft === value) { setEditing(false); return }
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(draft)
+      setSaved(true)
+      setEditing(false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save. Try again.')
+      settled.current = false
+    } finally { setSaving(false) }
   }
 
   function cancel() {
+    if (saving) return
     settled.current = true
+    setError(null)
     setDraft(value)
     setEditing(false)
   }
@@ -103,6 +117,8 @@ export function InlineText({
         type="button"
         onClick={() => {
           settled.current = false
+          setSaved(false)
+          setError(null)
           setEditing(true)
         }}
         className={cn(ROW, 'group w-full text-left hover:bg-muted')}
@@ -110,6 +126,7 @@ export function InlineText({
         <span className={LABEL}>{label}</span>
         <span className={cn(VALUE, 'flex min-w-0 items-center gap-1.5', tabular && 'tabular-nums')}>
           <span className="truncate">{value || placeholder}</span>
+          {saved && <span role="status" className="text-[11px] text-muted-foreground">Saved</span>}
           <Pencil
             className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
             aria-hidden
@@ -120,42 +137,91 @@ export function InlineText({
   }
 
   return (
-    <div className={ROW}>
-      <span className={LABEL}>{label}</span>
-      <input
-        ref={inputRef}
-        aria-label={label}
-        value={draft}
-        onChange={event => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={event => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            commit()
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            cancel()
-          }
-        }}
-        className={cn(
-          'h-7 w-44 rounded-md border border-input bg-background px-1.5 text-right text-[12.5px] outline-none focus:border-ring',
-          tabular && 'tabular-nums',
-        )}
-      />
+    <div>
+      <div className={ROW}>
+        <span className={LABEL}>{label}</span>
+        <input
+          ref={inputRef}
+          aria-label={label}
+          value={draft}
+          disabled={saving}
+          aria-invalid={Boolean(error)}
+          onChange={event => { setDraft(event.target.value); setError(null) }}
+          onBlur={() => { if (!error) void commit() }}
+          onKeyDown={event => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void commit()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              cancel()
+            }
+          }}
+          className={cn(
+            'h-7 w-44 rounded-md border border-input bg-background px-1.5 text-right text-[12.5px] outline-none focus:border-ring',
+            tabular && 'tabular-nums',
+          )}
+        />
+      </div>
+      {saving && <p role="status" className="px-1.5 text-xs text-muted-foreground">Saving {label}…</p>}
+      {error && (
+        <div className="px-1.5 text-xs">
+          <p role="alert" className="text-destructive">{label}: {error}</p>
+          <div className="mt-1 flex gap-3">
+            <button type="button" aria-label={`Retry ${label}`} className="underline" onClick={() => void commit()}>Retry</button>
+            <button type="button" aria-label={`Discard ${label} changes`} className="underline" onClick={cancel}>Discard changes</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
+/** Shared feedback for controls that save without closing an editor. */
+function useFieldSave(onSave: (next: string) => void | Promise<void>) {
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const busy = useRef(false)
+  const attempted = useRef('')
+  async function save(next: string) {
+    if (busy.current) return
+    busy.current = true
+    attempted.current = next
+    setStatus('saving')
+    setError(null)
+    try {
+      await onSave(next)
+      setStatus('saved')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save. Try again.')
+      setStatus('error')
+    } finally { busy.current = false }
+  }
+  return { status, error, save, retry: () => save(attempted.current), discard: () => { setStatus('idle'); setError(null) } }
+}
+
+function FieldSaveStatus({ label, state, onDiscard }: {
+  label: string
+  state: ReturnType<typeof useFieldSave>
+  onDiscard: () => void
+}) {
+  return <>
+    {(state.status === 'saving' || state.status === 'saved') && (
+      <p role="status" className="px-1.5 text-xs text-muted-foreground">{state.status === 'saving' ? `Saving ${label}…` : 'Saved'}</p>
+    )}
+    {state.error && <div className="px-1.5 text-xs">
+      <p role="alert" className="text-destructive">{label}: {state.error}</p>
+      <div className="mt-1 flex gap-3">
+        <button type="button" aria-label={`Retry ${label}`} className="underline" onClick={() => void state.retry()}>Retry</button>
+        <button type="button" aria-label={`Discard ${label} changes`} className="underline" onClick={() => { state.discard(); onDiscard() }}>Discard changes</button>
+      </div>
+    </div>}
+  </>
+}
+
 /** Reads as text until hovered, then shows its chrome. Saves on change. */
-export function InlineSelect({
-  label,
-  value,
-  options,
-  accent = false,
-  disabled = false,
-  onSave,
-}: {
+export function InlineSelect({ label, value, options, accent = false, disabled = false, onSave }: {
   label: string
   value: string
   options: Array<{ value: string; label: string }>
@@ -163,85 +229,67 @@ export function InlineSelect({
   disabled?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
-  return (
+  const [draft, setDraft] = useState<string | null>(null)
+  const state = useFieldSave(async next => { await onSave(next); setDraft(null) })
+  return <div>
     <div className={cn(ROW, 'hover:bg-muted')}>
       <span className={LABEL}>{label}</span>
       <select
         aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={event => void onSave(event.target.value)}
-        className={cn(
-          'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] hover:border-input hover:bg-background focus:border-ring focus:outline-none',
-          accent && 'font-semibold text-primary',
-        )}
+        aria-invalid={Boolean(state.error)}
+        value={draft ?? value}
+        disabled={disabled || state.status === 'saving'}
+        onChange={event => { setDraft(event.target.value); void state.save(event.target.value) }}
+        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] hover:border-input hover:bg-background focus:border-ring focus:outline-none', accent && 'font-semibold text-primary')}
       >
-        {options.map(option => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
+        {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </div>
-  )
+    <FieldSaveStatus label={label} state={state} onDiscard={() => setDraft(null)} />
+  </div>
 }
 
-export function InlineDate({
-  label,
-  value,
-  emphasized = false,
-  derived = false,
-  hideWhenEmpty = false,
-  onSave,
-}: {
+export function InlineDate({ label, value, emphasized = false, derived = false, hideWhenEmpty = false, onSave }: {
   label: string
-  /** `YYYY-MM-DD`, or empty when unset. */
+  /** YYYY-MM-DD, or empty when unset. */
   value: string
   emphasized?: boolean
-  /** The shown value came from another date, not from a stored column. */
   derived?: boolean
-  /** Skip the row entirely while it has no value (the rail's "hide empty" mode). */
   hideWhenEmpty?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
-  if (hideWhenEmpty && !value) return null
-  return (
+  const inputRef = useRef<HTMLInputElement>(null)
+  const lastSaved = useRef(value)
+  const state = useFieldSave(async next => { await onSave(next); lastSaved.current = next })
+  useEffect(() => { lastSaved.current = value }, [value])
+  if (hideWhenEmpty && !value && state.status === 'idle') return null
+  return <div>
     <div className={cn(ROW, 'hover:bg-muted')}>
       <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>
         {label}
-        {derived && (
-          <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">
-            auto
-          </span>
-        )}
+        {derived && <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">auto</span>}
       </span>
       <input
+        ref={inputRef}
         type="date"
         aria-label={label}
-        // Keyed on the value so a derived date re-renders when its anchor moves.
+        aria-invalid={Boolean(state.error)}
+        disabled={state.status === 'saving'}
         key={value}
         defaultValue={value}
-        // Saving on change — rather than waiting for the field to lose focus —
-        // records a picked date immediately. It has to wait for a settled one
-        // though: the browser reports a complete date while the year is still
-        // being typed (0002, 0020, 0202 on the way to 2026), and reports "" for
-        // every segment before that. Saving either would overwrite a good date
-        // with a half-typed one. Blur is what commits a genuine clear, and it
-        // stands down when the control says the entry is unfinished.
+        // Partial years and mid-entry blanks must never overwrite a stored date.
         onChange={event => {
           const next = event.target.value
-          if (isSettledDateEntry(next) && next !== value) void onSave(next)
+          if (isSettledDateEntry(next) && next !== lastSaved.current) void state.save(next)
         }}
         onBlur={event => {
-          if (event.target.validity?.badInput) return
+          if (event.target.validity?.badInput || state.error) return
           const next = event.target.value
-          if (next !== value && (next === '' || isSettledDateEntry(next))) void onSave(next)
+          if (next !== lastSaved.current && (next === '' || isSettledDateEntry(next))) void state.save(next)
         }}
-        className={cn(
-          'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none',
-          emphasized && 'border-input bg-background font-semibold text-primary',
-        )}
+        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none', emphasized && 'border-input bg-background font-semibold text-primary')}
       />
     </div>
-  )
+    <FieldSaveStatus label={label} state={state} onDiscard={() => { if (inputRef.current) inputRef.current.value = value }} />
+  </div>
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { listenForMatterContacts, notifyMatterContactsChanged } from '@/lib/matters/contactEvents'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
@@ -141,6 +142,7 @@ export function MatterOverviewContacts({
   }, [matterId, token])
 
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => listenForMatterContacts(matterId, () => { void refresh() }, 'people'), [matterId, refresh])
 
   const { clientContact, spouseContact, spouseRow, childContacts, childRows } = useMemo(() => {
     if (!data) {
@@ -187,6 +189,7 @@ export function MatterOverviewContacts({
     if (!res.ok) throw new Error(body.error ?? 'Failed to save client')
     toast.success('Client saved')
     await refresh()
+    notifyMatterContactsChanged(matterId, 'people')
   }
 
   async function saveExistingContact(contactId: string, values: ContactFormValues) {
@@ -203,6 +206,7 @@ export function MatterOverviewContacts({
     if (!res.ok) throw new Error(body.error ?? 'Failed to save contact')
     toast.success('Saved')
     await refresh()
+    notifyMatterContactsChanged(matterId, 'people')
   }
 
   async function addHouseholdMember(relationship_type: 'spouse' | 'child', values: ContactFormValues) {
@@ -220,6 +224,7 @@ export function MatterOverviewContacts({
     if (!res.ok) throw new Error(body.error ?? 'Failed to add contact')
     toast.success(relationship_type === 'spouse' ? 'Spouse added' : 'Child added')
     await refresh()
+    notifyMatterContactsChanged(matterId, 'people')
   }
 
   async function handleDeleteChild(contact: MatterContact) {
@@ -233,6 +238,7 @@ export function MatterOverviewContacts({
       if (!res.ok) throw new Error(body.error ?? 'Failed to remove contact')
       toast.success('Child removed')
       await refresh()
+      notifyMatterContactsChanged(matterId, 'people')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove contact')
     }

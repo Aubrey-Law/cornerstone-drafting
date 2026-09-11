@@ -69,6 +69,26 @@ describe('documents tab file manager', () => {
     vi.clearAllMocks()
   })
 
+  it('opens unreviewed client uploads across folders from the matter shortcut', () => {
+    renderTab({ initialScope: 'unreviewed' })
+    expect(screen.getByText('Deed from client')).toBeTruthy()
+    expect(screen.queryByText('Engagement letter')).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: 'Select everything in From client' })).toBeNull()
+  })
+
+  it('reports filter changes so a later unreviewed shortcut can restore its scope', async () => {
+    const user = userEvent.setup()
+    const onScopeChange = vi.fn()
+    const view = renderTab({initialScope:'unreviewed', onScopeChange})
+    await user.click(screen.getByRole('button', {name:/Unreviewed/}))
+    await user.click(screen.getByRole('menuitemcheckbox', {name:/All/}))
+    expect(onScopeChange).toHaveBeenCalledWith('all')
+    view.rerender(<MatterDocumentsTab matterId={MATTER_ID} documents={documents} loading={false} onDocumentsChanged={vi.fn()} initialScope="all" />)
+    view.rerender(<MatterDocumentsTab matterId={MATTER_ID} documents={documents} loading={false} onDocumentsChanged={vi.fn()} initialScope="unreviewed" />)
+    expect(screen.getByText('Deed from client')).toBeTruthy()
+    expect(screen.queryByText('Engagement letter')).toBeNull()
+  })
+
   it('lists the folders and only the files that are in none of them', () => {
     renderTab()
 

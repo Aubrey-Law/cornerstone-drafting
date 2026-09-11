@@ -114,6 +114,11 @@ const ACTION_LABEL: Record<MatterNextActionKind, string> = {
   'waiting-intake': 'Resend',
   'waiting-engagement': 'Resend',
   'resolve-review-flags': 'Review flags',
+  'closed': 'Documents',
+  'review': 'Review drafts',
+  'revise': 'Revisions',
+  'signing': 'Signing tasks',
+  'follow-up': 'Follow-up',
 }
 
 function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter>): TodayQueueRow {

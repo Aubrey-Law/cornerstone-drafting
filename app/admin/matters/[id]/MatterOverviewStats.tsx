@@ -1,6 +1,7 @@
 'use client'
 
 import { AlarmClock, CalendarClock, FileText, ListTodo, type LucideIcon } from 'lucide-react'
+import { FIRM_TIMEZONE, firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
 import { matterDeadlineTone } from '@/lib/matters/cardFacts'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
@@ -19,7 +20,7 @@ import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
  * container and not about the window.
  */
 
-const DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+const DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: FIRM_TIMEZONE })
 
 function StatTile({
   icon: Icon,
@@ -62,11 +63,13 @@ interface MatterOverviewStatsProps {
   taskCounts: RecordTaskCounts
   uploads: UnreviewedUploadCounts
   aging: MatterAgingSummary | null
-  /** Signing date, if one is set. */
+  /** Scheduled signing date, not the recorded completion date. */
   signingDate: string | null
   nextAppointment: string | null
   onOpenTasks: () => void
   onOpenDocuments: () => void
+  onOpenStageHistory: () => void
+  onOpenDate: (day: string | null) => void
 }
 
 export function MatterOverviewStats({
@@ -77,13 +80,15 @@ export function MatterOverviewStats({
   nextAppointment,
   onOpenTasks,
   onOpenDocuments,
+  onOpenStageHistory,
+  onOpenDate,
 }: MatterOverviewStatsProps) {
   // Whichever comes first: the signing is the milestone, but a meeting before it
   // is the thing actually in the way.
   const upcoming = [signingDate, nextAppointment]
     .filter((value): value is string => Boolean(value))
-    .map(value => ({ value, at: Date.parse(value) }))
-    .filter(entry => Number.isFinite(entry.at))
+    .map(value => ({ value, at: Date.parse(value), day: /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : firmDateKey(value) }))
+    .filter(entry => Number.isFinite(entry.at) && entry.day && entry.day >= firmTodayKey() && (entry.value === signingDate || entry.at >= Date.now()))
     .sort((a, b) => a.at - b.at)[0]
 
   const upcomingIsSigning = upcoming?.value === signingDate
@@ -118,15 +123,15 @@ export function MatterOverviewStats({
                 ? 'text-amber'
                 : undefined
           }
-          onClick={onOpenTasks}
+          onClick={onOpenStageHistory}
         />
         <StatTile
           icon={CalendarClock}
           label="Next date"
-          value={upcoming ? DATE.format(upcoming.at) : '—'}
+          value={upcoming?.day ? DATE.format(new Date(`${upcoming.day}T12:00:00Z`)) : '—'}
           sublabel={upcoming ? (upcomingIsSigning ? 'Signing' : 'Appointment') : 'None scheduled'}
           valueClassName={upcoming ? matterDeadlineTone(upcoming.at) : undefined}
-          onClick={onOpenTasks}
+          onClick={() => onOpenDate(upcoming?.day ?? null)}
         />
       </div>
     </div>
