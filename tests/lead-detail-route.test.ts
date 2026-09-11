@@ -425,8 +425,45 @@ describe('lead editing surfaces', () => {
     expect(calls.updates).toEqual([
       ['tasks', expect.objectContaining({ status: 'open', skipped_at: null, closeout_reason: null })],
     ])
-    // Only what the sweep marked — a task skipped by hand stays skipped.
-    expect(calls.filters).toContainEqual(['tasks', 'not', 'closeout_reason', 'is', null])
+    // Only what this lead's own death archived. Not "anything a sweep marked":
+    // a live lead is also holding the post-engagement plan behind
+    // `not_engaged`, and only conversion releases that.
+    expect(calls.filters).toContainEqual([
+      'tasks', 'in', 'closeout_reason', ['lead_lost', 'lead_declined'],
+    ])
+    expect(calls.filters).not.toContainEqual(['tasks', 'not', 'closeout_reason', 'is', null])
+  })
+
+  it('leaves the checklist alone when an ordinary edit does not move the status', async () => {
+    const { calls } = harness({
+      lead: snapshotLead,
+      opportunity: { id: 'm1', relationship_status: 'lead' },
+    })
+
+    const res = await PATCH(request({ ...valid, phone: '617-555-0123' }), params)
+
+    expect(res.status).toBe(200)
+    // Both directions of the sweep are transition semantics, and this save is
+    // neither. Running the revival on every save released the post-engagement
+    // plan the lead is holding behind `not_engaged` into the firm queue.
+    expect(calls.updates.filter(([table]: [string]) => table === 'tasks')).toEqual([])
+  })
+
+  it('puts the checklist back when the form itself returns a lost lead to play', async () => {
+    const { calls } = harness({
+      lead: { ...snapshotLead, lead_status: 'lost' },
+      opportunity: { id: 'm1', relationship_status: 'lost' },
+    })
+
+    const res = await PATCH(request(valid), params)
+
+    expect(res.status).toBe(200)
+    expect(calls.updates).toContainEqual([
+      'tasks', expect.objectContaining({ status: 'open', closeout_reason: null }),
+    ])
+    expect(calls.filters).toContainEqual([
+      'tasks', 'in', 'closeout_reason', ['lead_lost', 'lead_declined'],
+    ])
   })
 
   it('leaves the checklist alone when a lead converts', async () => {

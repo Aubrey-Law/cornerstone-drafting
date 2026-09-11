@@ -137,7 +137,7 @@ export async function createMatterFromIntake(
       admin,
       { matterId },
       { id: options.actorId ?? null },
-      { reason: 'not_engaged' },
+      { reasons: ['not_engaged'] },
     )
     if (released === null) console.warn('[sla-tasks] post-engagement release failed', matterId)
   } catch (e) {

@@ -141,11 +141,12 @@ describe('releasing it at conversion', () => {
       admin(),
       { matterId: 'matter-1' },
       {},
-      { reason: 'not_engaged', logActivity: false },
+      { reasons: ['not_engaged'], logActivity: false },
     )
 
     expect(taskCall().update).toMatchObject({ status: 'open', closeout_reason: null })
-    expect(filter('eq').some(e => e.args[0] === 'closeout_reason' && e.args[1] === 'not_engaged')).toBe(true)
+    const reasons = filter('in').find(entry => entry.args[0] === 'closeout_reason')
+    expect(reasons?.args[1]).toEqual(['not_engaged'])
     // Not "anything a sweep touched": converting a lead that had gone lost must
     // not also revive the checklist the lost sweep archived.
     expect(filter('not').some(entry => entry.args[0] === 'closeout_reason')).toBe(false)
@@ -154,6 +155,6 @@ describe('releasing it at conversion', () => {
   it('still restores every marked row when no reason is named', async () => {
     await restoreTasksForReopenedRecord(admin(), { matterId: 'matter-1' }, {}, { logActivity: false })
     expect(filter('not').some(entry => entry.args[0] === 'closeout_reason')).toBe(true)
-    expect(filter('eq').some(entry => entry.args[0] === 'closeout_reason')).toBe(false)
+    expect(filter('in').some(entry => entry.args[0] === 'closeout_reason')).toBe(false)
   })
 })

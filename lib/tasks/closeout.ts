@@ -146,11 +146,13 @@ export async function restoreTasksForReopenedRecord(
   actor: CloseoutActor = {},
   options: CloseoutOptions & {
     /**
-     * Restore only what this sweep archived. Conversion passes 'not_engaged'
-     * so it releases the plan it was holding back without also reviving a
-     * checklist that was archived because the lead had gone lost.
+     * Restore only what these sweeps archived. Conversion passes
+     * `['not_engaged']` so it releases the plan it was holding back without
+     * also reviving a checklist that was archived because the lead had gone
+     * lost; putting a lead back in play passes the two lead-death reasons, so
+     * it does the reverse. Omit to restore everything a sweep marked.
      */
-    reason?: CloseoutReason
+    reasons?: readonly CloseoutReason[]
   } = {},
 ): Promise<number | null> {
   const clauses = recordFilter(target)
@@ -168,7 +170,7 @@ export async function restoreTasksForReopenedRecord(
     .eq('status', 'archived')
     .or(clauses.join(','))
 
-  if (options.reason) query = query.eq('closeout_reason', options.reason)
+  if (options.reasons) query = query.in('closeout_reason', [...options.reasons])
   else query = query.not('closeout_reason', 'is', null)
 
   const { data, error } = await query.select('id')
