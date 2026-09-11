@@ -176,6 +176,14 @@ export async function proxy(request: NextRequest) {
     }
 
     if (userId && (requiresSession || shouldRedirectAuthenticatedLogin)) {
+      // The admin server layout performs the same role check before rendering
+      // any child route. When an older session lacks the JWT claim, defer to
+      // that check instead of adding a duplicate edge-to-database round trip.
+      // API requests still resolve the role here and in their route handler.
+      if (isAdminPath(pathname) && !isApiPath(pathname) && !claimRole) {
+        return supabaseResponse
+      }
+
       const role = await measure('role', () => resolveRole(supabase, userId, claimRole))
 
       if (pathname === '/auth/login') {
