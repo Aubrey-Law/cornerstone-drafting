@@ -4,6 +4,7 @@ import { getStoredCalendarConnection, deleteCalendarConnection } from '@/lib/cal
 import {
   getGoogleConfigIssue,
   hasCalendarScope,
+  hasGmailModifyScope,
   hasGmailSendScope,
   isGoogleConfigured,
 } from '@/lib/googleCalendar'
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
     // One consent covers calendar and mail, so a connection made before Gmail
     // was wired in is connected for the calendar and silently unable to send.
     hasGmailSendScope: hasGmailSendScope(conn?.scopes),
+    // Triage reads the mailbox; sending does not. A connection made before
+    // triage existed sends fine and returns an empty queue forever, so the
+    // two scopes are reported separately rather than as one "Gmail works".
+    hasGmailModifyScope: hasGmailModifyScope(conn?.scopes),
     // A connection with no refresh token works until the access token expires
     // and then fails silently, so it is worth surfacing as its own state rather
     // than letting it read as connected.

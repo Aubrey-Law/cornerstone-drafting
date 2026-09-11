@@ -20,11 +20,24 @@ const GOOGLE_TIMEOUT_MS = 15_000
 
 export const REQUIRED_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
 export const REQUIRED_GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+export const REQUIRED_GMAIL_MODIFY_SCOPE = 'https://www.googleapis.com/auth/gmail.modify'
 
 /**
- * `gmail.send` is send-only by design. Cornerstone never reads the mailbox, and
- * the broader `gmail.modify`/`mail.google.com` scopes would put every message
- * the attorney has ever received inside the app's blast radius for no feature.
+ * Cornerstone reads the mailbox, and that is a real cost rather than a free
+ * feature: `gmail.modify` puts every message the attorney has ever received
+ * inside the app's blast radius. It is requested for email triage alone — the
+ * scan reads recent inbox threads to find clients and leads waiting on a reply,
+ * and writes back nothing but a draft on the thread being answered. There is no
+ * bulk export, no body is persisted (only Gmail's own snippet), and nothing is
+ * ever sent without the attorney pressing send in Gmail.
+ *
+ * `mail.google.com` is still refused: it adds permanent delete, which no part
+ * of this product has a reason to hold.
+ *
+ * `gmail.send` is a subset of `gmail.modify` and is kept in the list anyway.
+ * Consent is incremental (`include_granted_scopes`), so a connection made
+ * before triage existed holds only `gmail.send`, and dropping it here would
+ * break sending for that connection until the attorney happened to reconnect.
  */
 const SCOPES = [
   'openid',
@@ -32,6 +45,7 @@ const SCOPES = [
   'profile',
   REQUIRED_CALENDAR_SCOPE,
   REQUIRED_GMAIL_SCOPE,
+  REQUIRED_GMAIL_MODIFY_SCOPE,
 ] as const
 
 function scopeIncludes(scope: string | null | undefined, target: string): boolean {
@@ -51,7 +65,18 @@ export function hasCalendarScope(scope: string | null | undefined): boolean {
  * a provider rather than after a client email silently fails.
  */
 export function hasGmailSendScope(scope: string | null | undefined): boolean {
-  return scopeIncludes(scope, REQUIRED_GMAIL_SCOPE)
+  return scopeIncludes(scope, REQUIRED_GMAIL_SCOPE) || scopeIncludes(scope, REQUIRED_GMAIL_MODIFY_SCOPE)
+}
+
+/**
+ * Whether the stored connection can read the mailbox and write drafts into it.
+ *
+ * Email triage needs this and sending does not, so it is a separate question
+ * from `hasGmailSendScope`: a connection predating triage sends mail perfectly
+ * well and returns an empty queue forever, with nothing about it looking wrong.
+ */
+export function hasGmailModifyScope(scope: string | null | undefined): boolean {
+  return scopeIncludes(scope, REQUIRED_GMAIL_MODIFY_SCOPE)
 }
 
 function clientId() {

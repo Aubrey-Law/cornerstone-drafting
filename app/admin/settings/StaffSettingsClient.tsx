@@ -101,6 +101,7 @@ export function StaffSettingsClient({
     email: string | null
     canRefresh: boolean
     hasGmailSendScope: boolean
+    hasGmailModifyScope: boolean
   } | null>(null)
 
   useEffect(() => {
@@ -168,6 +169,7 @@ export function StaffSettingsClient({
           email: body.email ?? null,
           canRefresh: Boolean(body.canRefresh),
           hasGmailSendScope: Boolean(body.hasGmailSendScope),
+          hasGmailModifyScope: Boolean(body.hasGmailModifyScope),
         })
       }
     })()
@@ -712,6 +714,18 @@ export function StaffSettingsClient({
                 <p className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
                   This connection cannot send mail — it predates Gmail sending. Reconnect to
                   grant the send permission; email stays on Resend until you do.
+                </p>
+              )}
+              {/* Triage reads the mailbox, which sending never did. Without the
+                  scope the queue is simply empty, which reads as "no email
+                  needs a reply" rather than as a missing permission. */}
+              {!google.hasGmailModifyScope && (
+                <p className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
+                  This connection cannot read the mailbox, so{' '}
+                  <Link href="/admin/email-triage" className="font-medium underline underline-offset-2">
+                    email triage
+                  </Link>{' '}
+                  stays empty. Reconnect to grant the read permission.
                 </p>
               )}
             </div>

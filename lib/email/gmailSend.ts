@@ -40,6 +40,12 @@ export interface GmailSendArgs {
   /** Mailbox owner for manual sends; falls back to the firm's connection. */
   userId?: string | null
   attachments?: EmailAttachment[]
+  /**
+   * Threading, for a reply. `<id@host>` tokens — see `replyHeaders.ts`.
+   * Omitted by every existing caller, which start new conversations.
+   */
+  inReplyTo?: string
+  references?: string[]
 }
 
 export interface GmailSendResult {
@@ -61,6 +67,25 @@ function encodeHeaderValue(value: string): string {
   const collapsed = value.replace(/[\r\n]+/g, ' ').trim()
   if (!/[^\u0000-\u007F]/.test(collapsed)) return collapsed
   return `=?UTF-8?B?${Buffer.from(collapsed, 'utf-8').toString('base64')}?=`
+}
+
+/**
+ * Sanitise a `<id@host>` header token.
+ *
+ * Deliberately **not** `encodeHeaderValue`. A Message-ID is ASCII by definition
+ * and has to appear literally for a client to match it; RFC 2047 encoding one
+ * because it happened to contain a non-ASCII byte would produce a header that
+ * looks fine and threads nothing. So anything outside printable ASCII is
+ * dropped rather than encoded, along with CR and LF — these values arrive in
+ * headers written by whoever sent the message, which makes them the one
+ * header-injection vector in this module.
+ *
+ * A token that does not survive as `<…>` is discarded: no header beats a
+ * malformed one.
+ */
+function headerToken(value: string): string | null {
+  const cleaned = value.replace(/[^\x21-\x7E]/g, '')
+  return /^<[^<>\s]+>$/.test(cleaned) ? cleaned : null
 }
 
 /** Base64 body parts are wrapped at 76 characters, as MIME requires. */
@@ -113,6 +138,13 @@ export function buildMimeMessage(args: GmailSendArgs & { from?: string | null })
   if (args.cc?.length) headers.push(header('Cc', encodeHeaderValue(args.cc.join(', '))))
   if (args.bcc?.length) headers.push(header('Bcc', encodeHeaderValue(args.bcc.join(', '))))
   if (args.replyTo) headers.push(header('Reply-To', encodeHeaderValue(args.replyTo)))
+
+  const inReplyTo = args.inReplyTo ? headerToken(args.inReplyTo) : null
+  if (inReplyTo) headers.push(header('In-Reply-To', inReplyTo))
+  const references = (args.references ?? [])
+    .map(headerToken)
+    .filter((token): token is string => token !== null)
+  if (references.length) headers.push(header('References', references.join(' ')))
 
   const attachments = args.attachments ?? []
   const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`

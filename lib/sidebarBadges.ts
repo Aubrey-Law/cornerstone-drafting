@@ -2,6 +2,8 @@ export interface SidebarCounts {
   /** Categories whose latest refresh failed; never display these as confirmed zero. */
   errors?: string[]
   inboxNeedsReplyCount: number
+  /** Triaged email waiting on a reply. Distinct from portal messages above. */
+  emailTriageNeedsReplyCount: number
   intakeReviewCount: number
   draftingNeedsDesignCount: number
   agingRedCount: number
@@ -20,6 +22,7 @@ export interface SidebarBadge {
 
 export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   inboxNeedsReplyCount: 0,
+  emailTriageNeedsReplyCount: 0,
   intakeReviewCount: 0,
   draftingNeedsDesignCount: 0,
   agingRedCount: 0,
@@ -30,6 +33,7 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
   const category = href === '/admin' ? 'inboxNeedsReplyCount' : href.startsWith('/admin/matters') ? 'intakeReviewCount'
+    : href === '/admin/email-triage' ? 'emailTriageNeedsReplyCount'
     : href === '/admin/tasks' ? 'tasksOverdueCount' : href === '/admin/billing' ? 'overdueInvoiceCount' : null
   if (category && counts.errors?.includes(category)) return null
   if (href === '/admin/drafting' && counts.errors?.some(key => key === 'aging' || key === 'draftingNeedsDesignCount')) return null
@@ -44,6 +48,11 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
     if (counts.agingRedCount > 0) return { value: counts.agingRedCount, tone: 'destructive' }
     if (counts.draftingNeedsDesignCount > 0) return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
     if (counts.agingAmberCount > 0) return { value: counts.agingAmberCount, tone: 'accent' }
+  }
+  // Accent, not destructive: unanswered mail is work waiting, not the firm
+  // being owed or a missed deadline.
+  if (href === '/admin/email-triage' && counts.emailTriageNeedsReplyCount > 0) {
+    return { value: counts.emailTriageNeedsReplyCount, tone: 'accent' }
   }
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
     return { value: counts.tasksOverdueCount, tone: 'destructive' }
@@ -64,6 +73,7 @@ export function mergeSidebarCounts(
   return {
     errors: next.errors ?? [],
     inboxNeedsReplyCount: next.inboxNeedsReplyCount ?? prev.inboxNeedsReplyCount,
+    emailTriageNeedsReplyCount: next.emailTriageNeedsReplyCount ?? prev.emailTriageNeedsReplyCount,
     intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
     draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
     agingRedCount: next.agingRedCount ?? prev.agingRedCount,
