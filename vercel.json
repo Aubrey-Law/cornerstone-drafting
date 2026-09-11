@@ -37,6 +37,14 @@
     {
       "path": "/api/cron/invoice-reminders",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/email-triage",
+      "schedule": "30 11 * * 1-5"
+    },
+    {
+      "path": "/api/cron/email-triage",
+      "schedule": "15 12 * * 1-5"
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   BookOpen,
   Clock,
   FilePenLine,
+  MailSearch,
   Search,
   Settings,
   Sparkles,
@@ -33,6 +34,7 @@ interface MatterResult {
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
+  { label: 'Email triage', href: '/admin/email-triage', icon: MailSearch },
   { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters/list', icon: Briefcase },
   { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },

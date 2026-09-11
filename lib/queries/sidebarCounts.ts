@@ -16,7 +16,7 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   async function section<T>(key: string, read: () => Promise<T>, fallback: T): Promise<T> {
     try { return await read() } catch { errors.push(key); return fallback }
   }
-  const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, overdueInvoiceCount] = await Promise.all([
+  const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount] = await Promise.all([
     section('intakeReviewCount', () => count(admin.from('v_matter_pipeline').select('matter_id', { count: 'exact', head: true }).eq('stage', 'intake_review')), 0),
     section('draftingNeedsDesignCount', async () => {
       const open = await admin.from('v_matter_pipeline').select('matter_id').neq('stage', 'closed')
@@ -32,10 +32,15 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     section('tasksOverdueCount', async () => (await fetchTaskCounts()).overdue, 0),
     // Secure client messages remain actionable on Today after Inbox retirement.
     section('inboxNeedsReplyCount', () => count(admin.from('messages').select('id', { count: 'exact', head: true }).eq('sender_role', 'client').is('read_at', null)), 0),
+    // Mail the attorney still owes a reply to. 'approved' is excluded: the
+    // draft is in Gmail and the thread is his to send, not the queue's.
+    section('emailTriageNeedsReplyCount', () => count(admin.from('email_triage_threads')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['needs_reply', 'drafting', 'drafted', 'failed'])), 0),
     section('overdueInvoiceCount', fetchOverdueInvoiceCount, 0),
   ])
   return { intakeReviewCount, draftingNeedsDesignCount, agingRedCount: aging.red, agingAmberCount: aging.amber,
-    tasksOverdueCount, inboxNeedsReplyCount, overdueInvoiceCount, errors }
+    tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, errors }
 }
 
 /**
