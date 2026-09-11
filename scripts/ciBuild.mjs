@@ -14,6 +14,10 @@ for (const key of ['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'SYSTEMROOT', 'CI', 
 }
 Object.assign(env, {
   NODE_ENV: 'production',
+  // Next's TypeScript worker inherits this environment. Node 22 on the CI
+  // runner defaults to a ~2 GiB heap, which this app's type graph exceeds.
+  // Set a known budget instead of forwarding arbitrary parent NODE_OPTIONS.
+  NODE_OPTIONS: '--max-old-space-size=4096',
   NEXT_TELEMETRY_DISABLED: '1',
   NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:9',
   NEXT_PUBLIC_SUPABASE_ANON_KEY: 'build-only-anon-key',

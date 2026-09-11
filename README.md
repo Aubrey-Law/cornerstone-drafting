@@ -127,7 +127,7 @@ On the Review step: **Convert PDF** (LibreOffice worker) or **Upload PDF to shar
 
 - `npm run build`: real Next production build, including theme generation.
 - `npm run typecheck`: incremental TypeScript check (not a build).
-- `npm run build:ci`: production build with synthetic configuration; requires a clean checkout without Next environment files.
+- `npm run build:ci`: production build with synthetic configuration and a fixed 4 GiB Node heap for build workers; requires a clean checkout without Next environment files. Parent Node options are not forwarded.
 - `npm test`: unit suite with synthetic credentials; ignores local environment files.
 - `npm run test:integration`: opt-in loopback Supabase tests; see `tests/README.md`.
 
