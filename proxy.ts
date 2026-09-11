@@ -176,11 +176,10 @@ export async function proxy(request: NextRequest) {
     }
 
     if (userId && (requiresSession || shouldRedirectAuthenticatedLogin)) {
-      // The admin server layout performs the same role check before rendering
-      // any child route. When an older session lacks the JWT claim, defer to
+      // Admin pages and API routes perform their own role check before serving
+      // protected content. When an older session lacks the JWT claim, defer to
       // that check instead of adding a duplicate edge-to-database round trip.
-      // API requests still resolve the role here and in their route handler.
-      if (isAdminPath(pathname) && !isApiPath(pathname) && !claimRole) {
+      if (isAdminPath(pathname) && !claimRole) {
         return supabaseResponse
       }
 

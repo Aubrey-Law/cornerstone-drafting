@@ -40,13 +40,13 @@ describe('proxy role resolution', () => {
     expect(mocks.from).not.toHaveBeenCalled()
   })
 
-  it('continues resolving missing role claims for admin API requests', async () => {
+  it('defers a missing admin API role claim to the route handler without a database lookup', async () => {
     const response = await proxy(
       new NextRequest('https://cornerstone.example/api/admin/billing/ledger'),
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.from).toHaveBeenCalledWith('users')
+    expect(mocks.from).not.toHaveBeenCalled()
   })
 
   it('continues rejecting unauthenticated admin page requests in the proxy', async () => {
