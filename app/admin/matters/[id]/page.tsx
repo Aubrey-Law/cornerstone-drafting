@@ -7,7 +7,7 @@ import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { isEsignConfigured } from '@/lib/esign/firma'
-import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
+import { isGoogleConfigured } from '@/lib/googleCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
@@ -351,7 +351,7 @@ export default async function MatterDetailPage({ params }: Params) {
       resyncPreviewCount={resyncPreviewCount}
       smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
       esignEnabled={isEsignConfigured()}
-      emailSendEnabled={isMicrosoftConfigured() || Boolean(process.env.RESEND_API_KEY)}
+      emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
     />
   )
 }

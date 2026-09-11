@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { computeSlots } from '@/lib/appointments/availability'
-import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
+import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
 import { getSchedulingSettings, listAppointmentTypes } from '@/lib/appointments/settings'
 import { effectiveWeeklyHours, isAppointmentLocationType } from '@/lib/appointments/types'
 import { annotateSlots } from '@/lib/calendarProductivity'

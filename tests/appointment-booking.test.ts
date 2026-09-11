@@ -113,7 +113,7 @@ vi.mock('@/lib/firmSettings', () => ({
   })),
 }))
 
-vi.mock('@/lib/appointments/graphBusy', () => {
+vi.mock('@/lib/appointments/calendarBusy', () => {
   class AvailabilityUnavailableError extends Error {}
   return {
     AvailabilityUnavailableError,
@@ -121,24 +121,19 @@ vi.mock('@/lib/appointments/graphBusy', () => {
   }
 })
 
-// Microsoft is the connected provider, as the firm's is today. The graphEvents
-// mock below is reached *through* the real calendarSync dispatch rather than in
-// place of it, so these tests still prove a booking routes to the calendar that
-// is actually connected.
-vi.mock('@/lib/calendarConnections', () => ({
-  getAnyConnectionForProvider: vi.fn(async (provider: string) =>
-    provider === 'microsoft' ? { user_id: 'user-1', provider } : null),
-}))
-
-vi.mock('@/lib/appointments/graphEvents', () => ({
+// Google is the firm's calendar. The googleEvents mock below is reached
+// *through* the real calendarSync dispatch rather than in place of it, so these
+// tests still prove a booking routes to the calendar the app actually writes to.
+vi.mock('@/lib/appointments/googleEvents', () => ({
   createCalendarEvent: vi.fn(async (input: Record<string, unknown>) => {
     state.createdEvents.push(input)
-    return { eventId: 'graph-event-1', onlineMeetingUrl: null }
+    return { eventId: 'google-event-1', onlineMeetingUrl: null }
   }),
   cancelCalendarEvent: vi.fn(async (eventId: string) => {
     state.cancelledEvents.push(eventId)
   }),
   rescheduleCalendarEvent: vi.fn(async () => {}),
+  getCalendarEventAttendees: vi.fn(async () => []),
 }))
 
 vi.mock('@/lib/appointments/settings', () => ({
@@ -238,7 +233,7 @@ afterEach(() => {
 })
 
 describe('bookAppointment', () => {
-  it('books a valid slot: inserts row, creates Graph event, sends emails', async () => {
+  it('books a valid slot: inserts row, creates the calendar event, sends emails', async () => {
     const result = await bookAppointment(bookingInput())
 
     expect(result.startIso).toBe(SLOT_ISO)
@@ -250,10 +245,10 @@ describe('bookAppointment', () => {
     expect(apptInsert?.values.start_time).toBe(SLOT_ISO)
     expect(apptInsert?.values.manage_token_hash).toMatch(/^[0-9a-f]{64}$/)
 
-    // Graph event created and saved back
+    // Calendar event created and saved back
     expect(state.createdEvents).toHaveLength(1)
     expect(
-      state.updates.some(u => u.table === 'appointments' && u.values.microsoft_event_id === 'graph-event-1'),
+      state.updates.some(u => u.table === 'appointments' && u.values.google_event_id === 'google-event-1'),
     ).toBe(true)
 
     // Confirmation to client + internal alert
@@ -332,7 +327,7 @@ describe('bookAppointment', () => {
     await bookAppointment({ ...bookingInput(), locationType: 'teams' })
     const insert = state.inserts.find(i => i.table === 'appointments')
     expect(insert?.values.location_type).toBe('teams')
-    // Graph event created as a Teams meeting, not the type's phone default.
+    // Calendar event created as a video meeting, not the type's phone default.
     const eventType = state.createdEvents[0]?.type as { locationType?: string } | undefined
     expect(eventType?.locationType).toBe('teams')
   })
@@ -426,15 +421,15 @@ describe('bookAppointment', () => {
     expect(state.pmpsAnchors).toHaveLength(0)
   })
 
-  it('still books when the Graph event creation fails', async () => {
-    const { createCalendarEvent } = await import('@/lib/appointments/graphEvents')
-    vi.mocked(createCalendarEvent).mockRejectedValueOnce(new Error('graph down'))
+  it('still books when the calendar event creation fails', async () => {
+    const { createCalendarEvent } = await import('@/lib/appointments/googleEvents')
+    vi.mocked(createCalendarEvent).mockRejectedValueOnce(new Error('Google Calendar is down'))
 
     const result = await bookAppointment(bookingInput())
     expect(result.appointmentId).toBeTruthy()
-    // No microsoft_event_id update happened
+    // No google_event_id update happened
     expect(
-      state.updates.some(u => u.table === 'appointments' && 'microsoft_event_id' in u.values),
+      state.updates.some(u => u.table === 'appointments' && 'google_event_id' in u.values),
     ).toBe(false)
     // Confirmation still sent
     expect(state.emails.some(e => e.category === 'appointment_confirmation')).toBe(true)
@@ -487,8 +482,8 @@ describe('cancelAppointment', () => {
     linked_lead_id: 'lead-9',
     linked_matter_id: null,
     booked_by_user_id: null,
-    microsoft_event_id: 'graph-event-1',
-    google_event_id: null,
+    microsoft_event_id: null,
+    google_event_id: 'google-event-1',
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',
     reminder_sent_at: null,
@@ -498,12 +493,12 @@ describe('cancelAppointment', () => {
     updated_at: '2026-08-01T00:00:00Z',
   }
 
-  it('cancels: updates status, deletes the Graph event, notes the lead', async () => {
+  it('cancels: updates status, deletes the calendar event, notes the lead', async () => {
     await cancelAppointment({ appointment: ROW, type: TYPE })
     expect(
       state.updates.some(u => u.table === 'appointments' && u.values.status === 'cancelled'),
     ).toBe(true)
-    expect(state.cancelledEvents).toEqual(['graph-event-1'])
+    expect(state.cancelledEvents).toEqual(['google-event-1'])
     expect(state.inserts.some(i => i.table === 'lead_activity')).toBe(true)
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
   })
@@ -572,8 +567,8 @@ describe('rescheduleAppointment', () => {
     linked_lead_id: 'lead-9',
     linked_matter_id: 'matter-7',
     booked_by_user_id: null,
-    microsoft_event_id: 'graph-event-1',
-    google_event_id: null,
+    microsoft_event_id: null,
+    google_event_id: 'google-event-1',
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',
     reminder_sent_at: null,

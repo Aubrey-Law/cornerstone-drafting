@@ -19,8 +19,8 @@ describe('email settings and templates', () => {
     expect(send).toContain('applyEmailTemplate')
     expect(send).toContain('email_log')
     expect(send).toContain("input.html !== undefined ? { html: input.html }")
-    const graph = fs.readFileSync(path.join(process.cwd(), 'lib/email/graphSend.ts'), 'utf8')
-    expect(graph).toContain("contentType: args.html ? 'HTML' : 'Text'")
+    const gmail = fs.readFileSync(path.join(process.cwd(), 'lib/email/gmailSend.ts'), 'utf8')
+    expect(gmail).toContain('gmail/v1/users/me/messages/send')
   })
 
   it('exposes admin email settings API and UI tab', () => {

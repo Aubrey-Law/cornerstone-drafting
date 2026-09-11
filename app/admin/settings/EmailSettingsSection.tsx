@@ -32,7 +32,7 @@ interface SettingsResponse {
   testInbox: string
   allowlist: string[]
   emailLogoHeader: boolean
-  graph: {
+  gmail: {
     available: boolean
     accountEmail: string | null
     missingScope: boolean
@@ -48,7 +48,7 @@ const MODE_LABELS: Record<EmailMode, string> = {
 
 const PROVIDER_LABELS: Record<EmailProvider, string> = {
   resend: 'Resend',
-  graph: 'Microsoft 365',
+  gmail: 'Gmail',
 }
 
 function formatTime(iso: string | null): string {
@@ -348,15 +348,15 @@ export function EmailSettingsSection() {
         </button>
       </div>
 
-      {data.graph.missingScope && (
+      {data.gmail.missingScope && (
         <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
-          <strong>Microsoft mailbox missing Mail.Send scope.</strong>{' '}
-          Reconnect from <Link href="/admin/settings?tab=outlook" className="underline">Settings → Outlook</Link> to grant the missing permission.
+          <strong>Google account missing the Gmail send permission.</strong>{' '}
+          Reconnect from <Link href="/admin/settings?tab=google" className="underline">Settings → Google</Link> to grant it.
         </div>
       )}
-      {data.graph.available && data.graph.accountEmail && (
+      {data.gmail.available && data.gmail.accountEmail && (
         <div className="mb-4 rounded-md border border-green/40 bg-green-bg px-3 py-2 text-[12px] text-green">
-          <strong>Microsoft 365 mailbox connected:</strong> categories set to <em>Microsoft 365</em> will send from <code className="font-sans">{data.graph.accountEmail}</code> and land in that Sent Items folder.
+          <strong>Gmail connected:</strong> categories set to <em>Gmail</em> will send from <code className="font-sans">{data.gmail.accountEmail}</code> and land in that account&rsquo;s Sent Mail.
         </div>
       )}
 
@@ -426,13 +426,13 @@ export function EmailSettingsSection() {
                 </td>
                 <td className="px-3 py-3 align-top">
                   <div className="flex gap-1" role="radiogroup" aria-label={`Provider for ${c.label}`}>
-                    {(['resend','graph'] as EmailProvider[]).map(p => {
-                      const disabledByGraph = p === 'graph' && !data.graph.available
-                      const disabled = pendingCats.has(c.category) || disabledByGraph
-                      const tooltip = disabledByGraph
-                        ? data.graph.missingScope
-                          ? 'Reconnect Microsoft with Mail.Send scope to enable.'
-                          : 'Connect a Microsoft 365 mailbox in Settings → Outlook to enable.'
+                    {(['resend','gmail'] as EmailProvider[]).map(p => {
+                      const disabledByGmail = p === 'gmail' && !data.gmail.available
+                      const disabled = pendingCats.has(c.category) || disabledByGmail
+                      const tooltip = disabledByGmail
+                        ? data.gmail.missingScope
+                          ? 'Reconnect Google with the Gmail send permission to enable.'
+                          : 'Connect the firm Google account in Settings → Google to enable.'
                         : undefined
                       return (
                         <button
@@ -445,7 +445,7 @@ export function EmailSettingsSection() {
                           className={cn(
                             'rounded-[5px] border px-2 py-1 text-[11px] font-medium transition-colors',
                             c.provider === p
-                              ? p === 'graph' ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                              ? p === 'gmail' ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
                               :                 'border-violet-300 bg-violet-50 text-violet-900'
                               : 'border-border bg-card text-muted-foreground hover:bg-muted',
                             disabled && 'opacity-50',

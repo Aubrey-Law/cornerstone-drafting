@@ -4,7 +4,7 @@ import { calculateMAEstateTax } from '@/lib/estateTax'
 import { fetchTasksForMatter } from '@/lib/queries/tasks'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { stageLabel, type MatterStage } from '@/types/database'
-import { getCalendarEventAttendees } from '@/lib/appointments/graphEvents'
+import { appointmentEventAttendees } from '@/lib/appointments/calendarSync'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,13 +30,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!appointment) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
 
   const matterId = appointment.linked_matter_id as string | null
-  let graphAttendees: Awaited<ReturnType<typeof getCalendarEventAttendees>> = []
-  if (appointment.microsoft_event_id) {
-    try {
-      graphAttendees = await getCalendarEventAttendees(appointment.microsoft_event_id)
-    } catch {
-      // Outlook connection failures leave the local invite data usable.
-    }
+  let calendarAttendees: Awaited<ReturnType<typeof appointmentEventAttendees>> = []
+  try {
+    calendarAttendees = await appointmentEventAttendees(appointment)
+  } catch {
+    // A calendar connection failure leaves the local invite data usable.
   }
   const localAttendees = [
     { name: appointment.attendee_name, email: appointment.attendee_email, status: 'invited' },
@@ -46,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       status: 'invited',
     }] : []),
   ]
-  const attendees = graphAttendees.length > 0 ? graphAttendees : localAttendees
+  const attendees = calendarAttendees.length > 0 ? calendarAttendees : localAttendees
   if (!matterId) {
     return NextResponse.json({
       appointment,

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 const resendSend = vi.hoisted(() => vi.fn())
-const sendViaGraph = vi.hoisted(() => vi.fn())
+const sendViaGmail = vi.hoisted(() => vi.fn())
 const getAllSettings = vi.hoisted(() => vi.fn())
 const isAllowed = vi.hoisted(() => vi.fn())
 const insert = vi.hoisted(() => vi.fn())
@@ -17,9 +17,9 @@ vi.mock('resend', () => ({
     emails = { send: resendSend }
   },
 }))
-vi.mock('@/lib/email/graphSend', () => ({
-  sendViaGraph,
-  GraphSendError: class extends Error {},
+vi.mock('@/lib/email/gmailSend', () => ({
+  sendViaGmail,
+  GmailSendError: class extends Error {},
 }))
 vi.mock('@/lib/email/settings', () => ({
   envEmailsHardKilled: () => false,
@@ -92,13 +92,13 @@ describe('sendEmail recipients', () => {
     expect(payload.bcc).toBeUndefined()
   })
 
-  it('passes bcc to Microsoft Graph when that is the configured provider', async () => {
-    getAllSettings.mockResolvedValue({ manual: { mode: 'live', provider: 'graph' } })
-    sendViaGraph.mockResolvedValue({ fromAddress: 'firm@example.com', messageId: 'g1' })
+  it('passes bcc to Gmail when that is the configured provider', async () => {
+    getAllSettings.mockResolvedValue({ manual: { mode: 'live', provider: 'gmail' } })
+    sendViaGmail.mockResolvedValue({ fromAddress: 'firm@example.com', messageId: 'g1' })
     const { sendEmail } = await import('@/lib/email/send')
     await sendEmail({ ...BASE, bcc: ['file@example.com'] })
 
-    expect(sendViaGraph).toHaveBeenCalledWith(
+    expect(sendViaGmail).toHaveBeenCalledWith(
       expect.objectContaining({ bcc: ['file@example.com'] }),
     )
     expect(resendSend).not.toHaveBeenCalled()

@@ -17,7 +17,7 @@ vi.mock('@/lib/crm/consent', () => ({ normalizeMarketingConsent: () => 'unknown'
 vi.mock('@/lib/communications/providers', () => ({ manualCommunicationsEnabled: () => false }))
 vi.mock('@/lib/communications/config', () => ({ isSmsConfigured: () => false }))
 vi.mock('@/lib/esign/firma', () => ({ isEsignConfigured: () => false }))
-vi.mock('@/lib/microsoftCalendar', () => ({ isMicrosoftConfigured: () => false }))
+vi.mock('@/lib/googleCalendar', () => ({ isGoogleConfigured: () => false }))
 vi.mock('@/lib/leads/activity', () => ({ buildLinkedMatterActivity: () => [] }))
 vi.mock('@/app/admin/matters/[id]/tabs/noteLinks', () => ({ mapMatterNoteRows: () => [] }))
 vi.mock('@/app/admin/matters/[id]/MatterDetailClient', () => ({ default: () => null }))

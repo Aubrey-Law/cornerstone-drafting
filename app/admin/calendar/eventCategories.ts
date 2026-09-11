@@ -1,4 +1,4 @@
-import type { EventCategory, OutlookEvent } from './types'
+import type { EventCategory, ExternalCalendarEvent } from './types'
 
 export interface CategoryStyle {
   bg: string
@@ -7,7 +7,7 @@ export interface CategoryStyle {
 }
 
 /**
- * Appointments carry a `typeLabel`; Outlook events only ever have a subject,
+ * Appointments carry a `typeLabel`; calendar events only ever have a subject,
  * so both are classified from their display text.
  */
 export function categorize(label: string): EventCategory {
@@ -33,7 +33,7 @@ export const CATEGORY_LABEL: Record<EventCategory, string> = {
   meeting: 'Client meeting',
   draft: 'Draft / design review',
   signing: 'Signing',
-  internal: 'Internal / Outlook',
+  internal: 'Internal / calendar',
 }
 
 export const CATEGORY_LEGEND: { category: EventCategory; label: string }[] = [
@@ -43,12 +43,12 @@ export const CATEGORY_LEGEND: { category: EventCategory; label: string }[] = [
   label: CATEGORY_LABEL[category as EventCategory],
 }))
 
-/** Diagonal hatch used for Outlook "block" holds, which are background, not events. */
+/** Diagonal hatch used for "block" holds, which are background, not events. */
 export const BLOCK_HATCH =
   'repeating-linear-gradient(45deg, var(--page-bg) 0 3px, var(--page-bg-2) 3px 6px)'
 
-/** Outlook holds named "BLOCK" are time the attorney reserved, not a meeting. */
-export function isBlock(event: OutlookEvent): boolean {
+/** Calendar holds named "BLOCK" are time the attorney reserved, not a meeting. */
+export function isBlock(event: ExternalCalendarEvent): boolean {
   return /^\s*◦?\s*block/i.test(event.subject)
 }
 

@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
 }))
 
+vi.mock('server-only', () => ({}))
+vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 vi.mock('@/lib/googleCalendar', () => ({
   getGoogleConnectionForUser: mocks.getConnection,
   getAccessToken: mocks.getAccessToken,
@@ -15,7 +17,7 @@ import {
   createCalendarEvent,
   rescheduleCalendarEvent,
 } from '@/lib/appointments/googleEvents'
-import type { CreateEventInput } from '@/lib/appointments/graphEvents'
+import type { CreateEventInput } from '@/lib/appointments/calendarTypes'
 
 function input(overrides: Partial<CreateEventInput> = {}): CreateEventInput {
   return {

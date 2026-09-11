@@ -1,22 +1,23 @@
 import 'server-only'
-import { getCalendarEventTimes, type OutlookEventTimes } from './graphEvents'
+import { getCalendarEventTimes } from './googleEvents'
+import type { CalendarEventTimes } from './calendarTypes'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 /**
- * Inbound half of the Outlook two-way sync.
+ * Inbound half of the Google Calendar two-way sync.
  *
- * Cornerstone already pushes bookings out to Outlook (create / reschedule /
- * cancel). Edits made in Outlook itself never came back, so an appointment the
- * attorney dragged to a new time — or deleted — kept its original row here and
- * was *hidden* from the Outlook overlay (it is excluded by
- * `microsoft_event_id`), leaving the app showing a meeting that no longer
- * exists at that time. This module mirrors those Outlook-side edits back onto
+ * Cornerstone already pushes bookings out to Google (create / reschedule /
+ * cancel). Edits made in Google Calendar itself never came back, so an
+ * appointment the attorney dragged to a new time — or deleted — kept its
+ * original row here and was *hidden* from the calendar overlay (it is excluded
+ * by `google_event_id`), leaving the app showing a meeting that no longer
+ * exists at that time. This module mirrors those calendar-side edits back onto
  * the `appointments` row so both calendars agree.
  *
- * Outlook stays the source of truth for time and existence; the app keeps
+ * Google stays the source of truth for time and existence; the app keeps
  * owning everything else (matter link, attendee data, type). Nothing here
- * writes back out to Graph or emails anyone — the change already happened in
- * Outlook, and Outlook has already notified the attendees.
+ * writes back out to Google or emails anyone — the change already happened
+ * there, and Google has already notified the attendees.
  */
 
 export interface ReconcilableAppointment {
@@ -24,7 +25,7 @@ export interface ReconcilableAppointment {
   start_time: string
   end_time: string
   status: string
-  microsoft_event_id: string | null
+  google_event_id: string | null
 }
 
 export type ReconcileAction =
@@ -33,13 +34,13 @@ export type ReconcileAction =
   /** Not in the fetched range — could be moved out of view, or deleted. */
   | { appointmentId: string; eventId: string; kind: 'recheck' }
 
-/** Graph and Postgres round differently; sub-minute drift is not a move. */
+/** Google and Postgres round differently; sub-minute drift is not a move. */
 const DRIFT_TOLERANCE_MS = 60_000
 
-/** Cap on direct per-event Graph lookups for one reconciliation pass. */
+/** Cap on direct per-event calendar lookups for one reconciliation pass. */
 const MAX_RECHECKS = 25
 
-function driftsFrom(appointment: ReconcilableAppointment, event: OutlookEventTimes): boolean {
+function driftsFrom(appointment: ReconcilableAppointment, event: CalendarEventTimes): boolean {
   const startDrift = Math.abs(Date.parse(appointment.start_time) - Date.parse(event.startIso))
   const endDrift = Math.abs(Date.parse(appointment.end_time) - Date.parse(event.endIso))
   if (!Number.isFinite(startDrift) || !Number.isFinite(endDrift)) return false
@@ -47,18 +48,18 @@ function driftsFrom(appointment: ReconcilableAppointment, event: OutlookEventTim
 }
 
 /**
- * Decide what each Cornerstone appointment needs, given the Outlook events
- * read for the same range. Pure — the Graph and database calls live in
- * `reconcileAppointmentsFromOutlook`.
+ * Decide what each Cornerstone appointment needs, given the calendar events
+ * read for the same range. Pure — the Google and database calls live in
+ * `reconcileAppointmentsFromCalendar`.
  */
-export function planOutlookReconciliation(
+export function planCalendarReconciliation(
   appointments: readonly ReconcilableAppointment[],
-  eventsById: ReadonlyMap<string, OutlookEventTimes>,
+  eventsById: ReadonlyMap<string, CalendarEventTimes>,
 ): ReconcileAction[] {
   const actions: ReconcileAction[] = []
   for (const appointment of appointments) {
-    const eventId = appointment.microsoft_event_id
-    // Only live bookings that Outlook actually owns an event for.
+    const eventId = appointment.google_event_id
+    // Only live bookings the calendar actually owns an event for.
     if (!eventId || appointment.status !== 'scheduled') continue
 
     const event = eventsById.get(eventId)
@@ -86,7 +87,7 @@ export function planOutlookReconciliation(
 export interface ReconcileSummary {
   moved: number
   cancelled: number
-  /** Actions that could not be applied (Graph error, or a time collision). */
+  /** Actions that could not be applied (a calendar error, or a time collision). */
   failed: number
 }
 
@@ -102,8 +103,8 @@ async function applyMove(
     .eq('status', 'scheduled')
   if (error) {
     // `appointments_no_overlap` rejects a move onto another live booking. The
-    // Outlook event is still the truth; surface it rather than failing the view.
-    console.error('[appointments] outlook move write failed for', appointmentId, error.message)
+    // calendar event is still the truth; surface it rather than failing the view.
+    console.error('[appointments] calendar move write failed for', appointmentId, error.message)
     return false
   }
   return true
@@ -116,27 +117,28 @@ async function applyCancel(appointmentId: string): Promise<boolean> {
     .eq('id', appointmentId)
     .eq('status', 'scheduled')
   if (error) {
-    console.error('[appointments] outlook cancel write failed for', appointmentId, error.message)
+    console.error('[appointments] calendar cancel write failed for', appointmentId, error.message)
     return false
   }
   return true
 }
 
 /**
- * Resolve a `recheck` with a direct Graph lookup: a 404 means the event was
- * deleted in Outlook, anything else means it simply moved out of the range we
- * read. Returns null when Graph itself failed — the appointment is then left
- * untouched, because "we could not ask" must never read as "it was deleted".
+ * Resolve a `recheck` with a direct calendar lookup: a 404 means the event was
+ * deleted in Google, anything else means it simply moved out of the range we
+ * read. Returns null when the lookup itself failed — the appointment is then
+ * left untouched, because "we could not ask" must never read as "it was
+ * deleted".
  */
 async function resolveRecheck(
   action: Extract<ReconcileAction, { kind: 'recheck' }>,
   appointment: ReconcilableAppointment,
 ): Promise<ReconcileAction | null> {
-  let event: OutlookEventTimes | null
+  let event: CalendarEventTimes | null
   try {
     event = await getCalendarEventTimes(action.eventId)
   } catch (err) {
-    console.error('[appointments] outlook recheck failed for', action.appointmentId, err)
+    console.error('[appointments] calendar recheck failed for', action.appointmentId, err)
     return null
   }
   if (!event || event.isCancelled) {
@@ -153,16 +155,16 @@ async function resolveRecheck(
 }
 
 /**
- * Mirror Outlook-side moves and deletions onto the appointments in a range.
+ * Mirror calendar-side moves and deletions onto the appointments in a range.
  * Best-effort: any failure is logged and counted, never thrown, so a calendar
  * load never fails on reconciliation.
  */
-export async function reconcileAppointmentsFromOutlook(
+export async function reconcileAppointmentsFromCalendar(
   appointments: readonly ReconcilableAppointment[],
-  eventsById: ReadonlyMap<string, OutlookEventTimes>,
+  eventsById: ReadonlyMap<string, CalendarEventTimes>,
 ): Promise<ReconcileSummary> {
   const byId = new Map(appointments.map(row => [row.id, row]))
-  const planned = planOutlookReconciliation(appointments, eventsById)
+  const planned = planCalendarReconciliation(appointments, eventsById)
   const summary: ReconcileSummary = { moved: 0, cancelled: 0, failed: 0 }
   if (planned.length === 0) return summary
 
@@ -172,7 +174,7 @@ export async function reconcileAppointmentsFromOutlook(
   )
   if (rechecks.length > MAX_RECHECKS) {
     console.warn(
-      `[appointments] ${rechecks.length} Outlook rechecks pending; resolving the first ${MAX_RECHECKS}`,
+      `[appointments] ${rechecks.length} calendar rechecks pending; resolving the first ${MAX_RECHECKS}`,
     )
   }
 
