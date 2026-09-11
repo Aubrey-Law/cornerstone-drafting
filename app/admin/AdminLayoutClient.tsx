@@ -37,6 +37,7 @@ import {
 } from '@/lib/sidebarBadges'
 import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 import { AdminSidebar } from './components/AdminSidebar'
+import { SidebarMattersContext } from '@/lib/matters/SidebarMattersContext'
 import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
 
 const GlobalSearch = dynamic(
@@ -186,7 +187,7 @@ export default function AdminLayoutClient({
   return (
     // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
     // can be a full-height column beside it instead of floating over content.
-    <>
+    <SidebarMattersContext.Provider value={sidebarMatters}>
     <div className="flex h-screen overflow-hidden bg-background">
       <aside
         className={cn(
@@ -298,6 +299,6 @@ export default function AdminLayoutClient({
       </Sheet>
 
     </div>
-    </>
+    </SidebarMattersContext.Provider>
   )
 }

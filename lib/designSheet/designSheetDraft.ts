@@ -1,6 +1,6 @@
 import type { DesignSheet, DesignSheetUpdate } from '@/types/database'
 import { buildDesignSheetPersistencePayload, stripDecisionOnlyTopLevelMirrors } from '@/lib/designSheetPersistence'
-import { parseUpdatedAt } from '@/lib/designSheet/updatedAt'
+import type { DesignSheetConflict } from './designSheetConflict'
 
 const DRAFT_PREFIX = 'cornerstone:design-sheet-draft:'
 
@@ -45,6 +45,8 @@ export type DesignSheetDraftRecord = {
   /** Server updated_at the draft was based on (or last successful save). */
   baseUpdatedAt: string | null
   sheet: DesignSheet
+  baseSheet?: DesignSheet | null
+  conflict?: DesignSheetConflict | null
   savedAt: number
 }
 
@@ -68,12 +70,16 @@ export function writeDesignSheetDraft(args: {
   matterId: string
   sheet: DesignSheet
   baseUpdatedAt: string | null
+  baseSheet?: DesignSheet | null
+  conflict?: DesignSheetConflict | null
 }): void {
   try {
     const record: DesignSheetDraftRecord = {
       matterId: args.matterId,
       baseUpdatedAt: args.baseUpdatedAt,
       sheet: args.sheet,
+      baseSheet: args.baseSheet,
+      conflict: args.conflict,
       savedAt: Date.now(),
     }
     storageSet(designSheetDraftStorageKey(args.matterId), JSON.stringify(record))
@@ -96,13 +102,8 @@ export function resolveInitialDesignSheet(args: {
   const draft = readDesignSheetDraft(args.matterId)
   if (!draft) return fromProps
 
-  const propsMs = parseUpdatedAt(args.sheetProp?.updated_at)
-  const draftBaseMs = parseUpdatedAt(draft.baseUpdatedAt)
-  // Drop draft if server props are strictly newer than the draft's base.
-  if (propsMs != null && draftBaseMs != null && propsMs > draftBaseMs) {
-    clearDesignSheetDraft(args.matterId)
-    return fromProps
-  }
+  // A stale draft is recovery data, never disposable. The state hook pauses
+  // saving and asks for explicit comparison when its base differs from props.
   return draft.sheet
 }
 

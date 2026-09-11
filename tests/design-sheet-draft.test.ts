@@ -96,7 +96,7 @@ describe('design sheet draft + save preparation', () => {
     }).trust).toBe(true)
   })
 
-  it('drops a draft when server props are newer than the draft base', () => {
+  it('preserves a stale draft for explicit recovery when server props are newer', () => {
     const older = inflateDesignSheetRow({
       id: 'sheet-1',
       matter_id: matterId,
@@ -127,7 +127,7 @@ describe('design sheet draft + save preparation', () => {
       plan_type: null,
       marital_status: null,
       decisions: resolved.decisions ?? {},
-    }).trust).toBe(false)
-    expect(readDesignSheetDraft(matterId)).toBeNull()
+    }).trust).toBe(true)
+    expect(readDesignSheetDraft(matterId)?.sheet).toBeTruthy()
   })
 })

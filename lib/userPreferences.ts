@@ -1,3 +1,4 @@
+import { parseSavedHubViews, type SavedHubView } from '@/lib/drafting/hubView'
 import type { ApiKeyProvider } from '@/lib/userApiKeys'
 import {
   ATTORNEY_PRESET_DECISION_FIELDS,
@@ -90,6 +91,7 @@ export function defaultModelForProvider(provider: LlmProvider): string {
 }
 
 export interface DraftingUserPreferences {
+  hubViews?: SavedHubView[]
   designView?: DraftingDesignView
   /** Opts into the in-progress single-page design-sheet route. */
   singlePageDesignSheet?: boolean
@@ -224,6 +226,7 @@ export function parseUserPreferences(raw: unknown): UserPreferences {
             designNavCollapsed: drafting.designNavCollapsed === true,
             designViewHintDismissed: drafting.designViewHintDismissed === true,
             attorneyPreset: parseAttorneyPreset(drafting.attorneyPreset),
+            hubViews: parseSavedHubViews(drafting.hubViews),
           },
     models: parseModels(obj.models),
     nav: parseNav(obj.nav),

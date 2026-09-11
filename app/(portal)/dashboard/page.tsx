@@ -14,9 +14,11 @@ import {
   fetchPortalAccount,
   fetchPortalMatterMeta,
   fetchRecentPortalDocuments,
+  fetchSharedDocuments,
   fetchUnreadFirmMessageCount,
 } from '@/lib/queries/portal'
 import { progressFromMatterDetails } from '@/lib/portal/progress'
+import { computePortalNextAction } from '@/lib/portal/nextActions'
 import type { MatterDocument } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -86,19 +88,54 @@ export default async function PortalDashboardPage() {
   const submitted = intakeStatus === 'submitted' || intakeStatus === 'approved'
 
   // Matter-scoped reads only run once ownership is established above.
-  const [meta, documents, latestMessage, unreadCount, appointment, account] = matter
+  const settled = async <T,>(promise: Promise<T>, fallback: T) => {
+    try {
+      return { value: await promise, available: true }
+    } catch {
+      return { value: fallback, available: false }
+    }
+  }
+
+  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult] = matter
     ? await Promise.all([
-        fetchPortalMatterMeta(matter.id),
-        fetchRecentPortalDocuments(matter.id, auth.id, 2),
-        fetchLatestFirmMessage(matter.id),
-        fetchUnreadFirmMessageCount(matter.id),
-        fetchNextAppointment(matter.id),
-        fetchPortalAccount(matter.id).catch(() => null),
+        settled(fetchPortalMatterMeta(matter.id), null),
+        settled(fetchRecentPortalDocuments(matter.id, auth.id, 2), [] as MatterDocument[]),
+        settled(fetchSharedDocuments(matter.id, 1), [] as MatterDocument[]),
+        settled(fetchLatestFirmMessage(matter.id), null),
+        settled(fetchUnreadFirmMessageCount(matter.id), 0),
+        settled(fetchNextAppointment(matter.id), null),
+        settled(fetchPortalAccount(matter.id), null),
       ])
-    : [null, [] as MatterDocument[], null, 0, null, null]
+    : [
+        { value: null, available: true },
+        { value: [] as MatterDocument[], available: true },
+        { value: [] as MatterDocument[], available: true },
+        { value: null, available: true },
+        { value: 0, available: true },
+        { value: null, available: true },
+        { value: null, available: true },
+      ]
+
+  const meta = metaResult.value
+  const documents = documentsResult.value
+  const latestMessage = messageResult.value
+  const unreadCount = unreadResult.value
+  const appointment = appointmentResult.value
+  const account = accountResult.value
 
   const firm = getFirmConfig()
   const progress = meta?.progress ?? progressFromMatterDetails(null)
+  const nextAction = computePortalNextAction({
+    hasMatter: matter !== null,
+    intakeComplete: submitted,
+    matterStatus: matter?.status ?? null,
+    matterStage: matter?.stage ?? null,
+    sharedDocumentCount: sharedResult.value.length,
+    unreadFirmMessageCount: unreadCount,
+    hasUpcomingAppointment: appointment !== null,
+    outstandingInvoiceCount: account?.invoices.filter(invoice => invoice.balanceCents > 0).length ?? 0,
+    factsAvailable: sharedResult.available && unreadResult.available && appointmentResult.available && accountResult.available,
+  })
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -180,24 +217,17 @@ export default async function PortalDashboardPage() {
         style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue-strong-border)' }}
       >
         <h2 className="text-sm font-semibold text-foreground">What&apos;s next</h2>
-        {submitted ? (
-          <p className="mt-1 text-sm leading-relaxed text-foreground/80">{progress.nextAction}</p>
-        ) : (
-          <>
-            <p className="mt-1 text-sm leading-relaxed text-foreground/80">
-              Finish your intake questionnaire so we can review the information for your matter. Your answers save as you
-              go, so you can stop and come back any time.
-            </p>
-            <Button asChild size="sm" className="mt-4">
-              <Link href="/intake">Continue intake</Link>
-            </Button>
-          </>
+        <p className="mt-1 text-sm leading-relaxed text-foreground/80">{nextAction.message}</p>
+        {nextAction.href && nextAction.label && (
+          <Button asChild size="sm" className="mt-4">
+            <Link href={nextAction.href}>{nextAction.label}</Link>
+          </Button>
         )}
       </section>
 
       {/* Only shown when there is something to say: a client with no invoices
           should not be told their balance is zero. */}
-      {matter && !account && <p role="alert" className="mt-4 text-sm text-destructive">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}
+      {matter && !accountResult.available && <p role="alert" className="mt-4 text-sm text-destructive">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}
       {account && account.invoices.length > 0 && (
         <div className="mt-4">
           <PortalAccountCard account={account} />
@@ -208,7 +238,9 @@ export default async function PortalDashboardPage() {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <section className="rounded-lg border border-border bg-card p-5">
           <h2 className="text-sm font-semibold text-foreground">Recent documents</h2>
-          {documents.length === 0 ? (
+          {!documentsResult.available ? (
+            <p role="alert" className="mt-2 text-sm text-destructive">Documents are temporarily unavailable. <Link href="/documents" className="underline">Retry documents</Link></p>
+          ) : documents.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">No documents shared yet.</p>
           ) : (
             <ul className="mt-3 space-y-3">

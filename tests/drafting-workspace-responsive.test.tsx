@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
+const recovery = vi.hoisted(() => ({ active: false }))
 const router = vi.hoisted(() => ({ replace: vi.fn() }))
 const params = vi.hoisted(() => ({ current: new URLSearchParams('step=design') }))
 
@@ -20,6 +21,9 @@ vi.mock('next/dynamic', () => ({
 
 vi.mock('@/lib/designSheet/useDesignSheetState', () => ({
   useDesignSheetState: () => ({
+    conflict: recovery.active ? { local: {}, latest: {}, base: null } : null,
+    resolveConflict: vi.fn(),
+    reloadConflictLatest: vi.fn(),
     sheet: {} as DesignSheet,
     contactsState: [],
     lpDataState: null,
@@ -42,6 +46,7 @@ import DraftingWorkspace from '@/app/admin/drafting/[matterId]/DraftingWorkspace
 
 afterEach(() => {
   cleanup()
+  recovery.active = false
   router.replace.mockReset()
   params.current = new URLSearchParams('step=design')
 })
@@ -73,4 +78,15 @@ describe('drafting workspace responsive navigation', () => {
 
     expect(router.replace).toHaveBeenCalledWith('/admin/drafting/matter-1?step=generate', { scroll: false })
   })
+  it.each(['generate', 'review'])('keeps recovery reachable on %s without disabling step navigation', async step => {
+    recovery.active = true
+    params.current = new URLSearchParams(`step=${step}`)
+    render(<DraftingWorkspace matterId="matter-1" matter={{ matter_id: 'matter-1', client_name: 'Jane Doe', practice_area: 'EP' } as PipelineMatter} contacts={[]} sheet={null} lpData={null} intakeSnapshot={null} hubMatter={null} sharedDrafts={[]} />)
+    expect(screen.getByRole('dialog', { name: 'Resolve design sheet changes' })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Review later' }))
+    expect(screen.getByRole('button', { name: 'Review versions' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Previous drafting step' }) as HTMLButtonElement).disabled).toBe(false)
+    if (step === 'generate') expect(screen.getByText('Resolve the saved versions before generating drafts.')).toBeTruthy()
+  })
+
 })

@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownAZ, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
+import { SavedDraftingViews } from './SavedDraftingViews'
+import { HUB_RETURN_KEY, hubViewUrl, parseHubView, type HubView } from '@/lib/drafting/hubView'
 import { cn } from '@/lib/utils'
 import {
   type HubActionFilter,
@@ -37,12 +39,58 @@ const ACTION_CHIPS: { value: HubActionFilter; label: string; tone: string }[] = 
 export default function DraftingHubClient({ matters: initialMatters, loadError = null }: DraftingHubClientProps) {
   const router = useRouter()
   const matters = initialMatters
-  const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<HubSortKey>('updated')
-  const [actionFilter, setActionFilter] = useState<HubActionFilter>('all')
-  const [practiceFilter, setPracticeFilter] = useState<string>('all')
+  const params = useSearchParams()
+  const queryKey = params.toString()
+  const [view, setView] = useState<HubView>(() => parseHubView(new URLSearchParams(queryKey)))
+  const { search, sort: sortKey, action: actionFilter, practice: practiceFilter } = view
   const [focusedIndex, setFocusedIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
+  const worklistRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef(view)
+  const positionRef = useRef({ matterId: '', scrollTop: 0 })
+  const initialized = useRef(false)
+  const restorePosition = useRef(false)
+
+  useEffect(() => {
+    let next = parseHubView(new URLSearchParams(queryKey))
+    if (!initialized.current) {
+      initialized.current = true
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(HUB_RETURN_KEY) ?? 'null')
+        if (saved && typeof saved.url === 'string' && saved.url.startsWith('/admin/drafting?')) {
+          if (!queryKey) {
+            next = parseHubView(new URLSearchParams(saved.url.split('?')[1]))
+            window.history.replaceState(null, '', hubViewUrl(next))
+          }
+          if (!queryKey || saved.url === hubViewUrl(next)) {
+            positionRef.current = { matterId: typeof saved.matterId === 'string' ? saved.matterId : '', scrollTop: Number.isFinite(saved.scrollTop) ? Math.max(0, saved.scrollTop) : 0 }
+            restorePosition.current = true
+          }
+        }
+      } catch { /* Returning to the list also works without session storage. */ }
+    }
+    viewRef.current = next
+    setView(current => hubViewUrl(current) === hubViewUrl(next) ? current : next)
+  }, [queryKey])
+
+  const rememberPosition = useCallback(() => {
+    try { sessionStorage.setItem(HUB_RETURN_KEY, JSON.stringify({ url: hubViewUrl(viewRef.current), ...positionRef.current })) } catch { /* optional convenience */ }
+  }, [])
+
+  const updateView = (next: HubView) => {
+    viewRef.current = next
+    positionRef.current = { matterId: '', scrollTop: 0 }
+    if (worklistRef.current) worklistRef.current.scrollTop = 0
+    setView(next)
+    setFocusedIndex(0)
+    // Native history integrates with App Router without fetching unchanged data.
+    window.history.replaceState(null, '', hubViewUrl(next))
+    rememberPosition()
+  }
+  const setSearch = (value: string) => updateView({ ...view, search: value })
+  const setSortKey = (value: HubSortKey) => updateView({ ...view, sort: value })
+  const setActionFilter = (value: HubActionFilter) => updateView({ ...view, action: value })
+  const setPracticeFilter = (value: string) => updateView({ ...view, practice: value })
 
   const practiceAreas = useMemo(() => {
     const set = new Set<string>()
@@ -54,8 +102,8 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   }, [matters])
 
   const searched = useMemo(
-    () => matters.filter(item => matchesHubSearch(item, search)),
-    [matters, search],
+    () => matters.filter(item => matchesHubSearch(item, search) && (practiceFilter === 'all' || item.matter.practice_area === practiceFilter)),
+    [matters, search, practiceFilter],
   )
 
   const actionCounts = useMemo(() => {
@@ -82,59 +130,53 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
     } else if (actionFilter !== 'all') {
       list = list.filter(item => hubNextActionKey(item) === actionFilter)
     }
-    if (practiceFilter !== 'all') {
-      list = list.filter(item => item.matter.practice_area === practiceFilter)
-    }
     return sortHubMatters(list, sortKey)
-  }, [actionFilter, practiceFilter, searched, sortKey])
+  }, [actionFilter, searched, sortKey])
 
   useEffect(() => {
-    setFocusedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)))
-  }, [filtered.length])
+    if (restorePosition.current && hubViewUrl(view) !== hubViewUrl(viewRef.current)) return
+    if (restorePosition.current && worklistRef.current) {
+      restorePosition.current = false
+      const index = filtered.findIndex(item => item.matter.matter_id === positionRef.current.matterId)
+      if (index >= 0) setFocusedIndex(index)
+      worklistRef.current.scrollTop = positionRef.current.scrollTop
+    } else setFocusedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)))
+  }, [filtered, view])
 
-  const openMatter = useCallback((matterId: string) => {
+  const focusRow = (index: number) => {
+    setFocusedIndex(index)
+    positionRef.current.matterId = filtered[index]?.matter.matter_id ?? ''
+    rememberPosition()
+  }
+  const openMatter = (matterId: string) => {
+    positionRef.current.matterId = matterId
+    rememberPosition()
     router.push(`/admin/drafting/${matterId}`)
-  }, [router])
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target
-      const editableTarget = target instanceof HTMLElement
-        ? target.closest('input, select, textarea, [contenteditable="true"]')
-        : null
-      if (editableTarget) {
-        if (event.key === 'Escape' && editableTarget instanceof HTMLElement) editableTarget.blur()
-        return
-      }
-      if (event.key === '/' && !event.metaKey && !event.ctrlKey) {
+      if (!(target instanceof HTMLElement) || target.closest('[role="dialog"], [role="menu"]')) return
+      const editable = target.closest('input, select, textarea, [contenteditable="true"]')
+      if (editable) return
+      if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault()
         searchRef.current?.focus()
         return
       }
-      if (filtered.length === 0) return
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        const nextIndex = Math.min(focusedIndex + 1, filtered.length - 1)
-        setFocusedIndex(nextIndex)
-        if (target instanceof HTMLElement && target.closest('[data-drafting-card-index]')) {
-          document.querySelector<HTMLButtonElement>(`[data-drafting-card-index="${nextIndex}"]`)?.focus()
-        }
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        const nextIndex = Math.max(focusedIndex - 1, 0)
-        setFocusedIndex(nextIndex)
-        if (target instanceof HTMLElement && target.closest('[data-drafting-card-index]')) {
-          document.querySelector<HTMLButtonElement>(`[data-drafting-card-index="${nextIndex}"]`)?.focus()
-        }
-      } else if (event.key === 'Enter') {
-        if (target instanceof HTMLElement && target.closest('button, a')) return
-        const item = filtered[focusedIndex]
-        if (item) openMatter(item.matter.matter_id)
-      }
+      if (!worklistRef.current?.contains(target) || event.metaKey || event.ctrlKey || event.altKey) return
+      const row = target.closest<HTMLElement>('[data-drafting-row-index]')
+      if (!row || !['ArrowDown', 'ArrowUp'].includes(event.key)) return
+      event.preventDefault()
+      const next = Math.max(0, Math.min(filtered.length - 1, Number(row.dataset.draftingRowIndex) + (event.key === 'ArrowDown' ? 1 : -1)))
+      // Keep navigation on the same responsive surface, including in tests with no layout.
+      const surface = target.closest('table, [role="list"]')
+      surface?.querySelector<HTMLElement>(`[data-drafting-row-index="${next}"]`)?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [filtered, focusedIndex, openMatter])
+  }, [filtered.length])
 
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
@@ -213,18 +255,22 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               ))}
             </select>
           )}
+          <SavedDraftingViews view={view} onChange={updateView} />
           <span className="hidden text-[10px] text-muted-foreground xl:inline">
             ↑↓ navigate · Enter open · / search
           </span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+      <div ref={worklistRef} role="region" aria-label="Drafting worklist" onScroll={event => { positionRef.current.scrollTop = event.currentTarget.scrollTop; rememberPosition() }} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div>
           {filtered.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {!showRetry && (search || actionFilter !== 'all' || practiceFilter !== 'all') && (
+                  <Button variant="outline" size="sm" onClick={() => updateView({ search: '', sort: 'updated', action: 'all', practice: 'all' })}>Clear filters</Button>
+                )}
                 {showRetry && (
                   <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => router.refresh()}>
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -237,7 +283,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
             <MatterPipelineTable
               matters={filtered}
               focusedIndex={focusedIndex}
-              onFocusIndex={setFocusedIndex}
+              onFocusIndex={focusRow}
               onOpen={openMatter}
             />
           )}

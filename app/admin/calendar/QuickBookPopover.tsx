@@ -176,7 +176,7 @@ export function QuickBookPopover({
       <PopoverTrigger asChild>
         <Button size="sm">
           <CalendarPlus className="mr-1 h-4 w-4" /> Quick book
-          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-[10px]">⌘K</kbd>
+          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-[10px]">⌘⇧K</kbd>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] p-0">

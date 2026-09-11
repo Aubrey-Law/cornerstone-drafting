@@ -281,7 +281,7 @@ export function CalendarClient() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setQuickBookPrefill(null)
         setQuickBookOpen(open => !open)

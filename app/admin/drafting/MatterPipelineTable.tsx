@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { Badge } from '@/components/ui/badge'
@@ -38,7 +39,6 @@ export default function MatterPipelineTable({
             index={index}
             focusedIndex={focusedIndex}
             onFocusIndex={onFocusIndex}
-            onOpen={onOpen}
           />
         ))}
       </div>
@@ -64,6 +64,7 @@ export default function MatterPipelineTable({
                 item={item}
                 index={index}
                 focusedIndex={focusedIndex}
+                onFocusIndex={onFocusIndex}
                 onOpen={onOpen}
               />
             ))}
@@ -79,13 +80,11 @@ function MatterPipelineCard({
   index,
   focusedIndex,
   onFocusIndex,
-  onOpen,
 }: {
   item: DraftingHubMatter
   index: number
   focusedIndex: number
   onFocusIndex: (index: number) => void
-  onOpen: (matterId: string) => void
 }) {
   const matter = item.matter
   const action = hubNextAction(item)
@@ -96,12 +95,14 @@ function MatterPipelineCard({
 
   return (
     <div role="listitem">
-      <button
-        type="button"
+      <Link
+        href={`/admin/drafting/${matter.matter_id}`}
+        prefetch={false}
         data-drafting-card-index={index}
+        data-drafting-row-index={index}
         data-state={focused ? 'selected' : undefined}
-        className="w-full rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=selected]:border-primary/40 data-[state=selected]:bg-muted/50"
-        onClick={() => onOpen(matter.matter_id)}
+        className="block w-full rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=selected]:border-primary/40 data-[state=selected]:bg-muted/50"
+        onClick={() => onFocusIndex(index)}
         onMouseEnter={schedulePrefetch}
         onMouseLeave={cancelPrefetch}
         onFocus={() => {
@@ -148,7 +149,7 @@ function MatterPipelineCard({
           <CardMetric label="Activity" value={lastActivity ? formatDate(lastActivity) : '—'} />
           <CardMetric label="Practice" value={matter.practice_area || '—'} />
         </span>
-      </button>
+      </Link>
     </div>
   )
 }
@@ -168,11 +169,13 @@ function MatterPipelineTableRow({
   item,
   index,
   focusedIndex,
+  onFocusIndex,
   onOpen,
 }: {
   item: DraftingHubMatter
   index: number
   focusedIndex: number
+  onFocusIndex: (index: number) => void
   onOpen: (matterId: string) => void
 }) {
   const matter = item.matter
@@ -185,12 +188,21 @@ function MatterPipelineTableRow({
     <TableRow
       data-state={focused ? 'selected' : undefined}
       className="cursor-pointer"
-      onClick={() => onOpen(matter.matter_id)}
+      onClick={event => {
+        if ((event.target as HTMLElement).closest('a, button') || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+        onOpen(matter.matter_id)
+      }}
       onMouseEnter={schedulePrefetch}
       onMouseLeave={cancelPrefetch}
     >
       <TableCell className="max-w-[12rem] font-medium">
-        <span className="block truncate">{matter.client_name || 'Unnamed client'}</span>
+        <Link
+          href={`/admin/drafting/${matter.matter_id}`}
+          data-drafting-row-index={index}
+          className="block truncate rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onFocus={() => { onFocusIndex(index); schedulePrefetch() }}
+          onBlur={cancelPrefetch}
+        >{matter.client_name || 'Unnamed client'}</Link>
         {matter.spouse_name && (
           <span className="block truncate text-[11px] font-normal text-muted-foreground">
             & {matter.spouse_name}
