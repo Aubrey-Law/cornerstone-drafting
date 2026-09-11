@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => {
   const eq = vi.fn(() => ({ single }))
   const select = vi.fn(() => ({ eq }))
   const from = vi.fn(() => ({ select }))
-  const getClaims = vi.fn(async () => ({
+  const getClaims = vi.fn(async (): Promise<{
+    data: { claims: { sub?: string } }
+  }> => ({
     data: { claims: { sub: 'staff-user' } },
   }))
 
