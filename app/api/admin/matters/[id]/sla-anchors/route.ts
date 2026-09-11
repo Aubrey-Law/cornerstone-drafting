@@ -89,7 +89,11 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const admin = getAdminClient()
-    const matterId = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    // Leads included: the discovery call and the PMPS are pre-engagement dates
+    // by definition, recorded against an opportunity's matters row long before
+    // anything is hired. Resolving hired-only answered "Matter not found" to
+    // every attempt to set one from the lead page.
+    const matterId = await resolveMatterId(rawId, admin, { includeLeads: true }).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
 
     const { data: existing, error: readError } = await admin

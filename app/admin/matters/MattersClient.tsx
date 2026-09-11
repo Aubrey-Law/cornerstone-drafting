@@ -87,6 +87,12 @@ interface MattersClientProps {
   pagination?: MatterPageResult & {params:MatterPageParams}
 }
 
+/** URL spelling of the filters that do not travel under their own name. */
+const FILTER_PARAM: Partial<Record<keyof MatterTableFilters, string>> = {
+  stageGroup: 'stage',
+  includeClosed: 'closed',
+}
+
 const INTAKE_BADGE_CLASS: Record<string, string> = {
   submitted: 'border-green/40 bg-green-bg text-green',
   in_progress: 'border-blue-strong-border bg-blue-bg text-blue',
@@ -195,6 +201,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
       filters.search.trim()
       || filters.practice !== 'all'
       || filters.stageGroup !== 'all'
+      || filters.includeClosed
       || cardFilter,
     )
   }, [cardFilter, filters])
@@ -223,7 +230,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
    */
   const exportCsv = async () => {
     if(pagination) {
-      const params=new URLSearchParams({search:filters.search,practice:filters.practice,stage:filters.stageGroup,sort:sortKey,card:cardFilter ?? '',format:'json',limit:'2000'})
+      const params=new URLSearchParams({search:filters.search,practice:filters.practice,stage:filters.stageGroup,sort:sortKey,card:cardFilter ?? '',closed:filters.includeClosed ? '1' : '',format:'json',limit:'2000'})
       const response=await fetch(`/api/admin/matters/export?${params}`,{headers:token ? {Authorization:`Bearer ${token}`} : {}})
       if(!response.ok) throw new Error('Matter export failed')
       const result=await response.json()
@@ -286,7 +293,8 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
     setFilters(current => ({ ...current, [key]: value }))
     if(pagination) {
       if(searchTimer.current) clearTimeout(searchTimer.current)
-      const changes={ [key==='stageGroup' ? 'stage' : key]:value }
+      // A boolean is a present-or-absent flag in the URL, not the string "false".
+      const changes={ [FILTER_PARAM[key] ?? key]: typeof value==='boolean' ? (value ? '1' : '') : value as string }
       if(key==='search') searchTimer.current=setTimeout(()=>navigate(changes),300)
       else navigate(changes)
     }
@@ -294,7 +302,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
 
   const clearFilters = () => {
     setFilters(EMPTY_MATTER_TABLE_FILTERS)
-    if(pagination) navigate({search:'',practice:'all',stage:'all',card:''})
+    if(pagination) navigate({search:'',practice:'all',stage:'all',card:'',closed:''})
   }
 
   const toggleAllFiltered = (checked: boolean) => {
@@ -507,6 +515,17 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
               {STAGE_GROUP_LABELS[group]}
             </FilterChip>
           ))}
+          {/*
+            Closed matters are out of the list by default — finished work with
+            nothing waiting on it — and this is the way back to one.
+          */}
+          <FilterChip
+            aria-label="Show closed matters"
+            onClick={() => updateFilter('includeClosed', !filters.includeClosed)}
+            selected={filters.includeClosed}
+          >
+            Closed
+          </FilterChip>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <div
               className="inline-flex rounded-md border border-border bg-background p-0.5"

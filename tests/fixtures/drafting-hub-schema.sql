@@ -1,6 +1,6 @@
 -- Synthetic schema for a disposable PostgreSQL database only.
 create table public.matters (id uuid primary key, matter_number text);
-create table public.pipeline_fixture (matter_id uuid, matter_name text, stage text, matter_created timestamptz,
+create table public.pipeline_fixture (matter_id uuid, matter_name text, stage text, status text, matter_created timestamptz,
   client_name text, client_email text, spouse_name text, spouse_email text, plan_type text, practice_area text, marital_status text);
 create view public.v_matter_pipeline as select * from public.pipeline_fixture;
 create table public.design_sheets (id uuid primary key, matter_id uuid, status text, version integer, plan_type text, decisions jsonb, updated_at timestamptz, created_at timestamptz);
@@ -12,6 +12,9 @@ grant select on all tables in schema public to service_role;
 insert into public.matters select md5(i::text)::uuid, '2026-' || i from generate_series(1,1203) i;
 insert into public.pipeline_fixture select md5(i::text)::uuid, 'Family ' || i,
   case when i <= 1180 then 'drafting' when i <=1200 then 'client_review' when i=1203 then 'revision' else 'drafting' end,
+  -- A matter closed by status while its stage still reads `drafting` is the row
+  -- the worklist used to keep forever; the hub must drop it.
+  case when i = 1 then 'closed' else 'active' end,
   now()-interval '15 days', 'Client ' || lpad(i::text,4,'0'), 'person' || i || '@example.test', null, null, 'pour_over',
   case when i%2=1 or i>1200 then 'Estate Planning' else 'Probate' end, 'single'
   from generate_series(1,1203) i;

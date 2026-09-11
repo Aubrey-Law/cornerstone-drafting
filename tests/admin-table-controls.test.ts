@@ -117,6 +117,7 @@ describe('matter table controls', () => {
       search: 'smith',
       practice: 'EP',
       stageGroup: 'active',
+      includeClosed: false,
     }, 'last_activity'))).toEqual(['matching-matter'])
   })
 

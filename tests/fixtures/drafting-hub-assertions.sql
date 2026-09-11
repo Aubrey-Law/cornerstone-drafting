@@ -3,13 +3,13 @@ do $$
 declare r jsonb; a jsonb; b jsonb;
 begin
   r := public.drafting_hub_page();
-  assert (r->>'total')::int = 1203, 'global total must exceed PostgREST row cap';
+  assert (r->>'total')::int = 1202, 'global total must exceed PostgREST row cap, closed matter excluded';
   assert jsonb_array_length(r->'rows') = 50, 'browser page bounded';
-  assert (r#>>'{actionCounts,design}')::int = 1180;
+  assert (r#>>'{actionCounts,design}')::int = 1179;
   assert (r#>>'{actionCounts,review}')::int = 20;
   r := public.drafting_hub_page('', 'review', 'Estate Planning');
   assert (r->>'total')::int = 10;
-  assert (r#>>'{actionCounts,all}')::int = 603, 'action facets respect practice, ignore action';
+  assert (r#>>'{actionCounts,all}')::int = 602, 'action facets respect practice, ignore action';
   assert (r#>>'{actionCounts,setup}')::int = 1;
   assert (r#>>'{actionCounts,generate}')::int = 1;
   assert (r#>>'{actionCounts,revise}')::int = 1;
@@ -24,11 +24,14 @@ begin
   r := public.drafting_hub_page('missing', 'all', 'all', 'updated', 400);
   assert (r->>'page')::int = 1 and (r->>'total')::int = 0;
   r := public.drafting_hub_page('', 'all', 'all', 'client', 400);
-  assert (r->>'page')::int = 25 and jsonb_array_length(r->'rows') = 3, 'empty page clamps to last';
+  assert (r->>'page')::int = 25 and jsonb_array_length(r->'rows') = 2, 'empty page clamps to last';
+  -- Closed by status with the stage still mid-drafting: off the worklist.
+  r := public.drafting_hub_page('client 0001');
+  assert (r->>'total')::int = 0, 'a closed matter leaves the drafting worklist';
   a := public.drafting_hub_page('', 'all', 'all', 'client', 1);
   b := public.drafting_hub_page('', 'all', 'all', 'client', 2);
-  assert a#>>'{rows,49,matter,client_name}' = 'Client 0050';
-  assert b#>>'{rows,0,matter,client_name}' = 'Client 0051';
+  assert a#>>'{rows,49,matter,client_name}' = 'Client 0051';
+  assert b#>>'{rows,0,matter,client_name}' = 'Client 0052';
   -- Stable ID tie breaker under identical action/activity/name.
   update public.pipeline_fixture set client_name='Same';
   a := public.drafting_hub_page('', 'all', 'all', 'client', 1);
@@ -40,5 +43,5 @@ begin
   assert has_function_privilege('service_role', 'public.drafting_hub_page(text,text,text,text,integer,integer)', 'execute');
 end $$;
 set role service_role;
-select (public.drafting_hub_page()->>'total')::int = 1203 as service_role_read_pass;
+select (public.drafting_hub_page()->>'total')::int = 1202 as service_role_read_pass;
 reset role;

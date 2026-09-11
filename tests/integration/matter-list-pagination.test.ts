@@ -19,14 +19,21 @@ afterAll(()=>{
   sql(`delete from public.intake_documents where client_intake_id in (${ids}); delete from public.matter_documents where matter_id in (select id::text from (${ids}) as fixture(id)); delete from public.client_intake where id in (${ids}); delete from public.matter_fixture where matter_id in (${ids}); delete from public.matters where id in (${ids})`)
 })
 describe('complete matter pages and board columns',()=>{
-  it('retains hired/nonarchived scope and stable global totals beyond 100 matters',()=>{
+  it('retains hired/open scope and stable global totals beyond 100 matters',()=>{
     const first=page(), second=page({page:2})
-    expect(first.total).toBe(151)
+    // 153 rows, less the lead, the archived one, and the two left at the closed
+    // stage: finished work is off the list until someone asks for it.
+    expect(first.total).toBe(150)
     expect(first.rows).toHaveLength(50)
     expect(new Set([...first.rows,...second.rows].map(row=>row.matter_id)).size).toBe(100)
     expect(page().rows.map(row=>row.matter_id)).toEqual(first.rows.map(row=>row.matter_id))
-    expect(first.groups).toEqual({early:70,active:50,work:30,closed:1})
-    expect(page({page:99}).page).toBe(4)
+    expect(first.groups).toEqual({early:70,active:50,work:30})
+    expect(page({page:99}).page).toBe(3)
+  })
+  it('brings closed and archived matters back only when asked',()=>{
+    const shown=page({closed:'show'})
+    expect(shown.total).toBe(152)
+    expect(shown.groups.closed).toBe(2)
   })
   it('pages each board column independently while retaining full column totals',()=>{
     const result=page({view:'board',groupPages:{early:2}})
@@ -36,7 +43,10 @@ describe('complete matter pages and board columns',()=>{
     expect(result.total).toBe(151)
   })
   it('filters the complete set and counts only uploads after review',()=>{
-    expect(page({search:`${prefix}-151`}).total).toBe(1)
+    expect(page({search:`${prefix}-150`}).total).toBe(1)
+    // Search does not smuggle a closed matter back in; the toggle does.
+    expect(page({search:`${prefix}-151`}).total).toBe(0)
+    expect(page({search:`${prefix}-151`,closed:'show'}).total).toBe(1)
     expect(page({practice:'Probate'}).total).toBe(75)
     const attention=page({card:'attention'})
     expect(attention.total).toBe(1)

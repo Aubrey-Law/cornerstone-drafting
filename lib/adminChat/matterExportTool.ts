@@ -37,7 +37,8 @@ const EXPORT_MATTERS_TOOL: Anthropic.Tool = {
     'Use it whenever the attorney asks for a list, export, or spreadsheet of matters or active ' +
     'clients. Filters match the matters list: a free-text search over client, matter number, ' +
     'matter name, email, phone, practice area and stage; a practice area; and a stage group. ' +
-    'Archived matters are never included. Returns the rows plus a CSV download link. Read-only.',
+    'Closed and archived matters are left out unless include_closed is true. ' +
+    'Returns the rows plus a CSV download link. Read-only.',
   input_schema: {
     type: 'object',
     properties: {
@@ -61,6 +62,12 @@ const EXPORT_MATTERS_TOOL: Anthropic.Tool = {
         enum: [...MATTER_SORT_KEYS],
         description: 'Row order. Defaults to client_asc (alphabetical by client).',
       },
+      include_closed: {
+        type: 'boolean',
+        description:
+          'Include closed and archived matters. Defaults to false — the list is open work. ' +
+          'Set it when the attorney asks about closed, finished or archived matters.',
+      },
       limit: {
         type: 'number',
         description:
@@ -72,7 +79,7 @@ const EXPORT_MATTERS_TOOL: Anthropic.Tool = {
 }
 
 export function matterExportSystemPromptNote() {
-  return `\n\nMATTER EXPORT: Call \`${EXPORT_MATTERS_TOOL_NAME}\` when the attorney asks for a list, export, or spreadsheet of matters or active clients. It returns each matter's client, email, phone, matter number, matter name, practice area, stage, intake status, fee and last milestone date, plus a CSV download link. It covers open matters only — archived ones are never included, so say so if they ask about archived work. Present the rows as a compact markdown table with only the columns the attorney asked about, and mention the download link. Leave a blank field blank rather than inventing one. If the result reports \`truncated: true\`, say how many matters matched in total and that the CSV holds the full set.`
+  return `\n\nMATTER EXPORT: Call \`${EXPORT_MATTERS_TOOL_NAME}\` when the attorney asks for a list, export, or spreadsheet of matters or active clients. It returns each matter's client, email, phone, matter number, matter name, practice area, stage, intake status, fee and last milestone date, plus a CSV download link. It covers open matters by default — closed and archived ones are left out unless you pass \`include_closed: true\`, which is what to do when the attorney asks about closed or finished work. Present the rows as a compact markdown table with only the columns the attorney asked about, and mention the download link. Leave a blank field blank rather than inventing one. If the result reports \`truncated: true\`, say how many matters matched in total and that the CSV holds the full set.`
 }
 
 export const exportMattersToolExecutor: AdminChatToolExecutor = {
@@ -83,6 +90,7 @@ export const exportMattersToolExecutor: AdminChatToolExecutor = {
       search: fields.search,
       practice: fields.practice_area,
       stage: fields.stage_group,
+      closed: fields.include_closed,
     })
     const sort = matterSortKeyFrom(fields.sort)
     const limit = Math.min(
@@ -109,6 +117,7 @@ export const exportMattersToolExecutor: AdminChatToolExecutor = {
             search: filters.search || null,
             practice_area: filters.practice,
             stage_group: filters.stageGroup,
+            include_closed: filters.includeClosed,
             sort,
           },
           returned: page.rows.length,

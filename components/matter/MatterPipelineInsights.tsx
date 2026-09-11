@@ -2,6 +2,7 @@
 
 import { AlertCircle, Briefcase, FileSignature, Inbox } from 'lucide-react'
 import { matterLastActivityAt } from '@/lib/adminTables/matterTable'
+import { isClosedMatter } from '@/lib/matters/closedMatter'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { stageInfo } from '@/types/database'
 
@@ -22,9 +23,13 @@ export type MatterCardFilter = 'open' | 'attention' | 'signing'
 const QUIET_DAYS = 14
 const SIGNING_WINDOW_DAYS = 30
 
-/** Everything that has not reached a closed stage. */
+/**
+ * Everything still running: not closed by status, and not at a closed stage.
+ * Both axes, because the firm closes matters along both — see
+ * `lib/matters/closedMatter.ts`.
+ */
 export function isOpenMatter(matter: MatterListRow): boolean {
-  return stageInfo(matter.stage).group !== 'closed'
+  return !isClosedMatter(matter) && stageInfo(matter.stage).group !== 'closed'
 }
 
 export function awaitingIntake(matter: MatterListRow): boolean {

@@ -12,7 +12,7 @@ import { matterExportCsv, matterExportFilename, matterExportLabel } from '@/lib/
  * The matters list export: the columns the list shows, as CSV.
  *
  * Filtered by the same vocabulary as the matters list (`search`, `practice`,
- * `stage`, `sort`), so a link the assistant hands back opens the same
+ * `stage`, `sort`, `closed`), so a link the assistant hands back opens the same
  * selection the attorney asked it about. `format=json` returns the rows
  * instead, which is what the `export_matters` tool reads.
  */
@@ -25,6 +25,8 @@ export async function GET(req: Request) {
     search: query.get('search'),
     practice: query.get('practice'),
     stage: query.get('stage'),
+    // The export mirrors the list, closed matters included or left out.
+    closed: query.get('closed'),
   })
   const sort = matterSortKeyFrom(query.get('sort'))
   const limit = query.has('limit')

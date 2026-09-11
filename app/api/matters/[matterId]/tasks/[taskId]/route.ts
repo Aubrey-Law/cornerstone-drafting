@@ -11,7 +11,7 @@ import {
   type ShiftedTaskDates,
 } from '@/lib/slaTasks/schedule'
 import { PLAN_TASK_COLUMNS } from '@/lib/slaTasks/types'
-import { TASK_STATUSES, type TaskRow, type TaskStatus } from '@/lib/tasks/types'
+import { TASK_STATUSES, type ChecklistItem, type TaskRow, type TaskStatus } from '@/lib/tasks/types'
 
 /**
  * "Skipped — not applicable" is `archived` with `skipped_at` set. It travels as
@@ -34,17 +34,40 @@ interface PatchBody {
   paused?: unknown
 }
 
-/** Timestamp columns that must agree with whatever status the task lands in. */
-function statusStamps(status: PlanStatusInput, now: string) {
+/**
+ * Columns that must agree with whatever status the task lands in.
+ *
+ * The same stamps the queue's own PATCH writes (app/api/admin/tasks/[id]), so a
+ * task finished on the plan board is recorded exactly like one ticked off
+ * anywhere else: who finished it, and every subtask closed out behind it. A
+ * completion that recorded neither read back as unfinished work on the record's
+ * task tab — "0 of 3 done" against a task the plan called done.
+ */
+function statusStamps(
+  status: PlanStatusInput,
+  now: string,
+  existing: TaskRow,
+  userId: string | null,
+) {
   const skipped = status === 'skipped'
-  return {
+  // Any hand-set status makes this the user's decision, not the closeout
+  // sweep's. Leaving a stale marker on the row would let a later reopen drag a
+  // completed task back to open. See lib/tasks/closeout.ts.
+  const common = {
     status: skipped ? 'archived' : status,
-    completed_at: status === 'done' ? now : null,
     skipped_at: skipped ? now : null,
-    // Any hand-set status makes this the user's decision, not the closeout
-    // sweep's. Leaving a stale marker on the row would let a later reopen drag
-    // a completed task back to open. See lib/tasks/closeout.ts.
     closeout_reason: null,
+  }
+  if (status !== 'done') return { ...common, completed_at: null, completed_by: null }
+  // An edit saved against a task that was already finished is not a second
+  // completion: re-dating it would move it between one day's "Done today" and
+  // another's.
+  const recorded = existing.status === 'done' && existing.completed_at
+  return {
+    ...common,
+    completed_at: recorded ? existing.completed_at : now,
+    completed_by: recorded ? existing.completed_by : userId,
+    checklist: ((existing.checklist ?? []) as ChecklistItem[]).map(item => ({ ...item, done: true })),
   }
 }
 
@@ -92,7 +115,8 @@ export async function PATCH(
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 })
   if (!existing) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const task = toPlanTask(existing as unknown as TaskRow)
+  const existingTask = existing as unknown as TaskRow
+  const task = toPlanTask(existingTask)
   const now = new Date().toISOString()
   const today = firmTodayKey()
 
@@ -122,12 +146,12 @@ export async function PATCH(
       const pausedFrom = firmDateKey(task.paused_at)
       shiftDays = pausedFrom ? Math.max(0, daysBetween(pausedFrom, today)) : 0
       shiftInclusive = true
-      if (!isPlanStatus(body.status)) Object.assign(update, statusStamps('in_progress', now))
+      if (!isPlanStatus(body.status)) Object.assign(update, statusStamps('in_progress', now, existingTask, auth.userId))
     }
   }
 
   if (isPlanStatus(body.status)) {
-    Object.assign(update, statusStamps(body.status, now))
+    Object.assign(update, statusStamps(body.status, now, existingTask, auth.userId))
     if (completing) {
       update.paused_at = null
       if (task.pauses_clock) {

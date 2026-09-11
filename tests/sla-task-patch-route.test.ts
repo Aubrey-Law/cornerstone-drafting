@@ -273,3 +273,57 @@ describe('PATCH matter task', () => {
     expect(updates).toHaveLength(0)
   })
 })
+
+/**
+ * A task finished on the plan board is finished the same way as one ticked off
+ * in the queue: the queue's PATCH records who did it and closes the subtasks
+ * out, and a plan completion that did neither read back as unfinished work
+ * everywhere else it appeared.
+ */
+describe('completing on the plan board', () => {
+  it('records who finished it and closes out its subtasks', async () => {
+    currentTask = task()
+    currentTask.checklist = [{ text: 'Send the letter', done: false }, { text: 'File it', done: true }]
+
+    await PATCH(request({ status: 'done' }), { params })
+
+    expect(updates[0].patch).toMatchObject({
+      status: 'done',
+      completed_at: expect.any(String),
+      completed_by: 'attorney-1',
+      checklist: [{ text: 'Send the letter', done: true }, { text: 'File it', done: true }],
+    })
+  })
+
+  it('keeps the original completion when an already-finished task is saved again', async () => {
+    currentTask = task({ status: 'done' })
+    currentTask.completed_at = '2026-03-09T10:00:00.000Z'
+    currentTask.completed_by = 'paralegal-2'
+
+    await PATCH(request({ status: 'done' }), { params })
+
+    expect(updates[0].patch).toMatchObject({
+      completed_at: '2026-03-09T10:00:00.000Z',
+      completed_by: 'paralegal-2',
+    })
+  })
+
+  it('clears the completion — and leaves the checklist alone — on any other status', async () => {
+    currentTask = task({ status: 'done' })
+    currentTask.checklist = [{ text: 'Send the letter', done: true }]
+
+    await PATCH(request({ status: 'open' }), { params })
+
+    expect(updates[0].patch).toMatchObject({ status: 'open', completed_at: null, completed_by: null })
+    expect(updates[0].patch).not.toHaveProperty('checklist')
+  })
+
+  it('leaves no closeout marker behind for a later reopen to act on', async () => {
+    currentTask = task()
+    currentTask.closeout_reason = 'matter_closed'
+
+    await PATCH(request({ status: 'done' }), { params })
+
+    expect(updates[0].patch.closeout_reason).toBeNull()
+  })
+})

@@ -3,6 +3,7 @@ import { practiceAreaLabel } from '@/lib/practiceArea'
 import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
 import { stageInfo, type StageGroup } from '@/types/database'
 import { matterLastMilestoneAt, matterQuietDays } from '@/lib/matters/cardFacts'
+import { isClosedMatter } from '@/lib/matters/closedMatter'
 import type { MatterListRow } from '@/lib/queries/matters'
 
 /**
@@ -75,7 +76,9 @@ function totalFrom(dates: (string | null | undefined)[], months: { current: stri
 }
 
 export function isOpenMatter(matter: MatterListRow): boolean {
-  return stageInfo(matter.stage).group !== 'closed'
+  // A matter closed by status is not open work either, whatever stage its row
+  // was left at. See `lib/matters/closedMatter.ts`.
+  return !isClosedMatter(matter) && stageInfo(matter.stage).group !== 'closed'
 }
 
 export function awaitsIntake(matter: MatterListRow): boolean {
