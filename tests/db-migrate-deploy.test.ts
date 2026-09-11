@@ -54,17 +54,31 @@ describe('what the deploy refuses to do quietly', () => {
   })
 
   it('shows what it is about to apply before applying it', () => {
-    const dryRun = WORKFLOW.indexOf('run: supabase db push --dry-run')
-    const apply = WORKFLOW.search(/run: supabase db push\s*\n/)
+    const dryRun = WORKFLOW.indexOf('- name: Show what will apply')
+    const apply = WORKFLOW.indexOf('- name: Apply\n')
     expect(dryRun).toBeGreaterThan(-1)
     expect(apply).toBeGreaterThan(dryRun)
+    expect(step('Show what will apply')).toContain('--dry-run')
+    for (const label of ['Show what will apply', 'Apply']) {
+      expect(step(label)).toContain('--project-ref "$PROJECT_REF"')
+      expect(step(label)).toContain('--skip-vault')
+    }
+    expect(WORKFLOW).not.toContain('run: supabase link')
+  })
+
+  it('defaults manual verification to a dry run and never applies on a feature branch', () => {
+    expect(WORKFLOW).toMatch(/dry_run:[\s\S]*?type: boolean\s+default: true/)
+    const apply = step('Apply')
+    expect(apply).toContain("github.ref == 'refs/heads/main'")
+    expect(apply).toContain("github.event_name == 'push' || !inputs.dry_run")
+    expect(apply).toContain('--yes')
   })
 
   it('re-checks the history afterwards, because a push can skip a version', () => {
     // 20260909000000 was used twice. `db push` applies a version once and
     // reports success, so the second file's SQL never ran while every status
     // stayed green. --strict fails on anything merged but unapplied.
-    const apply = WORKFLOW.search(/run: supabase db push\s*\n/)
+    const apply = WORKFLOW.indexOf('- name: Apply\n')
     const verify = WORKFLOW.indexOf('check:migration-drift')
     expect(verify).toBeGreaterThan(apply)
     expect(step('Verify the repo and the history now agree')).toContain('--strict')

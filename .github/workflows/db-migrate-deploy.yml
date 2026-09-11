@@ -35,6 +35,11 @@ on:
     paths:
       - 'supabase/migrations/**'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Verify connection and migration history without applying migrations'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -108,16 +113,17 @@ jobs:
           esac
           echo "PROJECT_REF=$ref" >> "$GITHUB_ENV"
 
-      - name: Link the project
-        run: supabase link --project-ref "$PROJECT_REF"
-
+      # Linking also requests revealed project API keys, which a database-only
+      # token may not access. The pinned CLI accepts the project ref directly.
+      # Vault configuration is a separate release concern, not a schema change.
       # Logged before anything runs, so the run itself is the record of what was
       # applied to a production database and when.
       - name: Show what will apply
-        run: supabase db push --dry-run
+        run: supabase db push --project-ref "$PROJECT_REF" --skip-vault --dry-run
 
       - name: Apply
-        run: supabase db push
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || !inputs.dry_run)
+        run: supabase db push --project-ref "$PROJECT_REF" --skip-vault --yes
 
       # The post-condition, not a formality: `db push` reports success for a
       # version it skipped because the history already claimed it, which is how
