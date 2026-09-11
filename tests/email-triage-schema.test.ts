@@ -89,3 +89,44 @@ describe('email triage migration', () => {
     expect(triage).toBeGreaterThan(provider)
   })
 })
+
+describe('the legal-vendor seed migration', () => {
+  function vendorSeed(): string {
+    const dir = path.join(process.cwd(), 'supabase/migrations')
+    const name = fs.readdirSync(dir).find(f => f.endsWith('_email_triage_legal_vendor_seed.sql'))
+    if (!name) throw new Error('vendor seed migration not found')
+    return fs.readFileSync(path.join(dir, name), 'utf8')
+  }
+
+  it('seeds the plan administrators this firm actually bills through', () => {
+    // LegalEASE alone was seven of the seventeen rows the first production
+    // scan queued, every one of them read as a possible new lead.
+    const sql = vendorSeed()
+    for (const domain of ['legaleaseplan.com', 'legalplans.com', 'clcadvantage.com']) {
+      expect(sql).toContain(domain)
+    }
+  })
+
+  it('seeds the recording and payment systems that mail notices, not people', () => {
+    const sql = vendorSeed()
+    for (const domain of ['simplifile.com', 'squareup.com', 'clio.com']) {
+      expect(sql).toContain(domain)
+    }
+  })
+
+  it('adds rows without disturbing the ones already there', () => {
+    // The attorney's own dismissals wrote rules into this table before this
+    // migration ran. A seed that clobbered them would silently un-ignore
+    // senders he had already silenced.
+    const sql = vendorSeed()
+    expect(sql).toContain('ON CONFLICT DO NOTHING')
+    expect(sql).not.toMatch(/\b(DELETE|TRUNCATE|DROP)\b/i)
+  })
+
+  it('sorts after the migration that created the table', () => {
+    const names = fs.readdirSync(path.join(process.cwd(), 'supabase/migrations'))
+      .filter(n => n.endsWith('.sql')).sort()
+    expect(names.findIndex(n => n.endsWith('_email_triage_legal_vendor_seed.sql')))
+      .toBeGreaterThan(names.findIndex(n => n.endsWith('_email_triage.sql')))
+  })
+})

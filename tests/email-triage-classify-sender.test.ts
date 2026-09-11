@@ -48,6 +48,7 @@ const BASE = {
   ignore: EMPTY_IGNORE_RULES,
   connectedAddress: 'scott@aubreylegal.com',
   firmDomains: ['aubreylegal.com'],
+  threadsFromSender: 1,
 }
 
 beforeEach(() => {
@@ -235,5 +236,121 @@ describe('classifySender', () => {
   it('carries a reason so a wrong call can be argued with', async () => {
     const match = await classifySender(adminStub(), BASE)
     expect(match.reason).toBeTruthy()
+  })
+})
+
+/**
+ * Regressions from the first production scan.
+ *
+ * That run queued 17 threads and one of them was worth reading. These pin the
+ * senders that got through, using their real shapes — because the rules looked
+ * reasonable in the abstract and were wrong against an actual law firm's inbox.
+ */
+describe('isAutomatedSender — the first production scan', () => {
+  const check = (over: Partial<typeof BASE>) => isAutomatedSender({ ...BASE, ...over })
+
+  it('catches a claims desk filing ticket after ticket', () => {
+    // Seven of these reached the queue as possible new leads. Three signals
+    // agree: a role local part, a reference number, and the volume.
+    const verdict = check({
+      email: 'claims@legaleaseplan.com',
+      name: 'LegalEASE Claims',
+      subject: 'Claim #43667 First Request for Claim Information',
+      threadsFromSender: 7,
+    })
+    expect(verdict.automated).toBe(true)
+  })
+
+  it('catches an invoice notification', () => {
+    const verdict = check({
+      email: 'messenger@messaging.squareup.com',
+      name: 'Square',
+      subject: 'You have an invoice waiting (#000189)',
+      threadsFromSender: 2,
+    })
+    expect(verdict.automated).toBe(true)
+  })
+
+  it('sees a hyphenated department mailer as one signal, not proof', () => {
+    // `ar-simplifile@` is a role address with a suffix, which the plain
+    // local-part set cannot match — so the prefix rule earns a signal here.
+    //
+    // But one signal is deliberately not enough, and this notice offers
+    // nothing else: a real display name, no reference number, a single
+    // thread. Condemning it would mean condemning `info@smallbusiness.com`
+    // on identical evidence, which is the enquiry this whole rule protects.
+    // So the structural rules decline, and the ignore list is what silences
+    // it — which is exactly what the ignore list is for.
+    const verdict = check({
+      email: 'ar-simplifile@ice.com',
+      name: 'Simplifile AR',
+      subject: 'eRecording License Payment Scheduled',
+      threadsFromSender: 1,
+    })
+    expect(verdict.reason).toBeNull()
+    expect(verdict.automated).toBe(false)
+
+    const ignored = check({
+      email: 'ar-simplifile@ice.com',
+      name: 'Simplifile AR',
+      subject: 'eRecording License Payment Scheduled',
+      ignore: { domains: new Set(['simplifile.com', 'ice.com']), addresses: new Set() },
+    })
+    expect(ignored).toMatchObject({ automated: true, hard: true })
+  })
+
+  it('catches a panel billing inquiry', () => {
+    const verdict = check({
+      email: 'panel@legalplans.com',
+      name: 'Legal Plans Panel',
+      subject: 'Billing Inquiry — account 88213',
+      threadsFromSender: 1,
+    })
+    expect(verdict.automated).toBe(true)
+  })
+
+  it('still lets a real person through, however they are addressed', () => {
+    // The case the two-signal rule exists to protect, and the one row from
+    // that scan that actually mattered.
+    expect(check({
+      email: 'andresen.jola@gmail.com',
+      name: 'J Andresen',
+      subject: 'Re: Aubrey Law - Invitation to your Client Portal',
+      threadsFromSender: 1,
+    }).automated).toBe(false)
+  })
+
+  it('does not condemn a one-off enquiry from a small firm’s shared inbox', () => {
+    expect(check({
+      email: 'info@smallbusiness.com',
+      name: 'Dana Reeve',
+      subject: 'Question about setting up a trust',
+      threadsFromSender: 1,
+    }).automated).toBe(false)
+  })
+
+  it('does not condemn a client who happens to write often', () => {
+    // Volume alone is one signal. A client mid-matter can easily open three
+    // threads in a fortnight, and must not be filtered for it.
+    expect(check({
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      subject: 'One more question about the trustee',
+      threadsFromSender: 5,
+    }).automated).toBe(false)
+  })
+
+  it('does not read a year or a street number as a reference number', () => {
+    expect(check({
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      subject: 'Moving to 1247 Beacon St in 2026 — does the deed change?',
+      threadsFromSender: 1,
+    }).automated).toBe(false)
+  })
+
+  it('defaults to one thread when the caller does not count', () => {
+    const { threadsFromSender: _omitted, ...withoutCount } = BASE
+    expect(isAutomatedSender(withoutCount as typeof BASE).automated).toBe(false)
   })
 })
