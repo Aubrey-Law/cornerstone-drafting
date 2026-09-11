@@ -61,6 +61,10 @@ it('passes complete task badge totals to the page without downloading the task l
   expect(page.props.initialTaskCounts).toEqual({ open: 603, overdue: 301 })
   expect(mocks.counts).toHaveBeenCalledTimes(1)
 })
+it('keeps the matter page hired-only through the timing wrapper', async () => {
+  await MatterDetailPage(params)
+  expect(mocks.matter).toHaveBeenCalledExactlyOnceWith('11111111-2222-3333-4444-555555555555')
+})
 it('does not render a false all-clear when upload counts fail', async () => {
   mocks.uploads.mockRejectedValue(new Error('Uploads unavailable'))
   await expect(MatterDetailPage(params)).rejects.toThrow('Uploads unavailable')

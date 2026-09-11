@@ -80,12 +80,4 @@ describe('matter query lifecycle views', () => {
     expect(source).toContain('fetchMatter(lead.matter_id, { includeLeads: true })')
   })
 
-  it('keeps the matter page hired-only', () => {
-    const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/page.tsx'),
-      'utf8',
-    )
-    expect(source).toContain('fetchMatter(id),')
-    expect(source).not.toContain('includeLeads: true')
-  })
 })

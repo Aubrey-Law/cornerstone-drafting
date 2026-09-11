@@ -22,6 +22,7 @@ import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
 import type { IntakeSnapshot } from '@/lib/queries'
+import { profileMatterDetail } from '@/lib/performance/matterDetailTiming'
 
 export const dynamic = 'force-dynamic'
 
@@ -240,118 +241,120 @@ async function loadLinkedLeadHistory(admin: ReturnType<typeof getAdminClient>, i
 }
 
 export default async function MatterDetailPage({ params }: Params) {
-  const { id: rawId } = await params
-  const admin = getAdminClient()
-  const id = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
-  if (!id) notFound()
-  // Identity is resolved first. All independent reads then overlap rather
-  // than waiting for a second round trip after the matter overview.
-  const matterShell = loadMatterShell(admin, id)
-  // Intake-dependent reads wait only for their own parent, not for design,
-  // notes, aging, and task reads that happen alongside them.
-  const intakeContext = matterShell.then(async matterRow => {
-    const intakeId = matterRow?.client_intake_id ?? null
-    const clientIntake = intakeId ? loadClientIntakeShell(admin, intakeId) : Promise.resolve(null)
-    const uploads = clientIntake.then(row => fetchUnreviewedUploadCounts(
-      admin, id, intakeId, row?.uploads_reviewed_at ?? null,
-      matterRow?.portal_uploads_reviewed_at ?? null,
-    ))
-    const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts] = await Promise.all([
-      fetchMatterEstateSnapshot(intakeId),
-      clientIntake,
-      loadLinkedLeadHistory(admin, intakeId),
-      loadMarketingConsent(admin, intakeId),
-      uploads,
+  return profileMatterDetail(async measure => {
+    const { id: rawId } = await params
+    const admin = getAdminClient()
+    const id = await measure('identity', () => resolveMatterId(rawId, admin)).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!id) notFound()
+    // Identity is resolved first. All independent reads then overlap rather
+    // than waiting for a second round trip after the matter overview.
+    const matterShell = measure('matter-shell', () => loadMatterShell(admin, id))
+    // Intake-dependent reads wait only for their own parent, not for design,
+    // notes, aging, and task reads that happen alongside them.
+    const intakeContext = matterShell.then(async matterRow => {
+      const intakeId = matterRow?.client_intake_id ?? null
+      const clientIntake = intakeId ? measure('client-intake', () => loadClientIntakeShell(admin, intakeId)) : Promise.resolve(null)
+      const uploads = clientIntake.then(row => measure('upload-counts', () => fetchUnreviewedUploadCounts(
+        admin, id, intakeId, row?.uploads_reviewed_at ?? null,
+        matterRow?.portal_uploads_reviewed_at ?? null,
+      )))
+      const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts] = await Promise.all([
+        measure('estate', () => fetchMatterEstateSnapshot(intakeId)),
+        clientIntake,
+        measure('lead-history', () => loadLinkedLeadHistory(admin, intakeId)),
+        measure('consent', () => loadMarketingConsent(admin, intakeId)),
+        uploads,
+      ])
+      return { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts }
+    })
+    const [matter, contacts, agingSummary, matterRow,
+      { data: detailsRow, error: detailsError }, notes, designSheet,
+      intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
+    ] = await Promise.all([
+      measure('core', () => fetchMatter(id)),
+      measure('contacts', () => fetchMatterContacts(id)),
+      measure('aging', () => fetchMatterAgingSummary(id)),
+      matterShell,
+      measure('details', () => admin.from('matter_details').select('*').eq('client_id', id).maybeSingle()),
+      measure('notes', () => loadMatterNotes(admin, id)),
+      measure('design', () => fetchDesignSheet(id)),
+      measure('intake-snapshot', () => loadIntakeSnapshotOptional(id)),
+      measure('activity', () => loadMatterActivity(admin, id)),
+      measure('stage-history', () => fetchMatterStageHistory(id)),
+      measure('task-counts', () => fetchRecordTaskCounts(id)),
+      intakeContext,
     ])
-    return { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts }
+    if (!matter) notFound()
+
+    const coreLoadError = detailsError
+    if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
+
+    const { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts } = context
+    const { leadNotes, leadMeetingNotes, leadActivity } = linkedHistory
+
+    const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
+
+    const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
+    const matterNumberManual = Boolean(matterRow?.matter_number_manual)
+    const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
+    // The stored flags are a snapshot of the intake submission. Resolve them against
+    // the design sheet so anything the attorney has since answered — a named
+    // fiduciary, a filled-in DOB — stops being reported as outstanding.
+    const storedReviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+    const reviewFlags = resolveIntakeReviewFlags(
+      storedReviewFlags,
+      designSheet as unknown as Record<string, unknown> | null,
+    )
+    const resyncPreviewCount = intakeSnapshot && designSheet
+      ? buildIntakeResyncPreview({
+          currentSheet: designSheet as unknown as Record<string, unknown>,
+          intake: intakeSnapshot,
+        }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
+      : 0
+
+    // Plan composition and fiduciaries belong to the design sheet; the matter
+    // page renders them read-only, so resolve them to names here rather than
+    // shipping the whole sheet to the client.
+    const planMirror = buildMatterPlanMirror(
+      designSheet,
+      contacts,
+      (detailsRow ?? null) as MatterDetailsRow | null,
+      { clientName: matter.client_name, spouseName: matter.spouse_name },
+    )
+
+    return (
+      <MatterDetailClient
+        matter={matter}
+        matterId={id}
+        initialTaskCounts={initialTaskCounts}
+        contacts={contacts}
+        agingSummary={agingSummary}
+        intakeId={intakeId}
+        clientIntakeRow={clientIntakeRow}
+        matterNumber={matterNumber}
+        matterNumberManual={matterNumberManual}
+        initialMatterType={(matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null}
+        matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
+        designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
+        planMirror={planMirror}
+        marketingConsent={marketingConsent}
+        initialEstateSnapshot={initialEstateSnapshot}
+        unreviewedUploadCounts={unreviewedUploadCounts}
+        initialNotes={notes as MatterNoteRow[]}
+        initialMatterLinkedNotes={mapMatterNoteRows(notes)}
+        initialLeadNotes={[
+          ...leadNotes.map(row => ({ ...row, lead_id: intakeId!, note_type: 'internal' as const })),
+          ...leadMeetingNotes.map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),
+        ]}
+        initialActivity={initialActivity}
+        initialStageHistory={stageHistory.entries}
+        designSheetSeeded={designSheetSeeded}
+        reviewFlags={reviewFlags}
+        resyncPreviewCount={resyncPreviewCount}
+        smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
+        esignEnabled={isEsignConfigured()}
+        emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
+      />
+    )
   })
-  const [matter, contacts, agingSummary, matterRow,
-    { data: detailsRow, error: detailsError }, notes, designSheet,
-    intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
-  ] = await Promise.all([
-    fetchMatter(id),
-    fetchMatterContacts(id),
-    fetchMatterAgingSummary(id),
-    matterShell,
-    admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
-    loadMatterNotes(admin, id),
-    fetchDesignSheet(id),
-    loadIntakeSnapshotOptional(id),
-    loadMatterActivity(admin, id),
-    fetchMatterStageHistory(id),
-    fetchRecordTaskCounts(id),
-    intakeContext,
-  ])
-  if (!matter) notFound()
-
-  const coreLoadError = detailsError
-  if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
-
-  const { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts } = context
-  const { leadNotes, leadMeetingNotes, leadActivity } = linkedHistory
-
-  const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
-
-  const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
-  const matterNumberManual = Boolean(matterRow?.matter_number_manual)
-  const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
-  // The stored flags are a snapshot of the intake submission. Resolve them against
-  // the design sheet so anything the attorney has since answered — a named
-  // fiduciary, a filled-in DOB — stops being reported as outstanding.
-  const storedReviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
-  const reviewFlags = resolveIntakeReviewFlags(
-    storedReviewFlags,
-    designSheet as unknown as Record<string, unknown> | null,
-  )
-  const resyncPreviewCount = intakeSnapshot && designSheet
-    ? buildIntakeResyncPreview({
-        currentSheet: designSheet as unknown as Record<string, unknown>,
-        intake: intakeSnapshot,
-      }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
-    : 0
-
-  // Plan composition and fiduciaries belong to the design sheet; the matter
-  // page renders them read-only, so resolve them to names here rather than
-  // shipping the whole sheet to the client.
-  const planMirror = buildMatterPlanMirror(
-    designSheet,
-    contacts,
-    (detailsRow ?? null) as MatterDetailsRow | null,
-    { clientName: matter.client_name, spouseName: matter.spouse_name },
-  )
-
-  return (
-    <MatterDetailClient
-      matter={matter}
-      matterId={id}
-      initialTaskCounts={initialTaskCounts}
-      contacts={contacts}
-      agingSummary={agingSummary}
-      intakeId={intakeId}
-      clientIntakeRow={clientIntakeRow}
-      matterNumber={matterNumber}
-      matterNumberManual={matterNumberManual}
-      initialMatterType={(matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null}
-      matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
-      designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
-      planMirror={planMirror}
-      marketingConsent={marketingConsent}
-      initialEstateSnapshot={initialEstateSnapshot}
-      unreviewedUploadCounts={unreviewedUploadCounts}
-      initialNotes={notes as MatterNoteRow[]}
-      initialMatterLinkedNotes={mapMatterNoteRows(notes)}
-      initialLeadNotes={[
-        ...leadNotes.map(row => ({ ...row, lead_id: intakeId!, note_type: 'internal' as const })),
-        ...leadMeetingNotes.map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),
-      ]}
-      initialActivity={initialActivity}
-      initialStageHistory={stageHistory.entries}
-      designSheetSeeded={designSheetSeeded}
-      reviewFlags={reviewFlags}
-      resyncPreviewCount={resyncPreviewCount}
-      smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
-      esignEnabled={isEsignConfigured()}
-      emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
-    />
-  )
 }

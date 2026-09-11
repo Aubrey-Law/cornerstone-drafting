@@ -1,0 +1,72 @@
+{
+  "revision": "3bc6bb1a0d4d612fa64e72966acc9668e4d3cd73",
+  "method": "Six parallel read-function probes per cycle from local Node 24 to production Supabase; GET/HEAD only; no page render or Vercel runtime included",
+  "samples": [
+    {
+      "cycle": 1,
+      "timings": [
+        {"phase": "identity", "ms": 347, "requests": [{"table": "matters", "ms": 316, "status": 200}]},
+        {"phase": "core", "ms": 377, "requests": [{"table": "v_matter_pipeline", "ms": 352, "status": 200}]},
+        {"phase": "contacts", "ms": 481, "requests": [{"table": "matters", "ms": 276, "status": 200}, {"table": "matter_contacts", "ms": 75, "status": 200}, {"table": "contacts", "ms": 82, "status": 200}]},
+        {"phase": "aging", "ms": 377, "requests": [{"table": "v_matter_aging", "ms": 349, "status": 200}]},
+        {"phase": "design", "ms": 380, "requests": [{"table": "design_sheets", "ms": 347, "status": 200}]},
+        {"phase": "intake", "ms": 623, "requests": [{"table": "matter_notes", "ms": 257, "status": 200}, {"table": "matters", "ms": 278, "status": 200}, {"table": "matter_contacts", "ms": 71, "status": 200}, {"table": "client_intake", "ms": 80, "status": 200}, {"table": "matter_contacts", "ms": 125, "status": 200}, {"table": "matter_contacts", "ms": 88, "status": 200}, {"table": "contacts", "ms": 103, "status": 200}]}
+      ]
+    },
+    {
+      "cycle": 2,
+      "timings": [
+        {"phase": "identity", "ms": 118, "requests": [{"table": "matters", "ms": 116, "status": 200}]},
+        {"phase": "core", "ms": 123, "requests": [{"table": "v_matter_pipeline", "ms": 120, "status": 200}]},
+        {"phase": "contacts", "ms": 260, "requests": [{"table": "matters", "ms": 116, "status": 200}, {"table": "matter_contacts", "ms": 67, "status": 200}, {"table": "contacts", "ms": 69, "status": 200}]},
+        {"phase": "aging", "ms": 123, "requests": [{"table": "v_matter_aging", "ms": 117, "status": 200}]},
+        {"phase": "design", "ms": 167, "requests": [{"table": "design_sheets", "ms": 165, "status": 200}]},
+        {"phase": "intake", "ms": 364, "requests": [{"table": "matter_notes", "ms": 116, "status": 200}, {"table": "matters", "ms": 117, "status": 200}, {"table": "matter_contacts", "ms": 66, "status": 200}, {"table": "matter_contacts", "ms": 70, "status": 200}, {"table": "client_intake", "ms": 71, "status": 200}, {"table": "matter_contacts", "ms": 56, "status": 200}, {"table": "contacts", "ms": 106, "status": 200}]}
+      ]
+    },
+    {
+      "cycle": 3,
+      "timings": [
+        {"phase": "identity", "ms": 83, "requests": [{"table": "matters", "ms": 81, "status": 200}]},
+        {"phase": "core", "ms": 92, "requests": [{"table": "v_matter_pipeline", "ms": 90, "status": 200}]},
+        {"phase": "contacts", "ms": 211, "requests": [{"table": "matters", "ms": 67, "status": 200}, {"table": "matter_contacts", "ms": 73, "status": 200}, {"table": "contacts", "ms": 62, "status": 200}]},
+        {"phase": "aging", "ms": 131, "requests": [{"table": "v_matter_aging", "ms": 129, "status": 200}]},
+        {"phase": "design", "ms": 84, "requests": [{"table": "design_sheets", "ms": 80, "status": 200}]},
+        {"phase": "intake", "ms": 322, "requests": [{"table": "matters", "ms": 81, "status": 200}, {"table": "matter_notes", "ms": 83, "status": 200}, {"table": "matter_contacts", "ms": 56, "status": 200}, {"table": "client_intake", "ms": 95, "status": 200}, {"table": "matter_contacts", "ms": 96, "status": 200}, {"table": "matter_contacts", "ms": 55, "status": 200}, {"table": "contacts", "ms": 80, "status": 200}]}
+      ]
+    },
+    {
+      "cycle": 4,
+      "timings": [
+        {"phase": "identity", "ms": 101, "requests": [{"table": "matters", "ms": 99, "status": 200}]},
+        {"phase": "core", "ms": 103, "requests": [{"table": "v_matter_pipeline", "ms": 99, "status": 200}]},
+        {"phase": "contacts", "ms": 191, "requests": [{"table": "matters", "ms": 61, "status": 200}, {"table": "matter_contacts", "ms": 65, "status": 200}, {"table": "contacts", "ms": 62, "status": 200}]},
+        {"phase": "aging", "ms": 69, "requests": [{"table": "v_matter_aging", "ms": 63, "status": 200}]},
+        {"phase": "design", "ms": 64, "requests": [{"table": "design_sheets", "ms": 60, "status": 200}]},
+        {"phase": "intake", "ms": 292, "requests": [{"table": "matter_notes", "ms": 67, "status": 200}, {"table": "matters", "ms": 100, "status": 200}, {"table": "matter_contacts", "ms": 57, "status": 200}, {"table": "client_intake", "ms": 58, "status": 200}, {"table": "matter_contacts", "ms": 59, "status": 200}, {"table": "matter_contacts", "ms": 60, "status": 200}, {"table": "contacts", "ms": 66, "status": 200}]}
+      ]
+    },
+    {
+      "cycle": 5,
+      "timings": [
+        {"phase": "identity", "ms": 96, "requests": [{"table": "matters", "ms": 94, "status": 200}]},
+        {"phase": "core", "ms": 93, "requests": [{"table": "v_matter_pipeline", "ms": 92, "status": 200}]},
+        {"phase": "contacts", "ms": 246, "requests": [{"table": "matters", "ms": 64, "status": 200}, {"table": "matter_contacts", "ms": 82, "status": 200}, {"table": "contacts", "ms": 64, "status": 200}]},
+        {"phase": "aging", "ms": 98, "requests": [{"table": "v_matter_aging", "ms": 95, "status": 200}]},
+        {"phase": "design", "ms": 99, "requests": [{"table": "design_sheets", "ms": 94, "status": 200}]},
+        {"phase": "intake", "ms": 299, "requests": [{"table": "matters", "ms": 95, "status": 200}, {"table": "matter_notes", "ms": 96, "status": 200}, {"table": "matter_contacts", "ms": 86, "status": 200}, {"table": "matter_contacts", "ms": 86, "status": 200}, {"table": "client_intake", "ms": 86, "status": 200}, {"table": "matter_contacts", "ms": 68, "status": 200}, {"table": "contacts", "ms": 43, "status": 200}]}
+      ]
+    },
+    {
+      "cycle": 6,
+      "timings": [
+        {"phase": "identity", "ms": 100, "requests": [{"table": "matters", "ms": 98, "status": 200}]},
+        {"phase": "core", "ms": 98, "requests": [{"table": "v_matter_pipeline", "ms": 91, "status": 200}]},
+        {"phase": "contacts", "ms": 263, "requests": [{"table": "matters", "ms": 100, "status": 200}, {"table": "matter_contacts", "ms": 86, "status": 200}, {"table": "contacts", "ms": 66, "status": 200}]},
+        {"phase": "aging", "ms": 102, "requests": [{"table": "v_matter_aging", "ms": 99, "status": 200}]},
+        {"phase": "design", "ms": 104, "requests": [{"table": "design_sheets", "ms": 99, "status": 200}]},
+        {"phase": "intake", "ms": 300, "requests": [{"table": "matter_notes", "ms": 99, "status": 200}, {"table": "matters", "ms": 100, "status": 200}, {"table": "client_intake", "ms": 84, "status": 200}, {"table": "matter_contacts", "ms": 84, "status": 200}, {"table": "matter_contacts", "ms": 85, "status": 200}, {"table": "matter_contacts", "ms": 56, "status": 200}, {"table": "contacts", "ms": 53, "status": 200}]}
+      ]
+    }
+  ]
+}
