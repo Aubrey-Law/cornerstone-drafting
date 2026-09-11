@@ -8,7 +8,12 @@ import {
 } from '@/lib/email/gmailRead'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { classifySender, emailDomain, type IgnoreRules } from './classifySender'
+import {
+  classifySender,
+  collectThreadParticipants,
+  emailDomain,
+  type IgnoreRules,
+} from './classifySender'
 import { generateTriageDraft } from './draft'
 import { evaluateNeedsReply } from './needsReply'
 
@@ -354,6 +359,15 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         ignore,
         connectedAddress: identity.address,
         firmDomains,
+        // The other side of a thread the firm started, for a sender whose own
+        // address matches nothing — a client written to at work who replies
+        // from personal Gmail.
+        threadParticipants: collectThreadParticipants({
+          messages: thread.messages,
+          senderEmail: inbound.from.email,
+          connectedAddress: identity.address,
+          firmDomains,
+        }),
       })
 
       if (match.classification === 'internal') {

@@ -199,6 +199,67 @@ export interface ClassifySenderArgs extends AutomatedCheckArgs {
   connectedAddress: string
   /** Domains that are the firm itself. Mail from these is never triaged. */
   firmDomains: string[]
+  /**
+   * Other addresses in this thread, from `collectThreadParticipants`.
+   *
+   * Consulted only when the sender's own address matches nothing: a client who
+   * was written to at work and replied from personal Gmail is otherwise a
+   * stranger forever. Exactly one entry, or this is not used — see below.
+   */
+  threadParticipants?: string[]
+}
+
+/**
+ * The other side of a two-party thread.
+ *
+ * Returns the non-firm addresses in a thread apart from the sender's own, and
+ * deliberately returns *all* of them so the caller can see how many there are:
+ * `classifySender` uses this only when there is exactly one, because that is
+ * the case where "the other party" is unambiguous.
+ *
+ * Why the count matters. Matching a sender through a thread means inheriting
+ * someone else's matter context, and inheriting the wrong one is far worse
+ * than inheriting none — it would put a client's file behind a draft written
+ * to a stranger. In a two-party thread the other address is the same person
+ * writing from a second mailbox, which is the case worth solving. In a thread
+ * with several outside parties — a client, opposing counsel, a CPA — the
+ * sender could be any of them, so nothing is assumed.
+ *
+ * Only recipients the firm itself wrote to count. An address that merely
+ * appeared in someone else's CC line is not one the firm chose to correspond
+ * with, and treating it as identifying would let an outsider attach themselves
+ * to a matter by CCing a client.
+ */
+export function collectThreadParticipants(args: {
+  messages: {
+    from: { email: string }
+    to: { email: string }[]
+    cc: { email: string }[]
+    labelIds: string[]
+  }[]
+  senderEmail: string
+  connectedAddress: string
+  firmDomains: string[]
+}): string[] {
+  const self = args.connectedAddress.toLowerCase()
+  const sender = args.senderEmail.toLowerCase()
+  const firmDomains = args.firmDomains.map(d => d.toLowerCase())
+  const isFirm = (email: string) =>
+    email === self || firmDomains.includes(emailDomain(email))
+
+  const found = new Set<string>()
+  for (const message of args.messages) {
+    // Outbound only: the firm's own choice of recipient is the signal.
+    const fromFirm = message.labelIds.includes('SENT') || isFirm(message.from.email.toLowerCase())
+    if (!fromFirm) continue
+
+    for (const address of [...message.to, ...message.cc]) {
+      const email = address.email.toLowerCase()
+      if (!email || email === sender || isFirm(email)) continue
+      found.add(email)
+    }
+  }
+  return Array.from(found)
 }
 
 /**
@@ -237,51 +298,17 @@ export async function classifySender(
     }
   }
 
-  // Both spellings, so a `+tag` address still finds its record.
-  const candidates = Array.from(new Set([email, stripPlusTag(email)]))
+  const direct = await lookupByAddress(admin, email, args.name, null)
+  if (direct) return direct
 
-  for (const candidate of candidates) {
-    const matterId = await findMatterIdByEmail(admin, candidate)
-    if (matterId) {
-      return {
-        classification: 'client',
-        clientIntakeId: null,
-        matterId,
-        contactId: null,
-        displayName: args.name,
-        reason: 'matches a hired matter',
-      }
-    }
-  }
-
-  for (const candidate of candidates) {
-    const lead = await findLeadByEmail(admin, candidate)
-    if (lead) {
-      return {
-        classification: 'lead',
-        clientIntakeId: lead.id,
-        matterId: await findMatterIdByLeadId(admin, lead.id),
-        contactId: null,
-        displayName: lead.full_name?.trim()
-          || [lead.first_name, lead.last_name].filter(Boolean).join(' ')
-          || args.name,
-        reason: `matches lead (${lead.lead_status ?? 'no status'})`,
-      }
-    }
-  }
-
-  const contact = await findContactByEmail(admin, candidates)
-  if (contact) {
-    return {
-      classification: 'contact',
-      clientIntakeId: contact.client_intake_id,
-      matterId: null,
-      contactId: contact.id,
-      displayName: [contact.first_name, contact.last_name].filter(Boolean).join(' ') || args.name,
-      reason: contact.relationship_type
-        ? `matches contact (${contact.relationship_type})`
-        : 'matches a contact',
-    }
+  // The sender's own address matched nothing. A thread the firm started is
+  // the remaining evidence: a client written to at work who replies from
+  // personal Gmail is a stranger by address and obvious by conversation.
+  // Only a two-party thread is unambiguous enough to act on.
+  const participants = args.threadParticipants ?? []
+  if (participants.length === 1) {
+    const viaThread = await lookupByAddress(admin, participants[0], args.name, participants[0])
+    if (viaThread) return viaThread
   }
 
   if (automated.automated) {
@@ -299,6 +326,70 @@ export async function classifySender(
     displayName: args.name,
     reason: 'not in Cornerstone — possible new lead',
   }
+}
+
+/**
+ * Look one address up against the firm's records.
+ *
+ * `via` names the address when it is not the sender's own, so a match made
+ * through the thread says so on the row rather than looking like a direct hit
+ * — a wrong inference should be legible at a glance, not buried.
+ */
+async function lookupByAddress(
+  admin: AdminClient,
+  address: string,
+  fallbackName: string | null,
+  via: string | null,
+): Promise<SenderMatch | null> {
+  const suffix = via ? ` via the thread (${via})` : ''
+  // Both spellings, so a `+tag` address still finds its record.
+  const candidates = Array.from(new Set([address, stripPlusTag(address)]))
+
+  for (const candidate of candidates) {
+    const matterId = await findMatterIdByEmail(admin, candidate)
+    if (matterId) {
+      return {
+        classification: 'client',
+        clientIntakeId: null,
+        matterId,
+        contactId: null,
+        displayName: fallbackName,
+        reason: `matches a hired matter${suffix}`,
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    const lead = await findLeadByEmail(admin, candidate)
+    if (lead) {
+      return {
+        classification: 'lead',
+        clientIntakeId: lead.id,
+        matterId: await findMatterIdByLeadId(admin, lead.id),
+        contactId: null,
+        displayName: lead.full_name?.trim()
+          || [lead.first_name, lead.last_name].filter(Boolean).join(' ')
+          || fallbackName,
+        reason: `matches lead (${lead.lead_status ?? 'no status'})${suffix}`,
+      }
+    }
+  }
+
+  const contact = await findContactByEmail(admin, candidates)
+  if (contact) {
+    return {
+      classification: 'contact',
+      clientIntakeId: contact.client_intake_id,
+      matterId: null,
+      contactId: contact.id,
+      displayName: [contact.first_name, contact.last_name].filter(Boolean).join(' ') || fallbackName,
+      reason: contact.relationship_type
+        ? `matches contact (${contact.relationship_type})${suffix}`
+        : `matches a contact${suffix}`,
+    }
+  }
+
+  return null
 }
 
 interface ContactLookupRow {
