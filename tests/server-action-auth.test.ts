@@ -18,7 +18,7 @@ const ROOTS = ['app', 'lib', 'components']
 const SKIP_DIRS = new Set(['node_modules', '.next', '.git'])
 
 const GUARD_PATTERN =
-  /requireAdminServerAction|requireEngagementStaff|requireAdmin\b|auth\.getUser\(\)|ADMIN_ROLES/
+  /requirePortalMessageMatter|requireAdminServerAction|requireEngagementStaff|requireAdmin\b|auth\.getUser\(\)|ADMIN_ROLES/
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -90,6 +90,8 @@ describe('server action authorization', () => {
     // Anything client-facing must be listed here deliberately, with the reason
     // it is safe. A new entry is a signal to review, not a formality.
     const REVIEWED_CLIENT_FACING = new Map([
+      ['app/(portal)/messages/actions.ts:acknowledgeMessages',
+        'requirePortalMessageMatter rechecks authenticated intake ownership and matches the canonical matter before a service update constrained to that matter, displayed IDs, unread state and firm senders. Negative ownership tests are in portal-history-authorization.test.ts.'],
       [
         'app/intake/(shell)/actions.ts:requestIntakeUnlock',
         'Reads the intake through the RLS-scoped user client filtered to ' +

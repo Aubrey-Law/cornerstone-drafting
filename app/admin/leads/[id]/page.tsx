@@ -8,10 +8,9 @@ import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { newestTimestamp } from '@/lib/leads/timeline'
 import { scoringAppointmentAt } from '@/lib/leads/score'
-import { fetchTasksForLead } from '@/lib/queries/tasks'
+import { fetchRecordTaskCounts, isUuid } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
-import { recordTaskCounts } from '@/lib/tasks/types'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { LeadDetailClient } from './LeadDetailClient'
 
@@ -71,6 +70,7 @@ function mapMeeting(note: LeadMeetingNoteLoaderRow) {
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!isUuid(id)) notFound()
   const admin = getAdminClient()
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -81,6 +81,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     notesResult,
     meetingsResult,
     appointmentResult,
+    initialTaskCounts,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
@@ -93,6 +94,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .order('start_time', { ascending: true })
       .limit(1)
       .maybeSingle(),
+    fetchRecordTaskCounts(id),
   ])
 
   const { data: lead, error: leadError } = leadResult
@@ -157,7 +159,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     initialIntakeUrl = standingIntakeUrl(lead.id, lead.intake_link_version)
   }
   const schedulingSettings = await getSchedulingSettings()
-  const initialTaskCounts = recordTaskCounts(await fetchTasksForLead(id, 'open'))
   // A lead's opportunity is never `hired`, so the People tab's matter must be
   // read through the leads-inclusive view or it comes back null for every lead.
   const [peopleMatter, initialPeopleContacts] = lead.matter_id

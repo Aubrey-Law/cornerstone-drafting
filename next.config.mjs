@@ -125,4 +125,18 @@ const finalConfig = SENTRY_BUILD_PLUGIN_ENABLED
     })
   : nextConfig;
 
-export default withBundleAnalyzer(finalConfig);
+const analyzedConfig = withBundleAnalyzer(finalConfig);
+// Browser-navigation investigations do not need the much larger server graph.
+// Opt in with ANALYZE_TARGET=client; ordinary builds and full analysis are unchanged.
+if (process.env.ANALYZE === 'true' && process.env.ANALYZE_TARGET === 'client') {
+  const analyzeWebpack = analyzedConfig.webpack;
+  analyzedConfig.webpack = (config, options) => {
+    if (options.isServer) {
+      return typeof finalConfig.webpack === 'function'
+        ? finalConfig.webpack(config, options)
+        : config;
+    }
+    return analyzeWebpack(config, options);
+  };
+}
+export default analyzedConfig;

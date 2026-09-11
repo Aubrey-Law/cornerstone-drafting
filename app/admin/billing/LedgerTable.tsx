@@ -18,6 +18,7 @@ import { Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
 export function LedgerTable({
   rows,
+  partial = false,
   selected,
   onLogPayment,
   onInvoice,
@@ -27,6 +28,7 @@ export function LedgerTable({
   onEdit,
   onDelete,
 }: {
+  partial?: boolean
   rows: BillingLedgerRow[]
   /** Ids ticked for bulk delete, keyed by billing item id. */
   selected: Record<string, boolean>
@@ -103,7 +105,7 @@ export function LedgerTable({
                     checked={group.rows.every(row => selected[row.id])}
                     onCheckedChange={checked =>
                       group.rows.forEach(row => onToggleRow(row.id, checked === true))}
-                    aria-label={`Select all ${group.rows.length} charges for ${group.clientName}`}
+                    aria-label={`Select all ${group.rows.length} ${partial ? 'shown ' : ''}charges for ${group.clientName}`}
                   />
                 </TableCell>
                 <TableCell colSpan={5} className="text-xs font-medium">
@@ -113,7 +115,7 @@ export function LedgerTable({
                   {billingMoney(group.balance)}
                 </TableCell>
                 <TableCell colSpan={4} className="pr-4 text-xs text-muted-foreground">
-                  matter total
+                  {partial ? 'shown charges subtotal' : 'matter total'}
                 </TableCell>
               </TableRow>
             )] : []),

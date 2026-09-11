@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
   let page
   try {
-    page = await fetchMatterExportRows(filters, { sort, limit })
+    page = await fetchMatterExportRows(filters, { sort, limit, card: query.get('card') === 'attention' ? 'attention' : query.get('card') === 'signing' ? 'signing' : null })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Matter export failed' },

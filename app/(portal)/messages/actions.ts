@@ -3,7 +3,9 @@
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { sendEmail } from '@/lib/email/send'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { ADMIN_EMAIL } from '@/lib/supabaseAdmin'
+import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
+import { readMessageHistory, type MessageCursor, type MessageHistoryPage } from '@/lib/messages/history'
+import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { appUrl } from '@/lib/urls'
 
 export interface Message {
@@ -75,4 +77,28 @@ export async function sendMessage(matterId: string, body: string): Promise<Messa
   }
 
   return data as Message
+}
+
+/** Every history/read action establishes ownership again; cursor/IDs confer no access. */
+export async function loadOlderMessages(matterId: string, before: MessageCursor): Promise<MessageHistoryPage> {
+  const supabase = await requirePortalMessageMatter(matterId)
+  return readMessageHistory(supabase, matterId, before)
+}
+
+async function requirePortalMessageMatter(matterId: string) {
+  const supabase = await createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const matter = await getMatterForUser(supabase, user.id)
+  if (!matter || matter.id !== matterId) throw new Error('Matter access required')
+  return supabase
+}
+
+export async function acknowledgeMessages(matterId: string, ids: string[]): Promise<void> {
+  if (!Array.isArray(ids) || ids.length > 50 || ids.some(id => !/^[0-9a-f-]{36}$/i.test(id))) throw new Error('Invalid message IDs')
+  await requirePortalMessageMatter(matterId)
+  if (!ids.length) return
+  const { error } = await getAdminClient().from('messages').update({ read_at: new Date().toISOString() })
+    .eq('matter_id', matterId).neq('sender_role', 'client').is('read_at', null).in('id', ids)
+  if (error) throw new Error('Could not mark displayed messages read')
 }

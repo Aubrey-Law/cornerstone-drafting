@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { GeneratedDatabase } from '@/types/supabase'
 import 'server-only'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { normalizePracticeArea } from '@/lib/practiceArea'
@@ -116,12 +118,13 @@ export async function fetchLeadListPage(params: LeadListParams): Promise<LeadLis
   const show = clampShow(params.show)
   const order = SORT_ORDER[params.sort] ?? SORT_ORDER.newest
 
-  const { data, error, count } = await applyLeadListFilters(selectLeads(LEAD_SELECT, true), params)
+  const [result, summary] = await Promise.all([applyLeadListFilters(selectLeads(LEAD_SELECT, true), params)
     .order(order.column, { ascending: order.ascending, nullsFirst: false })
     // A stable tiebreak, so two leads with the same score or fee do not swap
     // places between one page and the next.
     .order('id', { ascending: true })
-    .range(0, show - 1)
+    .range(0, show - 1), fetchLeadListSummary()])
+  const { data, error, count } = result
 
   if (error) {
     return { rows: [], total: 0, hasMore: false, summary: EMPTY_LEAD_LIST_SUMMARY, error: error.message }
@@ -129,7 +132,6 @@ export async function fetchLeadListPage(params: LeadListParams): Promise<LeadLis
 
   const rows = (data ?? []) as unknown as LeadListRow[]
   const total = count ?? rows.length
-  const summary = await fetchLeadListSummary()
   return { rows, total, hasMore: total > rows.length, summary, error: null }
 }
 
@@ -142,32 +144,10 @@ export async function fetchLeadListPage(params: LeadListParams): Promise<LeadLis
  * flags and the fee are read, so the whole set stays cheap.
  */
 export async function fetchLeadListSummary(): Promise<LeadListSummary> {
-  const { data, error } = await selectLeads(
-    'lead_status, is_open, needs_attention, has_pending_agreement, awaiting_intake, engagement_fee_quoted',
-    false,
-  )
-  if (error || !data) return EMPTY_LEAD_LIST_SUMMARY
-
-  const summary: LeadListSummary = { ...EMPTY_LEAD_LIST_SUMMARY, all: data.length }
-  for (const row of data as unknown as Array<{
-    lead_status: string | null
-    is_open: boolean | null
-    needs_attention: boolean | null
-    has_pending_agreement: boolean | null
-    awaiting_intake: boolean | null
-    engagement_fee_quoted: number | null
-  }>) {
-    const status = row.lead_status ?? 'lead'
-    if (status === 'lead') summary.open += 1
-    else if (status === 'lost') summary.lost += 1
-    else if (status === 'declined') summary.declined += 1
-    if (!row.is_open) continue
-    if (row.needs_attention) summary.attention += 1
-    if (row.has_pending_agreement) summary.agreements += 1
-    if (row.awaiting_intake) summary.awaitingIntake += 1
-    summary.quotedPipeline += row.engagement_fee_quoted ?? 0
-  }
-  return summary
+  const admin = getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
+  const { data, error } = await admin.rpc('firm_lead_summary_v1')
+  if (error || !data) throw new Error('Lead summary is temporarily unavailable')
+  return data as unknown as LeadListSummary
 }
 
 /**

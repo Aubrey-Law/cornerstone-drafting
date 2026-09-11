@@ -9,6 +9,7 @@ import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { InvoicePreview } from '@/components/billing/InvoicePreview'
+import { BillingMatterPicker } from '@/components/billing/BillingMatterPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -307,16 +308,7 @@ export function InvoiceComposer({
           <Label htmlFor="invoice-matter">Matter</Label>
           {/* Fixed while editing: the draft's charges belong to this matter,
               so moving it would mean discarding and starting again. */}
-          <Select value={matterId} onValueChange={setMatterId} disabled={Boolean(draft)}>
-            <SelectTrigger id="invoice-matter" className="min-h-11 w-full">
-              <SelectValue placeholder="Choose a matter" />
-            </SelectTrigger>
-            <SelectContent>
-              {matters.map(matter => (
-                <SelectItem key={matter.id} value={matter.id}>{matter.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <BillingMatterPicker id="invoice-matter" value={matterId} onChange={setMatterId} initialOptions={matters} disabled={Boolean(draft)} />
           {draft && (
             <p className="text-xs text-muted-foreground">
               Discard this draft to bill a different matter.

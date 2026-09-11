@@ -1,4 +1,9 @@
 import 'server-only'
+import { allAccountingRows } from '@/lib/queries/invoiceBalances'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { GeneratedDatabase } from '@/types/supabase'
+import type { BillingFilter } from '@/lib/billing/types'
+import { pageRequest, monthRange, type PageRequest, type PageResult } from '@/lib/queries/page'
 
 import { buildBillingSnapshot, buildRows } from '@/lib/billing/metrics'
 import type {
@@ -93,6 +98,7 @@ function currentWeekStart(now = new Date()): string {
 }
 
 export interface BillingMatterOption {
+  hasLegalFee?: boolean
   id: string
   label: string
 }
@@ -101,30 +107,12 @@ export interface BillingMatterOption {
  * Matters a charge can be added to, for the firm workspace's matter picker.
  * Covers every matter, not only those already carrying billing items.
  */
-export async function fetchBillingMatterOptions(): Promise<BillingMatterOption[]> {
-  const admin = getAdminClient()
-  const [matterResult, pipelineResult] = await Promise.all([
-    admin.from('matters').select('id, matter_number'),
-    admin.from('v_matter_pipeline').select('matter_id, client_name, matter_name'),
-  ])
-  if (matterResult.error) throw new Error(matterResult.error.message)
-  if (pipelineResult.error) throw new Error(pipelineResult.error.message)
-
-  type NameRow = Pick<PipelineRow, 'matter_id' | 'client_name' | 'matter_name'>
-  const pipelineById = new Map(
-    ((pipelineResult.data ?? []) as NameRow[]).map(row => [row.matter_id, row]),
-  )
-
-  return ((matterResult.data ?? []) as MatterRow[])
-    .map(matter => {
-      const pipeline = pipelineById.get(matter.id)
-      const name = pipeline?.client_name ?? pipeline?.matter_name ?? 'Unknown client'
-      return {
-        id: matter.id,
-        label: matter.matter_number ? `${name} · ${matter.matter_number}` : name,
-      }
-    })
-    .sort((a, b) => a.label.localeCompare(b.label))
+export async function fetchBillingMatterOptions(search='',selected?:string): Promise<BillingMatterOption[]> {
+  if(search.length>200) throw new Error('Matter search is too long')
+  const admin=getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
+  const {data,error}=await admin.rpc('firm_billing_matter_options_v1',{p_search:search,...(selected ? {p_selected:selected} : {})})
+  if(error || !data) throw new Error('Billing matter choices are unavailable')
+  return data as unknown as BillingMatterOption[]
 }
 
 /** Joins a raw billing_items row to its matter context. Shared by both views. */
@@ -276,6 +264,11 @@ export async function fetchMatterBilling(
   }
 }
 
+async function completeBillingRows<T>(read:(offset:number)=>PromiseLike<{data:T[]|null;error:unknown}>):Promise<{data:T[];error:{message:string}|null}> {
+  try { return {data:await allAccountingRows(read),error:null} }
+  catch { return {data:[],error:{message:'Complete billing data is unavailable'}} }
+}
+
 export async function fetchBillingData(input: {
   userId: string
   selectedMonth: string
@@ -293,17 +286,11 @@ export async function fetchBillingData(input: {
     dismissalResult,
     invoiceResult,
   ] = await Promise.all([
-    admin.from('billing_items').select('*').order('created_at', { ascending: true }),
-    admin.from('billing_payments').select('*').order('received_at', { ascending: true }),
-    admin.from('matters').select('id, matter_number'),
-    admin
-      .from('v_matter_pipeline')
-      .select('matter_id, client_name, client_email, matter_name, practice_area, plan_type'),
-    admin
-      .from('matter_details')
-      .select(
-        'client_id, practice_area, plan_type, legal_plan, flat_fee_amount, engagement_signed, engagement_signed_at',
-      ),
+    completeBillingRows(offset=>admin.from('billing_items').select('*').order('id').range(offset,offset+999)),
+    completeBillingRows(offset=>admin.from('billing_payments').select('*').order('id').range(offset,offset+999)),
+    completeBillingRows(offset=>admin.from('matters').select('id, matter_number').order('id').range(offset,offset+999)),
+    completeBillingRows(offset=>admin.from('v_matter_pipeline').select('matter_id, client_name, client_email, matter_name, practice_area, plan_type').order('matter_id').range(offset,offset+999)),
+    completeBillingRows(offset=>admin.from('matter_details').select('client_id, practice_area, plan_type, legal_plan, flat_fee_amount, engagement_signed, engagement_signed_at').order('client_id').range(offset,offset+999)),
     admin
       .from('firm_settings')
       .select('billing_annual_goal_cents')
@@ -314,7 +301,7 @@ export async function fetchBillingData(input: {
       .select('nudge_key')
       .eq('user_id', input.userId)
       .eq('week_start', weekStart),
-    admin.from('invoices').select('id, number, due_date, status'),
+    completeBillingRows(offset=>admin.from('invoices').select('id, number, due_date, status').order('id').range(offset,offset+999)),
   ])
 
   const errors = [
@@ -433,4 +420,15 @@ export async function fetchBillingData(input: {
     error: errors.length > 0 ? errors.map(error => error.message).join(' — ') : null,
     weekStart,
   }
+}
+
+export type LedgerPageParams = PageRequest & { filter:BillingFilter; search:string; month:string }
+export type LedgerPage = PageResult<BillingLedgerRow> & { counts:Record<BillingFilter,number> }
+export async function fetchLedgerPage(params:LedgerPageParams):Promise<LedgerPage> {
+  monthRange(params.month)
+  if(!['all','open','overdue','paid','to_invoice'].includes(params.filter) || params.search.length>200) throw new Error('Invalid ledger filter')
+  const admin=getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
+  const {data,error}=await admin.rpc('firm_ledger_page_v1',{p_query:{...params,...pageRequest(params),today:firmTodayKey()}})
+  if(error || !data) throw new Error('Billing ledger is temporarily unavailable. Please retry.')
+  return data as unknown as LedgerPage
 }

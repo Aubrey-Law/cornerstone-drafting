@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useState, useRef, type RefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -37,9 +37,11 @@ export function LogPaymentDialog({
   saving,
   returnFocusRef,
   onSave,
+  searchAll = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  searchAll?: boolean
   rows: BillingLedgerRow[]
   initialItemId: string | null
   saving: boolean
@@ -51,7 +53,31 @@ export function LogPaymentDialog({
     note: string | null
   }) => Promise<void>
 }) {
-  const openRows = useMemo(() => rows.filter(row => row.balance > 0), [rows])
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [result, setResult] = useState<{ rows: BillingLedgerRow[]; total: number; pageSize: number } | null>(null)
+  const [searchError, setSearchError] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (!open || !searchAll) return
+    const abort = new AbortController()
+    setSearchLoading(true); setSearchError(false)
+    const timer = setTimeout(() => {
+      void fetch(`/api/admin/billing/ledger?${new URLSearchParams({ q: query, page: String(page) })}`, { signal: abort.signal })
+        .then(async response => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
+        .then(data => { if (!abort.signal.aborted) setResult(data) })
+        .catch(() => { if (!abort.signal.aborted) setSearchError(true) })
+        .finally(() => { if (!abort.signal.aborted) setSearchLoading(false) })
+    }, 250)
+    return () => { abort.abort(); clearTimeout(timer) }
+  }, [open, searchAll, query, page, retry])
+  const openRows = useMemo(() => {
+    const current = (searchAll && result ? result.rows : rows).filter(row => row.balance > 0)
+    const initial = rows.find(row => row.id === initialItemId && row.balance > 0)
+    return initial && !current.some(row => row.id === initial.id) ? [initial, ...current] : current
+  }, [rows, result, searchAll, initialItemId])
   const [itemId, setItemId] = useState('')
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<BillingPaymentMethod>('check')
@@ -60,7 +86,9 @@ export function LogPaymentDialog({
   const selected = openRows.find(row => row.id === itemId) ?? null
 
   useEffect(() => {
-    if (!open) return
+    if (!open) { seeded.current = false; return }
+    if (seeded.current) return
+    seeded.current = true
     const next = openRows.find(row => row.id === initialItemId) ?? openRows[0] ?? null
     setItemId(next?.id ?? '')
     setAmount(next ? (next.balance / 100).toFixed(2) : '')
@@ -116,6 +144,12 @@ export function LogPaymentDialog({
             <DialogDescription>Record a payment received against an open billing item.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-5">
+            {searchAll && <div className="space-y-2">
+              <Input aria-label="Search all open charges" placeholder="Search all clients, matters, and charges…" value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} />
+              {searchLoading && <p role="status" className="text-xs">Searching charges…</p>}
+              {searchError && <p role="alert" className="text-xs">Charge search failed. <button type="button" className="underline" onClick={() => setRetry(n => n + 1)}>Retry</button></p>}
+              {result && <div className="flex items-center gap-2 text-xs"><span>{result.total} matching open charges · page {page}</span><Button type="button" variant="outline" size="sm" disabled={page <= 1 || searchLoading} onClick={() => setPage(n => n - 1)}>Previous</Button><Button type="button" variant="outline" size="sm" disabled={page * result.pageSize >= result.total || searchLoading} onClick={() => setPage(n => n + 1)}>Next</Button></div>}
+            </div>}
             <div className="space-y-2">
               <Label htmlFor="billing-item">Billing item</Label>
               <Select value={itemId} onValueChange={chooseItem}>

@@ -26,7 +26,7 @@ export default async function NewInvoicePage({
   const preselected = (firstParam(params.items) ?? '').split(',').filter(Boolean)
 
   const [matters, firm, charges] = await Promise.all([
-    fetchBillingMatterOptions(),
+    fetchBillingMatterOptions('', matterId ?? undefined),
     loadFirmSettings(),
     matterId ? fetchInvoiceableCharges(matterId) : Promise.resolve([]),
   ])

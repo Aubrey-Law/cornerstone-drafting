@@ -1,10 +1,14 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { GeneratedDatabase } from '@/types/supabase'
+import type { StageGroup } from '@/types/database'
+import type { MatterPageParams } from '@/lib/matters/pageParams'
+import { pageRequest, type PageResult } from '@/lib/queries/page'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { formatPhoneDisplay } from '@/lib/phone'
 import type { PipelineMatter } from '@/types/database'
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { fetchUnreviewedUploadCountsForMatters } from '@/lib/matter/unreviewedUploads'
 import {
-  filterAndSortMatters,
   type MatterSortKey,
   type MatterTableFilters,
 } from '@/lib/adminTables/matterTable'
@@ -100,16 +104,32 @@ export function clampMatterExportLimit(value: unknown): number {
 
 export async function fetchMatterExportRows(
   filters: MatterTableFilters,
-  options: { sort?: MatterSortKey; limit?: number } = {},
+  options: { sort?: MatterSortKey; limit?: number; card?: 'attention'|'signing'|null } = {},
 ): Promise<MatterExportPage> {
-  const { matters, error } = await fetchMattersList()
-  if (error) throw new Error(error)
-
   const limit = clampMatterExportLimit(options.limit ?? MATTER_EXPORT_DEFAULT_ROWS)
-  const selected = filterAndSortMatters(matters, filters, options.sort ?? 'client_asc')
-  return {
-    rows: selected.slice(0, limit).map(toMatterExportRow),
-    total: selected.length,
-    truncated: selected.length > limit,
+  const rows: MatterExportRow[] = []
+  let total = 0
+  for(let page=1;rows.length<limit;page++) {
+    const result=await fetchMatterPage({page,pageSize:100,filters,sort:options.sort ?? 'client_asc',card:options.card ?? null,view:'table',groupPages:{early:1,active:1,work:1,done:1,closed:1}})
+    total=result.total
+    rows.push(...result.rows.slice(0,limit-rows.length).map(toMatterExportRow))
+    if(page*100>=total || result.rows.length===0) break
   }
+  return { rows,total,truncated:total>rows.length }
+}
+
+export type MatterPageResult = PageResult<MatterListRow> & {
+  groups: Partial<Record<StageGroup,number>>
+  columns: Partial<Record<StageGroup,number>>
+  insights: { open:number; attention:number; signing:number; intakePending:number; unreviewed:number }
+}
+export async function fetchMatterPage(params:MatterPageParams):Promise<MatterPageResult> {
+  const admin=getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
+  const { data,error }=await admin.rpc('firm_matter_page_v1',{p_query:{
+    ...pageRequest(params), search:params.filters.search,practice:params.filters.practice,stage:params.filters.stageGroup,
+    sort:params.sort,card:params.card ?? '',view:params.view,groupPages:params.groupPages,
+  }})
+  if(error || !data) throw new Error('Matter list is temporarily unavailable. Please retry.')
+  const page=data as unknown as MatterPageResult
+  return {...page,rows:page.rows.map(row=>({...row,client_phone:formatPhoneDisplay(row.client_phone)||row.client_phone}))}
 }

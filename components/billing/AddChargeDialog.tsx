@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type RefObject } from 'react'
+import { BillingMatterPicker } from '@/components/billing/BillingMatterPicker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/metlife/pricing'
 
 export interface BillingMatterOption {
+  hasLegalFee?: boolean
   id: string
   label: string
 }
@@ -137,6 +139,7 @@ export function AddChargeDialog({
 }) {
   const picking = matterId === undefined && !editing
   const [selectedMatter, setSelectedMatter] = useState('')
+  const [selectedHasLegalFee, setSelectedHasLegalFee] = useState(false)
   const [kind, setKind] = useState<AddableBillingKind>('flat_fee')
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
@@ -153,12 +156,13 @@ export function AddChargeDialog({
     !editing
     && kind === 'flat_fee'
     && targetMatter !== ''
-    && (matterIdsWithLegalFee ?? []).includes(targetMatter)
+    && ((matterIdsWithLegalFee ?? []).includes(targetMatter) || (picking && selectedHasLegalFee))
 
   // Reseed on each open so a cancelled entry never leaks into the next one.
   useEffect(() => {
     if (!open) return
     setSelectedMatter(matterId ?? matters?.[0]?.id ?? '')
+    setSelectedHasLegalFee(Boolean(matters?.[0]?.hasLegalFee))
     setKind(editing?.kind ?? defaultKind)
     setLabel(editing?.label ?? '')
     setAmount(editing ? (editing.amountBilled / 100).toFixed(2) : '')
@@ -248,18 +252,7 @@ export function AddChargeDialog({
             {picking && (
               <div className="space-y-2">
                 <Label htmlFor="charge-matter">Matter</Label>
-                <Select value={selectedMatter} onValueChange={setSelectedMatter}>
-                  <SelectTrigger id="charge-matter" aria-label="Matter" className="min-h-11 w-full">
-                    <SelectValue placeholder="Choose a matter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(matters ?? []).map(matter => (
-                      <SelectItem key={matter.id} value={matter.id}>
-                        {matter.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <BillingMatterPicker id="charge-matter" value={selectedMatter} onChange={(id,hasLegalFee)=>{setSelectedMatter(id);setSelectedHasLegalFee(Boolean(hasLegalFee))}} initialOptions={matters ?? []} />
               </div>
             )}
 

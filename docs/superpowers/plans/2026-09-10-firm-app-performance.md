@@ -18,13 +18,15 @@ All nine invariants in the spec apply. In particular:
 - Keep attorney/admin as the only active firm roles; this program does not enable staff access.
 - Preserve secure portal messaging, unread state, transactional email, document sharing, and client access boundaries.
 
+Execution status: primary list/calendar/history changes are prepared; see [evidence](../../reviews/2026-09-10-firm-app-remediation-evidence.md) and [live baseline](../../reviews/2026-09-10-navigation-benchmark.md). Checkboxes that combine code work with deployment acceptance remain open until both are verified.
+
 ## P1: Repeatable navigation evidence
 
 **Create:** `docs/reviews/2026-09-10-navigation-benchmark.md`, `lib/performance/navigationTiming.ts`. **Modify only where spans are missing:** `lib/apiAuth.ts`, `app/admin/matters/[id]/page.tsx`, `app/admin/leads/page.tsx`, `app/admin/tasks/page.tsx`, `app/admin/components/AdminSidebar.tsx`. Reuse `instrumentation.ts` and `instrumentation-client.ts`; preserve the existing privacy behavior and `tests/sentry-instrumentation.test.ts`. Do not add a second telemetry SDK.
 
 **Interfaces:** Timing labels are route templates and named phases (`auth`, `role`, `primary-data`, `secondary-data`, `content-ready`), never client names, raw URLs/IDs, messages, tokens, or request bodies. Store browser timings locally for repeatable comparison; use existing sampled server spans for attribution.
 
-- [ ] Establish a normal authenticated live session through the user's sign-in flow. If unavailable, continue synthetic local profiling and independent R/C tasks, but leave live validation open. Never retrieve browser credentials or request passwords in chat.
+- [x] Establish a normal authenticated live session through the user's sign-in flow. If unavailable, continue synthetic local profiling and independent R/C tasks, but leave live validation open. Never retrieve browser credentials or request passwords in chat.
 - [ ] Record browser/device/network, deployment SHA, cache state, and route sequence. Measure Today → Leads → lead detail → Matters → matter detail → Tasks → Billing → Today. Run at least 20 repeat transitions per priority route; record first visits separately, p50/p95 click-to-usable-content, pending feedback, response bytes, request count, TTFB, server phases, scripting, and errors.
 - [ ] Add marks around the actual navigation and primary-content readiness, not only component mount or spinner visibility. Keep optional sections out of the ready definition but include rows and controls necessary for the task. A cached page still counts only when its data/state is usable.
 

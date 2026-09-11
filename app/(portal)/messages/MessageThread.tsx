@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useEffect, useMemo, useState, useTransition } from 'react'
-import { sendMessage, type Message } from './actions'
+import { sendMessage, loadOlderMessages, acknowledgeMessages, type Message } from './actions'
 import { Button } from '@/components/ui/button'
 import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
@@ -10,12 +10,15 @@ import { useMessagesRealtime, type RealtimeMessageRow } from '@/lib/messages/use
 import { linkifyText } from '@/lib/linkify'
 import { Send } from 'lucide-react'
 
+import type { MessageCursor } from '@/lib/messages/history'
+
 const firm = getFirmConfig()
 
 interface Props {
   matterId: string
   messages: Message[]
   clientUserId: string
+  older?: MessageCursor | null
 }
 
 function formatTime(iso: string): string {
@@ -59,9 +62,35 @@ function groupMessagesByCalendarDay(messages: Message[]): Array<{
   }, [])
 }
 
-export default function MessageThread({ matterId, messages: initial, clientUserId }: Props) {
+export default function MessageThread({ matterId, messages: initial, clientUserId, older: initialOlder = null }: Props) {
   const [messages, setMessages] = useState<Message[]>(initial)
   const [draft, setDraft] = useState('')
+  const [older, setOlder] = useState(initialOlder)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [readError, setReadError] = useState<string | null>(null)
+  const [readRetry, setReadRetry] = useState(0)
+  const acknowledged = useRef(new Set<string>())
+  const loadingHistory = useRef(false)
+  useEffect(() => {
+    const ids = messages.filter(m => m.sender_role !== 'client' && !m.read_at && !acknowledged.current.has(m.id)).slice(0, 50).map(m => m.id)
+    if (!ids.length) return
+    ids.forEach(id => acknowledged.current.add(id))
+    void acknowledgeMessages(matterId, ids).then(() => setReadError(null)).catch(() => {
+      ids.forEach(id => acknowledged.current.delete(id))
+      setReadError('Read status could not be saved.')
+    })
+  }, [messages, matterId, readRetry])
+  async function loadOlder() {
+    if (!older || loadingOlder) return
+    setLoadingOlder(true); setHistoryError(null); loadingHistory.current = true
+    try {
+      const page = await loadOlderMessages(matterId, older)
+      setMessages(current => [...page.messages.filter(row => !current.some(existing => existing.id === row.id)), ...current])
+      setOlder(page.older)
+    } catch { loadingHistory.current = false; setHistoryError('Older messages could not be loaded. Please retry.') }
+    finally { setLoadingOlder(false) }
+  }
   const [sendError, setSendError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -72,6 +101,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
   }, [])
 
   useEffect(() => {
+    if (loadingHistory.current) { loadingHistory.current = false; return }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
@@ -147,6 +177,9 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
       </div>
 
       <div className="flex-1 space-y-5 px-4 py-6">
+        {older && <Button variant="outline" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? 'Loading…' : 'Load older messages'}</Button>}
+        {historyError && <p role="alert">{historyError}</p>}
+        {readError && <p role="alert">{readError} <button className="underline" onClick={() => setReadRetry(n => n + 1)}>Retry</button></p>}
         {messages.length === 0 && (
           <p className="py-12 text-center text-sm text-muted-foreground">
             No messages yet. Send a message to {firm.firmName} below.

@@ -24,9 +24,9 @@ function builder(rows: unknown[]) {
       return chain
     }
   }
-  chain.limit = (...args: unknown[]) => {
-    calls.push({ method: 'limit', args })
-    return Promise.resolve({ data: rows, error: null })
+  chain.range = (from: number, to: number) => {
+    calls.push({ method: 'range', args: [from, to] })
+    return Promise.resolve({ data: rows.slice(from, to + 1), error: null })
   }
   return chain
 }
@@ -70,8 +70,8 @@ describe('fetchDueTasks', () => {
 
     // The cap stays as a backstop, but it must sit far above the window it
     // bounds — the bug was a limit doing the filtering.
-    const limit = calls.find(call => call.method === 'limit')
-    expect(limit?.args[0]).toBe(DUE_TASK_LIMIT)
+    const range = calls.find(call => call.method === 'range')
+    expect(range?.args).toEqual([0, DUE_TASK_LIMIT - 1])
     expect(DUE_TASK_LIMIT).toBeGreaterThanOrEqual(500)
 
     // Only the firm's own work: a client's "sign the engagement" task belongs
@@ -79,18 +79,17 @@ describe('fetchDueTasks', () => {
     expect(calls.some(call => call.method === 'eq' && call.args[0] === 'owner' && call.args[1] === 'firm')).toBe(true)
   })
 
-  it('says so rather than silently returning a short queue at the cap', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('reads beyond a full due-task page', async () => {
     tableRows = {
-      tasks: Array.from({ length: DUE_TASK_LIMIT }, (_, index) =>
+      tasks: Array.from({ length: DUE_TASK_LIMIT + 1 }, (_, index) =>
         taskFixture({ id: `task-${index}`, due_at: '2026-08-20T12:00:00.000Z' }),
       ),
     }
 
     const rows = await fetchDueTasks(THROUGH)
 
-    expect(rows).toHaveLength(DUE_TASK_LIMIT)
-    expect(error.mock.calls.flat().join(' ')).toContain('incomplete')
+    expect(rows).toHaveLength(DUE_TASK_LIMIT + 1)
+    expect(calls.filter(call => call.method === 'range')).toHaveLength(2)
   })
 
   it('returns every row it was given, soonest due first', async () => {

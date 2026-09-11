@@ -1,4 +1,5 @@
 'use client'
+import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
@@ -213,6 +214,7 @@ function MatterDetailClientInner({
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   initialTaskCounts = { open: 0, overdue: 0 },
 }: MatterDetailClientProps) {
+  usePrimaryReady('Matter detail', matterId)
   const token = useAccessToken()
   const router = useRouter()
   const pathname = usePathname()
@@ -257,6 +259,8 @@ function MatterDetailClientInner({
   }, [])
 
   const {
+    portalDraft,
+    setPortalDraft,
     items: communicationItems,
     sendOnChannel,
     unreadPortalCount,
@@ -920,6 +924,12 @@ function MatterDetailClientInner({
               onValueChange={v => setActiveTab(v as MatterTab)}
               className="w-full gap-4"
             >
+              {taskCounts.error && (
+                <p role="status" className="text-sm text-destructive">
+                  {taskCounts.error}{' '}
+                  <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
+                </p>
+              )}
               <MobileRecordSectionSelect
                 label="Matter section"
                 value={activeTab}
@@ -1122,6 +1132,8 @@ function MatterDetailClientInner({
                 matterId={matter.matter_id}
                 channel={communicationChannel}
                 onChannelChange={channel => setActiveTab('communications', undefined, channel)}
+                portalDraft={portalDraft}
+                setPortalDraft={setPortalDraft}
                 items={communicationItems}
                 clientName={matter.client_name || matter.matter_name || 'Client'}
                 clientPhone={matter.client_phone || null}

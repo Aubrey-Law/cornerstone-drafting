@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
+import { filterAndSortMatters, type MatterSortKey } from '@/lib/adminTables/matterTable'
+import type { StageGroup } from '@/types/database'
 
 /**
- * Stubbed at the database seam rather than at `fetchMattersList`, so the
- * filtering these tests exercise is the real one the matters page runs.
+ * Route/export wiring uses a reference filtering fixture at the RPC seam.
+ * Actual SQL filtering and board completeness are verified by the local
+ * matter-list-pagination integration tests.
  */
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
@@ -17,6 +20,13 @@ vi.mock('@/lib/matter/unreviewedUploads', () => ({
 }))
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
+    async rpc(name: string, { p_query: query }: { p_query: { search:string; practice:string; stage:StageGroup|'all'; sort:MatterSortKey; page:number; pageSize:number } }) {
+      mocks.queried.push(name)
+      const result=mocks.tableResult.v_matter_pipeline
+      if(result.error) return {data:null,error:result.error}
+      const selected=filterAndSortMatters(result.data as MatterListRow[],{search:query.search,practice:query.practice,stageGroup:query.stage},query.sort)
+      return {data:{rows:selected.slice((query.page-1)*query.pageSize,query.page*query.pageSize),total:selected.length,page:query.page,pageSize:query.pageSize,groups:{},columns:{},insights:{}},error:null}
+    },
     from(table: string) {
       mocks.queried.push(table)
       const result = mocks.tableResult[table] ?? { data: [], error: null }
@@ -150,6 +160,6 @@ describe('the matters export route', () => {
     mocks.tableResult.v_matter_pipeline = { data: [], error: { message: 'pipeline view missing' } }
     const response = await GET(new Request('https://app.test/api/admin/matters/export'))
     expect(response.status).toBe(500)
-    expect(await response.json()).toEqual({ error: 'pipeline view missing' })
+    expect(await response.json()).toEqual({ error: 'Matter list is temporarily unavailable. Please retry.' })
   })
 })

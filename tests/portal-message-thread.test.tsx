@@ -8,6 +8,8 @@ import { sendMessage, type Message } from '@/app/(portal)/messages/actions'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 
 vi.mock('@/app/(portal)/messages/actions', () => ({
+  acknowledgeMessages: vi.fn().mockResolvedValue(undefined),
+  loadOlderMessages: vi.fn(),
   sendMessage: vi.fn(),
 }))
 

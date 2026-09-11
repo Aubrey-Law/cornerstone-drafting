@@ -23,6 +23,8 @@ export interface SchedulingActionsProps {
 }
 
 export interface MatterMessagesSectionsProps {
+  portalDraft?: string
+  setPortalDraft?: (draft: string) => void
   portalLoading: boolean
   smsLoading: boolean
   smsRecipient: 'client' | 'spouse'
@@ -225,6 +227,8 @@ export function MatterCommunicationsTab({
       </div>
 
       <CommunicationThread
+        draft={messageProps.portalDraft}
+        onDraftChange={messageProps.setPortalDraft}
         items={items}
         loading={portalLoading || smsLoading}
         recordType="matter"

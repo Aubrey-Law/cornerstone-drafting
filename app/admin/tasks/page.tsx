@@ -1,35 +1,22 @@
+import { redirect } from 'next/navigation'
 import { getCachedClaims } from '@/lib/supabaseServer'
-import { fetchTaskAssignees, fetchTasks, fetchTaskTemplates } from '@/lib/queries/tasks'
-import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { fetchTaskAssignees, fetchTaskPage, fetchTaskTemplates } from '@/lib/queries/tasks'
+import { firmTodayKey } from '@/lib/firmDate'
+import { taskPageParams } from '@/lib/tasks/pageParams'
 import { TasksClient } from './TasksClient'
 
 export const dynamic = 'force-dynamic'
-
-export default async function AdminTasksPage() {
+export default async function AdminTasksPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const user = await getCachedClaims()
-
-  const [openTasks, doneTasks, assignees, templates] = await Promise.all([
-    // Every open task, not the first 500 of them: this page is the firm's
-    // whole queue, its filters run over what it was handed, and a cap here
-    // does not shorten the list so much as pick an arbitrary part of it.
-    fetchTasks({ status: 'open', all: true }),
-    // Done is only ever read for what was cleared today, a few rows.
-    fetchTasks({ status: 'done', limit: 200 }),
-    fetchTaskAssignees(),
-    fetchTaskTemplates(),
+  if (!user) redirect('/auth/login')
+  const params = taskPageParams(await searchParams)
+  const query = { ...params, viewerId: user.id }
+  const [open, done, assignees, templates] = await Promise.all([
+    fetchTaskPage({ ...query, status: 'open' }),
+    params.showDone ? fetchTaskPage({ ...query, page: params.donePage, status: 'done', completedOn: firmTodayKey() }) : null,
+    fetchTaskAssignees(), fetchTaskTemplates(),
   ])
-
-  // The Done group only shows what was cleared today — anything older is history.
-  const todayKey = firmTodayKey()
-  const doneToday = doneTasks.filter(task => task.completed_at && firmDateKey(task.completed_at) === todayKey)
-
-  return (
-    <TasksClient
-      initialOpenTasks={openTasks}
-      initialDoneToday={doneToday}
-      assignees={assignees}
-      templates={templates}
-      viewerId={user?.id ?? null}
-    />
-  )
+  return <TasksClient initialOpenTasks={open.rows} initialDoneToday={done?.rows ?? []}
+    assignees={assignees} templates={templates} viewerId={user.id}
+    pagination={{ params: { ...params, page: open.page, donePage: done?.page ?? params.donePage }, total: open.total, doneTotal: done?.total ?? 0, scopeCounts: open.scopeCounts }} />
 }

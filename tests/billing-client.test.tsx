@@ -169,7 +169,7 @@ describe('billing workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /Paid.*1/ }))
 
-    expect(navigation.replace).toHaveBeenCalledWith('/admin/billing?filter=paid', { scroll: false })
+    expect(navigation.replace).toHaveBeenCalledWith('/admin/billing?filter=paid&month=2026-07', { scroll: false })
   })
 
   it('opens an accessible payment dialog and blocks an overpayment', async () => {

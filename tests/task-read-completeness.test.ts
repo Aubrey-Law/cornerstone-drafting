@@ -105,14 +105,10 @@ describe('reading every open task', () => {
   })
 
   it('says so rather than returning a silently short list at the ceiling', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     // Every page full, for ever: the guard is what has to stop it.
     pages = Array.from({ length: TASK_READ_CEILING / TASK_PAGE_SIZE }, () => page(TASK_PAGE_SIZE, 'x'))
 
-    const rows = await fetchTasks({ status: 'open', all: true })
-
-    expect(rows).toHaveLength(TASK_READ_CEILING)
-    expect(error.mock.calls.flat().join(' ')).toContain('incomplete')
+    await expect(fetchTasks({ status: 'open', all: true })).rejects.toThrow('safety ceiling')
   })
 })
 
