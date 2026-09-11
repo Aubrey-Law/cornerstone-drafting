@@ -59,7 +59,7 @@ describe('matter draft generation route', () => {
     expect(engineSource).toContain("if (raw === 'supabase' || raw === 'typescript') return 'supabase'")
     expect(engineSource).not.toContain("return 'python'")
     expect(engineSource).toContain("return 'node'")
-    expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))")
+    expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId, clauseSnapshot: snapshot.clauseSnapshot }))")
     expect(source).not.toContain('runEstateGenerator')
     expect(source).not.toContain("} else if (engine === 'python') {")
     expect(source).not.toContain('function shouldUsePythonEstateGenerator')
@@ -81,7 +81,7 @@ describe('matter draft generation route', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/draft/preflight/route.ts'), 'utf8')
 
     expect(source).toContain("import { requireAdmin } from '@/lib/apiAuth'")
-    expect(source).toContain("import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'")
+    expect(source).toContain("import { loadDraftSourceSnapshot } from '@/lib/drafting/sourceSnapshot'")
     expect(source).toContain("import { buildEstateDraftPreflight } from '@/lib/estateGenerator/preflight'")
     expect(source).toContain('export async function GET')
     expect(source).toContain('const { err } = await requireAdmin(req)')
@@ -150,21 +150,21 @@ describe('matter draft generation route', () => {
     expect(source).toContain('warnings: draftWarnings')
   })
 
-  it('atomically registers database-backed Node files and rolls back R2 on persistence failure', () => {
+  it('atomically registers database-backed Node files and preserves uncertain commits for recovery', () => {
     const source = fs.readFileSync(routePath, 'utf8')
 
-    expect(source).toContain("import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'")
+    expect(source).toContain("import { PutObjectCommand } from '@aws-sdk/client-s3'")
     expect(source).toContain("import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'")
     expect(source).toContain('clauseSource: meta.clauseSource')
     expect(source).toContain('clauseManifest: meta.clauseManifest')
     expect(source).toContain("if (file.clauseSource === 'database')")
     expect(source).toContain('await persistGeneratedEstateDocument({')
-    expect(source).toContain('new DeleteObjectCommand({ Bucket: r2Bucket(), Key: r2Key })')
+    expect(source).not.toContain('new DeleteObjectCommand(')
 
     const branchStart = source.indexOf("if (file.clauseSource === 'database')")
     const databaseBranch = source.slice(branchStart, source.indexOf('} else {', branchStart))
     expect(databaseBranch).not.toContain('ensureInitialVersion')
-    expect(source.slice(branchStart, source.indexOf('uploadedFilenames.push(documentName)'))).toContain('} else {')
+    expect(source.slice(branchStart, source.indexOf('uploadedFilenames.push(documentName)', branchStart))).toContain('} else {')
   })
 
   it('routes legacy testamentary-trust fallback drafts through dedicated doc types', () => {

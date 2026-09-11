@@ -45,3 +45,14 @@ export function parseSavedHubViews(raw: unknown): SavedHubView[] {
     return [{ name, ...parseHubView(params) }]
   }).slice(0, 20)
 }
+
+/** Pagination is URL/return-position state, not part of a named saved filter. */
+export interface HubPageQuery extends HubView { page: number }
+export const HUB_PAGE_SIZE = 50
+export function parseHubPage(params: URLSearchParams): HubPageQuery {
+  const page = Number(params.get('page') ?? 1)
+  return { ...parseHubView(params), page: Number.isSafeInteger(page) && page > 0 ? Math.min(page, 1_000_000) : 1 }
+}
+export function hubPageUrl(query: HubPageQuery): string {
+  return `${hubViewUrl(query)}${query.page > 1 ? `&page=${query.page}` : ''}`
+}

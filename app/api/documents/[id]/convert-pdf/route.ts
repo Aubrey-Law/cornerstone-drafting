@@ -15,6 +15,7 @@ import {
 } from '@/lib/docxPdfConvert'
 import { createDocumentVersion, ensureInitialVersion, loadActiveVersion } from '@/lib/documentVersions'
 import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
+import { scanDocxBufferForMarkers } from '@/lib/drafting/markerScan'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -76,6 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const version = await loadActiveVersion(sb, id)
     const bytes = await loadR2Bytes(version?.r2_key ?? doc.r2_key)
+    const scan = scanDocxBufferForMarkers(bytes)
     const pdfBytes = await convertDocxToPdf(bytes, doc.name)
 
     const pdfName = doc.name.replace(/\.docx$/i, '') + '.pdf'
@@ -96,14 +98,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         uploaded_by: user.id,
         generation_id: doc.generation_id ?? null,
         generation_engine: doc.generation_engine ?? null,
-        // Inherited, not zeroed. A PDF render of a marked-up document shows
-        // the `[[ MISSING: … ]]` markers just as plainly as the DOCX does, so
-        // claiming a clean count here made converting to PDF a way around the
-        // share gate.
-        marker_count: doc.marker_count ?? 0,
-        missing_count: doc.missing_count ?? 0,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: user.id,
+        // Count the immutable bytes actually converted; stored counts may predate redlines.
+        marker_count: scan.markerCount,
+        missing_count: scan.missingFields.length,
+        reviewed_at: null,
+        reviewed_by: null,
       })
       .select(MATTER_DOCUMENT_COLUMNS)
       .single()

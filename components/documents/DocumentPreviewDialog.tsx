@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { Loader2 } from 'lucide-react'
 import {
@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getDocumentPreview, getDocumentUrl, isWordDocument } from '@/lib/documents'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 
 /**
  * Mammoth emits a small, predictable subset of HTML from a DOCX, but the source
@@ -59,11 +60,16 @@ export function DocumentPreviewDialog({
   document,
   open,
   onOpenChange,
+  onRevisionLoaded,
 }: {
   document: PreviewableDocument | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onRevisionLoaded?: (documentId: string, revision: string | null) => void
 }) {
+  const accessToken = useAccessToken()
+  const revisionCallback = useRef(onRevisionLoaded)
+  useEffect(() => { revisionCallback.current = onRevisionLoaded }, [onRevisionLoaded])
   const [url, setUrl] = useState<string | null>(null)
   const [html, setHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -83,14 +89,23 @@ export function DocumentPreviewDialog({
     setUrl(null)
     setHtml(null)
     setError(null)
+    revisionCallback.current?.(document.id, null)
 
     const load = isWordDocument(document.name, document.content_type)
-      ? getDocumentPreview(document.id).then(({ html: value }) => {
-          if (!cancelled) setHtml(value)
+      ? getDocumentPreview(document.id).then(({ html: value, reviewRevision }) => {
+          if (!cancelled) { setHtml(value); revisionCallback.current?.(document.id, reviewRevision ?? null) }
         })
-      : getDocumentUrl(document.id, 'view').then(nextUrl => {
-          if (!cancelled) setUrl(nextUrl)
-        })
+      : (async () => {
+          if (revisionCallback.current && accessToken) {
+            const response = await fetch(`/api/documents/${document.id}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+            if (!response.ok) throw new Error('Could not load document')
+            const value = await response.json()
+            if (!cancelled) { setUrl(value.url); revisionCallback.current?.(document.id, value.reviewRevision ?? null) }
+          } else {
+            const nextUrl = await getDocumentUrl(document.id, 'view')
+            if (!cancelled) setUrl(nextUrl)
+          }
+        })()
 
     void load.catch(err => {
       if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load preview')
@@ -99,7 +114,7 @@ export function DocumentPreviewDialog({
     return () => {
       cancelled = true
     }
-  }, [document, open])
+  }, [accessToken, document, open])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -11,7 +11,7 @@ describe('draft document selection', () => {
     // Selection state, defaulting to all documents when the preflight loads.
     expect(step).toContain("import { Checkbox } from '@/components/ui/checkbox'")
     expect(step).toContain('const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())')
-    expect(step).toContain('setSelectedDocs(new Set(next.documentsToGenerate.map(d => d.filename)))')
+    expect(step).toContain('setSelectedDocs(new Set(Array.isArray(remembered) ? remembered.filter(name => available.includes(name)) : available))')
 
     // A checkbox per document plus a select-all/clear toggle.
     expect(step).toContain('onCheckedChange={() => toggleDoc(d.filename)}')
@@ -19,7 +19,7 @@ describe('draft document selection', () => {
 
     // Only the selected documents are sent to the generation endpoint, and
     // generation is blocked when nothing is selected.
-    expect(step).toContain('body: JSON.stringify({ documents: documentsToSave, mode })')
+    expect(step).toContain('body: JSON.stringify({ documents: retry?.requested_documents ?? documentsToSave, mode, runId: activeRunId.current, sourceRevision: retry?.source_revision ?? preflight?.sourceRevision })')
     expect(step).toContain('if (documentsToSave.length === 0)')
     expect(step).toContain('selectedCount === 0')
   })
@@ -41,7 +41,7 @@ describe('draft document selection', () => {
     expect(step).toContain("type DraftDeliveryMode = 'save' | 'download'")
     expect(step).toContain('const [deliveryMode, setDeliveryMode] = useState<DraftDeliveryMode>(\'save\')')
     expect(step).toContain('Download only')
-    expect(step).toContain("body: JSON.stringify({ documents: documentsToSave, mode })")
+    expect(step).toContain("body: JSON.stringify({ documents: retry?.requested_documents ?? documentsToSave, mode, runId: activeRunId.current, sourceRevision: retry?.source_revision ?? preflight?.sourceRevision })")
     expect(step).toContain("decodeDraftDownloadMeta")
     expect(step).toContain('anchor.download = filename')
   })

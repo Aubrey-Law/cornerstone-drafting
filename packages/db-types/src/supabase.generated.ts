@@ -3460,6 +3460,76 @@ export type Database = {
           },
         ]
       }
+      draft_generation_runs: {
+        Row: {
+          created_at: string
+          created_by: string
+          error: string | null
+          id: string
+          lease_expires_at: string
+          matter_id: string
+          outcomes: Json
+          request_hash: string
+          requested_documents: string[]
+          source_revision: string
+          status: string
+          updated_at: string
+          worker_token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          error?: string | null
+          id: string
+          lease_expires_at: string
+          matter_id: string
+          outcomes?: Json
+          request_hash: string
+          requested_documents: string[]
+          source_revision: string
+          status: string
+          updated_at?: string
+          worker_token: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          error?: string | null
+          id?: string
+          lease_expires_at?: string
+          matter_id?: string
+          outcomes?: Json
+          request_hash?: string
+          requested_documents?: string[]
+          source_revision?: string
+          status?: string
+          updated_at?: string
+          worker_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_generation_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_generation_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "draft_generation_runs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       draft_log: {
         Row: {
           created_at: string
@@ -3763,6 +3833,252 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      email_triage_ignore_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          note: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
+      email_triage_scans: {
+        Row: {
+          actor_id: string | null
+          drafts_generated: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          skipped_automated: number
+          skipped_internal: number
+          started_at: string
+          threads_examined: number
+          threads_listed: number
+          threads_queued: number
+          threads_resolved: number
+          trigger: string
+        }
+        Insert: {
+          actor_id?: string | null
+          drafts_generated?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          skipped_automated?: number
+          skipped_internal?: number
+          started_at?: string
+          threads_examined?: number
+          threads_listed?: number
+          threads_queued?: number
+          threads_resolved?: number
+          trigger: string
+        }
+        Update: {
+          actor_id?: string | null
+          drafts_generated?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          skipped_automated?: number
+          skipped_internal?: number
+          started_at?: string
+          threads_examined?: number
+          threads_listed?: number
+          threads_queued?: number
+          threads_resolved?: number
+          trigger?: string
+        }
+        Relationships: []
+      }
+      email_triage_threads: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          classification: string
+          classification_reason: string | null
+          client_intake_id: string | null
+          connection_email: string
+          contact_id: string | null
+          created_at: string
+          dismissed_at: string | null
+          dismissed_reason: string | null
+          draft_body: string | null
+          draft_error: string | null
+          draft_generated_at: string | null
+          draft_model: string | null
+          draft_subject: string | null
+          first_seen_at: string
+          gmail_draft_id: string | null
+          gmail_draft_message_id: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id: string
+          last_scanned_at: string
+          matter_id: string | null
+          message_id_header: string | null
+          received_at: string
+          references_header: string | null
+          replied_at: string | null
+          sender_domain: string
+          sender_email: string
+          sender_name: string | null
+          snippet: string | null
+          status: string
+          subject: string | null
+          thread_message_count: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          classification: string
+          classification_reason?: string | null
+          client_intake_id?: string | null
+          connection_email: string
+          contact_id?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_reason?: string | null
+          draft_body?: string | null
+          draft_error?: string | null
+          draft_generated_at?: string | null
+          draft_model?: string | null
+          draft_subject?: string | null
+          first_seen_at?: string
+          gmail_draft_id?: string | null
+          gmail_draft_message_id?: string | null
+          gmail_message_id: string
+          gmail_thread_id: string
+          id?: string
+          last_scanned_at?: string
+          matter_id?: string | null
+          message_id_header?: string | null
+          received_at: string
+          references_header?: string | null
+          replied_at?: string | null
+          sender_domain: string
+          sender_email: string
+          sender_name?: string | null
+          snippet?: string | null
+          status?: string
+          subject?: string | null
+          thread_message_count?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          classification?: string
+          classification_reason?: string | null
+          client_intake_id?: string | null
+          connection_email?: string
+          contact_id?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_reason?: string | null
+          draft_body?: string | null
+          draft_error?: string | null
+          draft_generated_at?: string | null
+          draft_model?: string | null
+          draft_subject?: string | null
+          first_seen_at?: string
+          gmail_draft_id?: string | null
+          gmail_draft_message_id?: string | null
+          gmail_message_id?: string
+          gmail_thread_id?: string
+          id?: string
+          last_scanned_at?: string
+          matter_id?: string | null
+          message_id_header?: string | null
+          received_at?: string
+          references_header?: string | null
+          replied_at?: string | null
+          sender_domain?: string
+          sender_email?: string
+          sender_name?: string | null
+          snippet?: string | null
+          status?: string
+          subject?: string | null
+          thread_message_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_triage_threads_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "email_triage_threads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
       }
       engagement_agreement_recipients: {
         Row: {
@@ -4550,6 +4866,8 @@ export type Database = {
           email_logo_header: boolean
           email_signature_default: boolean
           email_signature_html: string | null
+          email_triage_enabled: boolean
+          email_triage_query: string | null
           estate_tax_schedules: Json
           firm_name: string | null
           id: number
@@ -4577,6 +4895,8 @@ export type Database = {
           email_logo_header?: boolean
           email_signature_default?: boolean
           email_signature_html?: string | null
+          email_triage_enabled?: boolean
+          email_triage_query?: string | null
           estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
@@ -4604,6 +4924,8 @@ export type Database = {
           email_logo_header?: boolean
           email_signature_default?: boolean
           email_signature_html?: string | null
+          email_triage_enabled?: boolean
+          email_triage_query?: string | null
           estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
@@ -6028,6 +6350,7 @@ export type Database = {
           content_type: string
           created_at: string
           current_version_id: string | null
+          draft_run_output: string | null
           folder_id: string | null
           generation_engine: string | null
           generation_id: string | null
@@ -6051,6 +6374,7 @@ export type Database = {
           content_type?: string
           created_at?: string
           current_version_id?: string | null
+          draft_run_output?: string | null
           folder_id?: string | null
           generation_engine?: string | null
           generation_id?: string | null
@@ -6074,6 +6398,7 @@ export type Database = {
           content_type?: string
           created_at?: string
           current_version_id?: string | null
+          draft_run_output?: string | null
           folder_id?: string | null
           generation_engine?: string | null
           generation_id?: string | null
@@ -9719,6 +10044,18 @@ export type Database = {
           id: string
         }[]
       }
+      claim_draft_generation_run: {
+        Args: {
+          p_actor_id: string
+          p_documents: string[]
+          p_id: string
+          p_matter_id: string
+          p_request_hash: string
+          p_revision: string
+          p_worker_token: string
+        }
+        Returns: Json
+      }
       claim_engagement_agreement_resume: {
         Args: {
           p_agreement_id: string
@@ -10333,6 +10670,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      draft_generation_metrics: { Args: { p_matter_id: string }; Returns: Json }
       drafting_hub_draft_rollups: {
         Args: { p_matter_ids: string[] }
         Returns: {
@@ -10341,6 +10679,21 @@ export type Database = {
           recent_drafts: Json
           superseded_draft_count: number
         }[]
+      }
+      drafting_hub_has_documents: {
+        Args: { p_decisions: Json; p_plan: string }
+        Returns: boolean
+      }
+      drafting_hub_page: {
+        Args: {
+          p_action?: string
+          p_page?: number
+          p_page_size?: number
+          p_practice?: string
+          p_search?: string
+          p_sort?: string
+        }
+        Returns: Json
       }
       enqueue_workflow_job: {
         Args: {

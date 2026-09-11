@@ -173,6 +173,7 @@ export function MatterDocumentsTab({
   /** One document from a row menu, or the whole selection from the toolbar. */
   const [deleteTargets, setDeleteTargets] = useState<MatterDocument[]>([])
   const [previewTarget, setPreviewTarget] = useState<MatterDocument | null>(null)
+  const [viewedRevisions, setViewedRevisions] = useState<Record<string, string | null>>({})
   const [combineOpen, setCombineOpen] = useState(false)
   const [auditTarget, setAuditTarget] = useState<MatterDocument | null>(null)
   const [auditEvents, setAuditEvents] = useState<DocumentAccessAudit[]>([])
@@ -574,7 +575,7 @@ export function MatterDocumentsTab({
   const handleMarkReviewed = async (doc: MatterDocument) => {
     setBusy(`review:${doc.id}`)
     try {
-      await setDocumentReviewed(doc.id, true)
+      await setDocumentReviewed(doc.id, true, viewedRevisions[doc.id] ?? undefined)
       toast.success(`Marked ${doc.name} reviewed`)
       await refresh()
     } catch (error) {
@@ -1007,7 +1008,7 @@ export function MatterDocumentsTab({
                       <DropdownMenuContent align="end">
                         {isDocumentUnreviewed(doc) && (
                           <DropdownMenuItem
-                            disabled={busy === `review:${doc.id}`}
+                            disabled={busy === `review:${doc.id}` || !viewedRevisions[doc.id]}
                             onSelect={() => void handleMarkReviewed(doc)}
                           >
                             <Eye className="mr-2 h-4 w-4" />Mark reviewed
@@ -1212,6 +1213,7 @@ export function MatterDocumentsTab({
         document={previewTarget}
         open={previewTarget !== null}
         onOpenChange={open => !open && setPreviewTarget(null)}
+        onRevisionLoaded={(id, revision) => setViewedRevisions(prev => ({ ...prev, [id]: revision }))}
       />
 
       <CombineWordDraftsDialog

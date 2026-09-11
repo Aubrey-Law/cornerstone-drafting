@@ -1,11 +1,15 @@
 import { randomUUID } from 'node:crypto'
+import { summarizeRun, type DraftRun, type DraftRunOutcome } from '@/lib/drafting/runState'
+import { loadDraftSourceSnapshot } from '@/lib/drafting/sourceSnapshot'
+import { claimDraftRun, draftRunMetrics, latestDraftRun, publicDraftRun, updateDraftRun } from '@/lib/drafting/runStore'
+import { buildEstateDraftPreflight } from '@/lib/estateGenerator/preflight'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getBearerToken, requireAdmin } from '@/lib/apiAuth'
-import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
+import { resolveMatterId } from '@/lib/buildDraftPayload'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { getR2Client, r2Bucket } from '@/lib/r2'
-import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { generateDocuments } from '@/lib/drafting/generateDocuments'
 import { getRequestOrigin } from '@/lib/requestOrigin'
@@ -28,10 +32,8 @@ import {
   generateAssetTransferFilesFromDesignSheet,
   selectedRealEstateTransferDocTypes,
 } from '@/lib/realEstateTransfer/draftIntegration'
-import type { DesignSheet, MatterContact } from '@/types/database'
 import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
 import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
-import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
 // Per-document marker report returned to the drafting UI. A non-zero markerCount
 // means the document still contains `[TODO:`, `[[ MISSING ]]`, or leftover
@@ -249,7 +251,24 @@ function parseDeliveryMode(value: unknown): DraftDeliveryMode {
   return value === 'download' ? 'download' : 'save'
 }
 
+export const maxDuration = 300
+export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
+
+export async function GET(req: NextRequest, { params }: Params) {
+  const { err } = await requireAdmin(req)
+  if (err) return err
+  const { id } = await params
+  try {
+    const canonicalId = await resolveMatterId(id).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!canonicalId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+    const run = await latestDraftRun(canonicalId, req.nextUrl.searchParams.get('runId'))
+    const metrics = await draftRunMetrics(canonicalId)
+    return NextResponse.json({ run: run ? publicDraftRun(run) : null, metrics }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 503 })
+  }
+}
 
 export async function POST(req: NextRequest, { params }: Params) {
   // Step 1: Auth guard
@@ -264,21 +283,26 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Optional: a subset of document slugs (matching the preflight `filename`s) to
   // save. When omitted or empty, every generated document is saved.
   const rawBody = await req.text().catch(() => '')
-  const body = rawBody ? tryParseJson<{ documents?: unknown; mode?: unknown }>(rawBody) : {}
+  const body = rawBody ? tryParseJson<{ documents?: unknown; mode?: unknown; runId?: unknown; sourceRevision?: unknown }>(rawBody) : {}
   const deliveryMode = parseDeliveryMode(body.mode)
   const requestedDocuments = Array.isArray(body.documents)
     ? body.documents.filter((slug): slug is string => typeof slug === 'string' && slug.trim().length > 0)
     : []
   const selectedDocuments = requestedDocuments.length > 0 ? new Set(requestedDocuments) : null
 
+  let run: DraftRun | null = null
+  let finalized = false
+  let outcomes: DraftRunOutcome[] = []
   try {
     const canonicalMatterId = await resolveMatterId(matterId).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!canonicalMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
 
     // Step 3: Build payload
     let payload: DraftPayload
+    let snapshot: Awaited<ReturnType<typeof loadDraftSourceSnapshot>>
     try {
-      payload = await buildDraftPayload(canonicalMatterId)
+      snapshot = await loadDraftSourceSnapshot(canonicalMatterId)
+      payload = snapshot.payload
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 400 })
     }
@@ -292,6 +316,21 @@ export async function POST(req: NextRequest, { params }: Params) {
         },
         { status: 422 }
       )
+    }
+
+    const revision = snapshot.revision
+    if (typeof body.sourceRevision !== 'string' || body.sourceRevision !== revision) {
+      return NextResponse.json({ error: 'Your source data changed. Check drafts again before generating.', code: 'SOURCE_CHANGED' }, { status: 409 })
+    }
+    if (deliveryMode === 'save') {
+      if (typeof body.runId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.runId)) {
+        return NextResponse.json({ error: 'A draft run identifier is required.' }, { status: 400 })
+      }
+      const documents = requestedDocuments.length ? requestedDocuments : buildEstateDraftPreflight(payload).documentsToGenerate.map(d => d.filename)
+      const claim = await claimDraftRun({ id: body.runId, matterId: canonicalMatterId, actorId: user.id, revision, documents })
+      if (!claim.claimed) return NextResponse.json({ run: publicDraftRun(claim.run), success: claim.run.status === 'completed', documents: claim.run.outcomes.filter(o => o.status === 'saved').map(o => o.name) }, { status: claim.run.status === 'completed' ? 200 : 202 })
+      run = claim.run
+      outcomes = run.outcomes ?? []
     }
 
     // Step 4: Generate documents via direct function call (no internal HTTP round-trip)
@@ -311,7 +350,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // existing — it now says what actually ran.)
     let generationEngine: EstateGeneratorEngine | 'llm_fallback' = engine
     if (engine === 'node') {
-      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))
+      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId, clauseSnapshot: snapshot.clauseSnapshot }))
       if (
         !nodeGenerateResult.ok
         && assetTransferDocTypes.length > 0
@@ -330,7 +369,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         generateResult = nodeGenerateResult
       }
     } else {
-      generateResult = await generateDocuments(admin, payload.design_sheet_id, user.id, payload.documents)
+      generateResult = await generateDocuments(admin, payload.design_sheet_id, user.id, payload.documents, snapshot)
     }
     draftWarnings = mergeDraftWarnings(draftWarnings, warningsFromGenerateResult(generateResult))
     draftMissing = missingFromGenerateResult(generateResult)
@@ -426,25 +465,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     if (assetTransferDocTypes.length > 0 && payload.design_sheet_id) {
-      const { data: sheetRow } = await admin
-        .from('design_sheets')
-        .select('*')
-        .eq('id', payload.design_sheet_id)
-        .maybeSingle()
+      const sheetRow = snapshot.sheet
       if (sheetRow) {
-        let contacts: MatterContact[] = []
-        // Read through the join (step 3 of docs/matter-contacts-migration.md).
-        contacts = (await loadMatterContacts(
-          admin,
-          canonicalMatterId,
-        )) as unknown as MatterContact[]
         const assetFiles = await generateAssetTransferFilesFromDesignSheet(
-          sheetRow as DesignSheet,
+          sheetRow,
           {
             client_name: payload.client.full_name,
             spouse_name: payload.spouse?.full_name ?? null,
           },
-          contacts,
+          snapshot.contacts,
           payload.documents,
         )
         generatedFiles.push(
@@ -488,6 +517,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       )
     }
 
+    // The optional model fallback uses legacy HTTP routes that load their own
+    // source data. Do not register output if those inputs changed during it.
+    if (generationEngine === 'llm_fallback' && (await loadDraftSourceSnapshot(canonicalMatterId)).revision !== revision) {
+      return NextResponse.json({ error: 'Source data changed during drafting. Check drafts again before retrying.', code: 'SOURCE_CHANGED' }, { status: 409 })
+    }
+
     if (deliveryMode === 'download') {
       const { zipBuffer, meta } = buildDraftDownloadArtifacts(generatedFiles, payload)
       const downloadMeta = encodeDraftDownloadMeta({
@@ -515,7 +550,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // One id groups every document from this run; used to supersede prior runs
     // and to attribute provenance per document.
-    const generationId = randomUUID()
+    const generationId = run?.id ?? randomUUID()
 
     // Snapshot the current (non-superseded) drafts before inserting this run's
     // rows so we can supersede the ones this run replaces. Captured up front so
@@ -523,15 +558,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     // null generation_id are still eligible.
     const { data: priorDraftRows } = await admin
       .from('matter_documents')
-      .select('id, name')
+      .select('id, name, generation_id')
       .eq('matter_id', canonicalMatterId)
       .eq('source', 'firm')
       .is('superseded_at', null)
-    const priorDrafts = (priorDraftRows ?? []) as Array<{ id: string; name: string }>
+    const priorDrafts = ((priorDraftRows ?? []) as Array<{ id: string; name: string; generation_id?: string }>).filter(doc => doc.generation_id !== run?.id)
 
     // Client-facing draft name: YYYY-MM-DD_Owner Name_Document Title.docx.
     // Date is the generation date in the firm's timezone (Massachusetts/Eastern).
-    const generationDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
+    const generationDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(run ? new Date(run.created_at) : new Date())
 
     for (const file of generatedFiles) {
       const documentName = buildDraftDocumentName({
@@ -542,9 +577,31 @@ export async function POST(req: NextRequest, { params }: Params) {
         title: file.title ?? titleFromOutputSlug(file.filename),
       })
 
+      try {
+      if (run) {
+        await updateDraftRun(run, {})
+        const saved = outcomes.find(o => o.filename === file.filename && o.status === 'saved')
+        if (saved?.documentId) {
+          uploadedFilenames.push(saved.name)
+          documentRefs.push({ id: saved.documentId, name: saved.name })
+          continue
+        }
+        // A response may have been lost after registration but before the ledger
+        // update. Reconcile against the persisted document before doing any upload.
+        const { data: existing, error: existingError } = await admin.from('matter_documents')
+          .select('id, name, marker_count').eq('generation_id', run.id).eq('draft_run_output', encodeURIComponent(file.filename)).maybeSingle()
+        if (existingError) throw new Error('Could not check saved output. Retry after the connection recovers.')
+        if (existing) {
+          outcomes = outcomes.filter(o => o.filename !== file.filename).concat({ filename: file.filename, name: existing.name, status: 'saved', documentId: existing.id, markerCount: existing.marker_count })
+          uploadedFilenames.push(existing.name)
+          documentRefs.push({ id: existing.id, name: existing.name })
+          await updateDraftRun(run, { outcomes })
+          continue
+        }
+      }
       const timestamp = Date.now()
       const safeFilename = documentName.replace(/[^a-zA-Z0-9._-]/g, '_')
-      const r2Key = `matters/${canonicalMatterId}/draft/${timestamp}-${safeFilename}`
+      const r2Key = run ? `matters/${canonicalMatterId}/draft-runs/${run.id}/${run.worker_token}/${encodeURIComponent(file.filename)}` : `matters/${canonicalMatterId}/draft/${timestamp}-${safeFilename}`
 
       // Scan the final DOCX for unresolved markers before it leaves the server.
       // Engine-agnostic, so it catches `[TODO:` clause text from the Python
@@ -610,11 +667,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           })
           documentRefs.push({ id: persisted.documentId, name: documentName })
         } catch (persistenceError) {
-          try {
-            await r2.send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: r2Key }))
-          } catch (cleanupError) {
-            console.error('[draft route] failed to clean up unregistered R2 object', r2Key, cleanupError)
-          }
+          // The transaction may have committed despite a lost response. Retain
+          // the object so retry can reconcile it using immutable output identity.
           throw new Error(
             `Failed to register document "${documentName}" with clause provenance: ${persistenceError instanceof Error ? persistenceError.message : 'unknown persistence error'}`,
           )
@@ -647,6 +701,24 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       uploadedFilenames.push(documentName)
+      if (run) {
+        outcomes = outcomes.filter(o => o.filename !== file.filename).concat({ filename: file.filename, name: documentName, status: 'saved', documentId: documentRefs[documentRefs.length - 1].id, markerCount: scan.markerCount })
+        await updateDraftRun(run, { outcomes })
+      }
+      } catch (error) {
+        if (!run) throw error
+        // Never downgrade a known persisted output if only the status write failed.
+        if (!outcomes.some(o => o.filename === file.filename && o.status === 'saved')) {
+          outcomes = outcomes.filter(o => o.filename !== file.filename).concat({ filename: file.filename, name: documentName, status: 'failed', error: (error as Error).message })
+        }
+        await updateDraftRun(run, { outcomes })
+      }
+    }
+
+    if (run) {
+      for (const filename of run.requested_documents) {
+        if (!outcomes.some(o => o.filename === filename)) outcomes.push({ filename, name: titleFromOutputSlug(filename), status: 'failed', error: 'The renderer did not produce this selected document.' })
+      }
     }
 
     // Step 5d: Supersede the prior drafts this run replaced (files stay in R2 —
@@ -656,7 +728,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const supersededIds = selectSupersededDraftIds({
       priorDrafts,
       regeneratedNames: uploadedFilenames,
-      fullSet: selectedDocuments === null,
+      fullSet: selectedDocuments === null && (!run || summarizeRun(run.requested_documents, outcomes).status === 'completed'),
     })
     if (supersededIds.length > 0) {
       const { error: supersedeErr } = await admin
@@ -684,8 +756,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     // counts; `hasBlockingMarkers` is the loud signal the UI uses to warn that a
     // draft is not ready to share. (The hard promote block lands in WP3.)
     const hasBlockingMarkers = documentReports.some(report => report.markerCount > 0)
+    const summary = run ? summarizeRun(run.requested_documents, outcomes) : null
+    if (run && summary) {
+      await updateDraftRun(run, { outcomes, status: summary.status })
+      run = { ...run, outcomes, status: summary.status }
+      finalized = true
+    }
     return NextResponse.json({
-      success: true,
+      success: !summary || summary.status === 'completed',
+      run: run ? publicDraftRun(run) : null,
       documents: uploadedFilenames,
       documentRefs,
       documentReports,
@@ -703,5 +782,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       { error: 'Draft generation failed', detail: (e as Error).message },
       { status: 500 }
     )
+  } finally {
+    if (run && !finalized) {
+      try {
+        const summary = summarizeRun(run.requested_documents, outcomes)
+        await updateDraftRun(run, { outcomes, status: summary.status, error: 'The run was interrupted. Saved documents are preserved; retry only the remaining documents.' })
+      } catch (error) { console.error('[draft run] could not finalize status', run.id, (error as Error).message) }
+    }
   }
 }

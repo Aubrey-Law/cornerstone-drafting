@@ -23,6 +23,8 @@ vi.mock('@/lib/designSheet/useDesignSheetState', () => ({
   useDesignSheetState: () => ({
     conflict: recovery.active ? { local: {}, latest: {}, base: null } : null,
     resolveConflict: vi.fn(),
+    flushAndSave: vi.fn(async () => !recovery.active),
+    saveStatusText: 'All changes saved',
     reloadConflictLatest: vi.fn(),
     sheet: {} as DesignSheet,
     contactsState: [],

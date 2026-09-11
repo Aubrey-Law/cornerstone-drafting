@@ -7,6 +7,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { auditDocumentAccess, isAdminUser, userCanReadDocument } from '@/lib/documentSecurity'
 import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
+import { documentReviewRevision } from '@/lib/documents/reviewRevision'
 import { checkDocumentShareable, describeShareBlock } from '@/lib/documents/shareGate'
 
 // GET /api/documents/[id]  →  { url: signedDownloadUrl, document: MatterDocument }
@@ -33,7 +34,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     new GetObjectCommand({ Bucket: r2Bucket(), Key: doc.r2_key }),
     { expiresIn: 300 },
   )
-  return NextResponse.json({ url, document: doc })
+  return NextResponse.json({ url, document: doc, reviewRevision: documentReviewRevision(doc) })
 }
 
 // PATCH /api/documents/[id]
@@ -52,6 +53,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = (await req.json()) as {
     shared?: boolean
     reviewed?: boolean
+    reviewRevision?: string
     name?: string
     folderId?: string | null
   }
@@ -74,7 +76,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .from('matter_documents')
     // r2_key, content_type, source and missing_count are here for the share
     // gate, which reads the bytes a client would actually download.
-    .select('id, matter_id, name, shared_at, r2_key, content_type, source, missing_count')
+    .select('id, matter_id, name, shared_at, r2_key, content_type, source, missing_count, current_version_id, superseded_at')
     .eq('id', id)
     .single()
   if (loadError || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -144,18 +146,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   if (isReviewToggle) {
-    const { data, error: reviewErr } = await sb
+    if (existing.superseded_at || body.reviewRevision !== documentReviewRevision(existing)) {
+      return NextResponse.json({ error: 'This document changed. Open the current version before marking it reviewed.' }, { status: 409 })
+    }
+    const update = sb
       .from('matter_documents')
       .update({
         reviewed_at: reviewed ? new Date().toISOString() : null,
         reviewed_by: reviewed ? user.id : null,
       })
       .eq('id', id)
-      .select(MATTER_DOCUMENT_COLUMNS)
-      .single()
+      .eq('r2_key', existing.r2_key)
+      .is('superseded_at', null)
+    const guarded = existing.current_version_id
+      ? update.eq('current_version_id', existing.current_version_id)
+      : update.is('current_version_id', null)
+    const { data, error: reviewErr } = await guarded.select(MATTER_DOCUMENT_COLUMNS).maybeSingle()
     if (reviewErr) return NextResponse.json({ error: reviewErr.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'This document changed while you were reviewing it. Reload the current version.' }, { status: 409 })
 
-    await auditDocumentAccess(sb, user, data, 'review', { reviewed, document_name: data.name })
+    await auditDocumentAccess(sb, user, data, 'review', { reviewed, document_name: data.name, version_id: existing.current_version_id, review_revision: body.reviewRevision })
     return NextResponse.json({ document: data })
   }
 

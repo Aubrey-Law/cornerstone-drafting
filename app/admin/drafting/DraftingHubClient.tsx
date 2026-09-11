@@ -1,28 +1,24 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownAZ, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { SavedDraftingViews } from './SavedDraftingViews'
-import { HUB_RETURN_KEY, hubViewUrl, parseHubView, type HubView } from '@/lib/drafting/hubView'
+import { HUB_RETURN_KEY, hubPageUrl, parseHubPage, type HubView, type HubPageQuery } from '@/lib/drafting/hubView'
 import { cn } from '@/lib/utils'
 import {
   type HubActionFilter,
   type HubSortKey,
   QUIET_DAYS,
-  hubNextActionKey,
-  isHubQuiet,
-  matchesHubSearch,
-  sortHubMatters,
 } from '@/lib/drafting/hubUtils'
-import type { DraftingHubMatter } from '@/lib/queries/drafting'
+import type { DraftingHubPage } from '@/lib/drafting/hub'
 
 interface DraftingHubClientProps {
-  matters: DraftingHubMatter[]
-  loadError?: string | null
+  result: DraftingHubPage
+  query: HubPageQuery
 }
 
 /** Next-action chips, in toolbar order. `tone` styles the unselected pill. */
@@ -36,12 +32,13 @@ const ACTION_CHIPS: { value: HubActionFilter; label: string; tone: string }[] = 
   { value: 'quiet', label: `Quiet ${QUIET_DAYS}d+`, tone: 'bg-red-bg text-red' },
 ]
 
-export default function DraftingHubClient({ matters: initialMatters, loadError = null }: DraftingHubClientProps) {
+export default function DraftingHubClient({ result, query }: DraftingHubClientProps) {
   const router = useRouter()
-  const matters = initialMatters
+  const { matters, error: loadError, actionCounts, practiceCounts, total, page, pageSize } = result
+  const [pending, startTransition] = useTransition()
   const params = useSearchParams()
   const queryKey = params.toString()
-  const [view, setView] = useState<HubView>(() => parseHubView(new URLSearchParams(queryKey)))
+  const [view, setView] = useState<HubPageQuery>(query)
   const { search, sort: sortKey, action: actionFilter, practice: practiceFilter } = view
   const [focusedIndex, setFocusedIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -50,98 +47,74 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   const positionRef = useRef({ matterId: '', scrollTop: 0 })
   const initialized = useRef(false)
   const restorePosition = useRef(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    let next = parseHubView(new URLSearchParams(queryKey))
+    // An older response must not erase text typed during the next debounce.
+    if (searchTimer.current) return
+    let next = query
     if (!initialized.current) {
       initialized.current = true
       try {
         const saved = JSON.parse(sessionStorage.getItem(HUB_RETURN_KEY) ?? 'null')
         if (saved && typeof saved.url === 'string' && saved.url.startsWith('/admin/drafting?')) {
           if (!queryKey) {
-            next = parseHubView(new URLSearchParams(saved.url.split('?')[1]))
-            window.history.replaceState(null, '', hubViewUrl(next))
+            next = parseHubPage(new URLSearchParams(saved.url.split('?')[1]))
+            startTransition(() => router.replace(hubPageUrl(next), { scroll: false }))
           }
-          if (!queryKey || saved.url === hubViewUrl(next)) {
+          if (!queryKey || saved.url === hubPageUrl(next)) {
             positionRef.current = { matterId: typeof saved.matterId === 'string' ? saved.matterId : '', scrollTop: Number.isFinite(saved.scrollTop) ? Math.max(0, saved.scrollTop) : 0 }
             restorePosition.current = true
           }
         }
       } catch { /* Returning to the list also works without session storage. */ }
     }
+    if (queryKey && !loadError && parseHubPage(new URLSearchParams(queryKey)).page !== next.page) {
+      startTransition(() => router.replace(hubPageUrl(next), { scroll: false }))
+    }
     viewRef.current = next
-    setView(current => hubViewUrl(current) === hubViewUrl(next) ? current : next)
-  }, [queryKey])
+    setView(current => hubPageUrl(current) === hubPageUrl(next) ? current : next)
+  }, [queryKey, query, router, loadError])
 
   const rememberPosition = useCallback(() => {
-    try { sessionStorage.setItem(HUB_RETURN_KEY, JSON.stringify({ url: hubViewUrl(viewRef.current), ...positionRef.current })) } catch { /* optional convenience */ }
+    try { sessionStorage.setItem(HUB_RETURN_KEY, JSON.stringify({ url: hubPageUrl(viewRef.current), ...positionRef.current })) } catch { /* optional convenience */ }
   }, [])
 
-  const updateView = (next: HubView) => {
+  const updateView = (nextView: HubView, nextPage = 1) => {
+    const next = { ...nextView, page: nextPage }
     viewRef.current = next
     positionRef.current = { matterId: '', scrollTop: 0 }
     if (worklistRef.current) worklistRef.current.scrollTop = 0
     setView(next)
     setFocusedIndex(0)
-    // Native history integrates with App Router without fetching unchanged data.
-    window.history.replaceState(null, '', hubViewUrl(next))
+    startTransition(() => router.replace(hubPageUrl(next), { scroll: false }))
     rememberPosition()
   }
-  const setSearch = (value: string) => updateView({ ...view, search: value })
-  const setSortKey = (value: HubSortKey) => updateView({ ...view, sort: value })
-  const setActionFilter = (value: HubActionFilter) => updateView({ ...view, action: value })
-  const setPracticeFilter = (value: string) => updateView({ ...view, practice: value })
-
-  const practiceAreas = useMemo(() => {
-    const set = new Set<string>()
-    for (const item of matters) {
-      const area = item.matter.practice_area?.trim()
-      if (area) set.add(area)
-    }
-    return Array.from(set).sort()
-  }, [matters])
-
-  const searched = useMemo(
-    () => matters.filter(item => matchesHubSearch(item, search) && (practiceFilter === 'all' || item.matter.practice_area === practiceFilter)),
-    [matters, search, practiceFilter],
-  )
-
-  const actionCounts = useMemo(() => {
-    const counts: Record<HubActionFilter, number> = {
-      all: searched.length,
-      design: 0,
-      setup: 0,
-      generate: 0,
-      review: 0,
-      revise: 0,
-      quiet: 0,
-    }
-    for (const item of searched) {
-      counts[hubNextActionKey(item)] += 1
-      if (isHubQuiet(item)) counts.quiet += 1
-    }
-    return counts
-  }, [searched])
-
-  const filtered = useMemo(() => {
-    let list = searched
-    if (actionFilter === 'quiet') {
-      list = list.filter(isHubQuiet)
-    } else if (actionFilter !== 'all') {
-      list = list.filter(item => hubNextActionKey(item) === actionFilter)
-    }
-    return sortHubMatters(list, sortKey)
-  }, [actionFilter, searched, sortKey])
+  // Debounce only search; chips, saved views and pagination navigate immediately.
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current) }, [])
+  const cancelSearch = () => { if (searchTimer.current) clearTimeout(searchTimer.current); searchTimer.current = null }
+  const setSearch = (value: string) => {
+    cancelSearch()
+    const next = { ...viewRef.current, search: value, page: 1 }
+    viewRef.current = next
+    setView(next)
+    searchTimer.current = setTimeout(() => { searchTimer.current = null; updateView(next) }, 250)
+  }
+  const applyView = (next: HubView, nextPage = 1) => { cancelSearch(); updateView(next, nextPage) }
+  const setSortKey = (value: HubSortKey) => applyView({ ...view, sort: value })
+  const setActionFilter = (value: HubActionFilter) => applyView({ ...view, action: value })
+  const setPracticeFilter = (value: string) => applyView({ ...view, practice: value })
+  const filtered = matters
 
   useEffect(() => {
-    if (restorePosition.current && hubViewUrl(view) !== hubViewUrl(viewRef.current)) return
+    if (restorePosition.current && hubPageUrl(query) !== hubPageUrl(viewRef.current)) return
     if (restorePosition.current && worklistRef.current) {
       restorePosition.current = false
       const index = filtered.findIndex(item => item.matter.matter_id === positionRef.current.matterId)
       if (index >= 0) setFocusedIndex(index)
       worklistRef.current.scrollTop = positionRef.current.scrollTop
     } else setFocusedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)))
-  }, [filtered, view])
+  }, [filtered, query])
 
   const focusRow = (index: number) => {
     setFocusedIndex(index)
@@ -180,11 +153,9 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
 
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
-    : matters.length === 0
-      ? 'No matters currently need drafting work.'
-      : search.trim() || actionFilter !== 'all' || practiceFilter !== 'all'
-        ? 'No drafting work matches the current filters.'
-        : 'No drafting work to show.'
+    : search.trim() || actionFilter !== 'all' || practiceFilter !== 'all'
+      ? 'No drafting work matches the current filters.'
+      : 'No matters currently need drafting work.'
 
   const showRetry = Boolean(loadError)
 
@@ -242,7 +213,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               <option value="action">Next action</option>
             </select>
           </label>
-          {practiceAreas.length > 1 && (
+          {(practiceCounts.length > 0 || practiceFilter !== 'all') && (
             <select
               value={practiceFilter}
               onChange={e => setPracticeFilter(e.target.value)}
@@ -250,26 +221,35 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               aria-label="Practice area"
             >
               <option value="all">All areas</option>
-              {practiceAreas.map(area => (
-                <option key={area} value={area}>{area}</option>
+              {practiceFilter !== 'all' && !practiceCounts.some(area => area.name === practiceFilter) && <option value={practiceFilter}>{practiceFilter} · 0</option>}
+              {practiceCounts.map(area => (
+                <option key={area.name} value={area.name}>{area.name} · {area.count}</option>
               ))}
             </select>
           )}
-          <SavedDraftingViews view={view} onChange={updateView} />
+          <SavedDraftingViews view={{ search, sort: sortKey, action: actionFilter, practice: practiceFilter }} onChange={applyView} />
           <span className="hidden text-[10px] text-muted-foreground xl:inline">
             ↑↓ navigate · Enter open · / search
           </span>
         </div>
       </div>
 
-      <div ref={worklistRef} role="region" aria-label="Drafting worklist" onScroll={event => { positionRef.current.scrollTop = event.currentTarget.scrollTop; rememberPosition() }} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+      <div className="flex items-center justify-between border-b px-4 py-2 text-xs text-muted-foreground md:px-6">
+        <span role="status" aria-live="polite">{pending ? 'Loading worklist…' : `${total === 0 ? 0 : (page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} matters`}</span>
+        <nav aria-label="Worklist pages" className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={pending || page <= 1} onClick={() => applyView(view, page - 1)}>Previous</Button>
+          <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+          <Button variant="outline" size="sm" disabled={pending || page * pageSize >= total} onClick={() => applyView(view, page + 1)}>Next</Button>
+        </nav>
+      </div>
+      <div ref={worklistRef} aria-busy={pending} role="region" aria-label="Drafting worklist" onScroll={event => { positionRef.current.scrollTop = event.currentTarget.scrollTop; rememberPosition() }} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div>
           {filtered.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 {!showRetry && (search || actionFilter !== 'all' || practiceFilter !== 'all') && (
-                  <Button variant="outline" size="sm" onClick={() => updateView({ search: '', sort: 'updated', action: 'all', practice: 'all' })}>Clear filters</Button>
+                  <Button variant="outline" size="sm" onClick={() => applyView({ search: '', sort: 'updated', action: 'all', practice: 'all' })}>Clear filters</Button>
                 )}
                 {showRetry && (
                   <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => router.refresh()}>

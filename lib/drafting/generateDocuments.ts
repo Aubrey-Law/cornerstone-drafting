@@ -5,6 +5,10 @@ import { docSelectionTemplateKey } from '@/lib/drafting/docSelectionKey'
 import { projectDraftPayloadToFlatSheet } from '@/lib/drafting/projectDesignSheet'
 import { buildClientVariables, buildSpouseVariables, escapeXml } from '@/lib/drafting/variables'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import type { DesignSheet } from '@/types/database'
+
+export interface DraftDocumentSelection { doc_type: string | null; variant: string | null; party: string | null; selected: boolean | null }
+export interface GenerateDocumentsSnapshot { payload: DraftPayload; sheet: DesignSheet | null; selections: DraftDocumentSelection[] }
 
 export interface GeneratedFile {
   name: string
@@ -65,8 +69,9 @@ export async function generateDocuments(
   sheetId: string,
   userId: string,
   documents?: DraftPayload['documents'],
+  captured?: GenerateDocumentsSnapshot,
 ): Promise<GenerateDocumentsResult> {
-  const { data: sheet, error: sheetError } = await sb
+  const { data: sheet, error: sheetError } = captured ? { data: captured.sheet, error: null } : await sb
     .from('design_sheets')
     .select('*')
     .eq('id', sheetId)
@@ -79,7 +84,7 @@ export async function generateDocuments(
 
   let payload: DraftPayload
   try {
-    payload = await buildDraftPayload(matterId)
+    payload = captured?.payload ?? await buildDraftPayload(matterId)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to build draft payload'
     return { ok: false, error: message, status: 422 }
@@ -87,7 +92,7 @@ export async function generateDocuments(
 
   const flatSheet = projectDraftPayloadToFlatSheet(payload)
 
-  const { data: selections } = await sb
+  const { data: selections } = captured ? { data: captured.selections } : await sb
     .from('doc_selections')
     .select('doc_type, variant, party, selected')
     .eq('design_sheet_id', sheetId)

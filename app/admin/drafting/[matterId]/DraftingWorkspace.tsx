@@ -22,6 +22,7 @@ import DesignSheetPage from '@/app/admin/drafting/[matterId]/design/DesignSheetP
 import type { DesignSheet, MatterContact, MatterDocument, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
+import { draftingProgress } from '@/lib/drafting/workspaceProgress'
 const GenerateStep = dynamic(() => import('./GenerateStep'), { ssr: false })
 const ReviewStep = dynamic(() => import('./ReviewStep'), { ssr: false })
 
@@ -88,9 +89,10 @@ export default function DraftingWorkspace({
     })
   }, [designState.lpDataState, designState.sheet, isLP, matter])
   const designComplete = designReadiness?.complete ?? false
-  const step: Step = isStep(rawStep) ? rawStep : defaultStep(designComplete, hubMatter)
+  const sharedGenerated = useMemo(() => sharedDrafts.filter(doc => doc.generation_id), [sharedDrafts])
+  const step: Step = isStep(rawStep) ? rawStep : defaultStep(designComplete, hubMatter, sharedGenerated.length)
 
-  const stepStatus = useMemo(() => computeStepStatus(designComplete, hubMatter), [designComplete, hubMatter])
+  const stepStatus = useMemo(() => draftingProgress(designComplete, hubMatter?.draftCount ?? 0, hubMatter?.recentDrafts ?? [], sharedGenerated), [designComplete, hubMatter, sharedGenerated])
 
   // A `focus=<sectionId>:<targetField>` param (from a preflight "Fix" link) is
   // captured when it appears, handed to the design sheet to scroll/focus, then
@@ -122,7 +124,28 @@ export default function DraftingWorkspace({
     router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
   }, [rawFocus, searchParams, router, matterId])
 
-  const setStep = (next: Step) => {
+  const [preparing, setPreparing] = useState(false)
+  const [transitionError, setTransitionError] = useState<string | null>(null)
+  const preparingRef = useRef(false)
+  const setStep = async (next: Step) => {
+    if (preparingRef.current) return
+    if (next === 'generate') {
+      preparingRef.current = true
+      setPreparing(true)
+      setTransitionError(null)
+      try {
+        if (!(await designState.flushAndSave())) {
+          setTransitionError('Your latest changes could not be saved. Return to Design to resolve the save before checking drafts.')
+          return
+        }
+      } catch {
+        setTransitionError('Saving did not finish. Your decisions are still open in Design; retry before checking drafts.')
+        return
+      } finally {
+        preparingRef.current = false
+        setPreparing(false)
+      }
+    }
     const params = new URLSearchParams(searchParams.toString())
     params.set('step', next)
     router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
@@ -199,7 +222,7 @@ export default function DraftingWorkspace({
             size="icon"
             className="h-10 w-10 shrink-0"
             aria-label="Previous drafting step"
-            disabled={!previousStep}
+            disabled={!previousStep || preparing}
             onClick={() => previousStep && setStep(previousStep.id)}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -214,7 +237,7 @@ export default function DraftingWorkspace({
             size="icon"
             className="h-10 w-10 shrink-0"
             aria-label="Next drafting step"
-            disabled={!nextStep}
+            disabled={!nextStep || preparing}
             onClick={() => nextStep && setStep(nextStep.id)}
           >
             <ChevronRight className="h-4 w-4" />
@@ -231,7 +254,8 @@ export default function DraftingWorkspace({
               <div key={s.id} className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setStep(s.id)}
+                  onClick={() => void setStep(s.id)}
+                  disabled={preparing}
                   aria-current={active ? 'step' : undefined}
                   className={cn(
                     'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
@@ -265,6 +289,10 @@ export default function DraftingWorkspace({
         onResolve={designState.resolveConflict}
         onReload={() => designState.reloadConflictLatest()}
       />}
+      <div className="shrink-0 border-b px-4 py-2 text-xs md:px-6" role="status" aria-live="polite">
+        {preparing ? 'Saving your latest decisions…' : designState.saveStatusText}
+        {transitionError && <p className="mt-1 text-destructive" role="alert">{transitionError}</p>}
+      </div>
       {/* Step body */}
       <div className={cn(
         'min-h-0 flex-1',
@@ -300,7 +328,8 @@ export default function DraftingWorkspace({
                 contacts: designState.contactsState,
                 intakeSnapshot,
               }}
-              onAdvance={() => setStep('review')}
+              beforePreflight={designState.flushAndSave}
+              onAdvance={() => void setStep('review')}
             />}
           </div>
         )}
@@ -314,20 +343,8 @@ export default function DraftingWorkspace({
   )
 }
 
-function defaultStep(designComplete: boolean, hubMatter: DraftingHubMatter | null): Step {
+function defaultStep(designComplete: boolean, hubMatter: DraftingHubMatter | null, sharedGeneratedCount: number): Step {
   if (!designComplete) return 'design'
-  if (!hubMatter || hubMatter.draftCount === 0) return 'generate'
+  if ((!hubMatter || hubMatter.draftCount === 0) && sharedGeneratedCount === 0) return 'generate'
   return 'review'
-}
-
-function computeStepStatus(
-  designComplete: boolean,
-  hubMatter: DraftingHubMatter | null,
-): Record<Step, 'complete' | 'pending'> {
-  const generateComplete = !!hubMatter && hubMatter.draftCount > 0
-  return {
-    design: designComplete ? 'complete' : 'pending',
-    generate: generateComplete ? 'complete' : 'pending',
-    review: 'pending',
-  }
 }

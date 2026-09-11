@@ -39,25 +39,6 @@ describe('drafting hub and workspace', () => {
     expect(adminNav).toContain("{ href: '/admin/drafting', label: 'Drafting'")
   })
 
-  it('adds an admin drafting route backed by the drafting query layer', () => {
-    const page = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/page.tsx'), 'utf8')
-    const query = fs.readFileSync(path.join(process.cwd(), 'lib/queries/drafting.ts'), 'utf8')
-
-    expect(page).toContain("import { fetchDraftingHubMatters } from '@/lib/queries/drafting'")
-    expect(page).toContain('<DraftingHubClient matters={matters} loadError={error} />')
-    expect(query).toContain(".from('v_matter_pipeline')")
-    expect(query).toContain(".in('stage', [...DRAFTING_QUEUE_STAGES])")
-    expect(query).toContain(".from('design_sheets')")
-    expect(query).toContain(".from('doc_selections')")
-    expect(query).toContain(".select('design_sheet_id, doc_type, variant, party, selected')")
-    expect(query).toContain(".from('matter_documents')")
-    expect(query).toContain("rpc('drafting_hub_draft_rollups'")
-    expect(query).toContain("matter.marital_status")
-    expect(query).toContain('docSelectionTemplateKey(selection)')
-    expect(query).not.toContain('template_filename')
-    expect(query).not.toContain('plan_type, marital_status, decisions')
-  })
-
   it('uses the existing matter draft endpoint and displays backend detail errors', () => {
     const step = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/GenerateStep.tsx'), 'utf8')
 
@@ -85,7 +66,7 @@ describe('drafting hub and workspace', () => {
     expect(step).toContain('preflight.missingFields.length > 0 && (')
     expect(step).toContain('preflight.error || preflight.warnings.length > 0')
     expect(step).toContain(
-      'disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null}',
+      'disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null || isGenerating}',
     )
   })
 
@@ -97,7 +78,7 @@ describe('drafting hub and workspace', () => {
     expect(review).toContain('const confirmDelete = async')
     expect(review).toContain('await deleteDocument(doc.id)')
     expect(review).toContain('setDeletedIds')
-    expect(review).toContain('<Trash2 className="h-3.5 w-3.5" />')
+    expect(review).toContain('onSelect={() => handleDelete(doc)}')
   })
 
   it('loads every current draft into the matter review workspace', () => {

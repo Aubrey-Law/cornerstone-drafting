@@ -132,7 +132,7 @@ describe('design sheet index preference', () => {
     expect(source).toContain("navOpen ? '244px' : null")
     // The phone layout is a single column, so nothing can overflow sideways.
     expect(source).toContain("isMobile\n    ? 'minmax(0, 1fr)'")
-    expect(source).toContain('clausePreviewOpen && !isMobile')
+    expect(source).toContain('clausePreviewOpen && clausesDocked && !isMobile')
   })
 })
 

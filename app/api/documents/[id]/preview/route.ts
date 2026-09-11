@@ -5,6 +5,7 @@ import { userCanReadDocument } from '@/lib/documentSecurity'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getR2Client, r2Bucket } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { documentReviewRevision } from '@/lib/documents/reviewRevision'
 
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -56,7 +57,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       ],
     })
 
-    return NextResponse.json({ html: value })
+    return NextResponse.json({ html: value, reviewRevision: documentReviewRevision(doc) }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (previewError) {
     console.error('DOCX preview error:', previewError)
     return NextResponse.json({ error: 'Could not render document preview' }, { status: 500 })

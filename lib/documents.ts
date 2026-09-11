@@ -170,7 +170,7 @@ export async function combineWordDocuments(docIds: string[], filename?: string):
  * `DocumentPreviewDialog`, which does it for them) rather than opening a
  * signed URL in a tab.
  */
-export async function getDocumentPreview(docId: string): Promise<{ html: string }> {
+export async function getDocumentPreview(docId: string): Promise<{ html: string; reviewRevision?: string }> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
 
@@ -179,7 +179,7 @@ export async function getDocumentPreview(docId: string): Promise<{ html: string 
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body?.error ?? 'Failed to load document preview')
-  return { html: String(body.html ?? '') }
+  return { html: String(body.html ?? ''), reviewRevision: typeof body.reviewRevision === 'string' ? body.reviewRevision : undefined }
 }
 
 /** Delete a document from R2 and the database. */
@@ -219,14 +219,15 @@ export async function setDocumentShared(
  * Mark a generated draft as attorney-reviewed (or clear it). Recorded with the
  * reviewer + timestamp. Informational only — it gates nothing.
  */
-export async function setDocumentReviewed(docId: string, reviewed: boolean): Promise<MatterDocument> {
+export async function setDocumentReviewed(docId: string, reviewed: boolean, reviewRevision?: string): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
 
+  if (!reviewRevision) throw new Error('Open the current document version before recording a review.')
   const res = await fetch(`/api/documents/${docId}`, {
     method: 'PATCH',
     headers: authHeaders(token),
-    body: JSON.stringify({ reviewed }),
+    body: JSON.stringify({ reviewed, reviewRevision }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

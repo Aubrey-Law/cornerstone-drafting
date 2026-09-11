@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { userCanReadDocument } from '@/lib/documentSecurity'
+import { isAdminUser, userCanReadDocument } from '@/lib/documentSecurity'
 import {
   DOCX_CONTENT_TYPE,
   getDocumentApiUser,
   isDocxDocument,
   loadR2Bytes,
 } from '@/lib/documentApiHelpers'
+import { documentReviewRevision } from '@/lib/documents/reviewRevision'
 import { loadActiveVersion } from '@/lib/documentVersions'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -28,17 +29,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!(await userCanReadDocument(sb, user, doc))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  // Sharing the current document does not publish its private revision history.
+  if (versionId && !(await isAdminUser(sb, user))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (!isDocxDocument(doc)) {
     return NextResponse.json({ error: 'Not a DOCX document' }, { status: 415 })
   }
 
   try {
     const version = await loadActiveVersion(sb, id, versionId)
+    if (versionId && !version) return NextResponse.json({ error: 'Version not found' }, { status: 404 })
     const r2Key = version?.r2_key ?? doc.r2_key
     const bytes = await loadR2Bytes(r2Key)
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         'Content-Type': DOCX_CONTENT_TYPE,
+        'X-Document-Revision': documentReviewRevision({ r2_key: r2Key, current_version_id: version?.id ?? doc.current_version_id }),
         'Content-Disposition': `inline; filename="${encodeURIComponent(doc.name)}"`,
         'Cache-Control': 'private, no-store',
       },
