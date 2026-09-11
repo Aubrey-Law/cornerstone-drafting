@@ -33,4 +33,18 @@ Apply the two additive migrations before deploying the application, after normal
 
 The new hub deliberately reports a missing migration instead of falling back to an incomplete first page. Generation remains request-driven with a five-minute execution budget and a six-minute recovery lease; interrupted runs recover on status checks and can be retried. It is not a separate background worker. Retry preserves completed outputs but the existing package renderer can still render a full package internally before only outstanding outputs are persisted.
 
-Local database fixtures represent the relevant production schema; they do not replay every historical migration. Browser services and conversion results were synthetic. Live conversion, storage, deployment and authenticated production smoke tests remain release-time checks. No shared database changes, client sends, deployment or remote push were performed.
+Local database fixtures represent the relevant production schema; they do not replay every historical migration. Browser services and conversion results were synthetic. Live conversion, storage, application deployment and authenticated application smoke tests remain release-time checks. No shared database changes, client sends, deployment or remote push were performed during the initial implementation verification.
+
+## Production migration deployment — September 11, 2026
+
+Both migrations above were applied to the verified `cornerstone` Supabase project (`qifunlovuwaryzsyfbnh`) following explicit deployment authorization. Before deployment, the live catalog confirmed their objects were absent and all 208 prior local migration versions matched remote history. The dry run listed only these two files; `--include-all` was required because existing remote history contains later version timestamps. No history repair, seed, role, or vault changes were needed.
+
+Post-deployment verification:
+
+- All 210 migration versions match; the final dry run reports the remote database is up to date.
+- The run ledger, output identity column/index, matter index, registration trigger, and five functions are present. Ledger RLS is enabled. The ledger and functions deny access to `anon` and `authenticated` and grant their intended service-role access; all five functions use invoker security and a fixed empty search path.
+- Read-only service-role SQL and actual Data API requests passed for the hub and metrics. The live hub returned one requested row from 31 eligible matters with at most five preview documents. Anonymous hub access returned HTTP 401 / PostgreSQL `42501`.
+- Security advisors reported no new errors or warnings. The only new informational finding is the deliberately policy-free, service-only run ledger. Existing unrelated findings remain unchanged.
+- Regenerated public-schema types include the deployed drafting objects and previously deployed email-triage definitions. Generated-type checks and application typecheck passed.
+
+The application was not deployed or merged as part of this database deployment. No production documents or matter records were changed by verification.
