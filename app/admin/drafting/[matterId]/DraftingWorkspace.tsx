@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { DesignSheetConflictDialog } from '@/components/design-sheet/DesignSheetConflictDialog'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -257,6 +258,13 @@ export default function DraftingWorkspace({
         </nav>
       </div>
 
+      {step !== 'design' && designState.conflict && <DesignSheetConflictDialog
+        key={`${designState.conflict.latest?.updated_at ?? 'loading'}:${designState.conflict.error ?? ''}`}
+        conflict={designState.conflict}
+        saving={designState.resolvingConflict}
+        onResolve={designState.resolveConflict}
+        onReload={() => designState.reloadConflictLatest()}
+      />}
       {/* Step body */}
       <div className={cn(
         'min-h-0 flex-1',
@@ -283,7 +291,7 @@ export default function DraftingWorkspace({
         )}
         {step === 'generate' && (
           <div className="mx-auto max-w-5xl p-4 md:p-6">
-            <GenerateStep
+            {designState.conflict ? <p role="status">Resolve the saved versions before generating drafts.</p> : <GenerateStep
               matterId={matterId}
               hubMatter={hubMatter}
               sourcePreview={{
@@ -293,7 +301,7 @@ export default function DraftingWorkspace({
                 intakeSnapshot,
               }}
               onAdvance={() => setStep('review')}
-            />
+            />}
           </div>
         )}
         {step === 'review' && (

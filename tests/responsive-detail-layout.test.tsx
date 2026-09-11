@@ -12,6 +12,7 @@ import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
 import type { PipelineMatter } from '@/types/database'
 
 const mediaState = vi.hoisted(() => ({ mobile: false }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 function installMatchMedia() {
   Object.defineProperty(window, 'matchMedia', {

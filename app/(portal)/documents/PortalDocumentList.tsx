@@ -63,7 +63,7 @@ function DocumentRow({
           aria-label={`View ${doc.name}`}
         >
           {viewPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-          <span className="hidden sm:inline">{viewPending ? 'Opening' : 'View'}</span>
+          <span>{viewPending ? 'Opening' : 'View'}</span>
         </button>
         <button
           type="button"
@@ -74,7 +74,7 @@ function DocumentRow({
           aria-label={`Download ${doc.name}`}
         >
           {downloadPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          <span className="hidden sm:inline">{downloadPending ? 'Starting' : 'Download'}</span>
+          <span>{downloadPending ? 'Starting' : 'Download'}</span>
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { DesignSheetConflictDialog } from '@/components/design-sheet/DesignSheetConflictDialog'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { PanelLeft, PanelLeftClose } from 'lucide-react'
@@ -490,7 +491,15 @@ function DesignSheetPageContent({
   return (
     <SharedFieldsProvider>
       <DesignValidationProvider value={validationValue}>
+        {state.conflict && <DesignSheetConflictDialog
+          key={`${state.conflict.latest?.updated_at ?? 'loading'}:${state.conflict.error ?? ''}`}
+          conflict={state.conflict}
+          saving={state.resolvingConflict}
+          onResolve={state.resolveConflict}
+          onReload={() => state.reloadConflictLatest()}
+        />}
         <div
+          inert={Boolean(state.conflict)}
           ref={scrollContainerRef}
           className="guided-interview guided-zinc min-h-0 overflow-y-auto bg-background"
           style={{ height: pageHeight }}

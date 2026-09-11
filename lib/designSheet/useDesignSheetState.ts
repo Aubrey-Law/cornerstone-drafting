@@ -34,6 +34,8 @@ import {
 } from '@/lib/designSheetImport/decisionFields'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
+import { resolveDesignSheetConflict, type ConflictChoices, type DesignSheetConflict } from './designSheetConflict'
+
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 
 type ApiErrorResponse = { error?: string }
@@ -76,7 +78,14 @@ export function useDesignSheetState({
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
 
   // Session draft means the attorney already edited this matter in this tab.
-  const [initialDraftExists] = useState(() => Boolean(readDesignSheetDraft(matterId)))
+  const [initialDraft] = useState(() => readDesignSheetDraft(matterId))
+  const initialDraftExists = Boolean(initialDraft)
+  const baseSheetRef = useRef<DesignSheet | null>(initialDraft?.baseSheet ?? sheetProp)
+  const [conflict, setConflict] = useState<DesignSheetConflict | null>(() => initialDraft?.conflict ?? (initialDraft && initialDraft.baseUpdatedAt !== (sheetProp?.updated_at ?? null) ? { local: initialDraft.sheet, base: initialDraft.baseSheet ?? null, latest: sheetProp } : null))
+  const conflictRef = useRef(conflict)
+  const recoveryReadVersionRef = useRef(0)
+  useEffect(() => () => { recoveryReadVersionRef.current += 1 }, [])
+  const [resolvingConflict, setResolvingConflict] = useState(false)
   const hasLocalEditsRef = useRef(initialDraftExists)
   const [sheet, setSheet] = useState<DesignSheet>(() => resolveInitialDesignSheet({
     matterId,
@@ -87,7 +96,7 @@ export function useDesignSheetState({
       return { ...base, ...computeDesignSheetDefaults(base, matter) }
     },
   }))
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(conflict ? 'error' : initialDraftExists ? 'dirty' : 'saved')
   const [_dirtyFields, setDirtyFields] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
   const [contactsState, setContactsState] = useState(contactsProp)
@@ -114,6 +123,7 @@ export function useDesignSheetState({
   const commitSheet = useCallback((
     updater: DesignSheet | ((previous: DesignSheet) => DesignSheet),
   ) => {
+    if (conflictRef.current) return
     setSheet(previous => {
       const next = typeof updater === 'function'
         ? (updater as (previous: DesignSheet) => DesignSheet)(previous)
@@ -123,6 +133,7 @@ export function useDesignSheetState({
         matterId,
         sheet: next,
         baseUpdatedAt: serverSheetStampRef.current ?? expectedUpdatedAtRef.current,
+        baseSheet: baseSheetRef.current,
       })
       return next
     })
@@ -157,6 +168,7 @@ export function useDesignSheetState({
   // Depend only on updated_at + saveStatus — not sheetProp identity — so drafting-workspace
   // parent re-renders cannot re-enter this effect and wipe local decisions.
   useEffect(() => {
+    if (conflictRef.current) return
     const stamp = sheetProp?.updated_at ?? null
     const decision = shouldApplyServerSheetProps({
       stamp,
@@ -178,6 +190,7 @@ export function useDesignSheetState({
     const nextSheet = applyDefaults
       ? { ...base, ...computeDesignSheetDefaults(base, matter) }
       : base
+    baseSheetRef.current = nextSheet
     commitSheet(nextSheet)
     setReadinessSheet(nextSheet)
     expectedUpdatedAtRef.current = stamp
@@ -247,6 +260,7 @@ export function useDesignSheetState({
   const draftBlockers = useMemo(() => blockingDetails.map(b => b.label), [blockingDetails])
 
   const saveStatusText = useMemo(() => {
+    if (conflict) return 'Unsaved changes — resolve conflicting versions'
     if (saveStatus === 'saving') return saveRetryCount > 0 ? `Retrying save (${saveRetryCount})…` : 'Saving…'
     if (saveStatus === 'error') return 'Save failed — will retry'
     if (saveStatus === 'dirty') return 'Unsaved changes'
@@ -258,10 +272,11 @@ export function useDesignSheetState({
       return today ? `Saved at ${time}` : `Saved ${date} ${time}`
     }
     return 'All changes saved'
-  }, [lastSavedAt, saveRetryCount, saveStatus])
+  }, [conflict, lastSavedAt, saveRetryCount, saveStatus])
 
   // ── Field updates with override tracking ─────────────────────────────────────
   const markDirty = useCallback((field: string) => {
+    if (conflictRef.current) return
     hasLocalEditsRef.current = true
     changeGenerationRef.current += 1
     setDirtyFields(prev => new Set(prev).add(field))
@@ -313,8 +328,85 @@ export function useDesignSheetState({
     markDirty(field as string)
   }, [commitSheet, markDirty])
 
+  const storeConflict = useCallback((value: DesignSheetConflict) => {
+    recoveryReadVersionRef.current += 1
+    conflictRef.current = value
+    setConflict(value)
+    pendingSaveRef.current = false
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    setSaveStatus('error')
+    writeDesignSheetDraft({ matterId, sheet: value.local, baseSheet: value.base, baseUpdatedAt: expectedUpdatedAtRef.current, conflict: value })
+  }, [matterId])
+
+  const loadConflictLatest = useCallback(async (recovery?: DesignSheetConflict) => {
+    if (!recovery && persistInFlightRef.current) return
+    const current = recovery ?? conflictRef.current
+    if (!current) return
+    storeConflict(current)
+    const readVersion = recoveryReadVersionRef.current
+    try {
+      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, { cache: 'no-store' })
+      const result = await response.json()
+      if (readVersion !== recoveryReadVersionRef.current) return
+      if (!response.ok || !result.sheet?.updated_at) throw new Error('Unable to load the latest saved version.')
+      storeConflict({ ...current, latest: result.sheet, error: undefined })
+    } catch {
+      if (readVersion !== recoveryReadVersionRef.current) return
+      storeConflict({ ...current, error: 'Unable to load the latest saved version. Your changes are preserved. Try again.' })
+    }
+  }, [matterId, storeConflict])
+
+  const resolveConflict = useCallback(async (choices: ConflictChoices): Promise<boolean> => {
+    const recovery = conflictRef.current
+    if (!recovery?.latest || persistInFlightRef.current) return false
+    let resolved: DesignSheet
+    try { resolved = resolveDesignSheetConflict(recovery.local, recovery.latest, choices) }
+    catch (error) { storeConflict({ ...recovery, error: (error as Error).message }); return false }
+    // Any pending GET describes the pre-resolution recovery state. It must not
+    // replace this operation or resurrect recovery after its successful save.
+    recoveryReadVersionRef.current += 1
+    persistInFlightRef.current = true
+    setResolvingConflict(true)
+    try {
+      const prepared = prepareDesignSheetForSave(resolved)
+      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetId: recovery.latest.id, expectedUpdatedAt: recovery.latest.updated_at, sheet: prepared, decisions: prepared.decisions }),
+      })
+      const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
+      if (response.status === 409 || result.conflict) {
+        await loadConflictLatest(recovery)
+        return false
+      }
+      if (!response.ok || !result.id) throw new Error(result.error ?? 'Unable to save resolved changes.')
+      const stamp = result.updated_at ?? recovery.latest.updated_at
+      const saved = { ...resolved, id: result.id, updated_at: stamp }
+      recoveryReadVersionRef.current += 1
+      conflictRef.current = null
+      setConflict(null)
+      sheetRef.current = saved
+      setSheet(saved)
+      baseSheetRef.current = saved
+      expectedUpdatedAtRef.current = stamp ?? null
+      serverSheetStampRef.current = stamp ?? null
+      setExpectedUpdatedAt(stamp ?? null)
+      setLastSavedAt(stamp ?? null)
+      pendingSaveRef.current = false
+      finishPersist(changeGenerationRef.current)
+      writeDesignSheetDraft({ matterId, sheet: saved, baseUpdatedAt: stamp ?? null, baseSheet: saved })
+      return true
+    } catch {
+      storeConflict({ ...recovery, error: 'Unable to save resolved changes. Both versions are preserved. Try again.' })
+      return false
+    } finally {
+      persistInFlightRef.current = false
+      setResolvingConflict(false)
+    }
+  }, [finishPersist, loadConflictLatest, matterId, storeConflict])
+
   // ── Persistence ──────────────────────────────────────────────────────────────
   const persistSheet = useCallback(async (): Promise<boolean> => {
+    if (conflictRef.current) return false
     if (persistInFlightRef.current) {
       pendingSaveRef.current = true
       return false
@@ -332,7 +424,8 @@ export function useDesignSheetState({
         try {
           await flushSheetRef()
           const persistedSheetId = sheetProp?.id || sheetRef.current.id
-          const sheetForSave = prepareDesignSheetForSave(sheetRef.current)
+          const savingSnapshot = sheetRef.current
+          const sheetForSave = prepareDesignSheetForSave(savingSnapshot)
           const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -355,19 +448,7 @@ export function useDesignSheetState({
           const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
 
           if (response.status === 409 || result.conflict) {
-            const serverUpdatedAt = typeof result.updated_at === 'string' ? result.updated_at : null
-            if (serverUpdatedAt) {
-              expectedUpdatedAtRef.current = serverUpdatedAt
-              setExpectedUpdatedAt(serverUpdatedAt)
-              setLastSavedAt(serverUpdatedAt)
-              serverSheetStampRef.current = serverUpdatedAt
-            }
-            // Another save likely landed first — retry with the server token before surfacing an error.
-            if (serverUpdatedAt && attempt < maxAttempts - 1) continue
-            hasLocalEditsRef.current = false
-            finishPersist(generationAtSaveStart)
-            toast.error('This design sheet was updated elsewhere. Reloading the latest version.')
-            router.refresh()
+            await loadConflictLatest({ local: sheetRef.current, base: baseSheetRef.current, latest: null })
             return false
           }
 
@@ -387,6 +468,7 @@ export function useDesignSheetState({
           // propsSheetStampRef to savedAt would make the sync effect treat those stale
           // props as "new" when saveStatus flips to saved.
           serverSheetStampRef.current = savedAt
+          baseSheetRef.current = { ...savingSnapshot, updated_at: savedAt }
           commitSheet(prev => stripDecisionOnlyTopLevelMirrors(
             prev as unknown as Record<string, unknown>,
           ) as unknown as DesignSheet)
@@ -396,6 +478,7 @@ export function useDesignSheetState({
               sheetRef.current as unknown as Record<string, unknown>,
             ) as unknown as DesignSheet,
             baseUpdatedAt: savedAt,
+            baseSheet: baseSheetRef.current,
           })
           finishPersist(generationAtSaveStart)
           return true
@@ -416,12 +499,12 @@ export function useDesignSheetState({
       return false
     } finally {
       persistInFlightRef.current = false
-      if (pendingSaveRef.current && changeGenerationRef.current !== savedGenerationRef.current) {
+      if (!conflictRef.current && pendingSaveRef.current && changeGenerationRef.current !== savedGenerationRef.current) {
         pendingSaveRef.current = false
         setSaveStatus('dirty')
       }
     }
-  }, [commitSheet, finishPersist, flushSheetRef, matterId, router, sheetProp?.id])
+  }, [commitSheet, finishPersist, flushSheetRef, loadConflictLatest, matterId, sheetProp?.id])
 
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })
@@ -429,7 +512,7 @@ export function useDesignSheetState({
 
   // Auto-save: debounce 3 seconds after any field change; retry after transient errors.
   useEffect(() => {
-    if (saveStatus !== 'dirty' && saveStatus !== 'error') return
+    if (conflictRef.current || (saveStatus !== 'dirty' && saveStatus !== 'error')) return
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => {
       startTransition(async () => { await persistSheet() })
@@ -439,7 +522,7 @@ export function useDesignSheetState({
     }
   // persistSheet captured via closure is stable; excluding to prevent infinite loop
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveStatus])
+  }, [saveStatus, conflict])
 
   // Warn before unload when there are unsaved changes
   useEffect(() => {
@@ -487,6 +570,7 @@ export function useDesignSheetState({
 
   // ── LP-specific data ──────────────────────────────────────────────────────────
   const updateLpPatch = useCallback((patch: Record<string, unknown>) => {
+    if (conflictRef.current) return
     const previousData = lpDataState?.li_design_sheet_data ?? {}
     const nextData = formatPhoneFieldsDeep({ ...previousData, ...patch })
     setLpDataState(prev => prev ? { ...prev, li_design_sheet_data: nextData } : prev)
@@ -511,6 +595,7 @@ export function useDesignSheetState({
   }, [matterId, lpDataState])
 
   const handlePlanCoverageChange = useCallback((coverage: 'no_trust' | 'trust_included') => {
+    if (conflictRef.current) return
     setLpDataState(prev => prev ? { ...prev, li_plan_coverage: coverage } : prev)
     startTransition(async () => {
       try {
@@ -556,6 +641,7 @@ export function useDesignSheetState({
     patch: DesignSheetImportProposal,
     fiduciaryCount = 0,
   ) => {
+    if (conflictRef.current) return
     commitSheet(prev => {
       const columnFields: Record<string, unknown> = {}
       const decisionFields: Record<string, unknown> = {}
@@ -628,6 +714,10 @@ export function useDesignSheetState({
 
   return {
     isLP,
+    conflict,
+    resolvingConflict,
+    resolveConflict,
+    reloadConflictLatest: loadConflictLatest,
     sheet,
     setSheet: commitSheet,
     saveStatus,

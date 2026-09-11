@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { MatterSwitcher } from '@/components/matter/MatterSwitcher'
 import {
   ArrowLeft,
   ChevronDown,
@@ -114,7 +115,7 @@ export function MatterDetailHeader({
           >
             {clientInitial(matter)}
           </span>
-          <span className="truncate text-sm font-semibold">{clientName}</span>
+          <MatterSwitcher matterId={matter.matter_id} label={clientName} />
         </span>
         <Badge variant="outline" className="hidden shrink-0 text-[10px] font-medium tabular-nums sm:inline-flex">
           {matterNumber ? `#${matterNumber}` : 'No matter number'}

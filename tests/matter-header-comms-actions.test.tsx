@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
 import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
 import type { PipelineMatter } from '@/types/database'
 

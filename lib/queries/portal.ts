@@ -145,8 +145,7 @@ export async function fetchUnreadFirmMessageCount(matterId: string): Promise<num
     .is('read_at', null)
 
   if (error) {
-    console.error('fetchUnreadFirmMessageCount error:', error)
-    return 0
+    throw new Error('Unread messages are unavailable. Please retry.')
   }
   return count ?? 0
 }
@@ -177,8 +176,7 @@ export async function fetchNextAppointment(matterId: string): Promise<PortalAppo
     .maybeSingle()
 
   if (error) {
-    console.error('fetchNextAppointment error:', error)
-    return null
+    throw new Error('Appointments are unavailable. Please retry.')
   }
   if (!data) return null
   // PostgREST types the embedded row as an array or object depending on the
