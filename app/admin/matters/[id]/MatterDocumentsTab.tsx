@@ -138,6 +138,8 @@ interface MatterDocumentsTabProps {
   onReviewIntakeUploads?: () => void | Promise<void>
   clientName?: string | null
   deepLinkedDocumentId?: string | null
+  initialScope?: Scope
+  onScopeChange?: (scope: Scope) => void
   recordLabel?: 'matter' | 'lead'
 }
 
@@ -153,11 +155,13 @@ export function MatterDocumentsTab({
   onReviewIntakeUploads,
   clientName,
   deepLinkedDocumentId,
+  initialScope = 'all',
+  onScopeChange,
   recordLabel = 'matter',
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<Scope>('all')
+  const [scope, setScope] = useState<Scope>(initialScope)
   const [openFolder, setOpenFolder] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortAscending, setSortAscending] = useState(true)
@@ -179,6 +183,13 @@ export function MatterDocumentsTab({
   const [folderRenameTarget, setFolderRenameTarget] = useState<MatterDocumentFolder | null>(null)
   const [folderRenameValue, setFolderRenameValue] = useState('')
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<MatterDocumentFolder | null>(null)
+
+  useEffect(() => {
+    if (!deepLinkedDocumentId) {
+      setScope(initialScope)
+      if (initialScope === 'unreviewed') setOpenFolder(null)
+    }
+  }, [initialScope, deepLinkedDocumentId])
 
   useEffect(() => {
     if (!deepLinkedDocumentId) return
@@ -251,7 +262,7 @@ export function MatterDocumentsTab({
     })
   }, [sortAscending, sortKey])
 
-  const searching = query.trim().length > 0
+  const searching = query.trim().length > 0 || scope === 'unreviewed'
 
   /**
    * The root lists the folder tiles plus only the files that live in none of
@@ -694,7 +705,11 @@ export function MatterDocumentsTab({
                 <DropdownMenuCheckboxItem
                   key={option.value}
                   checked={scope === option.value}
-                  onCheckedChange={() => setScope(option.value)}
+                  onCheckedChange={() => {
+                    setScope(option.value)
+                    if (option.value === 'unreviewed') setOpenFolder(null)
+                    onScopeChange?.(option.value)
+                  }}
                 >
                   {option.label} <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
                 </DropdownMenuCheckboxItem>

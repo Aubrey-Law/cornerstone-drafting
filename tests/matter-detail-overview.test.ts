@@ -165,3 +165,19 @@ describe('matter next action — engagement', () => {
     expect(action.href).toContain('focus=client-information%3Acounty')
   })
 })
+
+
+describe('matter lifecycle next actions', () => {
+  it.each(['closed', 'archived'])('does not restart work on a %s matter', status => {
+    const action = computeMatterNextAction(baseMatter({ status }))
+    expect(action.kind).toBe('closed')
+    expect(action.href).toBe('/admin/matters/m1?tab=documents')
+  })
+  it.each([
+    ['client_review', 'review'], ['revision', 'revise'],
+    ['drafts_approved', 'signing'], ['signing_scheduled', 'signing'],
+    ['signing_complete', 'follow-up'], ['post_execution', 'follow-up'], ['funding', 'follow-up'],
+  ] as const)('offers stage-appropriate work for %s', (stage, kind) => {
+    expect(computeMatterNextAction(baseMatter({stage, intake_status:null})).kind).toBe(kind)
+  })
+})

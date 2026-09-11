@@ -1,5 +1,6 @@
 'use client'
 
+import { listenForMatterContacts, notifyMatterContactsChanged } from '@/lib/matters/contactEvents'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -196,6 +197,8 @@ export function MatterFactsPanel({
   const [client, setClient] = useState<ClientRecord | null>(null)
   const [contacts, setContacts] = useState<ContactRecord[]>([])
   const [loadingContacts, setLoadingContacts] = useState(true)
+  const [contactsRevision, setContactsRevision] = useState(0)
+  useEffect(() => listenForMatterContacts(matterId, () => setContactsRevision(n => n + 1), 'facts'), [matterId])
   const [addressDraft, setAddressDraft] = useState<string | null>(null)
 
   useEffect(() => {
@@ -206,6 +209,7 @@ export function MatterFactsPanel({
         const res = await fetch(`/api/admin/matters/${matterId}/contacts`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
+        if (!res.ok) throw new Error('Could not load contacts')
         const body = (await res.json()) as { client?: ClientRecord; contacts?: ContactRecord[] }
         if (cancelled) return
         setClient(body.client ?? null)
@@ -219,7 +223,7 @@ export function MatterFactsPanel({
     return () => {
       cancelled = true
     }
-  }, [matterId, token])
+  }, [matterId, token, contactsRevision])
 
   const spouse = useMemo(
     () => contacts.find(contact => contact.relationship_type === 'spouse') ?? null,
@@ -244,9 +248,11 @@ export function MatterFactsPanel({
         const payload = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(payload.error ?? 'Could not save')
         onLocal()
+        notifyMatterContactsChanged(matterId, 'facts')
         toast.success('Saved', { id: 'matter-panel-save', duration: 1200 })
       } catch (caught) {
         toast.error(caught instanceof Error ? caught.message : 'Could not save')
+        throw caught
       }
     },
     [matterId, token],
@@ -382,7 +388,7 @@ export function MatterFactsPanel({
               key={clientName}
               onBlur={event => {
                 const next = event.target.value.trim()
-                if (next && next !== clientName) void saveClientField('full_name', next)
+                if (next && next !== clientName) void saveClientField('full_name', next).catch(() => {})
               }}
               className="-ml-1.5 h-6.5 w-full rounded-md border border-transparent bg-transparent px-1.5 text-[15px] font-semibold tracking-[-0.012em] outline-none hover:border-input hover:bg-background focus:border-ring focus:bg-background"
             />
@@ -391,7 +397,7 @@ export function MatterFactsPanel({
               <select
                 aria-label="Marital status"
                 value={maritalStatus}
-                onChange={event => void saveClientField('marital_status', event.target.value || null)}
+                onChange={event => void saveClientField('marital_status', event.target.value || null).catch(() => {})}
                 className="h-5.5 rounded border border-transparent bg-transparent px-1 text-[11.5px] text-muted-foreground hover:border-input hover:bg-background focus:border-ring focus:outline-none"
               >
                 {MARITAL_OPTIONS.map(option => (
@@ -522,7 +528,6 @@ export function MatterFactsPanel({
                   value={addressValue}
                   onChange={setAddressDraft}
                   onPlaceSelected={(parsed: ParsedAddress) => {
-                    setAddressDraft(null)
                     void patchContacts(
                       {
                         target: 'client',
@@ -533,8 +538,11 @@ export function MatterFactsPanel({
                           zip: parsed.zip,
                         },
                       },
-                      () => setClient(current => (current ? { ...current, ...parsed } : current)),
-                    )
+                      () => {
+                        setClient(current => (current ? { ...current, ...parsed } : current))
+                        setAddressDraft(null)
+                      },
+                    ).catch(() => {})
                   }}
                   className="h-7 text-[12.5px]"
                 />

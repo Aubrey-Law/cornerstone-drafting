@@ -13,6 +13,11 @@ export type MatterNextActionKind =
   | 'waiting-engagement'
   | 'resolve-review-flags'
   | 'draft'
+  | 'closed'
+  | 'review'
+  | 'revise'
+  | 'signing'
+  | 'follow-up'
 
 export interface MatterNextAction {
   kind: MatterNextActionKind
@@ -35,6 +40,52 @@ export function computeMatterNextAction(
   engagement?: EngagementSnapshot,
   reviewFlags: IntakeReadinessFlag[] = [],
 ): MatterNextAction {
+  if (matter.status === 'closed' || matter.status === 'archived' || matter.stage === 'closed') {
+    return {
+      kind: 'closed',
+      title: matter.status === 'archived' ? 'Matter archived' : 'Matter closed',
+      detail: 'Review retained documents, messages, and any remaining account items.',
+      href: `/admin/matters/${matter.matter_id}?tab=documents`,
+      cta: 'View documents',
+      tone: 'default',
+    }
+  }
+
+  // Later lifecycle stages remain useful even when historical intake metadata is incomplete.
+  if (matter.stage === 'client_review' || matter.stage === 'revision') {
+    const revising = matter.stage === 'revision'
+    return {
+      kind: revising ? 'revise' : 'review',
+      title: revising ? 'Address requested revisions' : 'Follow up on client review',
+      detail: revising
+        ? 'Review the requested changes in the drafting workspace.'
+        : 'Check the reviewed drafts and client feedback before advancing the matter.',
+      href: `/admin/drafting/${matter.matter_id}?step=review`,
+      cta: revising ? 'Review revisions' : 'Review drafts',
+      tone: 'default',
+    }
+  }
+  if (matter.stage === 'drafts_approved' || matter.stage === 'signing_scheduled') {
+    return {
+      kind: 'signing',
+      title: matter.stage === 'drafts_approved' ? 'Prepare for signing' : 'Review signing preparation',
+      detail: 'Review the signing tasks and scheduled date before the appointment.',
+      href: `/admin/matters/${matter.matter_id}?tab=tasks`,
+      cta: 'Open signing tasks',
+      tone: 'default',
+    }
+  }
+  if (['signing_complete', 'post_execution', 'funding'].includes(matter.stage)) {
+    return {
+      kind: 'follow-up',
+      title: 'Complete post-signing follow-up',
+      detail: 'Review the remaining execution, delivery, and funding tasks recorded for this matter.',
+      href: `/admin/matters/${matter.matter_id}?tab=tasks`,
+      cta: 'Review remaining tasks',
+      tone: 'default',
+    }
+  }
+
   const intakeStatus = matter.intake_status?.toLowerCase() ?? ''
   const intakeComplete = intakeStatus === 'completed' || intakeStatus === 'approved' || intakeStatus === 'submitted'
   const intakeSent = Boolean(matter.intake_sent_at) || intakeStatus === 'sent' || intakeComplete
@@ -92,7 +143,7 @@ export function computeMatterNextAction(
     return {
       kind: 'resolve-review-flags',
       title: 'Resolve intake and design review flags',
-      detail: `${reviewFlags.length} item${reviewFlags.length === 1 ? '' : 's'} need attorney review before drafting continues.`,
+      detail: `${reviewFlags.length} item${reviewFlags.length === 1 ? '' : 's'} need attorney review before relying on the drafts.`,
       href: first.href(matter.matter_id),
       cta: 'Resolve review flags',
       tone: 'warning',

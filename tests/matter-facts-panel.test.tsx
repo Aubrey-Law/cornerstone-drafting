@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }))
 
+import { listenForMatterContacts, notifyMatterContactsChanged } from '@/lib/matters/contactEvents'
 import { MatterFactsPanel } from '@/app/admin/matters/[id]/facts-panel/MatterFactsPanel'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -372,6 +373,39 @@ describe('MatterFactsPanel', () => {
     expect(onSaveField).not.toHaveBeenCalled()
     // County reads twice: editable in Contact, echoed read-only under Plan flags.
     expect((await screen.findAllByText('Middlesex')).length).toBe(2)
+  })
+
+  it('keeps failed contact text for retry and broadcasts only successful saves', async () => {
+    const user = userEvent.setup()
+    const changed = vi.fn()
+    const stop = listenForMatterContacts('m-1', changed)
+    let attempts = 0
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      if (init?.method === 'PATCH') {
+        attempts += 1
+        return { ok: attempts > 1, json: async () => attempts > 1 ? {} : { error: 'Connection lost' } } as Response
+      }
+      return { ok: true, json: async () => CONTACTS_PAYLOAD } as Response
+    })
+    renderPanel()
+    await user.click((await screen.findAllByRole('button', {name:/Email/}))[0])
+    await user.clear(screen.getAllByLabelText('Email')[0])
+    await user.type(screen.getAllByLabelText('Email')[0], 'new@example.com{Enter}')
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect((screen.getAllByLabelText('Email')[0] as HTMLInputElement).value).toBe('new@example.com')
+    expect(changed).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', {name:'Retry Email'}))
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1))
+    expect(attempts).toBe(2)
+    stop()
+  })
+
+  it('refreshes the facts when another contact view saves the same matter', async () => {
+    renderPanel()
+    await screen.findByDisplayValue('Margaret A. Chen')
+    vi.mocked(fetch).mockResolvedValue({ok:true,json:async()=>({...CONTACTS_PAYLOAD,client:{...CONTACTS_PAYLOAD.client,full_name:'Margaret Updated'}})} as Response)
+    notifyMatterContactsChanged('m-1', 'people')
+    expect(await screen.findByDisplayValue('Margaret Updated')).toBeTruthy()
   })
 
   it('saves a client contact field through the contacts route', async () => {

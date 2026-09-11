@@ -1,13 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  resolveIntakeReviewTarget,
-  type IntakeReadinessFlag,
-  type IntakeReadinessResolutionKind,
-} from '@/lib/intakeReadiness'
+import { resolveIntakeReviewTarget, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 
 interface MatterBlockerBannerProps {
@@ -15,65 +10,74 @@ interface MatterBlockerBannerProps {
   reviewFlags: IntakeReadinessFlag[]
   unreviewedUploadCounts: UnreviewedUploadCounts
   unreadPortalCount: number
-  /** Existing drafting link — the "draft anyway" escape hatch. */
   draftingHref: string
+  onReviewIntakeUploads?: () => void
 }
 
-function flagKind(flag: IntakeReadinessFlag): IntakeReadinessResolutionKind {
-  return flag.resolutionKind
-    ?? (flag.message.includes('discuss this with the attorney') ? 'attorney_judgment' : 'needs_data')
-}
-
-/**
- * Returns null when nothing is blocking — the caller then shows the aging
- * health badge in the record header instead.
- */
+/** Review flags are advisory; unread correspondence is not a drafting gate. */
 export function MatterBlockerBanner({
   matterId,
   reviewFlags,
-  unreviewedUploadCounts,
+  unreviewedUploadCounts: uploads,
   unreadPortalCount,
   draftingHref,
+  onReviewIntakeUploads,
 }: MatterBlockerBannerProps) {
-  const needsData = reviewFlags.filter(flag => flagKind(flag) === 'needs_data')
-  const attorneyJudgment = reviewFlags.filter(flag => flagKind(flag) === 'attorney_judgment')
-  const uploadCount = unreviewedUploadCounts.total
-  const total = reviewFlags.length + uploadCount + unreadPortalCount
-
-  if (total === 0) return null
-
-  const summary: string[] = []
-  if (needsData.length > 0) summary.push(`Needs data: ${needsData.map(flag => flag.label).join(', ')}`)
-  if (attorneyJudgment.length > 0) {
-    summary.push(`Attorney judgment: ${attorneyJudgment.map(flag => flag.label).join(', ')}`)
-  }
-  if (uploadCount > 0) summary.push(`${uploadCount} unreviewed upload${uploadCount === 1 ? '' : 's'}`)
-  if (unreadPortalCount > 0) {
-    summary.push(`${unreadPortalCount} unread message${unreadPortalCount === 1 ? '' : 's'}`)
-  }
-
-  const firstFlag = reviewFlags[0]
-  const resolveHref = firstFlag ? resolveIntakeReviewTarget(firstFlag).href(matterId) : null
-
+  if (!reviewFlags.length && !uploads.total && !unreadPortalCount) return null
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-border bg-amber-bg px-4 py-2 text-amber">
-      <TriangleAlert className="size-4 shrink-0" aria-hidden />
-      <p className="min-w-0 text-xs">
-        <span className="font-semibold">
-          Drafting is blocked on {total} item{total === 1 ? '' : 's'}
-        </span>
-        <span className="text-amber/80"> — {summary.join(' · ')}</span>
-      </p>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {resolveHref && (
-          <Button type="button" size="sm" variant="outline" asChild>
-            <Link href={resolveHref}>Resolve blockers</Link>
+    <section aria-label="Matter attention items" className="space-y-2 border-b border-border bg-card px-4 py-3">
+      {reviewFlags.length > 0 && (
+        <div className="rounded-md border border-amber-border bg-amber-bg p-3">
+          <p className="text-sm font-semibold text-amber">Review before drafting</p>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+            {(['needs_data', 'attorney_judgment'] as const).map(kind => {
+              const flags = reviewFlags.filter(flag => (flag.resolutionKind ?? 'needs_data') === kind)
+              return flags.length > 0 && (
+                <div key={kind}>
+                  <p className="text-xs font-medium">{kind === 'needs_data' ? 'Needs data' : 'Attorney judgment'}</p>
+                  <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {flags.map(flag => (
+                      <li key={flag.key}>
+                        <Link className="text-sm text-primary underline underline-offset-2" href={resolveIntakeReviewTarget(flag).href(matterId)}>
+                          {flag.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {uploads.intake > 0 && (onReviewIntakeUploads ? (
+          <Button size="sm" variant="outline" onClick={onReviewIntakeUploads}>
+            {uploads.intake} intake upload{uploads.intake === 1 ? '' : 's'} to review
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/admin/matters/${matterId}#matter-intake-actions`}>{uploads.intake} intake uploads to review</Link>
+          </Button>
+        ))}
+        {uploads.portal > 0 && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/admin/matters/${matterId}?tab=documents&scope=unreviewed`}>
+              {uploads.portal} portal upload{uploads.portal === 1 ? '' : 's'} to review
+            </Link>
           </Button>
         )}
-        <Button type="button" size="sm" variant="ghost" asChild>
-          <Link href={draftingHref}>Draft anyway</Link>
-        </Button>
+        {unreadPortalCount > 0 && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/admin/matters/${matterId}?tab=communications&channel=portal`}>
+              {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}
+            </Link>
+          </Button>
+        )}
+        {reviewFlags.length > 0 && (
+          <Button size="sm" variant="ghost" asChild><Link href={draftingHref}>Open drafting</Link></Button>
+        )}
       </div>
-    </div>
+    </section>
   )
 }

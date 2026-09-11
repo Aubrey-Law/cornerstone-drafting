@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MatterOverviewStats } from '@/app/admin/matters/[id]/MatterOverviewStats'
 
@@ -17,6 +17,8 @@ function renderStats(overrides: Partial<React.ComponentProps<typeof MatterOvervi
     nextAppointment: null,
     onOpenTasks: vi.fn(),
     onOpenDocuments: vi.fn(),
+    onOpenStageHistory: vi.fn(),
+    onOpenDate: vi.fn(),
     ...overrides,
   }
   render(<MatterOverviewStats {...props} />)
@@ -24,7 +26,8 @@ function renderStats(overrides: Partial<React.ComponentProps<typeof MatterOvervi
 }
 
 describe('MatterOverviewStats', () => {
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); vi.useRealTimers() })
+  beforeEach(() => { vi.useFakeTimers({toFake:['Date']}); vi.setSystemTime(NOW) })
 
   it('renders each tile as a control, not a readout', () => {
     renderStats()
@@ -51,6 +54,8 @@ describe('MatterOverviewStats', () => {
         nextAppointment={null}
         onOpenTasks={vi.fn()}
         onOpenDocuments={vi.fn()}
+        onOpenStageHistory={vi.fn()}
+        onOpenDate={vi.fn()}
       />,
     )
     expect(screen.getByText('3').className).not.toContain('text-red')
@@ -100,4 +105,16 @@ describe('MatterOverviewStats', () => {
     renderStats()
     expect(screen.getByText('None scheduled')).toBeTruthy()
   })
+})
+
+it('does not let a past signing displace an upcoming appointment',()=>{
+  vi.useFakeTimers({toFake:['Date']}); vi.setSystemTime(NOW)
+  const props=renderStats({ signingDate:iso(-3),nextAppointment:iso(2) })
+  fireEvent.click(screen.getByRole('button',{name:/Next date/}))
+  expect(props.onOpenDate).toHaveBeenCalledWith('2026-08-29')
+  expect(screen.getByText('Appointment')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:/Days in stage/}))
+  expect(props.onOpenStageHistory).toHaveBeenCalledOnce()
+  expect(props.onOpenTasks).not.toHaveBeenCalled()
+  cleanup(); vi.useRealTimers()
 })

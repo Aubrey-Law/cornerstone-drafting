@@ -141,10 +141,11 @@ describe('design-sheet-owned fields', () => {
 })
 
 describe('matter page surfaces', () => {
-  it('leads Overview with Matter details, above the next-action hero', () => {
+  it('leads Overview with the next action, above metrics and Matter details', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
-    expect(client.indexOf('<MatterDetailsCard')).toBeGreaterThan(-1)
-    expect(client.indexOf('<MatterDetailsCard')).toBeLessThan(client.indexOf('<MatterOverviewHero'))
+    expect(client.indexOf('<MatterOverviewHero')).toBeGreaterThan(-1)
+    expect(client.indexOf('<MatterOverviewHero')).toBeLessThan(client.indexOf('<MatterOverviewStats'))
+    expect(client.indexOf('<MatterOverviewStats')).toBeLessThan(client.indexOf('<MatterDetailsCard'))
   })
 
   it('drops the portal uploads card and moves Marketing to Communications', () => {

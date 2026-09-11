@@ -1,6 +1,7 @@
 'use client'
 import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
+import { listenForMatterContacts } from '@/lib/matters/contactEvents'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -217,6 +218,7 @@ function MatterDetailClientInner({
   usePrimaryReady('Matter detail', matterId)
   const token = useAccessToken()
   const router = useRouter()
+  useEffect(() => listenForMatterContacts(matterId, () => router.refresh()), [matterId, router])
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const activeTab = parseMatterTab(searchParams.get('tab'))
@@ -360,6 +362,7 @@ function MatterDetailClientInner({
     tab: MatterTab,
     section?: string,
     channel?: CommunicationChannel,
+    documentScope?: 'unreviewed',
   ) => {
     const params = new URLSearchParams(searchParams.toString())
     if (tab === 'overview') {
@@ -374,6 +377,8 @@ function MatterDetailClientInner({
       }
       if (tab !== 'tasks') params.delete('view')
     }
+    if (tab !== 'documents') { params.delete('scope'); params.delete('document') }
+    else if (documentScope) { params.set('scope', documentScope); params.delete('document') }
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     if (section) {
@@ -566,7 +571,7 @@ function MatterDetailClientInner({
       return
     }
     if (unreviewedUploadCounts.portal > 0) {
-      setActiveTab('documents')
+      setActiveTab('documents', undefined, undefined, 'unreviewed')
     }
   }, [openIntakeSheet, setActiveTab, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
@@ -916,6 +921,7 @@ function MatterDetailClientInner({
             unreviewedUploadCounts={unreviewedUploadCounts}
             unreadPortalCount={unreadPortalCount}
             draftingHref={draftingHref}
+            onReviewIntakeUploads={() => void openIntakeSheet()}
           />
 
           <div className="flex-1 px-4 py-4">
@@ -973,50 +979,12 @@ function MatterDetailClientInner({
                 {/* The facts rail moved to the persistent left column, so Overview
                     is a single stack rather than a two-column grid. */}
                 <div className="space-y-4">
-                {/* Where the matter stands, before anything that explains why. */}
-                <MatterOverviewStats
-                  taskCounts={taskCounts}
-                  uploads={unreviewedUploadCounts}
-                  aging={agingSummary ?? null}
-                  signingDate={matter.signing_date ?? null}
-                  nextAppointment={matter.next_appointment ?? null}
-                  onOpenTasks={() => setActiveTab('tasks')}
-                  onOpenDocuments={() => setActiveTab('documents')}
-                />
-                <MatterProgressTimeline
-                  matter={matter}
-                  details={matterDetails}
-                  intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
-                />
-                {/* The milestone rail above shows where the matter is; this shows
-                    how it got there and how long each stage took. */}
-                <MatterStageHistoryCard entries={initialStageHistory} />
-                {/* Matter details leads the tab: the standing facts come before
-                    the next action that depends on them. */}
-                <MatterDetailsCard
-                  matter={matter}
-                  matterId={matterId}
-                  matterNumber={matterNum}
-                  matterNumberManual={matterNumberManual}
-                  matterStatus={matter.status ?? 'active'}
-                  onStatusChange={status => void handleStatusChange(status)}
-                  statusSaving={statusSaving}
-                  details={matterDetails}
-                  designSheetPlanType={designSheetPlanType}
-                  onSaveField={handleSaveMatterDetailField}
-                  savingField={savingField}
-                  lastSavedAt={lastSavedAt}
-                  error={matterDetailsError}
-                  esignEnabled={esignEnabled}
-                  engagementSending={sendingEngagement}
-                  onSendEngagement={() => void handleSendEngagement()}
-                  onDraftEngagement={() => void handleDraftEngagement()}
-                />
                 <MatterOverviewHero
                   matter={matter}
                   matterType={matterType}
                   details={matterDetails}
                   nextAction={nextAction}
+                  currentTask={nextAction.kind === 'closed' ? null : currentEngineStageTask}
                   unreadPortalCount={unreadPortalCount}
                   unreviewedUploadCounts={unreviewedUploadCounts}
                   reviewFlags={reviewFlags}
@@ -1035,6 +1003,52 @@ function MatterDetailClientInner({
                       ]}
                     />
                   }
+                />
+                {/* Action first, then the facts that support it. */}
+                <MatterOverviewStats
+                  taskCounts={taskCounts}
+                  uploads={unreviewedUploadCounts}
+                  aging={agingSummary ?? null}
+                  signingDate={matterDetails?.scheduled_signing_date ?? null}
+                  nextAppointment={matter.next_appointment ?? null}
+                  onOpenTasks={() => setActiveTab('tasks')}
+                  onOpenDocuments={() => {
+                    if (unreviewedUploadCounts.intake > 0) void openIntakeSheet()
+                    else setActiveTab('documents', undefined, undefined, 'unreviewed')
+                  }}
+                  onOpenStageHistory={() => document.getElementById('matter-stage-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onOpenDate={day => {
+                    if (day) router.push(`/admin/calendar?date=${day}`)
+                    else setBookForClientOpen(true)
+                  }}
+                />
+                <MatterProgressTimeline
+                  matter={matter}
+                  details={matterDetails}
+                  intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
+                />
+                {/* The milestone rail above shows where the matter is; this shows
+                    how it got there and how long each stage took. */}
+                <MatterStageHistoryCard entries={initialStageHistory} />
+                {/* Supporting details follow the action and progress summary. */}
+                <MatterDetailsCard
+                  matter={matter}
+                  matterId={matterId}
+                  matterNumber={matterNum}
+                  matterNumberManual={matterNumberManual}
+                  matterStatus={matter.status ?? 'active'}
+                  onStatusChange={status => void handleStatusChange(status)}
+                  statusSaving={statusSaving}
+                  details={matterDetails}
+                  designSheetPlanType={designSheetPlanType}
+                  onSaveField={handleSaveMatterDetailField}
+                  savingField={savingField}
+                  lastSavedAt={lastSavedAt}
+                  error={matterDetailsError}
+                  esignEnabled={esignEnabled}
+                  engagementSending={sendingEngagement}
+                  onSendEngagement={() => void handleSendEngagement()}
+                  onDraftEngagement={() => void handleDraftEngagement()}
                 />
                 <IntakeSyncStatusCard
                   matterId={matterId}
@@ -1107,6 +1121,16 @@ function MatterDetailClientInner({
                   matterId={matterId}
                   clientName={matter.client_name}
                   deepLinkedDocumentId={searchParams.get('document')}
+                  initialScope={searchParams.get('scope') === 'unreviewed' ? 'unreviewed'
+                    : searchParams.get('scope') === 'shared' ? 'shared'
+                      : searchParams.get('scope') === 'client' ? 'client' : 'all'}
+                  onScopeChange={scope => {
+                    const params = new URLSearchParams(searchParams.toString())
+                    if (scope === 'all') params.delete('scope')
+                    else params.set('scope', scope)
+                    params.delete('document')
+                    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+                  }}
                   documents={documents}
                   folders={documentFolders}
                   loading={docsLoading}

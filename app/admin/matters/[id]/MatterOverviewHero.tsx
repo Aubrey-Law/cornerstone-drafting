@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { ArrowRight, TriangleAlert as AlertTriangle } from 'lucide-react'
+import { effectiveDueAt, type TaskRow } from '@/lib/tasks/types'
+import { formatDateDetail } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
@@ -23,6 +25,7 @@ interface MatterOverviewHeroProps {
   matterType?: MatterType | null
   details?: MatterDetailsRow | null
   nextAction: MatterNextAction
+  currentTask?: TaskRow | null
   unreadPortalCount: number
   unreviewedUploadCounts?: UnreviewedUploadCounts
   reviewFlags: IntakeReadinessFlag[]
@@ -55,6 +58,7 @@ export function MatterOverviewHero({
   matterType = null,
   details: _details = null,
   nextAction,
+  currentTask = null,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   reviewFlags,
@@ -124,9 +128,22 @@ export function MatterOverviewHero({
             )}
           </div>
           <div>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Next action</p>
             <h2 className="text-sm font-semibold text-foreground">{nextAction.title}</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{nextAction.detail}</p>
           </div>
+          {currentTask && (
+            <p className="text-sm">
+              <Link className="text-primary underline underline-offset-2" href={`/admin/matters/${matter.matter_id}?tab=tasks`}>
+                {currentTask.title}
+              </Link>
+              <span className="ml-2 text-xs text-muted-foreground">
+                Owner: {currentTask.assignee_name || (currentTask.assignee_id ? 'Assigned team member' : currentTask.owner || 'Unassigned')}
+                {' · '}
+                {effectiveDueAt(currentTask) ? `Due ${formatDateDetail(effectiveDueAt(currentTask)!)}` : 'No due date set'}
+              </span>
+            </p>
+          )}
           {reviewFlags.length > 0 && (
             <div className="grid gap-3 rounded-md border border-amber-border bg-amber-bg/40 p-3 sm:grid-cols-2">
               {([
