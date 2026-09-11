@@ -56,6 +56,18 @@ const CLOSEOUT_BY_LEAD_STATUS: Record<string, CloseoutReason> = {
   declined: 'lead_declined',
 }
 
+/**
+ * What putting a lead back in play releases: the checklist its own death
+ * archived, and nothing else.
+ *
+ * Scoped rather than "everything a sweep marked" because a live lead is
+ * already holding an archived plan on purpose — `ensureLeadSlaTasks` parks the
+ * post-engagement half behind `not_engaged` until somebody signs, and
+ * `lib/matters/createFromIntake.ts` is the one place that releases it. An
+ * unscoped restore here handed all of it to the firm queue instead.
+ */
+const LEAD_REVIVAL_REASONS = Object.values(CLOSEOUT_BY_LEAD_STATUS)
+
 async function syncLeadTasksToStatus(
   admin: ReturnType<typeof getAdminClient>,
   leadId: string,
@@ -66,7 +78,9 @@ async function syncLeadTasksToStatus(
   const target = { leadId, matterId }
   const reason = CLOSEOUT_BY_LEAD_STATUS[status]
   if (reason) await archiveTasksForClosedRecord(admin, target, reason, actor)
-  else if (status === 'lead') await restoreTasksForReopenedRecord(admin, target, actor)
+  else if (status === 'lead') {
+    await restoreTasksForReopenedRecord(admin, target, actor, { reasons: LEAD_REVIVAL_REASONS })
+  }
 }
 
 function atomicUpdateErrorStatus(error: { code?: string | null; message: string }) {
@@ -235,7 +249,13 @@ export async function PATCH(
   // The lead form can move status too, so the same sweep runs here. Read from
   // what was persisted, not from `details`: hiring rewrites the status on its
   // way to conversion, and that matter keeps its plan.
-  if (!requestedHired) {
+  //
+  // Only when the status actually moved. Both directions of the sweep are
+  // transition semantics — a lead stops being live, or comes back — and a save
+  // that leaves the status where it was is neither. Running it on every save
+  // meant an ordinary edit to a live lead re-ran the revival, and an edit to a
+  // lost one re-swept work added since.
+  if (!requestedHired && persistedDetails.status !== lead.lead_status) {
     await syncLeadTasksToStatus(
       admin,
       intakeId,

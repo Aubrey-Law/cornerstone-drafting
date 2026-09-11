@@ -178,6 +178,18 @@ describe('restoring a reopened record’s tasks', () => {
     const or = taskUpdate()?.filters.find(f => f.op === 'or')
     expect(or?.args[0]).toBe(`matter_id.eq.${MATTER},lead_id.eq.${LEAD}`)
   })
+
+  it('narrows to the sweeps it was named, when it was named any', async () => {
+    await restoreTasksForReopenedRecord(admin(), { matterId: MATTER }, {}, {
+      reasons: ['lead_lost', 'lead_declined'],
+    })
+
+    const reasons = taskUpdate()?.filters.find(f => f.op === 'in' && f.args[0] === 'closeout_reason')
+    expect(reasons?.args[1]).toEqual(['lead_lost', 'lead_declined'])
+    // Narrowed means narrowed: the unscoped "anything a sweep marked" filter
+    // must not also be on the query.
+    expect(taskUpdate()?.filters.some(f => f.op === 'not')).toBe(false)
+  })
 })
 
 describe('where the sweep is wired in', () => {
@@ -214,9 +226,25 @@ describe('where the sweep is wired in', () => {
     expect(leadRoute).toContain("declined: 'lead_declined'")
   })
 
-  it('restores a lead that is put back in play', () => {
+  it('restores a lead that is put back in play, and only what its own death took', () => {
+    expect(leadRoute).toMatch(
+      /else if \(status === 'lead'\) \{\s*await restoreTasksForReopenedRecord\(admin, target, actor, \{ reasons: LEAD_REVIVAL_REASONS \}\)/,
+    )
+    // The reasons are the lead-death ones, and nothing else. A live lead is
+    // holding an archived plan on purpose — the post-engagement half parked
+    // behind `not_engaged` — and only conversion releases that, so the set the
+    // revival draws from has to stay exactly these two.
+    expect(leadRoute).toContain('const LEAD_REVIVAL_REASONS = Object.values(CLOSEOUT_BY_LEAD_STATUS)')
+    expect(leadRoute).toMatch(
+      /const CLOSEOUT_BY_LEAD_STATUS: Record<string, CloseoutReason> = \{\s*lost: 'lead_lost',\s*declined: 'lead_declined',\s*\}/,
+    )
+  })
+
+  it('runs the lead-form sweep only when the status actually moved', () => {
+    // Both directions are transition semantics. On every save instead, an
+    // ordinary edit to a live lead re-ran the revival and released the plan.
     expect(leadRoute).toContain(
-      "else if (status === 'lead') await restoreTasksForReopenedRecord(admin, target, actor)",
+      'if (!requestedHired && persistedDetails.status !== lead.lead_status) {',
     )
   })
 
@@ -224,7 +252,7 @@ describe('where the sweep is wired in', () => {
     // `hired` is the one status that keeps its tasks: the matter it converts
     // into is the same row the plan was generated against.
     expect(leadRoute).not.toContain("hired: 'lead_")
-    expect(leadRoute).toContain('if (!requestedHired) {')
+    expect(leadRoute).toContain('if (!requestedHired &&')
   })
 
   it('sweeps the lead’s matter as well as the lead itself', () => {
