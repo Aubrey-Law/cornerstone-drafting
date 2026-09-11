@@ -6,7 +6,7 @@ Release step 4; based on `codex/firm-app-workflow-recovery`. Review the branch-r
 
 Validation: 488 root test files / 5,032 tests passed, one skipped; production build and typecheck passed; lint passed with 10 existing warnings. The series also passed 45 unchanged drafting corpus documents, 1,270 workbench tests, and 14 PostgreSQL integration checks with fixtures exceeding old row limits. The browser bundle excludes both retired phone SDKs. Live baseline has at least 20 valid observations per priority route; Today reached 8.95 seconds. These are baseline tool observations, not evidence of a deployed improvement.
 
-Rollout gate: apply reviewed additive migration `20261124000000_working_list_reads.sql` before consumer deployment, after the queue migration. Production RPC checks remain blocked until those functions exist. Keep the queue disabled. Reverting list consumers preserves the additive schema and data; never restore outbound SMS as a rollback shortcut.
+Database prerequisite completed with explicit owner approval: `20261124000000_working_list_reads.sql` was applied to production after the queue migration. All five list RPCs have service-only invoker permissions and passed read-only execution checks under the service role. Keep the queue disabled. Reverting list consumers preserves the additive schema and data; never restore outbound SMS as a rollback shortcut.
 
 Still required before production acceptance: synthetic staff/client portal walkthrough, review and CI, confirmed deployed SHA, native before/after timing, and trace-led tuning if targets remain unmet. Some server-side matter history/design comparisons and secondary overview reads remain eager; they are documented rather than claimed as deferred.
 

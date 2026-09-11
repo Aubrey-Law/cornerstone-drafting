@@ -1,6 +1,6 @@
 # Firm app remediation execution evidence
 
-Status: reliability, communications retirement, paged working lists, portal progress/history, and secondary calendar loading are prepared in an isolated worktree. Live baseline captured after owner sign-in. Production acceptance remains open. No production deployment/migration, provider cutover, or external send was performed.
+Status: reliability, communications retirement, paged working lists, portal progress/history, and secondary calendar loading are prepared in an isolated worktree and published as four draft PRs. Live baseline captured after owner sign-in. The two additive migrations have now been applied with explicit owner approval; see the CI remediation entry below. Production acceptance remains open. No app deployment, queue activation, provider cutover, or external send was performed.
 
 ## Revision and environment
 
@@ -107,3 +107,9 @@ Publication is prepared as an ordered review series; see the [release review](20
 ## Draft publication following owner authorization
 
 The owner explicitly requested the push and draft PRs after the initial approval-review block. Published the four prepared branches and verified their draft status and ordered bases: [build safeguards #453](https://github.com/spaubrey/cornerstone-drafting/pull/453), [communications/reliability #454](https://github.com/spaubrey/cornerstone-drafting/pull/454), [disabled queue recovery #455](https://github.com/spaubrey/cornerstone-drafting/pull/455), and [performance #456](https://github.com/spaubrey/cornerstone-drafting/pull/456). GitHub checks have started; they are not reported as passed. The locally verified application revision is `428df951`; the publication-status update is documentation only. No merge, production migration, queue activation, provider change, or client send was performed.
+
+### Failed-check remediation
+
+All four initial Application CI runs exhausted Node 22's approximately 2 GiB heap during the Next TypeScript build step. The isolated build launcher now sets a fixed 4 GiB heap for its children while still discarding arbitrary parent Node options and application secrets. A regression test failed before the change and passes afterward; a second test retains dotenv rejection. Prerequisite-branch verification passed the production build, standalone typecheck, lint with 17 existing warnings, and 466 root files / 4,977 tests with one skipped. The targeted launcher/environment suite passes 9 tests. The fix is propagated forward without rewriting published history.
+
+The owner separately approved applying exactly the two additive migrations. CLI preflight matched all 203 existing migration versions/names, with no remote-only entries and only `20261123000000_workflow_job_leases.sql` and `20261124000000_working_list_reads.sql` pending. Both were applied with those exact versions, without seeds, roles, or Vault updates. Post-application metadata confirms both lease columns, the expiry index, and all seven security-invoker functions: service_role can execute; anon and authenticated cannot. All five list functions executed successfully in a read-only service-role transaction. Queue remains disabled and contains zero jobs; the mutation RPCs were not invoked. Generated types were refreshed from the live schema to include lease fields on existing workflow-job return types as well as the new functions. No merge, app deployment, queue activation, provider change, or client send occurred. Updated GitHub checks remain the final verification gate for these fixes.
