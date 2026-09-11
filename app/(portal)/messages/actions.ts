@@ -1,5 +1,7 @@
 'use server'
 
+import { after } from 'next/server'
+
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { sendEmail } from '@/lib/email/send'
 import { getFirmConfig } from '@/lib/firmConfig'
@@ -49,31 +51,39 @@ export async function sendMessage(matterId: string, body: string): Promise<Messa
 
   if (error) throw new Error(error.message)
 
+  // Persistence is the send boundary. Keep the existing best-effort alert in
+  // the request lifetime without making the client wait for the email provider.
   try {
-    const firm = getFirmConfig()
-    const clientName =
-      (user.user_metadata?.full_name as string | undefined) ??
-      user.email ??
-      'A client'
-    const preview = body.trim().length > 200 ? body.trim().slice(0, 200) + '…' : body.trim()
+    after(async () => {
+      try {
+        const firm = getFirmConfig()
+        const clientName =
+          (user.user_metadata?.full_name as string | undefined) ??
+          user.email ??
+          'A client'
+        const preview = body.trim().length > 200 ? body.trim().slice(0, 200) + '…' : body.trim()
 
-    const matterLink = appUrl(`/admin/matters/${matterId}?tab=communications&channel=portal`)
+        const matterLink = appUrl(`/admin/matters/${matterId}?tab=communications&channel=portal`)
 
-    await sendEmail({
-      category: 'message_alert',
-      to: ADMIN_EMAIL,
-      subject: `New message from ${clientName}`,
-      html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
-        <h2 style="margin:0 0 12px">New portal message</h2>
-        <p><strong>${clientName}</strong> sent a message:</p>
-        <blockquote style="margin:12px 0;padding:12px;background:#f8fafc;border-left:3px solid #94a3b8">${preview}</blockquote>
-        <p><a href="${matterLink}" style="color:#1a6b72">View in Communications →</a></p>
-      </div>`,
-      replyTo: user.email ?? undefined,
-      from: `${firm.attorneyShortName} <${firm.email}>`,
+        await sendEmail({
+          category: 'message_alert',
+          to: ADMIN_EMAIL,
+          subject: `New message from ${clientName}`,
+          html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
+            <h2 style="margin:0 0 12px">New portal message</h2>
+            <p><strong>${clientName}</strong> sent a message:</p>
+            <blockquote style="margin:12px 0;padding:12px;background:#f8fafc;border-left:3px solid #94a3b8">${preview}</blockquote>
+            <p><a href="${matterLink}" style="color:#1a6b72">View in Communications →</a></p>
+          </div>`,
+          replyTo: user.email ?? undefined,
+          from: `${firm.attorneyShortName} <${firm.email}>`,
+        })
+      } catch (err) {
+        console.error('Failed to send attorney message notification:', err)
+      }
     })
   } catch (err) {
-    console.error('Failed to send attorney message notification:', err)
+    console.error('Failed to schedule attorney message notification:', err)
   }
 
   return data as Message
