@@ -16,6 +16,7 @@ vi.mock('@/lib/bookings/link', () => ({
 import {
   EMPTY_IGNORE_RULES,
   classifySender,
+  collectThreadParticipants,
   emailDomain,
   isAutomatedSender,
   stripPlusTag,
@@ -352,5 +353,169 @@ describe('isAutomatedSender — the first production scan', () => {
   it('defaults to one thread when the caller does not count', () => {
     const { threadsFromSender: _omitted, ...withoutCount } = BASE
     expect(isAutomatedSender(withoutCount as typeof BASE).automated).toBe(false)
+  })
+})
+
+/**
+ * Matching a sender through the thread they are replying in.
+ *
+ * The real case: a client is invited to the portal at her work address and
+ * replies from personal Gmail. By address she is a stranger; by conversation
+ * she is obviously the client. The first production scan filed exactly that as
+ * a possible new lead and drafted a consultation offer to an existing client.
+ *
+ * The risk runs the other way, though, and it is worse: inheriting the *wrong*
+ * matter puts a client's file behind a draft written to someone else. So the
+ * inference is deliberately narrow, and most of these tests are about what it
+ * refuses to do.
+ */
+describe('collectThreadParticipants', () => {
+  const FIRM = { connectedAddress: 'scott@aubreylegal.com', firmDomains: ['aubreylegal.com'] }
+
+  const message = (
+    from: string,
+    to: string[] = [],
+    cc: string[] = [],
+    labelIds: string[] = ['INBOX'],
+  ) => ({
+    from: { email: from },
+    to: to.map(email => ({ email })),
+    cc: cc.map(email => ({ email })),
+    labelIds,
+  })
+
+  it('finds the address the firm originally wrote to', () => {
+    const participants = collectThreadParticipants({
+      ...FIRM,
+      senderEmail: 'jola.personal@gmail.com',
+      messages: [
+        message('scott@aubreylegal.com', ['jola@workplace.com'], [], ['SENT']),
+        message('jola.personal@gmail.com', ['scott@aubreylegal.com']),
+      ],
+    })
+    expect(participants).toEqual(['jola@workplace.com'])
+  })
+
+  it('ignores the sender’s own address', () => {
+    const participants = collectThreadParticipants({
+      ...FIRM,
+      senderEmail: 'jola@workplace.com',
+      messages: [message('scott@aubreylegal.com', ['jola@workplace.com'], [], ['SENT'])],
+    })
+    expect(participants).toEqual([])
+  })
+
+  it('ignores the firm’s own addresses', () => {
+    const participants = collectThreadParticipants({
+      ...FIRM,
+      senderEmail: 'someone@example.com',
+      messages: [
+        message('scott@aubreylegal.com', ['paralegal@aubreylegal.com'], ['scott@aubreylegal.com'], ['SENT']),
+      ],
+    })
+    expect(participants).toEqual([])
+  })
+
+  it('does not collect addresses from a message the firm did not send', () => {
+    // The attack this closes: an outsider CCs a client and thereby attaches
+    // themselves to that client's matter. Only the firm's own choice of
+    // recipient counts as identifying.
+    const participants = collectThreadParticipants({
+      ...FIRM,
+      senderEmail: 'stranger@example.com',
+      messages: [message('stranger@example.com', ['scott@aubreylegal.com'], ['client@workplace.com'])],
+    })
+    expect(participants).toEqual([])
+  })
+
+  it('reports every outside party, so the caller can see it is ambiguous', () => {
+    const participants = collectThreadParticipants({
+      ...FIRM,
+      senderEmail: 'counsel@otherfirm.com',
+      messages: [
+        message('scott@aubreylegal.com', ['client@workplace.com'], ['cpa@accountants.com'], ['SENT']),
+      ],
+    })
+    expect(participants).toHaveLength(2)
+  })
+})
+
+describe('classifySender — matching through the thread', () => {
+  const WORK = 'jola@workplace.com'
+
+  beforeEach(() => {
+    // Only the work address is on file; the personal one is unknown.
+    mocks.findLeadByEmail.mockImplementation(async (_admin: unknown, email: string) =>
+      email === WORK
+        ? { id: 'lead-jola', lead_status: 'hired', full_name: 'Jola Andresen' }
+        : null)
+  })
+
+  it('finds the record when a client replies from a second address', async () => {
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      email: 'jola.personal@gmail.com',
+      name: 'Jola Andresen',
+      subject: 'Re: Aubrey Law - Invitation to your Client Portal',
+      threadParticipants: [WORK],
+    })
+    expect(match).toMatchObject({ classification: 'lead', clientIntakeId: 'lead-jola' })
+  })
+
+  it('says on the row that the match came through the thread', async () => {
+    // A wrong inference has to be legible at a glance, not buried.
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      email: 'jola.personal@gmail.com',
+      threadParticipants: [WORK],
+    })
+    expect(match.reason).toContain('via the thread')
+    expect(match.reason).toContain(WORK)
+  })
+
+  it('refuses to guess when the thread has several outside parties', async () => {
+    // Opposing counsel replying on a thread that CCs a client must not
+    // inherit that client's matter.
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      email: 'counsel@otherfirm.com',
+      threadParticipants: [WORK, 'cpa@accountants.com'],
+    })
+    expect(match.classification).toBe('possible_lead')
+  })
+
+  it('still files a true stranger as a possible new lead', async () => {
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      email: 'stranger@example.com',
+      threadParticipants: ['someone.else@example.com'],
+    })
+    expect(match.classification).toBe('possible_lead')
+  })
+
+  it('behaves as before when the caller passes no participants', async () => {
+    const match = await classifySender(adminStub(), { ...BASE, email: 'stranger@example.com' })
+    expect(match.classification).toBe('possible_lead')
+  })
+
+  it('prefers the sender’s own record, with no "via" note', async () => {
+    // A direct hit must never be dressed up as an inference.
+    mocks.findMatterIdByEmail.mockImplementation(async (_admin: unknown, email: string) =>
+      email === 'jane@example.com' ? 'matter-direct' : null)
+
+    const match = await classifySender(adminStub(), { ...BASE, threadParticipants: [WORK] })
+    expect(match).toMatchObject({ classification: 'client', matterId: 'matter-direct' })
+    expect(match.reason).not.toContain('via the thread')
+  })
+
+  it('does not let the thread rescue an unambiguously automated sender', async () => {
+    // Hard-automated still wins outright: a bounce notice on a client's
+    // thread is not the client writing.
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      email: 'mailer-daemon@workplace.com',
+      threadParticipants: [WORK],
+    })
+    expect(match.classification).toBe('automated')
   })
 })
