@@ -1,5 +1,7 @@
 # Firm app release review
 
+This is the publication-time record. The owner subsequently merged all four PRs; see [production verification and follow-up work](2026-09-10-firm-app-production-verification.md) for the current release evidence and open acceptance gates.
+
 The owner authorized publication. All four branches have been pushed and opened as draft PRs in the existing private repository. The implementation worktree remains at `/tmp/cornerstone-remediation`. No PR has been merged and no production migration or deployment was performed by this publication step.
 
 ## Published review sequence
