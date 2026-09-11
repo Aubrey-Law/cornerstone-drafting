@@ -18,6 +18,8 @@ import {
   getAuthUrl,
   getGoogleConfigIssue,
   hasCalendarScope,
+  hasGmailModifyScope,
+  hasGmailSendScope,
   isGoogleConfigured,
   toGoogleDisplayError,
 } from '@/lib/googleCalendar'
@@ -162,5 +164,41 @@ describe('hasCalendarScope', () => {
 
   it('does not match the read-only scope as though it were full access', () => {
     expect(hasCalendarScope('https://www.googleapis.com/auth/calendar.readonly')).toBe(false)
+  })
+})
+
+describe('the Gmail scopes', () => {
+  const SEND = 'https://www.googleapis.com/auth/gmail.send'
+  const MODIFY = 'https://www.googleapis.com/auth/gmail.modify'
+
+  it('asks for mailbox access, which email triage needs and sending never did', () => {
+    expect(new URL(getAuthUrl()).searchParams.get('scope')).toContain(MODIFY)
+  })
+
+  it('still asks for the send scope, so trimming the modify scope cannot break sending', () => {
+    // One consent covers both. Keeping send listed means the restricted scope
+    // can be withdrawn by deleting a line, without the connection losing the
+    // ability to send in the same move.
+    expect(new URL(getAuthUrl()).searchParams.get('scope')).toContain(SEND)
+  })
+
+  it('never asks for mail.google.com, which adds permanent delete for no feature', () => {
+    expect(new URL(getAuthUrl()).searchParams.get('scope')).not.toContain('mail.google.com')
+  })
+
+  it('treats the modify scope as sufficient to send, because it is', () => {
+    expect(hasGmailSendScope(`openid ${MODIFY}`)).toBe(true)
+    expect(hasGmailSendScope(`openid ${SEND}`)).toBe(true)
+    expect(hasGmailSendScope('openid email')).toBe(false)
+    expect(hasGmailSendScope(null)).toBe(false)
+  })
+
+  it('does not treat the send scope as permission to read the mailbox', () => {
+    // The whole point of the separate predicate: a connection made before
+    // triage existed sends mail perfectly well and must still be told to
+    // reconnect, rather than returning an empty queue forever.
+    expect(hasGmailModifyScope(`openid ${SEND}`)).toBe(false)
+    expect(hasGmailModifyScope(`openid ${MODIFY}`)).toBe(true)
+    expect(hasGmailModifyScope(null)).toBe(false)
   })
 })
