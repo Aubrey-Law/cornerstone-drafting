@@ -115,8 +115,8 @@ describe('portal message thread', () => {
     // Optimistic bubble is on screen while the action is in flight.
     expect(screen.getAllByText(saved.body)).toHaveLength(1)
 
-    // The realtime echo of this same insert commonly lands first: sendMessage
-    // also awaits an admin notification email before returning.
+    // The realtime echo can land after the database commit but before the
+    // send action response reaches the browser.
     const onInsert = vi.mocked(useMessagesRealtime).mock.calls.at(-1)![1]
     act(() => {
       onInsert(saved as never)

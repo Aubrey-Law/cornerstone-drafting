@@ -140,8 +140,8 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
       try {
         const saved = await sendMessage(matterId, trimmed)
         // The realtime echo of this same insert often arrives before the action
-        // resolves (it commits mid-action, which then also sends a notification
-        // email). Mapping the optimistic row onto `saved` in that case produced a
+        // resolves because the database commits before the response returns.
+        // Mapping the optimistic row onto `saved` in that case produced a
         // second bubble with a duplicate React key, so drop the placeholder and
         // only append when the echo has not already landed.
         setMessages(prev => {
