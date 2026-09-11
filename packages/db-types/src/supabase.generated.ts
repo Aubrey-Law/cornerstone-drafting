@@ -9631,6 +9631,14 @@ export type Database = {
       }
     }
     Functions: {
+      firm_billing_matter_options_v1: {
+        Args: { p_search: string; p_selected?: string }
+        Returns: Json
+      }
+      firm_ledger_page_v1: { Args: { p_query: Json }; Returns: Json }
+      firm_matter_page_v1: { Args: { p_query: Json }; Returns: Json }
+      firm_lead_summary_v1: { Args: never; Returns: Json }
+      firm_task_page_v1: { Args: { p_query: Json }; Returns: Json }
       approve_invoice_reminder: {
         Args: { p_actor_id: string; p_reminder_id: string }
         Returns: {

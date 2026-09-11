@@ -1,7 +1,8 @@
 'use client'
+import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronDown,
   ChevronRight,
@@ -43,6 +44,8 @@ import { OPEN_TASK_CAPTURE_EVENT } from '@/components/tasks/taskEvents'
 import { TaskTemplateSheet, type TaskTemplate } from '@/components/tasks/TaskTemplateSheet'
 import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 
+import type { TaskPageParams } from '@/lib/tasks/pageParams'
+
 type ScopeKey = 'mine' | 'team' | 'unassigned'
 
 type GroupKey = 'due' | 'matter'
@@ -58,6 +61,7 @@ interface TasksClientProps {
   assignees: Assignee[]
   templates: TaskTemplate[]
   viewerId: string | null
+  pagination?: { params: TaskPageParams; total: number; doneTotal: number; scopeCounts: Record<ScopeKey, number> }
 }
 
 const TODAY_LABEL = new Intl.DateTimeFormat('en-US', {
@@ -147,15 +151,29 @@ export function TasksClient({
   assignees,
   templates,
   viewerId,
+  pagination,
 }: TasksClientProps) {
+  usePrimaryReady('Tasks')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const navigate = (changes: Record<string, string>) => {
+    const next = new URLSearchParams(searchParams.toString())
+    next.set('page', '1'); next.set('donePage', '1')
+    for (const [key, value] of Object.entries(changes)) next.set(key, value)
+    router.push(`/admin/tasks?${next}`)
+  }
   const [openTasks, setOpenTasks] = useState(initialOpenTasks)
   const [doneToday, setDoneToday] = useState(initialDoneToday)
-  const [scope, setScope] = useState<ScopeKey>('mine')
-  const [sourceFilter, setSourceFilter] = useState<TaskSource | 'all'>('all')
-  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all')
-  const [assigneeFilter, setAssigneeFilter] = useState<string | 'all'>('all')
-  const [openOnly, setOpenOnly] = useState(true)
+  const [localScope, setScope] = useState<ScopeKey>('mine')
+  const [localSourceFilter, setSourceFilter] = useState<TaskSource | 'all'>('all')
+  const [localPriorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all')
+  const [localAssigneeFilter, setAssigneeFilter] = useState<string | 'all'>('all')
+  const scope = pagination?.params.scope ?? localScope
+  const sourceFilter = pagination?.params.source ?? localSourceFilter
+  const priorityFilter = pagination?.params.priority ?? localPriorityFilter
+  const assigneeFilter = pagination?.params.assignee ?? localAssigneeFilter
+  const [localOpenOnly, setOpenOnly] = useState(true)
+  const openOnly = pagination ? !pagination.params.showDone : localOpenOnly
   const [groupBy, setGroupBy] = useState<GroupKey>('due')
   const [laterOpen, setLaterOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
@@ -199,16 +217,18 @@ export function TasksClient({
       const updated = task.status === 'done' ? await actions.reopen(task) : await actions.complete(task)
       if (updated) applyUpdate(updated)
       else applyUpdate(task)
+      router.refresh()
     },
-    [actions, applyUpdate],
+    [actions, applyUpdate, router],
   )
 
   const snoozeTask = useCallback(
     async (task: TaskRow, days: number, label: string) => {
       const updated = await actions.snooze(task, days, label)
       if (updated) applyUpdate(updated)
+      router.refresh()
     },
-    [actions, applyUpdate],
+    [actions, applyUpdate, router],
   )
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
@@ -234,21 +254,23 @@ export function TasksClient({
         // same keystroke retries it, rather than making the user rebuild it.
         if (updated) {
           updated.forEach(applyUpdate)
+          router.refresh()
           clearSelection()
         }
       } finally {
         setAssigning(false)
       }
     },
-    [actions, applyUpdate, clearSelection, selectedIds],
+    [actions, applyUpdate, clearSelection, selectedIds, router],
   )
 
   const toggleSubtask = useCallback(
     async (task: TaskRow, index: number, done: boolean) => {
       const updated = await actions.toggleChecklistItem(task, index, done)
       if (updated) applyUpdate(updated)
+      router.refresh()
     },
-    [actions, applyUpdate],
+    [actions, applyUpdate, router],
   )
 
   // The due-date groups are always the open queue; `openOnly` governs whether
@@ -265,11 +287,13 @@ export function TasksClient({
     })
   }, [openTasks, scope, viewerId, sourceFilter, priorityFilter, assigneeFilter])
 
-  const scopeCounts = useMemo(() => ({
+  const localScopeCounts = useMemo(() => ({
     mine: openTasks.filter(t => t.assignee_id === viewerId).length,
     team: openTasks.filter(t => t.assignee_id && t.assignee_id !== viewerId).length,
     unassigned: openTasks.filter(t => !t.assignee_id).length,
   }), [openTasks, viewerId])
+
+  const scopeCounts = pagination?.scopeCounts ?? localScopeCounts
 
   const groups = useMemo(() => {
     const buckets: Record<TaskDueGroup, TaskRow[]> = {
@@ -484,6 +508,16 @@ export function TasksClient({
         }
       />
 
+      {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
+        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {Math.max(1, Math.ceil(pagination.total / pagination.params.pageSize))}. Groups below show this page.</span>
+        <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
+        <Button variant="outline" size="sm" disabled={pagination.params.page * pagination.params.pageSize >= pagination.total} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
+        {pagination.params.showDone && <div className="flex items-center gap-2">
+          <span>{pagination.doneTotal} completed today · page {pagination.params.donePage}</span>
+          <Button variant="outline" size="sm" disabled={pagination.params.donePage <= 1} onClick={() => navigate({ donePage: String(pagination.params.donePage - 1), page: String(pagination.params.page) })}>Previous completed</Button>
+          <Button variant="outline" size="sm" disabled={pagination.params.donePage * pagination.params.pageSize >= pagination.doneTotal} onClick={() => navigate({ donePage: String(pagination.params.donePage + 1), page: String(pagination.params.page) })}>Next completed</Button>
+        </div>}
+      </div>}
       {composerOpen && (
         <TaskComposer
           ref={composerRef}
@@ -501,7 +535,7 @@ export function TasksClient({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={scope} onValueChange={value => { setScope(value as ScopeKey); setFocusId(null); clearSelection() }}>
+          <Tabs value={scope} onValueChange={value => { if (pagination) navigate({ scope: value }); else setScope(value as ScopeKey); setFocusId(null); clearSelection() }}>
             <TabsList>
               <TabsTrigger value="mine">Mine ({scopeCounts.mine})</TabsTrigger>
               <TabsTrigger value="team">Team ({scopeCounts.team})</TabsTrigger>
@@ -516,7 +550,7 @@ export function TasksClient({
               { value: 'all', label: 'All sources' },
               ...TASK_SOURCES.map(source => ({ value: source, label: TASK_SOURCE_LABEL[source] })),
             ]}
-            onSelect={value => setSourceFilter(value as TaskSource | 'all')}
+            onSelect={value => pagination ? navigate({ source: value }) : setSourceFilter(value as TaskSource | 'all')}
           />
           <FilterMenu
             label="Priority"
@@ -527,7 +561,7 @@ export function TasksClient({
               { value: 'normal', label: 'Normal' },
               { value: 'low', label: 'Low' },
             ]}
-            onSelect={value => setPriorityFilter(value as TaskPriority | 'all')}
+            onSelect={value => pagination ? navigate({ priority: value }) : setPriorityFilter(value as TaskPriority | 'all')}
           />
           <FilterMenu
             label="Assignee"
@@ -538,7 +572,7 @@ export function TasksClient({
               { value: 'all', label: 'Anyone' },
               ...assignees.map(a => ({ value: a.id, label: a.name })),
             ]}
-            onSelect={setAssigneeFilter}
+            onSelect={value => pagination ? navigate({ assignee: value }) : setAssigneeFilter(value)}
           />
 
           {openOnly && (
@@ -547,6 +581,7 @@ export function TasksClient({
               // Clearing the filter reveals what was cleared today, so the
               // collapsed Done group opens with it.
               onClick={() => {
+                if (pagination) navigate({ done: '1' })
                 setOpenOnly(false)
                 setDoneOpen(true)
               }}

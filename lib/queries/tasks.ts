@@ -1,8 +1,11 @@
+import { allAccountingRows } from '@/lib/queries/invoiceBalances'
+import type { TaskPageFilters } from '@/lib/tasks/pageParams'
+import { pageRequest, type PageRequest, type PageResult } from '@/lib/queries/page'
+import type { GeneratedDatabase, Json } from '@/types/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { parseRecurrence } from '@/lib/tasks/recurrence'
 import {
-  EMPTY_TASK_COUNTS,
   compareTasks,
   isTaskOverdue,
   taskDueGroup,
@@ -288,9 +291,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
       rows.push(...page)
       if (page.length < TASK_PAGE_SIZE) break
       if (offset + TASK_PAGE_SIZE >= TASK_READ_CEILING) {
-        console.error(
-          `fetchTasks: stopped at the ${TASK_READ_CEILING}-row ceiling, so this list is incomplete.`,
-        )
+        throw new Error(`Task list exceeds the ${TASK_READ_CEILING}-row safety ceiling. Narrow the scope.`)
       }
     }
   } else {
@@ -305,13 +306,13 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
   return named.sort(compareTasks)
 }
 
-/** Far above the ~30 rows a day's queue holds; a breach means something is wrong. */
+/** Batch size for the complete due-task read. */
 export const DUE_TASK_LIMIT = 500
 
 /** One page of a `fetchTasks({ all: true })` read. */
 export const TASK_PAGE_SIZE = 500
 
-/** A runaway guard on paged reads, not a display limit; reaching it is logged. */
+/** A runaway guard on paged reads, not a display limit; reaching it fails visibly. */
 export const TASK_READ_CEILING = 20_000
 
 /**
@@ -333,28 +334,17 @@ export const TASK_READ_CEILING = 20_000
  */
 export async function fetchDueTasks(through: string): Promise<TaskRow[]> {
   const admin = getAdminClient()
-  const { data, error } = await admin
-    .from('tasks')
-    .select(TASK_COLUMNS)
-    .in('status', OPEN_STATUSES)
-    .eq('owner', 'firm')
-    .lte('effective_due_at', through)
-    .order('effective_due_at')
-    .limit(DUE_TASK_LIMIT)
-
-  if (error) {
-    console.error('fetchDueTasks:', error.message)
-    return []
+  const raw: RawTaskRow[] = []
+  for (let offset = 0; ; offset += DUE_TASK_LIMIT) {
+    const { data, error } = await admin.from('tasks').select(TASK_COLUMNS)
+      .in('status', OPEN_STATUSES).eq('owner', 'firm').lte('effective_due_at', through)
+      .order('effective_due_at').order('id').range(offset, offset + DUE_TASK_LIMIT - 1)
+    if (error) throw new Error('Due tasks are unavailable. Please retry.')
+    const page = (data ?? []) as unknown as RawTaskRow[]
+    raw.push(...page)
+    if (page.length < DUE_TASK_LIMIT) break
   }
-
-  const rows = ((data ?? []) as unknown as RawTaskRow[]).map(normalizeRow)
-  // The bug this function exists to fix was a silent truncation. If the cap is
-  // ever reached, say so rather than shipping a short queue that looks complete.
-  if (rows.length === DUE_TASK_LIMIT) {
-    console.error(
-      `fetchDueTasks: hit the ${DUE_TASK_LIMIT}-row cap, so the Today queue is incomplete. Raise DUE_TASK_LIMIT or page this read.`,
-    )
-  }
+  const rows = raw.map(normalizeRow)
   const named = await attachDisplayNames(rows)
   return named.sort(compareTasks)
 }
@@ -383,21 +373,9 @@ export async function fetchOpenStageTasksForRecord(recordId: string): Promise<Ta
 /** Counts behind the nav badge, the scope segmented control and the Today page. */
 export async function fetchTaskCounts(viewerId: string | null = null): Promise<TaskCounts> {
   const admin = getAdminClient()
-  const { data, error } = await admin
-    .from('tasks')
-    .select('id, status, due_at, soft_due_at, hard_due_at, assignee_id')
-    .in('status', OPEN_STATUSES)
-    .eq('owner', 'firm')
-    .limit(2000)
-
-  if (error) {
-    console.error('fetchTaskCounts:', error.message)
-    return EMPTY_TASK_COUNTS
-  }
-
-  // Only the due/status/assignee fields matter here, so the rows are counted
-  // through the same grouping helpers without a full task fetch.
-  const rows = (data ?? []) as unknown as Array<TaskDueFields & { assignee_id: string | null }>
+  const rows = await allAccountingRows<TaskDueFields & { assignee_id: string | null }>(offset => admin
+    .from('tasks').select('id, status, due_at, soft_due_at, hard_due_at, assignee_id')
+    .in('status', OPEN_STATUSES).eq('owner', 'firm').order('id').range(offset, offset + 999)).catch(() => { throw new Error('Task counts are unavailable. Please retry.') })
   const now = new Date()
 
   return {
@@ -448,4 +426,18 @@ export async function fetchTaskAssignees() {
     id: u.id,
     name: u.display_name ?? u.email ?? 'Unnamed',
   }))
+}
+
+export type TaskPageQuery = PageRequest & TaskPageFilters & { viewerId: string | null; status: 'open' | 'done'; completedOn?: string }
+export type TaskPageResult = PageResult<TaskRow> & { scopeCounts: { mine: number; team: number; unassigned: number } }
+export async function fetchTaskPage(input: TaskPageQuery): Promise<TaskPageResult> {
+  const query = { ...input, ...pageRequest(input) }
+  if (query.completedOn && (!/^\d{4}-\d{2}-\d{2}$/.test(query.completedOn) || new Date(query.completedOn).toISOString().slice(0,10) !== query.completedOn)) throw new Error('Invalid completion date')
+  const admin = getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
+  const { data, error } = await admin.rpc('firm_task_page_v1', { p_query: query as unknown as Json })
+  if (error || !data) throw new Error('Unable to load tasks')
+  const page = data as unknown as TaskPageResult
+  const lastPage = Math.max(1, Math.ceil(page.total / query.pageSize))
+  if (query.page > lastPage) return fetchTaskPage({ ...query, page: lastPage })
+  return { ...page, rows: await attachDisplayNames(page.rows.map(normalizeRow)) }
 }

@@ -232,7 +232,7 @@ export function compareTasks(a: TaskRow, b: TaskRow): number {
   if (!aDue && bDue) return 1
   const byPriority = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
   if (byPriority !== 0) return byPriority
-  return a.created_at < b.created_at ? -1 : 1
+  return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 }
 
 /** One matter/lead section of the task queue, in render order. */
