@@ -14,8 +14,10 @@ export interface RealtimeMessageRow {
 export function useMessagesRealtime(
   matterId: string,
   onInsert: (message: RealtimeMessageRow) => void,
+  onReconnect?: () => void | Promise<void>,
 ) {
   useEffect(() => {
+    let subscribed = false
     const channel = supabase
       .channel(`messages:${matterId}`)
       .on(
@@ -30,10 +32,14 @@ export function useMessagesRealtime(
           onInsert(payload.new as RealtimeMessageRow)
         },
       )
-      .subscribe()
+      .subscribe(status => {
+        if (status !== 'SUBSCRIBED') return
+        if (subscribed) void onReconnect?.()
+        subscribed = true
+      })
 
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [matterId, onInsert])
+  }, [matterId, onInsert, onReconnect])
 }

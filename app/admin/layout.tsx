@@ -8,6 +8,7 @@ import { resolveFirmModel } from '@/lib/firmModels'
 import { ANTHROPIC_MODEL_OPTIONS } from '@/lib/userPreferences'
 import AdminLayoutClient from './AdminLayoutClient'
 import { AuthTokenProvider } from '@/lib/auth/AuthTokenProvider'
+import { profileServerRequest } from '@/lib/performance/serverRequestTiming'
 
 const ADMIN_ROLES = ['attorney', 'admin']
 
@@ -32,39 +33,43 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const auth = await getCachedClaims()
-  if (!auth) {
-    redirect('/auth/login')
-  }
+  const profiled = await profileServerRequest('admin-layout', async measure => {
+    const auth = await measure('auth', getCachedClaims)
+    if (!auth) {
+      redirect('/auth/login')
+    }
 
-  const role = await getCachedUserRole(auth.id)
-  if (!role || !ADMIN_ROLES.includes(role)) {
-    redirect('/auth/login')
-  }
+    const role = await measure('role', () => getCachedUserRole(auth.id))
+    if (!role || !ADMIN_ROLES.includes(role)) {
+      redirect('/auth/login')
+    }
 
-  const firm = getFirmConfig()
-  const meta = (auth.claims.user_metadata ?? {}) as { full_name?: string; name?: string }
-  const userName =
-    meta.full_name ??
-    meta.name ??
-    auth.email ??
-    firm.attorneyShortName
-  const userInitials = initialsFor(userName)
+    const firm = getFirmConfig()
+    const meta = (auth.claims.user_metadata ?? {}) as { full_name?: string; name?: string }
+    const userName =
+      meta.full_name ??
+      meta.name ??
+      auth.email ??
+      firm.attorneyShortName
+    const userInitials = initialsFor(userName)
+    const modelLabel = await measure('model-label', assistantModelLabel)
 
-  return (
-    <AuthTokenProvider>
-      <div className="admin-root">
-        <NavigationTiming />
-        <AdminLayoutClient
-          userName={userName}
-          userInitials={userInitials}
-          voiceEnabled={manualCommunicationsEnabled() && isVoiceConfigured()}
-          smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
-          assistantModelLabel={await assistantModelLabel()}
-        >
-          {children}
-        </AdminLayoutClient>
-      </div>
-    </AuthTokenProvider>
-  )
+    return (
+      <AuthTokenProvider>
+        <div className="admin-root">
+          <NavigationTiming />
+          <AdminLayoutClient
+            userName={userName}
+            userInitials={userInitials}
+            voiceEnabled={manualCommunicationsEnabled() && isVoiceConfigured()}
+            smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
+            assistantModelLabel={modelLabel}
+          >
+            {children}
+          </AdminLayoutClient>
+        </div>
+      </AuthTokenProvider>
+    )
+  })
+  return profiled.value
 }

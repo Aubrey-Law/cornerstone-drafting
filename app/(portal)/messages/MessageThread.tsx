@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useEffect, useMemo, useState, useTransition } from 'react'
-import { sendMessage, loadOlderMessages, acknowledgeMessages, type Message } from './actions'
+import { sendMessage, loadOlderMessages, loadRecentMessages, acknowledgeMessages, type Message } from './actions'
 import { Button } from '@/components/ui/button'
 import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
@@ -116,7 +116,21 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
     })
   }, [])
 
-  useMessagesRealtime(matterId, handleRealtimeInsert)
+  const handleRealtimeReconnect = useCallback(async () => {
+    try {
+      const page = await loadRecentMessages(matterId)
+      setMessages(current => {
+        const merged = new Map(current.map(message => [message.id, message]))
+        for (const message of page.messages) merged.set(message.id, message)
+        return [...merged.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      })
+      setHistoryError(null)
+    } catch {
+      setHistoryError('Messages sent while reconnecting could not be loaded. Please retry.')
+    }
+  }, [matterId])
+
+  useMessagesRealtime(matterId, handleRealtimeInsert, handleRealtimeReconnect)
 
   function handleSend() {
     const trimmed = draft.trim()

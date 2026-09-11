@@ -22,7 +22,37 @@ export function primaryContentReady(route: FirmRoute) {
   const started = pending.started
   pending = null
   const name = `firm-navigation:${route}`
+  const ended = performance.now()
+  const totalMs = Math.round(ended - started)
+  const detail: Record<string, string | number> = {
+    route,
+    phase: 'content-ready',
+    totalMs,
+  }
+  const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
+  let navigationResource: PerformanceResourceTiming | undefined
+  for (const entry of resources) {
+    if (entry.initiatorType === 'fetch' && entry.startTime >= started
+      && (!navigationResource || entry.startTime < navigationResource.startTime)) {
+      navigationResource = entry
+    }
+  }
+  if (navigationResource && navigationResource.responseEnd > 0) {
+    detail.responseWaitMs = Math.max(0, Math.round(navigationResource.responseStart - started))
+    detail.responseTransferMs = Math.max(0, Math.round(navigationResource.responseEnd - navigationResource.responseStart))
+    detail.renderMs = Math.max(0, Math.round(ended - navigationResource.responseEnd))
+    const allowedServerTimings: Record<string, string> = {
+      proxy: 'proxyMs', auth: 'proxyAuthMs', role: 'proxyRoleMs',
+    }
+    for (const timing of navigationResource.serverTiming ?? []) {
+      const key = allowedServerTimings[timing.name]
+      if (key) detail[key] = Math.round(timing.duration)
+    }
+  }
   // Bound local history; DevTools can capture entries during an explicit trace.
   if (performance.getEntriesByName(name).length >= 100) performance.clearMeasures(name)
-  performance.measure(name, { start: started, end: performance.now(), detail: { route, phase: 'content-ready' } })
+  performance.measure(name, { start: started, end: ended, detail })
+  if (totalMs >= 1500) {
+    try { console.info('[navigation-timing]', detail) } catch { /* diagnostics are best effort */ }
+  }
 }

@@ -4,12 +4,13 @@ import React from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MessageThread from '@/app/(portal)/messages/MessageThread'
-import { sendMessage, type Message } from '@/app/(portal)/messages/actions'
+import { loadRecentMessages, sendMessage, type Message } from '@/app/(portal)/messages/actions'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 
 vi.mock('@/app/(portal)/messages/actions', () => ({
   acknowledgeMessages: vi.fn().mockResolvedValue(undefined),
   loadOlderMessages: vi.fn(),
+  loadRecentMessages: vi.fn(),
   sendMessage: vi.fn(),
 }))
 
@@ -129,5 +130,19 @@ describe('portal message thread', () => {
     // Previously the optimistic row was mapped onto `saved`, producing a second
     // identical bubble with a duplicate React key.
     expect(screen.getAllByText(saved.body)).toHaveLength(1)
+  })
+
+  it('reconciles messages missed while the realtime channel was disconnected', async () => {
+    const missed: Message = {
+      id: 'missed-1', matter_id: 'matter-1', sender_role: 'attorney', sender_id: 'staff-1',
+      body: 'Message sent during reconnect', created_at: new Date().toISOString(), read_at: null,
+    }
+    vi.mocked(loadRecentMessages).mockResolvedValue({ messages: [missed], older: null })
+    render(<MessageThread matterId="matter-1" clientUserId="client-1" messages={[]} />)
+
+    const onReconnect = vi.mocked(useMessagesRealtime).mock.calls.at(-1)?.[2]
+    await act(async () => { await onReconnect?.() })
+
+    expect(screen.getByText(missed.body)).toBeTruthy()
   })
 })
