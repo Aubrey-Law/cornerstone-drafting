@@ -30,8 +30,8 @@ credentials, or client information in seed files.
 
 ## Deploying to the shared firm database
 
-Merging a migration to `main` applies it. `.github/workflows/db-migrate-deploy.yml` links the
-project, dry-runs, pushes, and then re-checks that the repo and the recorded history agree.
+Merging a migration to `main` applies it. `.github/workflows/db-migrate-deploy.yml` selects the
+project explicitly, dry-runs, pushes, and then re-checks that the repo and the recorded history agree.
 Nobody has to remember a CLI command, which is what the incidents listed in
 `scripts/checkMigrationDrift.mjs` all came down to.
 
@@ -49,6 +49,13 @@ The workflow needs the `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` and `SUPA
 repository secrets, and fails loudly without them rather than skipping. To require a human
 approval before each deploy, add reviewers to the `production` environment under
 **Settings → Environments**.
+
+The workflow uses `db push --project-ref` rather than `supabase link`, which also requests
+permission to reveal project API keys. It skips Vault updates so a schema deployment cannot
+change unrelated secrets. Manual runs default to `dry_run=true`; feature branches can only
+verify, never apply. To retry application, select `main` and explicitly set `dry_run=false`.
+The strict history check remains active even in dry-run mode, so unapplied migrations still
+produce a visible failure.
 
 ## Linked shared firm database
 

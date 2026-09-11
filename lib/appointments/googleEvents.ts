@@ -357,6 +357,10 @@ const EVENTS_MAX_PAGES = 5
 const SECONDARY_CALENDAR_MAX_PAGES = 2
 const EVENTS_PAGE_SIZE = 250
 const MAX_SECONDARY_CALENDARS = 15
+// Google meters per-user requests, and starting every extra calendar at once
+// spends that budget on enrichment while the primary-calendar and booking reads
+// queue behind it. Two at a time leaves capacity for the reads that matter.
+const SECONDARY_CALENDAR_CONCURRENCY = 2
 
 /**
  * Wall-clock budget for reading the extra calendars. The primary calendar is
@@ -392,17 +396,27 @@ async function fetchAccountCalendars(token: string): Promise<CalendarRef[]> {
   return calendars.sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
 }
 
-/** Follow pageToken pages for one calendar's events.list. */
+/**
+ * Follow pageToken pages for one calendar's events.list.
+ *
+ * `deadline` is the shared budget for the extra calendars. It is checked
+ * between pages *and* passed to the request itself: a calendar that starts
+ * just under the budget would otherwise run its whole page allowance past it,
+ * and a request that stalls would hold the budget open indefinitely.
+ */
 async function fetchEventPages(
   token: string,
   calendarId: string,
   fromIso: string,
   toIso: string,
   maxPages: number,
+  deadline?: number,
 ): Promise<{ items: unknown[]; truncated: boolean }> {
   const items: unknown[] = []
   let pageToken: string | undefined
   for (let page = 0; page < maxPages; page++) {
+    const remaining = deadline === undefined ? GOOGLE_TIMEOUT_MS : deadline - Date.now()
+    if (remaining <= 0) throw new Error('calendar read budget exhausted')
     const params = new URLSearchParams({
       timeMin: fromIso,
       timeMax: toIso,
@@ -419,7 +433,10 @@ async function fetchEventPages(
     if (pageToken) params.set('pageToken', pageToken)
     const r = await googleFetch(
       `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(Math.min(GOOGLE_TIMEOUT_MS, remaining)),
+      },
     )
     if (!r.ok) throw await failure(r, 'events list')
     const json = (await r.json().catch(() => ({}))) as {
@@ -487,18 +504,43 @@ export async function listCalendarView(
   const skipped = others.slice(MAX_SECONDARY_CALENDARS).map(calendar => calendar.name)
   const deadline = Date.now() + SECONDARY_CALENDAR_BUDGET_MS
 
-  const settled = await Promise.allSettled(
-    secondary.map(async calendar => {
-      if (Date.now() > deadline) throw new Error('calendar read budget exhausted')
-      const { items, truncated } = await fetchEventPages(
-        token,
-        calendar.id,
-        fromIso,
-        toIso,
-        SECONDARY_CALENDAR_MAX_PAGES,
-      )
-      return { calendar, truncated, items: tagWithCalendar(items, calendar.id, calendar.name) }
-    }),
+  // A fixed pool rather than one promise per calendar, so the concurrency
+  // ceiling above actually holds. Results are written back by index, which is
+  // what keeps `calendars` and `skipped` in the account's own order.
+  const settled: Array<PromiseSettledResult<{
+    calendar: CalendarRef; truncated: boolean; items: unknown[]
+  }>> = new Array(secondary.length)
+  let next = 0
+  await Promise.all(
+    Array.from(
+      { length: Math.min(SECONDARY_CALENDAR_CONCURRENCY, secondary.length) },
+      async () => {
+        while (next < secondary.length) {
+          const index = next++
+          const calendar = secondary[index]
+          try {
+            const { items, truncated } = await fetchEventPages(
+              token,
+              calendar.id,
+              fromIso,
+              toIso,
+              SECONDARY_CALENDAR_MAX_PAGES,
+              deadline,
+            )
+            settled[index] = {
+              status: 'fulfilled',
+              value: {
+                calendar,
+                truncated,
+                items: tagWithCalendar(items, calendar.id, calendar.name),
+              },
+            }
+          } catch (reason) {
+            settled[index] = { status: 'rejected', reason }
+          }
+        }
+      },
+    ),
   )
 
   const readCalendars: CalendarRef[] = primaryCalendar ? [primaryCalendar] : []

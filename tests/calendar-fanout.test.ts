@@ -65,6 +65,102 @@ beforeEach(() => {
 })
 
 describe('listCalendarView fan-out', () => {
+  it('bounds concurrent secondary reads and keeps every calendar in account order', async () => {
+    const calendars = Array.from({ length: 7 }, (_, i) => ({ id: `extra-${i}`, summary: `Extra ${i}` }))
+    const base = stubGoogle({
+      calendars: [{ id: 'primary', summary: 'Aubrey Law', primary: true }, ...calendars],
+      primaryEvents: [event('primary-1')],
+    })
+    let active = 0
+    let peak = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const match = url.match(/\/calendars\/(extra-\d+)\/events/)
+      if (!match) return base(url)
+      active++
+      peak = Math.max(peak, active)
+      await new Promise(resolve => setTimeout(resolve, 0))
+      active--
+      return jsonResponse({ items: [event(match[1])] })
+    }))
+
+    const view = await listCalendarView(FROM, TO)
+
+    expect(peak).toBeLessThanOrEqual(2)
+    expect(peak).toBeGreaterThan(1)
+    expect(view.skipped).toEqual([])
+    expect(view.calendars.map(c => c.id)).toEqual(['primary', ...calendars.map(c => c.id)])
+    expect((view.raw as Array<{ id: string }>).map(e => e.id))
+      .toEqual(['primary-1', ...calendars.map(c => c.id)])
+  })
+
+  it('stops secondary pagination at the shared deadline without discarding the primary calendar', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    let now = 100_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const base = stubGoogle({
+      calendars: [
+        { id: 'primary', summary: 'Aubrey Law', primary: true },
+        { id: 'slow', summary: 'Slow' },
+      ],
+      primaryEvents: [event('primary-1')],
+    })
+    const signals: AbortSignal[] = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (!url.includes('/calendars/slow/events')) return base(url)
+      signals.push(init?.signal as AbortSignal)
+      now += 6_001
+      return jsonResponse({ items: [], nextPageToken: 'page-2' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const view = await listCalendarView(FROM, TO)
+
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('pageToken=page-2'))).toBe(false)
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
+    expect(timeout).toHaveBeenCalledWith(6_000)
+    expect(view.skipped).toEqual(['Slow'])
+    expect((view.raw as Array<{ id: string }>).map(e => e.id)).toEqual(['primary-1'])
+  })
+
+  it('aborts stalled secondary requests and skips queued calendars when the budget expires', async () => {
+    let now = 100_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+      const controller = new AbortController()
+      if (ms === 6_000) queueMicrotask(() => {
+        now = 106_001
+        controller.abort(new DOMException('budget expired', 'TimeoutError'))
+      })
+      return controller.signal
+    })
+    const base = stubGoogle({
+      calendars: [
+        { id: 'primary', summary: 'Aubrey Law', primary: true },
+        ...['first', 'second', 'queued'].map(id => ({ id, summary: id })),
+      ],
+      primaryEvents: [event('primary-1')],
+    })
+    const started: string[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      const match = url.match(/\/calendars\/(first|second|queued)\/events/)
+      if (!match) return base(url)
+      started.push(match[1])
+      const signal = init?.signal
+      return new Promise<Response>((_resolve, reject) => {
+        if (!signal) return reject(new Error('missing request deadline'))
+        if (signal.aborted) return reject(signal.reason)
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    }))
+
+    const view = await listCalendarView(FROM, TO)
+
+    expect(started).toEqual(['first', 'second'])
+    expect(view.skipped).toEqual(['first', 'second', 'queued'])
+    expect((view.raw as Array<{ id: string }>).map(e => e.id)).toEqual(['primary-1'])
+  })
+
   it('keeps the view when one calendar errors, and reports it as skipped', async () => {
     vi.stubGlobal('fetch', stubGoogle({
       calendars: [
