@@ -57,10 +57,32 @@ const HARD_AUTOMATED_LOCAL_PARTS = [
 const SOFT_AUTOMATED_LOCAL_PARTS = new Set([
   'info', 'support', 'billing', 'receipts', 'admin', 'sales', 'marketing',
   'newsletter', 'news', 'updates', 'team', 'hello', 'contact',
+  // Added after the first production scan. A plan administrator's claims
+  // desk sent seven separate threads in a fortnight and every one of them
+  // reached the queue as a possible new lead.
+  'claims', 'panel', 'referrals', 'referral', 'messenger', 'notification',
+  'notifications', 'alerts', 'alert', 'service', 'mailer', 'accounts',
+  'accountsreceivable', 'ar', 'ap', 'invoices', 'statements', 'donotreply',
 ])
+
+/**
+ * A local part shaped like a department's outbound mailer rather than a name:
+ * `ar-simplifile`, `claims-intake`, `no-reply-alerts`. Matching the stem is
+ * what the `Set` above cannot do, since these arrive with a suffix attached.
+ */
+const ROLE_LOCAL_PART_PREFIX =
+  /^(ar|ap|claims?|panel|billing|invoices?|accounts?|notifications?|alerts?|mailer|messenger|support|service|updates?|news)[-._]/i
 
 const AUTOMATED_SUBJECTS =
   /^\s*(out of office|automatic reply|undeliverable|delivery status notification|read:|auto(matic)? response)/i
+
+/**
+ * A reference number in the subject — `Claim #43667`, `Invoice #000189`,
+ * `Ticket 12345`, `Case No. 9`. Prose from a person almost never carries one;
+ * a system that files things by number almost always does.
+ */
+const REFERENCED_SUBJECT =
+  /(\b(claim|invoice|ticket|case|order|ref(erence)?|account|policy|statement)\b\W{0,12}(no\.?|number|#)?\s*#?\d{3,})|(#\s?\d{3,})/i
 
 const BULK_CATEGORY_LABELS = new Set([
   'CATEGORY_PROMOTIONS',
@@ -96,7 +118,19 @@ export interface AutomatedCheckArgs {
   labelIds: string[]
   subject: string | null
   ignore: IgnoreRules
+  /**
+   * How many separate threads this address opened in the scan window.
+   *
+   * The signal the first production scan made obvious: a person writing to a
+   * law firm opens one thread, maybe two. Seven in a fortnight, each with its
+   * own reference number, is a system filing tickets. Defaults to 1, so a
+   * caller that does not count still behaves as it did before.
+   */
+  threadsFromSender?: number
 }
+
+/** Above this, one address is a system rather than a correspondent. */
+const HIGH_VOLUME_THREADS = 3
 
 /**
  * Whether this is machine-generated mail.
@@ -142,11 +176,17 @@ export function isAutomatedSender(args: AutomatedCheckArgs): {
   }
 
   const soft: string[] = []
-  if (SOFT_AUTOMATED_LOCAL_PARTS.has(local)) soft.push(`sender is ${local}@`)
+  if (SOFT_AUTOMATED_LOCAL_PARTS.has(local) || ROLE_LOCAL_PART_PREFIX.test(local)) {
+    soft.push(`sender is ${local}@`)
+  }
   if (args.labelIds.some(id => BULK_CATEGORY_LABELS.has(id))) soft.push('Gmail filed it as bulk')
   if (!args.name || args.name.toLowerCase() === domain) soft.push('no personal display name')
   if (headers['x-mailer'] || headers['feedback-id'] || headers['x-campaign-id']) {
     soft.push('bulk-sender headers')
+  }
+  if (REFERENCED_SUBJECT.test(args.subject ?? '')) soft.push('subject carries a reference number')
+  if ((args.threadsFromSender ?? 1) >= HIGH_VOLUME_THREADS) {
+    soft.push(`${args.threadsFromSender} threads in the scan window`)
   }
 
   if (soft.length >= 2) {

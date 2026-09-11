@@ -297,6 +297,18 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       }
     })
 
+    // How many separate threads each address opened across this scan. A person
+    // writing to a law firm opens one, maybe two; a claims desk opens seven,
+    // each with its own reference number. Counted once here rather than
+    // re-derived per thread.
+    const threadsBySender = new Map<string, number>()
+    for (const thread of threads) {
+      const last = thread?.messages.at(-1)
+      if (!last) continue
+      const key = last.from.email.toLowerCase()
+      threadsBySender.set(key, (threadsBySender.get(key) ?? 0) + 1)
+    }
+
     for (const thread of threads) {
       if (!thread) continue
       counts.threadsExamined += 1
@@ -335,6 +347,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       const match = await classifySender(admin, {
         email: inbound.from.email,
         name: inbound.from.name,
+        threadsFromSender: threadsBySender.get(inbound.from.email.toLowerCase()) ?? 1,
         headers: inbound.headers,
         labelIds: inbound.labelIds,
         subject: inbound.subject,
