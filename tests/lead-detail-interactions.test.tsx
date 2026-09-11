@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+const { openExternalPhone } = vi.hoisted(() => ({ openExternalPhone: vi.fn() }))
+vi.mock('@/lib/clientPhone', () => ({ openExternalPhone }))
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -288,7 +290,7 @@ describe('lead detail page', () => {
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     expect(within(header()).getByRole('button', { name: 'Call' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Email' })).toBeTruthy()
-    expect(within(header()).getByRole('button', { name: 'Text' })).toBeTruthy()
+    expect(within(header()).queryByRole('button', { name: 'Text' })).toBeNull()
     expect(within(header()).getByRole('button', { name: 'Intake' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Resume engagement' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'More actions' })).toBeTruthy()
@@ -315,7 +317,7 @@ describe('lead detail page', () => {
     expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
   })
 
-  it('opens one-off email and text composers with the lead contact details', async () => {
+  it('opens one-off email with the lead contact details', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ok:true,json:async()=>({templates:[]})} as Response)
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
@@ -323,9 +325,7 @@ describe('lead detail page', () => {
     expect((await screen.findByRole('dialog')).textContent).toContain('jane@example.com')
     expect(screen.getByLabelText('Template')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Close' }))
-    await user.click(screen.getByRole('button', { name: 'Text' }))
-    expect((await screen.findByRole('dialog')).textContent).toContain('617')
-    expect(screen.getByLabelText('Text message')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
   })
 
   it('preserves template links and resolves first_name when sending lead email', async () => {
@@ -574,10 +574,9 @@ describe('lead detail page', () => {
     expect(router.push).toHaveBeenCalledWith('/admin/engagements/agreement-1?step=design')
   })
 
-  it('dispatches the shared softphone event from the follow-up ribbon', async () => {
+  it('opens external calling from the follow-up ribbon', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
-    const openPhone = vi.fn()
-    window.addEventListener('cornerstone:open-softphone', openPhone)
+    openExternalPhone.mockClear()
     const user = userEvent.setup()
     render(
       <LeadDetailClient
@@ -591,8 +590,7 @@ describe('lead detail page', () => {
 
     await user.click(within(screen.getByRole('status')).getByRole('button', { name: 'Call' }))
 
-    expect(openPhone).toHaveBeenCalledTimes(1)
-    window.removeEventListener('cornerstone:open-softphone', openPhone)
+    expect(openExternalPhone).toHaveBeenCalledTimes(1)
   })
 
   it('reactivates a lost lead through the only overflow transition', async () => {
@@ -1187,7 +1185,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
-    const topControls = ['Call', 'Email', 'Text', 'Intake', 'Draft engagement', 'More actions']
+    const topControls = ['Call', 'Email', 'Intake', 'Draft engagement', 'More actions']
       .map(name => within(header()).getByRole('button', { name })) as HTMLButtonElement[]
     const ribbonControls = ['Send intake', 'Fill it myself', 'Import', 'Snooze']
       .map(name => screen.getByRole('button', { name })) as HTMLButtonElement[]
@@ -1241,7 +1239,7 @@ describe('lead detail page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Snooze' }))
 
-    for (const name of ['Call', 'Email', 'Text', 'Intake', 'Draft engagement', 'More actions']) {
+    for (const name of ['Call', 'Email', 'Intake', 'Draft engagement', 'More actions']) {
       expect((within(header()).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
     }
 

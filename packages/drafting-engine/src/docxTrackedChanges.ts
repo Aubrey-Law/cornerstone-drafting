@@ -149,14 +149,6 @@ function getAttr(node: XmlNode, name: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-function setAttr(node: XmlNode, name: string, value: string): void {
-  const key = name.startsWith('@_') ? name : `@_${name}`
-  if (!node[':@'] || typeof node[':@'] !== 'object') {
-    node[':@'] = {}
-  }
-  ;(node[':@'] as Record<string, string>)[key] = value
-}
-
 function textContent(node: XmlNode): string {
   const tag = nodeTag(node)
   if (!tag) return ''

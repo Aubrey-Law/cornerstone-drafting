@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { PortalAccountCard } from '@/components/portal/PortalAccountCard'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
@@ -12,7 +13,7 @@ export default async function PortalAccountPage() {
   const supabase = await createServerSupabase()
   const matter = await getMatterForUser(supabase, auth.id)
   const account = matter
-    ? await fetchPortalAccount(matter.id)
+    ? await fetchPortalAccount(matter.id).catch(() => null)
     : { invoices: [], balanceCents: 0, nextDueDate: null }
 
   return (
@@ -22,7 +23,7 @@ export default async function PortalAccountPage() {
         Review balances, pay open invoices, and download paid invoices as receipts.
       </p>
       <div className="mt-6">
-        <PortalAccountCard account={account} showAll />
+        <>{account ? <PortalAccountCard account={account} showAll /> : <p role="alert">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}</>
       </div>
     </div>
   )

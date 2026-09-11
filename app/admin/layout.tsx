@@ -1,3 +1,4 @@
+import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getFirmConfig } from '@/lib/firmConfig'
@@ -55,8 +56,8 @@ export default async function AdminLayout({
         <AdminLayoutClient
           userName={userName}
           userInitials={userInitials}
-          voiceEnabled={isVoiceConfigured()}
-          smsEnabled={isSmsConfigured()}
+          voiceEnabled={manualCommunicationsEnabled() && isVoiceConfigured()}
+          smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
           assistantModelLabel={await assistantModelLabel()}
         >
           {children}

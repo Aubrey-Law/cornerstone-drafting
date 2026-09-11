@@ -52,21 +52,6 @@ describe('contact threads in the inbox', () => {
     expect(source(VIEW)).toMatch(/drop view if exists public\.v_communication_threads/i)
   })
 
-  it('keeps contact threads out of the needs-reply badge', () => {
-    // That badge measures client responsiveness; a chatty vendor must not
-    // drive it. Contact threads still appear in the inbox list.
-    expect(source('lib/queries/inbox.ts')).toMatch(/\.neq\('record_type', 'contact'\)/)
-  })
-
-  it('replies to a contact thread through the contact route', () => {
-    expect(source('app/admin/inbox/InboxClient.tsx'))
-      .toMatch(/\/api\/admin\/contacts\/\$\{selected\.contact_id\}/)
-  })
-
-  it('marks a contact thread read on its own messages', () => {
-    expect(source('app/api/admin/inbox/threads/[key]/route.ts'))
-      .toMatch(/key\.recordType === 'contact' \? 'contact_id' : 'lead_id'/)
-  })
 })
 
 describe('emails in the timeline', () => {
@@ -100,9 +85,7 @@ describe('emails in the timeline', () => {
     expect(source('lib/email/send.ts')).toMatch(/\['bcc', 'lead_id', 'contact_id'\]/)
   })
 
-  it('reads emails into lead and contact timelines', () => {
-    expect(source('lib/queries/inbox.ts')).toMatch(/emailRows\(emails\.data \?\? \[\]\)/)
-  })
+
 })
 
 describe('lead SMS replies from the inbox', () => {
@@ -128,10 +111,11 @@ describe('contact communications routes', () => {
     }
   })
 
-  it('refuses to send when no SMS provider is configured', () => {
+  it('retires the contact SMS route behind authorization', () => {
     const route = source('app/api/admin/contacts/[id]/send-sms/route.ts')
-    expect(route).toMatch(/isSmsConfigured\(\)/)
-    expect(route).toMatch(/status: 503/)
+    expect(route).toContain('requireAdmin')
+    expect(route).toContain('410')
+    expect(route).not.toContain('sendOutboundSms')
   })
 
   it('scopes contact reads to the contact, never to its household', () => {

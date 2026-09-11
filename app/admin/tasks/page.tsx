@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getCachedClaims } from '@/lib/supabaseServer'
 import { fetchTaskAssignees, fetchTasks, fetchTaskTemplates } from '@/lib/queries/tasks'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { TasksClient } from './TasksClient'
@@ -6,8 +6,7 @@ import { TasksClient } from './TasksClient'
 export const dynamic = 'force-dynamic'
 
 export default async function AdminTasksPage() {
-  const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedClaims()
 
   const [openTasks, doneTasks, assignees, templates] = await Promise.all([
     // Every open task, not the first 500 of them: this page is the firm's

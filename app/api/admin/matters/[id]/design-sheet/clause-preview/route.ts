@@ -20,7 +20,8 @@ export async function POST(req: Request, { params }: Params) {
 
   const { id } = await params
   try {
-    const matterId = await resolveMatterId(id)
+    const matterId = await resolveMatterId(id).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const payload = await buildDraftPayload(matterId, { designSheetOverride: body.sheet })
     const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
     const context = buildNodeEstateContext({ data, state: payload.client.state ?? 'MA' })

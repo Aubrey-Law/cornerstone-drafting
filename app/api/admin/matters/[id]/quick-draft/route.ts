@@ -52,7 +52,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const { id: matterId } = await params
   try {
-    const canonicalMatterId = await resolveMatterId(matterId)
+    const canonicalMatterId = await resolveMatterId(matterId).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!canonicalMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const admin = getAdminClient()
     const { data: sheetRow } = await admin
       .from('design_sheets')
@@ -120,7 +121,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const overrides = parsedOverrides.overrides
 
   try {
-    const canonicalMatterId = await resolveMatterId(matterId)
+    const canonicalMatterId = await resolveMatterId(matterId).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!canonicalMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const rendered = await renderSingleTemplateForMatter({
       matterId: canonicalMatterId,
       templateId,

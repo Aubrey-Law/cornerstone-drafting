@@ -1,11 +1,8 @@
 import { sendEmail } from '@/lib/email/send'
-import { sendProviderSmsMessage } from '@/lib/sms/provider'
 import type { RetellCallRowInsert } from './normalize'
 import {
   formatRetellAlertEmail,
-  formatRetellAlertSms,
   parseRetellSummaryEmails,
-  parseRetellSummarySmsTo,
   shouldNotifyRetellAnalyzed,
   type RetellNotifyInput,
 } from './notifyFormat'
@@ -51,23 +48,6 @@ export async function notifyRetellCallAnalyzed(
     }
   }
 
-  const smsTo = parseRetellSummarySmsTo()
-  if (!smsTo) return
-
-  try {
-    const result = await sendProviderSmsMessage({
-      to: smsTo,
-      body: formatRetellAlertSms(row),
-    })
-    if (!result.ok) {
-      console.error('[retell] summary SMS failed', { to: smsTo, error: result.error })
-    }
-  } catch (err) {
-    console.error('[retell] summary SMS error', {
-      to: smsTo,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
 }
 
 /** Narrow a DB/upsert row into notify input. */

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+const { openExternalPhone } = vi.hoisted(() => ({ openExternalPhone: vi.fn() }))
+vi.mock('@/lib/clientPhone', () => ({ openExternalPhone }))
 
 import React from 'react'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
@@ -63,22 +65,18 @@ const trustee = row({
   thread: { type: 'matter', id: 'm1' },
 })
 
-const openEvents: unknown[] = []
-const captureOpen = (e: Event) => openEvents.push((e as CustomEvent).detail)
 let fetched: string[] = []
 
 beforeEach(() => {
-  openEvents.length = 0
+  openExternalPhone.mockClear()
   composerProps.length = 0
   fetched = []
-  window.addEventListener('cornerstone:open-softphone', captureOpen)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     fetched.push(String(input))
     return { ok: true, status: 200, json: async () => [] } as Response
   }))
 })
 afterEach(() => {
-  window.removeEventListener('cornerstone:open-softphone', captureOpen)
   vi.unstubAllGlobals()
   cleanup()
   vi.clearAllMocks()
@@ -126,11 +124,11 @@ describe('ContactSidePanel', () => {
     expect(composerProps[0].recordOverride).toEqual({ type: 'contact', id: 'c1' })
   })
 
-  it('opens the softphone with the contact number prefilled', async () => {
+  it('opens the external calling application with the contact number', async () => {
     const user = userEvent.setup()
     renderPanel(standalone)
     await user.click(screen.getByRole('button', { name: 'Call Rita' }))
-    expect(openEvents).toContainEqual({ number: '(617) 555-0104' })
+    expect(openExternalPhone).toHaveBeenCalledWith({ number: '(617) 555-0104' })
   })
 
   it('still threads an intake-backed row through its lead or matter', async () => {

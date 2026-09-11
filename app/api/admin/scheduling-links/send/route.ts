@@ -3,11 +3,6 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { sendEmail } from '@/lib/email/send'
 import { isSmsConfigured } from '@/lib/communications/config'
-import {
-  resolveLeadSmsTarget,
-  resolveMatterSmsTarget,
-  sendOutboundSms,
-} from '@/lib/sms/outbound'
 import { notifyClientOfFirmMessage } from '@/lib/portalNotifications'
 import { buildCalendlyLink, getCalendlyUrls } from '@/lib/calendly/links'
 import { MEETING_TYPE_KEYS, meetingTypeForKey, type MeetingTypeKey } from '@/lib/scheduling'
@@ -255,26 +250,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, channel, status: result.status })
   }
 
-  if (channel === 'sms') {
-    if (!isSmsConfigured()) {
-      return NextResponse.json({ error: 'SMS is not configured' }, { status: 503 })
-    }
-    const { target: smsTarget, error: targetError } = leadId
-      ? await resolveLeadSmsTarget(leadId)
-      : await resolveMatterSmsTarget(matterId!, 'client')
-    if (targetError || !smsTarget) {
-      return NextResponse.json({ error: targetError ?? 'Recipient not found' }, { status: 404 })
-    }
-    const result = await sendOutboundSms(smsTarget, message, {
-      id: userId!,
-      email: user?.email ?? null,
-      name: actorName,
-    })
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status ?? 502 })
-    }
-    return NextResponse.json({ success: true, channel, status: result.status })
-  }
+  if (channel === 'sms') return NextResponse.json({ error: 'Texting has been retired.' }, { status: 410 })
 
   // channel === 'portal' (matterId guaranteed above)
   const { error: messageError } = await admin

@@ -25,7 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { openExternalPhone } from '@/lib/clientPhone'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import {
@@ -291,7 +291,7 @@ export function ContactsClient({
                               aria-label={`Call ${contact.name}`}
                               onClick={event => {
                                 event.stopPropagation()
-                                openStaffSoftphone({ number: contact.phone ?? undefined })
+                                openExternalPhone({ number: contact.phone ?? undefined })
                               }}
                             >
                               <Phone className="h-3.5 w-3.5" />

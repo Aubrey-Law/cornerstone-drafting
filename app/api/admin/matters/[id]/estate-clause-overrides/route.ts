@@ -117,7 +117,8 @@ async function authorizedMatter(req: Request, params: Params) {
   const auth = await requireAdmin(req)
   if (auth.err || !auth.userId) return { response: auth.err ?? Response.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { id } = await params.params
-  const canonicalMatterId = await resolveMatterId(id)
+  const canonicalMatterId = await resolveMatterId(id).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+  if (!canonicalMatterId) return { response: Response.json({ error: 'Matter not found' }, { status: 404 }) }
   return { canonicalMatterId, actorId: auth.userId }
 }
 

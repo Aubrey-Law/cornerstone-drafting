@@ -19,7 +19,7 @@ const PRIORITY_TONE: Record<string, string> = {
   low: 'border-border bg-muted text-muted-foreground',
 }
 
-export function OpenTasksCard({ tasks }: { tasks: TaskRow[] }) {
+export function OpenTasksCard({ tasks, error = null }: { tasks: TaskRow[]; error?: string | null }) {
   return (
     <Card className="min-w-0 gap-0 py-0">
       <CardHeader className="flex-row items-start justify-between border-b border-border py-3">
@@ -35,7 +35,11 @@ export function OpenTasksCard({ tasks }: { tasks: TaskRow[] }) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-2 px-4 py-4">
-        {tasks.length === 0 ? (
+        {error ? (
+          <div role="alert" className="py-4 text-sm text-destructive">
+            {error} <Link href="/admin/tasks" className="underline">Open tasks to retry</Link>
+          </div>
+        ) : tasks.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <CheckCircle2 className="size-4 text-green" aria-hidden />
             Nothing open right now.

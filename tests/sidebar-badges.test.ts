@@ -17,8 +17,13 @@ describe('sidebar badges', () => {
     expect(getNavBadge('/admin/matters', counts)).toEqual({ value: 2, tone: 'destructive' })
     // Aging is folded into Drafting: overdue (red) takes priority on that badge.
     expect(getNavBadge('/admin/drafting', counts)).toEqual({ value: 1, tone: 'destructive' })
-    expect(getNavBadge('/admin/inbox', counts)).toEqual({ value: 5, tone: 'accent' })
+    expect(getNavBadge('/admin', counts)).toEqual({ value: 5, tone: 'accent' })
     expect(getNavBadge('/admin/settings', counts)).toBeNull()
+  })
+
+  it('does not present failed refreshes as current badges', () => {
+    expect(getNavBadge('/admin/billing', { ...EMPTY_SIDEBAR_COUNTS, overdueInvoiceCount: 3, errors: ['overdueInvoiceCount'] })).toBeNull()
+    expect(getNavBadge('/admin/inbox', { ...EMPTY_SIDEBAR_COUNTS, inboxNeedsReplyCount: 2 })).toBeNull()
   })
 
   it('badges Billing when an invoice is past due', () => {

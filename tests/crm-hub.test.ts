@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8')
 
 describe('unified CRM hub', () => {
-  it('exposes one CRM navigation entry and the three CRM workspaces', () => {
+  it('links directly to Leads while preserving the CRM workspaces', () => {
     const adminLayout = read('app/admin/AdminLayoutClient.tsx')
     const subnav = read('app/admin/crm/CrmSubnav.tsx')
 
-    expect(adminLayout).toContain("{ href: '/admin/crm', label: 'CRM'")
-    expect(adminLayout).not.toMatch(/label: '(Leads|People|Contacts|Campaigns)'/)
+    expect(adminLayout).toContain("{ href: '/admin/crm/opportunities', label: 'Leads'")
+    expect(adminLayout).not.toMatch(/label: '(People|Contacts|Campaigns)'/)
     for (const route of ['people', 'opportunities', 'activities']) {
       expect(subnav).toContain(`/admin/crm/${route}`)
     }

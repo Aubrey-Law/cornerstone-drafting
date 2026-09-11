@@ -51,7 +51,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
 
   try {
-    const matterId = await resolveMatterId(id)
+    const matterId = await resolveMatterId(id).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+    if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     const payload = await buildDraftPayload(matterId)
 
     if (!payload.design_sheet_id) {

@@ -128,16 +128,14 @@ describe('POST /api/admin/scheduling-links/send', () => {
     expect(String(args.text)).toContain('https://calendly.com/aubreylaw/discovery')
   })
 
-  it('sends SMS through sendOutboundSms for a matter target', async () => {
+  it('rejects retired SMS scheduling links without sending', async () => {
     const { res } = await post({
       target: { matterId: 'matter-1' },
       meetingTypeKey: 'signing_appointment',
       channel: 'sms',
     })
-    expect(res.status).toBe(200)
-    const [, body] = sendOutboundSms.mock.calls[0] as [unknown, string]
-    expect(body).toContain('https://calendly.com/aubreylaw/signing')
-    expect(body).toContain('utm_medium=sms')
+    expect(res.status).toBe(410)
+    expect(sendOutboundSms).not.toHaveBeenCalled()
   })
 
   it('posts a portal message and notifies the client (matter only)', async () => {

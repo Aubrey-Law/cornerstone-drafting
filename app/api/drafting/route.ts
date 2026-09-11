@@ -67,7 +67,8 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = getAdminClient()
-  const resolvedMatterId = await resolveMatterId(matter_id, admin)
+  const resolvedMatterId = await resolveMatterId(matter_id, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
+  if (!resolvedMatterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
 
   const llmResolved = await resolveLlmConfig(admin, userId)
   if (!llmResolved.ok) {

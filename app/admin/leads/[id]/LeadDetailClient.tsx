@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { openExternalPhone } from '@/lib/clientPhone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { copyToClipboard } from '@/lib/clipboard'
 import { phoneTelHref } from '@/lib/phone'
@@ -595,7 +595,7 @@ export function LeadDetailClient({
           await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
           return
         case 'call':
-          openStaffSoftphone({ number: lead.phone ?? undefined })
+          openExternalPhone({ number: lead.phone ?? undefined })
           return
         case 'email':
           setCommunicationChannel('email')
@@ -759,7 +759,7 @@ export function LeadDetailClient({
             onStatusChange={handleTopStatusChange}
             onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
             onBookForClient={() => setBookForClientOpen(true)}
-            onCall={() => openStaffSoftphone({ number: lead.phone ?? undefined })}
+            onCall={() => openExternalPhone({ number: lead.phone ?? undefined })}
             onEmail={() => setCommunicationChannel('email')}
             onText={() => setCommunicationChannel('sms')}
             onIntake={() => setIntakeSheetOpen(true)}

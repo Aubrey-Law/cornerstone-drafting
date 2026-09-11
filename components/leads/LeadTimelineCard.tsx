@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
 import { CalendarDays, CircleDot, MessageSquareText } from 'lucide-react'
-import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { openExternalPhone } from '@/lib/clientPhone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormattedNote } from '@/components/notes/FormattedNote'
@@ -219,7 +219,7 @@ export function LeadTimelineCard({
 
   function openSoftphone() {
     // The rail switches to Phone and prefills the lead's number.
-    openStaffSoftphone({ number: leadPhone ?? undefined })
+    openExternalPhone({ number: leadPhone ?? undefined })
   }
 
   function renderBody(item: LeadTimelineItem) {

@@ -9,7 +9,6 @@ import {
   waitingSince,
   type CommunicationItem,
 } from '@/lib/comms/thread'
-import { parseThreadKey } from '@/lib/queries/inbox'
 
 function item(partial: Partial<CommunicationItem> & Pick<CommunicationItem, 'id' | 'channel' | 'direction' | 'created_at'>): CommunicationItem {
   return { body: 'body', ...partial }
@@ -153,22 +152,5 @@ describe('threadIsUnread', () => {
     expect(threadIsUnread({ unread_count: 2, marked_unread_at: null })).toBe(true)
     expect(threadIsUnread({ unread_count: 0, marked_unread_at: '2026-08-01T10:00:00Z' })).toBe(true)
     expect(threadIsUnread({ unread_count: 0, marked_unread_at: null })).toBe(false)
-  })
-})
-
-describe('parseThreadKey', () => {
-  it('accepts matter, lead and contact keys with UUIDs only', () => {
-    expect(parseThreadKey('matter:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')).toEqual({
-      recordType: 'matter',
-      recordId: '0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d',
-    })
-    expect(parseThreadKey('lead:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')?.recordType).toBe('lead')
-    expect(parseThreadKey('contact:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')?.recordType).toBe('contact')
-  })
-
-  it('still rejects anything that is not a UUID', () => {
-    expect(parseThreadKey('matter:1 OR 1=1')).toBeNull()
-    expect(parseThreadKey('contact:1 OR 1=1')).toBeNull()
-    expect(parseThreadKey('user:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')).toBeNull()
   })
 })

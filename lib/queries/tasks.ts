@@ -282,8 +282,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
     for (let offset = 0; offset < TASK_READ_CEILING; offset += TASK_PAGE_SIZE) {
       const { data, error } = await buildQuery().range(offset, offset + TASK_PAGE_SIZE - 1)
       if (error) {
-        console.error('fetchTasks:', error.message)
-        return []
+        throw new Error(`Unable to load tasks: ${error.message}`)
       }
       const page = (data ?? []) as unknown as RawTaskRow[]
       rows.push(...page)
@@ -297,8 +296,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
   } else {
     const { data, error } = await buildQuery().limit(limit)
     if (error) {
-      console.error('fetchTasks:', error.message)
-      return []
+      throw new Error(`Unable to load tasks: ${error.message}`)
     }
     rows.push(...((data ?? []) as unknown as RawTaskRow[]))
   }

@@ -36,7 +36,7 @@ const WHATS_NEXT: Record<StageGroup, string> = {
   early:
     "We're reviewing what you've sent and setting up your matter. Nothing is needed from you right now — we'll reach out if we have questions.",
   active:
-    "Attorney is preparing your documents. Drafts typically arrive here within 2 weeks — we'll message you when they're ready.",
+    "Attorney is preparing your documents. The firm will confirm your drafting schedule — we'll message you when they're ready.",
   work:
     'Your drafts are ready to read. Take your time, and send us any questions or changes through Messages before we finalize.',
   done:
@@ -115,7 +115,7 @@ export default async function PortalDashboardPage() {
         fetchLatestFirmMessage(matter.id),
         fetchUnreadFirmMessageCount(matter.id),
         fetchNextAppointment(matter.id),
-        fetchPortalAccount(matter.id),
+        fetchPortalAccount(matter.id).catch(() => null),
       ])
     : [null, [] as MatterDocument[], null, 0, null, null]
 
@@ -129,7 +129,7 @@ export default async function PortalDashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Your estate plan
+            Your matter
           </p>
           <h1
             className="mt-1 text-3xl font-semibold text-foreground"
@@ -220,6 +220,7 @@ export default async function PortalDashboardPage() {
 
       {/* Only shown when there is something to say: a client with no invoices
           should not be told their balance is zero. */}
+      {matter && !account && <p role="alert" className="mt-4 text-sm text-destructive">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}
       {account && account.invoices.length > 0 && (
         <div className="mt-4">
           <PortalAccountCard account={account} />

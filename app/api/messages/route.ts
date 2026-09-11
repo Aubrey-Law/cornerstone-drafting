@@ -1,3 +1,4 @@
+import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -46,6 +47,18 @@ export async function GET(req: Request) {
   if (!isAdmin) {
     const owns = await clientOwnsMatter(token, user.id, matterId)
     if (!owns) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (url.searchParams.get('summary') === '1') {
+    const admin = getAdminClient()
+    const [latest, unread] = await Promise.all([
+      admin.from('messages').select('id, body, sender_role, created_at, read_at').eq('matter_id', matterId)
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle(),
+      admin.from('messages').select('id', { count: 'exact', head: true }).eq('matter_id', matterId)
+        .eq('sender_role', isAdmin ? 'client' : 'attorney').is('read_at', null),
+    ])
+    if (latest.error || unread.error) return NextResponse.json({ error: 'Message summary unavailable' }, { status: 503 })
+    return NextResponse.json({ latest: latest.data, unread: unread.count ?? 0 })
   }
 
   const { data, error } = await getAdminClient()
@@ -110,19 +123,19 @@ export async function POST(req: Request) {
   return NextResponse.json(data)
 }
 
-// PATCH /api/messages — mark attorney messages as read for a matter (admin)
+// PATCH /api/messages — mark only the client messages displayed to the attorney.
 export async function PATCH(req: Request) {
   const { err } = await requireAdmin(req)
   if (err) return err
-
-  const body = await req.json()
-  const { matter_id } = body as { matter_id: string }
-  if (!matter_id) return NextResponse.json({ error: 'matter_id required' }, { status: 400 })
-
-  await getAdminClient().rpc('mark_messages_read', {
-    p_matter_id: matter_id,
-    p_reader_role: 'attorney',
-  })
-
+  const body = await req.json().catch(() => null)
+  const { matter_id, message_ids } = (body ?? {}) as { matter_id?: string; message_ids?: unknown }
+  if (!matter_id || !Array.isArray(message_ids) || !message_ids.length || message_ids.length > 1000
+    || !message_ids.every(id => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))) {
+    return NextResponse.json({ error: 'matter_id and displayed message_ids required' }, { status: 400 })
+  }
+  const { error } = await getAdminClient().from('messages').update({ read_at: new Date().toISOString() })
+    .eq('matter_id', matter_id).eq('sender_role', 'client').is('read_at', null).in('id', message_ids)
+  if (error) return NextResponse.json({ error: 'Could not mark messages read' }, { status: 503 })
+  revalidateSidebarCounts()
   return NextResponse.json({ ok: true })
 }

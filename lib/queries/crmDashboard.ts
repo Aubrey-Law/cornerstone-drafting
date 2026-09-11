@@ -16,6 +16,7 @@ const RECENT_PEOPLE = 8
 export interface CrmDashboardData {
   snapshot: CrmDashboardSnapshot
   tasks: TaskRow[]
+  tasksError: string | null
   /**
    * True when the contact base is larger than one read covers, so the counts
    * below are a sample. The page says so rather than presenting them as
@@ -35,8 +36,8 @@ export interface CrmDashboardData {
  * so at 221 contacts and several more per new matter its totals were on their
  * way to becoming a sample of the book rather than the book.
  *
- * A failed task read degrades to an empty task list rather than taking the
- * whole dashboard down with it.
+ * A failed task read is reported independently without taking the whole
+ * dashboard down or presenting an empty task list as an all-clear.
  */
 export async function fetchCrmDashboard(viewerId: string | null): Promise<CrmDashboardData> {
   const [peopleResult, recentResult, stagesResult, tasks] = await Promise.all([
@@ -45,7 +46,7 @@ export async function fetchCrmDashboard(viewerId: string | null): Promise<CrmDas
     fetchCrmStages(),
     // The five most urgent, now that the read is ordered by the stored due
     // date — this was an arbitrary five of 1,024 open tasks.
-    fetchTasks({ scope: 'all', status: 'open', viewerId, limit: 5 }).catch(() => [] as TaskRow[]),
+    fetchTasks({ scope: 'all', status: 'open', viewerId, limit: 5 }).then(tasks => ({ tasks, error: null })).catch(() => ({ tasks: [] as TaskRow[], error: 'Tasks are unavailable. Please retry.' })),
   ])
 
   return {
@@ -55,7 +56,8 @@ export async function fetchCrmDashboard(viewerId: string | null): Promise<CrmDas
       stages: stagesResult.stages,
       recentLimit: RECENT_PEOPLE,
     }),
-    tasks,
+    tasks: tasks.tasks,
+    tasksError: tasks.error,
     truncated: peopleResult.truncated,
     peopleCeiling: CRM_DASHBOARD_MAX_PEOPLE,
     error: peopleResult.error ?? recentResult.error ?? stagesResult.error,

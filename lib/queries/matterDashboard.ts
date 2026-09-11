@@ -29,6 +29,7 @@ export interface MatterDashboardData {
   snapshot: MatterDashboardSnapshot
   aging: MatterAgingTiles
   tasks: TaskRow[]
+  tasksError: string | null
   error: string | null
 }
 
@@ -36,15 +37,14 @@ export async function fetchMatterDashboard(viewerId: string | null): Promise<Mat
   const [mattersResult, aging, tasks] = await Promise.all([
     fetchMattersList(),
     fetchMatterAgingTiles().catch(() => EMPTY_TILES),
-    fetchTasks({ scope: 'all', status: 'open', viewerId, limit: OPEN_TASK_LIMIT }).catch(
-      () => [] as TaskRow[],
-    ),
+    fetchTasks({ scope: 'all', status: 'open', viewerId, limit: OPEN_TASK_LIMIT }).then(tasks => ({ tasks, error: null })).catch(() => ({ tasks: [] as TaskRow[], error: 'Tasks are unavailable. Please retry.' })),
   ])
 
   return {
     snapshot: buildMatterDashboard(mattersResult.matters),
     aging,
-    tasks,
+    tasks: tasks.tasks,
+    tasksError: tasks.error,
     error: mattersResult.error,
   }
 }

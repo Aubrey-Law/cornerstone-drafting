@@ -5,7 +5,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/components/softphone/SoftphoneProvider', () => ({ useVoiceEnabled: () => false }))
 
 import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
 import type { PipelineMatter } from '@/types/database'
@@ -50,26 +49,26 @@ function renderHeader(
 afterEach(cleanup)
 
 describe('MatterDetailHeader communication actions', () => {
-  it('calls the handlers when Email and Text are clicked', async () => {
+  it('keeps email and removes text controls', async () => {
     const user = userEvent.setup()
     const onEmail = vi.fn()
     const onText = vi.fn()
     renderHeader({}, { onEmail, onText })
 
     await user.click(screen.getAllByRole('button', { name: 'Email' })[0])
-    await user.click(screen.getAllByRole('button', { name: 'Text' })[0])
+    expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
 
     expect(onEmail).toHaveBeenCalled()
-    expect(onText).toHaveBeenCalled()
+    expect(onText).not.toHaveBeenCalled()
   })
 
-  it('disables Email without an address and Text without a number', () => {
+  it('disables Email without an address', () => {
     renderHeader(
       { client_email: '', client_phone: '' },
       { onEmail: vi.fn(), onText: vi.fn() },
     )
 
     expect((screen.getAllByRole('button', { name: 'Email' })[0] as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getAllByRole('button', { name: 'Text' })[0] as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
   })
 })

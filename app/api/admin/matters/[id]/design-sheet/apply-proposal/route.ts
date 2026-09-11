@@ -12,7 +12,6 @@ import {
   applyFiduciaryProposalsToSheet,
   type ResolvedFiduciaryProposal,
 } from '@/lib/designSheet/fiduciaryProposal'
-import type { DesignSheet } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 

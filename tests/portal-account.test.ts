@@ -25,7 +25,7 @@ function db(invoices: unknown[], payments: unknown[] = [], invoiceError: unknown
       }
       return chain
     }
-    return { select: () => ({ in: () => Promise.resolve({ data: payments, error: null }) }) }
+    return { select: () => ({ in: () => ({ order: () => ({ range: () => Promise.resolve({ data: table === 'billing_payments' ? payments : [], error: null }) }) }) }) }
   })
   return captured
 }
@@ -99,9 +99,8 @@ describe('fetchPortalAccount', () => {
       .toBe('doc-1-docx')
   })
 
-  it('returns an empty account rather than throwing when the read fails', async () => {
+  it('reports an unavailable account when the read fails', async () => {
     db([], [], { message: 'boom' })
-    expect(await fetchPortalAccount(MATTER, '2026-08-17'))
-      .toEqual({ invoices: [], balanceCents: 0, nextDueDate: null })
+    await expect(fetchPortalAccount(MATTER, '2026-08-17')).rejects.toThrow('could not be loaded')
   })
 })
