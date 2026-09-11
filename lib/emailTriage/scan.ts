@@ -130,26 +130,77 @@ async function loadSettings(): Promise<TriageSettings> {
   }
 }
 
+export interface ExistingTriageRow {
+  id: string
+  gmail_thread_id: string
+  gmail_message_id: string
+  gmail_draft_message_id: string | null
+  status: string
+}
+
 /**
- * Rows the queue is still carrying. Re-checked every run even when Gmail's
- * search no longer returns their thread: a thread the attorney answered and
- * archived leaves the search results, and without this it would sit in the
- * queue forever having already been dealt with.
+ * Every row this mailbox already has, whatever its status — not only the open
+ * ones. Both halves matter and both are easy to get wrong:
+ *
+ * Open rows are re-checked even when Gmail's search no longer returns their
+ * thread, because a thread the attorney answered and archived leaves the
+ * results and would otherwise sit in the queue forever having been dealt with.
+ *
+ * Resolved rows are loaded so the scan can recognise them and leave them alone.
+ * A dismissed thread's last message is still inbound, so without this the very
+ * next scan would file it as needing a reply again and dismissing anything
+ * would do nothing at all.
  */
-async function loadOpenRows(connectionEmail: string) {
+async function loadExistingRows(connectionEmail: string): Promise<ExistingTriageRow[]> {
   const { data, error } = await getAdminClient()
     .from('email_triage_threads')
     .select('id, gmail_thread_id, gmail_message_id, gmail_draft_message_id, status')
     .eq('connection_email', connectionEmail)
-    .in('status', ['needs_reply', 'drafting', 'drafted'])
   if (error) throw error
-  return (data ?? []) as {
-    id: string
-    gmail_thread_id: string
-    gmail_message_id: string
-    gmail_draft_message_id: string | null
-    status: string
-  }[]
+  return (data ?? []) as ExistingTriageRow[]
+}
+
+const OPEN_STATUSES = new Set(['needs_reply', 'drafting', 'drafted', 'failed'])
+
+export type ThreadAction =
+  /** Nothing to do — not waiting on the firm, or settled and unchanged. */
+  | { kind: 'skip' }
+  /** It was answered outside Cornerstone; close the row. */
+  | { kind: 'resolve' }
+  /** It is waiting. `reset` clears any draft, which no longer answers the last word. */
+  | { kind: 'queue'; reset: boolean }
+
+/**
+ * What this scan should do with one thread. Pure, so the rules that decide
+ * whether the attorney sees a message again can be tested without a mailbox.
+ *
+ * The two rules worth stating plainly, because both fail quietly:
+ *
+ * A dismissed or replied thread still *ends* with an inbound message — that is
+ * what it means to have dismissed it. Re-queueing on that basis would make
+ * Dismiss do nothing at all, so a settled row is left alone while it is the
+ * same message. A **new** inbound message reopens it: dismissal is of a
+ * message, not of a correspondent forever. Silencing someone permanently is
+ * what the sender and domain ignore rules are for.
+ *
+ * A new inbound message on an open row invalidates the draft, which was written
+ * to answer something that is no longer the last thing said.
+ */
+export function decideThreadAction(
+  verdict: { needsReply: boolean; reason?: string; inboundMessageId?: string },
+  existing: ExistingTriageRow | undefined,
+): ThreadAction {
+  if (!verdict.needsReply) {
+    const open = existing && OPEN_STATUSES.has(existing.status)
+    return open && verdict.reason === 'already_replied' ? { kind: 'resolve' } : { kind: 'skip' }
+  }
+  if (!existing) return { kind: 'queue', reset: true }
+
+  const sameMessage = existing.gmail_message_id === verdict.inboundMessageId
+  if (!OPEN_STATUSES.has(existing.status)) {
+    return sameMessage ? { kind: 'skip' } : { kind: 'queue', reset: true }
+  }
+  return { kind: 'queue', reset: !sameMessage }
 }
 
 export async function runEmailTriageScan(opts: TriageScanOptions): Promise<TriageScanResult> {
@@ -205,9 +256,9 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
   let failure: string | null = null
 
   try {
-    const [ignore, openRows] = await Promise.all([
+    const [ignore, existingRows] = await Promise.all([
       loadIgnoreRules(),
-      loadOpenRows(identity.address),
+      loadExistingRows(identity.address),
     ])
 
     const firmDomains = Array.from(new Set([
@@ -224,12 +275,16 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
 
     // Open rows first: resolving one is cheap and is what keeps the queue
     // honest. Gmail's search drops a thread once it is archived, so a thread
-    // answered and filed would otherwise never be revisited.
+    // answered and filed would otherwise never be revisited. Resolved rows are
+    // not re-fetched — they are only consulted when their thread turns up in
+    // the search anyway.
     const threadIds = Array.from(new Set([
-      ...openRows.map(row => row.gmail_thread_id),
+      ...existingRows
+        .filter(row => OPEN_STATUSES.has(row.status))
+        .map(row => row.gmail_thread_id),
       ...listed,
     ]))
-    const openByThread = new Map(openRows.map(row => [row.gmail_thread_id, row]))
+    const rowByThread = new Map(existingRows.map(row => [row.gmail_thread_id, row]))
 
     const threads = await mapWithConcurrency(threadIds, METADATA_CONCURRENCY, async id => {
       try {
@@ -245,7 +300,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     for (const thread of threads) {
       if (!thread) continue
       counts.threadsExamined += 1
-      const existing = openByThread.get(thread.id)
+      const existing = rowByThread.get(thread.id)
 
       const verdict = evaluateNeedsReply({
         connectedAddress: identity.address,
@@ -255,23 +310,24 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         thread,
       })
 
-      if (!verdict.needsReply) {
-        // An open row whose thread now ends outbound has been answered — in
-        // Gmail, on a phone, wherever. That is the queue cleaning itself.
-        if (existing && verdict.reason === 'already_replied') {
-          await admin
-            .from('email_triage_threads')
-            .update({
-              status: 'replied',
-              replied_at: new Date().toISOString(),
-              last_scanned_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existing.id)
-          counts.resolved += 1
-        }
+      const action = decideThreadAction(verdict, existing)
+      if (action.kind === 'skip') continue
+
+      if (action.kind === 'resolve') {
+        // The thread now ends outbound: it was answered in Gmail, on a phone,
+        // wherever. That is the queue cleaning itself.
+        const now = new Date().toISOString()
+        await admin
+          .from('email_triage_threads')
+          .update({ status: 'replied', replied_at: now, last_scanned_at: now, updated_at: now })
+          .eq('id', existing!.id)
+        counts.resolved += 1
         continue
       }
+
+      // `action.kind === 'queue'` already implies this; restated so the
+      // verdict narrows to the branch carrying the inbound message.
+      if (!verdict.needsReply) continue
 
       const inbound = thread.messages.find(m => m.id === verdict.inboundMessageId)
       if (!inbound) continue
@@ -299,7 +355,6 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       // A newer inbound message means the drafted reply answers something that
       // is no longer the last word, so the draft is cleared and the row goes
       // back into the queue.
-      const supersedesDraft = existing ? existing.gmail_message_id !== inbound.id : false
       const now = new Date().toISOString()
 
       const { error: upsertErr } = await admin
@@ -324,13 +379,19 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           contact_id: match.contactId,
           last_scanned_at: now,
           updated_at: now,
-          ...(supersedesDraft || !existing
+          ...(action.reset
             ? {
                 status: 'needs_reply',
                 draft_subject: null,
                 draft_body: null,
                 draft_generated_at: null,
                 draft_error: null,
+                gmail_draft_id: null,
+                gmail_draft_message_id: null,
+                approved_at: null,
+                dismissed_at: null,
+                dismissed_reason: null,
+                replied_at: null,
               }
             : {}),
         }, { onConflict: 'connection_email,gmail_thread_id' })
