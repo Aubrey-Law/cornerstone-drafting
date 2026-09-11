@@ -66,6 +66,7 @@ describe('portal message thread', () => {
     expect(screen.getByText('2:30 pm')).toBeTruthy()
     expect(screen.getByText('10:15 am')).toBeTruthy()
     expect(screen.queryByText(/Jul 25, 10:15/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeTruthy()
   })
 
   it('keeps the realtime subscription stable while the client types', () => {

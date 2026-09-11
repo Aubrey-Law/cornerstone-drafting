@@ -1,5 +1,7 @@
 # Firm app production verification
 
+For the subsequent deployed follow-ups, synthetic portal roundtrip, and mobile checks, see [matter profiling and acceptance follow-up](2026-09-10-matter-profiling-follow-up.md). The snapshot below records the original post-release verification.
+
 Verified September 10, 2026, local Eastern time (September 11 UTC). This records the deployed release, distinct from the two new follow-up fixes below.
 
 ## Release and database

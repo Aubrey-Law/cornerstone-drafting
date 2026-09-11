@@ -250,6 +250,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
             disabled={isPending}
           />
           <Button
+            aria-label="Send message"
             onClick={handleSend}
             disabled={!draft.trim() || isPending}
             size="icon"
