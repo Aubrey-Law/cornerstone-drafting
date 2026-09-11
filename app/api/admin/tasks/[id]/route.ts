@@ -37,6 +37,36 @@ function optionalTimestamp(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+/**
+ * The columns that must agree with whatever status a task lands in.
+ *
+ * `skipped_at` and `closeout_reason` are cleared on every hand-set status for
+ * the reason `app/api/matters/[matterId]/tasks/[taskId]/route.ts` clears them:
+ * a row still carrying the closeout sweep's marker is one that
+ * `restoreTasksForReopenedRecord` will drag back to `open` the next time its
+ * record is reopened, undoing the completion the user just recorded.
+ */
+function statusStamps(
+  status: TaskStatus,
+  existing: TaskRow,
+  userId: string | null,
+): Record<string, unknown> {
+  if (status !== 'done') {
+    return { status, completed_at: null, completed_by: null, skipped_at: null, closeout_reason: null }
+  }
+  // An edit saved against a task that was already finished is not a second
+  // completion: re-dating it would move the task between one day's "Done
+  // today" and another's for a change to its title.
+  const recorded = existing.status === 'done' && existing.completed_at
+  return {
+    status,
+    completed_at: recorded ? existing.completed_at : new Date().toISOString(),
+    completed_by: recorded ? existing.completed_by : userId,
+    skipped_at: null,
+    closeout_reason: null,
+  }
+}
+
 function normalizeChecklist(value: unknown): ChecklistItem[] {
   if (!Array.isArray(value)) return []
   return value.flatMap(item => {
@@ -87,12 +117,13 @@ export async function PATCH(req: Request, { params }: Params) {
     // Clearing the last item finishes the task; unchecking one reopens it.
     const allDone = checklist.length > 0 && checklist.every(item => item.done)
     if (allDone && existing.status !== 'done') {
-      patch.status = 'done'
+      // Stamped like any other completion: "Done today" is read off
+      // `completed_at`, so a task finished by its last checkbox would otherwise
+      // leave the queue without ever landing anywhere the user can see it.
+      Object.assign(patch, statusStamps('done', existing, auth.userId))
       completing = true
     } else if (!allDone && existing.status === 'done') {
-      patch.status = 'open'
-      patch.completed_at = null
-      patch.completed_by = null
+      Object.assign(patch, statusStamps('open', existing, auth.userId))
     }
   }
 
@@ -102,17 +133,13 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
     const status = body.status as TaskStatus
-    patch.status = status
+    Object.assign(patch, statusStamps(status, existing, auth.userId))
     if (status === 'done') {
       if (existing.status !== 'done') completing = true
-      patch.completed_at = new Date().toISOString()
-      patch.completed_by = auth.userId
       // Completing a checklist task closes out its remaining items.
       patch.checklist = ((existing.checklist ?? []) as ChecklistItem[]).map(item => ({ ...item, done: true }))
     } else {
       completing = false
-      patch.completed_at = null
-      patch.completed_by = null
     }
   }
 
@@ -149,20 +176,25 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if (body.checklist !== undefined) {
     const checklist = normalizeChecklist(body.checklist)
-    patch.checklist = checklist
+    // A request that also names a status has said what it wants outright — the
+    // detail sheet sends both on every save — so the checklist must not talk it
+    // back out of it. Without this, saving any edit to a finished task reopened
+    // it, because a task with no subtasks reads as "not all done".
+    const statusRequested = typeof body.status === 'string'
+    patch.checklist = statusRequested && body.status === 'done'
+      ? checklist.map(item => ({ ...item, done: true }))
+      : checklist
     patch.task_type = checklist.length > 0 ? 'checklist' : 'single'
 
-    const allDone = checklist.length > 0 && checklist.every(item => item.done)
-    if (allDone && existing.status !== 'done') {
-      patch.status = 'done'
-      patch.completed_at = new Date().toISOString()
-      patch.completed_by = auth.userId
-      completing = true
-    } else if (!allDone && existing.status === 'done') {
-      patch.status = 'open'
-      patch.completed_at = null
-      patch.completed_by = null
-      completing = false
+    if (!statusRequested && checklist.length > 0) {
+      const allDone = checklist.every(item => item.done)
+      if (allDone && existing.status !== 'done') {
+        Object.assign(patch, statusStamps('done', existing, auth.userId))
+        completing = true
+      } else if (!allDone && existing.status === 'done') {
+        Object.assign(patch, statusStamps('open', existing, auth.userId))
+        completing = false
+      }
     }
   }
 

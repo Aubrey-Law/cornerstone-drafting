@@ -128,10 +128,17 @@ export async function archiveTasksForClosedRecord(
 }
 
 /**
- * Put back what the sweep took. Only rows it marked are restored, and they come
- * back as `open` — a task that was `in_progress` or `blocked` when the record
- * died needs re-triage anyway, and collapsing to one status keeps this from
- * needing a second column to remember the old one.
+ * Put back what the sweep took. Only rows it marked *and left archived* are
+ * restored, and they come back as `open` — a task that was `in_progress` or
+ * `blocked` when the record died needs re-triage anyway, and collapsing to one
+ * status keeps this from needing a second column to remember the old one.
+ *
+ * The status filter is what stops a restore from undoing real work. A task the
+ * sweep archived can be finished by hand afterwards (the plan board still shows
+ * archived rows), and without it the next reopen of the record would drag that
+ * completed task back into the queue as `open`. `closeout_reason` alone is not
+ * enough of a guard, because it is the marker the sweep wrote, not a statement
+ * about where the row stands now.
  */
 export async function restoreTasksForReopenedRecord(
   admin: SupabaseClient,
@@ -158,6 +165,7 @@ export async function restoreTasksForReopenedRecord(
       closeout_reason: null,
       updated_at: now,
     })
+    .eq('status', 'archived')
     .or(clauses.join(','))
 
   if (options.reason) query = query.eq('closeout_reason', options.reason)
