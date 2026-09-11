@@ -6,12 +6,14 @@ The owner authorized publication. All four branches have been pushed and opened 
 
 | Draft PR | Branch | PR base | Review description |
 | --- | --- | --- | --- |
-| [#453](https://github.com/spaubrey/cornerstone-drafting/pull/453) | `codex/firm-app-release-guardrails` (`6af029f6`) | `main` (`03e284d0`) | [Build safeguards](firm-app-release/01-build-safeguards.md) |
-| [#454](https://github.com/spaubrey/cornerstone-drafting/pull/454) | `codex/firm-app-communications-retirement` (`562d595e`) | `codex/firm-app-release-guardrails` | [Communications retirement and reliability](firm-app-release/02-communications-and-reliability.md) |
-| [#455](https://github.com/spaubrey/cornerstone-drafting/pull/455) | `codex/firm-app-workflow-recovery` (`0984b832`) | `codex/firm-app-communications-retirement` | [Disabled queue recovery](firm-app-release/03-disabled-queue-recovery.md) |
+| [#453](https://github.com/spaubrey/cornerstone-drafting/pull/453) | `codex/firm-app-release-guardrails` (`64787dfa`) | `main` (`03e284d0`) | [Build safeguards](firm-app-release/01-build-safeguards.md) |
+| [#454](https://github.com/spaubrey/cornerstone-drafting/pull/454) | `codex/firm-app-communications-retirement` (`c66e5ea2`) | `codex/firm-app-release-guardrails` | [Communications retirement and reliability](firm-app-release/02-communications-and-reliability.md) |
+| [#455](https://github.com/spaubrey/cornerstone-drafting/pull/455) | `codex/firm-app-workflow-recovery` (`46edeb08`) | `codex/firm-app-communications-retirement` | [Disabled queue recovery](firm-app-release/03-disabled-queue-recovery.md) |
 | [#456](https://github.com/spaubrey/cornerstone-drafting/pull/456) | `codex/firm-app-remediation` | `codex/firm-app-workflow-recovery` | [Navigation and working lists](firm-app-release/04-navigation-and-working-lists.md) |
 
 These are dependent review branches. The proposed release order is 1 through 4. After a prerequisite lands on main, retarget the next PR to main and recheck its diff and CI before merging. Do not merge later work into an earlier review branch.
+
+The two applied additive migration files and regenerated types now live in the first prerequisite PR so all branches contain the production migration history. The SQL is unchanged; queue and working-list consumer changes remain in steps 3 and 4.
 
 Publication covered these four branches and four draft PRs with the linked descriptions. Initial CI exposed a Node 22 build-worker heap limit and missing live RPCs on the queue/list branches. The build launcher now supplies a fixed 4 GiB heap, and both migrations were applied with explicit owner approval. Updated branch checks must pass before merge. Main remains unchanged; no app deployment has occurred. Earlier local application verification applies to code revision `428df951`.
 
