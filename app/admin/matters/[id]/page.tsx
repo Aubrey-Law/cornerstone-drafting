@@ -17,8 +17,7 @@ import { normalizeMarketingConsent, type MarketingConsentStatus } from '@/lib/cr
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
-import { fetchTasksForMatter } from '@/lib/queries/tasks'
-import { recordTaskCounts } from '@/lib/tasks/types'
+import { fetchRecordTaskCounts } from '@/lib/queries/tasks'
 import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
@@ -247,34 +246,48 @@ export default async function MatterDetailPage({ params }: Params) {
   if (!id) notFound()
   // Identity is resolved first. All independent reads then overlap rather
   // than waiting for a second round trip after the matter overview.
+  const matterShell = loadMatterShell(admin, id)
+  // Intake-dependent reads wait only for their own parent, not for design,
+  // notes, aging, and task reads that happen alongside them.
+  const intakeContext = matterShell.then(async matterRow => {
+    const intakeId = matterRow?.client_intake_id ?? null
+    const clientIntake = intakeId ? loadClientIntakeShell(admin, intakeId) : Promise.resolve(null)
+    const uploads = clientIntake.then(row => fetchUnreviewedUploadCounts(
+      admin, id, intakeId, row?.uploads_reviewed_at ?? null,
+      matterRow?.portal_uploads_reviewed_at ?? null,
+    ))
+    const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts] = await Promise.all([
+      fetchMatterEstateSnapshot(intakeId),
+      clientIntake,
+      loadLinkedLeadHistory(admin, intakeId),
+      loadMarketingConsent(admin, intakeId),
+      uploads,
+    ])
+    return { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts }
+  })
   const [matter, contacts, agingSummary, matterRow,
     { data: detailsRow, error: detailsError }, notes, designSheet,
-    intakeSnapshot, matterActivity, stageHistory, initialTasks,
+    intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
   ] = await Promise.all([
     fetchMatter(id),
     fetchMatterContacts(id),
     fetchMatterAgingSummary(id),
-    loadMatterShell(admin, id),
+    matterShell,
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     loadMatterNotes(admin, id),
     fetchDesignSheet(id),
     loadIntakeSnapshotOptional(id),
     loadMatterActivity(admin, id),
     fetchMatterStageHistory(id),
-    fetchTasksForMatter(id, 'open'),
+    fetchRecordTaskCounts(id),
+    intakeContext,
   ])
   if (!matter) notFound()
 
   const coreLoadError = detailsError
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
-  const intakeId = (matterRow?.client_intake_id ?? null) as string | null
-  const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent] = await Promise.all([
-    fetchMatterEstateSnapshot(intakeId),
-    intakeId ? loadClientIntakeShell(admin, intakeId) : Promise.resolve(null),
-    loadLinkedLeadHistory(admin, intakeId),
-    loadMarketingConsent(admin, intakeId),
-  ])
+  const { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts } = context
   const { leadNotes, leadMeetingNotes, leadActivity } = linkedHistory
 
   const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
@@ -296,17 +309,6 @@ export default async function MatterDetailPage({ params }: Params) {
         intake: intakeSnapshot,
       }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
     : 0
-
-  const portalUploadsReviewedAt = (matterRow?.portal_uploads_reviewed_at ?? null) as string | null
-  const unreviewedUploadCounts = await fetchUnreviewedUploadCounts(
-    admin,
-    id,
-    intakeId,
-    clientIntakeRow?.uploads_reviewed_at ?? null,
-    portalUploadsReviewedAt,
-  ).catch(() => ({ intake: 0, portal: 0, total: 0 }))
-
-  const initialTaskCounts = recordTaskCounts(initialTasks)
 
   // Plan composition and fiduciaries belong to the design sheet; the matter
   // page renders them read-only, so resolve them to names here rather than

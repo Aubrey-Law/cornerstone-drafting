@@ -809,6 +809,12 @@ export function LeadDetailClient({
             </div>
           )}
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
+            {taskCounts.error && (
+              <p role="status" className="text-sm text-destructive">
+                {taskCounts.error}{' '}
+                <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
+              </p>
+            )}
             <MobileRecordSectionSelect
               label="Lead section"
               value={activeTab}

@@ -924,6 +924,12 @@ function MatterDetailClientInner({
               onValueChange={v => setActiveTab(v as MatterTab)}
               className="w-full gap-4"
             >
+              {taskCounts.error && (
+                <p role="status" className="text-sm text-destructive">
+                  {taskCounts.error}{' '}
+                  <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
+                </p>
+              )}
               <MobileRecordSectionSelect
                 label="Matter section"
                 value={activeTab}

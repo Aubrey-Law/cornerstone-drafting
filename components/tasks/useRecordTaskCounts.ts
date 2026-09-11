@@ -1,39 +1,44 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { recordTaskCounts, type RecordTaskCounts, type TaskRow } from '@/lib/tasks/types'
+import type { RecordTaskCounts } from '@/lib/tasks/types'
 
-/**
- * Open/overdue counts for one record, for the Tasks tab trigger badge. The tab
- * body unmounts when another tab is active, so the badge keeps its own count —
- * seeded on the server, then re-read only after the tab changes something.
- *
- * `recordTaskCounts` deliberately lives in `lib/tasks/types` rather than here:
- * the server pages seed this badge, and they cannot call into a client module.
- */
+/** Server-seeded badge totals, refreshed as aggregates after task mutations. */
 export function useRecordTaskCounts(recordId: string, initial: RecordTaskCounts) {
   const token = useAccessToken()
-  const [counts, setCounts] = useState(initial)
-
+  const [state, setState] = useState({ recordId, counts: initial, error: null as string | null })
+  const generation = useRef(0)
+  useEffect(() => () => { generation.current += 1 }, [recordId, token])
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
     [token],
   )
 
   const refresh = useCallback(async () => {
+    const request = ++generation.current
     try {
-      const res = await fetch(`/api/admin/tasks?status=open&recordId=${recordId}`, {
+      const res = await fetch(`/api/admin/tasks/counts?recordId=${encodeURIComponent(recordId)}`, {
         headers: authHeaders,
         cache: 'no-store',
       })
-      if (!res.ok) return
+      if (!res.ok) throw new Error('Task counts could not be refreshed.')
       const json = await res.json()
-      setCounts(recordTaskCounts((json.tasks ?? []) as TaskRow[]))
+      const counts = json.counts as RecordTaskCounts | undefined
+      if (!counts || !Number.isSafeInteger(counts.open) || !Number.isSafeInteger(counts.overdue)
+        || counts.open < 0 || counts.overdue < 0 || counts.overdue > counts.open) {
+        throw new Error('Task counts could not be refreshed.')
+      }
+      if (request === generation.current) setState({ recordId, counts, error: null })
     } catch {
-      // A stale badge is not worth surfacing an error for.
+      if (request === generation.current) setState(previous => ({
+        recordId,
+        counts: previous.recordId === recordId ? previous.counts : initial,
+        error: 'Task counts could not be refreshed.',
+      }))
     }
-  }, [recordId, authHeaders])
+  }, [recordId, authHeaders, initial])
 
-  return { ...counts, refresh }
+  const current = state.recordId === recordId ? state : { counts: initial, error: null }
+  return { ...current.counts, error: current.error, refresh }
 }

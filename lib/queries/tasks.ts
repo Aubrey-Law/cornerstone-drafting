@@ -1,4 +1,5 @@
 import { allAccountingRows } from '@/lib/queries/invoiceBalances'
+import { FIRM_TIMEZONE, firmTodayKey } from '@/lib/firmDate'
 import type { TaskPageFilters } from '@/lib/tasks/pageParams'
 import { pageRequest, type PageRequest, type PageResult } from '@/lib/queries/page'
 import type { GeneratedDatabase, Json } from '@/types/supabase'
@@ -16,6 +17,7 @@ import {
   type TaskRow,
   type TaskSource,
   type TaskStatus,
+  type RecordTaskCounts,
 } from '@/lib/tasks/types'
 import { PLAN_TASK_COLUMNS } from '@/lib/slaTasks/types'
 
@@ -199,11 +201,12 @@ async function recordClauses(admin: SupabaseClient, recordId: string): Promise<s
   const clauses = [`matter_id.eq.${recordId}`, `lead_id.eq.${recordId}`]
   // One extra lookup, and only when a record is named. A matter id matches
   // nothing here, so this costs a miss on the matter path and fixes the lead one.
-  const { data } = await admin
+  const { data, error } = await admin
     .from('matters')
     .select('id')
     .eq('client_intake_id', recordId)
     .maybeSingle()
+  if (error) throw new Error('Task record is unavailable. Please retry.')
   const leadMatterId = (data as { id: string } | null)?.id
   if (leadMatterId) clauses.push(`matter_id.eq.${leadMatterId}`)
   return clauses
@@ -351,6 +354,27 @@ export async function fetchDueTasks(through: string): Promise<TaskRow[]> {
 
 export async function fetchTasksForMatter(matterId: string, status: 'open' | 'done' | 'all' = 'all') {
   return fetchTasks({ recordId: matterId, status, limit: 200 })
+}
+
+/** Exact badge totals without downloading or enriching a capped task list. */
+export async function fetchRecordTaskCounts(recordId: string, now: Date = new Date()): Promise<RecordTaskCounts> {
+  if (!isUuid(recordId)) throw new Error('Invalid task record.')
+  const admin = getAdminClient()
+  const recordFilter = (await recordClauses(admin, recordId)).join(',')
+  const openQuery = () => admin.from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner', 'firm').in('status', OPEN_STATUSES).or(recordFilter)
+  // PostgreSQL resolves the named zone at this date, including DST. A task
+  // earlier today is not overdue; match taskDueGroup's firm-calendar rule.
+  const dayStart = `${firmTodayKey(now)} 00:00:00 ${FIRM_TIMEZONE}`
+  const [open, overdue] = await Promise.all([
+    openQuery(),
+    openQuery().lt('effective_due_at', dayStart),
+  ])
+  if (open.error || overdue.error || open.count === null || overdue.count === null) {
+    throw new Error('Task counts are unavailable. Please retry.')
+  }
+  return { open: open.count, overdue: overdue.count }
 }
 
 export async function fetchTasksForLead(leadId: string, status: 'open' | 'done' | 'all' = 'all') {

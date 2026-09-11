@@ -7,7 +7,7 @@ const OLDER_PAST = new Date(Date.now() - 30 * 86_400_000).toISOString()
 
 const harness = vi.hoisted(() => {
   const rawLead = {
-    id: 'lead-1',
+    id: '11111111-2222-4333-8444-555555555555',
     first_name: 'Jane',
     last_name: 'Doe',
     lead_status: 'lead',
@@ -110,7 +110,11 @@ vi.mock('@/lib/appointments/settings', () => ({
   getSchedulingSettings: vi.fn(async () => ({ timezone: 'America/Los_Angeles' })),
 }))
 vi.mock('@/lib/intakeContactHydration', () => ({ hydrateIntakeWithContacts: harness.hydrate }))
-vi.mock('next/navigation', () => ({ notFound: vi.fn() }))
+vi.mock('@/lib/queries/tasks', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/queries/tasks')>(),
+  fetchRecordTaskCounts: vi.fn(async () => ({ open: 603, overdue: 301 })),
+}))
+vi.mock('next/navigation', () => ({ notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND') }) }))
 vi.mock('@/app/admin/leads/[id]/LeadDetailClient', () => ({ LeadDetailClient: () => null }))
 
 import LeadDetailPage from '@/app/admin/leads/[id]/page'
@@ -127,12 +131,18 @@ describe('LeadDetailPage intake loader', () => {
     for (const table of Object.keys(harness.errors)) delete harness.errors[table]
   })
 
+  it('returns not found for a malformed lead ID before starting database reads', async () => {
+    await expect(LeadDetailPage({ params: Promise.resolve({ id: 'bad,id' }) })).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(harness.admin.from).not.toHaveBeenCalled()
+  })
+
   it('hydrates contact-backed household and fiduciary intake data before rendering the lead client', async () => {
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(harness.hydrate).toHaveBeenCalledWith(harness.admin, harness.rawLead)
     expect((page.props as { lead: unknown }).lead).toBe(harness.hydratedLead)
     expect(page.props).toMatchObject({
+      initialTaskCounts: { open: 603, overdue: 301 },
       actorNames: {
         'user-1': 'Alice Attorney',
         'user-2': 'ben@example.com',
@@ -146,7 +156,7 @@ describe('LeadDetailPage intake loader', () => {
   it('passes a visible actor warning while retaining the loaded timeline rows when actor lookup fails', async () => {
     harness.errors.users = { message: 'actor lookup failed' }
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({
       initialActivity: [expect.objectContaining({ id: 'activity-1' })],
@@ -163,7 +173,7 @@ describe('LeadDetailPage intake loader', () => {
       { id: 'current-user', display_name: 'Current Attorney', email: 'current@example.com' },
     ]
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({
       actorNames: { 'current-user': 'Current Attorney' },
@@ -203,7 +213,7 @@ describe('the meeting the detail page can see', () => {
   it('falls back to the planning session the matter row carries', async () => {
     harness.rows.matters = { discovery_call_at: null, pmps_at: FUTURE }
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({ nextAppointmentAt: FUTURE })
   })
@@ -212,7 +222,7 @@ describe('the meeting the detail page can see', () => {
     harness.rows.appointments = { start_time: '2026-07-30T14:00:00Z' }
     harness.rows.matters = { discovery_call_at: null, pmps_at: FUTURE }
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({ nextAppointmentAt: '2026-07-30T14:00:00Z' })
   })
@@ -222,7 +232,7 @@ describe('the meeting the detail page can see', () => {
     // held discovery call must not outrank a session still to come.
     harness.rows.matters = { discovery_call_at: PAST, pmps_at: FUTURE }
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({ nextAppointmentAt: FUTURE })
   })
@@ -231,13 +241,13 @@ describe('the meeting the detail page can see', () => {
     // Not "no meeting": the score credits a call already held, at half.
     harness.rows.matters = { discovery_call_at: OLDER_PAST, pmps_at: PAST }
 
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({ nextAppointmentAt: PAST })
   })
 
   it('stays null for a lead with neither a booking nor a milestone', async () => {
-    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: '11111111-2222-4333-8444-555555555555' }) })
 
     expect(page.props).toMatchObject({ nextAppointmentAt: null })
   })
