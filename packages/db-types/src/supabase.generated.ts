@@ -8886,6 +8886,7 @@ export type Database = {
         Row: {
           attempts: number
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -8893,6 +8894,7 @@ export type Database = {
           id: string
           job_type: string
           last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           matter_id: string | null
@@ -8904,6 +8906,7 @@ export type Database = {
         Insert: {
           attempts?: number
           available_at?: string
+          claim_token?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -8911,6 +8914,7 @@ export type Database = {
           id?: string
           job_type: string
           last_error?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
           matter_id?: string | null
@@ -8922,6 +8926,7 @@ export type Database = {
         Update: {
           attempts?: number
           available_at?: string
+          claim_token?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -8929,6 +8934,7 @@ export type Database = {
           id?: string
           job_type?: string
           last_error?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
           matter_id?: string | null
@@ -9828,6 +9834,7 @@ export type Database = {
         Returns: {
           attempts: number
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -9835,6 +9842,36 @@ export type Database = {
           id: string
           job_type: string
           last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_workflow_jobs_v2: {
+        Args: { p_lease_seconds?: number; p_limit: number; p_worker: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          claim_token: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           matter_id: string | null
@@ -10316,6 +10353,7 @@ export type Database = {
         Returns: {
           attempts: number
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -10323,6 +10361,7 @@ export type Database = {
           id: string
           job_type: string
           last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           matter_id: string | null
@@ -10347,6 +10386,7 @@ export type Database = {
         Returns: {
           attempts: number
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -10354,6 +10394,7 @@ export type Database = {
           id: string
           job_type: string
           last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           matter_id: string | null
@@ -10369,6 +10410,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finish_workflow_job_v2: {
+        Args: { p_claim_token: string; p_error?: string; p_job_id: string }
+        Returns: boolean
+      }
+      firm_billing_matter_options_v1: {
+        Args: { p_search: string; p_selected?: string }
+        Returns: Json
+      }
+      firm_lead_summary_v1: { Args: never; Returns: Json }
+      firm_ledger_page_v1: { Args: { p_query: Json }; Returns: Json }
+      firm_matter_page_v1: { Args: { p_query: Json }; Returns: Json }
+      firm_task_page_v1: { Args: { p_query: Json }; Returns: Json }
       get_matter_links_by_emails: {
         Args: { p_emails: string[] }
         Returns: {
@@ -10990,6 +11043,7 @@ export type Database = {
         Returns: {
           attempts: number
           available_at: string
+          claim_token: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -10997,6 +11051,7 @@ export type Database = {
           id: string
           job_type: string
           last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           matter_id: string | null
@@ -11496,12 +11551,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11525,11 +11580,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11550,11 +11605,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11575,11 +11630,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11592,11 +11647,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11610,4 +11665,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
