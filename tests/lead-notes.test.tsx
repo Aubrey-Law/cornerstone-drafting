@@ -128,9 +128,7 @@ describe('lead notes', () => {
     />)
 
     const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
-    expect(logCall.disabled).toBe(true)
-    expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
-    expect(screen.getByText('Add a lead phone number before logging a call')).toBeTruthy()
+    expect(logCall.disabled).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Notes' }))
     expect(screen.getByRole('button', { name: 'Notes' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.queryByText('Status changed')).toBeNull()
@@ -153,30 +151,42 @@ describe('lead notes', () => {
     expect(screen.queryByText('Note added')).toBeNull()
   })
 
-  it('opens the external calling application with the lead number', async () => {
+  it('opens call outcome logging without launching the external calling application', async () => {
     openExternalPhone.mockClear()
     const user = userEvent.setup()
     render(<LeadTimelineCard leadId="l1" leadPhone="+16175551212" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
     await user.click(screen.getByRole('button', { name: 'Log call' }))
-    expect(openExternalPhone).toHaveBeenCalledWith({ number: '+16175551212' })
+    expect(screen.getByRole('dialog', { name: 'Log call' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Call outcome' })).toBeTruthy()
+    expect(openExternalPhone).not.toHaveBeenCalled()
   })
 
-  it('keeps Log call disabled for a nonblank malformed phone number', () => {
-    render(<LeadTimelineCard leadId="l1" leadPhone="unknown" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
-
-    const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
-    expect(logCall.disabled).toBe(true)
-    expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
-    expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
+  it('logs an unsuccessful attempt even when the stored phone number is malformed', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ activity: { id: 'call-1', created_at: '2026-07-25T12:00:00Z' } }) } as Response)
+    const onCommittedTouch = vi.fn()
+    const onActivityChange = vi.fn()
+    const user = userEvent.setup()
+    render(<LeadTimelineCard leadId="l1" leadPhone="unknown" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} onCommittedTouch={onCommittedTouch} onActivityChange={onActivityChange} />)
+    await user.click(screen.getByRole('button', { name: 'Log call' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Call outcome' }), 'wrong_number')
+    await user.click(screen.getByRole('button', { name: 'Save call' }))
+    await waitFor(() => expect(onActivityChange).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ eventType: 'call_logged', outcome: 'wrong_number' })
+    expect(onCommittedTouch).not.toHaveBeenCalled()
   })
 
-  it('keeps Log call disabled for a nonblank malformed phone number', () => {
-    render(<LeadTimelineCard leadId="l1" leadPhone="unknown" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
-
-    const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
-    expect(logCall.disabled).toBe(true)
-    expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
-    expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
+  it('keeps failed call logging open and does not report contact without persistence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, json: async () => ({ error: 'Call could not be saved' }) } as Response)
+    const onCommittedTouch = vi.fn()
+    const onActivityChange = vi.fn()
+    const user = userEvent.setup()
+    render(<LeadTimelineCard leadId="l1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} onCommittedTouch={onCommittedTouch} onActivityChange={onActivityChange} />)
+    await user.click(screen.getByRole('button', { name: 'Log call' }))
+    await user.click(screen.getByRole('button', { name: 'Save call' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Call could not be saved')
+    expect(screen.getByRole('dialog', { name: 'Log call' })).toBeTruthy()
+    expect(onCommittedTouch).not.toHaveBeenCalled()
+    expect(onActivityChange).not.toHaveBeenCalled()
   })
 
 })

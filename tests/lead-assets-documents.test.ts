@@ -43,42 +43,34 @@ describe('lead assets and document management', () => {
 })
 
 describe('the opportunity workspace after the intake consolidation', () => {
-  it('orders the tabs Intake, Assets, Tasks, Communications, Documents, Notes', () => {
+  it('opens on Overview with dedicated intake and work tabs', () => {
     const leadTabs = read('lib/leads/leadPageTabs.ts')
     const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
 
     expect(leadTabs).toContain(
-      "export const LEAD_TABS = ['intake', 'assets', 'tasks', 'communications', 'documents', 'notes'] as const",
+      "export const LEAD_TABS = ['overview', 'intake', 'assets', 'tasks', 'communications', 'documents', 'notes'] as const",
     )
     // Plan and Timeline are folded into Intake, so neither has a trigger left.
     expect(leadDetail).not.toContain('<TabsTrigger value="plan">')
     expect(leadDetail).not.toContain('<TabsTrigger value="timeline">')
     // Intake is the landing tab, so it stays out of the URL like Plan did.
-    expect(leadDetail).toContain("if (tab === 'intake') params.delete('tab')")
+    expect(leadDetail).toContain("if (tab === 'overview') params.delete('tab')")
 
-    const order = ['intake', 'assets', 'tasks', 'communications', 'documents', 'notes']
+    const order = ['overview', 'intake', 'assets', 'tasks', 'communications', 'documents', 'notes']
       .map(tab => leadDetail.indexOf(`<TabsTrigger value="${tab}"`))
     expect(order.every(index => index > 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
   })
 
-  it('reads intake, score, key dates, people, and timeline in that order', () => {
-    const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
-    const intakeTab = leadDetail.slice(
-      leadDetail.indexOf('<TabsContent value="intake"'),
-      leadDetail.indexOf('<TabsContent value="tasks"'),
-    )
-
-    const order = [
-      '<LeadIntakeCard',
-      '<LeadScoreCard',
-      '<LeadKeyDatesCard',
-      '<MatterPeopleTabContent',
-      '<LeadChannelsCard',
-      '{timeline}',
-    ].map(marker => intakeTab.indexOf(marker))
-    expect(order.every(index => index > 0)).toBe(true)
-    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  it('keeps next-step context on Overview and questionnaire work in Intake', () => {
+    const detail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
+    const overview = detail.slice(detail.indexOf('<TabsContent value="overview"'), detail.indexOf('<TabsContent value="intake"'))
+    const intake = detail.slice(detail.indexOf('<TabsContent value="intake"'), detail.indexOf('<TabsContent value="tasks"'))
+    expect(overview).toContain('<LeadOverview')
+    expect(overview).toContain('{timeline}')
+    expect(intake).toContain('<LeadIntakeCard')
+    expect(intake).toContain('<MatterPeopleTabContent')
+    expect(intake).not.toContain('<LeadScoreCard')
   })
 
   it('moves the stage onto the rail and leaves the extra channels with the people', () => {

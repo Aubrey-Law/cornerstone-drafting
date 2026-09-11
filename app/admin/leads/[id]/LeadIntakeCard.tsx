@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { CheckCircle2, Circle, ClipboardList, Copy, Mail, RefreshCw, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { type IntakeRow } from '@/lib/intakeSections'
@@ -11,6 +13,7 @@ interface LeadIntakeCardProps {
   intakeUrl: string | null
   /** The standing link was deliberately revoked — copying must not revive it. */
   linkRevoked?: boolean
+  onOpenSection?: (sectionId: string) => void
   onOpen: () => void
   onCopy: () => void
   onEmail?: () => void
@@ -30,8 +33,12 @@ function stateLine(intake: IntakeRow, completed: number, total: number): string 
 
 export function LeadIntakeCard({
   intake, intakeUrl, linkRevoked = false, onOpen, onCopy, onEmail, onRotate, onRevoke,
-  onTrackChange, busy = false,
+  onTrackChange, onOpenSection, busy = false,
 }: LeadIntakeCardProps) {
+  const [choosingTrack, setChoosingTrack] = useState(!intake.intake_track && !intakeUrl)
+  useEffect(() => {
+    if (intake.intake_track || intakeUrl) setChoosingTrack(false)
+  }, [intake.intake_track, intakeUrl])
   const segments = getLeadIntakeProgress(intake)
   const completed = segments.filter((segment) => segment.complete).length
   const track = getIntakeTrack(intake)
@@ -71,26 +78,29 @@ export function LeadIntakeCard({
               <Mail className="h-3.5 w-3.5" /> Email link
             </Button>
           )}
-          {onRotate && (
-            <Button type="button" size="sm" variant="ghost" onClick={onRotate} disabled={busy}>
-              <RefreshCw className="h-3.5 w-3.5" /> {intakeUrl ? 'Replace' : 'Prepare link'}
-            </Button>
-          )}
-          {onRevoke && (
-            <Button type="button" size="sm" variant="ghost" onClick={onRevoke} disabled={!intakeUrl || busy}>
-              <ShieldX className="h-3.5 w-3.5" /> Revoke
-            </Button>
+          {(onRotate || onRevoke) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button type="button" size="sm" variant="ghost" disabled={busy}>Manage link</Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onRotate && <DropdownMenuItem onSelect={onRotate}><RefreshCw className="h-3.5 w-3.5" />{intakeUrl ? 'Replace link' : 'Prepare link'}</DropdownMenuItem>}
+                {onRevoke && <DropdownMenuItem onSelect={onRevoke} disabled={!intakeUrl}><ShieldX className="h-3.5 w-3.5" />Revoke link</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
       {linkRevoked && (
         <p id="intake-link-unavailable" className="mt-2 text-xs text-muted-foreground">
-          This intake link was revoked. Use <span className="font-medium">Prepare link</span> to issue a new one.
+          This intake link was revoked. Use <span className="font-medium">Manage link → Prepare link</span> to issue a new one.
         </p>
       )}
       {onTrackChange && (
         <div className="mt-3 rounded-md border border-border p-3">
-          <p className="text-xs font-medium text-foreground">Questionnaire</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">Questionnaire · {INTAKE_TRACK_OPTIONS.find(option => option.value === track)?.title}</p>
+            {!trackLocked && <Button type="button" size="sm" variant="ghost" aria-expanded={choosingTrack} onClick={() => setChoosingTrack(current => !current)}>{choosingTrack ? 'Done' : 'Change'}</Button>}
+          </div>
+          {choosingTrack && !trackLocked && <>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Choose before sending the link — it decides which questions the client is asked.
           </p>
@@ -110,6 +120,7 @@ export function LeadIntakeCard({
               </Button>
             ))}
           </div>
+          </>}
           {trackLocked && (
             <p className="mt-2 text-xs text-muted-foreground">
               Submitted — unlock the intake to change the questionnaire.
@@ -124,10 +135,16 @@ export function LeadIntakeCard({
             className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs"
             aria-label={`${segment.label}: ${segment.complete ? 'complete' : 'incomplete'}`}
           >
-            {segment.complete
-              ? <CheckCircle2 className="h-3.5 w-3.5 text-green" aria-hidden="true" />
-              : <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
-            <span>{segment.label}</span>
+            {!segment.complete && onOpenSection ? (
+              <button type="button" onClick={() => onOpenSection(segment.id)} className="flex min-h-9 w-full items-center gap-1.5 text-left text-sm underline-offset-4 hover:underline" aria-label={`Open ${segment.label} section`}>
+                <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />{segment.label}
+              </button>
+            ) : <>
+              {segment.complete
+                ? <CheckCircle2 className="h-3.5 w-3.5 text-green" aria-hidden="true" />
+                : <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+              <span>{segment.label}</span>
+            </>}
           </li>
         ))}
       </ul>

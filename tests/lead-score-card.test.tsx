@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { computeLeadScore, type LeadScoreInput } from '@/lib/leads/score'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
@@ -55,6 +55,7 @@ function actionableCard(
       {...props}
     />,
   )
+  fireEvent.click(screen.getByRole('button', { expanded: false }))
   return { onFillField, onIntent }
 }
 
@@ -67,6 +68,8 @@ describe('the lead score card', () => {
     expect(screen.getByText(/Referral/)).toBeTruthy()
     // The breakdown is not rendered until it is asked for.
     expect(screen.queryByText('Pipeline progress')).toBeNull()
+    expect(screen.queryByText('Likelihood to hire')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Ask Claude/ })).toBeNull()
   })
 
   it('gives the full breakdown back on demand', async () => {
@@ -77,7 +80,7 @@ describe('the lead score card', () => {
 
     expect(screen.getByText('Pipeline progress')).toBeTruthy()
     expect(screen.getByText('Revenue signal')).toBeTruthy()
-    expect(screen.getByText('Lead score')).toBeTruthy()
+    expect(screen.getByText('Priority score')).toBeTruthy()
   })
 
   it('says what a lead with nothing recorded is missing', () => {
@@ -99,16 +102,16 @@ describe('the lead score card', () => {
   })
 })
 
-describe('what would raise this score', () => {
+describe('optional missing context', () => {
   it('offers the unanswered questions, richest first, capped at three', async () => {
     // A bare lead is missing five; five asks on one card is nagging.
     actionableCard()
 
-    const asks = screen.getAllByRole('button').map(button => button.textContent ?? '')
-      .filter(text => text.includes('+'))
+    const contextList = screen.getByText('Missing context').nextElementSibling as HTMLElement
+    const asks = within(contextList).getAllByRole('button').map(button => button.textContent ?? '')
     expect(asks).toHaveLength(3)
     expect(asks[0]).toContain('Quote the fee')
-    expect(asks[0]).toContain('+15')
+    expect(asks.join(' ')).not.toContain('+15')
     // Estate and recency are also worth 15; urgency and source (10) fall off.
     expect(asks.join(' ')).not.toContain('Set the urgency')
   })
@@ -151,14 +154,14 @@ describe('what would raise this score', () => {
       readinessPercent: 80,
     })
 
-    expect(screen.queryByText('What would raise this score')).toBeNull()
+    expect(screen.queryByText('Missing context')).toBeNull()
   })
 
   it('stays quiet on a card with no handlers, and on a closed lead', () => {
     // The card is also rendered read-only, and a lost lead's blank fee is not
     // a task anyone should be nudged towards.
     card()
-    expect(screen.queryByText('What would raise this score')).toBeNull()
+    expect(screen.queryByText('Missing context')).toBeNull()
     cleanup()
 
     render(
@@ -169,6 +172,18 @@ describe('what would raise this score', () => {
         onFillField={vi.fn()}
       />,
     )
-    expect(screen.queryByText('What would raise this score')).toBeNull()
+    expect(screen.queryByText('Missing context')).toBeNull()
   })
+})
+
+
+it('describes the score recency signal as record activity rather than client contact', async () => {
+  const user = userEvent.setup()
+  card({ lastTouchAt: new Date().toISOString() })
+  expect(screen.getByText('Record activity today')).toBeTruthy()
+  expect(screen.queryByText(/Last touch/)).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Record activity today' }))
+  expect(screen.getByText('Recent record activity')).toBeTruthy()
+  expect(screen.queryByText('Recent contact')).toBeNull()
+  expect(screen.getByText(/Priority includes internal record activity/)).toBeTruthy()
 })

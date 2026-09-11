@@ -46,6 +46,7 @@ vi.mock('@/lib/sms/provider', () => ({
 vi.mock('@/lib/communications/providers', () => ({ smsProvider: () => 'twilio' }))
 vi.mock('@/lib/telnyx/config', () => ({ telnyxPhoneNumber: () => null }))
 
+import { sendProviderSmsMessage } from '@/lib/sms/provider'
 import { resolveLeadSmsTarget, sendOutboundSms } from '@/lib/sms/outbound'
 
 beforeEach(() => {
@@ -101,4 +102,12 @@ describe('lead-target outbound SMS', () => {
     const activity = inserts.find(i => i.table === 'lead_activity')
     expect(activity?.values).toMatchObject({ lead_id: 'lead-1', event_type: 'sms_sent' })
   })
+})
+
+it('records a provider-rejected text as failed rather than client contact', async () => {
+  vi.mocked(sendProviderSmsMessage).mockResolvedValueOnce({ ok: false, error: 'Provider rejected the message' })
+  const { target } = await resolveLeadSmsTarget('lead-1')
+  const result = await sendOutboundSms(target!, 'Follow up', { id: 'user-1', email: 'staff@example.com', name: 'Staff' })
+  expect(result.ok).toBe(false)
+  expect(inserts.find(row => row.table === 'lead_activity')?.values).toMatchObject({ event_type: 'sms_failed' })
 })

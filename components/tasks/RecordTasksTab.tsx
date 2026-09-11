@@ -77,6 +77,7 @@ export function RecordTasksTab({
   const token = useAccessToken()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [templates, setTemplates] = useState<TemplateOption[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'open' | 'done'>('open')
   const [sourceFilter, setSourceFilter] = useState<TaskSource | 'all'>('all')
@@ -97,10 +98,13 @@ export function RecordTasksTab({
         headers: authHeaders,
         cache: 'no-store',
       })
-      const json = res.ok ? await res.json() : { tasks: [] }
-      setTasks((json.tasks ?? []) as TaskRow[])
+      if (!res.ok) throw new Error('Task load failed')
+      const json = await res.json()
+      if (!Array.isArray(json.tasks)) throw new Error('Invalid task response')
+      setTasks(json.tasks as TaskRow[])
+      setLoadError(null)
     } catch {
-      setTasks([])
+      setLoadError('Could not load tasks. Please retry.')
     } finally {
       setLoading(false)
     }
@@ -209,7 +213,8 @@ export function RecordTasksTab({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <div className="@container">
+    <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-3">
         {planMatter && <ViewSwitch value={mode} onChange={switchView} />}
         <div className="flex flex-wrap items-center gap-2">
@@ -223,7 +228,7 @@ export function RecordTasksTab({
                 view === 'open' ? 'bg-card font-medium text-foreground shadow-xs' : 'text-muted-foreground',
               )}
             >
-              Open · {open.length}
+              Open{!loadError || tasks.length > 0 ? ` · ${open.length}` : ''}
             </button>
             <button
               type="button"
@@ -234,7 +239,7 @@ export function RecordTasksTab({
                 view === 'done' ? 'bg-card font-medium text-foreground shadow-xs' : 'text-muted-foreground',
               )}
             >
-              Done · {done.length}
+              Done{!loadError || tasks.length > 0 ? ` · ${done.length}` : ''}
             </button>
           </div>
 
@@ -293,11 +298,7 @@ export function RecordTasksTab({
             className="border-border"
             lockRecord
             defaultRecord={{ id: recordId, name: recordName ?? 'This record', kind: recordKind, detail: null }}
-            onCreate={async input => {
-              const created = await actions.create({ ...input, ...recordBinding })
-              if (created) await load()
-              return created
-            }}
+            onCreate={input => actions.create({ ...input, ...recordBinding })}
             onApplyTemplate={templateId => void actions.applyTemplate(templateId, recordBinding)}
           />
         )}
@@ -306,9 +307,15 @@ export function RecordTasksTab({
           <StageTaskCard task={stageTask} onToggleItem={toggleChecklistItem} onComplete={() => void toggle(stageTask)} />
         )}
 
+        {loadError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-3 text-sm">
+            <p>{loadError}{tasks.length > 0 ? ' Showing previously loaded tasks.' : ''}</p>
+            <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void load()}>Retry</Button>
+          </div>
+        )}
         {loading && tasks.length === 0 ? (
           <p className="px-1 text-sm text-muted-foreground">Loading tasks…</p>
-        ) : listed.length === 0 ? (
+        ) : loadError && tasks.length === 0 ? null : listed.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
             <p className="text-sm font-medium">
               {view === 'open' ? 'Nothing open on this record' : 'Nothing completed yet'}
@@ -379,7 +386,7 @@ export function RecordTasksTab({
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             >
               {doneOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
-              Done · {done.length}
+              Done{!loadError || tasks.length > 0 ? ` · ${done.length}` : ''}
             </button>
             {doneOpen && (
               <ul className="divide-y divide-border border-t border-border">
@@ -400,7 +407,7 @@ export function RecordTasksTab({
         )}
       </div>
 
-      <aside className="space-y-3">
+      {(!loadError || tasks.length > 0) && <aside className="space-y-3">
         <RailCard title="Follow-up cadence">
           {cadences.length === 0 ? (
             <p className="text-xs text-muted-foreground">No repeating follow-ups on this record.</p>
@@ -473,7 +480,7 @@ export function RecordTasksTab({
             </ul>
           )}
         </RailCard>
-      </aside>
+      </aside>}
       <TaskDetailSheet
         task={selectedTask}
         assignees={assignees}
@@ -492,6 +499,7 @@ export function RecordTasksTab({
           onTasksChanged?.()
         }}
       />
+    </div>
     </div>
   )
 }
@@ -594,7 +602,7 @@ function StageTaskCard({
       </div>
 
       {task.checklist.length > 0 ? (
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        <ul className="mt-3 grid gap-2 @min-[560px]:grid-cols-2">
           {task.checklist.map((item, index) => (
             <li key={index} className="flex items-start gap-2 text-sm">
               <Checkbox

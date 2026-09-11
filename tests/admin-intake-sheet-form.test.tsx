@@ -254,3 +254,21 @@ describe('AdminIntakeSheet children list', () => {
   })
 })
 
+
+describe('AdminIntakeSheet section navigation', () => {
+  it('focuses the requested section after intake data finishes loading', async () => {
+    getAdminIntakeData.mockResolvedValue({ intake_track: 'estate', first_name: 'Ada' })
+    renderSheet({ clientIntakeId: 'intake-1', initialSection: 'assets' })
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Assets' })))
+  })
+
+  it('explains where unavailable College Prep questions can be answered', async () => {
+    getAdminIntakeData.mockResolvedValue({ intake_track: 'college_prep', first_name: 'Ada' })
+    renderSheet({ clientIntakeId: 'intake-1', initialSection: 'school' })
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute('data-intake-section')).toBe('guided')
+    })
+    expect(document.activeElement?.textContent).toContain('guided questionnaire')
+    expect(screen.queryByRole('heading', { name: 'Assets' })).toBeNull()
+  })
+})

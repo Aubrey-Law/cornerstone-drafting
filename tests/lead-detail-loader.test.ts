@@ -148,8 +148,9 @@ describe('LeadDetailPage intake loader', () => {
         'user-2': 'ben@example.com',
       },
       nextAppointmentAt: '2026-07-30T14:00:00Z',
-      // Newest of activity, notes and meeting notes — calls no longer count.
-      lastTouchAt: '2026-07-22T10:00:00Z',
+      // Internal record edits and note creation are not client contact.
+      lastTouchAt: null,
+      lastClientResponseAt: null,
     })
   })
 
@@ -251,4 +252,47 @@ describe('the meeting the detail page can see', () => {
 
     expect(page.props).toMatchObject({ nextAppointmentAt: null })
   })
+})
+
+describe('lead detail contact and score inputs', () => {
+  it('uses the canonical list score inputs without detail readiness or calendar overrides', async () => {
+    harness.rows.v_lead_list = { ...harness.rawLead, last_activity_at: '2026-07-20T09:00:00Z', next_appointment_at: '2026-08-01T09:00:00Z', updated_at: '2026-07-23T09:00:00Z' }
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: harness.rawLead.id }) })
+    expect(page.props.initialScoreInput).toMatchObject({ lastTouchAt: '2026-07-20T09:00:00Z', nextAppointmentAt: '2026-08-01T09:00:00Z', readinessPercent: null })
+    delete harness.rows.v_lead_list
+  })
+})
+
+it('separates inbound responses from outbound contact and ignores later internal notes', async () => {
+  const original = harness.rows.lead_activity
+  harness.rows.lead_activity = [
+    { id: 'out', event_type: 'email_sent', created_at: '2026-07-20T09:00:00Z' },
+    { id: 'in', event_type: 'sms_received', created_at: '2026-07-19T09:00:00Z' },
+    { id: 'edit', event_type: 'lead_updated', created_at: '2026-07-23T09:00:00Z' },
+    { id: 'note', event_type: 'note', created_at: '2026-07-24T09:00:00Z' },
+  ]
+  try {
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: harness.rawLead.id }) })
+    expect(page.props).toMatchObject({ lastTouchAt: '2026-07-20T09:00:00Z', lastClientResponseAt: '2026-07-19T09:00:00Z' })
+  } finally { harness.rows.lead_activity = original }
+})
+
+it('includes accepted email send records and inbound SMS even when no activity row was written', async () => {
+  harness.rows.email_log = [{ sent_at: '2026-07-24T09:00:00Z', status: 'sent' }]
+  harness.rows.sms_messages = [{ created_at: '2026-07-23T09:00:00Z', direction: 'inbound' }]
+  try {
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: harness.rawLead.id }) })
+    expect(page.props).toMatchObject({ lastTouchAt: '2026-07-24T09:00:00Z', lastClientResponseAt: '2026-07-23T09:00:00Z' })
+  } finally {
+    delete harness.rows.email_log
+    delete harness.rows.sms_messages
+  }
+})
+
+it('falls back to email log creation time when a sent record has no sent_at timestamp', async () => {
+  harness.rows.email_log = [{ sent_at: null, created_at: '2026-07-24T09:00:00Z' }]
+  try {
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: harness.rawLead.id }) })
+    expect(page.props.lastTouchAt).toBe('2026-07-24T09:00:00Z')
+  } finally { delete harness.rows.email_log }
 })

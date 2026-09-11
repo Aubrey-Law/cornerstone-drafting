@@ -40,12 +40,12 @@ export function LeadReadinessDial({ lead, spouse, className }: LeadReadinessDial
       </div>
       <div className="min-w-0">
         <p
-          aria-label={`Lead readiness ${readiness.percent} percent`}
+          aria-label={`Intake completeness ${readiness.percent} percent`}
           className={cn('text-sm font-semibold', readiness.ready ? 'text-green' : 'text-amber')}
         >
-          {readiness.ready ? 'Ready to convert' : 'Not ready yet'}
+          Intake completeness
         </p>
-        <p className="truncate text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {missingSummary(readiness.missing.map(item => item.label))}
         </p>
       </div>

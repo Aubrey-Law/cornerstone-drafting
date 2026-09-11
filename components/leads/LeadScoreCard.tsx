@@ -16,6 +16,7 @@ import {
   leadScoreGaps,
   leadScoreIsActive,
   type LeadScore,
+  type LeadScoreComponent,
 } from '@/lib/leads/score'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { cn } from '@/lib/utils'
@@ -51,6 +52,11 @@ const bandAccent = {
 
 /** At most this many gaps: a bare lead has five, and five asks is nagging. */
 const MAX_GAPS = 3
+
+function scoreReason(component: LeadScoreComponent): string {
+  if (component.key !== 'recency') return component.reason
+  return component.reason.replace('Last touch', 'Record activity').replace('No recorded touch', 'No record activity recorded')
+}
 
 export function LeadScoreCard({
   leadId,
@@ -98,7 +104,7 @@ export function LeadScoreCard({
     .sort((left, right) => right.points - left.points)
     .slice(0, 2)
   const summary = drivers.length > 0
-    ? drivers.map(driver => driver.reason).join(' · ')
+    ? drivers.map(scoreReason).join(' · ')
     : 'Nothing scored yet — no intake, meeting or contact recorded'
 
   const askClaude = async () => {
@@ -120,59 +126,21 @@ export function LeadScoreCard({
 
   return (
     <section
-      aria-label="Lead score"
-      className={cn('rounded-lg border border-border bg-card p-4', className)}
+      aria-label="Priority score"
+      className={cn('rounded-lg border border-border bg-card p-3', className)}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">Lead score</h3>
+        <h3 className="text-sm font-semibold">Priority score</h3>
         <span className="text-[11px] text-muted-foreground">
-          {active ? 'Likelihood to hire' : 'Closed — kept for review'}
+          {active ? 'Rule-based priority' : 'Closed — kept for review'}
         </span>
       </div>
 
-      <p className={cn('mt-3 text-2xl font-semibold tabular-nums', active ? bandAccent[score.band] : 'text-muted-foreground')}>
+      <p className={cn('mt-2 text-lg font-semibold tabular-nums', active ? bandAccent[score.band] : 'text-muted-foreground')}>
         {score.score}
         <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span>
         <span className="ml-2 text-sm font-medium">{leadScoreBandLabel(score.band)}</span>
       </p>
-      {/*
-        The band reads the share of what this lead could earn, not of 100 — a
-        lead with no fee quoted is not judged on a question nobody has asked it
-        yet. Saying so here keeps a "57 · Hot" from looking like a mistake.
-      */}
-      {score.attainable < 100 && (
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {score.percent}% of the {score.attainable} points on offer so far —{' '}
-          {score.components.filter(component => !component.available).length} not yet asked
-        </p>
-      )}
-
-      {gaps.length > 0 && (
-        <div className="mt-3 border-t border-border pt-3">
-          <p className="text-[11px] font-medium text-muted-foreground">What would raise this score</p>
-          <ul className="mt-1.5 space-y-1">
-            {gaps.map(gap => (
-              <li key={gap.key}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (gap.field && onFillField) onFillField(gap.field)
-                    else if (gap.intent && onIntent) onIntent(gap.intent)
-                  }}
-                  disabled={gap.field ? !onFillField : !onIntent}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
-                >
-                  <span className="min-w-0 truncate">{gap.label}</span>
-                  <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
-                    +{gap.points}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/*
         Eight factors, each with a bar and a sentence, is most of a side panel
         for a number the reader usually agrees with at a glance. Collapsed, the
@@ -190,6 +158,42 @@ export function LeadScoreCard({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
+          <p className="mt-2 text-xs text-muted-foreground">A rules-based sorting aid; this is not a calibrated probability of hiring. Priority includes internal record activity, such as edits and notes; it does not measure only client contact.</p>
+          {/*
+            The band reads the share of what this lead could earn, not of 100 — a
+            lead with no fee quoted is not judged on a question nobody has asked it
+            yet. Saying so here keeps a "57 · Hot" from looking like a mistake.
+          */}
+          {score.attainable < 100 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {score.percent}% of the {score.attainable} points on offer so far —{' '}
+              {score.components.filter(component => !component.available).length} not yet asked
+            </p>
+          )}
+
+          {gaps.length > 0 && (
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="text-[11px] font-medium text-muted-foreground">Missing context</p>
+              <ul className="mt-1.5 space-y-1">
+                {gaps.map(gap => (
+                  <li key={gap.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (gap.field && onFillField) onFillField(gap.field)
+                        else if (gap.intent && onIntent) onIntent(gap.intent)
+                      }}
+                      disabled={gap.field ? !onFillField : !onIntent}
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      <span className="min-w-0 truncate">{gap.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <ul className="mt-2 space-y-1.5">
             {score.components.map(component => {
               const share = component.max === 0 ? 0 : Math.round((component.points / component.max) * 100)
@@ -197,7 +201,7 @@ export function LeadScoreCard({
                 <li key={component.key} className="text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span className={component.points > 0 ? 'text-foreground' : 'text-muted-foreground'}>
-                      {component.label}
+                      {component.key === 'recency' ? 'Recent record activity' : component.label}
                     </span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
                       {component.available ? `${component.points}/${component.max}` : 'not asked'}
@@ -212,55 +216,55 @@ export function LeadScoreCard({
                       style={{ width: `${share}%` }}
                     />
                   </div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{component.reason}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{scoreReason(component)}</p>
                 </li>
               )
             })}
           </ul>
+
+          <div className="mt-4 border-t border-border pt-3">
+            {insight ? (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium">
+                  {DIRECTION_COPY[insight.direction]}
+                  <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
+                    Claude: {insight.adjustedScore}/100
+                  </span>
+                </p>
+                {insight.rationale && (
+                  <p className="text-[11px] text-muted-foreground">{insight.rationale}</p>
+                )}
+                {insight.factors.length > 0 && (
+                  <ul className="flex flex-wrap gap-1">
+                    {insight.factors.map(factor => (
+                      <li
+                        key={factor}
+                        className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {factor}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  An advisory read on the record above. The score of record stays {score.score}.
+                </p>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading || !token}
+                onClick={askClaude}
+              >
+                <Sparkles aria-hidden className="h-3.5 w-3.5" />
+                {loading ? 'Reading the record…' : 'Ask Claude to sanity-check'}
+              </Button>
+            )}
+          </div>
         </CollapsibleContent>
       </Collapsible>
-
-      <div className="mt-4 border-t border-border pt-3">
-        {insight ? (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium">
-              {DIRECTION_COPY[insight.direction]}
-              <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
-                Claude: {insight.adjustedScore}/100
-              </span>
-            </p>
-            {insight.rationale && (
-              <p className="text-[11px] text-muted-foreground">{insight.rationale}</p>
-            )}
-            {insight.factors.length > 0 && (
-              <ul className="flex flex-wrap gap-1">
-                {insight.factors.map(factor => (
-                  <li
-                    key={factor}
-                    className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
-                  >
-                    {factor}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="text-[10px] text-muted-foreground">
-              An advisory read on the record above. The score of record stays {score.score}.
-            </p>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={loading || !token}
-            onClick={askClaude}
-          >
-            <Sparkles aria-hidden className="h-3.5 w-3.5" />
-            {loading ? 'Reading the record…' : 'Ask Claude to sanity-check'}
-          </Button>
-        )}
-      </div>
     </section>
   )
 }
