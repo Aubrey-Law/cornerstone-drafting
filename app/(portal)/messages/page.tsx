@@ -4,7 +4,7 @@ import { createServerSupabase } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { Button } from '@/components/ui/button'
 import MessageThread from './MessageThread'
-import type { Message } from './actions'
+import { readMessageHistory } from '@/lib/messages/history'
 
 export default async function MessagesPage() {
   const supabase = await createServerSupabase()
@@ -39,28 +39,14 @@ export default async function MessagesPage() {
 
   const matterId = matter.id
 
-  const { data: messages, error: messagesError } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('matter_id', matterId)
-    .order('created_at', { ascending: true })
-
-  // Discarding this error rendered the "No messages yet" empty state, telling a
-  // client their whole conversation with the firm was gone rather than that it
-  // failed to load. Let the route error boundary show a retryable failure.
-  if (messagesError) {
-    throw new Error(`Could not load your messages: ${messagesError.message}`)
-  }
-
-  await supabase.rpc('mark_messages_read', {
-    p_matter_id: matterId,
-    p_reader_role: 'client',
-  })
+  const history = await readMessageHistory(supabase, matterId)
 
   return (
     <MessageThread
+      key={matterId}
       matterId={matterId}
-      messages={(messages ?? []) as Message[]}
+      messages={history.messages}
+      older={history.older}
       clientUserId={user.id}
     />
   )

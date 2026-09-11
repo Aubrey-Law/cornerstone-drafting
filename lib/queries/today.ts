@@ -58,6 +58,8 @@ export interface TodayData {
   intakeToSend: PipelineMatter[]
   /** Matters with an appointment today (firm timezone), soonest first. */
   appointmentsToday: TodayAppointment[]
+  appointmentsError?: boolean
+  outlookEventIds?: string[]
   /** Open tasks whose effective due date has passed, soonest first. */
   overdueTasks: TaskRow[]
   /** Open tasks due today (firm timezone). */
@@ -128,7 +130,7 @@ function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter
  * One aggregate read for the attorney's "Today" home page. Reuses the same
  * sources as the sidebar badges but returns actionable rows, not just counts.
  */
-export async function fetchTodayData(): Promise<TodayData> {
+export async function fetchTodayData(options: { includeOutlook?: boolean } = {}): Promise<TodayData> {
   const admin = getAdminClient()
   const todayKey = firmTodayKey()
   // A deliberately wide UTC window around firm-local noon. We filter the
@@ -166,8 +168,8 @@ export async function fetchTodayData(): Promise<TodayData> {
     fetchTodayBilling(admin, todayKey),
   ])
 
-  if (mattersRes.error) console.error('fetchTodayData matters error:', mattersRes.error)
-  if (unreadRes.error) console.error('fetchTodayData unread messages error:', unreadRes.error)
+  if (mattersRes.error) throw new Error('Today matters are unavailable. Please retry.')
+  if (unreadRes.error) throw new Error('Today messages are unavailable. Please retry.')
   if (appointmentsRes.error) console.error('fetchTodayData appointments error:', appointmentsRes.error)
 
   const matters = (mattersRes.data ?? []) as PipelineMatter[]
@@ -258,14 +260,14 @@ export async function fetchTodayData(): Promise<TodayData> {
 
   // Outlook-only events are part of the Calendar page and therefore belong on
   // Your day too. Bookings already represented above are excluded by Graph id.
-  try {
+  if (options.includeOutlook !== false) try {
     const exclude = new Set(
       appointmentRows
         .map(row => row.microsoft_event_id)
         .filter((id): id is string => Boolean(id)),
     )
     const outlookEvents = mapGraphCalendarView(
-      await listCalendarView(calendarFrom, calendarTo),
+      (await listCalendarView(calendarFrom, calendarTo)).raw,
       exclude,
     )
     appointmentsToday.push(...outlookEvents
@@ -304,6 +306,8 @@ export async function fetchTodayData(): Promise<TodayData> {
     intakeReview,
     intakeToSend,
     appointmentsToday,
+    appointmentsError: Boolean(appointmentsRes.error),
+    outlookEventIds: appointmentRows.flatMap(row => row.microsoft_event_id ? [row.microsoft_event_id] : []),
     overdueTasks,
     tasksDueToday,
     activeMatterCount: matters.length,

@@ -1,4 +1,10 @@
 import 'server-only'
+import { revalidateTag } from 'next/cache'
+
+function invalidateTodayCalendar() {
+  try { revalidateTag('today-calendar-snapshot', { expire: 0 }) }
+  catch { console.warn('Calendar display cache invalidation unavailable; snapshot expires within five minutes') }
+}
 import { getAccessToken, getMicrosoftConnectionForUser } from '@/lib/microsoftCalendar'
 import type { AppointmentType } from './types'
 
@@ -66,6 +72,7 @@ export async function createCalendarHold(input: {
   })
   const json = await r.json().catch(() => ({})) as { id?: string; error?: { message?: string } }
   if (!r.ok || !json.id) throw new Error(json.error?.message || `Graph hold create failed (${r.status})`)
+  invalidateTodayCalendar()
   return { eventId: json.id, onlineMeetingUrl: null }
 }
 
@@ -148,6 +155,7 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
 
   const created = json as { id?: string; onlineMeeting?: { joinUrl?: string } }
   if (!created.id) throw new Error('Graph event create returned no id')
+  invalidateTodayCalendar()
   return {
     eventId: created.id,
     onlineMeetingUrl: created.onlineMeeting?.joinUrl ?? null,
@@ -438,8 +446,9 @@ function tagWithCalendar(items: unknown[], id: string | null, name: string | nul
 export async function listCalendarView(
   fromIso: string,
   toIso: string,
+  ownerId?: string,
 ): Promise<CalendarViewResult> {
-  const conn = await getMicrosoftConnectionForUser(null)
+  const conn = await getMicrosoftConnectionForUser(ownerId ?? null)
   if (!conn) throw new Error('Microsoft Outlook is not connected')
   const token = await getAccessToken(conn.user_id)
 
@@ -551,6 +560,7 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
     const detail = await r.text().catch(() => '')
     throw new Error(`Graph event cancel failed (${r.status}): ${detail.slice(0, 300)}`)
   }
+  invalidateTodayCalendar()
 }
 
 /** Move an existing Outlook event — Outlook emails the update to the attendee. */
@@ -578,4 +588,5 @@ export async function rescheduleCalendarEvent(
     const detail = await r.text().catch(() => '')
     throw new Error(`Graph event reschedule failed (${r.status}): ${detail.slice(0, 300)}`)
   }
+  invalidateTodayCalendar()
 }

@@ -1,5 +1,9 @@
+import { NavigationReady } from '@/app/admin/components/NavigationTiming'
 import Link from 'next/link'
-import { CalendarClock, CheckCircle2, Inbox } from 'lucide-react'
+import { LazyPlanning } from '@/app/admin/components/LazyPlanning'
+import { Suspense } from 'react'
+import { TodayCalendar, TodayCalendarCard } from '@/app/admin/components/TodayCalendar'
+import { CheckCircle2, Inbox } from 'lucide-react'
 import { ComingDueCard } from '@/app/admin/components/ComingDueCard'
 import { NextActionsCard } from '@/app/admin/components/NextActionsCard'
 import { DailyBriefCard } from '@/app/admin/components/DailyBriefCard'
@@ -22,14 +26,9 @@ function toMatterItem(m: PipelineMatter): TodayMatterItem {
   }
 }
 
-const APPOINTMENT_TIME = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-  timeZone: FIRM_TIMEZONE,
-})
 
 export default async function AdminTodayPage() {
-  const today = await fetchTodayData()
+  const today = await fetchTodayData({ includeOutlook: false })
   const dateLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -45,6 +44,8 @@ export default async function AdminTodayPage() {
   ].filter(Boolean) as string[]
 
   return (
+    <>
+      <NavigationReady route="Today" />
     <AdminPageShell className="mx-auto w-full max-w-[1240px]">
       <PageHeader
         title={dateLabel}
@@ -57,8 +58,7 @@ export default async function AdminTodayPage() {
           {today.overdueMatterCount} matter{today.overdueMatterCount === 1 ? '' : 's'}
           {' · '}
           {today.overdueLeadCount} lead{today.overdueLeadCount === 1 ? '' : 's'} over SLA
-          {' · '}
-          {today.appointmentsToday.length} appointment{today.appointmentsToday.length === 1 ? '' : 's'}
+
           </>
         }
       />
@@ -76,12 +76,7 @@ export default async function AdminTodayPage() {
             tasksDueToday={today.tasksDueToday}
           />
 
-          <details className="group mt-4 rounded-lg border border-border bg-card">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium text-foreground marker:content-none">
-              <span>Later · planning and context</span>
-              <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
-              <span className="hidden text-xs text-muted-foreground group-open:inline">Hide</span>
-            </summary>
+          <LazyPlanning>
             <div className="grid gap-4 border-t border-border p-3 md:grid-cols-2">
               <NextActionsCard />
               <ComingDueCard />
@@ -105,48 +100,13 @@ export default async function AdminTodayPage() {
 
               <TodayClearedCard />
             </div>
-          </details>
+          </LazyPlanning>
         </div>
 
         <aside className="basis-[280px] grow space-y-3 lg:sticky lg:top-4 lg:max-w-[320px] lg:self-start">
-          <section className="rounded-lg border border-border bg-card">
-            <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-              <CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden />
-              <h2 className="text-sm font-semibold text-foreground">Your day</h2>
-            </header>
-            {today.appointmentsToday.length === 0 ? (
-              <p className="px-3 py-2.5 text-sm text-muted-foreground">Nothing scheduled today</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {today.appointmentsToday.slice(0, 4).map(appt => (
-                  <li key={appt.id}>
-                    <Link
-                      href={appt.href}
-                      className="block px-3 py-2 text-sm hover:bg-muted/50"
-                    >
-                      <span className="font-medium tabular-nums text-foreground">
-                        {appt.is_all_day
-                          ? 'All day'
-                          : APPOINTMENT_TIME.format(new Date(appt.next_appointment))}
-                      </span>
-                      <span className="text-foreground"> · {appt.client_name ?? 'Unnamed matter'}</span>
-                      {appt.next_appointment_type && (
-                        <span className="text-muted-foreground"> · {appt.next_appointment_type}</span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {today.appointmentsToday.length > 4 && (
-              <Link
-                href="/admin/calendar"
-                className="block border-t border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              >
-                View {today.appointmentsToday.length - 4} more appointment{today.appointmentsToday.length - 4 === 1 ? '' : 's'}
-              </Link>
-            )}
-          </section>
+          <Suspense fallback={<TodayCalendarCard rows={today.appointmentsToday} status={today.appointmentsError ? 'Recorded appointments unavailable; loading Outlook…' : 'Loading Outlook calendar…'} />}>
+            <TodayCalendar appointmentsError={today.appointmentsError} appointments={today.appointmentsToday} excludeIds={today.outlookEventIds ?? []} />
+          </Suspense>
 
           <TodayBillingCard billing={today.billing} />
 
@@ -162,5 +122,6 @@ export default async function AdminTodayPage() {
         </aside>
       </div>
     </AdminPageShell>
+    </>
   )
 }

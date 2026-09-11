@@ -16,34 +16,12 @@ import {
   fetchRecentPortalDocuments,
   fetchUnreadFirmMessageCount,
 } from '@/lib/queries/portal'
-import { stageInfo, type MatterStage, type StageGroup } from '@/types/database'
+import { progressFromMatterDetails } from '@/lib/portal/progress'
 import type { MatterDocument } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
 /* ─── stage tracker ───────────────────────────────────────────────────────── */
-
-const TRACKER_STEPS: { group: StageGroup; label: string }[] = [
-  { group: 'early', label: 'Intake' },
-  { group: 'active', label: 'Drafting' },
-  { group: 'work', label: 'Your review' },
-  { group: 'done', label: 'Signing' },
-  { group: 'closed', label: 'Complete' },
-]
-
-/** One plain-language sentence per stage group for the "What's next" card. */
-const WHATS_NEXT: Record<StageGroup, string> = {
-  early:
-    "We're reviewing what you've sent and setting up your matter. Nothing is needed from you right now — we'll reach out if we have questions.",
-  active:
-    "Attorney is preparing your documents. The firm will confirm your drafting schedule — we'll message you when they're ready.",
-  work:
-    'Your drafts are ready to read. Take your time, and send us any questions or changes through Messages before we finalize.',
-  done:
-    "Your documents are final and we're getting them signed. We'll confirm the signing details with you and walk you through the day.",
-  closed:
-    'Your estate plan is complete. Signed copies live in Documents — reach out any time your family or finances change.',
-}
 
 const APPOINTMENT_DATE = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
@@ -120,8 +98,7 @@ export default async function PortalDashboardPage() {
     : [null, [] as MatterDocument[], null, 0, null, null]
 
   const firm = getFirmConfig()
-  const group: StageGroup = matter ? stageInfo((matter.stage ?? 'intake') as MatterStage).group : 'early'
-  const currentIndex = TRACKER_STEPS.findIndex(s => s.group === group)
+  const progress = meta?.progress ?? progressFromMatterDetails(null)
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -129,7 +106,7 @@ export default async function PortalDashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Your matter
+            {progress.heading}
           </p>
           <h1
             className="mt-1 text-3xl font-semibold text-foreground"
@@ -149,11 +126,11 @@ export default async function PortalDashboardPage() {
       {/* ── stage tracker ── */}
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
         <ol className="flex items-start">
-          {TRACKER_STEPS.map((step, i) => {
-            const done = i < currentIndex
-            const current = i === currentIndex
+          {progress.milestones.map((step, i) => {
+            const done = step.state === 'completed'
+            const current = step.state === 'current'
             return (
-              <li key={step.group} className="flex min-w-0 flex-1 items-start last:flex-none">
+              <li key={step.key} className="flex min-w-0 flex-1 items-start last:flex-none">
                 <div className="flex min-w-0 shrink flex-col items-center gap-1.5 px-0.5">
                   <span
                     aria-hidden
@@ -181,7 +158,7 @@ export default async function PortalDashboardPage() {
                     {step.label}
                   </span>
                 </div>
-                {i < TRACKER_STEPS.length - 1 && (
+                {i < progress.milestones.length - 1 && (
                   <span
                     aria-hidden
                     className="mt-[9px] h-0.5 min-w-2 flex-1"
@@ -192,8 +169,8 @@ export default async function PortalDashboardPage() {
             )
           })}
         </ol>
-        {!matter && (
-          <p className="mt-4 text-sm text-muted-foreground">Your matter is being set up.</p>
+        {progress.milestones.length === 0 && (
+          <p className="mt-4 text-sm text-muted-foreground">The firm will share progress updates through Messages.</p>
         )}
       </section>
 
@@ -204,11 +181,11 @@ export default async function PortalDashboardPage() {
       >
         <h2 className="text-sm font-semibold text-foreground">What&apos;s next</h2>
         {submitted ? (
-          <p className="mt-1 text-sm leading-relaxed text-foreground/80">{WHATS_NEXT[group]}</p>
+          <p className="mt-1 text-sm leading-relaxed text-foreground/80">{progress.nextAction}</p>
         ) : (
           <>
             <p className="mt-1 text-sm leading-relaxed text-foreground/80">
-              Finish your intake questionnaire so we can begin drafting. Your answers save as you
+              Finish your intake questionnaire so we can review the information for your matter. Your answers save as you
               go, so you can stop and come back any time.
             </p>
             <Button asChild size="sm" className="mt-4">

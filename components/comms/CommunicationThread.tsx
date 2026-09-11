@@ -42,6 +42,8 @@ export interface CommunicationThreadProps {
     onDraft: (value: string) => void,
   ) => ReactNode
   className?: string
+  draft?: string
+  onDraftChange?: (draft: string) => void
 }
 
 const FILTER_CHANNEL: Record<Exclude<ThreadChannelFilter, 'all'>, CommChannel> = {
@@ -58,8 +60,7 @@ const TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
 })
 
 /**
- * Merged timeline over every channel plus the locked-channel composer. Both
- * the matter Communications tab and the firm inbox render this — data loading
+ * Merged timeline over every channel plus the locked-channel composer. Record-level communication views render this; data loading
  * and send endpoints stay with the caller.
  */
 export function CommunicationThread({
@@ -75,8 +76,12 @@ export function CommunicationThread({
   emailComposer,
   renderDraftAi,
   className,
+  draft: controlledDraft,
+  onDraftChange,
 }: CommunicationThreadProps) {
-  const [draft, setDraft] = useState('')
+  const [localDraft, setLocalDraft] = useState('')
+  const draft = controlledDraft ?? localDraft
+  const setDraft = onDraftChange ?? setLocalDraft
   const logRef = useRef<HTMLOListElement>(null)
 
   const merged = useMemo(() => mergeCommunicationItems(items), [items])

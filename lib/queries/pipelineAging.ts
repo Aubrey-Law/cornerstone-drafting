@@ -134,7 +134,7 @@ export async function fetchMatterAging(): Promise<{
 
   if (error) {
     console.error('fetchMatterAging:', error.message)
-    return { rows: [], tiles: buildTiles([]) }
+    throw new Error('Matter aging is unavailable. Please retry.')
   }
 
   const rows = sortRows((data ?? []).map(r => normalizeRow(r as Record<string, unknown>)))

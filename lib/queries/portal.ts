@@ -1,3 +1,5 @@
+import { progressFromMatterDetails, type PortalProgress } from '@/lib/portal/progress'
+import type { MatterDetailsRow } from '@/types/matter-details'
 import { loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { firmTodayKey } from '@/lib/firmDate'
@@ -69,6 +71,7 @@ export async function fetchRecentPortalDocuments(
 export interface PortalMatterMeta {
   matterName: string | null
   createdAt: string | null
+  progress: PortalProgress
 }
 
 /** Display metadata for the dashboard header (`{name} · started {date}`). */
@@ -85,7 +88,12 @@ export async function fetchPortalMatterMeta(matterId: string): Promise<PortalMat
     return null
   }
   if (!data) return null
+  const { data: details, error: detailsError } = await admin.from('matter_details')
+    .select('practice_area,intake_date,draft_sent_date,drafts_approved_date,execution_date,signing_date,pb_pr_appointment_date,pb_inventory_filed_date,pb_final_distribution_date,pb_estate_closed,pb_estate_closed_date')
+    .eq('client_id', matterId).maybeSingle()
+  if (detailsError) throw new Error('Matter progress is temporarily unavailable')
   return {
+    progress: progressFromMatterDetails(details as MatterDetailsRow | null),
     matterName: (data.name as string | null) ?? null,
     createdAt: (data.created_at as string | null) ?? null,
   }
