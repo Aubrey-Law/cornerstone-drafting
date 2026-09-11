@@ -1,4 +1,4 @@
-import type { CalendarAppointment, OutlookEvent } from './types'
+import type { CalendarAppointment, ExternalCalendarEvent } from './types'
 
 /** Default time-grid window for day/week views (minutes from local midnight). */
 export const GRID_START_MIN = 7 * 60
@@ -33,13 +33,13 @@ export function endMinutesOfDay(startIso: string, endIso: string): number {
 /**
  * Time-grid bounds for the days on screen. Starts from the standard business
  * window and widens (to the hour) around anything earlier or later, so an
- * Outlook event at 6am or 9pm renders on the grid instead of being clipped
+ * calendar event at 6am or 9pm renders on the grid instead of being clipped
  * away — every Microsoft event in range has to be reachable in the app.
  */
 export function timeGridBounds(
   days: Date[],
   byDay: Map<string, CalendarAppointment[]>,
-  outlookByDay: Map<string, OutlookEvent[]>,
+  calendarByDay: Map<string, ExternalCalendarEvent[]>,
 ): { startMin: number; endMin: number } {
   let startMin = GRID_START_MIN
   let endMin = GRID_END_MIN
@@ -54,7 +54,7 @@ export function timeGridBounds(
       if (a.status === 'cancelled') continue
       widen(minutesOfDay(a.startTime), endMinutesOfDay(a.startTime, a.endTime))
     }
-    for (const e of outlookByDay.get(key) ?? []) {
+    for (const e of calendarByDay.get(key) ?? []) {
       if (e.isAllDay) continue
       widen(minutesOfDay(e.startIso), endMinutesOfDay(e.startIso, e.endIso))
     }

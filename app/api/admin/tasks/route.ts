@@ -4,8 +4,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { TASK_COLUMNS, fetchTasks, isUuid, type TaskScope } from '@/lib/queries/tasks'
 import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
 import { parseRecurrence } from '@/lib/tasks/recurrence'
-import { createCalendarHold } from '@/lib/appointments/graphEvents'
-import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
+import { createCalendarHold } from '@/lib/appointments/googleEvents'
+import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
 import {
   TASK_OWNERS,
   TASK_PRIORITIES,
@@ -309,11 +309,11 @@ export async function POST(req: Request) {
         })
         await admin
           .from('appointments')
-          .update({ microsoft_event_id: hold.eventId })
+          .update({ google_event_id: hold.eventId })
           .eq('id', appointmentData.id)
-          .is('microsoft_event_id', null)
+          .is('google_event_id', null)
       } catch {
-        console.error('[tasks] failed to create task calendar hold in Outlook', task.id)
+        console.error('[tasks] failed to create task calendar hold in Google Calendar', task.id)
       }
     } catch (err) {
       console.error('[tasks] failed to create task calendar hold', err)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { computeSlots } from '@/lib/appointments/availability'
-import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
+import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { hashManageToken, isManageTokenExpired } from '@/lib/appointments/manageTokens'
 import { getAppointmentTypeBySlug, getSchedulingSettings } from '@/lib/appointments/settings'

@@ -7,7 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DayAgenda } from '@/app/admin/calendar/DayAgenda'
 import { BLOCK_HATCH, CATEGORY_STYLE, categorize } from '@/app/admin/calendar/eventCategories'
-import type { CalendarAppointment, CalendarRailData, OutlookEvent } from '@/app/admin/calendar/types'
+import type { CalendarAppointment, CalendarRailData, ExternalCalendarEvent } from '@/app/admin/calendar/types'
 
 afterEach(cleanup)
 
@@ -25,7 +25,7 @@ function appointment(overrides: Partial<CalendarAppointment> & Pick<CalendarAppo
   }
 }
 
-function outlookEvent(overrides: Partial<OutlookEvent> & Pick<OutlookEvent, 'id' | 'subject'>): OutlookEvent {
+function outlookEvent(overrides: Partial<ExternalCalendarEvent> & Pick<ExternalCalendarEvent, 'id' | 'subject'>): ExternalCalendarEvent {
   return {
     startIso: '2026-07-30T18:00:00.000Z', endIso: '2026-07-30T19:00:00.000Z',
     isAllDay: false, showAs: 'busy',
@@ -35,13 +35,13 @@ function outlookEvent(overrides: Partial<OutlookEvent> & Pick<OutlookEvent, 'id'
 
 function renderDay(props: {
   appointments?: CalendarAppointment[]
-  outlookEvents?: OutlookEvent[]
+  calendarEvents?: ExternalCalendarEvent[]
 }) {
   return render(
     <DayAgenda
       date={new Date('2026-07-30T12:00:00.000Z')}
       appointments={props.appointments ?? []}
-      outlookEvents={props.outlookEvents ?? []}
+      calendarEvents={props.calendarEvents ?? []}
       attention={[]}
       rail={rail}
       onDismissAttention={vi.fn()}
@@ -77,7 +77,7 @@ describe('day calendar colour coding', () => {
   })
 
   it('colour codes Outlook events the same way', () => {
-    renderDay({ outlookEvents: [outlookEvent({ id: 'o1', subject: 'Estate plan sync' })] })
+    renderDay({ calendarEvents: [outlookEvent({ id: 'o1', subject: 'Estate plan sync' })] })
 
     expect(categorize('Estate plan sync')).toBe('meeting')
     const strip = screen.getByText('Client meeting').parentElement as HTMLElement
@@ -85,7 +85,7 @@ describe('day calendar colour coding', () => {
   })
 
   it('keeps Outlook blocks as hatched background, not coloured events', () => {
-    renderDay({ outlookEvents: [outlookEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
+    renderDay({ calendarEvents: [outlookEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
 
     const block = screen.getByText('BLOCK admin time') as HTMLElement
     expect(block.style.backgroundImage).toBe(BLOCK_HATCH)

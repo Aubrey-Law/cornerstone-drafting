@@ -8,7 +8,7 @@ import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
-import { fetchAllBusy, AvailabilityUnavailableError } from './graphBusy'
+import { fetchAllBusy, AvailabilityUnavailableError } from './calendarBusy'
 import {
   cancelAppointmentEvent,
   createAppointmentEvent,
@@ -397,8 +397,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       .eq('id', appointmentId)
   }
 
-  // Create the calendar event in whichever calendar is connected. Failure keeps
-  // the booking, flagged in admin by the event id being null.
+  // Create the Google Calendar event. Failure keeps the booking, flagged in
+  // admin by the event id being null.
   const firm = await loadFirmSettings()
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
     .filter(Boolean)

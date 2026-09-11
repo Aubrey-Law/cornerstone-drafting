@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   EMAIL_CATEGORIES,
+  normalizeEmailProvider,
   type EmailCategory,
   type EmailMode,
   type EmailProvider,
@@ -15,7 +16,14 @@ interface CategorySettings {
 
 let cache: { at: number; settings: Record<EmailCategory, CategorySettings> } | null = null
 
-const GRAPH_DEFAULT_CATEGORIES = new Set<EmailCategory>(['manual'])
+/**
+ * Categories that default to the firm's own mailbox rather than Resend.
+ *
+ * A manual one-off is a letter from the attorney, so it should come from — and
+ * thread in — their own Sent Mail. Everything automated stays on Resend, where
+ * bulk deliverability and bounce handling are the vendor's problem.
+ */
+const GMAIL_DEFAULT_CATEGORIES = new Set<EmailCategory>(['manual'])
 
 export function envEmailsHardKilled(): boolean {
   const raw = process.env.EMAILS_ENABLED
@@ -46,7 +54,7 @@ function defaults(): Record<EmailCategory, CategorySettings> {
       c,
       {
         mode: c === 'manual' ? ('on' as EmailMode) : ('on' as EmailMode),
-        provider: (GRAPH_DEFAULT_CATEGORIES.has(c) ? 'graph' : 'resend') as EmailProvider,
+        provider: (GMAIL_DEFAULT_CATEGORIES.has(c) ? 'gmail' : 'resend') as EmailProvider,
       },
     ]),
   ) as Record<EmailCategory, CategorySettings>
@@ -61,11 +69,11 @@ export async function getAllSettings(force = false): Promise<Record<EmailCategor
       .from('email_settings')
       .select('category, mode, provider')
     if (!error && data) {
-      for (const row of data as { category: string; mode: EmailMode; provider: EmailProvider | null }[]) {
+      for (const row of data as { category: string; mode: EmailMode; provider: string | null }[]) {
         if ((EMAIL_CATEGORIES as readonly string[]).includes(row.category)) {
           settings[row.category as EmailCategory] = {
             mode: row.mode,
-            provider: row.provider ?? 'resend',
+            provider: normalizeEmailProvider(row.provider),
           }
         }
       }

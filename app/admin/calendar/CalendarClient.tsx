@@ -25,8 +25,8 @@ import {
   type CalendarAppointment,
   type CalendarRailData,
   type CalendarView,
-  type OutlookCalendarRef,
-  type OutlookEvent,
+  type ExternalCalendarRef,
+  type ExternalCalendarEvent,
   type PlanData,
   LOCATION_LABEL,
   allowedFormats,
@@ -57,9 +57,9 @@ function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-/** Names the Outlook calendar an event came from, for tooltips. */
-function outlookSource(event: OutlookEvent): string {
-  return event.calendarName ? `Outlook · ${event.calendarName}` : 'Outlook'
+/** Names the calendar an event came from, for tooltips. */
+function calendarSource(event: ExternalCalendarEvent): string {
+  return event.calendarName ? `Google · ${event.calendarName}` : 'Google Calendar'
 }
 
 function availabilityLabel(appointment: CalendarAppointment): string {
@@ -139,13 +139,13 @@ function parseIntOrNull(value: string): number | null {
 }
 
 /**
- * Key Outlook events by day. Timed events use the local start day; all-day
+ * Key calendar events by day. Timed events use the local start day; all-day
  * events use the UTC date parts (Graph reports them as UTC midnights) and
  * expand across each day they span.
  */
-function outlookEventsByDay(events: OutlookEvent[]): Map<string, OutlookEvent[]> {
-  const map = new Map<string, OutlookEvent[]>()
-  const push = (key: string, e: OutlookEvent) => {
+function calendarEventsByDay(events: ExternalCalendarEvent[]): Map<string, ExternalCalendarEvent[]> {
+  const map = new Map<string, ExternalCalendarEvent[]>()
+  const push = (key: string, e: ExternalCalendarEvent) => {
     const list = map.get(key) ?? []
     list.push(e)
     map.set(key, list)
@@ -182,18 +182,18 @@ export function CalendarClient() {
   const [reschedule, setReschedule] = useState<RescheduleDraft | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [acting, setActing] = useState(false)
-  const [showOutlook, setShowOutlook] = useState(true)
-  const [outlookEvents, setOutlookEvents] = useState<OutlookEvent[]>([])
-  const [outlookConnected, setOutlookConnected] = useState(true)
-  const [outlookCalendars, setOutlookCalendars] = useState<OutlookCalendarRef[]>([])
-  const [outlookTruncated, setOutlookTruncated] = useState(false)
-  const [outlookError, setOutlookError] = useState<string | null>(null)
-  const [outlookSkipped, setOutlookSkipped] = useState<string[]>([])
+  const [showCalendar, setShowCalendar] = useState(true)
+  const [calendarEvents, setCalendarEvents] = useState<ExternalCalendarEvent[]>([])
+  const [calendarConnected, setCalendarConnected] = useState(true)
+  const [syncedCalendars, setSyncedCalendars] = useState<ExternalCalendarRef[]>([])
+  const [calendarTruncated, setCalendarTruncated] = useState(false)
+  const [calendarError, setCalendarError] = useState<string | null>(null)
+  const [calendarSkipped, setCalendarSkipped] = useState<string[]>([])
   const [attention, setAttention] = useState<AttentionItem[]>([])
   const [rail, setRail] = useState<CalendarRailData>({ datesThisWeek: [], followUps: [], openSlots: [] })
   const [planData, setPlanData] = useState<PlanData | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<CalendarAppointment | null>(null)
-  const [previewEvents, setPreviewEvents] = useState<OutlookEvent[]>([])
+  const [previewEvents, setPreviewEvents] = useState<ExternalCalendarEvent[]>([])
   const [planBlock, setPlanBlock] = useState<PlanBlockDraft | null>(null)
   const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
 
@@ -217,10 +217,10 @@ export function CalendarClient() {
     setLoading(true)
     const rangeQuery = `from=${range.from.toISOString()}&to=${range.to.toISOString()}`
     try {
-      const [apptRes, outlookRes] = await Promise.all([
+      const [apptRes, calendarRes] = await Promise.all([
         fetch(`/api/admin/scheduling/appointments?${rangeQuery}`, { headers: authHeaders() }),
-        showOutlook
-          ? fetch(`/api/admin/scheduling/outlook-events?${rangeQuery}`, { headers: authHeaders() })
+        showCalendar
+          ? fetch(`/api/admin/scheduling/calendar-events?${rangeQuery}`, { headers: authHeaders() })
           : Promise.resolve(null),
       ])
       if (!apptRes.ok) {
@@ -230,24 +230,24 @@ export function CalendarClient() {
       const json = await apptRes.json()
       setTypes((json.types ?? []).filter((t: BookableType) => t.active))
       let appointmentRows: CalendarAppointment[] = json.appointments ?? []
-      if (outlookRes) {
-        const outlookJson = outlookRes.ok
-          ? await outlookRes.json()
+      if (calendarRes) {
+        const calendarJson = calendarRes.ok
+          ? await calendarRes.json()
           : { connected: false, events: [], calendars: [], truncated: false }
-        setOutlookEvents(outlookJson.events ?? [])
-        setOutlookConnected(Boolean(outlookJson.connected))
-        setOutlookCalendars(outlookJson.calendars ?? [])
-        setOutlookTruncated(Boolean(outlookJson.truncated))
-        setOutlookSkipped(outlookJson.skipped ?? [])
-        setOutlookError(
-          outlookRes.ok
-            ? (typeof outlookJson.error === 'string' ? outlookJson.error : null)
-            : `Outlook request failed (${outlookRes.status})`,
+        setCalendarEvents(calendarJson.events ?? [])
+        setCalendarConnected(Boolean(calendarJson.connected))
+        setSyncedCalendars(calendarJson.calendars ?? [])
+        setCalendarTruncated(Boolean(calendarJson.truncated))
+        setCalendarSkipped(calendarJson.skipped ?? [])
+        setCalendarError(
+          calendarRes.ok
+            ? (typeof calendarJson.error === 'string' ? calendarJson.error : null)
+            : `Calendar request failed (${calendarRes.status})`,
         )
-        // The Outlook fetch also mirrors Outlook-side moves and deletions back
+        // The calendar fetch also mirrors calendar-side moves and deletions back
         // onto the appointment rows. Those writes land after the parallel
         // appointments read, so re-read once when anything actually changed.
-        const synced = outlookJson.synced as { moved?: number; cancelled?: number } | undefined
+        const synced = calendarJson.synced as { moved?: number; cancelled?: number } | undefined
         const changed = (synced?.moved ?? 0) + (synced?.cancelled ?? 0)
         if (changed > 0) {
           const resyncRes = await fetch(`/api/admin/scheduling/appointments?${rangeQuery}`, {
@@ -257,15 +257,15 @@ export function CalendarClient() {
             appointmentRows = (await resyncRes.json()).appointments ?? appointmentRows
           }
           toast.info(
-            `Synced ${changed} appointment${changed === 1 ? '' : 's'} from Outlook`,
+            `Synced ${changed} appointment${changed === 1 ? '' : 's'} from Google Calendar`,
           )
         }
       } else {
-        setOutlookEvents([])
-        setOutlookCalendars([])
-        setOutlookTruncated(false)
-        setOutlookSkipped([])
-        setOutlookError(null)
+        setCalendarEvents([])
+        setSyncedCalendars([])
+        setCalendarTruncated(false)
+        setCalendarSkipped([])
+        setCalendarError(null)
       }
       setAppointments(appointmentRows)
     } catch {
@@ -273,7 +273,7 @@ export function CalendarClient() {
     } finally {
       setLoading(false)
     }
-  }, [range, authHeaders, showOutlook])
+  }, [range, authHeaders, showCalendar])
 
   useEffect(() => {
     void load()
@@ -337,9 +337,9 @@ export function CalendarClient() {
     return map
   }, [appointments])
 
-  const outlookByDay = useMemo(
-    () => outlookEventsByDay(showOutlook ? [...outlookEvents, ...previewEvents] : previewEvents),
-    [outlookEvents, previewEvents, showOutlook],
+  const calendarByDay = useMemo(
+    () => calendarEventsByDay(showCalendar ? [...calendarEvents, ...previewEvents] : previewEvents),
+    [calendarEvents, previewEvents, showCalendar],
   )
 
   function shift(delta: number) {
@@ -408,8 +408,8 @@ export function CalendarClient() {
     return new Date(y, m - 1, d)
   }, [selectedDay])
 
-  const selectedOutlook = outlookByDay.get(selectedDay) ?? []
-  const selectedBlocks = selectedOutlook.filter(isBlock)
+  const selectedCalendarEvents = calendarByDay.get(selectedDay) ?? []
+  const selectedBlocks = selectedCalendarEvents.filter(isBlock)
 
   useEffect(() => {
     if (view !== 'day') return
@@ -544,11 +544,11 @@ export function CalendarClient() {
   const dayPanel = (
     <section className="rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold text-foreground">{fmtDayHeading(selectedDate)}</h2>
-          {selectedOutlook.filter(e => !isBlock(e)).length > 0 && (
+          {selectedCalendarEvents.filter(e => !isBlock(e)).length > 0 && (
             <div className="mt-2 space-y-0.5">
-              {selectedOutlook.filter(e => !isBlock(e)).map(e => (
+              {selectedCalendarEvents.filter(e => !isBlock(e)).map(e => (
                 <p key={e.id} className="text-xs text-muted-foreground">
-                  <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">Outlook</span>
+                  <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">Calendar</span>
                   {e.isAllDay ? 'All day' : `${fmtTime(e.startIso)}–${fmtTime(e.endIso)}`} · {e.subject}
                 </p>
               ))}
@@ -591,7 +591,7 @@ export function CalendarClient() {
                             <span className="ml-2 text-primary">Calendly</span>
                           )}
                           {a.source !== 'calendly' && !a.calendarSynced && a.status === 'scheduled' && (
-                            <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
+                            <span className="ml-2 text-amber-700">⚠ not on the calendar</span>
                           )}
                         </p>
                         {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
@@ -759,40 +759,40 @@ export function CalendarClient() {
           <label
             className="flex items-center gap-1.5 text-xs text-muted-foreground"
             title={
-              outlookConnected
-                ? 'Show your Outlook events alongside booked appointments'
-                : 'Outlook is not connected — connect it from Settings → Outlook'
+              calendarConnected
+                ? 'Show your Google Calendar events alongside booked appointments'
+                : 'Google Calendar is not connected — connect it from Settings → Google'
             }
           >
             <input
               type="checkbox"
-              checked={showOutlook}
-              onChange={e => setShowOutlook(e.target.checked)}
+              checked={showCalendar}
+              onChange={e => setShowCalendar(e.target.checked)}
             />
-            Outlook events
-            {showOutlook && !outlookConnected && (
-              <span className="text-amber-700" title={outlookError ?? undefined}>
-                ⚠ not connected{outlookError ? ` — ${outlookError}` : ''}
+            Calendar events
+            {showCalendar && !calendarConnected && (
+              <span className="text-amber-700" title={calendarError ?? undefined}>
+                ⚠ not connected{calendarError ? ` — ${calendarError}` : ''}
               </span>
             )}
-            {showOutlook && outlookConnected && outlookSkipped.length > 0 && (
+            {showCalendar && calendarConnected && calendarSkipped.length > 0 && (
               <span
                 className="text-amber-700"
-                title={`Outlook would not return these calendars: ${outlookSkipped.join(', ')}`}
+                title={`Google would not return these calendars: ${calendarSkipped.join(', ')}`}
               >
-                ⚠ {outlookSkipped.length} calendar
-                {outlookSkipped.length === 1 ? '' : 's'} unavailable
+                ⚠ {calendarSkipped.length} calendar
+                {calendarSkipped.length === 1 ? '' : 's'} unavailable
               </span>
             )}
-            {showOutlook && outlookConnected && outlookCalendars.length > 1 && (
-              <span title={outlookCalendars.map(c => c.name).join(', ')}>
-                · {outlookCalendars.length} calendars
+            {showCalendar && calendarConnected && syncedCalendars.length > 1 && (
+              <span title={syncedCalendars.map(c => c.name).join(', ')}>
+                · {syncedCalendars.length} calendars
               </span>
             )}
-            {showOutlook && outlookTruncated && (
+            {showCalendar && calendarTruncated && (
               <span
                 className="text-amber-700"
-                title="Outlook returned more events than this view reads. Narrow the range to see the rest."
+                title="Google returned more events than this view reads. Narrow the range to see the rest."
               >
                 ⚠ partial
               </span>
@@ -846,7 +846,7 @@ export function CalendarClient() {
             <MonthGrid
               anchor={anchor}
               byDay={byDay}
-              outlookByDay={outlookByDay}
+              calendarByDay={calendarByDay}
               todayKey={todayKey}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
@@ -856,7 +856,7 @@ export function CalendarClient() {
             <TimeGrid
               days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))}
               byDay={byDay}
-              outlookByDay={outlookByDay}
+              calendarByDay={calendarByDay}
               todayKey={todayKey}
               onSlotClick={(date, time) => openQuickBook({ date, time })}
               onEventClick={setSelectedAppointment}
@@ -865,7 +865,7 @@ export function CalendarClient() {
             <DayAgenda
               date={selectedDate}
               appointments={selectedAppointments}
-              outlookEvents={selectedOutlook}
+              calendarEvents={selectedCalendarEvents}
               attention={attention}
               rail={rail}
               onDismissAttention={id => void dismissAttention(id)}
@@ -1007,7 +1007,7 @@ export function CalendarClient() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Moves the Outlook event and emails the client the new time. Any free
+                Moves the calendar event and emails the client the new time. Any free
                 time works — client-facing hours and notice rules do not apply.
               </p>
               <div className="flex justify-end gap-2">
@@ -1046,13 +1046,13 @@ export function CalendarClient() {
 function MonthGrid(props: {
   anchor: Date
   byDay: Map<string, CalendarAppointment[]>
-  outlookByDay: Map<string, OutlookEvent[]>
+  calendarByDay: Map<string, ExternalCalendarEvent[]>
   todayKey: string
   selectedDay: string
   onSelectDay: (key: string) => void
   onEventClick: (appointment: CalendarAppointment) => void
 }) {
-  const { anchor, byDay, outlookByDay, todayKey, selectedDay, onSelectDay, onEventClick } = props
+  const { anchor, byDay, calendarByDay, todayKey, selectedDay, onSelectDay, onEventClick } = props
   const grid = monthGrid(anchor.getFullYear(), anchor.getMonth())
 
   return (
@@ -1069,15 +1069,15 @@ function MonthGrid(props: {
           const key = dayKey(date)
           const inMonth = date.getMonth() === anchor.getMonth()
           const dayAppointments = byDay.get(key) ?? []
-          const allOutlook = outlookByDay.get(key) ?? []
+          const allCalendarEvents = calendarByDay.get(key) ?? []
           // Blocks collapse to one strip so they don't eat the three event slots.
-          const blocks = allOutlook.filter(isBlock)
-          const dayOutlook = allOutlook.filter(e => !isBlock(e))
+          const blocks = allCalendarEvents.filter(isBlock)
+          const dayCalendarEvents = allCalendarEvents.filter(e => !isBlock(e))
           const blockLabel = blocks.some(b => b.isAllDay) ? 'Blocked all day' : 'Blocked'
           const shown = dayAppointments.slice(0, 3)
-          const outlookShown = dayOutlook.slice(0, Math.max(0, 3 - shown.length))
+          const calendarShown = dayCalendarEvents.slice(0, Math.max(0, 3 - shown.length))
           const hiddenCount =
-            dayAppointments.length - shown.length + dayOutlook.length - outlookShown.length
+            dayAppointments.length - shown.length + dayCalendarEvents.length - calendarShown.length
           return (
             <div
               key={key}
@@ -1146,14 +1146,14 @@ function MonthGrid(props: {
                   </button>
                 )
               })}
-              {outlookShown.map(e => {
+              {calendarShown.map(e => {
                 const style = CATEGORY_STYLE[categorize(e.subject)]
                 return (
                   <span
                     key={e.id}
                     className="truncate rounded px-1 py-0.5 text-[11px] leading-4"
                     style={{ background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }}
-                    title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (${outlookSource(e)})`}
+                    title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (${calendarSource(e)})`}
                   >
                     {e.isAllDay ? '◦' : fmtTime(e.startIso)} {e.subject}
                   </span>
@@ -1173,15 +1173,15 @@ function MonthGrid(props: {
 function TimeGrid(props: {
   days: Date[]
   byDay: Map<string, CalendarAppointment[]>
-  outlookByDay: Map<string, OutlookEvent[]>
+  calendarByDay: Map<string, ExternalCalendarEvent[]>
   todayKey: string
   onSlotClick: (date: Date, time: string) => void
   onEventClick: (a: CalendarAppointment) => void
 }) {
-  const { days, byDay, outlookByDay, todayKey, onSlotClick, onEventClick } = props
+  const { days, byDay, calendarByDay, todayKey, onSlotClick, onEventClick } = props
   // Widened past the business window when the days on screen hold earlier or
-  // later events, so nothing on the Outlook calendar falls off the grid.
-  const { startMin: gridStartMin, endMin: gridEndMin } = timeGridBounds(days, byDay, outlookByDay)
+  // later events, so nothing on the calendar falls off the grid.
+  const { startMin: gridStartMin, endMin: gridEndMin } = timeGridBounds(days, byDay, calendarByDay)
   const slotCount = (gridEndMin - gridStartMin) / SLOT_MIN
   const gridHeight = slotCount * SLOT_PX
 
@@ -1195,9 +1195,9 @@ function TimeGrid(props: {
           <div />
           {days.map(d => {
             const key = dayKey(d)
-            const dayOutlook = outlookByDay.get(key) ?? []
-            const allDay = dayOutlook.filter(e => e.isAllDay && !isBlock(e))
-            const allDayBlocked = dayOutlook.some(e => e.isAllDay && isBlock(e))
+            const dayCalendarEvents = calendarByDay.get(key) ?? []
+            const allDay = dayCalendarEvents.filter(e => e.isAllDay && !isBlock(e))
+            const allDayBlocked = dayCalendarEvents.some(e => e.isAllDay && isBlock(e))
             return (
               <div key={key} className="border-l border-border px-2 py-1.5 text-center">
                 <span
@@ -1227,7 +1227,7 @@ function TimeGrid(props: {
                         color: style.text,
                         borderLeft: `3px solid ${style.dot}`,
                       }}
-                      title={`All day: ${e.subject} (${outlookSource(e)})`}
+                      title={`All day: ${e.subject} (${calendarSource(e)})`}
                     >
                       {e.subject}
                     </span>
@@ -1255,9 +1255,9 @@ function TimeGrid(props: {
           {days.map(d => {
             const key = dayKey(d)
             const events = (byDay.get(key) ?? []).filter(a => a.status !== 'cancelled')
-            const timed = (outlookByDay.get(key) ?? []).filter(e => !e.isAllDay)
+            const timed = (calendarByDay.get(key) ?? []).filter(e => !e.isAllDay)
             const blocks = timed.filter(isBlock)
-            const outlookTimed = timed.filter(e => !isBlock(e))
+            const calendarTimed = timed.filter(e => !isBlock(e))
             return (
               <div
                 key={key}
@@ -1300,7 +1300,7 @@ function TimeGrid(props: {
                     />
                   )
                 })}
-                {outlookTimed.map(e => {
+                {calendarTimed.map(e => {
                   const startMin = Math.max(minutesOfDay(e.startIso), gridStartMin)
                   const endMin = Math.min(
                     Math.max(endMinutesOfDay(e.startIso, e.endIso), startMin + 15),
@@ -1324,7 +1324,7 @@ function TimeGrid(props: {
                         color: style.text,
                         borderLeft: `3px solid ${style.dot}`,
                       }}
-                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (${outlookSource(e)})`}
+                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (${calendarSource(e)})`}
                     >
                       <span className="block truncate text-[11px] leading-4">
                         {fmtTime(e.startIso)} {e.subject}

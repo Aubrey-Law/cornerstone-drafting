@@ -46,7 +46,7 @@ Google Cloud and Azure Entra redirect URIs must point at **Supabase**, not this 
 
 Run `node scripts/validateOAuth.mjs` after changing provider settings.
 
-### Microsoft login (sign-in — separate from Outlook Graph below)
+### Microsoft login (staff sign-in only)
 
 The login page uses Supabase provider `azure` (“Continue with Microsoft”). No extra Vercel env vars are required beyond `NEXT_PUBLIC_APP_URL` and the Supabase keys.
 
@@ -97,7 +97,7 @@ node scripts/validateOAuth.mjs https://<your-host>
 
 Expect `✓ azure: redirects to provider login`. Then click **Continue with Microsoft** on `/auth/login`.
 
-> **Note:** Microsoft **Graph** (Outlook send from Settings) uses a *different* Entra app and redirect (`/api/admin/microsoft/callback`) — see below. You can reuse one app with both redirect URIs, or register two apps.
+> **Note:** this is sign-in only. Microsoft **Graph** (Outlook send and calendar) has been retired — see *Retired — Microsoft Graph* below.
 
 ## Optional — Granola (meeting notes import)
 
@@ -230,20 +230,11 @@ The admin-safe audit endpoint is `GET /api/admin/communications/status`.
 Inbound readiness is true only when `VOICE_PROVIDER=telnyx`, outbound Telnyx
 voice is ready, and the fixed SIP/fallback routing values validate.
 
-## Optional — Microsoft Graph (Outlook send)
+## Google Calendar and Gmail
 
-| Variable | Purpose |
-|----------|---------|
-| `MICROSOFT_GRAPH_CLIENT_ID` | Entra app client ID |
-| `MICROSOFT_GRAPH_CLIENT_SECRET` | Entra app secret |
-| `MICROSOFT_GRAPH_REDIRECT_URI` | Must exactly match an Entra redirect URI on this host. Preferred: `https://<host>/api/admin/microsoft/callback`. Alias also supported: `https://<host>/api/microsoft/callback` |
-| `MICROSOFT_GRAPH_TENANT_ID` | Optional; defaults to `common` |
-
-Staff connect Outlook under **Settings**. Manual matter email uses Graph when connected; otherwise Resend `manual` category.
-
-**Entra app registration:** Under **Authentication → Redirect URIs**, add the same URL as `MICROSOFT_GRAPH_REDIRECT_URI` (e.g. `https://cornerstone.aubreylegal.com/api/microsoft/callback` or `.../api/admin/microsoft/callback`). A mismatch causes 404 or `redirect_uri` token errors.
-
-## Optional — Google Calendar
+The firm's calendar and mailbox. One OAuth client and one consent cover both:
+appointments and holds are written to Google Calendar, availability is read
+from it, and email categories set to *Gmail* send from the connected mailbox.
 
 | Variable | Purpose |
 |----------|---------|
@@ -251,12 +242,19 @@ Staff connect Outlook under **Settings**. Manual matter email uses Graph when co
 | `GOOGLE_CALENDAR_CLIENT_SECRET` | OAuth client secret |
 | `GOOGLE_CALENDAR_REDIRECT_URI` | Must exactly match an Authorised redirect URI on the OAuth client: `https://<host>/api/admin/google/callback` |
 
-Connect at `/api/admin/google/connect`.
+Connect at `/api/admin/google/connect`, or from **Settings → Google**.
 
-**Google Cloud setup:** enable the **Google Calendar API**, create an OAuth
-client of type *Web application*, and add the same URL as
-`GOOGLE_CALENDAR_REDIRECT_URI` under **Authorised redirect URIs** — Google
+**Google Cloud setup:** enable the **Google Calendar API** *and the **Gmail
+API***, create an OAuth client of type *Web application*, and add the same URL
+as `GOOGLE_CALENDAR_REDIRECT_URI` under **Authorised redirect URIs** — Google
 matches it exactly, including scheme and any trailing slash.
+
+**Scopes requested:** `openid`, `email`, `profile`,
+`https://www.googleapis.com/auth/calendar` and
+`https://www.googleapis.com/auth/gmail.send`. The mail scope is send-only —
+Cornerstone never reads the mailbox. A connection made before Gmail was wired
+in carries only the calendar scope and cannot send; Settings → Google flags it
+and a reconnect fixes it.
 
 **If a connection reports no refresh token:** Google issues one only on an
 account's first consent, and Cornerstone asks for `prompt=consent` to force it.
@@ -264,6 +262,22 @@ Where an older grant is still in place, remove Cornerstone at
 [myaccount.google.com/permissions](https://myaccount.google.com/permissions) and
 connect again. The callback refuses to store a connection without one rather
 than saving something that stops working within the hour.
+
+## Retired — Microsoft Graph (Outlook send and calendar)
+
+`MICROSOFT_GRAPH_CLIENT_ID`, `MICROSOFT_GRAPH_CLIENT_SECRET`,
+`MICROSOFT_GRAPH_REDIRECT_URI` and `MICROSOFT_GRAPH_TENANT_ID` are no longer
+read for any new work. Nothing is written to Outlook and no mail is sent
+through Graph; there is no longer a way to connect an Outlook mailbox.
+
+Leave the variables in place while any appointment booked before the switchover
+is still in the future: those rows carry a `microsoft_event_id`, and cancelling
+or moving one has to happen in Outlook, which is the only calendar that holds
+it. Once none remain, remove the variables and disconnect under
+**Settings → Outlook (legacy)** — that tab disappears with the connection.
+
+Staff sign-in with Microsoft is a **separate** thing and is unaffected; see
+*Microsoft login* above.
 
 ## Optional — Retell
 

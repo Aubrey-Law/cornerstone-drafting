@@ -259,10 +259,10 @@ export function QuickBookPopover({
           <Step number="4" title="When">
             {!connected ? (
               <p className="rounded-md border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground">
-                Outlook is disconnected, so verified openings are unavailable.
+                Google Calendar is disconnected, so verified openings are unavailable.
               </p>
             ) : loadingSlots ? (
-              <p className="text-xs text-muted-foreground">Checking Outlook and appointment buffers…</p>
+              <p className="text-xs text-muted-foreground">Checking the calendar and appointment buffers…</p>
             ) : (
               <div className="grid grid-cols-2 gap-1.5">
                 {slots.slice(0, 14).map(slot => (

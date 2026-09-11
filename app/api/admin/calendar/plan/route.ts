@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
-import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
+import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
 import { aggregateWorkload, nextWorkingDateKeys } from '@/lib/calendarProductivity'
 import type { CalendarWorkEvent } from '@/lib/calendarProductivity'
 import { FIRM_TIMEZONE, firmTodayKey } from '@/lib/firmDate'
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult] = await Promise.all([
     admin
       .from('appointments')
-      .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, microsoft_event_id')
+      .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, google_event_id, microsoft_event_id')
       .gte('start_time', rangeFrom.toISOString())
       .lte('start_time', rangeTo.toISOString()),
     // Two exact reads where one capped read used to stand in for both: the
@@ -57,11 +57,13 @@ export async function GET(req: NextRequest) {
   let connected = true
   try {
     const exclude = new Set(
-      appointments.map(row => row.microsoft_event_id).filter((id): id is string => Boolean(id)),
+      appointments
+        .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+        .filter((id): id is string => Boolean(id)),
     )
     const view = await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString())
-    const outlook = mapGraphCalendarView(view.raw, exclude)
-    workEvents.push(...outlook
+    const calendarEvents = mapCalendarView(view.raw, exclude)
+    workEvents.push(...calendarEvents
       .filter(event => !event.isAllDay)
       .map(event => ({ startIso: event.startIso, endIso: event.endIso, kind: 'internal' as const })))
   } catch {

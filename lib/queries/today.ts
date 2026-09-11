@@ -7,7 +7,7 @@ import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { invoiceOverdue } from '@/lib/billing/invoices'
 import { fetchDueTasks } from '@/lib/queries/tasks'
 import { taskDueGroup, type TaskRow } from '@/lib/tasks/types'
-import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
+import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
 import type { PipelineMatter } from '@/types/database'
 
 export interface TodayUnreadThread {
@@ -59,7 +59,8 @@ export interface TodayData {
   /** Matters with an appointment today (firm timezone), soonest first. */
   appointmentsToday: TodayAppointment[]
   appointmentsError?: boolean
-  outlookEventIds?: string[]
+  /** Calendar event ids the Your-day overlay must not show twice. */
+  calendarEventIds?: string[]
   /** Open tasks whose effective due date has passed, soonest first. */
   overdueTasks: TaskRow[]
   /** Open tasks due today (firm timezone). */
@@ -130,7 +131,7 @@ function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter
  * One aggregate read for the attorney's "Today" home page. Reuses the same
  * sources as the sidebar badges but returns actionable rows, not just counts.
  */
-export async function fetchTodayData(options: { includeOutlook?: boolean } = {}): Promise<TodayData> {
+export async function fetchTodayData(options: { includeCalendar?: boolean } = {}): Promise<TodayData> {
   const admin = getAdminClient()
   const todayKey = firmTodayKey()
   // A deliberately wide UTC window around firm-local noon. We filter the
@@ -160,7 +161,7 @@ export async function fetchTodayData(options: { includeOutlook?: boolean } = {})
     fetchDueTasks(dueThrough),
     admin
       .from('appointments')
-      .select('id, start_time, status, attendee_name, linked_matter_id, microsoft_event_id, appointment_type_id')
+      .select('id, start_time, status, attendee_name, linked_matter_id, google_event_id, microsoft_event_id, appointment_type_id')
       .gte('start_time', calendarFrom)
       .lt('start_time', calendarTo)
       .eq('status', 'scheduled')
@@ -210,6 +211,7 @@ export async function fetchTodayData(options: { includeOutlook?: boolean } = {})
     start_time: string
     attendee_name: string
     linked_matter_id: string | null
+    google_event_id: string | null
     microsoft_event_id: string | null
     appointment_type_id: string | null
   }>
@@ -258,36 +260,36 @@ export async function fetchTodayData(options: { includeOutlook?: boolean } = {})
       is_all_day: false,
     })))
 
-  // Outlook-only events are part of the Calendar page and therefore belong on
-  // Your day too. Bookings already represented above are excluded by Graph id.
-  if (options.includeOutlook !== false) try {
+  // Calendar-only events are part of the Calendar page and therefore belong on
+  // Your day too. Bookings already represented above are excluded by event id.
+  if (options.includeCalendar !== false) try {
     const exclude = new Set(
       appointmentRows
-        .map(row => row.microsoft_event_id)
+        .flatMap(row => [row.google_event_id, row.microsoft_event_id])
         .filter((id): id is string => Boolean(id)),
     )
-    const outlookEvents = mapGraphCalendarView(
+    const calendarEvents = mapCalendarView(
       (await listCalendarView(calendarFrom, calendarTo)).raw,
       exclude,
     )
-    appointmentsToday.push(...outlookEvents
-      // Graph represents all-day dates at midnight in the requested timezone;
-      // retain their calendar date instead of shifting midnight into yesterday.
+    appointmentsToday.push(...calendarEvents
+      // An all-day event is a calendar date anchored at UTC midnight; retain
+      // that date instead of shifting midnight into yesterday.
       .filter(event =>
         (event.isAllDay ? event.startIso.slice(0, 10) : firmDateKey(event.startIso)) === todayKey,
       )
       .map(event => ({
-        id: `outlook:${event.id}`,
+        id: `calendar:${event.id}`,
         matter_id: null,
         client_name: event.subject,
         next_appointment: event.startIso,
-        next_appointment_type: 'Outlook',
+        next_appointment_type: 'Calendar',
         href: '/admin/calendar',
         is_all_day: event.isAllDay,
       })))
   } catch (error) {
-    // Today remains useful when Outlook is disconnected or temporarily down.
-    console.error('fetchTodayData Outlook calendar error:', error)
+    // Today remains useful when the calendar is disconnected or briefly down.
+    console.error('fetchTodayData calendar error:', error)
   }
   appointmentsToday.sort((a, b) => a.next_appointment.localeCompare(b.next_appointment))
 
@@ -307,7 +309,9 @@ export async function fetchTodayData(options: { includeOutlook?: boolean } = {})
     intakeToSend,
     appointmentsToday,
     appointmentsError: Boolean(appointmentsRes.error),
-    outlookEventIds: appointmentRows.flatMap(row => row.microsoft_event_id ? [row.microsoft_event_id] : []),
+    calendarEventIds: appointmentRows
+      .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+      .filter((id): id is string => Boolean(id)),
     overdueTasks,
     tasksDueToday,
     activeMatterCount: matters.length,

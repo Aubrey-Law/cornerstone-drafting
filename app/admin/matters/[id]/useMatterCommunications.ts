@@ -26,10 +26,6 @@ export interface SmsMessage {
   actor_name?: string | null
 }
 
-interface EmailSendResponse {
-  provider?: string
-}
-
 export function useMatterCommunications({ matterId, token, initialEmailTo, enabled = true }: {
   matterId: string; token: string | null; initialEmailTo: string; enabled?: boolean
 }) {
@@ -137,7 +133,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
     if (!token || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return
     setEmailSending(true)
     try {
-      const response = await apiRequest<EmailSendResponse>(`/api/admin/matters/${matterId}/send-email`, {
+      await apiRequest(`/api/admin/matters/${matterId}/send-email`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -151,7 +147,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
       }, 'Email failed')
       setEmailSubject('')
       setEmailBody('')
-      toast.success(response.provider === 'graph' ? 'Email sent via Outlook' : 'Email sent')
+      toast.success('Email sent')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not send email')
     } finally {

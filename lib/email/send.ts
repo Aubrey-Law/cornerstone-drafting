@@ -11,7 +11,7 @@ import {
   getTestInbox,
   isAllowed,
 } from './settings'
-import { GraphSendError, sendViaGraph } from './graphSend'
+import { GmailSendError, sendViaGmail } from './gmailSend'
 import type { EmailAttachment } from './attachments'
 import { assembleManualEmail } from './manualAssembly'
 import { redactIdentifier } from '@/lib/log/redact'
@@ -29,7 +29,7 @@ export interface SendEmailArgs {
   /** Defaults to true for automated categories and false for manual one-off sends. */
   useStoredTemplate?: boolean
   from?: string
-  /** Microsoft Graph mailbox owner for manual sends; falls back to any firm connection. */
+  /** Gmail mailbox owner for manual sends; falls back to any firm connection. */
   userId?: string | null
   /** Files to send alongside the message. See lib/email/attachments.ts for the size cap. */
   attachments?: EmailAttachment[]
@@ -115,7 +115,8 @@ interface ResendAttemptInput {
 
 interface AttemptResult {
   resendId: string | null
-  graphMessageId: string | null
+  /** The sending provider's own message id, when it returns one. */
+  providerMessageId: string | null
   fromAddress: string | null
   error: string | null
 }
@@ -123,7 +124,7 @@ interface AttemptResult {
 async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    return { resendId: null, graphMessageId: null, fromAddress: input.from, error: 'RESEND_API_KEY not configured' }
+    return { resendId: null, providerMessageId: null, fromAddress: input.from, error: 'RESEND_API_KEY not configured' }
   }
   const resend = new Resend(apiKey)
   try {
@@ -146,25 +147,25 @@ async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> 
         : {}),
     })
     if (error) {
-      return { resendId: null, graphMessageId: null, fromAddress: input.from, error: error.message }
+      return { resendId: null, providerMessageId: null, fromAddress: input.from, error: error.message }
     }
-    return { resendId: data?.id ?? null, graphMessageId: null, fromAddress: input.from, error: null }
+    return { resendId: data?.id ?? null, providerMessageId: null, fromAddress: input.from, error: null }
   } catch (err) {
     return {
       resendId: null,
-      graphMessageId: null,
+      providerMessageId: null,
       fromAddress: input.from,
       error: err instanceof Error ? err.message : 'Unknown send error',
     }
   }
 }
 
-async function attemptGraph(
+async function attemptGmail(
   input: ResendAttemptInput,
   userId?: string | null,
 ): Promise<AttemptResult> {
   try {
-    const { fromAddress, messageId } = await sendViaGraph({
+    const { fromAddress, messageId } = await sendViaGmail({
       to: input.to,
       cc: input.isRedirect ? undefined : input.ccList,
       bcc: input.isRedirect ? undefined : input.bccList,
@@ -175,12 +176,12 @@ async function attemptGraph(
       userId,
       attachments: input.attachments,
     })
-    return { resendId: null, graphMessageId: messageId, fromAddress, error: null }
+    return { resendId: null, providerMessageId: messageId, fromAddress, error: null }
   } catch (err) {
-    const msg = err instanceof GraphSendError
+    const msg = err instanceof GmailSendError
       ? `${err.kind}: ${err.message}`
-      : err instanceof Error ? err.message : 'Unknown Graph error'
-    return { resendId: null, graphMessageId: null, fromAddress: null, error: msg }
+      : err instanceof Error ? err.message : 'Unknown Gmail error'
+    return { resendId: null, providerMessageId: null, fromAddress: null, error: msg }
   }
 }
 
@@ -320,10 +321,10 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   let providerUsed: EmailProvider = provider
   let result: AttemptResult
 
-  if (provider === 'graph') {
-    const graphResult = await attemptGraph(attemptInput, userId)
-    if (!graphResult.error) {
-      result = graphResult
+  if (provider === 'gmail') {
+    const gmailResult = await attemptGmail(attemptInput, userId)
+    if (!gmailResult.error) {
+      result = gmailResult
     } else {
       await logSend({
         ...recordLink,
@@ -334,11 +335,11 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         subject: finalSubject,
         reply_to: replyTo ?? null,
         cc: ccList ? ccList.join(', ') : null,
-      bcc: bccList ? bccList.join(', ') : null,
+        bcc: bccList ? bccList.join(', ') : null,
         html: finalBody,
-        provider: 'graph',
+        provider: 'gmail',
         status: 'error',
-        error: `graph_failed_falling_back: ${graphResult.error}`,
+        error: `gmail_failed_falling_back: ${gmailResult.error}`,
       })
       providerUsed = 'resend'
       result = await attemptResend(attemptInput)
@@ -385,7 +386,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     html: finalBody,
     resend_id: result.resendId,
     provider: providerUsed,
-    provider_message_id: result.graphMessageId,
+    provider_message_id: result.providerMessageId,
     status: result.error ? 'error' : isRedirect ? 'redirected' : 'sent',
     error: result.error,
   })
