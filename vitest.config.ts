@@ -10,11 +10,12 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    exclude: ['tests/integration/**', '**/node_modules/**', '**/.git/**'],
     setupFiles: ['tests/setup.ts'],
     testTimeout: 30_000,
     pool: 'forks',
-    // RLS tests do real network calls to Supabase. Run serially so we don't
-    // overwhelm the DB and so per-test seeds don't race.
+    // Keep the established memory footprint for the drafting/rendering suite.
+    // Real-service tests use vitest.integration.config.ts explicitly.
     fileParallelism: false,
   },
 })

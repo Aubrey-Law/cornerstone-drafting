@@ -9,16 +9,17 @@ npm test              # one-shot
 npm run test:watch    # interactive
 ```
 
-## Required env
+## Test environments
 
-The harness reads `.env.test` first, then falls back to `.env.local`. Both are
-git-ignored. Optional for most unit tests; integration-style tests need:
+Unit tests do not load `.env.test` or `.env.local`. The setup discards inherited
+application credentials and installs synthetic Supabase values. Mock external
+clients in tests; do not send to real services from the unit suite.
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-Use a Supabase branch DB or local `supabase start` — not production.
+Real-service tests live under `tests/integration/` and run only with
+`npm run test:integration`. Supply `INTEGRATION_SUPABASE_URL`,
+`INTEGRATION_SUPABASE_SERVICE_ROLE_KEY`, and (for client auth tests)
+`INTEGRATION_SUPABASE_ANON_KEY`. The runner accepts loopback URLs only and
+fails before constructing clients for missing credentials or remote targets.
 
 ## Browser-testing fixture
 
