@@ -1,19 +1,19 @@
 # Firm app release review
 
-The implementation is prepared locally in `/tmp/cornerstone-remediation`. Publishing the following four draft pull requests is the next proposed action. Publication requires owner authorization; no remediation branch has been pushed, merged, or deployed, and neither new migration is live.
+The owner authorized publication. All four branches have been pushed and opened as draft PRs in the existing private repository. The implementation worktree remains at `/tmp/cornerstone-remediation`. No PR has been merged and no production migration or deployment was performed by this publication step.
 
-## Proposed review sequence
+## Published review sequence
 
-| Step | Local branch | Proposed PR base | Review description |
+| Draft PR | Branch | PR base | Review description |
 | --- | --- | --- | --- |
-| 1 | `codex/firm-app-release-guardrails` (`edb91db3`) | `main` (`03e284d0`) | [Build safeguards](firm-app-release/01-build-safeguards.md) |
-| 2 | `codex/firm-app-communications-retirement` (`b3749832`) | `codex/firm-app-release-guardrails` | [Communications retirement and reliability](firm-app-release/02-communications-and-reliability.md) |
-| 3 | `codex/firm-app-workflow-recovery` (`826133cc`) | `codex/firm-app-communications-retirement` | [Disabled queue recovery](firm-app-release/03-disabled-queue-recovery.md) |
-| 4 | `codex/firm-app-remediation` | `codex/firm-app-workflow-recovery` | [Navigation and working lists](firm-app-release/04-navigation-and-working-lists.md) |
+| [#453](https://github.com/spaubrey/cornerstone-drafting/pull/453) | `codex/firm-app-release-guardrails` (`edb91db3`) | `main` (`03e284d0`) | [Build safeguards](firm-app-release/01-build-safeguards.md) |
+| [#454](https://github.com/spaubrey/cornerstone-drafting/pull/454) | `codex/firm-app-communications-retirement` (`b3749832`) | `codex/firm-app-release-guardrails` | [Communications retirement and reliability](firm-app-release/02-communications-and-reliability.md) |
+| [#455](https://github.com/spaubrey/cornerstone-drafting/pull/455) | `codex/firm-app-workflow-recovery` (`826133cc`) | `codex/firm-app-communications-retirement` | [Disabled queue recovery](firm-app-release/03-disabled-queue-recovery.md) |
+| [#456](https://github.com/spaubrey/cornerstone-drafting/pull/456) | `codex/firm-app-remediation` | `codex/firm-app-workflow-recovery` | [Navigation and working lists](firm-app-release/04-navigation-and-working-lists.md) |
 
 These are dependent review branches. The proposed release order is 1 through 4. After a prerequisite lands on main, retarget the next PR to main and recheck its diff and CI before merging. Do not merge later work into an earlier review branch.
 
-The publication request covers pushing only these four branches to the existing private `spaubrey/cornerstone-drafting` repository and opening four draft PRs with the linked descriptions. Each draft's CI should run against its own branch head. Main remains unchanged by publication.
+Publication covered these four branches and four draft PRs with the linked descriptions. Each draft's CI has started against its own branch head; final results are pending. Main remains unchanged by publication. Local application verification applies to code revision `428df951`; this publication update changes documentation only.
 
 ## What the app changes
 
