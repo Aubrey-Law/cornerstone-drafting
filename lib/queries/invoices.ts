@@ -1,4 +1,5 @@
 import 'server-only'
+import { pageRequest, monthRange, type PageRequest, type PageResult } from '@/lib/queries/page'
 import { allAccountingRows, loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 
 import {
@@ -275,4 +276,29 @@ export async function fetchInvoiceableCharges(
       amountBilled: row.amount_billed,
       createdAt: row.created_at,
     }))
+}
+
+export type InvoicePageQuery = PageRequest & { matterId?: string; status?: InvoiceStatus; issueMonth?: string }
+export async function fetchInvoicePage(input: InvoicePageQuery, now?: Date): Promise<PageResult<InvoiceListRow>> {
+  const page = pageRequest(input)
+  if (input.status && !['draft','issued','partial','paid','void'].includes(input.status)) throw new Error('Invalid invoice status')
+  const admin = getAdminClient()
+  let query = admin.from('invoices').select('*', { count: 'exact' })
+  if (input.matterId) query = query.eq('matter_id', input.matterId)
+  if (input.status) query = query.eq('status', input.status)
+  if (input.issueMonth) {
+    const range = monthRange(input.issueMonth)
+    query = query.gte('issue_date', range.from).lt('issue_date', range.to)
+  }
+  const offset = (page.page - 1) * page.pageSize
+  const { data, error, count } = await query.order('created_at', { ascending:false }).order('id', { ascending:false }).range(offset, offset + page.pageSize - 1)
+  if (error || count === null) throw new Error('Invoice register is temporarily unavailable')
+  const lastPage = Math.max(1, Math.ceil(count / page.pageSize))
+  if (page.page > lastPage) return fetchInvoicePage({ ...input, page:lastPage }, now)
+  const raw = (data ?? []) as InvoiceRow[]
+  const [invoices, accounting] = await Promise.all([attachContext(raw), loadInvoiceAccounting(admin, raw)])
+  return { ...page, total:count, rows:invoices.map(invoice => {
+    const { balance, collected } = accounting.get(invoice.id)!
+    return { ...invoice, balance, collected, ...invoiceOverdue(invoice,balance,firmTodayKey(now)) }
+  }) }
 }

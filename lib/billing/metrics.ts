@@ -146,7 +146,7 @@ export function buildRows(
       if (aOpen !== bOpen) return aOpen - bOpen
       const aDate = a.invoicedAt ?? a.createdAt
       const bDate = b.invoicedAt ?? b.createdAt
-      return aDate.localeCompare(bDate) || a.clientName.localeCompare(b.clientName)
+      return aDate.localeCompare(bDate) || a.clientName.localeCompare(b.clientName) || a.id.localeCompare(b.id)
     })
 }
 
@@ -544,7 +544,7 @@ export function filterBillingRows(
     if (filter === 'overdue' && !row.overdue) return false
     if (
       filter === 'paid'
-      && (row.balance > 0 || !row.paidAt || !row.paidAt.startsWith(`${selectedMonth}-`))
+      && (row.balance > 0 || !row.paidAt || !firmDateKey(row.paidAt)?.startsWith(`${selectedMonth}-`))
     ) return false
     if (
       normalized

@@ -1,6 +1,7 @@
 'use client'
+import { NavigationReady } from '@/app/admin/components/NavigationTiming'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Banknote, Download, FileText, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -22,6 +23,7 @@ import type {
   BillingPaymentMethod,
   BillingSnapshot,
 } from '@/lib/billing/types'
+import type { LedgerPage } from '@/lib/queries/billing'
 import { BillingRail } from './BillingRail'
 import { CollectionGoalCard } from './CollectionGoalCard'
 import { CollectionsTrendCard } from './CollectionsTrendCard'
@@ -64,13 +66,15 @@ export default function BillingClient({
   loadError,
   weekStart,
   matterOptions,
-  invoices,
+  invoices, pagination, summary,
 }: {
   initialSnapshot: BillingSnapshot
   loadError: string | null
   weekStart: string
   matterOptions: BillingMatterOption[]
   invoices: InvoiceListRowView[]
+  pagination?: LedgerPage
+  summary?: ReactNode
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -100,8 +104,8 @@ export default function BillingClient({
   const deleteOpenerRef = useRef<HTMLElement | null>(null)
 
   const rows = useMemo(
-    () => filterBillingRows(initialSnapshot.rows, filter, search, month),
-    [filter, initialSnapshot.rows, month, search],
+    () => pagination ? initialSnapshot.rows : filterBillingRows(initialSnapshot.rows, filter, search, month),
+    [filter, initialSnapshot.rows, month, search, pagination],
   )
   // Only what the current filter shows can be acted on, so a selection left
   // behind by another filter never quietly widens a delete.
@@ -128,7 +132,7 @@ export default function BillingClient({
       .map(row => row.matterId),
     [initialSnapshot.rows],
   )
-  const counts = useMemo(() => ({
+  const localCounts = useMemo(() => ({
     all: initialSnapshot.rows.length,
     to_invoice: filterBillingRows(initialSnapshot.rows, 'to_invoice', '', month).length,
     open: initialSnapshot.rows.filter(row => row.balance > 0).length,
@@ -136,8 +140,11 @@ export default function BillingClient({
     paid: filterBillingRows(initialSnapshot.rows, 'paid', '', month).length,
   }), [initialSnapshot.rows, month])
 
+  const counts=pagination?.counts ?? localCounts
+
   function setUrl(next: Partial<{ filter: BillingFilter; search: string; month: string; tab: string }>) {
     const params = new URLSearchParams(searchParams.toString())
+    params.delete('page')
     if (next.tab !== undefined) {
       if (next.tab === 'ledger') params.delete('tab')
       else params.set('tab', next.tab)
@@ -149,8 +156,7 @@ export default function BillingClient({
     else params.set('filter', nextFilter)
     if (nextSearch) params.set('search', nextSearch)
     else params.delete('search')
-    if (nextMonth === initialSnapshot.selectedMonth) params.delete('month')
-    else params.set('month', nextMonth)
+    params.set('month', nextMonth)
     const query = params.toString()
     router.replace(`/admin/billing${query ? `?${query}` : ''}`, { scroll: false })
   }
@@ -197,6 +203,7 @@ export default function BillingClient({
    * right bill rather than an empty form the user has to rebuild.
    */
   function billMatter(matterId: string) {
+    if(pagination) { router.push(`/admin/billing/invoices/new?matterId=${matterId}`); return }
     const billable = initialSnapshot.rows.filter(row =>
       row.matterId === matterId
       && row.kind !== 'plan_claim'
@@ -444,6 +451,7 @@ export default function BillingClient({
 
   return (
     <AdminPageShell className="mx-auto w-full max-w-[1440px]">
+      <NavigationReady route="Billing" />
       <PageHeader
         title="Billing"
         description={`Fees, legal plan claims, and costs across all matters · ${new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-15T12:00:00Z`))}`}
@@ -495,7 +503,7 @@ export default function BillingClient({
         </div>
       )}
 
-      <FinanceHeroCards snapshot={initialSnapshot} />
+      {summary ?? <FinanceHeroCards snapshot={initialSnapshot} />}
 
       {/* The ledger is what you act on, so it is the landing tab; the
           analytics that used to sit above it move to Insights. */}
@@ -509,7 +517,11 @@ export default function BillingClient({
         </TabsList>
 
         <TabsContent value="ledger" className="min-w-0 space-y-4">
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          {pagination && <div className="flex items-center gap-3 text-sm"><span>{pagination.total} matching charges · page {pagination.page}</span>{[pagination.page-1,pagination.page+1].map((page,index)=>{
+            const params=new URLSearchParams(searchParams.toString());params.set('page',String(page))
+            return <Button key={index} variant="outline" size="sm" disabled={index===0 ? page<1 : pagination.page*pagination.pageSize>=pagination.total} onClick={()=>router.push(`/admin/billing?${params}`)}>{index===0 ? 'Previous' : 'Next'}</Button>
+          })}<Link href="/admin/billing?tab=insights" className="underline">Insights and billing follow-up</Link></div>}
+          <div className={pagination ? "min-w-0" : "grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"}>
             <Card className="min-w-0 gap-0 py-0">
               <CardHeader className="gap-3 border-b border-border py-3">
                 <div className="flex flex-wrap items-center gap-3">
@@ -576,6 +588,7 @@ export default function BillingClient({
               <CardContent className="px-0">
                 <LedgerTable
                   rows={rows}
+                  partial={Boolean(pagination)}
                   selected={selectedRows}
                   onLogPayment={openPayment}
                   onInvoice={row => void markInvoice(row)}
@@ -589,7 +602,7 @@ export default function BillingClient({
                 />
               </CardContent>
             </Card>
-            <div className="space-y-3">
+            {!pagination && <div className="space-y-3">
               <CollectionGoalCard snapshot={initialSnapshot} />
               <BillingRail
                 snapshot={initialSnapshot}
@@ -597,7 +610,7 @@ export default function BillingClient({
                 onDismiss={nudge => void dismissNudge(nudge)}
               />
               <RecentPaymentsCard payments={initialSnapshot.recentPayments} />
-            </div>
+            </div>}
           </div>
         </TabsContent>
 
@@ -610,6 +623,7 @@ export default function BillingClient({
         </TabsContent>
 
         <TabsContent value="insights" className="min-w-0">
+          <div className="mb-4 grid gap-4 lg:grid-cols-3"><CollectionGoalCard snapshot={initialSnapshot}/><BillingRail snapshot={initialSnapshot} onNudgeAction={nudge=>void actOnNudge(nudge)} onDismiss={nudge=>void dismissNudge(nudge)}/><RecentPaymentsCard payments={initialSnapshot.recentPayments}/></div>
           <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
             <RevenueSourcesCard revenue={initialSnapshot.revenue} />
             <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
@@ -654,6 +668,7 @@ export default function BillingClient({
       />
 
       <LogPaymentDialog
+        searchAll={Boolean(pagination)}
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         rows={initialSnapshot.rows}

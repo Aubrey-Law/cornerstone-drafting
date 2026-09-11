@@ -32,7 +32,7 @@ export default async function EditInvoicePage({
   if (invoice.status !== 'draft') redirect(`/admin/billing/invoices/${id}`)
 
   const [matters, firm, charges] = await Promise.all([
-    fetchBillingMatterOptions(),
+    fetchBillingMatterOptions('', invoice.matterId),
     loadFirmSettings(),
     fetchInvoiceableCharges(invoice.matterId, invoice.id),
   ])
