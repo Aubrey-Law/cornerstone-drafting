@@ -1,4 +1,5 @@
 'use client'
+import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -115,6 +116,7 @@ export function LeadsClient({
   summary: LeadListSummary
   esignEnabled: boolean
 }) {
+  usePrimaryReady('Leads')
   const token = useAccessToken()
   const router = useRouter()
   const pathname = usePathname()

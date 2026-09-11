@@ -1,4 +1,5 @@
 'use client'
+import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
@@ -31,6 +32,8 @@ import {
   type MatterCardFilter,
 } from '@/components/matter/MatterPipelineInsights'
 import { isMobileDetailViewport } from '@/components/layout/ResponsiveDetailRail'
+import type { MatterPageParams } from '@/lib/matters/pageParams'
+import type { MatterPageResult } from '@/lib/queries/matters'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
@@ -81,6 +84,7 @@ const LawmaticsImportDialog = dynamic(() => import('./LawmaticsImportDialog'), {
 interface MattersClientProps {
   matters: MatterListRow[]
   loadError?: string | null
+  pagination?: MatterPageResult & {params:MatterPageParams}
 }
 
 const INTAKE_BADGE_CLASS: Record<string, string> = {
@@ -109,17 +113,27 @@ function MattersClientShell({ matters: _matters, loadError = null }: MattersClie
   )
 }
 
-function MattersClientInner({ matters: initialMatters, loadError = null }: MattersClientProps) {
+function MattersClientInner({ matters: initialMatters, loadError = null, pagination }: MattersClientProps) {
+  usePrimaryReady('Matters')
   const searchParams = useSearchParams()
   const token = useAccessToken()
   const router = useRouter()
+  const searchTimer=useRef<ReturnType<typeof setTimeout> | null>(null)
+  const navigate=(changes:Record<string,string>,reset=true)=>{
+    const next=new URLSearchParams(searchParams.toString())
+    if(reset) { next.delete('page'); STAGE_GROUP_ORDER.forEach(group=>next.delete(`page_${group}`)) }
+    for(const [key,value] of Object.entries(changes)) { if(value) next.set(key,value); else next.delete(key) }
+    router.push(`/admin/matters/list?${next}`,{scroll:false})
+  }
+  useEffect(()=>()=>{if(searchTimer.current) clearTimeout(searchTimer.current)},[])
+
   // Held locally so a board drag can move a card before the server confirms;
   // `router.refresh()` re-seeds it through the effect below.
   const [matters, setMatters] = useState(initialMatters)
-  const [filters, setFilters] = useState<MatterTableFilters>(EMPTY_MATTER_TABLE_FILTERS)
-  const [cardFilter, setCardFilter] = useState<MatterCardFilter | null>(null)
-  const [sortKey, setSortKey] = useState<MatterSortKey>('last_activity')
-  const [view, setView] = useState<MatterListView>('table')
+  const [filters, setFilters] = useState<MatterTableFilters>(pagination?.params.filters ?? EMPTY_MATTER_TABLE_FILTERS)
+  const [cardFilter, setCardFilter] = useState<MatterCardFilter | null>(pagination?.params.card ?? null)
+  const [sortKey, setSortKey] = useState<MatterSortKey>(pagination?.params.sort ?? 'last_activity')
+  const [view, setView] = useState<MatterListView>(pagination?.params.view ?? 'table')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
@@ -141,14 +155,16 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
 
   useEffect(() => {
     setMatters(initialMatters)
-  }, [initialMatters])
+    if(pagination) { setFilters(pagination.params.filters);setCardFilter(pagination.params.card);setSortKey(pagination.params.sort);setView(pagination.params.view);setSelected({}) }
+  }, [initialMatters,pagination])
 
   useEffect(() => {
     // Below md the five columns are too cramped, so start on the table without
     // overwriting the stored choice — the board stays one tap away.
+    if (pagination) return
     const stored = readMatterListView()
     setView(isMobileDetailViewport() && stored === 'board' ? 'table' : stored)
-  }, [])
+  }, [pagination])
 
   useEffect(() => {
     if (searchParams.get('create') === '1') setCreateOpen(true)
@@ -166,11 +182,13 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     }
   }, [router, searchParams])
 
-  const groupCounts = useMemo(() => {
+  const localGroupCounts = useMemo(() => {
     const counts: Record<StageGroup, number> = { early: 0, active: 0, work: 0, done: 0, closed: 0 }
     for (const matter of matters) counts[stageInfo(matter.stage).group] += 1
     return counts
   }, [matters])
+
+  const groupCounts = pagination ? {early:0,active:0,work:0,done:0,closed:0,...pagination.groups} : localGroupCounts
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
@@ -191,8 +209,8 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   }, [cardFilter, matters])
 
   const filtered = useMemo(
-    () => filterAndSortMatters(carded, filters, sortKey),
-    [carded, filters, sortKey],
+    () => pagination ? matters : filterAndSortMatters(carded, filters, sortKey),
+    [carded, filters, sortKey, pagination, matters],
   )
 
   /**
@@ -203,7 +221,16 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
    * asking the server again would mean restating the search, the chips and the
    * insight cards in SQL, and the two definitions would drift.
    */
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    if(pagination) {
+      const params=new URLSearchParams({search:filters.search,practice:filters.practice,stage:filters.stageGroup,sort:sortKey,card:cardFilter ?? '',format:'json',limit:'2000'})
+      const response=await fetch(`/api/admin/matters/export?${params}`,{headers:token ? {Authorization:`Bearer ${token}`} : {}})
+      if(!response.ok) throw new Error('Matter export failed')
+      const result=await response.json()
+      downloadCsv(matterExportCsv(result.matters),matterExportFilename(cardFilter ?? filters.stageGroup))
+      if(result.truncated) toast.info(`Exported ${result.matters.length} of ${result.total} matching matters`)
+      return
+    }
     const label = cardFilter ?? (filters.stageGroup === 'all' ? 'all' : filters.stageGroup)
     downloadCsv(
       matterExportCsv(filtered.map(toMatterExportRow)),
@@ -214,6 +241,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   /** "Open matters" is the unfiltered list, so it clears rather than narrows. */
   const toggleCardFilter = (next: MatterCardFilter) => {
     setSelected({})
+    if(pagination) navigate({card:next === 'open' || cardFilter === next ? '' : next})
     if (next === 'open') {
       setCardFilter(null)
       return
@@ -241,6 +269,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   const switchView = (next: MatterListView) => {
     setView(next)
     writeMatterListView(next)
+    if(pagination) navigate({view:next})
     // Row selection is a table affordance; the board has no checkboxes, so a
     // stale selection would leave an un-clearable bulk bar on screen.
     if (next === 'board') setSelected({})
@@ -255,10 +284,17 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
 
   const updateFilter = <K extends keyof MatterTableFilters>(key: K, value: MatterTableFilters[K]) => {
     setFilters(current => ({ ...current, [key]: value }))
+    if(pagination) {
+      if(searchTimer.current) clearTimeout(searchTimer.current)
+      const changes={ [key==='stageGroup' ? 'stage' : key]:value }
+      if(key==='search') searchTimer.current=setTimeout(()=>navigate(changes),300)
+      else navigate(changes)
+    }
   }
 
   const clearFilters = () => {
     setFilters(EMPTY_MATTER_TABLE_FILTERS)
+    if(pagination) navigate({search:'',practice:'all',stage:'all',card:''})
   }
 
   const toggleAllFiltered = (checked: boolean) => {
@@ -409,7 +445,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
 
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
-    : matters.length === 0
+    : (pagination ? Object.values(pagination.groups).reduce((sum,n)=>sum+(n ?? 0),0) === 0 : matters.length === 0)
       ? 'No matters yet. Create one to get started.'
       : hasActiveFilters
         ? 'No matters match the current filters.'
@@ -445,6 +481,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
         </div>
         <MatterPipelineInsights
           matters={matters}
+          totals={pagination?.insights}
           activeFilter={cardFilter}
           onToggleFilter={toggleCardFilter}
         />
@@ -452,7 +489,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
           <FilterChip
             onClick={() => updateFilter('stageGroup', 'all')}
             selected={filters.stageGroup === 'all'}
-            count={matters.length}
+            count={Object.values(groupCounts).reduce((sum,n)=>sum+n,0)}
           >
             All
           </FilterChip>
@@ -517,7 +554,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                 ))}
               </SelectContent>
             </Select>
-            <Select value={sortKey} onValueChange={value => setSortKey(value as MatterSortKey)}>
+            <Select value={sortKey} onValueChange={value => {setSortKey(value as MatterSortKey); if(pagination) navigate({sort:value})}}>
               <SelectTrigger size="sm" className="w-40" aria-label="Sort matters by">
                 <SelectValue />
               </SelectTrigger>
@@ -560,6 +597,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
+        {pagination && <div className="mb-3 flex items-center gap-3 text-sm"><span>{pagination.total} matching matters{view==='table' ? ` · page ${pagination.page}` : ''}</span>{view==='table' && <><Button variant="outline" size="sm" disabled={pagination.page<=1} onClick={()=>navigate({page:String(pagination.page-1)},false)}>Previous</Button><Button variant="outline" size="sm" disabled={pagination.page*pagination.pageSize>=pagination.total} onClick={()=>navigate({page:String(pagination.page+1)},false)}>Next</Button></>}</div>}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border px-6 py-16 text-center">
             <Briefcase className="h-8 w-8 text-muted-foreground" />
@@ -576,6 +614,9 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
             cards={boardCards}
             onOpen={matterId => router.push(`/admin/matters/${matterId}`)}
             onStageChange={handleStageChange}
+            pagination={pagination ? Object.fromEntries(STAGE_GROUP_ORDER.map(group=>[group,{total:pagination.columns[group] ?? 0,page:Math.max(1,Math.min(pagination.params.groupPages[group],Math.ceil((pagination.columns[group] ?? 0)/pagination.pageSize))),pageSize:pagination.pageSize}])) : undefined}
+            onPageChange={(group,page)=>navigate({[`page_${group}`]:String(page)},false)}
+            onSaved={()=>{navigate({});router.refresh()}}
             label="Matters pipeline board"
           />
         ) : (

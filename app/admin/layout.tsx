@@ -1,3 +1,4 @@
+import { NavigationTiming } from './components/NavigationTiming'
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
@@ -53,6 +54,7 @@ export default async function AdminLayout({
   return (
     <AuthTokenProvider>
       <div className="admin-root">
+        <NavigationTiming />
         <AdminLayoutClient
           userName={userName}
           userInitials={userInitials}

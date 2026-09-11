@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -64,6 +65,9 @@ interface MatterStageBoardProps {
   onStageChange: (matterId: string, stage: MatterStage) => void
   /** Names the board region for screen readers. */
   label?: string
+  pagination?: Partial<Record<StageGroup,{total:number;page:number;pageSize:number}>>
+  onPageChange?: (group:StageGroup,page:number)=>void
+  onSaved?: ()=>void
 }
 
 /** Stage pipeline board shared by the Matters list and the Drafting hub. */
@@ -72,6 +76,7 @@ export function MatterStageBoard({
   onOpen,
   onStageChange,
   label = 'Matter pipeline board',
+  pagination, onPageChange, onSaved,
 }: MatterStageBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<StageGroup | null>(null)
@@ -106,8 +111,9 @@ export function MatterStageBoard({
       onStageChange(matterId, card.stage)
       return
     }
+    onSaved?.()
     toast.success(`Moved to ${stageLabel(targetStage)}`)
-  }, [cards, onStageChange])
+  }, [cards, onStageChange, onSaved])
 
   const handleDrop = useCallback((group: StageGroup, matterId: string) => {
     void applyStage(firstStageOfGroup(group), matterId)
@@ -127,13 +133,15 @@ export function MatterStageBoard({
       >
         {STAGE_GROUP_ORDER.map(group => {
           const items = byGroup.get(group) ?? []
+          const paging = pagination?.[group]
+          const count = paging?.total ?? items.length
           const colors = GROUP_COLORS[group]
           const isTarget = dropTarget === group
 
           return (
             <section
               key={group}
-              aria-label={`${STAGE_GROUP_LABELS[group]} · ${items.length}`}
+              aria-label={`${STAGE_GROUP_LABELS[group]} · ${count}`}
               className={cn(
                 'flex min-w-0 flex-col rounded-lg border bg-muted/20',
                 isTarget ? 'border-primary ring-2 ring-primary/20' : 'border-border',
@@ -159,9 +167,10 @@ export function MatterStageBoard({
                   <h2 className="truncate text-xs font-semibold">{STAGE_GROUP_LABELS[group]}</h2>
                 </div>
                 <Badge variant="outline" className="border-current/20 bg-background/60 text-[10px] tabular-nums">
-                  {items.length}
+                  {count}
                 </Badge>
               </header>
+              {paging && <div className="flex items-center justify-between px-2 py-1 text-xs"><Button variant="ghost" size="sm" disabled={paging.page<=1} onClick={()=>onPageChange?.(group,paging.page-1)}>Previous</Button><span>{paging.page}</span><Button variant="ghost" size="sm" disabled={paging.page*paging.pageSize>=paging.total} onClick={()=>onPageChange?.(group,paging.page+1)}>Next</Button></div>}
               <ul className="flex min-h-[8rem] flex-1 flex-col gap-2 p-2">
                 {items.length === 0 ? (
                   <li className="rounded-md border border-dashed border-border px-2 py-6 text-center text-[11px] text-muted-foreground">
