@@ -18,9 +18,9 @@ export interface EmailAttachment {
 /**
  * Total attachment budget for one send.
  *
- * Resend allows far more, but Microsoft Graph's `sendMail` rejects request
- * bodies over ~4MB (anything larger needs an upload session), so keep the cap
- * modest and let the provider's own error surface if it still refuses.
+ * Both providers allow more — Gmail accepts a raw message up to ~35MB — but the
+ * whole message is built in memory and base64 inflates it by a third, so keep
+ * the cap modest and let the provider's own error surface if it still refuses.
  */
 export const MAX_TOTAL_ATTACHMENT_BYTES = 10 * 1024 * 1024
 

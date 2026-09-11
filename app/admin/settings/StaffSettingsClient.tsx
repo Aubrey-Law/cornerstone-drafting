@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
-import { CALENDAR_TARGET_LABEL, preferredTarget } from '@/lib/appointments/calendarTarget'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   DEFAULT_ANTHROPIC_MODEL,
@@ -92,8 +91,6 @@ export function StaffSettingsClient({
   })
   const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null)
   const [outlook, setOutlook] = useState<{
-    envConfigured: boolean
-    configIssue: string | null
     connected: boolean
     email: string | null
   } | null>(null)
@@ -103,6 +100,7 @@ export function StaffSettingsClient({
     connected: boolean
     email: string | null
     canRefresh: boolean
+    hasGmailSendScope: boolean
   } | null>(null)
 
   useEffect(() => {
@@ -123,13 +121,10 @@ export function StaffSettingsClient({
     ) {
       setTab(t)
     }
-    if (sp.get('mscal_connected') === '1') {
-      toast.success('Outlook connected')
-    }
     const err = sp.get('mscal_error')
     if (err) toast.error(err)
     if (sp.get('gcal_connected') === '1') {
-      toast.success('Google Calendar connected')
+      toast.success('Google connected')
     }
     const gerr = sp.get('gcal_error')
     // Google's failures are long and specific (a redirect URI that does not
@@ -162,12 +157,7 @@ export function StaffSettingsClient({
       }
       if (oRes.ok) {
         const body = await oRes.json()
-        setOutlook({
-          envConfigured: Boolean(body.envConfigured),
-          configIssue: body.configIssue ?? null,
-          connected: Boolean(body.connected),
-          email: body.email ?? null,
-        })
+        setOutlook({ connected: Boolean(body.connected), email: body.email ?? null })
       }
       if (gRes.ok) {
         const body = await gRes.json()
@@ -177,6 +167,7 @@ export function StaffSettingsClient({
           connected: Boolean(body.connected),
           email: body.email ?? null,
           canRefresh: Boolean(body.canRefresh),
+          hasGmailSendScope: Boolean(body.hasGmailSendScope),
         })
       }
     })()
@@ -362,7 +353,7 @@ export function StaffSettingsClient({
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, API keys, MCP connectors, Outlook, firm templates, AI usage,
+          Model preferences, API keys, MCP connectors, Google, firm templates, AI usage,
           and matter stage SLA.
         </p>
       </div>
@@ -373,10 +364,12 @@ export function StaffSettingsClient({
             ['models', 'Models'],
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
-            ['outlook', 'Outlook'],
-            ['google', 'Google Calendar'],
+            ['google', 'Google'],
             ['email', 'Email'],
             ['scheduling', 'Scheduling'],
+            // Only while a stored Microsoft connection is still holding events
+            // from before the firm left Microsoft 365.
+            ...(outlook?.connected ? [['outlook', 'Outlook (legacy)'] as const] : []),
             ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
@@ -651,24 +644,107 @@ export function StaffSettingsClient({
         </section>
       )}
 
+      {tab === 'google' && (
+        <section className="space-y-4 rounded-lg border border-border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Google Calendar &amp; Gmail</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connect the firm&rsquo;s Google account. One consent covers both: appointments
+              and holds are written to Google Calendar, and email categories set to
+              <em> Gmail</em> send from this mailbox. Without it, calendar features are
+              unavailable and email falls back to Resend.
+            </p>
+          </div>
+          {!google ? (
+            <p className="text-sm text-muted-foreground">Loading&hellip;</p>
+          ) : !google.envConfigured ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+              Google is not configured.
+              {google.configIssue ? ` ${google.configIssue}` : ''} Set
+              GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET and
+              GOOGLE_CALENDAR_REDIRECT_URI (pointing at /api/admin/google/callback), then
+              redeploy so the new values are visible.
+            </p>
+          ) : google.connected ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm">
+                  Connected as{' '}
+                  <span className="font-medium">{google.email || 'Google account'}</span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    if (!token) return
+                    void (async () => {
+                      setSaving(true)
+                      try {
+                        const res = await fetch('/api/admin/google/status', {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                        if (!res.ok) throw new Error('Disconnect failed')
+                        setGoogle((g) => (g ? { ...g, connected: false, email: null } : g))
+                        toast.success('Google disconnected')
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Disconnect failed')
+                      } finally {
+                        setSaving(false)
+                      }
+                    })()
+                  }}
+                >
+                  Disconnect
+                </Button>
+              </div>
+              {!google.canRefresh && (
+                <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                  This connection has no refresh token, so it will stop working within the hour.
+                  Remove Cornerstone at myaccount.google.com/permissions and connect again.
+                </p>
+              )}
+              {/* A connection made before Gmail was wired in has the calendar
+                  scope and not the mail one, and nothing about it looks wrong
+                  until a client email fails. */}
+              {!google.hasGmailSendScope && (
+                <p className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
+                  This connection cannot send mail — it predates Gmail sending. Reconnect to
+                  grant the send permission; email stays on Resend until you do.
+                </p>
+              )}
+            </div>
+          ) : (
+            <Button size="sm" asChild>
+              <a href="/api/admin/google/connect">Connect Google</a>
+            </Button>
+          )}
+
+          <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+            New appointments and holds go to{' '}
+            <span className="font-medium">
+              {google?.connected ? 'Google Calendar' : 'no calendar — nothing is connected'}
+            </span>
+            .
+          </p>
+        </section>
+      )}
+
       {tab === 'outlook' && (
         <section className="space-y-4 rounded-lg border border-border p-4">
           <div>
-            <h2 className="text-sm font-semibold">Microsoft 365 / Outlook</h2>
+            <h2 className="text-sm font-semibold">Outlook (legacy)</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Connect your Outlook mailbox to send matter emails via Microsoft Graph. If not
-              connected, manual emails fall back to Resend.
+              The firm no longer runs on Microsoft 365, and nothing new is written here.
+              This connection stays only so appointments booked before the switchover can
+              still be cancelled and moved in the calendar that actually holds them.
+              Disconnecting leaves those events in place — they would then have to be
+              cancelled in Outlook by hand.
             </p>
           </div>
           {!outlook ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : !outlook.envConfigured ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-              Microsoft Graph is not configured.
-              {outlook.configIssue ? ` ${outlook.configIssue}` : ''} Set
-              MICROSOFT_GRAPH_CLIENT_ID, MICROSOFT_GRAPH_CLIENT_SECRET, and
-              MICROSOFT_GRAPH_REDIRECT_URI (pointing at /api/admin/microsoft/callback).
-            </p>
+            <p className="text-sm text-muted-foreground">Loading&hellip;</p>
           ) : outlook.connected ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm">
@@ -688,9 +764,8 @@ export function StaffSettingsClient({
                         headers: { Authorization: `Bearer ${token}` },
                       })
                       if (!res.ok) throw new Error('Disconnect failed')
-                      setOutlook((o) =>
-                        o ? { ...o, connected: false, email: null } : o,
-                      )
+                      setOutlook((o) => (o ? { ...o, connected: false, email: null } : o))
+                      setTab('google')
                       toast.success('Outlook disconnected')
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : 'Disconnect failed')
@@ -704,96 +779,9 @@ export function StaffSettingsClient({
               </Button>
             </div>
           ) : (
-            <Button size="sm" asChild>
-              <a href="/api/admin/microsoft/connect">Connect Outlook</a>
-            </Button>
-          )}
-        </section>
-      )}
-
-      {tab === 'google' && (
-        <section className="space-y-4 rounded-lg border border-border p-4">
-          <div>
-            <h2 className="text-sm font-semibold">Google Calendar</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Connect the firm&rsquo;s Google account so appointments are written to Google
-              Calendar. Existing appointments already in Outlook stay there and are still
-              cancelled and moved there.
-            </p>
-          </div>
-          {!google ? (
-            <p className="text-sm text-muted-foreground">Loading&hellip;</p>
-          ) : !google.envConfigured ? (
             <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-              Google Calendar is not configured.
-              {google.configIssue ? ` ${google.configIssue}` : ''} Set
-              GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET and
-              GOOGLE_CALENDAR_REDIRECT_URI (pointing at /api/admin/google/callback), then
-              redeploy so the new values are visible.
-            </p>
-          ) : google.connected ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm">
-                  Connected as{' '}
-                  <span className="font-medium">{google.email || 'Google Calendar'}</span>
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={saving}
-                  onClick={() => {
-                    if (!token) return
-                    void (async () => {
-                      setSaving(true)
-                      try {
-                        const res = await fetch('/api/admin/google/status', {
-                          method: 'DELETE',
-                          headers: { Authorization: `Bearer ${token}` },
-                        })
-                        if (!res.ok) throw new Error('Disconnect failed')
-                        setGoogle((g) => (g ? { ...g, connected: false, email: null } : g))
-                        toast.success('Google Calendar disconnected')
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : 'Disconnect failed')
-                      } finally {
-                        setSaving(false)
-                      }
-                    })()
-                  }}
-                >
-                  Disconnect
-                </Button>
-              </div>
-              {!google.canRefresh && (
-                <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                  This connection has no refresh token, so it will stop working within the hour.
-                  Remove Cornerstone at myaccount.google.com/permissions and connect again.
-                </p>
-              )}
-            </div>
-          ) : (
-            <Button size="sm" asChild>
-              <a href="/api/admin/google/connect">Connect Google Calendar</a>
-            </Button>
-          )}
-
-          {/* The question worth answering on this screen: where does the next
-              booking actually land? `preferredTarget` is the same function the
-              booking flow dispatches on, so this cannot drift into naming a
-              calendar that bookings do not go to. */}
-          {google && outlook && (
-            <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-              New appointments go to{' '}
-              <span className="font-medium">
-                {CALENDAR_TARGET_LABEL[
-                  preferredTarget({
-                    google: google.connected,
-                    microsoft: outlook.connected,
-                  }) ?? 'none'
-                ]}
-              </span>
-              .
+              No Outlook connection is stored. Cornerstone cannot reconnect one — the
+              firm&rsquo;s calendar and mailbox are Google.
             </p>
           )}
         </section>

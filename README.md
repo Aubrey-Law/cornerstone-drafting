@@ -11,7 +11,7 @@ Drafting (design sheet → generate → review) lives in this repo and is the so
 - Supabase Postgres/Auth (greenfield baseline + lite migrations)
 - Cloudflare R2 private document storage
 - Node estate document generator (data in `tools/aubreylaw-docgeneration`)
-- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Microsoft Graph (Outlook send), Retell (AI receptionist)
+- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Google (Calendar + Gmail send), Retell (AI receptionist)
 
 ## Local setup
 
@@ -41,11 +41,11 @@ Dev server: [http://localhost:3002](http://localhost:3002)
 | `/admin/drafting` | Drafting next-action queue |
 | `/admin/drafting/[matterId]` | Design → Generate → Review workspace |
 | `/admin/tasks` | Unified work queue and recurring work |
-| `/admin/calendar` | Cornerstone appointments and Outlook calendar |
+| `/admin/calendar` | Cornerstone appointments and Google Calendar |
 | `/admin/billing` | Charges, invoices, payments, claims, and accounting export |
 | `/admin/assistant` | Firm assistant |
 | `/admin/works` | Workflow and reference library |
-| `/admin/settings` | Firm, models, email, Outlook, scheduling, and SLA settings |
+| `/admin/settings` | Firm, models, email, Google, scheduling, and SLA settings |
 
 ### Client portal
 
@@ -117,7 +117,7 @@ Direct-pay estate-planning and college-preparation schedules use two due-on-rece
 
 ## Environment
 
-See [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md) for Supabase, R2, Resend, Telnyx/Twilio, Microsoft Graph, and Retell variables.
+See [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md) for Supabase, R2, Resend, Telnyx/Twilio, Google, and Retell variables.
 
 ## Sharing PDFs with clients
 

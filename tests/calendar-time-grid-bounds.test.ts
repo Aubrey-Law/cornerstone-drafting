@@ -5,7 +5,7 @@ import {
   endMinutesOfDay,
   timeGridBounds,
 } from '@/app/admin/calendar/timeGrid'
-import type { CalendarAppointment, OutlookEvent } from '@/app/admin/calendar/types'
+import type { CalendarAppointment, ExternalCalendarEvent } from '@/app/admin/calendar/types'
 
 /** Local-time ISO for the test day, so the assertions are timezone-independent. */
 function localIso(day: number, hour: number, minute = 0): string {
@@ -15,7 +15,7 @@ function localIso(day: number, hour: number, minute = 0): string {
 const DAY = new Date(2026, 7, 10)
 const DAY_KEY = '2026-08-10'
 
-function outlookEvent(overrides: Partial<OutlookEvent> = {}): OutlookEvent {
+function outlookEvent(overrides: Partial<ExternalCalendarEvent> = {}): ExternalCalendarEvent {
   return {
     id: 'ev-1',
     subject: 'Court hearing',
@@ -53,7 +53,7 @@ function appointment(overrides: Partial<CalendarAppointment> = {}): CalendarAppo
   }
 }
 
-function bounds(options: { appointments?: CalendarAppointment[]; outlook?: OutlookEvent[] } = {}) {
+function bounds(options: { appointments?: CalendarAppointment[]; outlook?: ExternalCalendarEvent[] } = {}) {
   return timeGridBounds(
     [DAY],
     new Map(options.appointments ? [[DAY_KEY, options.appointments]] : []),

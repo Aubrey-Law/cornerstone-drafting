@@ -17,7 +17,7 @@ import type {
   AttentionItem,
   CalendarAppointment,
   CalendarRailData,
-  OutlookEvent,
+  ExternalCalendarEvent,
 } from './types'
 import {
   BLOCK_HATCH,
@@ -119,8 +119,8 @@ function CategoryStrip({ label, style }: { label: string; style: { bg: string; t
   )
 }
 
-/** Outlook events carry the same category colour as their month-grid block. */
-function OutlookRow({ event }: { event: OutlookEvent }) {
+/** Calendar events carry the same category colour as their month-grid block. */
+function CalendarEventRow({ event }: { event: ExternalCalendarEvent }) {
   const category = categorize(event.subject)
   const style = categoryStyleFor(event.subject)
   return (
@@ -136,7 +136,7 @@ function OutlookRow({ event }: { event: OutlookEvent }) {
         <div className="px-3 py-2 text-muted-foreground">
           <p className="text-sm font-medium text-foreground">{event.subject}</p>
           <p className="text-[11px]">
-            {event.calendarName ? `Outlook · ${event.calendarName}` : 'Outlook event'}
+            {event.calendarName ? `Google · ${event.calendarName}` : 'Calendar event'}
           </p>
         </div>
       </div>
@@ -190,7 +190,7 @@ function AgendaRow({
                 {appointment.source === 'calendly'
                   ? ' · Calendly'
                   : !appointment.calendarSynced && appointment.status === 'scheduled'
-                    ? ' · ⚠ not on Outlook'
+                    ? ' · ⚠ not on the calendar'
                     : ''}
               </p>
             </div>
@@ -256,7 +256,7 @@ function AgendaRow({
 export function DayAgenda({
   date,
   appointments,
-  outlookEvents,
+  calendarEvents,
   attention,
   rail,
   onDismissAttention,
@@ -266,7 +266,7 @@ export function DayAgenda({
 }: {
   date: Date
   appointments: CalendarAppointment[]
-  outlookEvents: OutlookEvent[]
+  calendarEvents: ExternalCalendarEvent[]
   attention: AttentionItem[]
   rail: CalendarRailData
   onDismissAttention: (id: string) => void
@@ -278,8 +278,8 @@ export function DayAgenda({
   const booked = active.reduce((sum, item) => sum + durationMinutes(item.startTime, item.endTime), 0)
   const workday = 8 * 60
   const heading = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  const blocks = outlookEvents.filter(isBlock)
-  const outlook = outlookEvents.filter(event => !isBlock(event))
+  const blocks = calendarEvents.filter(isBlock)
+  const external = calendarEvents.filter(event => !isBlock(event))
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
@@ -287,7 +287,7 @@ export function DayAgenda({
         <header>
           <h1 className="text-xl font-semibold text-foreground">{heading}</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {active.length + outlook.length} events · {minutesLabel(booked)} booked ·{' '}
+            {active.length + external.length} events · {minutesLabel(booked)} booked ·{' '}
             {minutesLabel(Math.max(0, workday - booked))} open · {nextMeetingLabel(active)}
           </p>
         </header>
@@ -307,7 +307,7 @@ export function DayAgenda({
             </div>
           ))}
           {[...active.map(item => ({ kind: 'appointment' as const, start: item.startTime, item })),
-            ...outlook.map(item => ({ kind: 'outlook' as const, start: item.startIso, item }))]
+            ...external.map(item => ({ kind: 'calendar' as const, start: item.startIso, item }))]
             .sort((a, b) => a.start.localeCompare(b.start))
             .map(row => row.kind === 'appointment' ? (
               <AgendaRow
@@ -317,9 +317,9 @@ export function DayAgenda({
                 onReschedule={() => onReschedule(row.item)}
               />
             ) : (
-              <OutlookRow key={row.item.id} event={row.item} />
+              <CalendarEventRow key={row.item.id} event={row.item} />
             ))}
-          {active.length === 0 && outlook.length === 0 && blocks.length === 0 && (
+          {active.length === 0 && external.length === 0 && blocks.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               Nothing scheduled. Use Quick book or choose an open slot.
             </div>

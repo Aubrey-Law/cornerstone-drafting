@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
-import { createCalendarHold } from '@/lib/appointments/graphEvents'
+import { createCalendarHold } from '@/lib/appointments/googleEvents'
 
 export async function POST(req: Request) {
   const auth = await requireAdmin(req)

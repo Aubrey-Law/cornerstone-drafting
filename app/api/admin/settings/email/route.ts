@@ -6,6 +6,7 @@ import {
   EMAIL_CATEGORY_META,
   isEmailCategory,
   isEmailProvider,
+  normalizeEmailProvider,
   type EmailMode,
   type EmailProvider,
 } from '@/lib/email/categories'
@@ -15,8 +16,8 @@ import {
   getAllowlist,
   getTestInbox,
 } from '@/lib/email/settings'
-import { getStoredCalendarConnection, getAnyMicrosoftConnection } from '@/lib/calendarConnections'
-import { hasMailSendScope } from '@/lib/microsoftCalendar'
+import { getStoredCalendarConnection, getAnyConnectionForProvider } from '@/lib/calendarConnections'
+import { hasGmailSendScope } from '@/lib/googleCalendar'
 import { clearFirmSettingsCache, loadFirmSettings } from '@/lib/firmSettings'
 
 const VALID_MODES: EmailMode[] = ['on', 'off', 'redirect']
@@ -47,13 +48,13 @@ async function loadEmailSettingsRows(
       rows: ((full.data ?? []) as {
         category: string
         mode: EmailMode
-        provider: EmailProvider | null
+        provider: string | null
         updated_at: string | null
         updated_by: string | null
       }[]).map(row => ({
         category: row.category,
         mode: row.mode,
-        provider: row.provider ?? 'resend',
+        provider: normalizeEmailProvider(row.provider),
         updated_at: row.updated_at,
         updated_by: row.updated_by,
       })),
@@ -135,16 +136,16 @@ export async function GET(req: NextRequest) {
     byCategory.set(row.category, row)
   }
 
-  let msConn = null
+  let googleConn = null
   try {
-    msConn =
-      (userId ? await getStoredCalendarConnection(userId, 'microsoft') : null) ??
-      (await getAnyMicrosoftConnection())
+    googleConn =
+      (userId ? await getStoredCalendarConnection(userId, 'google') : null) ??
+      (await getAnyConnectionForProvider('google'))
   } catch {
-    msConn = null
+    googleConn = null
   }
-  const graphAvailable = Boolean(msConn) && hasMailSendScope(msConn?.scopes)
-  const graphAccountEmail = msConn?.email ?? null
+  const gmailAvailable = Boolean(googleConn) && hasGmailSendScope(googleConn?.scopes)
+  const gmailAccountEmail = googleConn?.email ?? null
 
   const lastSends = await loadLastSendRows(admin)
 
@@ -164,7 +165,7 @@ export async function GET(req: NextRequest) {
     return {
       ...EMAIL_CATEGORY_META[c],
       mode: (setting?.mode ?? 'off') as EmailMode,
-      provider: (setting?.provider ?? 'resend') as EmailProvider,
+      provider: normalizeEmailProvider(setting?.provider),
       updatedAt: setting?.updated_at ?? null,
       updatedBy: setting?.updated_by ?? null,
       lastSentAt: last?.sent_at ?? null,
@@ -181,10 +182,12 @@ export async function GET(req: NextRequest) {
     allowlist: getAllowlist(),
     emailLogoHeader: firm.emailLogoHeader,
     migrationRequired,
-    graph: {
-      available: graphAvailable,
-      accountEmail: graphAccountEmail,
-      missingScope: Boolean(msConn) && !graphAvailable,
+    gmail: {
+      available: gmailAvailable,
+      accountEmail: gmailAccountEmail,
+      // A Google account connected before Gmail was wired in carries only the
+      // calendar scope; that is a reconnect, not a missing connection.
+      missingScope: Boolean(googleConn) && !gmailAvailable,
     },
   })
 }
@@ -229,19 +232,19 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'mode must be on|off|redirect' }, { status: 400 })
   }
   if (provider !== undefined && !isEmailProvider(provider)) {
-    return NextResponse.json({ error: 'provider must be resend|graph' }, { status: 400 })
+    return NextResponse.json({ error: 'provider must be resend|gmail' }, { status: 400 })
   }
   if (mode === undefined && provider === undefined) {
     return NextResponse.json({ error: 'mode or provider is required' }, { status: 400 })
   }
 
-  if (provider === 'graph') {
+  if (provider === 'gmail') {
     const conn =
-      (userId ? await getStoredCalendarConnection(userId, 'microsoft') : null) ??
-      (await getAnyMicrosoftConnection())
-    if (!conn || !hasMailSendScope(conn.scopes)) {
+      (userId ? await getStoredCalendarConnection(userId, 'google') : null) ??
+      (await getAnyConnectionForProvider('google'))
+    if (!conn || !hasGmailSendScope(conn.scopes)) {
       return NextResponse.json(
-        { error: 'Microsoft mailbox not connected with Mail.Send scope. Connect from Settings → Outlook.' },
+        { error: 'Google account not connected with the Gmail send scope. Connect from Settings → Google.' },
         { status: 400 },
       )
     }

@@ -35,7 +35,7 @@ export interface BookableType {
   active: boolean
 }
 
-export interface OutlookEvent {
+export interface ExternalCalendarEvent {
   id: string
   subject: string
   startIso: string
@@ -47,8 +47,8 @@ export interface OutlookEvent {
   calendarName?: string | null
 }
 
-/** One synced Outlook calendar, as reported by the outlook-events route. */
-export interface OutlookCalendarRef {
+/** One synced calendar, as reported by the calendar-events route. */
+export interface ExternalCalendarRef {
   id: string
   name: string
   isDefault: boolean

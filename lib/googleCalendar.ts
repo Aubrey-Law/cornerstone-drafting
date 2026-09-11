@@ -6,12 +6,11 @@ import {
 } from '@/lib/calendarConnections'
 
 /**
- * Google OAuth for the firm's calendar.
+ * Google OAuth for the firm's calendar and mailbox.
  *
- * Deliberately shaped like `lib/microsoftCalendar.ts` — same exported names,
- * same failure modes, same "config issue" string rather than a thrown error on
- * a missing variable — so the two can sit behind one provider switch without a
- * caller learning which is which.
+ * One connection covers both: the same consent that lets Cornerstone write
+ * appointments also lets it send matter email, so the attorney authorises once
+ * and the app never has to explain which half of Google it is missing.
  */
 
 const GOOGLE_AUTH_BASE = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -19,14 +18,21 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo'
 const GOOGLE_TIMEOUT_MS = 15_000
 
+export const REQUIRED_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
+export const REQUIRED_GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+
+/**
+ * `gmail.send` is send-only by design. Cornerstone never reads the mailbox, and
+ * the broader `gmail.modify`/`mail.google.com` scopes would put every message
+ * the attorney has ever received inside the app's blast radius for no feature.
+ */
 const SCOPES = [
   'openid',
   'email',
   'profile',
-  'https://www.googleapis.com/auth/calendar',
+  REQUIRED_CALENDAR_SCOPE,
+  REQUIRED_GMAIL_SCOPE,
 ] as const
-
-export const REQUIRED_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
 
 function scopeIncludes(scope: string | null | undefined, target: string): boolean {
   if (!scope) return false
@@ -35,6 +41,17 @@ function scopeIncludes(scope: string | null | undefined, target: string): boolea
 
 export function hasCalendarScope(scope: string | null | undefined): boolean {
   return scopeIncludes(scope, REQUIRED_CALENDAR_SCOPE)
+}
+
+/**
+ * Whether the stored connection can send mail.
+ *
+ * A connection made before Gmail was wired in carries only the calendar scope
+ * and Google will refuse the send, so this is checked before offering Gmail as
+ * a provider rather than after a client email silently fails.
+ */
+export function hasGmailSendScope(scope: string | null | undefined): boolean {
+  return scopeIncludes(scope, REQUIRED_GMAIL_SCOPE)
 }
 
 function clientId() {

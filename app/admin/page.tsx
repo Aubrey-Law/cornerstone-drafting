@@ -28,7 +28,7 @@ function toMatterItem(m: PipelineMatter): TodayMatterItem {
 
 
 export default async function AdminTodayPage() {
-  const today = await fetchTodayData({ includeOutlook: false })
+  const today = await fetchTodayData({ includeCalendar: false })
   const dateLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -105,7 +105,7 @@ export default async function AdminTodayPage() {
 
         <aside className="basis-[280px] grow space-y-3 lg:sticky lg:top-4 lg:max-w-[320px] lg:self-start">
           <Suspense fallback={<TodayCalendarCard rows={today.appointmentsToday} status={today.appointmentsError ? 'Recorded appointments unavailable; loading Outlook…' : 'Loading Outlook calendar…'} />}>
-            <TodayCalendar appointmentsError={today.appointmentsError} appointments={today.appointmentsToday} excludeIds={today.outlookEventIds ?? []} />
+            <TodayCalendar appointmentsError={today.appointmentsError} appointments={today.appointmentsToday} excludeIds={today.calendarEventIds ?? []} />
           </Suspense>
 
           <TodayBillingCard billing={today.billing} />

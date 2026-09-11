@@ -21,12 +21,25 @@ export const EMAIL_CATEGORIES = [
 
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number]
 export type EmailMode = 'on' | 'off' | 'redirect'
-export type EmailProvider = 'resend' | 'graph'
+export type EmailProvider = 'resend' | 'gmail'
 
-export const EMAIL_PROVIDERS: readonly EmailProvider[] = ['resend', 'graph'] as const
+export const EMAIL_PROVIDERS: readonly EmailProvider[] = ['resend', 'gmail'] as const
 
 export function isEmailProvider(value: unknown): value is EmailProvider {
-  return value === 'resend' || value === 'graph'
+  return value === 'resend' || value === 'gmail'
+}
+
+/**
+ * Read a stored provider, mapping the retired Microsoft Graph value onto Gmail.
+ *
+ * Rows written before the firm left Microsoft 365 still say `graph`, and the
+ * migration rewrites them — but a database that has not been pushed yet would
+ * otherwise fall back to Resend and silently send client mail from the wrong
+ * address. Every read of `email_settings.provider` goes through here.
+ */
+export function normalizeEmailProvider(value: unknown): EmailProvider {
+  if (value === 'graph') return 'gmail'
+  return isEmailProvider(value) ? value : 'resend'
 }
 
 export interface EmailCategoryMeta {

@@ -1,11 +1,11 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
-import { createCalendarHold } from '@/lib/appointments/graphEvents'
+import { createCalendarHold } from '@/lib/appointments/googleEvents'
 import { computeSlots } from '@/lib/appointments/availability'
-import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
+import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
 import { getSchedulingSettings, listAppointmentTypes } from '@/lib/appointments/settings'
 import { effectiveWeeklyHours } from '@/lib/appointments/types'
-import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
+import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
 import { fetchDueTasks, fetchTasks } from '@/lib/queries/tasks'
 import {
   isUuid,
@@ -400,11 +400,11 @@ async function createTaskFromInput(input: CreateTaskInput, actor: { id: string; 
       })
       await admin
         .from('appointments')
-        .update({ microsoft_event_id: hold.eventId })
+        .update({ google_event_id: hold.eventId })
         .eq('id', appointment.data.id)
-        .is('microsoft_event_id', null)
+        .is('google_event_id', null)
     } catch {
-      console.error('[assistant-calendar-tools] failed to create task calendar hold in Outlook', task.id)
+      console.error('[assistant-calendar-tools] failed to create task calendar hold in Google Calendar', task.id)
     }
   }
 
@@ -441,18 +441,27 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
         const admin = getAdminClient()
         const { data } = await admin
           .from('appointments')
-          .select('id, start_time, end_time, status, attendee_name, linked_matter_id, microsoft_event_id')
+          .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id, microsoft_event_id')
           .gte('start_time', from.toISOString())
           .lt('start_time', to.toISOString())
-        const exclude = new Set((data ?? []).map(row => row.microsoft_event_id).filter((id): id is string => Boolean(id)))
-        let outlook: unknown[] = []
+        const exclude = new Set(
+          (data ?? [])
+            .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+            .filter((id): id is string => Boolean(id)),
+        )
+        let calendarEvents: unknown[] = []
         let connected = true
         try {
-          outlook = mapGraphCalendarView(await listCalendarView(from.toISOString(), to.toISOString()), exclude)
+          // `.raw` is the event array; the result object itself would map to
+          // nothing and quietly read as an empty calendar.
+          const view = await listCalendarView(from.toISOString(), to.toISOString())
+          calendarEvents = mapCalendarView(view.raw, exclude)
         } catch {
           connected = false
         }
-        return { content: JSON.stringify({ appointments: data ?? [], outlook, connected }) }
+        return {
+          content: JSON.stringify({ appointments: data ?? [], calendar: calendarEvents, connected }),
+        }
       },
     },
     {
