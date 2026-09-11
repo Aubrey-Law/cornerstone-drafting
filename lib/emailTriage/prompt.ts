@@ -41,7 +41,6 @@ export function sanitizeQuoted(text: string): string {
     // Control characters other than tab, newline and carriage return, plus the
     // Unicode format and zero-width characters: invisible to whoever reviews the
     // draft, not invisible to the model.
-    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '')
 }
