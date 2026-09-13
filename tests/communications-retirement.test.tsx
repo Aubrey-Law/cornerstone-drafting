@@ -9,13 +9,13 @@ vi.mock('@/components/rail/RailActivityPane', () => ({ RailActivityPane: () => <
 import { AdminRail, useAdminRail } from '@/components/rail/AdminRail'
 
 function Harness() {
-  const rail = useAdminRail({ voiceEnabled: true })
-  return <><button onClick={rail.toggle}>Open tools</button><AdminRail rail={rail} voiceEnabled smsEnabled /></>
+  const rail = useAdminRail()
+  return <><button onClick={rail.toggle}>Open tools</button><AdminRail rail={rail} /></>
 }
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('retired communication surfaces', () => {
-  it('keeps tools available without phone or text controls even with legacy settings', async () => {
+  it('keeps tools available without phone or text controls', async () => {
     render(<Harness />)
     fireEvent.click(screen.getByText('Open tools'))
     expect(await screen.findByRole('button', { name: 'Assistant' })).toBeTruthy()

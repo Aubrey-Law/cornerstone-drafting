@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
 import { Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ChatMessage } from '@/app/admin/components/ChatMessage'
+import { useStickToBottom } from '@/hooks/useStickToBottom'
 import type { AssistantMessage } from './useAssistantStream'
 
 interface AssistantThreadProps {
@@ -12,14 +12,17 @@ interface AssistantThreadProps {
 }
 
 export function AssistantThread({ messages, streaming }: AssistantThreadProps) {
-  const bottomRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, streaming])
+  const { containerRef, bottomRef, onScroll } = useStickToBottom<HTMLDivElement>([messages, streaming])
 
   return (
-    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-4">
+    <div
+      ref={containerRef}
+      onScroll={onScroll}
+      role="log"
+      aria-live="polite"
+      aria-busy={streaming}
+      className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-4"
+    >
       {messages.map(message => (
         <div key={message.id}>
           {message.role === 'user' && message.workflowAttached && (
@@ -48,7 +51,7 @@ export function AssistantThread({ messages, streaming }: AssistantThreadProps) {
         </div>
       ))}
       {streaming && messages[messages.length - 1]?.role === 'assistant' && !messages[messages.length - 1]?.content && (
-        <p className="px-2 text-sm text-muted-foreground">Thinking…</p>
+        <p role="status" className="px-2 text-sm text-muted-foreground">Thinking…</p>
       )}
       <div ref={bottomRef} />
     </div>

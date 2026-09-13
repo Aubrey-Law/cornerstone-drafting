@@ -34,7 +34,12 @@ Review only approved matter facts. Identify missing information as [UNKNOWN]. Dr
 
 const SCOPES = ['all', 'mine', 'shared', 'system', 'inactive'] as const
 
-export default function WorksClient() {
+interface WorksClientProps {
+  /** Document masters are administrator-only; attorneys see why, not a failure. */
+  canManageMasters?: boolean
+}
+
+export default function WorksClient({ canManageMasters = false }: WorksClientProps) {
   const searchParams = useSearchParams()
   const [skills, setSkills] = useState<WorkSkill[]>([])
   const [scope, setScope] = useState<(typeof SCOPES)[number]>('all')
@@ -46,6 +51,7 @@ export default function WorksClient() {
   const [editorSkill, setEditorSkill] = useState<WorkSkill | null>(null)
   const [shareSkill, setShareSkill] = useState<WorkSkill | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
@@ -53,11 +59,22 @@ export default function WorksClient() {
     setLoading(true)
     const params = new URLSearchParams({ scope })
     if (type) params.set('type', type)
-    const response = await fetch(`/api/admin/works?${params.toString()}`, { cache: 'no-store' })
-    const body = await response.json().catch(() => ({})) as { skills?: WorkSkill[]; error?: string }
-    if (response.ok) setSkills(body.skills ?? [])
-    else toast.error(body.error ?? 'Unable to load the library')
-    setLoading(false)
+    try {
+      const response = await fetch(`/api/admin/works?${params.toString()}`, { cache: 'no-store' })
+      const body = await response.json().catch(() => ({})) as { skills?: WorkSkill[]; error?: string }
+      if (response.ok) {
+        setSkills(body.skills ?? [])
+        setLoadError(null)
+      } else {
+        const message = body.error ?? 'Unable to load the library'
+        setLoadError(message)
+        toast.error(message)
+      }
+    } catch {
+      setLoadError('Could not reach the server.')
+    } finally {
+      setLoading(false)
+    }
   }, [scope, type])
 
   useEffect(() => { void loadSkills() }, [loadSkills])
@@ -143,7 +160,7 @@ export default function WorksClient() {
       <Tabs defaultValue="workflows" className="flex min-h-0 flex-1 flex-col gap-4">
         <TabsList className="w-fit">
           <TabsTrigger value="workflows">Workflows</TabsTrigger>
-          <TabsTrigger value="documents">Document masters</TabsTrigger>
+          {canManageMasters && <TabsTrigger value="documents">Document masters</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="workflows" className="flex min-h-0 flex-1 flex-col gap-4">
@@ -191,6 +208,12 @@ export default function WorksClient() {
             <div className="overflow-hidden rounded-lg border border-border bg-card">
               {loading ? (
                 <p className="p-8 text-sm text-muted-foreground">Loading workflows…</p>
+              ) : loadError ? (
+                <div className="p-10 text-center">
+                  <p className="text-sm font-medium text-destructive">The library could not be loaded</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
+                  <Button className="mt-3" size="sm" variant="outline" onClick={() => void loadSkills()}>Try again</Button>
+                </div>
               ) : filtered.length === 0 ? (
                 <div className="p-10 text-center">
                   <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -236,7 +259,7 @@ export default function WorksClient() {
           </div>
         </TabsContent>
 
-        <TabsContent value="documents" className="min-h-0 flex-1">
+        {canManageMasters && <TabsContent value="documents" className="min-h-0 flex-1">
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="mb-4 flex items-start gap-2">
               <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
@@ -248,7 +271,7 @@ export default function WorksClient() {
             <TemplateBuilderLauncher skills={skills} />
             <DocumentTemplatesSection />
           </div>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       <SkillEditorDialog

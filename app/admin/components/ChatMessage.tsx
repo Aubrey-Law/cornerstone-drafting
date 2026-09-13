@@ -14,6 +14,9 @@ import type {
 
 export type ToolStatus = 'running' | 'done' | 'error'
 
+/** Tools whose result is a proposal the attorney must accept, never a write. */
+const PROPOSAL_TOOLS = ['create_hold', 'propose_reschedule', 'create_task', 'create_lead', 'register_custom_template']
+
 export interface ToolEvent {
   toolUseId: string
   tool: string
@@ -33,34 +36,42 @@ export interface ToolEvent {
     id: string
     title: string
     rationale: string
-    kind: 'create_hold' | 'propose_reschedule'
+    kind: 'create_hold' | 'propose_reschedule' | 'create_task' | 'create_lead' | 'register_custom_template'
     payload: Record<string, unknown>
   }>
   error?: string
 }
 
-function CalendarProposalCard({ event }: { event: ToolEvent }) {
+/** Renders any proposed write — calendar hold, reschedule, task, lead. */
+function ProposalCard({ event }: { event: ToolEvent }) {
   const [accepted, setAccepted] = useState<Set<string>>(new Set())
   const [acting, setActing] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
   const rows = event.proposal ?? []
-  if (event.status === 'running') return <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">Preparing calendar proposal…</div>
-  if (event.status === 'error') return <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">Calendar proposal failed: {event.error ?? 'Unknown error'}</div>
+  if (event.status === 'running') return <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">Preparing proposal…</div>
+  if (event.status === 'error') return <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">Proposal failed: {event.error ?? 'Unknown error'}</div>
 
   async function accept(row: typeof rows[number]) {
     setActing(true)
-      try {
-        const response = await fetch('/api/admin/calendar/proposals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kind: row.kind, payload: row.payload }),
-        })
-        if (response.ok) {
-          await response.json().catch(() => ({}))
-          setAccepted(current => new Set(current).add(row.id))
-        }
-      } finally {
-        setActing(false)
+    setFailed(null)
+    try {
+      const response = await fetch('/api/admin/assistant/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: row.kind, payload: row.payload }),
+      })
+      const body = await response.json().catch(() => ({})) as { error?: string }
+      if (response.ok) {
+        setAccepted(current => new Set(current).add(row.id))
+      } else {
+        // Silently leaving the row unchanged read as "nothing happened".
+        setFailed(body.error ?? 'Could not apply this proposal.')
       }
+    } catch {
+      setFailed('Could not reach the server.')
+    } finally {
+      setActing(false)
+    }
   }
 
   return (
@@ -78,10 +89,14 @@ function CalendarProposalCard({ event }: { event: ToolEvent }) {
                   >
               {accepted.has(row.id) ? 'Accepted' : 'Accept'}
                     </button>
-            <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-muted">Alternative</button>
           </div>
         </div>
       ))}
+      {failed && (
+        <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
+          {failed}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2">
         <button
           type="button"
@@ -91,13 +106,15 @@ function CalendarProposalCard({ event }: { event: ToolEvent }) {
         >
           Accept all {rows.length}
         </button>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('calendar:preview-proposals', { detail: rows }))}
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-        >
-          <Eye className="h-3.5 w-3.5" /> Preview on calendar
-        </button>
+        {rows.some(row => row.kind === 'create_hold' || row.kind === 'propose_reschedule') && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('calendar:preview-proposals', { detail: rows }))}
+            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <Eye className="h-3.5 w-3.5" /> Preview on calendar
+          </button>
+        )}
       </div>
     </div>
   )
@@ -279,33 +296,10 @@ function ToolEventCard({
     return <ExportToolEventCard event={event} />
   }
 
-  if (event.tool === 'create_hold' || event.tool === 'propose_reschedule') {
-    return <CalendarProposalCard event={event} />
-  }
-
-  if (event.tool === 'create_task') {
-    if (event.status === 'running') {
-      return (
-        <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-          Creating task…
-        </div>
-      )
-    }
-
-    if (event.status === 'error') {
-      return (
-        <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Task creation failed: {event.error ?? 'Unknown error'}
-        </div>
-      )
-    }
-
-    return (
-      <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-foreground">
-        <div className="font-semibold text-foreground">Task created</div>
-        {event.taskTitle && <div className="mt-0.5 text-muted-foreground">{event.taskTitle}</div>}
-      </div>
-    )
+  // A proposed write renders as a proposal whichever tool emitted it — the
+  // mutating tools all propose now rather than writing on the model's say-so.
+  if (event.proposal?.length || PROPOSAL_TOOLS.includes(event.tool)) {
+    return <ProposalCard event={event} />
   }
 
   if (event.tool !== 'create_metlife_claim_guide') return null

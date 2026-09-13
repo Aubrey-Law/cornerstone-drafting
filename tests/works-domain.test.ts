@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseSkillMarkdown,
+  renameSkillMarkdown,
   serializeSkillMarkdown,
   type WorkSkillMetadata,
 } from '@/lib/works/skill'
@@ -67,8 +68,10 @@ body`)).toThrow(/type/i)
 
 describe('Works run safety', () => {
   it('does not launch inactive skills', () => {
-    expect(canLaunchSkill({ is_active: false, is_owner: true })).toEqual({ ok: false, reason: 'inactive' })
-    expect(canLaunchSkill({ is_active: true, is_owner: false })).toEqual({ ok: true })
+    expect(canLaunchSkill({ is_active: false, is_permitted: true })).toEqual({ ok: false, reason: 'inactive' })
+    expect(canLaunchSkill({ is_active: true, is_permitted: true })).toEqual({ ok: true })
+    // The permission argument was accepted and then ignored.
+    expect(canLaunchSkill({ is_active: true, is_permitted: false })).toEqual({ ok: false, reason: 'forbidden' })
   })
 
   it('allows only safe run transitions', () => {
@@ -84,5 +87,30 @@ describe('Works run safety', () => {
     for (const [from, to] of allowed) expect(canTransitionRun(from, to)).toBe(true)
     expect(canTransitionRun('confirmed', 'running')).toBe(false)
     expect(canTransitionRun('cancelled', 'completed')).toBe(false)
+  })
+})
+
+describe('duplicating a skill', () => {
+  it('renames the copy so it is distinguishable from its original', () => {
+    const source = serializeSkillMarkdown(
+      {
+        name: 'Trust intake',
+        description: 'd',
+        version: '1.0',
+        type: 'assistant',
+        execution_mode: 'run',
+        practice: 'EP',
+        jurisdictions: ['MA'],
+        allowed_context: ['matter'],
+        columns_config: undefined,
+      },
+      'Ask about the trust.',
+    )
+
+    const copy = parseSkillMarkdown(renameSkillMarkdown(source, 'Copy of Trust intake'))
+
+    expect(copy.metadata.name).toBe('Copy of Trust intake')
+    expect(copy.metadata.version).toBe('1.0')
+    expect(copy.body).toBe('Ask about the trust.')
   })
 })

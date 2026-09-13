@@ -54,6 +54,12 @@ export async function logAiUsage(input: AiUsageLogInput): Promise<void> {
  *   - claude-haiku-*         : $0.80 input / $4 output
  *   Cache reads              : 10% of input rate
  *   Cache writes             : 125% of input rate
+ *
+ * Anthropic models only. The add-in and matter assistants resolve a per-user
+ * provider (`lib/llm/resolve.ts`), so `ai_usage.model` can hold an OpenAI or
+ * Gemini id — those used to fall through to the Opus rate and be reported as
+ * three-figure Anthropic spend. They return 0 now, which is honestly "not
+ * priced here" rather than confidently wrong.
  */
 export function estimateUsdCost(row: {
   model: string
@@ -63,6 +69,7 @@ export function estimateUsdCost(row: {
   cache_creation_input_tokens: number
 }): number {
   const m = row.model.toLowerCase()
+  if (!m.includes('claude')) return 0
   let inRate = 15, outRate = 75
   if (m.includes('haiku')) { inRate = 0.8; outRate = 4 }
   else if (m.includes('sonnet')) { inRate = 3; outRate = 15 }

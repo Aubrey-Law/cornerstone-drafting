@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { describeValue, redactIdentifier, redactRecipients } from '@/lib/log/redact'
@@ -100,6 +100,9 @@ describe('confirmed PII log sites stay redacted', () => {
     })
       .split('\n')
       .filter(Boolean)
+      // A file deleted but not yet staged is still listed by git; it cannot
+      // contain an offending log line, so skip it rather than fail on ENOENT.
+      .filter(file => existsSync(path.join(process.cwd(), file)))
 
     // Bare `attendeeEmail` / `actualTo` as a console argument is the exact
     // shape that reached production. Redaction wrappers are stripped first so

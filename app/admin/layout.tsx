@@ -1,9 +1,7 @@
 import { NavigationTiming } from './components/NavigationTiming'
-import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
 import { resolveFirmModel } from '@/lib/firmModels'
 import { ANTHROPIC_MODEL_OPTIONS } from '@/lib/userPreferences'
 import AdminLayoutClient from './AdminLayoutClient'
@@ -61,8 +59,6 @@ export default async function AdminLayout({
           <AdminLayoutClient
             userName={userName}
             userInitials={userInitials}
-            voiceEnabled={manualCommunicationsEnabled() && isVoiceConfigured()}
-            smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
             assistantModelLabel={modelLabel}
           >
             {children}

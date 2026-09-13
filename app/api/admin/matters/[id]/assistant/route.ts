@@ -9,6 +9,14 @@ import {
   listMatterAssistantHistory,
 } from '@/lib/matterAssistantHistory'
 import { executeMcpToolCall, loadMcpToolsForUser } from '@/lib/matterAssistantTools'
+import { consumeRateLimit } from '@/lib/rateLimit'
+
+// The MCP tool loop can run for a while; give it the same headroom the other
+// chat lanes get rather than inheriting the platform default mid-stream.
+export const maxDuration = 120
+
+/** Matches the admin chat lane: generous enough to work, tight enough to notice abuse. */
+const RATE_LIMIT = { bucket: 'matter_assistant', limit: 60, windowSeconds: 600 }
 
 const MAX_TOOL_ROUNDS = 4
 
@@ -142,6 +150,14 @@ export async function POST(
   const { user, err } = await requireAdmin(req)
   if (err) return err
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limit = await consumeRateLimit(RATE_LIMIT, user.id)
+  if (!limit.ok) {
+    return Response.json({ error: 'Too many requests. Try again shortly.' }, {
+      status: 429,
+      headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+    })
+  }
 
   const { id: matterId } = await params
   const body = (await req.json().catch(() => null)) as {

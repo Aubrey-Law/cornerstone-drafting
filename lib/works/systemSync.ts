@@ -42,6 +42,11 @@ function rowFromBundledSkill(skill: BundledSystemSkill, sortOrder: number) {
   }
 }
 
+/** Postgres 23505, however the client surfaces it. */
+function isDuplicateSlug(error: { code?: string; message?: string }): boolean {
+  return error.code === '23505' || /duplicate key|already exists/i.test(error.message ?? '')
+}
+
 /**
  * Upsert the bundled system-skill tree into work_skills, keyed by slug.
  * Skills whose slug disappeared from the tree are deactivated, never deleted —
@@ -70,7 +75,20 @@ export async function syncSystemWorkflows(): Promise<SystemSyncResult> {
     const existing = existingBySlug.get(skill.slug)
     if (!existing) {
       const { error: insertError } = await db.from('work_skills').insert(row)
-      if (insertError) throw new Error(`insert ${skill.slug}: ${insertError.message}`)
+      if (insertError) {
+        // Two admins syncing at once race the partial unique index on slug. The
+        // loser used to abort mid-loop with a raw duplicate-key 500, leaving the
+        // tree half-synced. Converge on the row the winner wrote instead.
+        if (!isDuplicateSlug(insertError)) throw new Error(`insert ${skill.slug}: ${insertError.message}`)
+        const { error: retryError } = await db
+          .from('work_skills')
+          .update({ ...row, updated_at: new Date().toISOString() })
+          .eq('slug', skill.slug)
+          .eq('is_system', true)
+        if (retryError) throw new Error(`update ${skill.slug}: ${retryError.message}`)
+        result.updated.push(skill.slug)
+        continue
+      }
       result.created.push(skill.slug)
     } else if (
       existing.skill_md === skill.parsed.source &&

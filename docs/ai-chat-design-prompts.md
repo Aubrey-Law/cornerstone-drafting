@@ -8,10 +8,15 @@ Documents the two AI Chat (AI Assistant) flows that gather inputs and produce dr
 Both run inside the admin AI Chat assistant. They are **not** separate endpoints — they are instruction blocks embedded in the chat system prompt that tell Claude how to run a structured interview and what handoff block to emit.
 
 **Implementation:**
-- Route: `app/api/admin/chat/route.ts`
-- Model: resolved via `resolveFirmModel('assistant')`, max tokens `2048`
-- Trust block: `trustDraftingIntakeInstructions()` (lines ~153–199)
-- Incapacity block: `incapacityDesignSheetInstructions()` (lines ~201–289)
+- Routes: `app/api/admin/chat/route.ts` (rail) and
+  `app/api/admin/assistant/chats/[chatId]/messages/route.ts` (assistant page);
+  both run `createAdminChatStream` from `lib/adminChat/engine.ts`
+- Model: resolved via `resolveFirmModel('assistant')`
+- Trust block: `trustDraftingIntakeInstructions()` (`lib/adminChat/prompts.ts`)
+- Incapacity block: `incapacityDesignSheetInstructions()` (`lib/adminChat/prompts.ts`)
+- The instruction bodies themselves live in
+  `tools/workflows/system/assistant/<slug>/SKILL.md` and are synced into
+  `work_skills`. **Edit the SKILL.md, not route code.**
 - Pre-fill source: `loadMatterContext()` / `draftPayloadFactSheet()` inject a normalized design-sheet fact block so Claude pre-fills known values and only asks for `[UNKNOWN]` items.
 
 > **Distinct tool:** the **Design Sheet Import** tool (`lib/designSheetImport/server.ts`, `claude-sonnet-4-20250514`) parses pasted attorney notes into a JSON design sheet. It's a different feature from these two chat flows — see the end of this doc.

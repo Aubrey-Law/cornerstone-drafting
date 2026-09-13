@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import {
+  ASSISTANT_DISPLAY_HISTORY_TURNS,
   deleteAssistantChat,
   getAssistantChat,
   listAssistantChatMessages,
@@ -16,7 +17,7 @@ export async function GET(req: Request, { params }: Params) {
   try {
     const chat = await getAssistantChat(chatId, auth.userId)
     if (!chat) return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    const messages = await listAssistantChatMessages(chatId)
+    const messages = await listAssistantChatMessages(chatId, { limit: ASSISTANT_DISPLAY_HISTORY_TURNS })
     return NextResponse.json({ chat, messages })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load chat' }, { status: 500 })

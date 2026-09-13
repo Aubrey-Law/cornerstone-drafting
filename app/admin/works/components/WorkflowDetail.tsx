@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { skillBody, skillColumns, type WorkSkill } from '@/components/works/types'
+import { renameSkillMarkdown } from '@/lib/works/skill'
 
 interface RunState {
   id: string
@@ -75,7 +76,7 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
     const response = await fetch('/api/admin/works', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skillMd: skill.skill_md }),
+      body: JSON.stringify({ skillMd: renameSkillMarkdown(skill.skill_md, `Copy of ${skill.name}`) }),
     })
     const body = await response.json().catch(() => ({})) as { error?: string }
     if (response.ok) {
@@ -91,10 +92,19 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
     const response = await fetch(`/api/admin/works/${skill.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isActive: !skill.is_active }),
+      // Send the version this view was built from: the server refuses a write
+      // that would silently overwrite someone else's edit.
+      body: JSON.stringify({ isActive: !skill.is_active, expectedUpdatedAt: skill.updated_at }),
     })
-    if (response.ok) await onChanged()
-    else toast.error('Unable to update skill activation')
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    if (response.ok) {
+      await onChanged()
+    } else if (response.status === 409) {
+      toast.error(body.error ?? 'This skill changed elsewhere. Reloading.')
+      await onChanged()
+    } else {
+      toast.error(body.error ?? 'Unable to update skill activation')
+    }
   }
 
   async function launchRun() {
@@ -132,24 +142,33 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
     setRunLoading(false)
   }
 
+  /** Re-read the run rather than assuming the result: confirmation has several
+   *  side effects and a partial failure used to still paint "confirmed". */
+  async function reloadRun(runId: string) {
+    const response = await fetch(`/api/admin/works/runs/${runId}`, { cache: 'no-store' })
+    const body = await response.json().catch(() => ({})) as { run?: RunState; artifacts?: RunArtifact[] }
+    if (response.ok && body.run) {
+      setRunOutput(body.run)
+      setRunArtifacts(body.artifacts ?? [])
+    }
+  }
+
   async function confirmRun() {
     if (!runOutput) return
-    const response = await fetch(`/api/admin/works/runs/${runOutput.id}/confirm`, { method: 'POST' })
-    if (response.ok) {
-      setRunOutput(prev => prev ? { ...prev, status: 'confirmed' } : prev)
-      setRunArtifacts(prev => prev.map(artifact => ({ ...artifact, status: 'promoted' })))
-    }
-    else toast.error('Unable to confirm run')
+    const runId = runOutput.id
+    const response = await fetch(`/api/admin/works/runs/${runId}/confirm`, { method: 'POST' })
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) toast.error(body.error ?? 'Unable to confirm run')
+    await reloadRun(runId)
   }
 
   async function cancelRun() {
     if (!runOutput) return
-    const response = await fetch(`/api/admin/works/runs/${runOutput.id}/cancel`, { method: 'POST' })
-    if (response.ok) {
-      setRunOutput(prev => prev ? { ...prev, status: 'cancelled' } : prev)
-      setRunArtifacts([])
-    }
-    else toast.error('Unable to cancel run')
+    const runId = runOutput.id
+    const response = await fetch(`/api/admin/works/runs/${runId}/cancel`, { method: 'POST' })
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) toast.error(body.error ?? 'Unable to cancel run')
+    await reloadRun(runId)
   }
 
   return (

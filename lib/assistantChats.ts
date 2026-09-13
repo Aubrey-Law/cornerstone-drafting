@@ -30,6 +30,17 @@ function assistantDb() {
 
 const CHAT_TITLE_MAX = 80
 
+/**
+ * Turns replayed to the model on each send. Without a cap, every turn of a
+ * thread is re-sent forever: cost grows linearly and a long thread eventually
+ * exceeds the context window and fails outright. Matches MAX_HISTORY_TURNS in
+ * lib/matterAssistantHistory.ts.
+ */
+export const ASSISTANT_MODEL_HISTORY_TURNS = 40
+
+/** Wider window for rendering a chat page — still bounded. */
+export const ASSISTANT_DISPLAY_HISTORY_TURNS = 200
+
 export function chatTitleFromMessage(content: string) {
   const firstLine = content.replace(/^\[Workflow:[^\]]*\]\s*/i, '').split('\n').find(line => line.trim()) ?? ''
   const trimmed = firstLine.trim()
@@ -79,14 +90,21 @@ export async function getAssistantChat(chatId: string, userId: string): Promise<
   return (data as AssistantChatRow | null) ?? null
 }
 
-export async function listAssistantChatMessages(chatId: string): Promise<AssistantChatMessageRow[]> {
+export async function listAssistantChatMessages(
+  chatId: string,
+  options: { limit?: number } = {},
+): Promise<AssistantChatMessageRow[]> {
+  // Newest rows first so a long thread keeps its most recent turns, then
+  // reversed back to chronological order for callers. The default is the model
+  // window: a caller that wants more must ask for it.
   const { data, error } = await assistantDb()
     .from('assistant_chat_messages')
     .select('*')
     .eq('chat_id', chatId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
+    .limit(options.limit ?? ASSISTANT_MODEL_HISTORY_TURNS)
   if (error) throw new Error(error.message)
-  return (data ?? []) as AssistantChatMessageRow[]
+  return ((data ?? []) as AssistantChatMessageRow[]).reverse()
 }
 
 export async function renameAssistantChat(chatId: string, userId: string, title: string) {
