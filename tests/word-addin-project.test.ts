@@ -48,6 +48,34 @@ describe('word-addin build isolation', () => {
     // reference Office.js globals that do not exist under vitest.
     expect(read('vitest.config.ts')).toMatch(/include:\s*\[\s*'tests\//)
   })
+
+  it('does not inherit the root PostCSS config', () => {
+    // The other exclusions keep the root build off the add-in. This one runs
+    // the other way: Vite searches *upward* for a PostCSS config, so from
+    // word-addin/ it finds the repo root's postcss.config.mjs and tries to
+    // require @tailwindcss/postcss — a Next app dependency the nested project
+    // does not install. That broke `vite build` outright.
+    //
+    // Tailwind gets in through @tailwindcss/vite instead, so an inline empty
+    // config is correct as well as sufficient: it is what stops the search.
+    const viteConfig = read('word-addin/vite.config.ts')
+    expect(viteConfig).toMatch(/css:\s*\{\s*postcss:\s*\{\s*\}\s*\}/)
+    expect(viteConfig).toContain('@tailwindcss/vite')
+
+    const addinDeps = JSON.parse(read('word-addin/package.json')).devDependencies
+    expect(addinDeps['@tailwindcss/postcss']).toBeUndefined()
+    expect(fs.existsSync(path.join(root, 'word-addin/postcss.config.mjs'))).toBe(false)
+  })
+
+  it('type-checks its own Node-land config files', () => {
+    // tsconfig `include` covers vite.config.ts and vitest.config.ts, which use
+    // process, node:path and import.meta.dirname. Without the node types those
+    // are 10 errors, and since `build` is `typecheck && vite build`, the whole
+    // build fails — which nothing in CI would have caught.
+    const tsconfig = JSON.parse(read('word-addin/tsconfig.json'))
+    expect(tsconfig.compilerOptions.types).toContain('node')
+    expect(JSON.parse(read('word-addin/package.json')).devDependencies['@types/node']).toBeDefined()
+  })
 })
 
 /**
