@@ -9,6 +9,14 @@ import {
 } from './auth/session'
 import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
+import MatterBar from './components/MatterBar'
+import {
+  clearLink,
+  currentDocumentKey,
+  loadLink,
+  storeLink,
+  type LinkedMatter,
+} from './matter/link'
 
 interface SessionInfo {
   userId: string
@@ -25,6 +33,23 @@ export default function App() {
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('chat')
+  // Resolved once: the pane is re-created when Word opens another document, so
+  // the key cannot change underneath a mounted App.
+  const [documentKey] = useState<string | null>(() => currentDocumentKey())
+  const [matter, setMatter] = useState<LinkedMatter | null>(() => loadLink(documentKey))
+
+  const linkMatter = useCallback(
+    (next: LinkedMatter) => {
+      storeLink(documentKey, next)
+      setMatter(next)
+    },
+    [documentKey],
+  )
+
+  const unlinkMatter = useCallback(() => {
+    clearLink(documentKey)
+    setMatter(null)
+  }, [documentKey])
 
   const verify = useCallback(async () => {
     setChecking(true)
@@ -116,11 +141,18 @@ export default function App() {
       </header>
 
       {/*
+        Above the tabs' content, not inside the chat panel: the matter is a
+        property of the document, and it stays on screen while the attorney is
+        on the Format tab rather than appearing to have been forgotten.
+      */}
+      <MatterBar linked={matter} onLink={linkMatter} onUnlink={unlinkMatter} />
+
+      {/*
         Both panels stay mounted. Switching tabs mid-stream would otherwise tear
         down the request and lose the reply.
       */}
       <div className="min-h-0 flex-1" hidden={tab !== 'chat'}>
-        <ChatPanel />
+        <ChatPanel matterId={matter?.id ?? null} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'format'}>
         <FormatPanel />
