@@ -1,8 +1,8 @@
 # Cornerstone Word Add-in
 
 A Word task pane for drafting: chat about the open document and apply the model's
-revisions as native tracked changes, drafting from the matter's design sheet, plus
-the firm formatting pass.
+revisions as native tracked changes, drafting from the matter's design sheet and
+writing decisions back to it, plus the firm formatting pass.
 
 Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
@@ -253,6 +253,8 @@ itself — `tests/addin-route-auth.test.ts` enforces that none of them forget.
 | `POST /api/addin/chat` | SSE chat; the reply carries an `<EDITS>` block |
 | `GET /api/addin/matters` | The drafting worklist, for the matter picker |
 | `GET /api/addin/matters/[id]/brief` | One matter's normalized design sheet |
+| `POST /api/addin/matters/[id]/design-sheet/propose` | Read the open document for decisions. Writes nothing |
+| `POST /api/addin/matters/[id]/design-sheet/apply` | Write the accepted rows to the design sheet |
 | `GET /api/addin/style-set` | The firm's active `StyleSetSettings` |
 | `POST /api/addin/style-set/apply` | Style-sweep a `.docx` and return the bytes |
 
@@ -321,6 +323,74 @@ The cost is that the link is per-machine, and an unsaved document (which has no
 path, and would otherwise share one key with every other unsaved document) holds
 its link in memory only.
 
+## Writing decisions back
+
+The **Sheet** tab is the other direction: an attorney who settles a successor
+trustee while redlining had to re-key it on the design sheet, or leave the two
+disagreeing until someone noticed.
+
+**Read document** sends the open document through
+`parseDesignSheetImportText` — the same extraction behind the web import dialog,
+which builds the proposal, compares it against the stored sheet, and marks each
+row. Nothing here re-reads or re-interprets the design sheet, so the pane and the
+dialog cannot disagree about what a document is proposing.
+
+Then every change is shown, old value → new, and **only ticked rows are written**.
+
+**Rows that would overwrite arrive unticked.** The server sets
+`selected: !replacement`, and that default is the substance of the feature rather
+than a nicety: filling a blank field is routine, changing a decision the attorney
+already recorded is not, and the quiet version of that mistake is the one nobody
+catches. Those rows are also the only ones drawn in amber.
+
+Values the document offered that a field cannot hold are listed under **Not
+applied** rather than dropped — "the document said something this field cannot
+express" is a different fact from "the document said nothing", and only the first
+is worth an attorney's attention. This is the same guard that kept
+'per stirpes' out of `distribution_method`.
+
+### One writer
+
+`lib/designSheet/applyProposal.ts` is the only thing that writes an accepted
+proposal. The web dialog's route and this one both call it, and
+`tests/design-sheet-completion.test.ts` asserts that neither touches
+`design_sheets` itself.
+
+That module is where the compare-and-swap lives, where a created contact gets its
+`matter_contacts` join row, and where an empty decisions blob is kept out of the
+database. Each of those has been got wrong once already; a second writer is where
+they would silently come back.
+
+### What the pane may write
+
+Narrower than the dialog, because the pane is further from the attorney's eye.
+
+- **Fields are allow-listed** against `DESIGN_SHEET_IMPORT_FIELDS` — only what the
+  extractor can propose, and therefore only what a review UI could have shown. A
+  malformed or hostile body cannot reach `id`, `matter_id`, or a column nobody was
+  shown. Refused, not dropped: ignoring a field silently would report success for
+  a change that did not happen.
+- **No fiduciary proposals.** The shared writer supports them and accepting one
+  can mint a `contacts` row — creating a person in the firm's records from a Word
+  pane, without the matching UI the dialog has, is not something to do
+  sight-unseen. Fiduciary *names* still write back: `trustee_primary`,
+  `guardian_primary` and the rest are ordinary allow-listed string fields.
+
+### The conflict window
+
+Reviewing takes as long as it takes, and the sheet may be edited in the web app
+meanwhile. `propose` reads the sheet **before** extracting and returns its `id`
+and `updated_at`; the pane hands both back on apply, and the writer's
+compare-and-swap refuses a sheet that moved. The attorney is told to re-read
+rather than having their copy win.
+
+Reading the token before the extraction is deliberate — reading it after would
+leave a window where the sheet changed and the token still looked fresh.
+
+After a successful save the rows are cleared rather than left on screen: they now
+describe a sheet that has changed, and re-saving them would be a write against a
+stale token.
+
 ## How edits are applied
 
 The model names a passage verbatim; the pane finds it with `body.search()` and
@@ -373,9 +443,12 @@ document, so they preview before applying and apply as tracked changes.
 - **A first-time staff user with no `users` row gets a 403** with no explanation.
   Open the Cornerstone web app once first.
 - Documents over ~3.5 MB are rejected by the style sweep (Vercel body limit).
-- **The matter link is per-machine**, and the design sheet is read-only from here:
-  the pane drafts from the sheet but cannot write an attorney's decision back to
-  it, so a value settled in Word still has to be entered on the design sheet.
+- **The matter link is per-machine.**
+- **Write-back is a whole-document read, not a diff.** The Sheet tab extracts
+  decisions from the document as it stands; it does not know which of them the
+  attorney changed in this session. A document that has always said one thing
+  proposes it just the same, which is why a row that would overwrite arrives
+  unticked.
 
 ## Tests
 
@@ -387,7 +460,8 @@ Root-suite tests cover the parts that must not drift: `tests/edit-protocol.test.
 pins the pane's copy of the edit contract against the server's,
 `tests/word-addin-office-usage.test.ts` guards the host quirks above,
 `tests/matter-brief.test.ts` pins the non-invention rule and the fencing on the
-design sheet, `tests/addin-route-auth.test.ts` enforces that every `/api/addin/*`
+design sheet, `tests/design-sheet-write-back.test.ts` pins the write-back
+allow-list and the propose/apply separation, `tests/addin-route-auth.test.ts` enforces that every `/api/addin/*`
 route gates itself, and `tests/word-addin-project.test.ts` guards the build
 isolation that keeps this nested project out of the root typecheck, lint, and Next
 build.

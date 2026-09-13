@@ -37,6 +37,8 @@ const PROBE_TIMEOUT_MS = 10_000
 /** Matches `maxDuration` on /api/addin/chat. */
 const CHAT_TIMEOUT_MS = 120_000
 const STYLE_SWEEP_TIMEOUT_MS = 60_000
+/** Matches `maxDuration` on the propose route: it is a model call over the whole document. */
+const PROPOSE_TIMEOUT_MS = 120_000
 
 function authHeaders(): Record<string, string> {
   const session = loadSession()
@@ -123,6 +125,32 @@ export async function apiGet<T>(path: string): Promise<T> {
   })
 }
 
+/**
+ * A POST the attorney is waiting on.
+ *
+ * Interactive, unlike `apiGet`: these are only ever sent by a button press, so
+ * re-authenticating in place beats bouncing them to a sign-in button
+ * mid-review — and losing a reviewed set of ticked rows to an expired token
+ * would mean reading the whole document again.
+ */
+async function apiPost<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
+  return withAuthRetry(async () => {
+    let res: Response
+    try {
+      res = await fetch(path, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: deadline(timeoutMs),
+      })
+    } catch (err) {
+      describeAbort(err, timeoutMs / 1000)
+    }
+    if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
+    return (await res.json()) as T
+  }, true)
+}
+
 export interface ChatTurn {
   role: 'user' | 'assistant'
   content: string
@@ -178,6 +206,67 @@ export function listMatters(query: string): Promise<MatterListResponse> {
 
 export function getMatterBrief(matterId: string): Promise<MatterBrief> {
   return apiGet<MatterBrief>(`/api/addin/matters/${encodeURIComponent(matterId)}/brief`)
+}
+
+/** One proposed design-sheet change. Mirrors `DesignSheetImportPreviewRow`. */
+export interface ProposedFieldRow {
+  field: string
+  label: string
+  section: string
+  currentDisplay: string
+  proposedDisplay: string
+  /** Preselected by the server: false whenever the row would overwrite a value. */
+  selected: boolean
+  /** True when the sheet already holds a different value for this field. */
+  replacement: boolean
+}
+
+/** A value the document offered that the field cannot hold. Shown, never applied. */
+export interface RejectedFieldRow {
+  field: string
+  label: string
+  section: string
+  value: string
+  options: readonly string[]
+}
+
+export interface DesignSheetProposal {
+  preview: ProposedFieldRow[]
+  rejected: RejectedFieldRow[]
+  proposed: Record<string, unknown>
+  /** Compare-and-swap token; handed straight back on apply. */
+  sheetId: string | null
+  updatedAt: string | null
+}
+
+export interface ApplyProposalResult {
+  ok: true
+  updatedAt: string
+  appliedFields: number
+}
+
+/** Read the open document for design-sheet decisions. Proposes only; writes nothing. */
+export function proposeDesignSheet(
+  matterId: string,
+  documentText: string,
+): Promise<DesignSheetProposal> {
+  return apiPost<DesignSheetProposal>(
+    `/api/addin/matters/${encodeURIComponent(matterId)}/design-sheet/propose`,
+    { documentText },
+    PROPOSE_TIMEOUT_MS,
+  )
+}
+
+/** Write back only the ticked rows, pinned to the sheet the proposal was read from. */
+export function applyDesignSheet(
+  matterId: string,
+  args: { sheetId: string | null; expectedUpdatedAt: string | null; fields: Record<string, unknown> },
+): Promise<ApplyProposalResult> {
+  return apiPost<ApplyProposalResult>(
+    `/api/addin/matters/${encodeURIComponent(matterId)}/design-sheet/apply`,
+    args,
+    STYLE_SWEEP_TIMEOUT_MS,
+  )
 }
 
 export interface StreamChatArgs {
