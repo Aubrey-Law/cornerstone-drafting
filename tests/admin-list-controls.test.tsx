@@ -7,12 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeadsClient, type LeadRow } from '@/app/admin/leads/LeadsClient'
 import { MAX_LEAD_PAGE_SIZE } from '@/lib/leads/listParams'
 import MattersClient from '@/app/admin/matters/MattersClient'
+import { matterPageParams } from '@/lib/matters/pageParams'
 import type { MatterListRow } from '@/lib/queries/matters'
 
 const replace = vi.fn()
+const push = vi.fn()
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace }),
+  useRouter: () => ({ push, refresh: vi.fn(), replace }),
   usePathname: () => '/admin/leads',
   useSearchParams: () => new URLSearchParams(),
 }))
@@ -29,6 +31,7 @@ if (!HTMLElement.prototype.scrollIntoView) {
 afterEach(() => {
   cleanup()
   replace.mockClear()
+  push.mockClear()
 })
 
 const LEAD_PARAMS = {
@@ -241,6 +244,56 @@ describe('matter list controls', () => {
 
     expect(visibleMatterNames()).toContain('Cora Closed')
     expect(visibleMatterNames()).toContain('Dana Done')
+  })
+
+  it('counts an archived matter as closed, the same as one closed outright', async () => {
+    const user = userEvent.setup()
+    const archived = { ...matterRows[0], matter_id: 'filed', client_name: 'Eli Archived', status: 'archived' }
+    render(<MattersClient matters={[...matterRows, archived]} />)
+
+    expect(visibleMatterNames()).not.toContain('Eli Archived')
+
+    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+
+    expect(visibleMatterNames()).toContain('Eli Archived')
+  })
+
+  /**
+   * The list the firm actually loads is paged by the database, and that path
+   * renders the page it was handed without running the client-side filter at
+   * all. So what keeps a closed matter off the screen there is the chip
+   * reaching `firm_matter_page_v1` as `closed=1` — the rows come back already
+   * filtered. Press it again and the parameter has to go, or there would be no
+   * way back to the working list.
+   */
+  function serverPaged(matters: MatterListRow[], query: Record<string, string> = {}) {
+    return {
+      rows: matters, total: matters.length, page: 1, pageSize: 50, groups: {}, columns: {},
+      insights: { open: 0, attention: 0, signing: 0, intakePending: 0, unreviewed: 0 },
+      params: matterPageParams(query),
+    }
+  }
+
+  it('asks the database for closed matters rather than filtering the page it holds', async () => {
+    const user = userEvent.setup()
+    render(<MattersClient matters={matterRows} pagination={serverPaged(matterRows)} />)
+
+    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+
+    expect(String(push.mock.calls.at(-1)?.[0])).toContain('closed=1')
+  })
+
+  it('shows what the database sends back, and gives the chip up on a second press', async () => {
+    const user = userEvent.setup()
+    const closed = { ...matterRows[0], matter_id: 'ended', client_name: 'Cora Closed', stage: 'closed' as const }
+    const page = [...matterRows, closed]
+    render(<MattersClient matters={page} pagination={serverPaged(page, { closed: '1' })} />)
+
+    expect(visibleMatterNames()).toContain('Cora Closed')
+
+    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+
+    expect(String(push.mock.calls.at(-1)?.[0])).not.toContain('closed=1')
   })
 
   it('clear filters preserves matter sort order and visible-row selection', async () => {
