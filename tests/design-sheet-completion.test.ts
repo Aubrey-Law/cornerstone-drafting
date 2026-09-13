@@ -174,26 +174,43 @@ describe('proposal routes do not write', () => {
     expect(route).not.toContain(".from('design_sheets').insert")
   })
 
-  it('apply-proposal guards the write with a compare-and-swap', () => {
-    const route = source('app/api/admin/matters/[id]/design-sheet/apply-proposal/route.ts')
+  // These three guarantees moved into lib/designSheet/applyProposal.ts when the
+  // Word add-in became a second surface that accepts proposals. They are asserted
+  // against the shared writer now, which is where they have to hold — a route
+  // that only delegates cannot carry them, and duplicating the write into a
+  // second route is exactly what these tests exist to prevent.
+  it('the proposal writer guards the write with a compare-and-swap', () => {
+    const writer = source('lib/designSheet/applyProposal.ts')
 
-    expect(route).toContain('requireAdmin')
-    expect(route).toContain('updatedAtMatches')
-    expect(route).toContain("updateQuery.eq('updated_at', storedUpdatedAt)")
+    expect(writer).toContain('updatedAtMatches')
+    expect(writer).toContain("updateQuery.eq('updated_at', storedUpdatedAt)")
   })
 
-  it('apply-proposal puts a person it creates onto the matter', () => {
+  it('the proposal writer puts a person it creates onto the matter', () => {
     // Step 7a of docs/matter-contacts-migration.md — a contact written without a
     // join row is invisible to every reader.
-    expect(source('app/api/admin/matters/[id]/design-sheet/apply-proposal/route.ts'))
-      .toContain('attachContactToMatter')
+    expect(source('lib/designSheet/applyProposal.ts')).toContain('attachContactToMatter')
   })
 
-  it('apply-proposal never sends an empty decisions blob', () => {
+  it('the proposal writer never sends an empty decisions blob', () => {
     // buildDesignSheetSavePayload treats a supplied decisions object as
     // authoritative, so `{}` would replace every stored decision with nothing.
-    expect(source('app/api/admin/matters/[id]/design-sheet/apply-proposal/route.ts'))
+    expect(source('lib/designSheet/applyProposal.ts'))
       .toContain('(existingSheet.decisions ?? {}) as Record<string, unknown>')
+  })
+
+  it('every surface that applies a proposal goes through that one writer', () => {
+    // The design sheet is the firm's authoritative record. A surface that writes
+    // it directly would be a second answer to all three guarantees above.
+    for (const route of [
+      'app/api/admin/matters/[id]/design-sheet/apply-proposal/route.ts',
+      'app/api/addin/matters/[id]/design-sheet/apply/route.ts',
+    ]) {
+      const text = source(route)
+      expect(text).toContain('requireAdmin')
+      expect(text).toContain('applyDesignSheetProposal')
+      expect(text).not.toContain(".from('design_sheets')")
+    }
   })
 })
 

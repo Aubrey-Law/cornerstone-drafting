@@ -10,6 +10,7 @@ import {
 import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
 import MatterBar from './components/MatterBar'
+import WriteBackPanel from './components/WriteBackPanel'
 import {
   clearLink,
   currentDocumentKey,
@@ -25,7 +26,7 @@ interface SessionInfo {
   role: string | null
 }
 
-type Tab = 'chat' | 'format'
+type Tab = 'chat' | 'sheet' | 'format'
 
 export default function App() {
   const [session, setSession] = useState<StoredSession | null>(() => loadSession())
@@ -122,6 +123,9 @@ export default function App() {
           <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
             Draft
           </TabButton>
+          <TabButton active={tab === 'sheet'} onClick={() => setTab('sheet')}>
+            Sheet
+          </TabButton>
           <TabButton active={tab === 'format'} onClick={() => setTab('format')}>
             Format
           </TabButton>
@@ -153,6 +157,9 @@ export default function App() {
       */}
       <div className="min-h-0 flex-1" hidden={tab !== 'chat'}>
         <ChatPanel matterId={matter?.id ?? null} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'sheet'}>
+        <WriteBackPanel matterId={matter?.id ?? null} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'format'}>
         <FormatPanel />
