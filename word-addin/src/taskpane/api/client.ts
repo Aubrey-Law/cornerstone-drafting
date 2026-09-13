@@ -128,12 +128,71 @@ export interface ChatTurn {
   content: string
 }
 
+/** One row of the matter picker. Mirrors `GET /api/addin/matters`. */
+export interface MatterSummary {
+  id: string
+  matterNumber: string | null
+  clientName: string
+  spouseName: string | null
+  stage: string
+  planType: string | null
+  designStatus: string | null
+  draftCount: number
+}
+
+export interface MatterListResponse {
+  matters: MatterSummary[]
+  total: number
+  truncated: boolean
+}
+
+/** The normalized design sheet. Mirrors `GET /api/addin/matters/[id]/brief`. */
+export interface MatterBrief {
+  matterId: string
+  matterNumber: string | null
+  clientName: string
+  spouseName: string | null
+  matterType: string
+  practiceArea: string | null
+  trustName: string | null
+  factSheet: string
+  truncated: boolean
+}
+
+/**
+ * Whether the model was actually given the design sheet for this turn.
+ *
+ * Reported on every reply rather than assumed from the pane's own state: the
+ * brief is built server-side and can fail there — an unready sheet, a matter
+ * that is not hired — and an attorney who linked a matter will otherwise read
+ * an invented fiduciary as a sourced one.
+ */
+export type MatterContext =
+  | { state: 'none' }
+  | { state: 'applied'; matterNumber: string | null; clientName: string }
+  | { state: 'unavailable'; reason: string }
+
+export function listMatters(query: string): Promise<MatterListResponse> {
+  return apiGet<MatterListResponse>(`/api/addin/matters?q=${encodeURIComponent(query)}`)
+}
+
+export function getMatterBrief(matterId: string): Promise<MatterBrief> {
+  return apiGet<MatterBrief>(`/api/addin/matters/${encodeURIComponent(matterId)}/brief`)
+}
+
 export interface StreamChatArgs {
   messages: ChatTurn[]
   documentText: string
   documentName: string | null
+  /** The linked matter, or null to draft from the document alone. */
+  matterId: string | null
   signal?: AbortSignal
   onDelta: (text: string) => void
+}
+
+export interface ChatResult {
+  reply: string
+  matterContext: MatterContext
 }
 
 /**
@@ -143,7 +202,7 @@ export interface StreamChatArgs {
  * that, never from the deltas — a truncated `original` would still find a match
  * in the document, at the wrong boundary.
  */
-export async function streamChat(args: StreamChatArgs): Promise<string> {
+export async function streamChat(args: StreamChatArgs): Promise<ChatResult> {
   // Interactive: the attorney is watching this one, so re-authenticating in
   // place beats sending them back to a sign-in button mid-sentence.
   return withAuthRetry(async () => {
@@ -156,6 +215,7 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
           messages: args.messages,
           documentText: args.documentText,
           documentName: args.documentName,
+          matterId: args.matterId,
         }),
         signal: deadline(CHAT_TIMEOUT_MS, args.signal),
       })
@@ -171,6 +231,10 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
     let buffer = ''
     let reply = ''
     let sawDone = false
+    // Absent on a reply from a server that predates matter context. Treated as
+    // 'none' rather than assumed applied — the safe direction, since the pane
+    // warns on anything that is not 'applied' while a matter is linked.
+    let matterContext: MatterContext = { state: 'none' }
 
     for (;;) {
       const { done, value } = await reader.read()
@@ -185,7 +249,13 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
         const line = frame.split('\n').find(l => l.startsWith('data: '))
         if (!line) continue
 
-        let payload: { delta?: string; done?: boolean; reply?: string; error?: string }
+        let payload: {
+          delta?: string
+          done?: boolean
+          reply?: string
+          error?: string
+          matterContext?: MatterContext
+        }
         try {
           payload = JSON.parse(line.slice(6))
         } catch {
@@ -203,6 +273,7 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
           // dropped by an intermediary, and a partial reply must not be parsed
           // for edits.
           if (typeof payload.reply === 'string') reply = payload.reply
+          if (payload.matterContext) matterContext = payload.matterContext
         }
       }
     }
@@ -210,7 +281,7 @@ export async function streamChat(args: StreamChatArgs): Promise<string> {
     if (!sawDone) {
       throw new ApiError('The connection dropped before the reply finished.', 502)
     }
-    return reply
+    return { reply, matterContext }
   }, true)
 }
 

@@ -50,6 +50,22 @@ function proxyToCornerstone(): ProxyOptions {
 export default defineConfig(async ({ command }): Promise<UserConfig> => ({
   plugins: [react(), tailwindcss()],
   /**
+   * An inline (empty) PostCSS config, which is what stops Vite searching for
+   * one on disk.
+   *
+   * Tailwind reaches this project through `@tailwindcss/vite` above, so there
+   * is no PostCSS step to configure. But the search walks *upward* from this
+   * directory, and the parent is the Cornerstone repo root — whose
+   * `postcss.config.mjs` loads `@tailwindcss/postcss`, a dependency of the Next
+   * app that this nested project does not and should not install. Vite found
+   * it, tried to require it from here, and `vite build` died on
+   * `Cannot find module '@tailwindcss/postcss'`.
+   *
+   * Belongs with the exclusions pinned by `tests/word-addin-project.test.ts`:
+   * same rule that the root build ignores the add-in, in the other direction.
+   */
+  css: { postcss: {} },
+  /**
    * Stamped at server start / build time. The pane prints it, so a stale
    * bundle announces itself instead of being mistaken for broken code.
    */

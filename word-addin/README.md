@@ -1,7 +1,8 @@
 # Cornerstone Word Add-in
 
 A Word task pane for drafting: chat about the open document and apply the model's
-revisions as native tracked changes, plus the firm formatting pass.
+revisions as native tracked changes, drafting from the matter's design sheet, plus
+the firm formatting pass.
 
 Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
@@ -250,8 +251,75 @@ itself — `tests/addin-route-auth.test.ts` enforces that none of them forget.
 |---|---|
 | `GET /api/addin/session` | Token check and profile |
 | `POST /api/addin/chat` | SSE chat; the reply carries an `<EDITS>` block |
+| `GET /api/addin/matters` | The drafting worklist, for the matter picker |
+| `GET /api/addin/matters/[id]/brief` | One matter's normalized design sheet |
 | `GET /api/addin/style-set` | The firm's active `StyleSetSettings` |
 | `POST /api/addin/style-set/apply` | Style-sweep a `.docx` and return the bytes |
+
+## Drafting from the matter
+
+The pane drafts from the open document alone until a matter is linked. **Link a
+matter** searches the same drafting worklist as `/admin/drafting` — the same
+`drafting_hub_page` RPC, so it applies the same search and hides closed matters
+along both of the two axes a matter can be closed on. A separate query here would
+be a second answer to "what am I drafting", and the one likeliest to still offer a
+matter the firm closed last week.
+
+Once linked, every chat turn carries the matter's **design sheet**, and the model
+is told it is the source of truth: where the sheet and the document disagree, the
+document is out of date.
+
+That sheet is `draftPayloadFactSheet(buildDraftPayload(matterId))` — the same
+normalized payload the admin chat drafts from and the generator builds documents
+from. `lib/drafting/matterBrief.ts` is a thin wrapper over those two and
+deliberately does not read the design sheet itself: fiduciary slots resolve to
+names, the plan type normalizes, and the design-sheet defaults apply in exactly
+one place. A second reader here would be a second answer to "who is the successor
+trustee", drifting from the first the moment either changed — the argument the
+formatting pass already makes for round-tripping the style sweep through the
+server.
+
+**`[UNKNOWN]` is the load-bearing part.** The fact sheet marks every value the
+attorney has not decided, and the prompt's non-invention rule says to leave the
+document's placeholder and flag it rather than fill it in. A drafting assistant
+that guesses a successor trustee produces a document that reads as finished and
+names the wrong person; nothing downstream catches that. `tests/matter-brief.test.ts`
+pins those instructions, and **Design sheet** in the pane shows the attorney the
+same text the model gets, `[UNKNOWN]`s counted at the top — linking a matter and
+finding six of them is the moment to go fill the sheet in.
+
+The sheet is fenced with `quoteUserContent` despite being attorney-approved: it is
+seeded from client intake, so its names and notes are free text a client typed.
+
+### When the sheet does not arrive
+
+`buildMatterBrief` never throws. A matter that is not hired, or has no design sheet
+row, is an ordinary state, and losing the attorney's typed message to it would be a
+poor trade — so the turn proceeds without the sheet.
+
+It is never silent, though. The terminal SSE frame reports `matterContext`, and the
+pane shows a warning on any reply where a matter is linked and the state is not
+`applied`. Dropping the brief quietly is the one genuinely dangerous failure here:
+the reply looks identical, and the attorney reads an invented fiduciary as a sourced
+one. A reply with no `matterContext` at all — an older server — is treated as `none`
+for the same reason.
+
+`allowPartial` is deliberately not set. It would answer an unready matter with a
+sheet of `[[ MISSING ]]` holes instead of an error, and a brief that looks populated
+but is not is worse here than no brief.
+
+### Where the link is stored
+
+In `localStorage`, keyed by the document's path — not in
+`Office.context.document.settings`, for the same reason the access token is not:
+document settings are written into the `.docx`, so the link would travel with the
+file. A token there is a credential leak; a matter id there is a quieter one — an
+internal identifier for a named client, embedded in a document the firm emails to
+that client and to beneficiaries.
+
+The cost is that the link is per-machine, and an unsaved document (which has no
+path, and would otherwise share one key with every other unsaved document) holds
+its link in memory only.
 
 ## How edits are applied
 
@@ -305,6 +373,9 @@ document, so they preview before applying and apply as tracked changes.
 - **A first-time staff user with no `users` row gets a 403** with no explanation.
   Open the Cornerstone web app once first.
 - Documents over ~3.5 MB are rejected by the style sweep (Vercel body limit).
+- **The matter link is per-machine**, and the design sheet is read-only from here:
+  the pane drafts from the sheet but cannot write an attorney's decision back to
+  it, so a value settled in Word still has to be entered on the design sheet.
 
 ## Tests
 
@@ -314,9 +385,12 @@ npm test          # in word-addin/ — the pure logic
 
 Root-suite tests cover the parts that must not drift: `tests/edit-protocol.test.ts`
 pins the pane's copy of the edit contract against the server's,
-`tests/word-addin-office-usage.test.ts` guards the host quirks above, and
-`tests/word-addin-project.test.ts` guards the build isolation that keeps this
-nested project out of the root typecheck, lint, and Next build.
+`tests/word-addin-office-usage.test.ts` guards the host quirks above,
+`tests/matter-brief.test.ts` pins the non-invention rule and the fencing on the
+design sheet, `tests/addin-route-auth.test.ts` enforces that every `/api/addin/*`
+route gates itself, and `tests/word-addin-project.test.ts` guards the build
+isolation that keeps this nested project out of the root typecheck, lint, and Next
+build.
 
 ## Attribution
 

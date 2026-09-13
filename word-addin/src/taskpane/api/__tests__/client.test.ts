@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, NotSignedInError, apiGet, postStyleSweep } from '../client'
+import { ApiError, NotSignedInError, apiGet, postStyleSweep, streamChat } from '../client'
 
 /**
  * The startup probe hanging the whole pane is the bug these exist for.
@@ -162,5 +162,100 @@ describe('a call the attorney is waiting on', () => {
 
     await expect(postStyleSweep('ZmFrZQ==')).rejects.toBeInstanceOf(ApiError)
     expect(displayDialogAsync).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The design sheet reaches the model server-side, so the pane cannot see
+ * whether it did. The terminal SSE frame reports it, and these pin that
+ * reporting: a reply the attorney believes is sourced in the client's design
+ * sheet, but is not, is the failure the whole matter-context feature has to
+ * avoid making invisible.
+ */
+function sseResponse(frames: string[]): Response {
+  const encoder = new TextEncoder()
+  let i = 0
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'ok',
+    body: {
+      getReader: () => ({
+        read: async () =>
+          i < frames.length
+            ? { done: false, value: encoder.encode(frames[i++]) }
+            : { done: true, value: undefined },
+      }),
+    },
+  } as unknown as Response
+}
+
+describe('streaming a chat turn', () => {
+  beforeEach(storeToken)
+
+  it('sends the linked matter with the turn', async () => {
+    // Typed with the arguments it is asserted on: an inferred `() => …` mock
+    // gives `calls[0]` the type `[]`, and reading `[1]` off it fails to compile.
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) =>
+      sseResponse([`data: ${JSON.stringify({ done: true, reply: 'ok' })}\n\n`]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await streamChat({
+      messages: [{ role: 'user', content: 'hi' }],
+      documentText: 'doc',
+      documentName: 'trust.docx',
+      matterId: 'm-42',
+      onDelta: () => {},
+    })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.matterId).toBe('m-42')
+  })
+
+  it('reports the context state the server sent back', async () => {
+    vi.stubGlobal('fetch', async () =>
+      sseResponse([
+        `data: ${JSON.stringify({ delta: 'partial' })}\n\n`,
+        `data: ${JSON.stringify({
+          done: true,
+          reply: 'full',
+          matterContext: { state: 'applied', matterNumber: 'EP-1', clientName: 'Ellis' },
+        })}\n\n`,
+      ]),
+    )
+
+    const result = await streamChat({
+      messages: [{ role: 'user', content: 'hi' }],
+      documentText: '',
+      documentName: null,
+      matterId: 'm-42',
+      onDelta: () => {},
+    })
+
+    // The terminal frame's reply wins over the accumulated deltas.
+    expect(result.reply).toBe('full')
+    expect(result.matterContext).toEqual({
+      state: 'applied',
+      matterNumber: 'EP-1',
+      clientName: 'Ellis',
+    })
+  })
+
+  it('defaults to "none" when the reply carries no context', async () => {
+    // A server that predates this field, or a dropped one. Defaulting to
+    // 'applied' would silently vouch for facts nobody supplied.
+    vi.stubGlobal('fetch', async () =>
+      sseResponse([`data: ${JSON.stringify({ done: true, reply: 'ok' })}\n\n`]),
+    )
+
+    const result = await streamChat({
+      messages: [{ role: 'user', content: 'hi' }],
+      documentText: '',
+      documentName: null,
+      matterId: 'm-42',
+      onDelta: () => {},
+    })
+    expect(result.matterContext).toEqual({ state: 'none' })
   })
 })

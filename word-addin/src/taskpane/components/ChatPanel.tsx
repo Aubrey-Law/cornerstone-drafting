@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { streamChat, type ChatTurn } from '../api/client'
+import { describeContextGap } from '../matter/contextGap'
 import { readDocument } from '../../word/readDocument'
 import { parseEditsBlock, type ProposedEdit } from '../../word/editTypes'
 import { applyTrackedEdits, type EditOutcome } from '../../word/applyTrackedEdits'
@@ -10,12 +11,14 @@ interface Turn extends ChatTurn {
   outcomes?: EditOutcome[]
 }
 
-export default function ChatPanel() {
+
+export default function ChatPanel({ matterId }: { matterId: string | null }) {
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [contextWarning, setContextWarning] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const send = async () => {
@@ -38,13 +41,16 @@ export default function ChatPanel() {
       // last message, and a stale snapshot produces edits that cannot be found.
       const snapshot = await readDocument()
 
-      const reply = await streamChat({
+      const { reply, matterContext } = await streamChat({
         messages: history.map(({ role, content }) => ({ role, content })),
         documentText: snapshot.markdown,
         documentName: snapshot.name,
+        matterId,
         signal: controller.signal,
         onDelta: text => setStreaming(prev => prev + text),
       })
+
+      setContextWarning(describeContextGap(matterId, matterContext))
 
       const { edits, prose, malformed } = parseEditsBlock(reply)
       setStreaming('')
@@ -71,8 +77,9 @@ export default function ChatPanel() {
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {turns.length === 0 && !streaming && (
           <p className="text-[color:var(--color-ink-muted)]">
-            Ask about the open document, or describe a change. Revisions arrive as tracked
-            changes you can accept or reject one at a time.
+            {matterId
+              ? 'Ask about the open document, or describe a change. The linked matter’s design sheet is the source of truth for names, dates and fiduciaries. Revisions arrive as tracked changes you can accept or reject one at a time.'
+              : 'Ask about the open document, or describe a change. Link a matter above to draft from its design sheet. Revisions arrive as tracked changes you can accept or reject one at a time.'}
           </p>
         )}
 
@@ -99,6 +106,11 @@ export default function ChatPanel() {
         ))}
 
         {streaming && <div className="whitespace-pre-wrap opacity-70">{streaming}</div>}
+        {contextWarning && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800">
+            {contextWarning}
+          </p>
+        )}
         {error && <p className="text-red-600">{error}</p>}
       </div>
 
