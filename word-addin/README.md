@@ -2,7 +2,8 @@
 
 A Word task pane for drafting: chat about the open document and apply the model's
 revisions as native tracked changes, drafting from the matter's design sheet and
-writing decisions back to it, plus the firm formatting pass.
+writing decisions back to it, saving versions into Cornerstone, plus the firm
+formatting pass.
 
 Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
@@ -255,6 +256,9 @@ itself — `tests/addin-route-auth.test.ts` enforces that none of them forget.
 | `GET /api/addin/matters/[id]/brief` | One matter's normalized design sheet |
 | `POST /api/addin/matters/[id]/design-sheet/propose` | Read the open document for decisions. Writes nothing |
 | `POST /api/addin/matters/[id]/design-sheet/apply` | Write the accepted rows to the design sheet |
+| `GET /api/addin/matters/[id]/documents` | The matter's Word documents, for linking the open file |
+| `GET /api/addin/documents/[id]/versions` | A document's version history |
+| `POST /api/addin/documents/[id]/versions` | Save the open document as the next version |
 | `GET /api/addin/style-set` | The firm's active `StyleSetSettings` |
 | `POST /api/addin/style-set/apply` | Style-sweep a `.docx` and return the bytes |
 
@@ -322,6 +326,73 @@ that client and to beneficiaries.
 The cost is that the link is per-machine, and an unsaved document (which has no
 path, and would otherwise share one key with every other unsaved document) holds
 its link in memory only.
+
+## Version history
+
+The add-in shipped editing whatever file was open on disk while
+`/api/documents/[id]/edits` wrote R2 versions, and the two never met: an
+attorney's tracked changes lived in a local file the firm's record knew nothing
+about. The **Versions** tab closes that.
+
+Link the open file to one of the matter's Word documents — chosen, never guessed
+from the filename, because estate matters routinely carry a will and a trust
+whose filenames differ by a word, and a wrong guess files an attorney's edits
+against the wrong document in a way that only shows up much later.
+
+**Save this version** then uploads the document as it stands and makes it the
+document's next version, through `createDocumentVersion` — the same writer the
+web app's edit path uses, which owns the R2 upload, the `version_number` retry
+on a unique collision, and the `current_version_id` pointer.
+
+Nothing is automatic. A version is a durable record of a legal document, and the
+firm should get one because an attorney decided to make one, not because a pane
+was open.
+
+### Why the bytes, not the edit list
+
+The pane uploads the attorney's own document rather than replaying its edit list
+server-side. Replaying would produce a *different* document from the one on
+their screen — Word's revisions and the server's applier do not agree at the XML
+level — so the file they are looking at would stop being the file of record.
+
+`ensureInitialVersion` runs first, so the state before the pane touched anything
+becomes v1 and the save becomes v2. Without it the history would begin at the
+edited document and the original would be unrecoverable.
+
+### What stops a version being lost
+
+The link records the version that was current when it was made, and the save
+sends it back. A version created by someone else in the meantime is refused with
+a 409 naming it, rather than buried — the attorney may have been editing in Word
+for an hour, and silently overwriting that work is the same failure this path
+exists to prevent, arriving by a different door.
+
+It catches a version created **since the document was linked**. It cannot catch
+an attorney who opened a stale download and linked that, because nothing inside a
+`.docx` records which version it came from. The pane shows the version it is
+about to follow for exactly that reason.
+
+### No edit cards
+
+Saving a version writes no `document_edits` rows, and that is deliberate.
+
+Those rows carry each revision's `w:id` so the web UI can accept or reject one.
+The pane cannot know the ids Word assigned. A row without them is worse than no
+row: `resolveTrackedChange` would get an empty id list, change nothing, and still
+mark the edit accepted — a review UI reporting success for a document it did not
+touch.
+
+The pane's own cards accept and reject in Word, which is where those revisions
+are. Deriving real ids is possible — diff `extractTrackedChangeIds` across the
+old and new bytes — but pairing them into cards with text and context needs a
+tracked-change extractor that does not exist yet.
+
+### Recorded as `user_upload`
+
+`document_versions.source` is a CHECK-constrained enum, so a `word_addin` value
+would need a migration to say something `document_access_audit` already records:
+the save writes `surface: 'word-addin'` into the audit metadata, where "how did
+this happen" belongs.
 
 ## Writing decisions back
 
@@ -433,17 +504,17 @@ document, so they preview before applying and apply as tracked changes.
 
 ## Known limitations
 
-- **No version history.** The add-in edits whatever file is open on disk.
-  `/api/documents/[id]/edits` writes a new R2 version and `document_edits` rows;
-  this path does neither, and the two do not reconcile. Fine for a prototype,
-  not something to discover in production.
 - **Desktop first.** Word on the web should work but is untested; Mac
   under-reports deleted revisions through `getTrackedChanges()`, which the pane
   notes on the card rather than treating as a failure.
 - **A first-time staff user with no `users` row gets a 403** with no explanation.
   Open the Cornerstone web app once first.
-- Documents over ~3.5 MB are rejected by the style sweep (Vercel body limit).
-- **The matter link is per-machine.**
+- **Documents over roughly 3.5 MB** cannot be style-swept or saved as a version:
+  both send the whole file, and Vercel caps the request body. The version save
+  names the size before spending the upload; the style sweep does not.
+- **The matter and document links are per-machine**, and a document must be
+  linked by hand: nothing inside a `.docx` says which Cornerstone document or
+  version it came from.
 - **Write-back is a whole-document read, not a diff.** The Sheet tab extracts
   decisions from the document as it stands; it does not know which of them the
   attorney changed in this session. A document that has always said one thing
@@ -461,7 +532,9 @@ pins the pane's copy of the edit contract against the server's,
 `tests/word-addin-office-usage.test.ts` guards the host quirks above,
 `tests/matter-brief.test.ts` pins the non-invention rule and the fencing on the
 design sheet, `tests/design-sheet-write-back.test.ts` pins the write-back
-allow-list and the propose/apply separation, `tests/addin-route-auth.test.ts` enforces that every `/api/addin/*`
+allow-list and the propose/apply separation,
+`tests/addin-document-versions.test.ts` pins the version save — one writer, v1
+before v2, the stale-version refusal, and the absent edit cards — `tests/addin-route-auth.test.ts` enforces that every `/api/addin/*`
 route gates itself, and `tests/word-addin-project.test.ts` guards the build
 isolation that keeps this nested project out of the root typecheck, lint, and Next
 build.

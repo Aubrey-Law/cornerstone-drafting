@@ -1,4 +1,5 @@
 import { serializeWordMutation } from '../mutationQueue'
+import { readDocumentBytes } from '../readDocumentBytes'
 
 /**
  * The declarative half of the firm formatting pass — font, title sizes,
@@ -22,48 +23,6 @@ import { serializeWordMutation } from '../mutationQueue'
 export interface StyleSweepResult {
   noOp: boolean
   changedParts: string[]
-}
-
-/** Office allows only two open file handles per document; every path closes. */
-async function readDocumentBytes(): Promise<string> {
-  const file = await new Promise<Office.File>((resolve, reject) => {
-    Office.context.document.getFileAsync(
-      Office.FileType.Compressed,
-      { sliceSize: 4 * 1024 * 1024 },
-      (result) => {
-        if (result.status === Office.AsyncResultStatus.Succeeded) resolve(result.value)
-        else reject(new Error(result.error?.message ?? 'Could not read the document.'))
-      },
-    )
-  })
-
-  try {
-    const chunks: number[][] = []
-    for (let i = 0; i < file.sliceCount; i++) {
-      const slice = await new Promise<Office.Slice>((resolve, reject) => {
-        file.getSliceAsync(i, (result) => {
-          if (result.status === Office.AsyncResultStatus.Succeeded) resolve(result.value)
-          else reject(new Error(result.error?.message ?? 'Could not read the document.'))
-        })
-      })
-      chunks.push(slice.data as number[])
-    }
-    return toBase64(chunks)
-  } finally {
-    file.closeAsync()
-  }
-}
-
-function toBase64(chunks: number[][]): string {
-  // Chunked so a large document does not blow the argument limit of
-  // String.fromCharCode with a single spread of millions of bytes.
-  let binary = ''
-  for (const chunk of chunks) {
-    for (let i = 0; i < chunk.length; i += 8192) {
-      binary += String.fromCharCode(...chunk.slice(i, i + 8192))
-    }
-  }
-  return btoa(binary)
 }
 
 export async function applyStyleSweep(

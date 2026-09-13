@@ -11,6 +11,7 @@ import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
 import MatterBar from './components/MatterBar'
 import WriteBackPanel from './components/WriteBackPanel'
+import VersionPanel from './components/VersionPanel'
 import {
   clearLink,
   currentDocumentKey,
@@ -18,6 +19,13 @@ import {
   storeLink,
   type LinkedMatter,
 } from './matter/link'
+import {
+  clearDocumentLink,
+  currentDocumentLinkKey,
+  loadDocumentLink,
+  storeDocumentLink,
+  type LinkedDocument,
+} from './document/link'
 
 interface SessionInfo {
   userId: string
@@ -26,7 +34,7 @@ interface SessionInfo {
   role: string | null
 }
 
-type Tab = 'chat' | 'sheet' | 'format'
+type Tab = 'chat' | 'sheet' | 'versions' | 'format'
 
 export default function App() {
   const [session, setSession] = useState<StoredSession | null>(() => loadSession())
@@ -51,6 +59,26 @@ export default function App() {
     clearLink(documentKey)
     setMatter(null)
   }, [documentKey])
+
+  const [documentLinkKey] = useState<string | null>(() => currentDocumentLinkKey())
+  // Not named `document`: inside this component that would shadow the global
+  // one, and a later `document.getElementById` would resolve to the link.
+  const [linkedDocument, setLinkedDocument] = useState<LinkedDocument | null>(() =>
+    loadDocumentLink(documentLinkKey),
+  )
+
+  const linkDocument = useCallback(
+    (next: LinkedDocument) => {
+      storeDocumentLink(documentLinkKey, next)
+      setLinkedDocument(next)
+    },
+    [documentLinkKey],
+  )
+
+  const unlinkDocument = useCallback(() => {
+    clearDocumentLink(documentLinkKey)
+    setLinkedDocument(null)
+  }, [documentLinkKey])
 
   const verify = useCallback(async () => {
     setChecking(true)
@@ -119,12 +147,15 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-[color:var(--color-line)] px-3 py-2">
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
             Draft
           </TabButton>
           <TabButton active={tab === 'sheet'} onClick={() => setTab('sheet')}>
             Sheet
+          </TabButton>
+          <TabButton active={tab === 'versions'} onClick={() => setTab('versions')}>
+            Versions
           </TabButton>
           <TabButton active={tab === 'format'} onClick={() => setTab('format')}>
             Format
@@ -160,6 +191,14 @@ export default function App() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'sheet'}>
         <WriteBackPanel matterId={matter?.id ?? null} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'versions'}>
+        <VersionPanel
+          matterId={matter?.id ?? null}
+          linked={linkedDocument}
+          onLink={linkDocument}
+          onUnlink={unlinkDocument}
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'format'}>
         <FormatPanel />
