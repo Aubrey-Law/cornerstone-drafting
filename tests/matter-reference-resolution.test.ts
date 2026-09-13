@@ -35,3 +35,38 @@ describe('explicit matter references', () => {
     await expect(resolveMatterRef({ kind, value: id }, fixture.admin)).rejects.toThrow('unavailable')
   })
 })
+
+/**
+ * The pre-engagement clock records the discovery call and the PMPS on a lead's
+ * own matters row. Hired-only resolution answered "Matter not found" to every
+ * one of those saves, so the widened lookup has to stay opt-in *and* stay the
+ * exception: everything that reads drafting data keeps the hired gate.
+ */
+describe('leads', () => {
+  function recordingClient(row: unknown) {
+    const filters: [string, unknown][] = []
+    const admin = { from: () => {
+      const chain = {
+        select: () => chain,
+        eq: (column: string, value: unknown) => { filters.push([column, value]); return chain },
+        order: () => chain,
+        limit: () => chain,
+        maybeSingle: async () => ({ data: row, error: null }),
+      }
+      return chain
+    } } as unknown as ReturnType<typeof getAdminClient>
+    return { admin, filters }
+  }
+
+  it('keeps the hired gate by default', async () => {
+    const fixture = recordingClient({ id })
+    await resolveMatterRef({ kind: 'matter', value: id }, fixture.admin)
+    expect(fixture.filters).toContainEqual(['relationship_status', 'hired'])
+  })
+
+  it('resolves an opportunity’s matters row when leads are included', async () => {
+    const fixture = recordingClient({ id })
+    expect(await resolveMatterId(id, fixture.admin, { includeLeads: true })).toBe(id)
+    expect(fixture.filters.map(([column]) => column)).not.toContain('relationship_status')
+  })
+})

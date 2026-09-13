@@ -5,6 +5,10 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
+import {
+  archiveTasksForClosedRecord,
+  restoreTasksForReopenedRecord,
+} from '@/lib/tasks/closeout'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -51,6 +55,22 @@ export async function PATCH(req: Request, { params }: Params) {
       unchanged: boolean
       durableJobs: boolean
     }
+    // Closing a matter is a stage move here: the Close-out card stamps the date
+    // and sets the stage in one action, and nothing else ran afterwards — so a
+    // closed matter kept its whole unfinished checklist in the firm queue. The
+    // same sweep the status route runs, for the same reason, and reversible the
+    // same way: reopening the matter puts back exactly what this archived.
+    if (!result.unchanged) {
+      const actor = { id: userId, email: user?.email ?? null, name: actorName }
+      if (stage === 'closed') {
+        await archiveTasksForClosedRecord(admin, { matterId }, 'matter_closed', actor)
+      } else if (result.previousStage === 'closed') {
+        // Scoped to this sweep's own rows: a lead's held-back plan and a
+        // hand-skipped task carry their own markers and are not this to revive.
+        await restoreTasksForReopenedRecord(admin, { matterId }, actor, { reasons: ['matter_closed'] })
+      }
+    }
+
     // Feature-flag fallback preserves current behavior until durable processing
     // is explicitly enabled in firm settings.
     if (!result.unchanged && !result.durableJobs) {

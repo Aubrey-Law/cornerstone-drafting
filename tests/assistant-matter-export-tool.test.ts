@@ -41,12 +41,26 @@ describe('assistant matter export tool', () => {
     fetchMatterExportRows.mockReset()
   })
 
-  it('describes the columns it returns and the fact that it is open matters only', () => {
+  it('describes the columns it returns and that closed work is out unless asked for', () => {
     expect(exportMattersToolExecutor.tool.name).toBe(EXPORT_MATTERS_TOOL_NAME)
-    expect(exportMattersToolExecutor.tool.description).toContain('Archived matters are never included')
+    expect(exportMattersToolExecutor.tool.description).toContain(
+      'Closed and archived matters are left out unless include_closed is true',
+    )
     const note = matterExportSystemPromptNote()
     expect(note).toContain(EXPORT_MATTERS_TOOL_NAME)
-    expect(note).toContain('open matters only')
+    expect(note).toContain('include_closed')
+  })
+
+  it('asks for closed matters only when the attorney does, and says so in the link', async () => {
+    fetchMatterExportRows.mockResolvedValue(page([]))
+    const result = await exportMattersToolExecutor.execute(
+      { include_closed: true },
+      { toolUseId: 'tool-closed', emit: vi.fn() },
+    )
+
+    const [filters] = fetchMatterExportRows.mock.calls[0] as [MatterTableFilters]
+    expect(filters.includeClosed).toBe(true)
+    expect(JSON.parse(result.content).download_url).toContain('closed=1')
   })
 
   it('returns the listed matters with a CSV link', async () => {
@@ -80,7 +94,7 @@ describe('assistant matter export tool', () => {
       MatterTableFilters,
       { sort: MatterSortKey; limit: number },
     ]
-    expect(filters).toEqual({ search: 'Smith', practice: 'Probate', stageGroup: 'done' })
+    expect(filters).toEqual({ search: 'Smith', practice: 'Probate', stageGroup: 'done', includeClosed: false })
     expect(options.sort).toBe('newest')
 
     // The link handed back describes the same selection the rows came from.
@@ -101,7 +115,7 @@ describe('assistant matter export tool', () => {
       MatterTableFilters,
       { sort: MatterSortKey },
     ]
-    expect(filters).toEqual({ search: '', practice: 'all', stageGroup: 'all' })
+    expect(filters).toEqual({ search: '', practice: 'all', stageGroup: 'all', includeClosed: false })
     // A list of clients is read by name, not by recency.
     expect(options.sort).toBe('client_asc')
     expect(JSON.parse(result.content).filters).toMatchObject({ stage_group: 'all', search: null })

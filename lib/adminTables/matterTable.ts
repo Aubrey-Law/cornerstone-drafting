@@ -1,4 +1,5 @@
 import type { MatterListRow } from '@/lib/queries/matters'
+import { isClosedMatter } from '@/lib/matters/closedMatter'
 import { stageInfo, type StageGroup } from '@/types/database'
 import { compareNullable, normalizeSearchText, stableSort, timestamp } from '@/lib/collections'
 
@@ -6,6 +7,13 @@ export type MatterTableFilters = {
   search: string
   practice: string
   stageGroup: StageGroup | 'all'
+  /**
+   * Closed matters are out of the list unless this is on. They are finished
+   * work — nothing on one is waiting for anybody — and leaving them in is what
+   * made the list longer every month without ever getting more useful. The
+   * Closed toggle brings them back when someone needs to look one up.
+   */
+  includeClosed: boolean
 }
 
 export type MatterSortKey = 'last_activity' | 'newest' | 'oldest' | 'client_asc' | 'client_desc' | 'matter_number'
@@ -14,6 +22,7 @@ export const EMPTY_MATTER_TABLE_FILTERS: MatterTableFilters = {
   search: '',
   practice: 'all',
   stageGroup: 'all',
+  includeClosed: false,
 }
 
 export type MatterListView = 'board' | 'table'
@@ -59,7 +68,11 @@ export function filterAndSortMatters(
 ): MatterListRow[] {
   const search = normalizeSearchText(filters.search)
   const practice = normalizeSearchText(filters.practice)
-  const filtered = matters.filter(matter => matchesMatter(matter, search, practice, filters.stageGroup))
+  const filtered = matters.filter(
+    matter =>
+      (filters.includeClosed || !isClosedMatter(matter))
+      && matchesMatter(matter, search, practice, filters.stageGroup),
+  )
   return stableSort(filtered, (left, right) => compareMatters(left, right, sortKey))
 }
 
@@ -127,12 +140,16 @@ export function matterTableFiltersFrom(input: {
   search?: unknown
   practice?: unknown
   stage?: unknown
+  closed?: unknown
 }): MatterTableFilters {
   const stage = typeof input.stage === 'string' ? input.stage : ''
   return {
     search: typeof input.search === 'string' ? input.search.trim() : '',
     practice: typeof input.practice === 'string' && input.practice.trim() ? input.practice.trim() : 'all',
     stageGroup: (MATTER_STAGE_GROUPS as string[]).includes(stage) ? (stage as StageGroup) : 'all',
+    // Anything but an explicit yes leaves closed matters out, so a tool call
+    // that says nothing about them gets the list the page shows.
+    includeClosed: input.closed === true || input.closed === '1' || input.closed === 'true',
   }
 }
 

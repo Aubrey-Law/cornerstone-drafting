@@ -20,11 +20,11 @@ vi.mock('@/lib/matter/unreviewedUploads', () => ({
 }))
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
-    async rpc(name: string, { p_query: query }: { p_query: { search:string; practice:string; stage:StageGroup|'all'; sort:MatterSortKey; page:number; pageSize:number } }) {
+    async rpc(name: string, { p_query: query }: { p_query: { search:string; practice:string; stage:StageGroup|'all'; closed:string; sort:MatterSortKey; page:number; pageSize:number } }) {
       mocks.queried.push(name)
       const result=mocks.tableResult.v_matter_pipeline
       if(result.error) return {data:null,error:result.error}
-      const selected=filterAndSortMatters(result.data as MatterListRow[],{search:query.search,practice:query.practice,stageGroup:query.stage},query.sort)
+      const selected=filterAndSortMatters(result.data as MatterListRow[],{search:query.search,practice:query.practice,stageGroup:query.stage,includeClosed:query.closed==='show'},query.sort)
       return {data:{rows:selected.slice((query.page-1)*query.pageSize,query.page*query.pageSize),total:selected.length,page:query.page,pageSize:query.pageSize,groups:{},columns:{},insights:{}},error:null}
     },
     from(table: string) {

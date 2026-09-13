@@ -227,6 +227,22 @@ describe('matter list controls', () => {
     expect(visibleMatterNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
   })
 
+  it('keeps closed matters out of the list until the Closed chip is pressed', async () => {
+    const user = userEvent.setup()
+    // Closed along each axis the firm uses: the stage, and the status.
+    const closedByStage = { ...matterRows[0], matter_id: 'ended', client_name: 'Cora Closed', stage: 'closed' as const }
+    const closedByStatus = { ...matterRows[1], matter_id: 'shut', client_name: 'Dana Done', status: 'closed' }
+    render(<MattersClient matters={[...matterRows, closedByStage, closedByStatus]} />)
+
+    expect(visibleMatterNames()).not.toContain('Cora Closed')
+    expect(visibleMatterNames()).not.toContain('Dana Done')
+
+    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+
+    expect(visibleMatterNames()).toContain('Cora Closed')
+    expect(visibleMatterNames()).toContain('Dana Done')
+  })
+
   it('clear filters preserves matter sort order and visible-row selection', async () => {
     const user = userEvent.setup()
     render(<MattersClient matters={matterRows} />)

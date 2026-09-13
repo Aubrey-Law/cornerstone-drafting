@@ -128,6 +128,7 @@ export async function fetchMatterPage(params:MatterPageParams):Promise<MatterPag
   const { data,error }=await admin.rpc('firm_matter_page_v1',{p_query:{
     ...pageRequest(params), search:params.filters.search,practice:params.filters.practice,stage:params.filters.stageGroup,
     sort:params.sort,card:params.card ?? '',view:params.view,groupPages:params.groupPages,
+    closed:params.filters.includeClosed ? 'show' : 'hide',
   }})
   if(error || !data) throw new Error('Matter list is temporarily unavailable. Please retry.')
   const page=data as unknown as MatterPageResult

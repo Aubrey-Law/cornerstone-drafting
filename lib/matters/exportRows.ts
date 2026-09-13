@@ -108,6 +108,9 @@ export function matterExportUrl(filters: MatterTableFilters, sort?: MatterSortKe
   if (filters.search) query.set('search', filters.search)
   if (filters.practice && filters.practice !== 'all') query.set('practice', filters.practice)
   if (filters.stageGroup !== 'all') query.set('stage', filters.stageGroup)
+  // Only when asked for: the link has to open the same selection the rows came
+  // from, and closed matters are out of that selection by default.
+  if (filters.includeClosed) query.set('closed', '1')
   if (sort) query.set('sort', sort)
   const qs = query.toString()
   return `/api/admin/matters/export${qs ? `?${qs}` : ''}`
