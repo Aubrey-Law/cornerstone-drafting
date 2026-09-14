@@ -47,6 +47,7 @@ import type {
   DesignSheetImportPreviewRow,
   DesignSheetImportProposal,
 } from '@/lib/designSheetImport/shared'
+import { forEachSseFrame, toolEventFrom } from '@/app/admin/components/chatStream'
 
 interface ChatPanelProps {
   open: boolean
@@ -324,7 +325,13 @@ export function ChatPanel({
   }, [contextType, messages, threadKey])
 
   useEffect(() => {
-    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
+    const element = threadRef.current
+    if (!element) return
+    // Only follow the newest message when the reader is already at the bottom;
+    // scrolling back during a stream used to be undone on the next delta.
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+    if (distance > 160) return
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
   // The box grows with what is typed, up to a few lines — unless the operator
@@ -387,101 +394,36 @@ export function ChatPanel({
         throw new Error(json?.error ?? 'Chat unavailable - try again in a moment.')
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const events = buffer.split('\n\n')
-        buffer = events.pop() ?? ''
-
-        for (const event of events) {
-          const dataLines = event
-            .split('\n')
-            .filter(line => line.startsWith('data:'))
-            .map(line => line.slice(5).trim())
-
-          for (const dataLine of dataLines) {
-            if (!dataLine || dataLine === '[DONE]') continue
-            const parsed = JSON.parse(dataLine) as {
-              text?: string
-              error?: string
-              tool?: string
-              tool_use_id?: string
-              status?: 'running' | 'done' | 'error'
-              result?: {
-                filename?: string
-                signed_url?: string
-                download_url?: string
-                row_count?: number
-                total_claim?: number
-                matter_id?: string
-                preview?: unknown
-                proposed?: unknown
-                task_id?: string
-                title?: string
-                task_title?: string
-                target?: 'matter' | 'lead'
-                proposal?: unknown
-              }
-            }
-            if (parsed.error && !parsed.tool) throw new Error(parsed.error)
-            if (parsed.tool && parsed.tool_use_id && parsed.status) {
-              sawToolEvent = true
-              const preview = Array.isArray(parsed.result?.preview)
-                ? parsed.result.preview as DesignSheetImportPreviewRow[]
-                : undefined
-              const proposed = isRecord(parsed.result?.proposed)
-                ? parsed.result.proposed as DesignSheetImportProposal
-                : undefined
-              const toolEvent = {
-                tool: parsed.tool,
-                toolUseId: parsed.tool_use_id,
-                status: parsed.status,
-                filename: parsed.result?.filename,
-                signedUrl: parsed.result?.signed_url,
-                downloadUrl: parsed.result?.download_url,
-                exportCount: parsed.result?.row_count,
-                totalClaim: parsed.result?.total_claim,
-                matterId: parsed.result?.matter_id,
-                taskId: parsed.result?.task_id,
-                taskTitle: typeof parsed.result?.title === 'string'
-                  ? parsed.result.title
-                  : typeof parsed.result?.task_title === 'string'
-                    ? parsed.result.task_title
-                    : undefined,
-                preview,
-                proposed,
-                proposal: Array.isArray(parsed.result?.proposal)
-                  ? parsed.result.proposal as ToolEvent['proposal']
-                  : undefined,
-                error: parsed.status === 'error' ? parsed.error : undefined,
-              }
-              setMessages(prev => prev.map(message => {
-                if (message.id !== assistantMessage.id) return message
-                const existing = message.toolEvents ?? []
-                const idx = existing.findIndex(event => event.toolUseId === toolEvent.toolUseId)
-                const next = idx >= 0
-                  ? existing.map((event, i) => i === idx ? { ...event, ...toolEvent } : event)
-                  : [...existing, toolEvent]
-                return { ...message, toolEvents: next }
-              }))
-              continue
-            }
-            if (!parsed.text) continue
-            replyText += parsed.text
-            setMessages(prev => prev.map(message =>
-              message.id === assistantMessage.id
-                ? { ...message, content: message.content + parsed.text }
-                : message
-            ))
-          }
+      await forEachSseFrame(response.body, parsed => {
+        if (parsed.error && !parsed.tool) throw new Error(parsed.error)
+        if (parsed.tool && parsed.tool_use_id && parsed.status) {
+          sawToolEvent = true
+          const toolEvent = toolEventFrom({
+            tool: parsed.tool,
+            tool_use_id: parsed.tool_use_id,
+            status: parsed.status,
+            result: parsed.result,
+            error: parsed.status === 'error' ? parsed.error : undefined,
+          })
+          setMessages(prev => prev.map(message => {
+            if (message.id !== assistantMessage.id) return message
+            const existing = message.toolEvents ?? []
+            const idx = existing.findIndex(event => event.toolUseId === toolEvent.toolUseId)
+            const next = idx >= 0
+              ? existing.map((event, i) => i === idx ? { ...event, ...toolEvent } : event)
+              : [...existing, toolEvent]
+            return { ...message, toolEvents: next }
+          }))
+          return
         }
-      }
+        if (!parsed.text) return
+        replyText += parsed.text
+        setMessages(prev => prev.map(message =>
+          message.id === assistantMessage.id
+            ? { ...message, content: message.content + parsed.text }
+            : message
+        ))
+      })
       persistReply = replyText || (sawToolEvent ? '[Prepared a design sheet proposal for review]' : null)
     } catch (err) {
       if ((err as Error).name === 'AbortError') {

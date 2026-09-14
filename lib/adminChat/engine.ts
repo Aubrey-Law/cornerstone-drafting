@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { logAiUsage } from '@/lib/aiUsage'
-import { getAnthropicClient } from '@/lib/anthropic'
+import { getAnthropicClient, PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
 import { resolveFirmModel } from '@/lib/firmModels'
 import { buildDraftPayload } from '@/lib/buildDraftPayload'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
@@ -64,7 +64,9 @@ You specialize in:
 
 You can also answer general questions about the attorney's pipeline, matter stages, and client management. If asked about a specific matter and you don't have its context, say so and suggest the attorney navigate to that matter page to ask there.
 
-Be concise. Use plain language unless the attorney asks for technical detail.${await trustDraftingIntakeInstructions()}${await incapacityDesignSheetInstructions()}`
+Be concise. Use plain language unless the attorney asks for technical detail.
+
+${PROMPT_INJECTION_GUARDRAIL}${await trustDraftingIntakeInstructions()}${await incapacityDesignSheetInstructions()}`
 }
 
 export async function loadMatterContext(contextId: string): Promise<MatterContext> {
@@ -194,19 +196,22 @@ MATTER: ${text(matter.matter_number)} - ${text(practiceArea)} - Stage: ${text(ma
 MATTER NAME: ${text(matter.name ?? pipeline?.matter_name)}
 PLAN TYPE: ${text(details?.ep_plan_category ?? details?.plan_type ?? intake?.plan_type ?? pipeline?.plan_type)}
 LEGAL PLAN: ${text(legalPlan || '-')} ${details?.legal_plan_id ? `(Member ID ${text(details.legal_plan_id)})` : ''}
-${formatIntakeQuestionnaire(intake, pipeline)}
+${quoteUserContent('client-intake-questionnaire', formatIntakeQuestionnaire(intake, pipeline))}
 ${formatDesignSheetSummary(designSheet)}
 ASSETS:
-${summarizeAssets(intake, designSheet, assetIntakeRows)}
+${quoteUserContent('client-reported-assets', summarizeAssets(intake, designSheet, assetIntakeRows))}
 FAMILY:
 ${summarizeFamily(intake, pipeline)}
 FIDUCIARIES:
 ${summarizeFiduciaries(intake, designSheet)}
-SPECIAL CONCERNS: ${text(designSheet?.concerns ?? intake?.concerns ?? intake?.special_notes ?? intake?.planning_objectives)}
+SPECIAL CONCERNS:
+${quoteUserContent('client-concerns', text(designSheet?.concerns ?? intake?.concerns ?? intake?.special_notes ?? intake?.planning_objectives))}
 RECENT NOTES:
-${noteLines}${designSheetSection}
+${quoteUserContent('matter-notes', noteLines)}${designSheetSection}
 
-Respond in plain, concise attorney-facing language. You may draft text (emails, summaries, clauses) when asked. Always flag if you're uncertain. Do not invent facts not present in the context above.${designSheetImportNote}${draftingSummaryNote}${trustIntakeNote}${incapacityIntakeNote}`
+Respond in plain, concise attorney-facing language. You may draft text (emails, summaries, clauses) when asked. Always flag if you're uncertain. Do not invent facts not present in the context above.
+
+${PROMPT_INJECTION_GUARDRAIL}${designSheetImportNote}${draftingSummaryNote}${trustIntakeNote}${incapacityIntakeNote}`
 
   const matterLabel = [
     text(matter.name ?? pipeline?.matter_name, ''),
@@ -285,15 +290,17 @@ SOURCE: ${text(lead.lead_source)}
 URGENCY: ${text(lead.lead_urgency)}
 QUALIFICATION NOTES: ${text(lead.qualification_notes)}
 ENGAGEMENT: ${text(lead.engagement_status)}; quoted fee ${text(lead.engagement_fee_quoted)}
-${formatIntakeQuestionnaire(lead)}
+${quoteUserContent('client-intake-questionnaire', formatIntakeQuestionnaire(lead))}
 ASSETS:
-${summarizeAssets(lead, null, (assetsRes.data ?? []) as Row[])}
+${quoteUserContent('client-reported-assets', summarizeAssets(lead, null, (assetsRes.data ?? []) as Row[]))}
 FAMILY:
 ${summarizeFamily(lead, null)}
 RECENT LEAD TIMELINE:
-${timeline}
+${quoteUserContent('lead-timeline', timeline)}
 
-Respond in plain, concise attorney-facing language. Treat this record as a lead, not an active matter. You may draft text when asked. Always flag uncertainty and missing intake facts. Do not invent facts.`
+Respond in plain, concise attorney-facing language. Treat this record as a lead, not an active matter. You may draft text when asked. Always flag uncertainty and missing intake facts. Do not invent facts.
+
+${PROMPT_INJECTION_GUARDRAIL}`
 
   return { systemPrompt, matterLabel: fullName(lead) }
 }
@@ -318,11 +325,13 @@ export function sse(data: Record<string, unknown>) {
 }
 
 /** A tool the chat loop can call: Anthropic schema + server-side executor. */
+export type AdminChatToolEmit = (data: Record<string, unknown>) => void
+
 export interface AdminChatToolExecutor {
   tool: Anthropic.Tool
   execute: (
     input: unknown,
-    ctx: { toolUseId: string; emit: (data: Record<string, unknown>) => void },
+    ctx: { toolUseId: string; emit: AdminChatToolEmit },
   ) => Promise<{ content: string; isError?: boolean }>
 }
 
@@ -343,7 +352,15 @@ export interface AdminChatStreamOptions {
   /** Observe every SSE data event (used to persist assistant messages/events). */
   onEvent?: (data: Record<string, unknown>) => void
   /** Called once the stream finishes (success or failure) with the accumulated text. */
-  onComplete?: (result: { text: string; success: boolean; errorMessage?: string }) => void | Promise<void>
+  /** Backoff between retries of a failure that landed before any text. Tests set it to 1. */
+  retryDelayMs?: number
+  /** `aborted` means the consumer hung up — persist the partial reply as shown. */
+  onComplete?: (result: {
+    text: string
+    success: boolean
+    errorMessage?: string
+    aborted?: boolean
+  }) => void | Promise<void>
 }
 
 /**
@@ -351,22 +368,73 @@ export interface AdminChatStreamOptions {
  * Extracted from app/api/admin/chat/route.ts so the floating chat panel and
  * the dedicated assistant page share one engine.
  */
+/** Mirrors the retry policy in lib/anthropic.ts: transport, 408, 429 and 5xx. */
+function isRetryableStreamError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const status = (error as { status?: number; statusCode?: number }).status
+    ?? (error as { status?: number; statusCode?: number }).statusCode
+  if (status === undefined) return true
+  if (status === 408 || status === 429) return true
+  return status >= 500 && status < 600
+}
+
 export function createAdminChatStream(options: AdminChatStreamOptions): Response {
-  const { system, messages, tools = [], maxIterations = 4, preamble, usage, onEvent, onComplete } = options
+  const { system, messages, tools = [], maxIterations = 4, preamble, usage, onEvent, onComplete, retryDelayMs = 500 } = options
   const encoder = new TextEncoder()
   const executorsByName = new Map(tools.map(executor => [executor.tool.name, executor]))
   const anthropicTools = tools.map(executor => executor.tool)
+
+  // Shared with cancel(): the consumer can go away at any point, and when it
+  // does we stop the model rather than paying for tokens nobody will read.
+  let abortActiveStream: (() => void) | null = null
+  let clientGone = false
 
   const stream = new ReadableStream({
     async start(controller) {
       const startedAt = Date.now()
       const usageTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
       let accumulatedText = ''
+      let closed = false
+      /** Writing to a controller the consumer has dropped throws; that is not an error. */
+      const write = (chunk: string) => {
+        if (closed || clientGone) return
+        try {
+          controller.enqueue(encoder.encode(chunk))
+        } catch {
+          closed = true
+        }
+      }
+      const close = () => {
+        if (closed) return
+        closed = true
+        try {
+          controller.close()
+        } catch {
+          // Already closed by a cancelling consumer.
+        }
+      }
       const emit = (data: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(sse(data)))
+        write(sse(data))
         if (typeof data.text === 'string') accumulatedText += data.text
         onEvent?.(data)
       }
+      /**
+       * Open the model stream, retrying a transient failure only while the
+       * attorney has seen nothing yet. Once text is on screen a retry would
+       * repeat it, so the failure surfaces instead.
+       */
+      const openStream = async <T>(open: () => T): Promise<T> => {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            return open()
+          } catch (error) {
+            const last = attempt >= 3
+            if (last || accumulatedText !== '' || !isRetryableStreamError(error)) throw error
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)))
+          }
+        }
+      }
+
       const chatModel = await resolveFirmModel('assistant')
       let usageModel = chatModel
       const anthropic = await getAnthropicClient()
@@ -377,7 +445,8 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
 
         // Tool-use loop. We cap iterations defensively.
         for (let iteration = 0; iteration < maxIterations; iteration++) {
-          const anthropicStream = anthropic.messages.stream({
+          if (clientGone) break
+          const anthropicStream = await openStream(() => anthropic.messages.stream({
             model: chatModel,
             max_tokens: 4096,
             // Cache the large matter context prompt so the tool loop and
@@ -392,9 +461,12 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
             ],
             messages: conversation,
             ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
-          })
+          }))
+
+          abortActiveStream = () => anthropicStream.abort()
 
           for await (const event of anthropicStream) {
+            if (clientGone) break
             if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
               emit({ text: event.delta.text })
             }
@@ -451,10 +523,16 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
           }
 
           conversation.push({ role: 'user', content: toolResults })
+
+          if (iteration === maxIterations - 1) {
+            // Falling out of the loop here used to emit [DONE] over a partial
+            // answer with no signal that the assistant had more to do.
+            emit({ text: '\n\n_(Stopped: tool loop limit reached. Ask me to continue.)_' })
+          }
         }
 
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-        controller.close()
+        write('data: [DONE]\n\n')
+        close()
 
         void logAiUsage({
           route: usage.route,
@@ -469,11 +547,17 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
           durationMs: Date.now() - startedAt,
           success: true,
         })
-        await onComplete?.({ text: accumulatedText, success: true })
+        await onComplete?.({ text: accumulatedText, success: true, ...(clientGone ? { aborted: true } : {}) })
       } catch (error) {
+        if (clientGone) {
+          // The consumer cancelled mid-stream; the abort surfaces here.
+          close()
+          await onComplete?.({ text: accumulatedText, success: true, aborted: true })
+          return
+        }
         console.error(`[${usage.route}] anthropic stream failed`, error)
-        controller.enqueue(encoder.encode(sse({ error: 'Chat unavailable - try again in a moment.' })))
-        controller.close()
+        write(sse({ error: 'Chat unavailable - try again in a moment.' }))
+        close()
         void logAiUsage({
           route: usage.route,
           contextType: usage.contextType,
@@ -494,6 +578,13 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
           errorMessage: error instanceof Error ? error.message : String(error),
         })
       }
+    },
+    cancel() {
+      // The attorney pressed Stop, or the tab went away. Stop generating and
+      // let start() persist exactly what was streamed, so a reload shows the
+      // same answer the attorney saw.
+      clientGone = true
+      abortActiveStream?.()
     },
   })
 

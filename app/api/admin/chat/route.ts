@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { consumeRateLimit } from '@/lib/rateLimit'
+import { ASSISTANT_MODEL_HISTORY_TURNS } from '@/lib/assistantChats'
 import { buildDraftPayload } from '@/lib/buildDraftPayload'
 import {
   buildContext,
@@ -24,6 +25,9 @@ import {
 } from '@/lib/adminChat/matterKnowledgeTools'
 
 export const maxDuration = 120
+
+/** One turn's ceiling. A pasted document belongs in a document, not in a turn. */
+const MAX_MESSAGE_CHARS = 24_000
 
 type ChatRole = 'user' | 'assistant'
 
@@ -61,13 +65,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid context_type' }, { status: 400 })
   }
 
+  // This lane takes its history from the client, so the bounds have to be
+  // applied here: an unbounded array is unbounded context and unbounded cost.
   const requestMessages = body.messages
     .filter(message =>
       (message.role === 'user' || message.role === 'assistant') &&
       typeof message.content === 'string' &&
       message.content.trim()
     )
-    .map(message => ({ role: message.role, content: message.content.trim() }))
+    .slice(-ASSISTANT_MODEL_HISTORY_TURNS)
+    .map(message => ({ role: message.role, content: message.content.trim().slice(0, MAX_MESSAGE_CHARS) }))
 
   if (requestMessages.length === 0) {
     return NextResponse.json({ error: 'At least one message is required' }, { status: 400 })

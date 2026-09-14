@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -20,6 +20,9 @@ describe('document preview confidentiality', () => {
       .split('\n')
       .filter(Boolean)
       .filter(file => !file.startsWith('tests/'))
+      // A file deleted but not yet staged is still tracked by git; it cannot
+      // contain an external viewer URL, so skip it rather than fail on ENOENT.
+      .filter(file => existsSync(path.join(process.cwd(), file)))
 
   it('never sends a document URL to an external office viewer', () => {
     const offenders = tracked().filter(file => {

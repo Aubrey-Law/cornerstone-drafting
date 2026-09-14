@@ -11,7 +11,6 @@ import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 import { renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
 import type { NodeEstateData } from '@/lib/estateGenerator/node/types'
 import { extractTemplateVariables, knownClauseIds, knownTemplateRoots } from '@/lib/estateGenerator/templateVariables'
-import { createCustomTemplate, customTemplateId } from '@/lib/documentTemplates/customTemplates'
 import { getDocumentTemplateRegistry } from '@/lib/documentTemplates/registry'
 import { createDocumentTemplateVersion } from '@/lib/documentTemplates/repository'
 import {
@@ -20,6 +19,8 @@ import {
   saveTemplateBuilderRevision,
 } from '@/lib/templateBuilder/uploads'
 import { applyDocxReplacements, extractDocxParagraphText } from '@/lib/templateBuilder/docxEdit'
+import { isAdministrator } from '@/lib/apiAuth'
+import { proposeWrite } from '@/lib/adminChat/proposals'
 
 const MAX_TEXT_CHARS = 16000
 // Headroom over the full catalog: an unfiltered `list_template_fields` has to
@@ -523,23 +524,23 @@ export function templateBuilderToolExecutors(userId: string): AdminChatToolExecu
           if (typeof label !== 'string' || !label.trim()) return toolError('label is required')
           const row = await getTemplateBuilderUpload(uploadId)
           if (!row) return toolError(`No template upload found with id ${uploadId}`)
-          const buffer = await loadTemplateBuilderBuffer(row)
-          const created = await createCustomTemplate({
-            label: label.trim(),
-            buffer,
-            actorId: userId,
-            outputFilename: typeof outputFilename === 'string' ? outputFilename : undefined,
+
+          // Registering makes the template live in Quick Draft for every matter.
+          // That is a firm-wide write, so it is proposed and the attorney's
+          // accept is what performs it.
+          return proposeWrite({
+            kind: 'register_custom_template',
+            toolName: REGISTER_CUSTOM_TOOL.name,
+            toolUseId,
+            emit,
+            title: `Register template: ${label.trim()}`,
+            rationale: 'It becomes available in Quick Draft for every matter.',
+            payload: {
+              upload_id: uploadId,
+              label: label.trim(),
+              output_filename: typeof outputFilename === 'string' ? outputFilename : null,
+            },
           })
-          emit({ tool: REGISTER_CUSTOM_TOOL.name, tool_use_id: toolUseId, status: 'done', result: { label: created.label } })
-          return {
-            content: JSON.stringify({
-              ok: true,
-              templateId: customTemplateId(created.id),
-              label: created.label,
-              outputFilename: created.output_filename,
-              note: 'The template is now available in Quick Draft (matter → drafting → Quick Draft) for every matter.',
-            }),
-          }
         } catch (error) {
           return toolError(error instanceof Error ? error.message : 'Registration failed')
         }
@@ -562,6 +563,12 @@ export function templateBuilderToolExecutors(userId: string): AdminChatToolExecu
       tool: STAGE_MASTER_TOOL,
       execute: async (input, { toolUseId, emit }) => {
         try {
+          // The HTTP route for this is administrator-only; the chat path must not
+          // be the way around it. Checked before anything else so a non-admin
+          // cannot probe upload or template ids either.
+          if (!await isAdministrator(userId)) {
+            return toolError('Staging a firm master template requires the administrator role.')
+          }
           const { uploadId } = await requireUpload(input)
           const { template_id: templateId } = (input ?? {}) as { template_id?: unknown }
           if (typeof templateId !== 'string' || !templateId.trim()) return toolError('template_id is required')

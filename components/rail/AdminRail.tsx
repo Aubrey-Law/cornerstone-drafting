@@ -70,7 +70,7 @@ export interface AdminRailController {
  * `AdminRail`) because the topbar toggle and the rail render in different
  * branches of the layout tree.
  */
-export function useAdminRail(_options: { voiceEnabled?: boolean } = {}): AdminRailController {
+export function useAdminRail(): AdminRailController {
   const [open, setOpen] = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [tab, setTabState] = useState<RailTab>('assistant')
@@ -225,9 +225,6 @@ export function useAdminRail(_options: { voiceEnabled?: boolean } = {}): AdminRa
 
 interface AdminRailProps {
   rail: AdminRailController
-  voiceEnabled: boolean
-  /** Legacy props are ignored; phone and SMS panes have been retired. */
-  smsEnabled?: boolean
   matterDisplayName?: string | null
   assistantModelLabel?: string | null
   /** Overdue task count for the Tasks tab badge, from the sidebar counts. */
@@ -259,7 +256,7 @@ export function AdminRail({
       {visible && (
         <div className="flex h-11 shrink-0 items-center border-b border-border pl-1 pr-1.5">
           {/*
-            Five tabs do not fit 460px with labels, so only the active tab keeps
+            Four tabs do not fit 460px with labels, so only the active tab keeps
             its text; the rest are 34px icon buttons with a title tooltip.
           */}
           {tabs.map(item => {

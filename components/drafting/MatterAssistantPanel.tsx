@@ -75,7 +75,13 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
   }, [loadHistory])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    const element = scrollRef.current
+    if (!element) return
+    // Only follow the newest message when the reader is already at the bottom;
+    // scrolling back during a stream used to be undone on the next delta.
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+    if (distance > 160) return
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
   }, [turns])
 
   const clearHistory = async () => {

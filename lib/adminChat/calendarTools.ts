@@ -22,6 +22,7 @@ import {
   TASK_TYPES,
 } from '@/lib/tasks/types'
 import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
+import { proposeWrite } from '@/lib/adminChat/proposals'
 import { parseRecurrence as parseRecurrenceText } from '@/lib/tasks/recurrence'
 import type { TaskRecurrence } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -300,6 +301,18 @@ function buildCreateTaskPayload(fields: Record<string, unknown>, context: Calend
   }
 }
 
+/**
+ * Turn an accepted `create_task` proposal into the real task (and, when asked,
+ * the appointment and calendar hold). Called only from the acceptance route —
+ * the tool itself proposes, it never writes.
+ */
+export async function acceptTaskProposal(
+  fields: Record<string, unknown>,
+  actor: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null,
+) {
+  return createTaskFromInput(buildCreateTaskPayload(fields, {}), actor)
+}
+
 async function createTaskFromInput(input: CreateTaskInput, actor: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null) {
   const admin = getAdminClient()
   const { data, error } = await admin
@@ -542,28 +555,24 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
       execute: async (input, { toolUseId, emit }) => {
         try {
           const fields = (input ?? {}) as Record<string, unknown>
-          const payload = buildCreateTaskPayload(fields, context)
-          const task = await createTaskFromInput(payload, context.actor ?? null)
-
-          emit({
-            tool: definitions.create_task.name,
-            tool_use_id: toolUseId,
-            status: 'done',
-            result: {
-              taskId: task.id,
-              title: task.title,
-              taskTitle: task.title,
+          // Validate now so the attorney is never shown a proposal that cannot
+          // be accepted — but do not write. A task can create an appointment and
+          // a real calendar event, and client-authored text reaches this prompt.
+          const validated = buildCreateTaskPayload(fields, context)
+          return proposeWrite({
+            kind: 'create_task',
+            toolName: definitions.create_task.name,
+            toolUseId,
+            emit,
+            title: validated.title,
+            rationale: validated.description ?? '',
+            payload: {
+              ...fields,
+              title: validated.title,
+              matter_id: validated.matterId,
+              lead_id: validated.leadId,
             },
           })
-
-          return {
-            content: JSON.stringify({
-              ok: true,
-              task_id: task.id,
-              title: task.title,
-              task_title: task.title,
-            }),
-          }
         } catch (error) {
           return {
             content: JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Could not create task' }),
@@ -620,7 +629,7 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
 }
 
 export function calendarPlanningSystemPromptNote() {
-  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to add tasks for a matter or lead when needed. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
+  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to propose tasks for a matter or lead when needed. Task creation is a proposal like calendar writes: the task is created only when the attorney presses accept. Never say a task was created — say you have proposed it and it needs their acceptance. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
 
 RECORD LOOKUP: Whenever any tool needs a matter_id or lead_id — creating tasks, calendar holds, listing matter dates, rendering templates, or anything else — and the attorney has named a client or matter without an id in context, call find_matter_or_lead with the client name, email, phone, or matter name to resolve it yourself. Never ask the attorney to supply a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
 }
