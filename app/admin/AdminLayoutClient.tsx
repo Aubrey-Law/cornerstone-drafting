@@ -88,8 +88,6 @@ interface AdminLayoutClientProps {
   children: React.ReactNode
   userName: string
   userInitials: string
-  voiceEnabled?: boolean
-  smsEnabled?: boolean
   assistantModelLabel?: string | null
   /**
    * Forces the compact icon rail and hides the collapse toggle without writing
@@ -104,8 +102,6 @@ export default function AdminLayoutClient({
   children,
   userName,
   userInitials,
-  voiceEnabled = false,
-  smsEnabled = false,
   assistantModelLabel = null,
   forceCollapsed,
 }: AdminLayoutClientProps) {
@@ -114,7 +110,7 @@ export default function AdminLayoutClient({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [badgeCounts, setBadgeCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS)
-  const rail = useAdminRail({ voiceEnabled })
+  const rail = useAdminRail()
   const matterDisplayName = useMatterDisplayName()
   // Called once and passed to both sidebar instances (desktop column and mobile
   // sheet) so they share one fetch and one view of what is pinned.
@@ -269,8 +265,6 @@ export default function AdminLayoutClient({
           <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
           <AdminRail
             rail={rail}
-            voiceEnabled={voiceEnabled}
-            smsEnabled={smsEnabled}
             matterDisplayName={matterDisplayName}
             assistantModelLabel={assistantModelLabel}
             tasksOverdue={badgeCounts.tasksOverdueCount}

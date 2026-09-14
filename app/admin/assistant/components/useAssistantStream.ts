@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import type { ToolEvent } from '@/app/admin/components/ChatMessage'
+import { forEachSseFrame, toolEventFrom } from '@/app/admin/components/chatStream'
+
+export { toolEventFrom }
 
 export interface WorkflowRef {
   id: string
@@ -59,26 +62,13 @@ export function messagesFromPersisted(rows: PersistedMessage[]): AssistantMessag
         message.workflowApplied = workflowRefFrom(event.workflow_applied)
       }
       if (typeof event.tool === 'string' && typeof event.tool_use_id === 'string' && typeof event.status === 'string') {
-        const result = isRecord(event.result) ? event.result : undefined
-        const toolEvent: ToolEvent = {
+        const toolEvent = toolEventFrom({
           tool: event.tool,
-          toolUseId: event.tool_use_id,
+          tool_use_id: event.tool_use_id,
           status: event.status as ToolEvent['status'],
-          taskId: typeof result?.task_id === 'string' ? result.task_id : undefined,
-          taskTitle:
-            typeof result?.title === 'string'
-              ? result.title
-              : typeof result?.task_title === 'string'
-                ? result.task_title
-                : undefined,
-          matterId: typeof result?.matter_id === 'string' ? result.matter_id : undefined,
-          filename: typeof result?.filename === 'string' ? result.filename : undefined,
-          downloadUrl: typeof result?.download_url === 'string' ? result.download_url : undefined,
-          exportCount: typeof result?.row_count === 'number' ? result.row_count : undefined,
-          preview: Array.isArray(result?.preview) ? result.preview as ToolEvent['preview'] : undefined,
-          proposed: isRecord(result?.proposed) ? result.proposed as ToolEvent['proposed'] : undefined,
-          error: typeof event.error === 'string' ? event.error : undefined,
-        }
+          result: isRecord(event.result) ? event.result : undefined,
+          error: event.error,
+        })
         const existing = message.toolEvents ?? []
         const idx = existing.findIndex(candidate => candidate.toolUseId === toolEvent.toolUseId)
         message.toolEvents = idx >= 0
@@ -88,6 +78,13 @@ export function messagesFromPersisted(rows: PersistedMessage[]): AssistantMessag
     }
     return message
   })
+}
+
+/** "45 seconds" / "2 minutes" — a wait an attorney can act on. */
+function formatWait(seconds: number): string {
+  if (seconds < 60) return `${Math.ceil(seconds)} second${Math.ceil(seconds) === 1 ? '' : 's'}`
+  const minutes = Math.ceil(seconds / 60)
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`
 }
 
 interface StreamHandlers {
@@ -133,65 +130,39 @@ export function useAssistantStream() {
       })
 
       if (!response.ok || !response.body) {
-        const json = await response.json().catch(() => null) as { error?: string } | null
+        const json = await response.json().catch(() => null) as { error?: string; retryAfter?: number } | null
+        // A 429 already tells us how long to wait; showing "try again in a
+        // moment" threw that away and left the attorney guessing.
+        const headerWait = Number(response.headers.get('Retry-After') ?? '')
+        const retryAfter = json?.retryAfter ?? (Number.isFinite(headerWait) && headerWait > 0 ? headerWait : null)
+        if (response.status === 429 && retryAfter) {
+          throw new Error(`Too many requests — try again in ${formatWait(retryAfter)}.`)
+        }
         throw new Error(json?.error ?? 'Assistant unavailable - try again in a moment.')
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const events = buffer.split('\n\n')
-        buffer = events.pop() ?? ''
-
-        for (const event of events) {
-          const dataLines = event
-            .split('\n')
-            .filter(line => line.startsWith('data:'))
-            .map(line => line.slice(5).trim())
-
-          for (const dataLine of dataLines) {
-            if (!dataLine || dataLine === '[DONE]') continue
-            const parsed = JSON.parse(dataLine) as {
-              text?: string
-              error?: string
-              tool?: string
-              tool_use_id?: string
-              status?: ToolEvent['status']
-              result?: Record<string, unknown>
-              workflow_applied?: { workflow_id?: string; title?: string }
-            }
-            if (parsed.error && !parsed.tool) throw new Error(parsed.error)
-            if (parsed.workflow_applied) {
-              const workflow = workflowRefFrom(parsed.workflow_applied)
-              if (workflow) handlers.onWorkflowApplied(workflow)
-            }
-            if (parsed.tool && parsed.tool_use_id && parsed.status) {
-              handlers.onToolEvent({
-                tool: parsed.tool,
-                toolUseId: parsed.tool_use_id,
-                status: parsed.status,
-                matterId: typeof parsed.result?.matter_id === 'string' ? parsed.result.matter_id : undefined,
-                filename: typeof parsed.result?.filename === 'string' ? parsed.result.filename : undefined,
-                downloadUrl: typeof parsed.result?.download_url === 'string' ? parsed.result.download_url : undefined,
-                exportCount: typeof parsed.result?.row_count === 'number' ? parsed.result.row_count : undefined,
-                preview: Array.isArray(parsed.result?.preview) ? parsed.result.preview as ToolEvent['preview'] : undefined,
-                proposed: isRecord(parsed.result?.proposed) ? parsed.result.proposed as ToolEvent['proposed'] : undefined,
-                error: parsed.status === 'error' ? parsed.error : undefined,
-              })
-              continue
-            }
-            if (parsed.text) {
-              replyText += parsed.text
-              handlers.onDelta(parsed.text)
-            }
-          }
+      await forEachSseFrame(response.body, parsed => {
+        if (parsed.error && !parsed.tool) throw new Error(parsed.error)
+        if (parsed.workflow_applied) {
+          const workflow = workflowRefFrom(parsed.workflow_applied)
+          if (workflow) handlers.onWorkflowApplied(workflow)
         }
-      }
+        if (parsed.tool && parsed.tool_use_id && parsed.status) {
+          handlers.onToolEvent(toolEventFrom({
+            tool: parsed.tool,
+            tool_use_id: parsed.tool_use_id,
+            status: parsed.status,
+            result: parsed.result,
+            error: parsed.status === 'error' ? parsed.error : undefined,
+          }))
+          return
+        }
+        if (parsed.text) {
+          replyText += parsed.text
+          handlers.onDelta(parsed.text)
+        }
+      })
+
       return { text: replyText, aborted: false }
     } catch (error) {
       if ((error as Error).name === 'AbortError') {

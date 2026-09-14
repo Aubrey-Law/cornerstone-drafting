@@ -14,6 +14,7 @@ interface ShareSkillDialogProps {
 
 export function ShareSkillDialog({ skill, onOpenChange }: ShareSkillDialogProps) {
   const [email, setEmail] = useState('')
+  const [allowEdit, setAllowEdit] = useState(false)
   const [sharing, setSharing] = useState(false)
 
   async function share() {
@@ -24,13 +25,14 @@ export function ShareSkillDialog({ skill, onOpenChange }: ShareSkillDialogProps)
     const response = await fetch(`/api/admin/works/${skill.id}/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: target }),
+      body: JSON.stringify({ email: target, allowEdit }),
     })
     const body = await response.json().catch(() => ({})) as { error?: string }
     setSharing(false)
     if (response.ok) {
       toast.success(`Skill shared with ${target}`)
       setEmail('')
+      setAllowEdit(false)
       onOpenChange(false)
     } else {
       toast.error(body.error ?? 'Unable to share skill')
@@ -42,7 +44,7 @@ export function ShareSkillDialog({ skill, onOpenChange }: ShareSkillDialogProps)
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Share “{skill?.name}”</DialogTitle>
-          <DialogDescription>The attorney you share with can use this skill; grant edit access from the API if needed.</DialogDescription>
+          <DialogDescription>The attorney you share with can run this skill. Let them edit it too if you want them to maintain it with you.</DialogDescription>
         </DialogHeader>
         <Input
           type="email"
@@ -51,6 +53,15 @@ export function ShareSkillDialog({ skill, onOpenChange }: ShareSkillDialogProps)
           placeholder="attorney@example.com"
           onKeyDown={event => { if (event.key === 'Enter') void share() }}
         />
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={allowEdit}
+            onChange={event => setAllowEdit(event.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          Let them edit this skill
+        </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" disabled={sharing || !email.trim()} onClick={() => void share()}>

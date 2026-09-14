@@ -13,7 +13,7 @@ export function getBearerToken(req: Request): string | null {
   return auth.slice(7).trim() || null
 }
 
-async function resolveUserRole(userId: string): Promise<string | null> {
+export async function resolveUserRole(userId: string): Promise<string | null> {
   const admin = (await import('@/lib/supabaseAdmin')).getAdminClient()
   const { data: profile } = await admin
     .from('users')
@@ -81,6 +81,11 @@ export function requireAdmin(req: Request): ReturnType<typeof verifyAdmin> {
     adminRequests.set(req, pending)
   }
   return pending
+}
+
+/** Is this user an administrator? For gates outside an HTTP handler. */
+export async function isAdministrator(userId: string): Promise<boolean> {
+  return (await resolveUserRole(userId)) === 'admin'
 }
 
 /** Strict administrator gate for destructive firm-wide settings. */

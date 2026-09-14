@@ -20,14 +20,14 @@ vi.mock('@/components/rail/RailEmailPane', () => ({
 import { AdminRail, useAdminRail } from '@/components/rail/AdminRail'
 import { openCornerstoneAssistant } from '@/app/admin/components/adminChatEvents'
 
-function Harness({ voiceEnabled = true }: { voiceEnabled?: boolean }) {
-  const rail = useAdminRail({ voiceEnabled })
+function Harness() {
+  const rail = useAdminRail()
   return (
     <>
       <button type="button" onClick={rail.toggle}>
         toggle rail
       </button>
-      <AdminRail rail={rail} voiceEnabled={voiceEnabled} assistantModelLabel="Claude Opus 4.8" />
+      <AdminRail rail={rail} assistantModelLabel="Claude Opus 4.8" />
     </>
   )
 }
@@ -62,8 +62,10 @@ describe('admin rail chrome', () => {
     expect((await screen.findByTestId('chat-panel')).textContent).toContain('assistant open: true')
   })
 
-  it('hides the phone tab when voice is not configured', async () => {
-    render(<Harness voiceEnabled={false} />)
+  // The phone and SMS panes were retired; there is no configuration that brings
+  // the tab back, which is what the removed voiceEnabled prop used to suggest.
+  it('has no phone tab at all', async () => {
+    render(<Harness />)
     await userEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
     expect(screen.queryByRole('button', { name: /Phone/ })).toBeNull()
   })

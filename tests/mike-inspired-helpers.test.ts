@@ -115,3 +115,23 @@ describe('api key providers', () => {
     expect(normalizeApiKeyProvider('nope')).toBeNull()
   })
 })
+
+describe('cost estimates for models this table does not price', () => {
+  const oneMillion = {
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+  }
+
+  // The add-in and matter assistants resolve a per-user provider, so an OpenAI
+  // or Gemini id reaches ai_usage — and used to be priced at the Opus rate.
+  it('does not price a non-Anthropic model as Opus', () => {
+    expect(estimateUsdCost({ model: 'gpt-4.1', ...oneMillion })).toBe(0)
+    expect(estimateUsdCost({ model: 'gemini-2.5-flash', ...oneMillion })).toBe(0)
+  })
+
+  it('still prices Anthropic models', () => {
+    expect(estimateUsdCost({ model: 'claude-sonnet-5', ...oneMillion })).toBe(18)
+  })
+})

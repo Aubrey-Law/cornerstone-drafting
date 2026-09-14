@@ -156,3 +156,13 @@ export function serializeSkillMarkdown(metadata: WorkSkillMetadata, body: string
   ]
   return `${lines.join('\n')}\n`
 }
+
+/**
+ * Rename a SKILL.md in place. Duplicating used to copy the source verbatim, so
+ * the clone carried the original's name and version and the two were
+ * indistinguishable in the list.
+ */
+export function renameSkillMarkdown(source: string, name: string): string {
+  const parsed = parseSkillMarkdown(source)
+  return serializeSkillMarkdown({ ...parsed.metadata, name }, parsed.body)
+}

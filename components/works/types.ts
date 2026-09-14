@@ -14,6 +14,8 @@ export interface WorkSkill {
   columns_config?: WorkTableColumn[] | null
   is_system: boolean
   is_active: boolean
+  /** The version this view was built from — sent back as the concurrency guard. */
+  updated_at?: string
   is_owner?: boolean
   is_shared?: boolean
   allow_edit?: boolean

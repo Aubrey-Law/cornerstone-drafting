@@ -1,13 +1,13 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
-import { createLead } from '@/lib/leads/createLead'
+import { proposeWrite } from '@/lib/adminChat/proposals'
 
 export const CREATE_LEAD_TOOL_NAME = 'create_lead'
 
 const CREATE_LEAD_TOOL: Anthropic.Tool = {
   name: CREATE_LEAD_TOOL_NAME,
   description:
-    'Create a new lead after the attorney explicitly asks to create one. ' +
+    'Propose a new lead after the attorney explicitly asks to create one. The lead is not created until the attorney accepts the proposal. ' +
     'The client name and email are required. Never guess missing client information.',
   input_schema: {
     type: 'object',
@@ -30,7 +30,7 @@ const CREATE_LEAD_TOOL: Anthropic.Tool = {
 }
 
 export function leadSystemPromptNote() {
-  return `\n\nLEAD CREATION: You can create a lead with the \`${CREATE_LEAD_TOOL_NAME}\` tool. Use it only when the attorney explicitly asks to create or add a lead. A client name and email are required; ask for any missing required value and never invent it. Optional phone, practice area, and quoted fee may be omitted. After a successful tool result, confirm the lead was created and provide its returned admin URL. Do not call the tool more than once for the same request.`
+  return `\n\nLEAD CREATION: You can propose a lead with the \`${CREATE_LEAD_TOOL_NAME}\` tool. Use it only when the attorney explicitly asks to create or add a lead. A client name and email are required; ask for any missing required value and never invent it. Optional phone, practice area, and quoted fee may be omitted. The tool only proposes: the lead is created when the attorney presses accept on the proposal card. Never say a lead was created — say you have proposed it and it needs their acceptance. Do not call the tool more than once for the same request.`
 }
 
 export const createLeadToolExecutor: AdminChatToolExecutor = {
@@ -46,29 +46,20 @@ export const createLeadToolExecutor: AdminChatToolExecutor = {
       }
     }
 
-    const created = await createLead({
-      clientName,
-      clientEmail,
-      clientPhone: typeof fields.client_phone === 'string' ? fields.client_phone : null,
-      practiceArea: typeof fields.practice_area === 'string' ? fields.practice_area : 'EP',
-      feeQuoted: typeof fields.fee_quoted === 'number' ? fields.fee_quoted : null,
+    return proposeWrite({
+      kind: 'create_lead',
+      toolName: CREATE_LEAD_TOOL_NAME,
+      toolUseId,
+      emit,
+      title: `Create lead: ${clientName}`,
+      rationale: clientEmail,
+      payload: {
+        client_name: clientName,
+        client_email: clientEmail,
+        client_phone: typeof fields.client_phone === 'string' ? fields.client_phone : null,
+        practice_area: typeof fields.practice_area === 'string' ? fields.practice_area : 'EP',
+        fee_quoted: typeof fields.fee_quoted === 'number' ? fields.fee_quoted : null,
+      },
     })
-    const url = `/admin/crm/opportunities/${created.leadId}`
-    emit({
-      tool: CREATE_LEAD_TOOL_NAME,
-      tool_use_id: toolUseId,
-      status: 'done',
-      result: { lead_id: created.leadId, client_name: created.clientName, url },
-    })
-    return {
-      content: JSON.stringify({
-        ok: true,
-        lead_id: created.leadId,
-        client_name: created.clientName,
-        client_email: created.clientEmail,
-        practice_area: created.practiceArea,
-        url,
-      }),
-    }
   },
 }

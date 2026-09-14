@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
+import { quoteUserContent } from '@/lib/anthropic'
 import {
   DOCUMENT_TEXT_LIMIT,
   MATTER_SECTIONS,
@@ -227,7 +228,16 @@ export function matterKnowledgeToolExecutors(
             truncated: result.truncated,
           },
         })
-        return { content: JSON.stringify({ ok: true, ...result }) }
+        // A stored document is whatever a client uploaded or typed. Hand its
+        // body to the model as fenced data so instructions inside it read as
+        // content — the same treatment the Word add-in gives an open document.
+        return {
+          content: JSON.stringify({
+            ok: true,
+            ...result,
+            text: quoteUserContent('matter-document', result.text),
+          }),
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to read the document'
         emit({

@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { worksDb } from '@/lib/works/data'
 import { promoteRunArtifacts } from '@/lib/works/artifacts'
 import { ensureMetlifeClaimItem } from '@/lib/metlife/ledger'
+import { canTransitionRun, type WorkRunStatus } from '@/lib/works/run'
 
 export async function POST(req: Request, { params }: { params: Promise<{ runId: string }> }) {
   const auth = await requireAdmin(req)
@@ -12,12 +13,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
   const { data: run } = await db.from('work_runs').select('id, status, matter_id, created_by, input_snapshot, work_skills(skill_type, slug)').eq('id', runId).maybeSingle()
   if (!run) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   if (run.status === 'confirmed') return NextResponse.json({ run, promoted: [] })
-  if (!['awaiting_confirmation', 'completed'].includes(run.status)) return NextResponse.json({ error: 'Run is not awaiting confirmation' }, { status: 409 })
+  if (!canTransitionRun(run.status as WorkRunStatus, 'confirmed')) {
+    return NextResponse.json({ error: 'Run is not awaiting confirmation' }, { status: 409 })
+  }
   let review: unknown = null
   const skillType = Array.isArray(run.work_skills) ? run.work_skills[0]?.skill_type : run.work_skills?.skill_type
   const skillSlug = Array.isArray(run.work_skills) ? run.work_skills[0]?.slug : run.work_skills?.slug
   const proposal = run.input_snapshot?.tabular_review_proposal
-  if (skillType === 'tabular' && run.matter_id && proposal && Array.isArray(proposal.columns_config)) {
+  // Confirmation has several side effects and only flips the run at the end, so
+  // a failure part-way through leaves the earlier ones committed. Record the
+  // review we created, and skip it on a retry rather than inserting a second.
+  const existingReviewId = typeof run.input_snapshot?.tabular_review_id === 'string'
+    ? run.input_snapshot.tabular_review_id
+    : null
+  if (existingReviewId) {
+    const { data: already } = await db.from('tabular_reviews').select('*').eq('id', existingReviewId).maybeSingle()
+    review = already ?? null
+  }
+  if (!review && skillType === 'tabular' && run.matter_id && proposal && Array.isArray(proposal.columns_config)) {
     const result = await db.from('tabular_reviews').insert({
       matter_id: run.matter_id,
       title: typeof proposal.title === 'string' ? proposal.title : 'Works tabular review',
@@ -27,6 +40,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
     }).select('*').single()
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })
     review = result.data
+    await db.from('work_runs').update({
+      input_snapshot: { ...run.input_snapshot, tabular_review_id: (result.data as { id?: string }).id },
+      updated_at: new Date().toISOString(),
+    }).eq('id', runId)
   }
   let promoted: Array<{ artifactId: string; documentId: string }> = []
   const generatesDocuments = skillSlug === 'prepare-pmps-package' || skillSlug === 'prepare-metlife-claim'

@@ -1,12 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import PizZip from 'pizzip'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/apiAuth', () => ({ isAdministrator: vi.fn(async () => true) }))
 import { applyDocxReplacements, extractDocxParagraphText } from '@/lib/templateBuilder/docxEdit'
 import { extractTemplateVariables } from '@/lib/estateGenerator/templateVariables'
 import { resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import { templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
 import { readBundledSystemSkill } from '@/lib/works/systemSkills'
+import { isAdministrator } from '@/lib/apiAuth'
 
 const realTemplate = fs.readFileSync(
   path.join(process.cwd(), 'tools/aubreylaw-docgeneration/templates/certificate-of-trust.docx'),
@@ -195,5 +198,21 @@ describe('template-builder skill and wiring', () => {
       const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
       expect(source).toContain("import { requireAdmin } from '@/lib/apiAuth'")
     }
+  })
+})
+
+describe('the chat path is not a way around the administrator gate', () => {
+  it('refuses to stage a firm master for a non-administrator', async () => {
+    vi.mocked(isAdministrator).mockResolvedValue(false)
+
+    const executor = templateBuilderToolExecutors('attorney-1')
+      .find(candidate => candidate.tool.name === 'stage_master_template_version')
+    const result = await executor!.execute(
+      { upload_id: 'upload-1', template_id: 'will' },
+      { toolUseId: 't1', emit: () => {} },
+    )
+
+    expect(result.isError).toBe(true)
+    expect(JSON.parse(result.content).error).toContain('administrator')
   })
 })

@@ -10,7 +10,8 @@ interface FakeRow {
   [key: string]: unknown
 }
 
-const state: { rows: FakeRow[]; nextId: number } = { rows: [], nextId: 1 }
+const state: { rows: FakeRow[]; nextId: number; failNextInsertAsDuplicate: boolean } =
+  { rows: [], nextId: 1, failNextInsertAsDuplicate: false }
 
 function fakeDb() {
   return {
@@ -28,18 +29,31 @@ function fakeDb() {
           }
         },
         insert(row: Record<string, unknown>) {
+          if (state.failNextInsertAsDuplicate) {
+            state.failNextInsertAsDuplicate = false
+            // Simulate the other admin's row landing first: the partial unique
+            // index on slug rejects this insert.
+            state.rows.push({ ...(row as FakeRow), id: `row-${state.nextId++}`, skill_md: 'written by the other admin' })
+            return Promise.resolve({ error: { code: '23505', message: 'duplicate key value violates unique constraint' } })
+          }
           state.rows.push({ ...(row as FakeRow), id: `row-${state.nextId++}` })
           return Promise.resolve({ error: null })
         },
         update(patch: Record<string, unknown>) {
-          return {
+          const filters: Array<[string, unknown]> = []
+          const chain = {
             eq(column: string, value: unknown) {
+              filters.push([column, value])
+              return chain
+            },
+            then(onFulfilled: (result: { error: null }) => unknown) {
               for (const row of state.rows) {
-                if (row[column] === value) Object.assign(row, patch)
+                if (filters.every(([column, value]) => row[column] === value)) Object.assign(row, patch)
               }
-              return Promise.resolve({ error: null })
+              return Promise.resolve({ error: null }).then(onFulfilled)
             },
           }
+          return chain
         },
       }
     },
@@ -55,6 +69,7 @@ describe('system workflow sync', () => {
   beforeEach(() => {
     state.rows = []
     state.nextId = 1
+    state.failNextInsertAsDuplicate = false
   })
 
   it('creates all bundled skills on first sync and is a no-op on re-run', async () => {
@@ -115,5 +130,26 @@ describe('system workflow sync', () => {
     const result = await syncSystemWorkflows()
     expect(result.updated).toEqual(['matter-next-steps'])
     expect(target.is_active).toBe(true)
+  })
+})
+
+describe('two admins pressing sync at once', () => {
+  beforeEach(() => {
+    state.rows = []
+    state.nextId = 1
+    state.failNextInsertAsDuplicate = false
+  })
+
+  it('converges on the row the other writer created instead of aborting the tree', async () => {
+    const bundled = listBundledSystemSkills()
+    state.failNextInsertAsDuplicate = true
+
+    const result = await syncSystemWorkflows()
+
+    // The losing insert becomes an update, and the rest of the tree still syncs.
+    expect(result.updated).toHaveLength(1)
+    expect(result.created).toHaveLength(bundled.length - 1)
+    expect(state.rows).toHaveLength(bundled.length)
+    for (const row of state.rows) expect(row.skill_md).not.toBe('written by the other admin')
   })
 })

@@ -97,6 +97,19 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     return () => { cancelled = true }
   }, [searchParams, chatId])
 
+  /** Re-read a chat from the server. Used after a stop, so what is on screen is
+   *  exactly what was persisted. */
+  const reloadMessages = useCallback(async (targetChatId: string) => {
+    const response = await fetch(`/api/admin/assistant/chats/${targetChatId}`, {
+      headers: await authHeaders(),
+      cache: 'no-store',
+    })
+    const body = await response.json().catch(() => ({})) as {
+      messages?: Parameters<typeof messagesFromPersisted>[0]
+    }
+    if (response.ok) setMessages(messagesFromPersisted(body.messages ?? []))
+  }, [])
+
   const streamInto = useCallback(async (targetChatId: string, content: string, attachedWorkflow: WorkflowRef | null) => {
     const userMessage: AssistantMessage = {
       id: makeLocalId(),
@@ -114,7 +127,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     setMessages(prev => [...prev, userMessage, assistantMessage])
 
     try {
-      await send(targetChatId, { content, workflow: attachedWorkflow }, {
+      const result = await send(targetChatId, { content, workflow: attachedWorkflow }, {
         onDelta: text => setMessages(prev => prev.map(message =>
           message.id === assistantMessage.id ? { ...message, content: message.content + text } : message,
         )),
@@ -131,9 +144,19 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
           message.id === assistantMessage.id ? { ...message, workflowApplied: applied } : message,
         )),
       })
+      if (result.aborted) {
+        // The server keeps what it already generated. Re-read so the thread
+        // shows the persisted answer rather than the truncated one on screen.
+        await reloadMessages(targetChatId)
+      }
     } catch (error) {
       const detail = (error as Error).message || 'Assistant unavailable - try again in a moment.'
-      toast.error(detail)
+      toast.error(detail, {
+        action: {
+          label: 'Retry',
+          onClick: () => { void streamIntoRef.current?.(targetChatId, content, attachedWorkflow) },
+        },
+      })
       setMessages(prev => prev.map(message =>
         message.id === assistantMessage.id && !message.content
           ? { ...message, content: `Error: ${detail}` }
@@ -142,7 +165,11 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     } finally {
       void loadChats()
     }
-  }, [send, loadChats])
+  }, [send, loadChats, reloadMessages])
+
+  // Retry re-enters the same function; a ref keeps the callback identity stable.
+  const streamIntoRef = useRef<typeof streamInto | null>(null)
+  useEffect(() => { streamIntoRef.current = streamInto }, [streamInto])
 
   // Load an existing chat's history; then fire any pending first message
   // handed off from the initial view.

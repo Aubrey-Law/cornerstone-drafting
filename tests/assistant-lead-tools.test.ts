@@ -15,18 +15,15 @@ describe('assistant lead creation tool', () => {
   it('requires an explicit request and required facts in its instructions', () => {
     const note = leadSystemPromptNote()
     expect(note).toContain('explicitly asks')
+    expect(note).toContain('accept')
     expect(note).toContain('name and email are required')
     expect(note).toContain('never invent')
     expect(createLeadToolExecutor.tool.name).toBe(CREATE_LEAD_TOOL_NAME)
   })
 
-  it('creates a lead through the shared lead service and returns its admin URL', async () => {
-    createLead.mockResolvedValue({
-      leadId: 'lead-1',
-      clientName: 'Jane Doe',
-      clientEmail: 'jane@example.com',
-      practiceArea: 'EP',
-    })
+  // A lead is a write, and client-authored text reaches the system prompt. The
+  // tool therefore proposes; the attorney's Accept is what creates the record.
+  it('proposes a lead instead of creating one', async () => {
     const events: Record<string, unknown>[] = []
     const result = await createLeadToolExecutor.execute(
       {
@@ -38,21 +35,26 @@ describe('assistant lead creation tool', () => {
       { toolUseId: 'tool-1', emit: event => events.push(event) },
     )
 
-    expect(createLead).toHaveBeenCalledWith({
-      clientName: 'Jane Doe',
-      clientEmail: 'jane@example.com',
-      clientPhone: '617-555-0100',
-      practiceArea: 'EP',
-      feeQuoted: 3500,
-    })
+    expect(createLead).not.toHaveBeenCalled()
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
-      lead_id: 'lead-1',
-      url: '/admin/crm/opportunities/lead-1',
+      proposed: true,
+      requires_acceptance: true,
+      changes: [{
+        kind: 'create_lead',
+        payload: {
+          client_name: 'Jane Doe',
+          client_email: 'jane@example.com',
+          client_phone: '617-555-0100',
+          practice_area: 'EP',
+          fee_quoted: 3500,
+        },
+      }],
     })
     expect(events).toContainEqual(expect.objectContaining({
       tool: CREATE_LEAD_TOOL_NAME,
       status: 'done',
+      result: expect.objectContaining({ proposal: expect.any(Array) }),
     }))
   })
 
