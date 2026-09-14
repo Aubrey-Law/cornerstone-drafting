@@ -83,7 +83,15 @@ describe('style sweep round trip', () => {
   it('always closes the file handle', () => {
     // Office allows only two open handles per document; leaking one breaks the
     // next run with an unhelpful error.
-    expect(sweep).toMatch(/finally\s*\{[\s\S]*closeAsync\(\)/)
+    //
+    // Asserted against readDocumentBytes.ts, which is where the read moved when
+    // the version save became a second caller. One reader is the point: two
+    // would be two chances to leak a handle, and the second one's leak would
+    // surface as the first one failing.
+    expect(read('word-addin/src/word/readDocumentBytes.ts')).toMatch(
+      /finally\s*\{[\s\S]*closeAsync\(\)/,
+    )
+    expect(sweep).toContain("from '../readDocumentBytes'")
   })
 })
 

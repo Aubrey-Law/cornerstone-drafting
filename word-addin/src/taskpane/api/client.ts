@@ -39,6 +39,8 @@ const CHAT_TIMEOUT_MS = 120_000
 const STYLE_SWEEP_TIMEOUT_MS = 60_000
 /** Matches `maxDuration` on the propose route: it is a model call over the whole document. */
 const PROPOSE_TIMEOUT_MS = 120_000
+/** A whole-document upload to R2; slower than a JSON round trip, bounded by the body limit. */
+const VERSION_SAVE_TIMEOUT_MS = 120_000
 
 function authHeaders(): Record<string, string> {
   const session = loadSession()
@@ -206,6 +208,59 @@ export function listMatters(query: string): Promise<MatterListResponse> {
 
 export function getMatterBrief(matterId: string): Promise<MatterBrief> {
   return apiGet<MatterBrief>(`/api/addin/matters/${encodeURIComponent(matterId)}/brief`)
+}
+
+/** One of the matter's Word documents. Mirrors `GET /api/addin/matters/[id]/documents`. */
+export interface MatterDocument {
+  id: string
+  name: string
+  size: number
+  createdAt: string
+  currentVersionId: string | null
+  superseded: boolean
+}
+
+export interface DocumentVersionRow {
+  id: string
+  versionNumber: number
+  source: string
+  sizeBytes: number
+  createdAt: string
+}
+
+export interface DocumentVersions {
+  documentId: string
+  name: string
+  currentVersionId: string | null
+  versions: DocumentVersionRow[]
+}
+
+export interface SavedVersion {
+  ok: true
+  versionId: string
+  versionNumber: number
+  markerCount: number
+  missingCount: number
+}
+
+export function listMatterDocuments(matterId: string): Promise<{ documents: MatterDocument[] }> {
+  return apiGet(`/api/addin/matters/${encodeURIComponent(matterId)}/documents`)
+}
+
+export function getDocumentVersions(documentId: string): Promise<DocumentVersions> {
+  return apiGet(`/api/addin/documents/${encodeURIComponent(documentId)}/versions`)
+}
+
+/** Upload the open document as the next version of `documentId`. */
+export function saveDocumentVersion(
+  documentId: string,
+  args: { fileBase64: string; baseVersionId: string | null },
+): Promise<SavedVersion> {
+  return apiPost<SavedVersion>(
+    `/api/addin/documents/${encodeURIComponent(documentId)}/versions`,
+    args,
+    VERSION_SAVE_TIMEOUT_MS,
+  )
 }
 
 /** One proposed design-sheet change. Mirrors `DesignSheetImportPreviewRow`. */
