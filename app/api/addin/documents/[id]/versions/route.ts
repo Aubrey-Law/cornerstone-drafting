@@ -81,6 +81,11 @@ export async function GET(req: Request, { params }: Params) {
  * `surface: 'word-addin'`, because "who did this and from where" is what the
  * audit table is for; the source column is what the version list shows.
  *
+ * The migration and this code go live on the same push and finish
+ * independently, so for a minute the new value can meet the old constraint.
+ * `sourceFallback` saves the version as `user_upload` rather than losing it
+ * over a label — the bytes are already in R2 by the time the insert runs.
+ *
  * No `document_edits` rows. Those carry the `w:id` of each revision so the web
  * UI can accept or reject one, and the pane cannot know the ids Word assigned.
  * A row without them is worse than no row: `resolveTrackedChange` would get an
@@ -166,6 +171,9 @@ export async function POST(req: Request, { params }: Params) {
       filename: doc.name,
       contentType: DOCX_CONTENT_TYPE,
       source: 'word_addin',
+      // Until 20261130000000 is applied, the database does not know that word.
+      // A save is worth more than the label on it.
+      sourceFallback: 'user_upload',
       createdBy: userId,
     })
     if ('error' in result) {

@@ -73,6 +73,13 @@ describe('saving a version from the pane', () => {
     expect(route).toContain("'word-addin'")
   })
 
+  it('would rather mislabel a version than lose one', () => {
+    // The widening migration and this code ship on the same push and finish
+    // independently. For that minute the bytes are in R2 and the constraint
+    // still refuses the word: save it as 'user_upload' instead of failing.
+    expect(source(VERSIONS)).toContain("sourceFallback: 'user_upload'")
+  })
+
   it('rescans markers so a stale count cannot outlive the bytes', () => {
     // Matches the edits route. A stale marker count is how a draft looks
     // finished when it still has unresolved placeholders in it.

@@ -405,6 +405,13 @@ against the constraint, because a source TypeScript believes in and the database
 rejects fails at insert time — after `createDocumentVersion` has already put the
 bytes in R2.
 
+The save also passes `sourceFallback: 'user_upload'`. A migration and the code
+that needs it ship on the same push and finish independently, so for a minute
+the new value can meet the old constraint; rather than lose the attorney's save
+over a label, `createDocumentVersion` retries once under the source the previous
+schema allowed and logs that it did. The retry does not re-upload — the R2 key
+is timestamp-based, not version-based.
+
 ## Writing decisions back
 
 The **Sheet** tab is the other direction: an attorney who settles a successor

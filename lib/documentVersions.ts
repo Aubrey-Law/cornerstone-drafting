@@ -135,6 +135,11 @@ export async function createDocumentVersion(args: {
   filename: string
   contentType: string
   source: DocumentVersionSource
+  /**
+   * A source the previous schema already allowed, for a caller whose `source`
+   * arrives with a migration. See the check-violation branch below.
+   */
+  sourceFallback?: DocumentVersionSource
   createdBy: string | null
   setCurrent?: boolean
   folder?: string
@@ -160,6 +165,8 @@ export async function createDocumentVersion(args: {
   const MAX_ATTEMPTS = 3
   let data: DocumentVersion | null = null
   let lastError: string | null = null
+  let source: DocumentVersionSource = args.source
+  let fellBack = false
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const versionNumber = await nextVersionNumber(args.admin, args.documentId)
@@ -168,7 +175,7 @@ export async function createDocumentVersion(args: {
       .insert({
         document_id: args.documentId,
         r2_key: r2Key,
-        source: args.source,
+        source,
         version_number: versionNumber,
         filename: args.filename,
         file_type: args.contentType,
@@ -184,9 +191,40 @@ export async function createDocumentVersion(args: {
     }
 
     lastError = insertResult.error?.message ?? 'version insert failed'
-    // 23505 = unique_violation: another writer took this number. Anything else
-    // will not be fixed by retrying.
-    if (insertResult.error?.code !== '23505') break
+    // 23505 = unique_violation: another writer took this number.
+    if (insertResult.error?.code === '23505') continue
+
+    /*
+     * 23514 = check_violation. The one this can reach is the `source` CHECK,
+     * in the minute between a deploy and the migration that widens it: the two
+     * ship on the same push and finish independently, so new code can meet the
+     * old constraint. The bytes are already in R2 by now, so failing here would
+     * lose the attorney's save and orphan the object over a value that is only
+     * a label.
+     *
+     * Save it under the source the previous schema allowed instead, once. The
+     * version is the point; what it is called is not worth the document.
+     * `lastError` keeps the original message, so the log says what happened
+     * even though the save succeeds.
+     */
+    const detail = `${insertResult.error?.message ?? ''} ${insertResult.error?.details ?? ''}`
+    if (
+      insertResult.error?.code === '23514' &&
+      !fellBack &&
+      args.sourceFallback &&
+      detail.includes('document_versions_source_check')
+    ) {
+      console.warn(
+        `[documentVersions] source '${source}' rejected by the database; ` +
+          `saving as '${args.sourceFallback}'. The widening migration is probably not applied yet.`,
+      )
+      source = args.sourceFallback
+      fellBack = true
+      continue
+    }
+
+    // Anything else will not be fixed by retrying.
+    break
   }
 
   if (!data) return { error: lastError ?? 'version insert failed' }
