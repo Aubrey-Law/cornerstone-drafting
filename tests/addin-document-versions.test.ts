@@ -63,10 +63,12 @@ describe('saving a version from the pane', () => {
   })
 
   it('records that the version came from Word', () => {
-    // document_versions.source is a CHECK-constrained enum, so the surface goes
-    // in the audit metadata rather than costing a migration to say what the
-    // audit row already says.
+    // In the version list, where an attorney reads it: 'word_addin' rather than
+    // the 'user_upload' this shipped with, which was indistinguishable from a
+    // document dragged into the browser. The audit row still says which surface
+    // the request came from, which is a different question.
     const route = source(VERSIONS)
+    expect(route).toContain("source: 'word_addin'")
     expect(route).toContain('auditDocumentAccess')
     expect(route).toContain("'word-addin'")
   })

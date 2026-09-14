@@ -74,11 +74,12 @@ export async function GET(req: Request, { params }: Params) {
  * anything becomes v1 and this save becomes v2. Without it the history would
  * begin at the edited document and the original would be unrecoverable.
  *
- * Recorded as `user_upload`: a person uploaded the file they had. The fact that
- * it came from Word goes in the audit metadata, where "how did this happen"
- * belongs — `document_versions.source` is a CHECK-constrained enum, and a new
- * value there would need a migration to say something the audit row already
- * says.
+ * Recorded as `word_addin`, which 20261130000000 added to the
+ * `document_versions.source` CHECK. It was `user_upload` first, and that read
+ * in the version history exactly like a document dragged into the browser —
+ * true in the letter, wrong about what happened. The audit row still carries
+ * `surface: 'word-addin'`, because "who did this and from where" is what the
+ * audit table is for; the source column is what the version list shows.
  *
  * No `document_edits` rows. Those carry the `w:id` of each revision so the web
  * UI can accept or reject one, and the pane cannot know the ids Word assigned.
@@ -164,7 +165,7 @@ export async function POST(req: Request, { params }: Params) {
       bytes,
       filename: doc.name,
       contentType: DOCX_CONTENT_TYPE,
-      source: 'user_upload',
+      source: 'word_addin',
       createdBy: userId,
     })
     if ('error' in result) {

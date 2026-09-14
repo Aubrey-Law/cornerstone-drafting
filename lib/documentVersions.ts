@@ -4,14 +4,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
 
-export type DocumentVersionSource =
-  | 'upload'
-  | 'generated'
-  | 'assistant_edit'
-  | 'user_upload'
-  | 'user_accept'
-  | 'user_reject'
-  | 'converted_pdf'
+/**
+ * The vocabulary of `document_versions.source`, as a value rather than a type
+ * so `tests/document-version-source-parity.test.ts` can hold it against the
+ * CHECK constraint. A value here that the database does not allow fails at
+ * insert time — after the bytes are already in R2.
+ */
+export const DOCUMENT_VERSION_SOURCES = [
+  'upload',
+  'generated',
+  'assistant_edit',
+  'user_upload',
+  'user_accept',
+  'user_reject',
+  'converted_pdf',
+  'word_addin',
+] as const
+
+export type DocumentVersionSource = (typeof DOCUMENT_VERSION_SOURCES)[number]
 
 export interface DocumentVersion {
   id: string

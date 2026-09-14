@@ -387,12 +387,23 @@ are. Deriving real ids is possible — diff `extractTrackedChangeIds` across the
 old and new bytes — but pairing them into cards with text and context needs a
 tracked-change extractor that does not exist yet.
 
-### Recorded as `user_upload`
+### Recorded as `word_addin`
 
-`document_versions.source` is a CHECK-constrained enum, so a `word_addin` value
-would need a migration to say something `document_access_audit` already records:
-the save writes `surface: 'word-addin'` into the audit metadata, where "how did
-this happen" belongs.
+`document_versions.source` is a CHECK-constrained text column;
+`20261130000000_document_versions_word_addin_source.sql` widened it to allow
+`word_addin`. The save was `user_upload` first, which was true in the letter — a
+person uploaded the file they had — but read in the version history exactly like
+a document dragged into the browser, and the two are not the same event.
+
+The audit row still writes `surface: 'word-addin'` into
+`document_access_audit.metadata`. That answers who made the request and from
+where; the source column answers what the bytes are, which is the question the
+version list asks.
+
+`tests/document-version-source-parity.test.ts` holds `DOCUMENT_VERSION_SOURCES`
+against the constraint, because a source TypeScript believes in and the database
+rejects fails at insert time — after `createDocumentVersion` has already put the
+bytes in R2.
 
 ## Writing decisions back
 
