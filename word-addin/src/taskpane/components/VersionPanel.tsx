@@ -186,6 +186,8 @@ function describeSource(source: string): string {
       return 'change rejected'
     case 'converted_pdf':
       return 'PDF conversion'
+    case 'word_addin':
+      return 'saved from Word'
     default:
       return source.replaceAll('_', ' ')
   }
