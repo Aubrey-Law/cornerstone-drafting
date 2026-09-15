@@ -1,6 +1,7 @@
 import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocumentRequestStatus } from '@/lib/esign/types'
 import { validateEngagementInput } from './schema'
 import type { EngagementInput } from './types'
+import { engagementAnchorMarkers } from './anchors'
 
 export interface EngagementServiceAgreement {
   id: string
@@ -50,10 +51,10 @@ interface Dependencies {
 
 function anchorsFor(recipients: EngagementServiceAgreement['recipients']): EsignDocumentRequestInput['anchors'] {
   return recipients.flatMap((recipient, index) => {
-    const number = index + 1
+    const markers = engagementAnchorMarkers(index + 1)
     return [
-      { marker: `[[CLIENT_${number}_SIGNATURE]]`, type: 'signature' as const, recipientKey: recipient.key, required: true },
-      { marker: `[[CLIENT_${number}_DATE]]`, type: 'date' as const, recipientKey: recipient.key, required: true, dateSigningDefault: true },
+      { marker: markers.signature, type: 'signature' as const, recipientKey: recipient.key, required: true },
+      { marker: markers.date, type: 'date' as const, recipientKey: recipient.key, required: true, dateSigningDefault: true },
     ]
   })
 }

@@ -9,6 +9,7 @@ import { hashSigningToken, signingSessionGate } from '@/lib/esign/nativeTokens'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
+import { engagementAnchorMarkers } from '@/lib/engagement/anchors'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 
 export const runtime = 'nodejs'
@@ -185,15 +186,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
   const pdf = Buffer.from(await download.arrayBuffer())
 
-  const { data: recipient } = await admin
+  // Load every recipient in agreement order, not just this one. The markers are
+  // numbered by position in that order — `anchorsFor` in lib/engagement/service.ts
+  // derives them the same way when the request is sent — so the position has to be
+  // read off the same ordered list. Asking only for this recipient's
+  // `recipient_order` would work today but silently diverge the moment those
+  // values are ever non-contiguous.
+  const { data: roster } = await admin
     .from('engagement_agreement_recipients')
-    .select('name, email, recipient_order')
+    .select('name, email, role, recipient_order')
     .eq('agreement_id', session.agreement_id)
-    .eq('role', session.recipient_key)
-    .maybeSingle()
+    .order('recipient_order', { ascending: true })
 
-  const order = (recipient?.recipient_order as number | undefined) ?? 1
-  const prefix = session.recipient_key === 'spouse' ? 'SPOUSE' : `CLIENT_${order}`
+  const orderedRecipients = roster ?? []
+  const position = orderedRecipients.findIndex(r => r.role === session.recipient_key) + 1
+  if (position === 0) {
+    // No guessing here. A default position would stamp this signature on some
+    // other signer's line and produce an executed agreement that looks finished
+    // and is wrong — far worse than refusing to sign.
+    console.error('[esign sign] recipient not found on agreement', {
+      agreementId: session.agreement_id,
+      recipientKey: session.recipient_key,
+    })
+    return NextResponse.json({ error: 'Could not sign this agreement' }, { status: 500 })
+  }
+  const recipient = orderedRecipients[position - 1]
+  const markers = engagementAnchorMarkers(position)
 
   await recordAudit({ sessionId: session.id, agreementId: session.agreement_id, eventType: 'signed', req })
 
@@ -207,12 +225,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     pdf,
     fields: [
       {
-        marker: `[[${prefix}_SIGNATURE]]`,
+        marker: markers.signature,
         kind: 'signature',
         ...(signaturePng ? { signaturePng } : { text: typedName }),
       },
       {
-        marker: `[[${prefix}_DATE]]`,
+        marker: markers.date,
         kind: 'date',
         text: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       },
