@@ -129,10 +129,16 @@ describe('signature anchors in a real LibreOffice render', () => {
     }
   })
 
-  it('puts each signer on their own line', async () => {
+  it('gives each signer a distinct position', async () => {
     // Both signers resolving is not enough: if CLIENT_1 and CLIENT_2 came back
     // at the same spot, one signature would land on the other's line — the same
     // class of defect as the SPOUSE/CLIENT_2 mismatch, arriving geometrically.
+    //
+    // Distinct means distinct, not "on separate lines". In the shipped template
+    // the two signature blocks are a two-column table row, so the signers share
+    // a `y` and differ only in `x` — and their dates do the same, one row down.
+    // A run that reports both signers at the same `y` is therefore expected
+    // here, and is not what this test is looking for.
     const rendered = await renderThroughWorker()
     const first = engagementAnchorMarkers(1)
     const second = engagementAnchorMarkers(2)

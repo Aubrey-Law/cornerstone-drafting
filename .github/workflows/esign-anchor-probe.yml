@@ -1,0 +1,114 @@
+name: Signature anchors resolve in a real render
+
+# The native e-signature engine decides where to draw a client's signature by
+# locating `[[CLIENT_1_SIGNATURE]]` and friends in the *rendered* PDF. Every
+# unit test of that code builds its own PDF with pdf-lib, where the text is one
+# tidy run in a standard font. A real agreement comes out of LibreOffice, whose
+# fonts are subset and whose runs break wherever Word broke them.
+#
+# Nothing checked that the two agree until this job existed, and the failure it
+# guards is a quiet one: a signature drawn beside the signature line instead of
+# on it, on a fee agreement that looks properly executed and is only re-read if
+# the engagement is ever disputed.
+#
+# WHY THIS BUILDS ITS OWN WORKER RATHER THAN CALLING THE DEPLOYED ONE. Probing
+# the Fly worker would need DOCX_PDF_CONVERT_URL and DOCX_PDF_CONVERT_SECRET as
+# repository secrets. Both are marked Sensitive in Vercel, which makes them
+# write-only — not readable through the CLI, the API or the dashboard — so
+# putting them here would mean rotating production credentials to enable a test.
+# tools/docx-pdf-worker/Dockerfile is self-contained, so the job builds that
+# image and mints its own throwaway secret instead. Nothing is stored.
+#
+# It also makes the measurement better rather than merely cheaper: the image
+# pins its fonts (fonts-liberation, fonts-dejavu-core) and its LibreOffice
+# build, so the geometry measured here is the geometry production renders.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Only where the answer could change. Installing LibreOffice makes the
+    # image build slow, and a check that is slow everywhere gets ignored.
+    paths:
+      - 'assets/engagement-agreements/**'
+      - 'lib/engagement/render.ts'
+      - 'lib/esign/nativeAnchors.ts'
+      - 'lib/esign/nativeSeal.ts'
+      - 'tools/docx-pdf-worker/**'
+      - 'tests/probe/**'
+      - 'vitest.probe.config.ts'
+      - '.github/workflows/esign-anchor-probe.yml'
+  schedule:
+    # 12:20 UTC on Mondays — after the daily database checks, so a red morning
+    # is not three things at once.
+    - cron: '20 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esign-anchor-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Signature anchors resolve in a real render
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the convert worker image
+        run: docker build -t docx-pdf-worker:probe ./tools/docx-pdf-worker
+
+      # Minted per run and never stored. The image sets NODE_ENV=production,
+      # and server.mjs refuses /convert with a 503 when the secret is unset in
+      # production — so one has to exist, and generating it is both simpler and
+      # safer than keeping a real one here.
+      - name: Start the worker
+        id: worker
+        run: |
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          echo "secret=$secret" >> "$GITHUB_OUTPUT"
+          docker run -d --name convert-worker \
+            -e "CONVERT_WORKER_SECRET=$secret" \
+            -p 127.0.0.1:8080:8080 \
+            docx-pdf-worker:probe
+
+      - name: Wait for the worker to answer
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/health > /dev/null 2>&1; then
+              echo "Worker healthy after ${i}s."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::The convert worker never became healthy. Container logs follow."
+          docker logs convert-worker || true
+          exit 1
+
+      # The probe prints where every anchor landed. Read those lines rather than
+      # the tick: this job passing means four markers resolved to real boxes on
+      # the page, and the numbers say where.
+      - name: Locate the anchors
+        env:
+          DOCX_PDF_CONVERT_URL: http://127.0.0.1:8080
+          DOCX_PDF_CONVERT_SECRET: ${{ steps.worker.outputs.secret }}
+        run: npm run check:engagement-anchors
+
+      - name: Worker logs on failure
+        if: failure()
+        run: docker logs convert-worker || true
+
+      - name: Stop the worker
+        if: always()
+        run: docker rm -f convert-worker || true
