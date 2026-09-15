@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderEngagementAgreement } from '@/lib/engagement/render'
+import { DocxPdfConvertError } from '@/lib/docxPdfConvert'
 import { allEngagementAnchorMarkers, engagementAnchorMarkers } from '@/lib/engagement/anchors'
 import { AnchorLocationError, locateAnchors, toPdfOrigin } from '@/lib/esign/nativeAnchors'
 
@@ -43,12 +44,43 @@ const input = {
   expirationHours: 72,
 }
 
+/**
+ * Render through the real worker, translating its transport failures into
+ * something that names the cause.
+ *
+ * The convert client reports a rejection as `Convert worker failed (401)` from
+ * inside lib/docxPdfConvert.ts, which is accurate but points at the client
+ * rather than at the two variables that actually disagree. The probe is where
+ * someone is configuring those variables for the first time, so it is where the
+ * mapping from status code to cause belongs.
+ */
+async function renderThroughWorker() {
+  try {
+    return await renderEngagementAgreement(input)
+  } catch (error) {
+    if (error instanceof DocxPdfConvertError && (error.status === 401 || error.status === 403)) {
+      throw new Error(
+        `The convert worker is reachable but rejected the request (${error.status}).\n`
+          + 'DOCX_PDF_CONVERT_SECRET does not match the worker\'s CONVERT_WORKER_SECRET. '
+          + 'The URL is right and the worker is up — only the bearer token disagrees.\n'
+          + 'Re-pull it rather than retyping it:\n'
+          + '  vercel env pull .env.vercel --environment=production\n'
+          + '  grep -E \'^DOCX_PDF_CONVERT_(URL|SECRET)=\' .env.vercel > .env.test && rm .env.vercel\n'
+          + 'If the pulled value still fails, Vercel and the worker hold different '
+          + 'secrets — which would mean production conversion is failing too, and is '
+          + 'worth checking before anything else.',
+      )
+    }
+    throw error
+  }
+}
+
 describe('signature anchors in a real LibreOffice render', () => {
   it('resolves every anchor to a usable box on the page', async () => {
     // No `convertDocx` override: this goes through the deployed worker, which is
     // the whole point. NODE_ENV is 'test' under vitest, so renderEngagementAgreement
     // uses the bundled template and needs no database.
-    const rendered = await renderEngagementAgreement(input)
+    const rendered = await renderThroughWorker()
     expect(rendered.pdfBytes.length).toBeGreaterThan(0)
 
     const markers = allEngagementAnchorMarkers(2)
@@ -97,11 +129,17 @@ describe('signature anchors in a real LibreOffice render', () => {
     }
   })
 
-  it('puts each signer on their own line', async () => {
+  it('gives each signer a distinct position', async () => {
     // Both signers resolving is not enough: if CLIENT_1 and CLIENT_2 came back
     // at the same spot, one signature would land on the other's line — the same
     // class of defect as the SPOUSE/CLIENT_2 mismatch, arriving geometrically.
-    const rendered = await renderEngagementAgreement(input)
+    //
+    // Distinct means distinct, not "on separate lines". In the shipped template
+    // the two signature blocks are a two-column table row, so the signers share
+    // a `y` and differ only in `x` — and their dates do the same, one row down.
+    // A run that reports both signers at the same `y` is therefore expected
+    // here, and is not what this test is looking for.
+    const rendered = await renderThroughWorker()
     const first = engagementAnchorMarkers(1)
     const second = engagementAnchorMarkers(2)
     const [sig1, date1, sig2, date2] = await locateAnchors(rendered.pdfBytes, [
