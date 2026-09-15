@@ -16,6 +16,8 @@ export const EMAIL_CATEGORIES = [
   'sla_task_internal_reminder',
   'invoice_sent',
   'invoice_reminder',
+  'esign_signature_request',
+  'esign_signature_reminder',
   'manual',
 ] as const
 
@@ -151,6 +153,18 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'invoice_reminder',
     label: 'Invoice payment reminder',
     description: 'Sent to a client when an issued invoice passes its due date and still owes a balance.',
+    recipient: 'client',
+  },
+  esign_signature_request: {
+    category: 'esign_signature_request',
+    label: 'Engagement signature request',
+    description: 'Sent to a client with their one-time link to sign the engagement agreement.',
+    recipient: 'client',
+  },
+  esign_signature_reminder: {
+    category: 'esign_signature_reminder',
+    label: 'Engagement signature reminder',
+    description: 'Sent to a client who has not yet signed, with a fresh signing link.',
     recipient: 'client',
   },
   manual: {

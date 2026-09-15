@@ -1,13 +1,35 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createFirmaEsignProvider } from '@/lib/esign/firma'
+import { createNativeEsignProvider, esignNativeEnabled } from '@/lib/esign/native'
 import { issueRevisionApproval, verifyRevisionApproval } from './approval'
 import { renderEngagementAgreement } from './render'
 import * as repository from './repository'
 import { createEngagementService } from './service'
 import { markEngagementSentStatus } from './status'
 
-export function engagementService() {
+/**
+ * Pick the signing provider for this send.
+ *
+ * The whole cutover is this function. `lib/engagement/service.ts` is pure and
+ * dependency-injected, so it never learns which provider it got — if it ever
+ * needs to, the seam is being bypassed.
+ *
+ * Read per call rather than cached: flipping the flag has to take effect
+ * without a deploy, because the reason to flip it back is usually urgent.
+ */
+async function selectEsignProvider() {
+  return await esignNativeEnabled()
+    ? createNativeEsignProvider()
+    : createFirmaEsignProvider({
+      apiKey: process.env.FIRMA_API_KEY ?? '',
+      singleTemplateId: process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID ?? '',
+      jointTemplateId: process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT ?? null,
+    })
+}
+
+export async function engagementService() {
   const client = getAdminClient()
+  const provider = await selectEsignProvider()
   return createEngagementService({
     repository: {
       createDraft: input => repository.createAgreementDraft(client, { ...input, renderSha256: 'unrendered', masterVersion: '0' }),
@@ -28,9 +50,9 @@ export function engagementService() {
       claimResume: input => repository.claimAgreementResume(client, input),
       releaseClaim: (id, error) => repository.releaseAgreementClaim(client, id, error),
       recordRequest: async (id, requestId) => {
-        await repository.recordExternalRequest(client, id, requestId, 'firma')
+        await repository.recordExternalRequest(client, id, requestId, provider.name)
       },
-      recordRecipients: (id, recipients) => repository.recordExternalRecipients(client, id, recipients, 'firma'),
+      recordRecipients: (id, recipients) => repository.recordExternalRecipients(client, id, recipients, provider.name),
       markSent: async id => {
         const row = await repository.markAgreementSent(client, id) as { matter_id?: string | null } | null
         if (row?.matter_id) {
@@ -48,7 +70,7 @@ export function engagementService() {
       const rendered = await renderEngagementAgreement(input)
       return { docx: rendered.docxBytes, pdf: rendered.pdfBytes, renderSha256: rendered.pdfSha256, masterVersion: rendered.masterVersion, renderSnapshot: { docxBase64: rendered.docxBytes.toString('base64'), pdfBase64: rendered.pdfBytes.toString('base64') } }
     } },
-    provider: createFirmaEsignProvider({ apiKey: process.env.FIRMA_API_KEY ?? '', singleTemplateId: process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID ?? '', jointTemplateId: process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT ?? null }),
+    provider,
     approval: { issue: issueRevisionApproval, verify: verifyRevisionApproval },
   })
 }
