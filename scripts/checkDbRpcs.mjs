@@ -10,11 +10,25 @@
 // So this asks the layer that actually failed: PostgREST's OpenAPI document
 // lists one /rpc/<name> path per function it can resolve for the given role.
 //
+// One distinction matters, because the two look identical to a naive check:
+// an RPC missing from the database is drift only if nothing in the repo defines
+// it. When a migration in this branch creates it, the function is simply not
+// deployed yet — migrations reach the shared database on merge to main, so a
+// pull request that adds an RPC would otherwise fail a required check it could
+// never pass before merging.
+//
+// So a missing RPC no repo migration defines fails on every event, and one a
+// migration does define fails everywhere except on a pull request. The drift
+// this file exists to catch is unaffected: `update_lead_opportunity_field` was
+// defined by a migration whose SQL never ran, and the daily scheduled run —
+// which the header above calls the important one — still fails on it.
+//
 // Run: npm run check:db-rpcs
 // Exits 1 when the app calls an RPC the database does not expose.
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 // The root app's own directories, plus the workbench's. The workbench calls
 // `ensure_user_profile` on its sign-in path, and scanning only the repository
@@ -81,6 +95,55 @@ function collectCalledRpcs() {
   return calls
 }
 
+const MIGRATIONS_DIR = 'supabase/migrations'
+const FUNCTION_DEFINITION_PATTERN =
+  /create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([A-Za-z0-9_]+)/gi
+
+/**
+ * Every function name any migration in the repo creates.
+ *
+ * Read from the files rather than from migration history: history says what was
+ * *applied*, and a migration in an unmerged branch has no history row at all —
+ * which is exactly the case this needs to recognize.
+ *
+ * @returns {Set<string>}
+ */
+export function migrationDefinedRpcs(dir = MIGRATIONS_DIR) {
+  const defined = new Set()
+  let entries
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return defined
+  }
+  for (const name of entries) {
+    if (!name.endsWith('.sql')) continue
+    const sql = readFileSync(join(dir, name), 'utf8')
+    for (const match of sql.matchAll(FUNCTION_DEFINITION_PATTERN)) defined.add(match[1])
+  }
+  return defined
+}
+
+/**
+ * Split RPCs missing from the database into the two cases that need different
+ * answers.
+ *
+ * `undefined` is a real bug in any context: code calls a function nothing in
+ * the repo or the database defines. `pendingDeploy` is a migration that has not
+ * landed yet, which is normal on a pull request and a genuine problem anywhere
+ * else.
+ *
+ * @returns {{ undefined: string[], pendingDeploy: string[] }}
+ */
+export function classifyMissingRpcs(missing, definedInMigrations) {
+  const result = { undefined: [], pendingDeploy: [] }
+  for (const name of missing) {
+    if (definedInMigrations.has(name)) result.pendingDeploy.push(name)
+    else result.undefined.push(name)
+  }
+  return result
+}
+
 async function fetchExposedRpcs(url, key) {
   const response = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
@@ -95,52 +158,112 @@ async function fetchExposedRpcs(url, key) {
       .map(path => path.slice('/rpc/'.length)),
   )
 }
+/**
+ * Entry point. Separated from the exported helpers above so the test suite can
+ * import and exercise them without the script running against a database —
+ * the same shape checkMigrationDrift.mjs uses.
+ */
+async function main() {
+  loadEnvFile('.env.local')
+  loadEnvFile('.env')
 
-loadEnvFile('.env.local')
-loadEnvFile('.env')
+  // SUPABASE_URL is accepted too: the NEXT_PUBLIC_ prefix is meaningless in CI,
+  // where nothing is being bundled for a browser.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// SUPABASE_URL is accepted too: the NEXT_PUBLIC_ prefix is meaningless in CI,
-// where nothing is being bundled for a browser.
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const called = collectCalledRpcs()
 
-const called = collectCalledRpcs()
+  if (!url || !key) {
+    // Never fail a build just because credentials are absent — the check is only
+    // meaningful where the database is reachable.
+    console.log(
+      `⊘ Skipping RPC check (found ${called.size} RPC calls in source; ` +
+        'set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to verify them)',
+    )
+    return 0
+  }
 
-if (!url || !key) {
-  // Never fail a build just because credentials are absent — the check is only
-  // meaningful where the database is reachable.
-  console.log(
-    `⊘ Skipping RPC check (found ${called.size} RPC calls in source; ` +
-      'set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to verify them)',
+  let exposed
+  try {
+    exposed = await fetchExposedRpcs(url, key)
+  } catch (error) {
+    console.error(`\n❌ Could not read the database schema: ${error.message}\n`)
+    return 1
+  }
+
+  const missing = [...called.keys()].filter(name => !exposed.has(name)).sort()
+  const { undefined: undefinedRpcs, pendingDeploy } = classifyMissingRpcs(
+    missing,
+    migrationDefinedRpcs(),
   )
-  process.exit(0)
-}
 
-let exposed
-try {
-  exposed = await fetchExposedRpcs(url, key)
-} catch (error) {
-  console.error(`\n❌ Could not read the database schema: ${error.message}\n`)
-  process.exit(1)
-}
+  // A pull request is the one place an undeployed migration is expected. Every
+  // other event — main, the scheduled run, a manual dispatch — is looking at a
+  // database that should already have everything the repo describes.
+  const onPullRequest = process.env.GITHUB_EVENT_NAME === 'pull_request'
 
-const missing = [...called.keys()].filter(name => !exposed.has(name)).sort()
-
-if (missing.length > 0) {
-  console.error(
-    `\n❌ ${missing.length} RPC${missing.length === 1 ? '' : 's'} called in code ` +
-      'but not exposed by the database:\n',
-  )
-  for (const name of missing) {
-    console.error(`   • ${name}`)
+  function reportSites(name) {
     for (const site of called.get(name)) console.error(`     ${site}`)
   }
-  console.error(
-    '\nThe function is missing or not in PostgREST’s schema cache. Check whether\n' +
-      'its migration truly ran (a history row can exist without its SQL having\n' +
-      'executed), then re-apply it and reload the schema cache.\n',
-  )
-  process.exit(1)
+
+  if (undefinedRpcs.length > 0) {
+    console.error(
+      `\n❌ ${undefinedRpcs.length} RPC${undefinedRpcs.length === 1 ? '' : 's'} called in code ` +
+        'but neither exposed by the database nor created by any migration:\n',
+    )
+    for (const name of undefinedRpcs) {
+      console.error(`   • ${name}`)
+      reportSites(name)
+    }
+    console.error(
+      '\nNothing in this repository defines these. Either the call name is wrong or\n' +
+        'the migration that should create them was never written.\n',
+    )
+  }
+
+  if (pendingDeploy.length > 0 && !onPullRequest) {
+    console.error(
+      `\n❌ ${pendingDeploy.length} RPC${pendingDeploy.length === 1 ? '' : 's'} created by a ` +
+        'migration in this repository but not exposed by the database:\n',
+    )
+    for (const name of pendingDeploy) {
+      console.error(`   • ${name}`)
+      reportSites(name)
+    }
+    console.error(
+      '\nThe function is missing or not in PostgREST’s schema cache. Check whether\n' +
+        'its migration truly ran (a history row can exist without its SQL having\n' +
+        'executed), then re-apply it and reload the schema cache.\n',
+    )
+  }
+
+  if (undefinedRpcs.length > 0 || (pendingDeploy.length > 0 && !onPullRequest)) {
+    return 1
+  }
+
+  if (pendingDeploy.length > 0) {
+    // Not a failure here, and said plainly so nobody reads it as the drift
+    // failure above: these deploy when the branch merges.
+    console.log(
+      `\n⏳ ${pendingDeploy.length} RPC${pendingDeploy.length === 1 ? ' is' : 's are'} new in ` +
+        'this branch and not deployed yet:\n',
+    )
+    for (const name of pendingDeploy) console.log(`   • ${name}`)
+    console.log(
+      '\nA migration here creates them, and migrations reach the shared database\n' +
+        'when this merges. The scheduled run will fail on them if it does not.\n',
+    )
+    // Reported, not failed — but the summary below must not then claim
+    // everything is exposed, because it is not.
+    console.log(`✓ The other ${called.size - pendingDeploy.length} RPCs are exposed by the database`)
+    return 0
+  }
+
+  console.log(`✓ All ${called.size} RPCs called in app code are exposed by the database`)
+  return 0
 }
 
-console.log(`✓ All ${called.size} RPCs called in app code are exposed by the database`)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(await main())
+}

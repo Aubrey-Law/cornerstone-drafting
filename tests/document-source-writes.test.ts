@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest'
 const WRITERS: Array<{ file: string; source: string }> = [
   { file: 'app/api/documents/upload/route.ts', source: "source: isAdmin ? 'firm' : 'client'" },
   { file: 'app/api/documents/[id]/convert-pdf/route.ts', source: "source: 'firm'" },
-  { file: 'app/api/webhooks/esign/route.ts', source: "source: 'firm'" },
+  // Signed engagement agreements are written by the shared completion module,
+  // which both the webhook and in-process signing go through.
+  { file: 'lib/esign/completion.ts', source: "source: 'firm'" },
   { file: 'app/api/admin/meeting-notes/route.ts', source: "source: 'meeting-notes'" },
   { file: 'lib/drafting/persistGeneratedDocument.ts', source: "source: 'firm'" },
   { file: 'lib/intake/promoteIntakeDocuments.ts', source: "source: 'client'" },

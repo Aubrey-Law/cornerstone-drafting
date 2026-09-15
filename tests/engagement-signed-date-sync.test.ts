@@ -173,10 +173,14 @@ describe('both write paths keep the two columns together', () => {
   })
 
   it('an e-signed engagement moves the SLA clock too', () => {
-    // The webhook is how most engagements get signed. If it were the one path
+    // E-signing is how most engagements get signed. If it were the one path
     // that skipped the anchor, the clock would be wrong for the common case.
+    // The anchor now moves inside the shared completion module, which is what
+    // every signing path — webhook or in-process — has to go through.
+    const completion = read('lib/esign/completion.ts')
+    expect(completion).toContain('syncEngagementSignedAnchor')
     const route = read('app/api/webhooks/esign/route.ts')
-    expect(route).toContain('syncEngagementSignedAnchor')
+    expect(route).toContain('@/lib/esign/completion')
   })
 
   it('the SLA tab save also updates the matter details and the lead', () => {

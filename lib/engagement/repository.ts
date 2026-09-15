@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { EsignProviderName } from '@/lib/esign/types'
 import type { EngagementInput } from './types'
 import { verifyRevisionApproval } from './approval'
 
@@ -124,8 +125,25 @@ export async function markAgreementReady(client: SupabaseClient, input: {
   }).single())
 }
 
-export async function recordFirmaRequest(client: SupabaseClient, agreementId: string, firmaRequestId: string) {
-  return one(client.from('engagement_agreements').update({ firma_request_id: firmaRequestId }).eq('id', agreementId).eq('status', 'sending').select().single())
+/**
+ * Record the provider's request id against a sending agreement.
+ *
+ * Both the generic and the Firma-specific column are written while Firma is a
+ * provider: the generic one is what new code reads, and the legacy one keeps
+ * `claim_engagement_agreement_resume` and any un-migrated row working through
+ * the compatibility window. They are dropped together, after a data audit.
+ */
+export async function recordExternalRequest(
+  client: SupabaseClient,
+  agreementId: string,
+  externalRequestId: string,
+  provider: EsignProviderName = 'firma',
+) {
+  return one(client.from('engagement_agreements').update({
+    provider,
+    external_request_id: externalRequestId,
+    ...(provider === 'firma' ? { firma_request_id: externalRequestId } : {}),
+  }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
 export async function releaseAgreementClaim(client: SupabaseClient, agreementId: string, error: string) {
@@ -145,10 +163,18 @@ export async function claimAgreementResume(client: SupabaseClient, input: { agre
   return { claimed: Array.isArray(data) && data.length === 1 }
 }
 
-export async function recordFirmaRecipients(client: SupabaseClient, agreementId: string, recipients: Array<{ key: string; externalId: string }>) {
+export async function recordExternalRecipients(
+  client: SupabaseClient,
+  agreementId: string,
+  recipients: Array<{ key: string; externalId: string }>,
+  provider: EsignProviderName = 'firma',
+) {
   for (const recipient of recipients) {
     const { data, error } = await client.from('engagement_agreement_recipients')
-      .update({ firma_recipient_id: recipient.externalId })
+      .update({
+        external_recipient_id: recipient.externalId,
+        ...(provider === 'firma' ? { firma_recipient_id: recipient.externalId } : {}),
+      })
       .eq('agreement_id', agreementId).eq('role', recipient.key).select('id').single()
     if (error) throw new Error(error.message)
     if (!data) throw new Error(`Could not persist exact recipient mapping for ${recipient.key}`)

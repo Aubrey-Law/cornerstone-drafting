@@ -172,55 +172,84 @@ describe('in-app sign now', () => {
 
 describe('esign webhook route source shape', () => {
   const source = read('app/api/webhooks/esign/route.ts')
+  const adapter = read('lib/esign/webhookAdapter.ts')
+  const completion = read('lib/esign/completion.ts')
 
   it('runs on node with dynamic rendering', () => {
     expect(source).toContain("runtime = 'nodejs'")
     expect(source).toContain("dynamic = 'force-dynamic'")
   })
 
-  it('gates on the timestamped HMAC signature before parsing JSON', () => {
-    expect(source).toContain('FIRMA_WEBHOOK_SECRET')
-    expect(source).toContain('verifyFirmaWebhookSignature')
-    expect(source).toContain("req.headers.get('x-firma-signature')")
-    expect(source).toContain("req.headers.get('x-firma-signature-old')")
+  it('gates on the provider signature before parsing JSON', () => {
+    // Verification moved into the provider adapter, but the ordering guarantee
+    // is the route's: nothing may parse the body before it is authenticated.
+    expect(source).toContain('adapter.verify(rawBody, req.headers)')
     expect(source.indexOf('await req.text()')).toBeLessThan(source.indexOf('JSON.parse(rawBody)'))
-    expect(source.indexOf('verifyFirmaWebhookSignature')).toBeLessThan(source.indexOf('JSON.parse(rawBody)'))
+    expect(source.indexOf('adapter.verify')).toBeLessThan(source.indexOf('JSON.parse(rawBody)'))
     expect(source).not.toContain("searchParams.get('secret')")
     expect(source).toContain('503')
     expect(source).toContain('401')
   })
 
+  it('keeps Firma signature verification in the Firma adapter', () => {
+    expect(adapter).toContain('FIRMA_WEBHOOK_SECRET')
+    expect(adapter).toContain('FIRMA_WEBHOOK_SECRET_OLD')
+    expect(adapter).toContain('verifyFirmaWebhookSignature')
+    expect(adapter).toContain("headers.get('x-firma-signature')")
+    expect(adapter).toContain("headers.get('x-firma-signature-old')")
+  })
+
   it('treats the payload as a hint and re-fetches provider state', () => {
     expect(source).toContain('getEnvelopeState')
     expect(source).toContain('engagement_envelope_id')
+    // The hint carries identifiers only — never state.
+    expect(adapter).toContain('externalEventId')
+    expect(adapter).toContain('externalRequestId')
+    expect(adapter).not.toContain('signedAt')
   })
 
-  it('stores the signed pdf and flips the engagement flag last', () => {
-    expect(source).toContain('putFileToR2')
-    expect(source).toContain("source: 'firm'")
-    expect(source).toContain('shared_at: new Date().toISOString()')
-    expect(source).toContain('engagement_signed: true')
-    expect(source).toContain('uploaded_by: null')
+  it('stores the signed pdf and flips the engagement flag last, in one shared place', () => {
+    expect(completion).toContain('putFileToR2')
+    expect(completion).toContain("source: 'firm'")
+    expect(completion).toContain('shared_at: new Date().toISOString()')
+    expect(completion).toContain('engagement_signed: true')
+    expect(completion).toContain('uploaded_by: null')
+    expect(completion).toContain('syncEngagementSignedAnchor')
+    // The status flip must come after the upload so a retry is safe.
+    expect(completion.indexOf('putFileToR2')).toBeLessThan(completion.indexOf('engagement_signed: true'))
+    // The route delegates rather than keeping a second copy.
+    expect(source).toContain('@/lib/esign/completion')
+    expect(source).not.toContain('putFileToR2')
     expect(source).toContain('duplicate')
   })
 
-  it('claims the official event id atomically before fetching provider state', () => {
-    expect(source).toContain('payload.id')
-    expect(source).toContain('data.signing_request')
-    expect(source).toContain("req.headers.get('x-firma-event')")
-    expect(source).toContain("rpc('claim_firma_webhook_event'")
-    expect(source.indexOf("rpc('claim_firma_webhook_event'"))
+  it('parses the documented nested signing-request payload in the adapter', () => {
+    expect(adapter).toContain('payload.id')
+    expect(adapter).toContain('data.signing_request')
+    expect(adapter).toContain("headers.get('x-firma-event')")
+  })
+
+  it('claims the event atomically, keyed by provider, before fetching state', () => {
+    expect(source).toContain("rpc('claim_esign_webhook_event'")
+    expect(source).toContain('p_provider: adapter.provider')
+    expect(source.indexOf("rpc('claim_esign_webhook_event'"))
       .toBeLessThan(source.indexOf('getEnvelopeState'))
-    expect(source.indexOf("rpc('claim_firma_webhook_event'"))
+    expect(source.indexOf("rpc('claim_esign_webhook_event'"))
       .toBeLessThan(source.indexOf('if (agreement)'))
     expect(source).toContain("claimStatus === 'in_progress'")
     expect(source).toContain('{ status: 503 }')
-    expect(source).toContain('markFirmaWebhookFailed')
-    expect(source).toContain('markFirmaWebhookProcessed')
+    expect(source).toContain('markWebhookFailed')
+    expect(source).toContain('markWebhookProcessed')
     expect(source).not.toContain("createHash('sha256')")
     expect(source).not.toContain("req.headers.get('x-firma-delivery')")
     expect(source).not.toContain("select('id, processed_at')")
     expect(source).not.toContain("eventInsertError.code !== '23505'")
+  })
+
+  it('never builds a PostgREST filter out of the request body', () => {
+    // The signing-request id arrives in the payload; interpolating it into
+    // `.or()` filter syntax is injection-shaped even behind a verified HMAC.
+    expect(source).not.toContain('.or(`')
   })
 })
 
