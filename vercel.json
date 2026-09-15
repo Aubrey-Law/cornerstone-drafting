@@ -45,6 +45,10 @@
     {
       "path": "/api/cron/email-triage",
       "schedule": "15 12 * * 1-5"
+    },
+    {
+      "path": "/api/cron/esign-reconcile",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

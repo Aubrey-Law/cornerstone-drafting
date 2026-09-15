@@ -120,6 +120,10 @@ describe('API route auth coverage', () => {
           // method on it rather than a provider-named helper. The route still
           // has to call it, which is what this guard is really asserting.
           /processor\.verifySignature\b/,
+          // E-signature: same shape. The Firma HMAC check still runs, but it
+          // lives in lib/esign/webhookAdapter.ts so a second provider brings
+          // its own verifier rather than widening the route.
+          /adapter\.verify\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
         ]),

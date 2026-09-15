@@ -78,13 +78,18 @@ describe('matter-owned lead lifecycle', () => {
     expect(read('app/api/admin/matters/[id]/engagement-draft/route.ts')).toContain('matterId,')
   })
 
-  it('reconciles matter-owned Firma callbacks into the versioned agreement', () => {
+  it('reconciles matter-owned provider callbacks into the versioned agreement', () => {
     const webhook = read('app/api/webhooks/esign/route.ts')
     expect(webhook).toContain("from('engagement_agreements')")
-    expect(webhook).toContain("from('firma_webhook_events')")
-    expect(webhook).toContain('completed_r2_key: stored.r2Key')
-    expect(webhook).toContain("from('engagement_agreement_recipients')")
-    expect(webhook).toContain('engagement-agreement-${agreementId}.pdf')
+    expect(webhook).toContain("from('esign_webhook_events')")
+    expect(webhook).toContain('completeWorkspaceAgreement')
+
+    // Applying recipient state and keying the stored PDF per agreement moved
+    // into the shared completion module, so the native signing path reconciles
+    // identically rather than growing its own version.
+    const completion = read('lib/esign/completion.ts')
+    expect(completion).toContain("from('engagement_agreement_recipients')")
+    expect(completion).toContain('signed/engagement-agreement-')
   })
 
   it('limits permanent deletion to admins and protects hired or signed records', () => {

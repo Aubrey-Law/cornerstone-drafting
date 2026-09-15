@@ -13,6 +13,7 @@ import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
+import { EngagementStatusPanel } from './EngagementStatusPanel'
 import type { EngagementWorkspaceAgreement as Agreement } from '@/lib/engagement/http'
 import type { EngagementInput } from '@/lib/engagement/types'
 
@@ -64,6 +65,10 @@ function download(url: string, name: string) {
   a.click()
 }
 
+const HAS_BEEN_SENT_STATUSES = [
+  'sending', 'sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired',
+]
+
 function isLocked(status: string) {
   return ['sending', 'sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired'].includes(status)
 }
@@ -91,6 +96,9 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   const searchParams = useSearchParams()
   const step = engagementStep(searchParams.get('step'))
   const locked = isLocked(agreement.status)
+  // 'sending' is deliberately included: a send that died midway leaves an
+  // agreement stuck there, and that is exactly when staff need the controls.
+  const hasBeenSent = HAS_BEEN_SENT_STATUSES.includes(agreement.status)
   const [input, setInput] = useState<EngagementInput>(agreement.active_revision.input_snapshot)
   const [preview, setPreview] = useState<PreviewPayload | null>(() => previewFromActiveRevision(agreement))
   const [previewUrls, setPreviewUrls] = useState<PreviewUrls | null>(null)
@@ -272,6 +280,9 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-6xl space-y-4">
+          {/* Once an agreement is out with a client, where it stands matters
+              more than the drafting steps above it, so the status panel leads. */}
+          {hasBeenSent && <EngagementStatusPanel agreementId={agreement.id} />}
           {step === 'design' && (
             <DesignStep
               input={input}
