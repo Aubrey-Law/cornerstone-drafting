@@ -62,6 +62,22 @@ describe('signing route security shape', () => {
     expect(route).toContain("status: 'declined'")
   })
 
+  it('derives anchor markers from position, not from the recipient role', () => {
+    // The template numbers signers CLIENT_1/CLIENT_2; the spouse is CLIENT_2.
+    // A role-named prefix produced [[SPOUSE_SIGNATURE]], which exists in no
+    // template, so the spouse could never sign. Both callers now share one
+    // derivation — see tests/engagement-anchors.test.ts for the template pin.
+    expect(route).toContain('engagementAnchorMarkers')
+    expect(route).not.toContain('SPOUSE')
+  })
+
+  it('refuses to sign rather than guess a signer position', () => {
+    // Defaulting to position 1 would stamp this signature on another signer's
+    // line and produce an executed agreement that looks finished and is wrong.
+    expect(route).not.toContain('?? 1')
+    expect(route).toContain('recipient not found on agreement')
+  })
+
   it('runs on node, which the sealing step requires', () => {
     expect(route).toContain("runtime = 'nodejs'")
     expect(route).toContain("dynamic = 'force-dynamic'")
