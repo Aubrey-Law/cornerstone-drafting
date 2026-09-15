@@ -57,6 +57,31 @@ describe('when the types check runs', () => {
   })
 })
 
+describe('how it reaches the database', () => {
+  const SCRIPT = read('scripts/generateSupabaseTypes.mjs')
+
+  it('addresses the project by ref, not by linking to it', () => {
+    // `supabase link` reads project settings and API keys, which needs
+    // privileges that reading the schema does not. On 2026-09-15 it failed with
+    // "your account does not have the necessary privileges" on a token that was
+    // concurrently reading the migration history fine, and the whole check went
+    // out — reporting a failure that looked like drift while comparing nothing.
+    expect(SCRIPT).toContain('--project-id')
+    expect(SCRIPT).not.toContain('--linked')
+    // Comment lines are stripped: the workflow explains this absence in prose,
+    // and matching that prose would make the assertion pass for the wrong reason.
+    const commands = WORKFLOW.split('\n').filter(line => !/^\s*#/.test(line)).join('\n')
+    expect(commands).not.toContain('supabase link')
+  })
+
+  it('refuses to run without the credentials it actually needs', () => {
+    // A generator that produced nothing would leave the previous file in place
+    // and read as "no drift" — the failure this whole workflow exists to catch.
+    expect(SCRIPT).toContain('SUPABASE_ACCESS_TOKEN')
+    expect(SCRIPT).toContain('process.exit(1)')
+  })
+})
+
 describe('what the check does about drift', () => {
   it('fails, and prints the diff so the fix is obvious', () => {
     const compare = step('Fail on drift, printing it')

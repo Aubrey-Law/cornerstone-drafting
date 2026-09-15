@@ -107,18 +107,13 @@ jobs:
         with:
           version: ${{ steps.cli.outputs.version }}
 
-      - name: Link the project
-        if: steps.cli.outputs.version != ''
-        run: |
-          ref=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^.]+)\..*$#\1#')
-          case "$ref" in
-            "" | *[!a-z0-9]* )
-              echo "::error::Could not read a project ref out of SUPABASE_URL. Expected https://<ref>.supabase.co."
-              exit 1
-              ;;
-          esac
-          supabase link --project-ref "$ref"
-
+      # NO `supabase link` STEP, deliberately. Linking reads project settings and
+      # API keys, which needs privileges that reading the schema does not — and
+      # on 2026-09-15 it failed with "your account does not have the necessary
+      # privileges" on a token that was concurrently reading the migration
+      # history fine. That took this check out entirely while looking like drift.
+      # generateSupabaseTypes.mjs addresses the project by ref instead, which
+      # needs only SUPABASE_ACCESS_TOKEN.
       - name: Regenerate types from the database
         if: steps.cli.outputs.version != ''
         run: npm run db:types:linked
@@ -177,17 +172,6 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: ${{ steps.cli.outputs.version }}
-
-      - name: Link the project
-        run: |
-          ref=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^.]+)\..*$#\1#')
-          case "$ref" in
-            "" | *[!a-z0-9]* )
-              echo "::error::Could not read a project ref out of SUPABASE_URL. Expected https://<ref>.supabase.co."
-              exit 1
-              ;;
-          esac
-          supabase link --project-ref "$ref"
 
       - name: Regenerate types from the database
         run: npm run db:types:linked
