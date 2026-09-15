@@ -3,6 +3,7 @@ import { HeadBucketCommand } from '@aws-sdk/client-s3'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getR2Client, r2Bucket } from '@/lib/r2'
 import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
+import { isEngagementApprovalConfigured } from '@/lib/engagement/approvalConfig'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 
 // Default GET returns liveness only (200 {ok:true}) for Vercel uptime checks
@@ -74,8 +75,11 @@ function checkCommunications(): Check {
 // It gates readiness rather than merely reporting, because approve and send both
 // fail without it whichever e-signature provider is selected: the workspace is
 // genuinely unusable, not degraded.
-export function checkEngagementSigning(): Check {
-  return process.env.ENGAGEMENT_APPROVAL_SECRET?.trim()
+// Not exported, and the predicate it calls lives in lib: a Next.js route file
+// may only export its handlers and config, so exporting this to make it
+// testable fails `next build` — which `npm run typecheck` does not catch.
+function checkEngagementSigning(): Check {
+  return isEngagementApprovalConfigured()
     ? { status: 'ok' }
     : {
         status: 'fail',
