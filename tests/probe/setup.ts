@@ -18,6 +18,27 @@ config({ path: '.env.local', override: false })
 // which is the failure mode these are meant to close, not reproduce.
 const workerUrl = process.env.DOCX_PDF_CONVERT_URL?.trim()
 
+// `vercel env pull` cannot retrieve a variable marked Sensitive in Vercel —
+// those are write-only by design. It writes this placeholder instead, so a
+// pull-and-copy lands the literal string in .env.test and the probe sends it
+// as a bearer token. The worker then answers 401, which reads as "wrong
+// secret" rather than "no secret was ever retrieved". Caught by name, because
+// the shape is indistinguishable from a short real value.
+const REDACTED = '[SENSITIVE]'
+for (const name of ['DOCX_PDF_CONVERT_URL', 'DOCX_PDF_CONVERT_SECRET']) {
+  if (process.env[name]?.trim() === REDACTED) {
+    throw new Error(
+      `${name} is the literal string "${REDACTED}", not a value.\n`
+        + 'That is what `vercel env pull` writes for a variable marked Sensitive in '
+        + 'Vercel, which cannot be read back through the CLI, the API or the dashboard.\n'
+        + 'Run the worker locally instead — it needs no secret:\n'
+        + '  cd tools/docx-pdf-worker && npm install && npm start\n'
+        + 'then set DOCX_PDF_CONVERT_URL=http://127.0.0.1:8080 and remove '
+        + 'DOCX_PDF_CONVERT_SECRET from .env.test.',
+    )
+  }
+}
+
 if (!workerUrl) {
   throw new Error(
     'DOCX_PDF_CONVERT_URL is not set, so there is no convert worker to probe.\n'
