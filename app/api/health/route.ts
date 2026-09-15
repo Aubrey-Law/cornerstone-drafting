@@ -65,6 +65,24 @@ function checkCommunications(): Check {
     : { status: 'ok' }
 }
 
+// Config-only, like checkCommunications above. It exists because the absence of
+// this one variable is otherwise discovered halfway through the agreement
+// workspace — after creating a lead, drafting an agreement and clicking approve
+// — as a bare "not configured" error. It went unset in production for months
+// because nothing asked for it until someone walked that flow by hand.
+//
+// It gates readiness rather than merely reporting, because approve and send both
+// fail without it whichever e-signature provider is selected: the workspace is
+// genuinely unusable, not degraded.
+export function checkEngagementSigning(): Check {
+  return process.env.ENGAGEMENT_APPROVAL_SECRET?.trim()
+    ? { status: 'ok' }
+    : {
+        status: 'fail',
+        detail: 'ENGAGEMENT_APPROVAL_SECRET is not set; engagement approve and send will fail',
+      }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   if (url.searchParams.get('check') !== 'full') {
@@ -73,7 +91,12 @@ export async function GET(req: NextRequest) {
 
   const [supabase, r2] = await Promise.all([checkSupabase(), checkR2()])
 
-  const checks = { supabase, r2, communications: checkCommunications() }
+  const checks = {
+    supabase,
+    r2,
+    communications: checkCommunications(),
+    engagementSigning: checkEngagementSigning(),
+  }
   const ok = Object.values(checks).every((c) => c.status !== 'fail')
 
   return NextResponse.json(

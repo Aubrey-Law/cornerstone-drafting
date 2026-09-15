@@ -296,9 +296,42 @@ Webhook URL: `https://<host>/api/webhooks/retell`
 
 On `call_analyzed`, Cornerstone upserts the call and emails/SMS the summary (`retell_call_alert` category).
 
+## Engagement agreements (workspace flow)
+
+Required by the agreement workspace at `/admin/engagements/[agreementId]` — preview, approve
+and send — **whichever e-signature provider is selected**. Approve and send both fail without
+it, and the failure is a plain `ENGAGEMENT_APPROVAL_SECRET is not configured` from
+`lib/engagement/approval.ts`.
+
+| Variable | Purpose |
+|----------|---------|
+| `ENGAGEMENT_APPROVAL_SECRET` | HMAC key signing the revision-approval token that the send step consumes. Any long random value (`openssl rand -base64 48`); mark it Sensitive. Rotating it only invalidates approval tokens not yet consumed, and those expire quickly. |
+
+This one was missing from this checklist until 2026-09-15, so it was never set in production —
+and nobody noticed, because production had only ever used the legacy template flow below, which
+does not pass through the workspace. The first real run of the workspace flow failed on it.
+
+### Signing-link origin
+
+Native signing links are built from the first of these that is set
+(`lib/esign/native.ts:39`), and sending fails outright if none is:
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_APP_URL` | Preferred. Already required above. |
+| `NEXT_PUBLIC_SITE_URL` | Fallback. Only needed if `NEXT_PUBLIC_APP_URL` is unset. |
+| `CORNERSTONE_ORIGIN` | Second fallback. Same. |
+
 ## Optional — Firma.dev (engagement e-signature)
 
-The current production routes use the legacy template-based flow, so the template IDs below remain required for the corresponding solo and joint paths. The planned document-based flow is not production-ready: its POC confirmed `FIRMA_API_KEY` authentication and the document lifecycle, but layout/anchor behavior, two-signer ordering, and webhook contract verification remain blocked. Do not remove the template IDs or add new document-flow secrets until that implementation replaces the legacy routes.
+Firma signs engagement agreements whenever `firm_settings.esign_native_enabled` is false, and
+the **legacy template flow** (`/api/admin/{matters,leads}/[id]/engagement`) goes through Firma
+regardless of that flag, so the template IDs below stay required until that flow is migrated.
+
+The in-house engine replaced the abandoned Firma *document* flow: anchor geometry is verified
+against a real LibreOffice render by `.github/workflows/esign-anchor-probe.yml`, and two-signer
+ordering is settled by position rather than role. Native signing needs no Firma credential —
+it needs `ENGAGEMENT_APPROVAL_SECRET`, an origin, R2 and `RESEND_API_KEY`, all above.
 
 | Variable | Purpose |
 |----------|---------|
