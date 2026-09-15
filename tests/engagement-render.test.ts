@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import { renderEngagementAgreement } from '@/lib/engagement/render'
+import { allEngagementAnchorMarkers } from '@/lib/engagement/anchors'
 
-const anchors = ['CLIENT_1_SIGNATURE', 'CLIENT_1_DATE', 'CLIENT_2_SIGNATURE', 'CLIENT_2_DATE']
+const anchors = allEngagementAnchorMarkers(2)
 
 function pdf(text: string, width = 612, height = 792): Buffer {
   const escaped = text.replace(/([\\()])/g, '\\$1')
@@ -33,11 +34,11 @@ const input = {
 
 describe('renderEngagementAgreement', () => {
   it('renders all structured fields and stable metadata without legacy tags', async () => {
-    const converted = pdf(anchors.map(a => `[[${a}]]`).join(' '))
+    const converted = pdf(anchors.join(' '))
     const result = await renderEngagementAgreement(input, { convertDocx: async () => converted })
     const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
     for (const value of ['2026-07-12', 'Alex Client', 'alex@example.com', 'Jordan Client', 'jordan@example.com', '$7,500.00', 'Half now; half before signing.']) expect(xml).toContain(value)
-    for (const anchor of anchors) expect(xml.match(new RegExp(`\\[\\[${anchor}\\]\\]`, 'g'))).toHaveLength(1)
+    for (const anchor of anchors) expect(xml.split(anchor)).toHaveLength(2)
     expect(xml).not.toMatch(/\{\{(?:signature:|autofill_date_signed)|\{[^{}]+\}/)
     expect(result.masterKey).toBe('ep-trust-couple')
     expect(result.masterVersion).toBe('1')
@@ -53,12 +54,12 @@ describe('renderEngagementAgreement', () => {
   })
 
   it('rejects a non-Letter PDF', async () => {
-    await expect(renderEngagementAgreement(input, { convertDocx: async () => pdf(anchors.map(a => `[[${a}]]`).join(' '), 595, 842) })).rejects.toThrow(/US Letter/i)
+    await expect(renderEngagementAgreement(input, { convertDocx: async () => pdf(anchors.join(' '), 595, 842) })).rejects.toThrow(/US Letter/i)
   })
 
   it.each([
-    anchors.slice(1).map(a => `[[${a}]]`).join(' '),
-    [...anchors, 'CLIENT_1_SIGNATURE'].map(a => `[[${a}]]`).join(' '),
+    anchors.slice(1).join(' '),
+    [...anchors, anchors[0]].join(' '),
   ])('rejects missing or duplicate anchors', async (text) => {
     await expect(renderEngagementAgreement(input, { convertDocx: async () => pdf(text) })).rejects.toThrow(/anchor/i)
   })
