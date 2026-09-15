@@ -16,9 +16,18 @@ describe('current engagement flow contract', () => {
   })
 
   it('converts signed leads and stores the completed PDF', () => {
+    // Lead conversion stays in the route (it is webhook-branch specific);
+    // storing the evidence moved into the shared completion module so the
+    // native in-process signing path cannot grow a second, divergent copy.
     expect(webhook).toContain('createMatterFromIntake')
-    expect(webhook).toContain('putFileToR2')
-    expect(webhook).toContain("from('matter_documents').insert")
     expect(webhook).toContain('getEnvelopeState')
+    expect(webhook).toContain('storeSignedEngagement')
+
+    const completion = fs.readFileSync(
+      path.join(process.cwd(), 'lib/esign/completion.ts'),
+      'utf8',
+    )
+    expect(completion).toContain('putFileToR2')
+    expect(completion).toContain("from('matter_documents').insert")
   })
 })

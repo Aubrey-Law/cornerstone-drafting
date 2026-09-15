@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
   const getEnvelopeState = vi.fn(async () => ({
     status: 'sent',
     recipients: [],
-    finalDocumentUrl: null,
+    artifacts: [],
   }))
   const rpc = vi.fn(async () => ({ data: state.claimStatus, error: null }))
 
@@ -100,7 +100,7 @@ beforeEach(() => {
   mocks.getEnvelopeState.mockResolvedValue({
     status: 'sent',
     recipients: [],
-    finalDocumentUrl: null,
+    artifacts: [],
   })
 })
 
@@ -126,9 +126,10 @@ describe('Firma webhook route behavior', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(mocks.rpc).toHaveBeenCalledWith('claim_firma_webhook_event', {
+    expect(mocks.rpc).toHaveBeenCalledWith('claim_esign_webhook_event', {
+      p_provider: 'firma',
       p_event_id: 'event-1',
-      p_firma_request_id: 'request-1',
+      p_external_request_id: 'request-1',
       p_event_type: 'signing_request.updated',
       p_payload: expect.any(Object),
       p_agreement_id: 'agreement-1',
@@ -167,7 +168,7 @@ describe('Firma webhook route behavior', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ ok: true, duplicate: true })
     expect(mocks.rpc).toHaveBeenCalledWith(
-      'claim_firma_webhook_event',
+      'claim_esign_webhook_event',
       expect.objectContaining({ p_agreement_id: null }),
     )
     expect(mocks.getEnvelopeState).not.toHaveBeenCalled()
@@ -177,7 +178,7 @@ describe('Firma webhook route behavior', () => {
     mocks.getEnvelopeState.mockResolvedValue({
       status: 'signed',
       recipients: [],
-      finalDocumentUrl: null,
+      artifacts: [],
     })
 
     const response = await POST(request({
@@ -188,8 +189,8 @@ describe('Firma webhook route behavior', () => {
 
     expect(response.status).toBe(502)
     expect(mocks.state.updates).toContainEqual({
-      table: 'firma_webhook_events',
-      values: { error: 'signed document storage deferred' },
+      table: 'esign_webhook_events',
+      values: { error: 'signed document not ready yet' },
     })
   })
 })

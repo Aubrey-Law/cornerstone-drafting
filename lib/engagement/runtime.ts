@@ -16,10 +16,10 @@ export function engagementService() {
         const snapshot = row.active_revision.input_snapshot
         const render = row.active_revision.render_snapshot ?? {}
         return {
-          id: row.id, status: row.status, externalRequestId: row.firma_request_id,
+          id: row.id, status: row.status, externalRequestId: row.external_request_id ?? row.firma_request_id,
           inputSnapshot: snapshot,
           activeRevision: { id: row.active_revision.id, renderSha256: row.active_revision.render_sha256, pdf: Buffer.from(render.pdfBase64 ?? '', 'base64'), masterVersion: row.active_revision.master_version },
-          recipients: (row.recipients ?? []).map((r: any) => ({ key: r.role, name: r.name, email: r.email, order: r.recipient_order, externalId: r.firma_recipient_id })),
+          recipients: (row.recipients ?? []).map((r: any) => ({ key: r.role, name: r.name, email: r.email, order: r.recipient_order, externalId: r.external_recipient_id ?? r.firma_recipient_id })),
         }
       },
       createRevision: (id, rendered) => repository.createAgreementRevision(client, id, rendered as any),
@@ -28,9 +28,9 @@ export function engagementService() {
       claimResume: input => repository.claimAgreementResume(client, input),
       releaseClaim: (id, error) => repository.releaseAgreementClaim(client, id, error),
       recordRequest: async (id, requestId) => {
-        await repository.recordFirmaRequest(client, id, requestId)
+        await repository.recordExternalRequest(client, id, requestId, 'firma')
       },
-      recordRecipients: (id, recipients) => repository.recordFirmaRecipients(client, id, recipients),
+      recordRecipients: (id, recipients) => repository.recordExternalRecipients(client, id, recipients, 'firma'),
       markSent: async id => {
         const row = await repository.markAgreementSent(client, id) as { matter_id?: string | null } | null
         if (row?.matter_id) {

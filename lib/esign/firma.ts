@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { FirmaClient } from '@firma-dev/sdk'
-import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocumentRequestStatus, EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
+import type { EsignArtifact, EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocumentRequestState, EsignDocumentRequestStatus, EsignEnvelopeState, EsignProvider, EsignProviderCapabilities, EsignSigner } from '@/lib/esign/types'
 
 /**
  * firma.dev e-signature provider.
@@ -43,7 +43,17 @@ function toRecipient(signer: EsignSigner, order: number) {
 }
 
 class FirmaEsignProvider implements EsignProvider {
-  readonly name = 'firma'
+  readonly name = 'firma' as const
+  /**
+   * Firma returns one combined signed-document + audit-certificate PDF rather
+   * than the two separately, so `separateAuditCertificate` is false.
+   */
+  readonly capabilities: EsignProviderCapabilities = {
+    resend: true,
+    cancel: true,
+    embeddedSigning: false,
+    separateAuditCertificate: false,
+  }
   private readonly client: FirmaClient
   private readonly singleTemplateId: string
   private readonly jointTemplateId: string | null
@@ -100,7 +110,27 @@ class FirmaEsignProvider implements EsignProvider {
     if (!response.ok) throw new Error(`firma.dev send failed (${response.status})`)
   }
 
-  async getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus; recipients?: EsignDocumentRequestResult['recipients'] }> {
+  async resendDocumentRequest(input: { requestId: string; recipientIds: string[]; customMessage?: string }): Promise<void> {
+    if (input.recipientIds.length === 0) return
+    const response = await this.fetcher(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${encodeURIComponent(input.requestId)}/resend`, {
+      method: 'POST', headers: { Authorization: this.apiKey(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient_ids: input.recipientIds, ...(input.customMessage ? { custom_message: input.customMessage } : {}) }),
+    })
+    if (!response.ok) throw new Error(`firma.dev resend failed (${response.status})`)
+  }
+
+  async cancelDocumentRequest(requestId: string, reason: string): Promise<void> {
+    // Unlike cancelEnvelope (best-effort cleanup of a superseded envelope),
+    // this is a staff-initiated action, so a failure must surface rather than
+    // leave the workspace showing an agreement as cancelled when it is live.
+    await this.client.signingRequests.cancelSigningRequest({
+      id: requestId,
+      reason,
+      notify_signers: true,
+    })
+  }
+
+  async getDocumentRequestState(requestId: string): Promise<EsignDocumentRequestState> {
     const response = await this.fetcher(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${encodeURIComponent(requestId)}`, {
       method: 'GET', headers: { Authorization: this.apiKey() },
     })
@@ -177,15 +207,22 @@ class FirmaEsignProvider implements EsignProvider {
     }))
     const status = detail.status ?? {}
     if (status.finished) {
+      // Firma exposes a single combined signed-document + audit-certificate
+      // PDF. It can lag the finish event while the certificate generates, so
+      // an empty artifact list here is "not ready yet", not "no evidence".
+      const combined = detail.final_document_download_url
+      const artifacts: EsignArtifact[] = typeof combined === 'string' && combined
+        ? [{ kind: 'combined_evidence', url: combined, mimeType: 'application/pdf' }]
+        : []
       return {
         status: 'signed',
         signedAt: detail.timestamps?.finished_on ?? null,
-        finalDocumentUrl: detail.final_document_download_url ?? null,
+        artifacts,
         recipients,
       }
     }
     if (status.declined || status.expired || status.cancelled) {
-      return { status: 'declined', signedAt: null, finalDocumentUrl: null, recipients }
+      return { status: 'declined', signedAt: null, artifacts: [], recipients }
     }
     if (status.sent) {
       const envelopeStatus = recipients.some(recipient => recipient.status === 'signed')
@@ -193,9 +230,9 @@ class FirmaEsignProvider implements EsignProvider {
         : detail.timestamps?.last_signing_action_on
           ? 'viewed'
           : 'sent'
-      return { status: envelopeStatus, signedAt: null, finalDocumentUrl: null, recipients }
+      return { status: envelopeStatus, signedAt: null, artifacts: [], recipients }
     }
-    return { status: 'unknown', signedAt: null, finalDocumentUrl: null, recipients }
+    return { status: 'unknown', signedAt: null, artifacts: [], recipients }
   }
 }
 
