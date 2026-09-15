@@ -6,12 +6,15 @@ import Docxtemplater from 'docxtemplater'
 import PizZip from 'pizzip'
 import { convertDocxToPdf } from '@/lib/docxPdfConvert'
 import { validateEngagementInput } from './schema'
+import { allEngagementAnchorMarkers } from './anchors'
 import { resolveDocumentTemplate } from '@/lib/documentTemplates/resolver'
 import type { ResolvedDocumentTemplate } from '@/lib/documentTemplates/types'
 
 const MASTER_KEY = 'ep-trust-couple' as const
 const MASTER_VERSION = '1' as const
-const ANCHORS = ['CLIENT_1_SIGNATURE', 'CLIENT_1_DATE', 'CLIENT_2_SIGNATURE', 'CLIENT_2_DATE'] as const
+// The couple template has two signers. Derived rather than listed, so this
+// cannot drift from what the signing route stamps — see lib/engagement/anchors.ts.
+const ANCHORS = allEngagementAnchorMarkers(2)
 const PDF_CANVAS_GLOBALS = ['DOMMatrix', 'ImageData', 'Path2D'] as const
 const requireCanvasRuntime = createRequire(import.meta.url)
 
@@ -50,8 +53,8 @@ async function validatePdf(pdfBytes: Buffer): Promise<void> {
       throw new Error('Engagement PDF pages must all be US Letter (612 x 792 points)')
     }
     for (const anchor of ANCHORS) {
-      const count = text.text.split(`[[${anchor}]]`).length - 1
-      if (count !== 1) throw new Error(`Engagement PDF anchor [[${anchor}]] must exist exactly once; found ${count}`)
+      const count = text.text.split(anchor).length - 1
+      if (count !== 1) throw new Error(`Engagement PDF anchor ${anchor} must exist exactly once; found ${count}`)
     }
   } finally {
     await parser.destroy()

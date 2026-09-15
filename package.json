@@ -50,7 +50,8 @@
     "supabase:db:push": "supabase db push",
     "styleSets:seed": "tsx scripts/seedStyleSets.ts",
     "build:ci": "node scripts/ciBuild.mjs",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "check:engagement-anchors": "vitest run --config vitest.probe.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
