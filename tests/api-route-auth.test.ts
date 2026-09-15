@@ -126,6 +126,13 @@ describe('API route auth coverage', () => {
           /adapter\.verify\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
+          // Client signing: the emailed token is the credential, and the route
+          // resolves the session by its SHA-256 rather than by anything in the
+          // request body. Same class as the booking manage links — a hash
+          // comparison in the route, not a session, because the signer has no
+          // account. The raw token is never stored, so this lookup is also the
+          // only way the row can be found at all.
+          /hashSigningToken\b/,
         ]),
       ).toBe(true)
     })
