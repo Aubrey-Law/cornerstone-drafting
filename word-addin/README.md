@@ -7,12 +7,37 @@ formatting pass.
 
 Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
-## Running it
+## Setup
 
-Three terminals. The first two stay running; the third is a one-shot.
+### Before you start
+
+- **macOS.** `npm start` sideloads only here. Windows uses a trusted catalogue
+  instead — see [Windows](#windows).
+- **Word for Microsoft 365, kept current.** `manifest.xml` requires the
+  `WordApi 1.6` requirement set, which is where individual tracked-change review
+  lives. An older Word raises no error: it silently declines to offer the add-in
+  at all.
+- **Node 22** — the repo's `.nvmrc`; the root `package.json` allows `>=22 <26`.
+- **Cornerstone running locally**, with the repository root env file in place.
+  The pane proxies every request to it, and the sign-in dialog reads
+  `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from that same
+  file: `vite.config.ts` points Vite's `envDir` at the repository root, so the
+  add-in has no env file of its own to fill in.
+- **A staff account.** Every `/api/addin/*` route calls `requireAdmin`, which
+  wants a `users.role` of `attorney` or `admin`. Signing in without one gets a
+  403 on the pane's first call rather than at the sign-in step.
+- **One Supabase setting, once per project.** **Authentication → URL
+  Configuration → Redirect URLs** must include `https://localhost:3100/**`, or
+  the sign-in dialog ends up on the project's Site URL instead of coming back
+  with its code. See [The OAuth round trip](#the-oauth-round-trip).
+
+### The three terminals
+
+The first two stay running; the third is a one-shot.
 
 ```bash
 # 1 — Cornerstone, from the repo root
+npm ci                           # first time only
 npm run dev                      # http://localhost:3002
 
 # 2 — the pane
@@ -29,8 +54,15 @@ Order matters: `npm start` does not serve anything, it only copies `manifest.xml
 into Word's sideload folder. If the pane is not already being served from
 terminal 2, Word opens an empty frame.
 
-**First run only:** macOS protects Word's add-in folder from other processes, so
-`npm start` is refused until you grant the terminal access.
+The first `npm run dev` in `word-addin` mints a local HTTPS certificate and asks
+for your keychain password; Office refuses to load a task pane over plain HTTP.
+Set `DEV_HTTPS_CERT` and `DEV_HTTPS_KEY` to serve existing cert files instead,
+which is the only way through in a headless environment.
+
+### Let the terminal into Word's folder (first run, macOS)
+
+macOS protects Word's add-in folder from other processes, so `npm start` is
+refused until you grant the terminal access.
 
 1. **System Settings → Privacy & Security → Full Disk Access** → add the terminal
    you run this from (Terminal, iTerm, VS Code…) and switch it on.
@@ -47,19 +79,85 @@ WEF=~/Library/Containers/com.microsoft.Word/Data/Documents/wef
 touch "$WEF/.permtest" && echo WRITABLE && rm "$WEF/.permtest" || echo DENIED
 ```
 
-Then **quit Word completely (⌘Q) and reopen it** — a running Word does not
-rescan the sideload folder. Open a document and pick **Cornerstone** from the
-Home ribbon, or **Insert → My Add-ins → Cornerstone**.
+### Open it in Word
+
+**Quit Word completely (⌘Q) and reopen it** — a running Word does not rescan the
+sideload folder. Open a document and pick **Cornerstone** from the Home ribbon,
+or **Insert → My Add-ins → Cornerstone**. Then **Sign in** in the pane, and link
+a matter from the bar at the top.
 
 `npm run stop` unregisters it. The sideloaded manifest is a *copy*, so re-run
 `npm start` after editing `manifest.xml`.
 
-The first `npm run dev` mints a local HTTPS certificate and asks for your
-keychain password; Office refuses to load a task pane over plain HTTP. Set
-`DEV_HTTPS_CERT` and `DEV_HTTPS_KEY` to serve existing cert files instead, which
-is the only way through in a headless environment.
+### Verify the setup
 
-Point the pane at a different backend with `CORNERSTONE_ORIGIN`.
+Each command checks one layer, in the order the pane depends on them, so the
+first one that disagrees is the thing to fix:
+
+```bash
+# the pane is being served, over HTTPS
+curl -sk -o /dev/null -w '%{http_code}\n' https://localhost:3100/taskpane.html   # 200
+
+# Cornerstone is up, and its add-in routes are gating
+curl -s  -o /dev/null -w '%{http_code}\n' http://localhost:3002/api/addin/session # 401
+
+# the pane's proxy reaches Cornerstone — same 401, through the HTTPS origin
+curl -sk -o /dev/null -w '%{http_code}\n' https://localhost:3100/api/addin/session # 401
+
+# Word has the manifest
+ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/                    # <GUID>.manifest.xml
+```
+
+A `401` is the healthy answer to those two: the route exists and refused an
+unauthenticated call. A `404` means the proxy is pointed somewhere without
+Cornerstone on it; a connection error means terminal 1 is not running.
+
+In the pane itself, the `build <timestamp>` line under "Checking your session"
+should match when you started the dev server. If it does not, Word is running a
+cached bundle — see [Troubleshooting](#troubleshooting).
+
+### Windows
+
+`npm start` exits with instructions rather than sideloading. Word on Windows
+loads add-ins from a network shared folder registered as a trusted catalogue:
+
+1. Share a folder (it must be a UNC path — `\\machine\share`, not a local
+   directory).
+2. **File → Options → Trust Center → Trust Center Settings → Trusted Add-in
+   Catalogs**, add the share, tick **Show in Menu**, and restart Word.
+3. Copy `word-addin/manifest.xml` into the share.
+4. **Insert → My Add-ins → Shared Folder → Cornerstone**.
+
+Everything else is the same, including the two dev servers and the HTTPS
+certificate. The rest of this document's paths are macOS ones.
+
+### Environment variables
+
+| Variable | Where it is read | What it does |
+|---|---|---|
+| `CORNERSTONE_ORIGIN` | `word-addin/vite.config.ts` | Where `/api` is proxied. Defaults to `http://localhost:3002` |
+| `DEV_HTTPS_CERT`, `DEV_HTTPS_KEY` | `word-addin/vite.config.ts` | Serve these cert files instead of minting one. Without them `office-addin-dev-certs` installs a local CA, which needs a keychain prompt no headless environment can answer |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | repository root env file | The sign-in dialog exchanges credentials with Supabase directly. Both are public values the Next app already ships to every browser |
+
+### Pointing the pane at a deployed Cornerstone
+
+```bash
+CORNERSTONE_ORIGIN=https://cornerstone.example npm run dev
+```
+
+The pane is still served from `https://localhost:3100` and the manifest still
+points there; only the proxy target moves. If that deployment uses a different
+Supabase project, two things follow: add its domain to `<AppDomains>` in
+`manifest.xml` (an Office dialog may only navigate to domains listed there) and
+re-sideload with `npm start`, and add `https://localhost:3100/**` to *that*
+project's redirect URLs.
+
+`npm run build` writes `dist/` — `taskpane.html`, `commands.html`, `dialog.html`
+and their assets. Nothing in this repo hosts it: publishing the pane properly
+would mean serving `dist/` over HTTPS and repointing every URL in
+`manifest.xml` — `SourceLocation`, `Taskpane.Url`, `Commands.Url`, the icons —
+at that origin, and adding it to `<AppDomains>`. Until then the manifest is a
+development one and the pane runs from each attorney's own machine.
 
 ### Why sideloading is hand-rolled
 

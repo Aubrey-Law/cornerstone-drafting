@@ -27,6 +27,15 @@ npm run dev
 
 Dev server: [http://localhost:3002](http://localhost:3002)
 
+### Word add-in
+
+`word-addin/` is a sideloaded Word task pane that drafts against the same
+routes: chat and tracked-change redlines, the matter's design sheet in both
+directions, version saves into R2, and the firm formatting pass. It runs beside
+this dev server on `https://localhost:3100` and proxies `/api` to it. Setup,
+sideloading, and troubleshooting are in
+[word-addin/README.md](word-addin/README.md).
+
 ## Main routes
 
 ### Staff (`attorney` / `admin`)
