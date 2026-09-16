@@ -5435,6 +5435,30 @@ export type Database = {
           },
         ]
       }
+      integration_entity_leases: {
+        Row: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Insert: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Update: {
+          entity_id?: string
+          entity_type?: string
+          lease_expires_at?: string
+          lease_token?: string
+          provider?: string
+        }
+        Relationships: []
+      }
       integration_external_records: {
         Row: {
           created_at: string
@@ -10371,6 +10395,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_provider: string }
+        Returns: string
+      }
       approve_invoice_reminder: {
         Args: { p_actor_id: string; p_reminder_id: string }
         Returns: {
@@ -11756,6 +11784,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      release_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_lease_token: string; p_provider: string }
+        Returns: boolean
+      }
       release_matter_fee_milestone: {
         Args: { p_actor_id: string; p_milestone_id: string }
         Returns: {
@@ -11805,6 +11837,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reopen_integration_workflow_job: {
+        Args: { p_dedupe_key: string; p_job_type: string }
+        Returns: string
       }
       release_webhook_event: {
         Args: { p_event_id: string; p_provider: string }

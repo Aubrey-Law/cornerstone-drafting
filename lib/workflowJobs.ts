@@ -17,6 +17,7 @@ export type WorkflowJobType =
   | 'release_billing_milestone'
   | 'annual_review'
   | 'prepare_invoice_reminders'
+  | 'lawmatics_sync_appointment'
 
 export interface WorkflowJob {
   id: string
@@ -89,6 +90,15 @@ async function createAnnualReviewTask(matterId: string, actorId: string | null) 
 
 async function runJob(job: WorkflowJob) {
   const payload = job.payload ?? {}
+  if (job.job_type === 'lawmatics_sync_appointment') {
+    if (typeof payload.appointmentId !== 'string' || !payload.appointmentId.trim()
+      || typeof payload.sourceVersion !== 'string' || !payload.sourceVersion.trim()) {
+      throw new Error('lawmatics_sync_appointment requires appointmentId and sourceVersion')
+    }
+    const { runLawmaticsAppointmentSyncJob } = await import('@/lib/integrations/lawmatics/jobs')
+    await runLawmaticsAppointmentSyncJob(payload.appointmentId, payload.sourceVersion)
+    return
+  }
   if (job.job_type === 'seed_design_sheet') {
     if (!job.matter_id) throw new Error('seed_design_sheet requires matter_id')
     await ensureDesignSheetSeededFromIntake(job.matter_id)
