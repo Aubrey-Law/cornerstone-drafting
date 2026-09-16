@@ -131,7 +131,7 @@ export function createEngagementService(deps: Dependencies) {
           customMessage: agreement.inputSnapshot.emailMessage,
         })
       } catch (error) {
-        await deps.repository.releaseClaim(agreement.id, error instanceof Error ? error.message : 'Firma create failed')
+        await deps.repository.releaseClaim(agreement.id, error instanceof Error ? error.message : 'The e-signature provider could not create the request')
         throw error
       }
       await deps.repository.recordRequest(agreement.id, created.requestId)

@@ -146,13 +146,44 @@ export async function recordExternalRequest(
   }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
+/**
+ * Release a send claim, recording why it failed.
+ *
+ * The reason used to go to the HTTP response and the server logs and nowhere
+ * durable, so a failed send left a row saying `failed` and nothing saying what
+ * happened. Diagnosing the first three native sends meant reading an error
+ * string off someone's screen.
+ *
+ * `provider_sync_error` already carries exactly this for the reconcile and
+ * webhook paths (lib/esign/reconcile.ts, app/api/webhooks/esign/route.ts), and
+ * lib/engagement/postSend.ts already surfaces it. The send path was the one
+ * place that did not take part.
+ */
 export async function releaseAgreementClaim(client: SupabaseClient, agreementId: string, error: string) {
-  const { error: updateError } = await client.from('engagement_agreements').update({ status: 'failed', send_lease_id: null, send_lease_expires_at: null, updated_at: new Date().toISOString() }).eq('id', agreementId).eq('status', 'sending')
+  const now = new Date().toISOString()
+  const { error: updateError } = await client.from('engagement_agreements').update({
+    status: 'failed',
+    send_lease_id: null,
+    send_lease_expires_at: null,
+    // Bounded: a provider can return a very long body, and this is read by a
+    // person trying to find out what broke, not by a parser.
+    provider_sync_error: error.slice(0, 2000),
+    provider_sync_error_at: now,
+    updated_at: now,
+  }).eq('id', agreementId).eq('status', 'sending')
   if (updateError) throw new Error(`${error}: ${updateError.message}`)
 }
 
 export async function markAgreementSent(client: SupabaseClient, agreementId: string) {
-  return one(client.from('engagement_agreements').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', agreementId).eq('status', 'sending').select().single())
+  // Clear the previous failure. A send that succeeded on a retry must not keep
+  // showing the error from the attempt before it — the same way reconcile.ts
+  // clears these on a successful sync.
+  return one(client.from('engagement_agreements').update({
+    status: 'sent',
+    sent_at: new Date().toISOString(),
+    provider_sync_error: null,
+    provider_sync_error_at: null,
+  }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
 export async function claimAgreementResume(client: SupabaseClient, input: { agreementId: string; requestId: string; sentBy: string }) {
