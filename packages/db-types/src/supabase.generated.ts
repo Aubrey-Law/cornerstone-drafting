@@ -152,6 +152,8 @@ export type Database = {
         Row: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name: string | null
+          attendee_last_name: string | null
           attendee_name: string
           attendee_phone: string | null
           booked_by_user_id: string | null
@@ -171,6 +173,8 @@ export type Database = {
           raw: Json
           reminder_sent_at: string | null
           second_attendee_email: string | null
+          second_attendee_first_name: string | null
+          second_attendee_last_name: string | null
           second_attendee_name: string | null
           source: string
           start_time: string
@@ -180,6 +184,8 @@ export type Database = {
         Insert: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -199,6 +205,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time: string
@@ -208,6 +216,8 @@ export type Database = {
         Update: {
           appointment_type_id?: string
           attendee_email?: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name?: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -227,6 +237,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time?: string
@@ -5435,6 +5447,141 @@ export type Database = {
           },
         ]
       }
+      integration_entity_leases: {
+        Row: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Insert: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Update: {
+          entity_id?: string
+          entity_type?: string
+          lease_expires_at?: string
+          lease_token?: string
+          provider?: string
+        }
+        Relationships: []
+      }
+      integration_external_records: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          external_record_type: string
+          id: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          last_succeeded_at: string | null
+          metadata: Json
+          provider: string
+          request_hash: string | null
+          request_snapshot: Json | null
+          source_version: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type: string
+          id?: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type?: string
+          id?: string
+          idempotency_key?: string
+          internal_entity_id?: string
+          internal_entity_type?: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider?: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_settings: {
+        Row: {
+          created_at: string
+          id: number
+          lawmatics_appointment_sync_enabled: boolean
+          lawmatics_event_type_id_map: Json
+          lawmatics_last_check_error: string | null
+          lawmatics_last_checked_at: string | null
+          lawmatics_location_id_map: Json
+          lawmatics_user_ids: Json
+          statular_doc_id_map: Json
+          statular_drafter_id: string | null
+          statular_sync_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       invoice_checkout_sessions: {
         Row: {
           amount_cents: number
@@ -5752,21 +5899,21 @@ export type Database = {
       lawmatics_tokens: {
         Row: {
           access_token: string
-          expires_at: string
+          expires_at: string | null
           id: string
           refresh_token: string | null
           updated_at: string
         }
         Insert: {
           access_token: string
-          expires_at: string
+          expires_at?: string | null
           id: string
           refresh_token?: string | null
           updated_at?: string
         }
         Update: {
           access_token?: string
-          expires_at?: string
+          expires_at?: string | null
           id?: string
           refresh_token?: string | null
           updated_at?: string
@@ -10260,6 +10407,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_provider: string }
+        Returns: string
+      }
       approve_invoice_reminder: {
         Args: { p_actor_id: string; p_reminder_id: string }
         Returns: {
@@ -11092,6 +11243,15 @@ export type Database = {
         Args: { p_claim_token: string; p_error?: string; p_job_id: string }
         Returns: boolean
       }
+      finish_workflow_job_v3: {
+        Args: {
+          p_claim_token: string
+          p_error?: string
+          p_job_id: string
+          p_retry_after_ms?: number
+        }
+        Returns: boolean
+      }
       firm_billing_matter_options_v1: {
         Args: { p_search: string; p_selected?: string }
         Returns: Json
@@ -11645,6 +11805,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      release_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_lease_token: string; p_provider: string }
+        Returns: boolean
+      }
       release_matter_fee_milestone: {
         Args: { p_actor_id: string; p_milestone_id: string }
         Returns: {
@@ -11694,6 +11858,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reopen_integration_workflow_job: {
+        Args: { p_dedupe_key: string; p_job_type: string }
+        Returns: string
       }
       release_webhook_event: {
         Args: { p_event_id: string; p_provider: string }
@@ -12234,12 +12402,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12263,11 +12431,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12288,11 +12456,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12313,11 +12481,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12330,11 +12498,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

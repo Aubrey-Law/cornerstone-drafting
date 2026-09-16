@@ -16,7 +16,7 @@ export default async function PortalSchedulePage() {
   const firstName = (intake?.first_name as string | null | undefined) ?? ''
   const lastName = (intake?.last_name as string | null | undefined) ?? ''
   const phone = (intake?.phone as string | null | undefined) ?? ''
-  const name = [firstName, lastName].filter(Boolean).join(' ')
+  const historicalName = typeof intake?.full_name === 'string' ? intake.full_name : ''
 
   const types = await getAppointmentTypesForPortal()
 
@@ -32,7 +32,8 @@ export default async function PortalSchedulePage() {
       <div className="mt-8">
         <SchedulePageClient
           types={types}
-          defaultName={name}
+          defaultFirstName={firstName || (!lastName ? historicalName : '')}
+          defaultLastName={lastName}
           defaultEmail={auth.email ?? ''}
           defaultPhone={phone}
         />

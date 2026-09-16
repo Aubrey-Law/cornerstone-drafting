@@ -8,6 +8,7 @@ import { putFileToR2 } from '@/lib/documentUpload'
 import { hashSigningToken, signingSessionGate } from '@/lib/esign/nativeTokens'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
 import { sealFieldsFor, type SignedMark } from '@/lib/esign/sealFields'
+import type { SealSigner } from '@/lib/esign/nativeSeal'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
@@ -225,9 +226,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   await recordAudit({ sessionId: session.id, agreementId: session.agreement_id, eventType: 'signed', req })
 
+  // session_id comes back so each trail line can name its signer. Without it a
+  // couple's ten events render as one list in which nothing says who opened,
+  // consented or signed — and this certificate is what the firm would produce
+  // to show that a particular person signed.
   const { data: trail } = await admin
     .from('esign_audit_events')
-    .select('event_type, occurred_at, ip, user_agent')
+    .select('event_type, occurred_at, ip, user_agent, session_id')
     .eq('agreement_id', session.agreement_id)
     .order('occurred_at', { ascending: true })
 
@@ -247,7 +252,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     .eq('status', 'signed')
     .neq('id', session.id)
 
+  const nameOf = new Map(orderedRecipients.map(r => [r.role as string, r.name as string]))
+  // session id -> signer name, for attributing the audit trail.
+  const signerBySession = new Map<string, string>([[session.id, (recipient?.name as string) ?? typedName]])
+
   const priorMarks: SignedMark[] = []
+  const priorSigners: SealSigner[] = []
   for (const prior of priorSessions ?? []) {
     const priorPosition = positionOf.get(prior.recipient_key as string)
     if (!priorPosition) {
@@ -264,6 +274,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       .select('typed_name, signature_png_r2_key')
       .eq('session_id', prior.id as string)
       .maybeSingle()
+    const priorKey = prior.recipient_key as string
+    const priorRecipient = orderedRecipients[priorPosition - 1]
     priorMarks.push({
       position: priorPosition,
       signedAt: new Date(prior.signed_at as string),
@@ -272,6 +284,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         ? await downloadFromR2(artifact.signature_png_r2_key as string)
         : null,
     })
+    priorSigners.push({
+      name: nameOf.get(priorKey) ?? priorKey,
+      email: (priorRecipient?.email as string) ?? '',
+      adoptionMethod: artifact?.signature_png_r2_key ? 'drawn' : 'typed',
+      signedAt: new Date(prior.signed_at as string),
+    })
+    signerBySession.set(prior.id as string, nameOf.get(priorKey) ?? priorKey)
   }
 
   const sealed = await sealSignedAgreement({
@@ -287,10 +306,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         ...(signaturePng ? { signaturePng } : { typedName }),
       },
     ]),
-    signer: {
+    // Every signer, in agreement order, so a couple's certificate names both
+    // rather than whoever happened to seal last.
+    signers: [...priorSigners, {
       name: (recipient?.name as string) ?? typedName,
       email: (recipient?.email as string) ?? '',
-    },
+      adoptionMethod: signaturePng ? ('drawn' as const) : ('typed' as const),
+      signedAt: new Date(now),
+    }].sort((a, b) => (a.signedAt?.getTime() ?? 0) - (b.signedAt?.getTime() ?? 0)),
     agreementId: session.agreement_id,
     consentText: ESIGN_CONSENT_TEXT,
     auditTrail: (trail ?? []).map(entry => ({
@@ -298,6 +321,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       occurredAt: entry.occurred_at as string,
       ip: entry.ip as string | null,
       userAgent: entry.user_agent as string | null,
+      signerName: signerBySession.get(entry.session_id as string) ?? null,
     })),
   })
 

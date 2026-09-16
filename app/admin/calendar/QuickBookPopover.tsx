@@ -5,6 +5,8 @@ import { CalendarPlus, Check, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { normalizeBookingNames } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import {
@@ -29,10 +31,12 @@ interface PersonResult {
 interface Draft {
   typeId: string
   locationType: LocationType
-  attendeeName: string
+  attendeeFirstName: string
+  attendeeLastName: string
   attendeeEmail: string
   attendeePhone: string
-  secondAttendeeName: string
+  secondAttendeeFirstName: string
+  secondAttendeeLastName: string
   secondAttendeeEmail: string
   startIso: string
 }
@@ -41,10 +45,12 @@ function initialDraft(types: BookableType[], prefillIso?: string | null): Draft 
   return {
     typeId: types[0]?.id ?? '',
     locationType: allowedFormats(types[0])[0],
-    attendeeName: '',
+    attendeeFirstName: '',
+    attendeeLastName: '',
     attendeeEmail: '',
     attendeePhone: '',
-    secondAttendeeName: '',
+    secondAttendeeFirstName: '',
+    secondAttendeeLastName: '',
     secondAttendeeEmail: '',
     startIso: prefillIso ?? '',
   }
@@ -134,8 +140,14 @@ export function QuickBookPopover({
   }, [open, draft.typeId, draft.locationType, range, authHeaders, prefillIso])
 
   async function submit() {
-    if (!draft.attendeeName.trim() || !draft.attendeeEmail.trim() || !draft.typeId || !draft.startIso) {
+    if (!draft.attendeeEmail.trim() || !draft.typeId || !draft.startIso) {
       toast.error('Choose who, what, where, and when')
+      return
+    }
+    try {
+      normalizeBookingNames({ ...draft, firstName: draft.attendeeFirstName, lastName: draft.attendeeLastName })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Confirm attendee names')
       return
     }
     setBooking(true)
@@ -147,10 +159,12 @@ export function QuickBookPopover({
           typeId: draft.typeId,
           locationType: draft.locationType,
           startIso: draft.startIso,
-          attendeeName: draft.attendeeName.trim(),
+          attendeeFirstName: draft.attendeeFirstName,
+          attendeeLastName: draft.attendeeLastName,
           attendeeEmail: draft.attendeeEmail.trim(),
           attendeePhone: draft.attendeePhone.trim() || undefined,
-          secondAttendeeName: draft.secondAttendeeName.trim() || undefined,
+          secondAttendeeFirstName: draft.secondAttendeeFirstName.trim() || undefined,
+          secondAttendeeLastName: draft.secondAttendeeLastName.trim() || undefined,
           secondAttendeeEmail: draft.secondAttendeeEmail.trim() || undefined,
         }),
       })
@@ -200,10 +214,12 @@ export function QuickBookPopover({
                     onClick={() => {
                       setDraft(current => ({
                         ...current,
-                        attendeeName: person.name ?? '',
+                        attendeeFirstName: person.name ?? '',
+                        attendeeLastName: '',
                         attendeeEmail: person.email ?? '',
                         attendeePhone: person.phone ?? '',
-                        secondAttendeeName: person.secondName ?? '',
+                        secondAttendeeFirstName: person.secondName ?? '',
+                        secondAttendeeLastName: '',
                         secondAttendeeEmail: person.secondEmail ?? '',
                       }))
                       setQuery(person.name)
@@ -216,7 +232,44 @@ export function QuickBookPopover({
                 ))}
               </div>
             )}
-            {draft.attendeeEmail && <p className="mt-1 text-[11px] text-green-700"><Check className="mr-1 inline h-3 w-3" />{draft.attendeeName} · {draft.attendeeEmail}</p>}
+            {draft.attendeeEmail && <p className="mt-1 text-[11px] text-green-700"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="quick-book-first-name">First name</Label>
+                <Input id="quick-book-first-name" required maxLength={80} autoComplete="given-name"
+                  value={draft.attendeeFirstName} onChange={event => setDraft(current => ({ ...current, attendeeFirstName: event.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="quick-book-last-name">Last name</Label>
+                <Input id="quick-book-last-name" required maxLength={80} autoComplete="family-name"
+                  value={draft.attendeeLastName} onChange={event => setDraft(current => ({ ...current, attendeeLastName: event.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="quick-book-email">Email</Label>
+                <Input id="quick-book-email" type="email" required
+                  value={draft.attendeeEmail} onChange={event => setDraft(current => ({ ...current, attendeeEmail: event.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="quick-book-phone">Phone</Label>
+                <Input id="quick-book-phone" type="tel"
+                  value={draft.attendeePhone} onChange={event => setDraft(current => ({ ...current, attendeePhone: event.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="quick-book-spouse-first-name">Spouse/partner first name</Label>
+                <Input id="quick-book-spouse-first-name" maxLength={80}
+                  value={draft.secondAttendeeFirstName} onChange={event => setDraft(current => ({ ...current, secondAttendeeFirstName: event.target.value }))} />
+              </div>
+              <div>
+                <Label htmlFor="quick-book-spouse-last-name">Spouse/partner last name</Label>
+                <Input id="quick-book-spouse-last-name" maxLength={80}
+                  value={draft.secondAttendeeLastName} onChange={event => setDraft(current => ({ ...current, secondAttendeeLastName: event.target.value }))} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="quick-book-spouse-email">Spouse/partner email</Label>
+                <Input id="quick-book-spouse-email" type="email"
+                  value={draft.secondAttendeeEmail} onChange={event => setDraft(current => ({ ...current, secondAttendeeEmail: event.target.value }))} />
+              </div>
+            </div>
           </Step>
 
           <Step number="2" title="What">
@@ -274,7 +327,7 @@ export function QuickBookPopover({
         </div>
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
           <span className="text-[11px] text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString() : 'Choose a verified slot'}</span>
-          <Button size="sm" disabled={booking || !draft.startIso || !draft.attendeeEmail} onClick={() => void submit()}>
+          <Button size="sm" disabled={booking || !draft.startIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
             {booking ? 'Booking…' : 'Book & email confirmation'}
           </Button>
         </div>
