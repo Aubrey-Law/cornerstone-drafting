@@ -347,8 +347,50 @@ describe('durable Statular client creation', () => {
     const currentHash = 'e6d48bf7956ed4d78f4643fbbbbaf26804680364da9ea6ea012fd76eb888a70e'
     db.integration_external_records.push(externalRecord({ request_snapshot: frozen, request_hash: currentHash, source_version: currentHash }))
     await expect(syncStatularClient('lead-1')).resolves.toMatchObject({ operation: 'created', externalId: 'statular-client-1' })
-    expect(mocks.createClient).toHaveBeenCalledWith(frozen, 'cornerstone:statular:client:lead-1:v1')
+    expect(mocks.createClient).toHaveBeenCalledWith(frozen, 'cornerstone:statular:client:lead-1:v1', undefined)
     expect(record()?.request_snapshot).toEqual(frozen)
+  })
+
+  it('replaces a non-attempt placeholder with the real generation key and payload hash', async () => {
+    db.integration_external_records.push(externalRecord({
+      status: 'attention', source_version: 'preflight',
+      idempotency_key: 'cornerstone:statular:client:lead-1:preflight',
+      request_hash: null, request_snapshot: null,
+      last_error_code: 'identity_required', last_error_message: 'Safe preflight failure.',
+    }))
+
+    await expect(syncStatularClient('lead-1')).resolves.toMatchObject({ operation: 'created' })
+
+    expect(record()).toMatchObject({
+      status: 'synced', idempotency_key: 'cornerstone:statular:client:lead-1:v1',
+      request_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      request_snapshot: expect.objectContaining({ first_name: 'Ada', last_name: 'Lovelace' }),
+      last_error_code: null, last_error_message: null,
+    })
+  })
+
+  it('passes cancellation to transport and performs no outcome write after abort', async () => {
+    const started = deferred<void>()
+    const response = deferred<{ id: string }>()
+    const controller = new AbortController()
+    mocks.createClient.mockImplementationOnce((_payload, _key, signal: AbortSignal) => {
+      expect(signal).toBe(controller.signal)
+      started.resolve()
+      return response.promise
+    })
+
+    const syncing = syncStatularClient('lead-1', controller.signal)
+    await started.promise
+    controller.abort()
+    response.resolve({ id: 'too-late-client' })
+
+    await expect(syncing).rejects.toMatchObject({
+      provider: 'statular', kind: 'retryable', code: 'timeout',
+    })
+    expect(record()).toMatchObject({
+      status: 'pending', external_id: null, last_attempt_at: expect.any(String),
+      last_succeeded_at: null, last_error_code: null, last_error_message: null,
+    })
   })
 
   it('persists only a safe normalized failure and leaves the frozen snapshot retryable', async () => {

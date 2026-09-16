@@ -51,22 +51,35 @@ function safeFailure(error: unknown): IntegrationError {
   })
 }
 
+function requireActive(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new IntegrationError({
+      provider: 'statular', kind: 'retryable', code: 'timeout',
+      safeMessage: 'The Statular request timed out or was cancelled.', retryAfterMs: null,
+    })
+  }
+}
+
 /** Creates a Statular client once, with the database snapshot authoritative on retry. */
-export async function syncStatularClient(clientIntakeId: string): Promise<IntegrationResult> {
+export async function syncStatularClient(clientIntakeId: string, signal?: AbortSignal): Promise<IntegrationResult> {
   const ref: ExternalRecordRef = {
     provider: 'statular', internalEntityType: 'lead', internalEntityId: clientIntakeId, externalRecordType: 'client',
   }
+  requireActive(signal)
   const existing = await getExternalRecord(ref)
+  requireActive(signal)
   if (existing?.external_id) return result('reused', existing.external_id)
 
   const config = getStatularConfig()
   const payload = await buildStatularClientPayload(clientIntakeId)
+  requireActive(signal)
   const requestSnapshot = canonicalize(payload)
   const requestHash = snapshotHash(requestSnapshot)
   const idempotencyKey = `cornerstone:statular:client:${clientIntakeId}:${config.generation}`
   const claimed = await claimExternalRecord({
     ...ref, sourceVersion: requestHash, idempotencyKey, requestSnapshot, requestHash,
   })
+  requireActive(signal)
   if (claimed.external_id) return result('reused', claimed.external_id)
 
   let fenced
@@ -74,7 +87,9 @@ export async function syncStatularClient(clientIntakeId: string): Promise<Integr
     fenced = await beginCreateIntegrationAttempt({
       ...ref, idempotencyKey: claimed.idempotency_key, expectedLastAttemptAt: claimed.last_attempt_at,
     })
+    requireActive(signal)
   } catch (error) {
+    if (signal?.aborted) throw safeFailure(error)
     if (error instanceof IntegrationError && error.code === 'integration_record_changed') {
       const completed = await getExternalRecord(ref)
       if (completed?.external_id) return result('reused', completed.external_id)
@@ -85,11 +100,16 @@ export async function syncStatularClient(clientIntakeId: string): Promise<Integr
   try {
     // The claimed snapshot, not the just-built object, is the replay contract.
     const storedPayload = claimed.request_snapshot as unknown as StatularClientPayload
-    const created = await createStatularClient(storedPayload, claimed.idempotency_key)
+    requireActive(signal)
+    const created = await createStatularClient(storedPayload, claimed.idempotency_key, signal)
+    requireActive(signal)
     await recordIntegrationSuccess({ ...attempt, externalId: created.id })
     return result('created', created.id)
   } catch (error) {
     const safe = safeFailure(error)
+    // The workflow worker retains the claim until cooperative cancellation
+    // settles. Do not append an outcome write after its signal has fired.
+    if (signal?.aborted) throw safe
     await recordIntegrationFailure({ ...attempt, error: safe })
     throw safe
   }
