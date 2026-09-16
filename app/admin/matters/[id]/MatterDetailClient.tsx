@@ -257,6 +257,7 @@ function MatterDetailClientInner({
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
+  const [stageHistoryOpen, setStageHistoryOpen] = useState(false)
 
   useEffect(() => {
     if (!isMobileDetailViewport()) setFactsRailOpen(true)
@@ -814,7 +815,6 @@ function MatterDetailClientInner({
     [communicationItems, lastPortalMessage],
   )
   const draftingHref = `/admin/drafting/${matter.matter_id}`
-  const blockerCount = reviewFlags.length + unreviewedUploadCounts.total + unreadPortalCount
   const readinessItems = useMemo(
     () =>
       buildMatterReadinessItems({
@@ -850,16 +850,12 @@ function MatterDetailClientInner({
       <MatterDetailHeader
         matter={matter}
         matterNumber={matterNum}
-        agingSummary={agingSummary}
-        nextActionDate={matterDetails?.next_action_date ?? null}
         intakeCompleted={intakeCompleted}
         intakeId={liveIntakeId}
         unlocking={unlocking}
-        showHealthBadge={blockerCount === 0}
         factsRailOpen={factsRailOpen}
         onToggleFactsRail={() => setFactsRailOpen(open => !open)}
         onEmail={() => setComposerChannel('email')}
-        onText={() => setComposerChannel('sms')}
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
@@ -996,8 +992,6 @@ function MatterDetailClientInner({
                 <div className="space-y-4">
                 <MatterOverviewHero
                   matter={matter}
-                  matterType={matterType}
-                  details={matterDetails}
                   nextAction={nextAction}
                   currentTask={nextAction.kind === 'closed' ? null : currentEngineStageTask}
                   unreadPortalCount={unreadPortalCount}
@@ -1031,7 +1025,10 @@ function MatterDetailClientInner({
                     if (unreviewedUploadCounts.intake > 0) void openIntakeSheet()
                     else setActiveTab('documents', undefined, undefined, 'unreviewed')
                   }}
-                  onOpenStageHistory={() => document.getElementById('matter-stage-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onOpenStageHistory={() => {
+                    setStageHistoryOpen(true)
+                    document.getElementById('matter-stage-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
                   onOpenDate={day => {
                     if (day) router.push(`/admin/calendar?date=${day}`)
                     else setBookForClientOpen(true)
@@ -1044,7 +1041,11 @@ function MatterDetailClientInner({
                 />
                 {/* The milestone rail above shows where the matter is; this shows
                     how it got there and how long each stage took. */}
-                <MatterStageHistoryCard entries={initialStageHistory} />
+                <MatterStageHistoryCard
+                  entries={initialStageHistory}
+                  open={stageHistoryOpen}
+                  onOpenChange={setStageHistoryOpen}
+                />
                 {/* Supporting details follow the action and progress summary. */}
                 <MatterDetailsCard
                   matter={matter}

@@ -22,52 +22,21 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { cn } from '@/lib/utils'
-import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
-import { presentNextAction } from '@/lib/matter/nextActionDate'
-import { stageGroupColor, stageLabel, type PipelineMatter } from '@/types/database'
+import type { PipelineMatter } from '@/types/database'
 
 interface MatterDetailHeaderProps {
   matter: PipelineMatter
   matterNumber: string | null
-  agingSummary: MatterAgingSummary | null
-  /** matter_details.next_action_date — the attorney's own "come back to me". */
-  nextActionDate?: string | null
   intakeCompleted: boolean
   intakeId: string | null
   unlocking: boolean
-  /** True only when the blocker banner is absent, so the badge has somewhere to live. */
-  showHealthBadge: boolean
   factsRailOpen: boolean
   onToggleFactsRail: () => void
   onEmail: () => void
-  onText: () => void
   onOpenIntake: () => void
   onImportIntake: () => void
   onUnlockIntake: () => void
   onDelete: () => void
-}
-
-export function healthPresentation(summary: MatterAgingSummary | null) {
-  if (!summary || summary.isSnoozed) return null
-  if (summary.health === 'red') {
-    return {
-      label: 'Stalled',
-      className: 'border-red-strong-border bg-red-strong-bg text-red-strong',
-    }
-  }
-  if (summary.health === 'amber') {
-    return {
-      label: 'Needs attention',
-      className: 'border-amber-border bg-amber-bg text-amber',
-    }
-  }
-  if (summary.health === 'green') {
-    return {
-      label: 'On track',
-      className: 'border-green/40 bg-green-bg text-green',
-    }
-  }
-  return null
 }
 
 function clientInitial(matter: PipelineMatter): string {
@@ -78,12 +47,9 @@ function clientInitial(matter: PipelineMatter): string {
 export function MatterDetailHeader({
   matter,
   matterNumber,
-  agingSummary,
-  nextActionDate = null,
   intakeCompleted,
   intakeId,
   unlocking,
-  showHealthBadge,
   factsRailOpen,
   onToggleFactsRail,
   onEmail,
@@ -92,9 +58,6 @@ export function MatterDetailHeader({
   onUnlockIntake,
   onDelete,
 }: MatterDetailHeaderProps) {
-  const health = showHealthBadge ? healthPresentation(agingSummary) : null
-  const nextAction = presentNextAction(nextActionDate)
-  const stageColors = stageGroupColor(matter.stage)
   const clientName = matter.client_name || matter.matter_name || 'Matter'
 
   return (
@@ -120,32 +83,6 @@ export function MatterDetailHeader({
         <Badge variant="outline" className="hidden shrink-0 text-micro font-medium tabular-nums sm:inline-flex">
           {matterNumber ? `#${matterNumber}` : 'No matter number'}
         </Badge>
-        <span
-          aria-label="Matter stage"
-          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-micro font-semibold lg:inline-flex"
-          style={{ background: stageColors.bg, color: stageColors.text }}
-        >
-          {stageLabel(matter.stage)}
-          {agingSummary && ` · day ${agingSummary.daysInStage}`}
-        </span>
-        {health && (
-          <Badge variant="outline" className={cn('shrink-0 text-micro', health.className)}>
-            {health.label}
-          </Badge>
-        )}
-        {nextAction && (
-          <Badge
-            variant="outline"
-            title={`Next action ${nextAction.date}`}
-            className={cn(
-              'hidden shrink-0 text-micro lg:inline-flex',
-              nextAction.tone === 'overdue' && 'border-red-strong-border bg-red-strong-bg text-red-strong',
-              nextAction.tone === 'today' && 'border-amber-border bg-amber-bg text-amber',
-            )}
-          >
-            {nextAction.label}
-          </Badge>
-        )}
       </div>
 
       <div className="hidden shrink-0 items-center gap-2 md:flex">

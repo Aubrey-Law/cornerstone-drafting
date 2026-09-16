@@ -15,15 +15,17 @@ describe('matter overview frame', () => {
     expect(page).toContain('initialEstateSnapshot')
   })
 
-  it('retains intake operations while exposing only one stage selector', () => {
+  it('retains intake operations while keeping stage changes in the progress strip', () => {
     const header = fs.readFileSync(path.join(routeDir, 'MatterDetailHeader.tsx'), 'utf8')
     const hero = fs.readFileSync(path.join(routeDir, 'MatterOverviewHero.tsx'), 'utf8')
+    const stageStrip = fs.readFileSync(path.join(routeDir, 'MatterStageStrip.tsx'), 'utf8')
 
     expect(header).toContain('Intake actions')
     expect(header).toContain('Import intake — paste text or upload Word')
     expect(header).toContain('Unlock intake for client editing')
-    expect(header).toContain('aria-label="Matter stage"')
-    expect(hero).not.toContain('aria-label="Matter stage"')
+    expect(header).not.toContain('aria-label="Matter stage"')
+    expect(stageStrip).toContain('Change stage')
+    expect(stageStrip).toContain('Confirm stage change')
     expect(hero).not.toContain('Matter Status: Hired')
     expect(hero).not.toContain('Aging {agingHealth}')
   })

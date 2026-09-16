@@ -24,8 +24,17 @@ const timeline = (rows: MatterStageHistoryRow[], actors?: Map<string, string>) =
   buildStageTimeline(rows, actors)
 
 describe('MatterStageHistoryCard', () => {
-  it('reads newest first and marks the current stage', () => {
+  it('starts collapsed so the overview stays focused on current work', () => {
     render(<MatterStageHistoryCard entries={timeline([
+      row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
+    ])} />)
+
+    expect(screen.getByRole('button', { expanded: false })).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+  })
+
+  it('reads newest first and marks the current stage', () => {
+    render(<MatterStageHistoryCard defaultOpen entries={timeline([
       row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
       row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
       row({ id: 3, from_stage: 'design', to_stage: 'drafting', entered_at: '2026-08-20T12:00:00Z' }),
@@ -56,7 +65,7 @@ describe('MatterStageHistoryCard', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-09T12:00:00Z'))
     try {
-      render(<MatterStageHistoryCard entries={timeline([
+      render(<MatterStageHistoryCard defaultOpen entries={timeline([
         row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
         row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
       ])} />)
@@ -70,7 +79,7 @@ describe('MatterStageHistoryCard', () => {
   })
 
   it('names the stage a matter moved from, and does not invent one for the first entry', () => {
-    render(<MatterStageHistoryCard entries={timeline([
+    render(<MatterStageHistoryCard defaultOpen entries={timeline([
       row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
       row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z' }),
     ])} />)
@@ -83,7 +92,7 @@ describe('MatterStageHistoryCard', () => {
   })
 
   it('attributes a transition when an actor was recorded', () => {
-    render(<MatterStageHistoryCard entries={timeline(
+    render(<MatterStageHistoryCard defaultOpen entries={timeline(
       [
         row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
         row({ id: 2, from_stage: 'intake', to_stage: 'design', entered_at: '2026-08-06T12:00:00Z', actor_id: 'u1' }),
@@ -99,7 +108,7 @@ describe('MatterStageHistoryCard', () => {
     const rows = Array.from({ length: 9 }, (_, index) =>
       row({ id: index + 1, to_stage: 'design', entered_at: `2026-08-0${index + 1}T12:00:00Z` }),
     )
-    render(<MatterStageHistoryCard entries={timeline(rows)} />)
+    render(<MatterStageHistoryCard defaultOpen entries={timeline(rows)} />)
 
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
     await user.click(screen.getByRole('button', { name: /Show 3 earlier entries/ }))
@@ -107,7 +116,7 @@ describe('MatterStageHistoryCard', () => {
   })
 
   it('explains an empty history rather than rendering an empty rail', () => {
-    render(<MatterStageHistoryCard entries={[]} />)
+    render(<MatterStageHistoryCard defaultOpen entries={[]} />)
 
     expect(screen.getByText(/No stage moves recorded yet/)).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
@@ -115,7 +124,7 @@ describe('MatterStageHistoryCard', () => {
 
   it('collapses from the header', async () => {
     const user = userEvent.setup()
-    render(<MatterStageHistoryCard entries={timeline([
+    render(<MatterStageHistoryCard defaultOpen entries={timeline([
       row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
     ])} />)
 
@@ -126,7 +135,7 @@ describe('MatterStageHistoryCard', () => {
 
   it('does not add a second stage selector to the page', () => {
     // matter-overview-frame asserts the header holds the only one.
-    const { container } = render(<MatterStageHistoryCard entries={timeline([
+    const { container } = render(<MatterStageHistoryCard defaultOpen entries={timeline([
       row({ id: 1, to_stage: 'intake', entered_at: '2026-08-01T12:00:00Z' }),
     ])} />)
 

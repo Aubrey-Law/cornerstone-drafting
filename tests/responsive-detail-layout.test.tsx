@@ -124,15 +124,12 @@ describe('responsive admin detail layout', () => {
       <MatterDetailHeader
         matter={matter}
         matterNumber="1024"
-        agingSummary={null}
         intakeCompleted={false}
         intakeId={null}
         unlocking={false}
-        showHealthBadge={false}
         factsRailOpen={false}
         onToggleFactsRail={vi.fn()}
         onEmail={vi.fn()}
-        onText={vi.fn()}
         onOpenIntake={vi.fn()}
         onImportIntake={vi.fn()}
         onUnlockIntake={vi.fn()}
