@@ -152,6 +152,46 @@ describe('Statular allow-listed payloads', () => {
   it('accepts the 200 character idempotency-key boundary', async () => {
     await expect(createStatularClient(client, 'a'.repeat(200))).resolves.toEqual({ id: '12345' })
   })
+
+  describe.each(['dob', 'partner_dob', 'birthdate'] as const)('%s calendar validation', field => {
+    function withDate(value: string): StatularClientPayload {
+      return field === 'birthdate'
+        ? { ...client, children: [{ name: 'Sam', relationship: 'joint', birthdate: value }] }
+        : { ...client, [field]: value }
+    }
+
+    it.each(['2025-02-29', '1900-02-29', '2024-02-30', '2026-04-31', '2026-00-01', '2026-13-01', '2026-01-00', '0000-01-01', '2026-9-01', '09/01/2026', '2026-01-01T00:00:00Z', ' 2026-01-01', '2026-01-01\n', ''])('rejects invalid calendar date %s before fetch', async value => {
+      const error = await createStatularClient(withDate(value), key).catch(e => e)
+      expect(error).toMatchObject({ kind: 'attention', code: 'invalid_payload' })
+      expectSafe(error)
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it.each(['2000-02-29', '2024-02-29', '1900-02-28', '2026-04-30', '0001-01-01'])('preserves valid calendar date %s', async value => {
+      await expect(createStatularClient(withDate(value), key)).resolves.toEqual({ id: '12345' })
+      const sent = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)
+      expect(field === 'birthdate' ? sent.children[0].birthdate : sent[field]).toBe(value)
+    })
+  })
+
+  it.each([
+    ['leading space', ' key'], ['trailing space', 'key '], ['NUL', 'key\u0000'],
+    ['C0 lower boundary', 'key\u0001'], ['C0 upper boundary', 'key\u001f'],
+    ['tab', 'key\tvalue'], ['DEL', 'key\u007f'], ['C1 lower boundary', 'key\u0080'],
+    ['C1 upper boundary', 'key\u009f'], ['Unicode beyond Latin-1', 'key\u0100'],
+    ['surrogate pair', 'key😀'], ['leading NBSP', '\u00a0key'], ['trailing NBSP', 'key\u00a0'],
+  ])('rejects noncanonical header key: %s before fetch', async (_description, invalidKey) => {
+    const error = await createStatularClient(client, invalidKey).catch(e => e)
+    expect(error).toMatchObject({ kind: 'attention', code: 'invalid_idempotency_key' })
+    expectSafe(error)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it.each(['key with spaces', 'key~', 'key\u00a0value', 'key\u00a1', 'key\u00ff', 'é'.repeat(200)])('preserves a canonical visible or Latin-1 idempotency key', async validKey => {
+    await expect(createStatularClient(client, validKey)).resolves.toEqual({ id: '12345' })
+    const headers = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers)
+    expect(headers.get('Idempotency-Key')).toBe(validKey)
+  })
 })
 
 describe('Statular transport', () => {
