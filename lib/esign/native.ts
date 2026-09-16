@@ -110,7 +110,20 @@ class NativeEsignProvider implements EsignProvider {
     await locateAnchors(input.document, input.anchors.map(a => a.marker))
 
     const admin = getAdminClient()
-    const requestId = crypto.randomUUID()
+
+    // The agreement's own id, not a fresh one. Two things depend on it and
+    // both are load-bearing: esign_signing_sessions.agreement_id is a foreign
+    // key to engagement_agreements(id), so an invented id cannot be inserted
+    // at all, and the signing route reads the document back from
+    // `esign/${session.agreement_id}/agreement.pdf` — a key it can only
+    // reconstruct if this is where the document was put.
+    //
+    // A vendor provider returns an id from its own system. This provider is
+    // the system, so the request and the agreement are the same thing.
+    const requestId = input.agreementId?.trim()
+    if (!requestId) {
+      throw new Error('A native e-sign document request needs the agreement it belongs to')
+    }
     const r2Key = `esign/${requestId}/agreement.pdf`
     await putFileToR2(r2Key, input.document, 'application/pdf')
 
