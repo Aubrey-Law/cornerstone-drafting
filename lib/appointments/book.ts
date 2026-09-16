@@ -21,6 +21,7 @@ import { createManageToken } from './manageTokens'
 import { getSchedulingSettings } from './settings'
 import {
   effectiveWeeklyHours,
+  normalizeBookingNames,
   resolveLocationType,
   type AppointmentRow,
   type AppointmentSource,
@@ -50,14 +51,16 @@ export class BookingPausedError extends Error {
 export interface BookAppointmentInput {
   type: AppointmentType
   startIso: string
-  attendeeName: string
+  attendeeFirstName: string
+  attendeeLastName: string
   attendeeEmail: string
   attendeePhone?: string | null
   notes?: string | null
   /** Chosen meeting format; must be in type.locationTypes (else the default is used). */
   locationType?: string | null
   /** Optional spouse/partner — invited to the event and cc'd on emails. */
-  secondAttendeeName?: string | null
+  secondAttendeeFirstName?: string | null
+  secondAttendeeLastName?: string | null
   secondAttendeeEmail?: string | null
   source: AppointmentSource
   bookedByUserId?: string | null
@@ -81,22 +84,21 @@ function isOverlapViolation(error: { code?: string; message?: string } | null): 
 async function createLeadFromAppointment(input: {
   admin: AdminClient
   attendeeName: string
+  attendeeFirstName: string
+  attendeeLastName: string
   attendeeEmail: string
   attendeePhone: string | null
   typeLabel: string
   startIso: string
 }): Promise<LeadRow | null> {
-  const { admin, attendeeName, attendeeEmail, attendeePhone, typeLabel, startIso } = input
-  const parts = attendeeName.trim().split(/\s+/)
-  const firstName = parts[0] || 'Unknown'
-  const lastName = parts.slice(1).join(' ') || 'Unknown'
+  const { admin, attendeeName, attendeeFirstName, attendeeLastName, attendeeEmail, attendeePhone, typeLabel, startIso } = input
 
   const { data, error } = await admin
     .from('client_intake')
     .insert({
-      first_name: firstName,
-      last_name: lastName,
-      full_name: attendeeName.trim() || `${firstName} ${lastName}`.trim(),
+      first_name: attendeeFirstName,
+      last_name: attendeeLastName,
+      full_name: attendeeName,
       email: attendeeEmail,
       phone: attendeePhone,
       status: 'in_progress',
@@ -301,7 +303,14 @@ async function enqueueLawmaticsAfterCommit(appointmentId: string, actorId?: stri
  * row (the exclusion constraint is the final race guard), create the calendar
  * event, link lead/matter, and send confirmations.
  */
-export async function bookAppointment(input: BookAppointmentInput): Promise<BookAppointmentResult> {
+export async function bookAppointment(rawInput: BookAppointmentInput): Promise<BookAppointmentResult> {
+  const input = { ...rawInput, ...normalizeBookingNames({
+    firstName: rawInput.attendeeFirstName,
+    lastName: rawInput.attendeeLastName,
+    secondAttendeeFirstName: rawInput.secondAttendeeFirstName,
+    secondAttendeeLastName: rawInput.secondAttendeeLastName,
+    secondAttendeeEmail: rawInput.secondAttendeeEmail,
+  }) }
   const admin = getAdminClient()
   const settings = await getSchedulingSettings()
 
@@ -355,11 +364,15 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       end_time: endIso,
       status: 'scheduled',
       attendee_name: input.attendeeName,
+      attendee_first_name: input.attendeeFirstName,
+      attendee_last_name: input.attendeeLastName,
       attendee_email: input.attendeeEmail,
       attendee_phone: input.attendeePhone ?? null,
       notes: input.notes ?? null,
       location_type: locationType,
       second_attendee_name: input.secondAttendeeName?.trim() || null,
+      second_attendee_first_name: input.secondAttendeeFirstName,
+      second_attendee_last_name: input.secondAttendeeLastName,
       second_attendee_email: input.secondAttendeeEmail?.trim().toLowerCase() || null,
       booked_by_user_id: input.bookedByUserId ?? null,
       manage_token_hash: manage.tokenHash,
@@ -385,6 +398,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       const created = await createLeadFromAppointment({
         admin,
         attendeeName: input.attendeeName,
+        attendeeFirstName: input.attendeeFirstName,
+        attendeeLastName: input.attendeeLastName,
         attendeeEmail: input.attendeeEmail,
         attendeePhone: input.attendeePhone ?? null,
         typeLabel: input.type.label,

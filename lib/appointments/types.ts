@@ -89,9 +89,13 @@ export interface AppointmentRow {
   status: AppointmentStatus
   location_type: AppointmentLocationType | null
   attendee_name: string
+  attendee_first_name?: string | null
+  attendee_last_name?: string | null
   attendee_email: string
   attendee_phone: string | null
   second_attendee_name: string | null
+  second_attendee_first_name?: string | null
+  second_attendee_last_name?: string | null
   second_attendee_email: string | null
   notes: string | null
   linked_lead_id: string | null
@@ -107,6 +111,39 @@ export interface AppointmentRow {
   external_booking_uid?: string | null
   created_at: string
   updated_at: string
+}
+
+export class BookingNameValidationError extends Error {}
+
+/** New bookings require confirmed components; historical display names are never split. */
+export function normalizeBookingNames(input: {
+  firstName: unknown
+  lastName: unknown
+  secondAttendeeFirstName?: unknown
+  secondAttendeeLastName?: unknown
+  secondAttendeeEmail?: unknown
+}) {
+  function component(value: unknown, field: string, required: boolean): string | null {
+    const name = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''
+    if ((value != null && typeof value !== 'string') || name.length > 80 || (required && !name)) {
+      throw new BookingNameValidationError(`${field} must be a name between 1 and 80 characters`)
+    }
+    return name || null
+  }
+  const attendeeFirstName = component(input.firstName, 'firstName', true)!
+  const attendeeLastName = component(input.lastName, 'lastName', true)!
+  const secondAttendeeFirstName = component(input.secondAttendeeFirstName, 'secondAttendeeFirstName', false)
+  const secondAttendeeLastName = component(input.secondAttendeeLastName, 'secondAttendeeLastName', false)
+  const hasSecondEmail = typeof input.secondAttendeeEmail === 'string' && Boolean(input.secondAttendeeEmail.trim())
+  if ((secondAttendeeFirstName || secondAttendeeLastName || hasSecondEmail) && !(secondAttendeeFirstName && secondAttendeeLastName)) {
+    throw new BookingNameValidationError('Both secondAttendeeFirstName and secondAttendeeLastName are required for a second attendee name')
+  }
+  return {
+    attendeeFirstName, attendeeLastName,
+    attendeeName: `${attendeeFirstName} ${attendeeLastName}`,
+    secondAttendeeFirstName, secondAttendeeLastName,
+    secondAttendeeName: secondAttendeeFirstName && secondAttendeeLastName ? `${secondAttendeeFirstName} ${secondAttendeeLastName}` : null,
+  }
 }
 
 /** Half-open UTC interval [start, end) in epoch milliseconds. */
