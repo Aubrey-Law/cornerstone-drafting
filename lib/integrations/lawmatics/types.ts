@@ -1,6 +1,7 @@
 export interface LawmaticsRequestInit {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   body?: Record<string, unknown>
+  signal?: AbortSignal
 }
 
 export interface LawmaticsProspectInput {

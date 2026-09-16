@@ -4,7 +4,7 @@ import { enqueueWorkflowJob } from '@/lib/workflowJobs'
 import { getIntegrationSettings } from '@/lib/integrations/settings'
 import { getExternalRecord, type ExternalRecord, type ExternalRecordRef } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
-import { lawmaticsDatabase, lawmaticsFailure, sourceHash } from './prospect'
+import { lawmaticsDatabase, lawmaticsFailure, requireLawmaticsActive, requireSafeCreate, sourceHash } from './prospect'
 import { syncLawmaticsAppointment } from './appointments'
 
 export async function enqueueLawmaticsAppointmentSync(appointmentId: string, actorId?: string | null,
@@ -65,11 +65,12 @@ async function recordNonAttemptState(ref: ExternalRecordRef, sourceVersion: stri
   if (error) throw persistenceFailure()
 }
 
-export async function runLawmaticsAppointmentSyncJob(appointmentId: string, sourceVersion: string) {
+export async function runLawmaticsAppointmentSyncJob(appointmentId: string, sourceVersion: string, signal?: AbortSignal) {
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'appointment',
     internalEntityId: appointmentId, externalRecordType: 'event' }
   const leaseArgs = { p_provider: 'lawmatics', p_entity_type: 'appointment', p_entity_id: appointmentId }
   try {
+    requireLawmaticsActive(signal)
     if (!(await getIntegrationSettings()).lawmaticsAppointmentSyncEnabled) {
       await recordNonAttemptState(ref, sourceVersion, await getExternalRecord(ref), 'disabled')
       return
@@ -79,14 +80,20 @@ export async function runLawmaticsAppointmentSyncJob(appointmentId: string, sour
     if (leaseError) throw persistenceFailure()
     if (!leaseToken) throw lawmaticsFailure('integration_busy', 'Appointment synchronization is already running.', 'retryable')
     try {
+      requireLawmaticsActive(signal)
       const before = await getExternalRecord(ref)
       if (!(await getIntegrationSettings()).lawmaticsAppointmentSyncEnabled) {
         await recordNonAttemptState(ref, sourceVersion, before, 'disabled')
         return
       }
       try {
+        // Owning a fresh appointment lease proves the previous Event owner has
+        // released or expired, even if its POST began late within that lease.
+        // Prospect contention uses a different entity and its bounded window.
+        requireLawmaticsActive(signal)
+        await requireSafeCreate(before, ref, true)
         // Read current source state; old queued versions must converge to it.
-        await syncLawmaticsAppointment(appointmentId)
+        await syncLawmaticsAppointment(appointmentId, signal)
       } catch (error) {
         if (!(error instanceof IntegrationError) || error.kind === 'retryable') throw error
         await recordNonAttemptState(ref, sourceVersion, before,

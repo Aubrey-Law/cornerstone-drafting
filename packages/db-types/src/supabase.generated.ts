@@ -11231,6 +11231,15 @@ export type Database = {
         Args: { p_claim_token: string; p_error?: string; p_job_id: string }
         Returns: boolean
       }
+      finish_workflow_job_v3: {
+        Args: {
+          p_claim_token: string
+          p_error?: string
+          p_job_id: string
+          p_retry_after_ms?: number
+        }
+        Returns: boolean
+      }
       firm_billing_matter_options_v1: {
         Args: { p_search: string; p_selected?: string }
         Returns: Json

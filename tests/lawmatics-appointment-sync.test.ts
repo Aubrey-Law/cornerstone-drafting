@@ -111,7 +111,7 @@ describe('stable Lawmatics Prospect identity', () => {
     appointment().linked_matter_id = 'matter-1'
     await expect(resolveLawmaticsProspect('appointment-1')).resolves.toBe('prospect-1')
     expect(mocks.createProspect).toHaveBeenCalledTimes(1)
-    expect(mocks.createProspect).toHaveBeenCalledWith({ firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.test', phone: '5551234567' })
+    expect(mocks.createProspect).toHaveBeenCalledWith({ firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.test', phone: '5551234567' }, undefined)
     expect(record('prospect')).toMatchObject({ external_id: 'prospect-1', status: 'synced' })
   })
 
@@ -161,6 +161,85 @@ describe('stable Lawmatics Prospect identity', () => {
 })
 
 describe('Lawmatics Event convergence', () => {
+  it.each(['success', 'newer-attempt'])('does not overwrite a concurrent %s while marking stale ambiguity', async concurrent => {
+    const abandoned = { provider: 'lawmatics', internal_entity_type: 'appointment', internal_entity_id: 'appointment-1',
+      external_record_type: 'event', external_id: null, status: 'pending', source_version: 'abandoned-version',
+      idempotency_key: 'abandoned-key', request_snapshot: { evidence: 'original' }, request_hash: 'original-hash',
+      last_attempt_at: new Date(Date.now() - 121_000).toISOString(), last_error_code: null }
+    records().push({ ...abandoned })
+    mocks.from.mockImplementation((table: string) => {
+      const q = query(table)
+      const update = q.update.getMockImplementation()!
+      q.update.mockImplementation((patch: Row) => {
+        if (patch.last_error_code === 'create_outcome_unknown') {
+          if (concurrent === 'success') Object.assign(record('event'), { status: 'synced', external_id: 'winner-event' })
+          else record('event').last_attempt_at = new Date().toISOString()
+        }
+        return update(patch)
+      })
+      return q
+    })
+    await expect(syncLawmaticsAppointment('appointment-1')).rejects.toMatchObject({ kind: 'retryable', code: 'integration_record_changed' })
+    expect(record('event').status).toBe(concurrent === 'success' ? 'synced' : 'pending')
+    expect(record('event').last_error_code).toBeNull()
+    expect(mocks.createEvent).not.toHaveBeenCalled()
+  })
+
+  it.each(['prospect', 'event'])('persists stale %s create ambiguity without replacing its attempt evidence', async type => {
+    const abandoned = { provider: 'lawmatics', internal_entity_type: type === 'event' ? 'appointment' : 'lead',
+      internal_entity_id: type === 'event' ? 'appointment-1' : 'lead-1', external_record_type: type,
+      external_id: null, status: 'pending', source_version: 'abandoned-version', idempotency_key: 'abandoned-key',
+      request_snapshot: { evidence: 'original' }, request_hash: 'original-hash',
+      last_attempt_at: new Date(Date.now() - 121_000).toISOString(), last_error_code: null }
+    records().push({ ...abandoned })
+    const service = type === 'event' ? syncLawmaticsAppointment : resolveLawmaticsProspect
+    await expect(service('appointment-1')).rejects.toMatchObject({ kind: 'attention', code: 'create_outcome_unknown' })
+    expect(record(type)).toMatchObject({ ...abandoned, status: 'attention', last_error_code: 'create_outcome_unknown' })
+    const saved = structuredClone(record(type))
+    await expect(service('appointment-1')).rejects.toMatchObject({ code: 'create_outcome_unknown' })
+    expect(record(type)).toEqual(saved)
+    expect(mocks.createProspect).not.toHaveBeenCalled()
+    expect(mocks.createEvent).not.toHaveBeenCalled()
+  })
+
+  it.each(['create', 'update'])('does not %s an Event if sync is disabled while its Prospect POST is pending', async operation => {
+    if (operation === 'update') {
+      await syncLawmaticsAppointment('appointment-1')
+      records().splice(records().findIndex(row => row.external_record_type === 'prospect'), 1)
+      appointment().start_time = '2026-09-21T14:00:00Z'
+      mocks.createEvent.mockClear()
+    }
+    const started = deferred<void>()
+    const response = deferred<{ id: string }>()
+    mocks.createProspect.mockImplementationOnce(() => { started.resolve(); return response.promise })
+    const pending = syncLawmaticsAppointment('appointment-1').catch(error => error)
+    await started.promise
+    settings.lawmaticsAppointmentSyncEnabled = false
+    response.resolve({ id: 'prospect-late' })
+    expect(await pending).toMatchObject({ code: 'integration_disabled' })
+    expect(mocks.createEvent).not.toHaveBeenCalled()
+    expect(mocks.updateEvent).not.toHaveBeenCalled()
+    expect(record('prospect')).toMatchObject({ external_id: 'prospect-late', status: 'synced' })
+  })
+
+  it('rechecks disablement immediately before cancelling the provider Event', async () => {
+    await syncLawmaticsAppointment('appointment-1')
+    appointment().status = 'cancelled'
+    mocks.from.mockImplementation((table: string) => {
+      const q = query(table)
+      const update = q.update.getMockImplementation()!
+      q.update.mockImplementation((patch: Row) => {
+        if (table === 'integration_external_records' && patch.last_attempt_at && patch.status === 'pending') {
+          settings.lawmaticsAppointmentSyncEnabled = false
+        }
+        return update(patch)
+      })
+      return q
+    })
+    await expect(syncLawmaticsAppointment('appointment-1')).rejects.toMatchObject({ code: 'integration_disabled' })
+    expect(mocks.cancelEvent).not.toHaveBeenCalled()
+  })
+
   it.each(['prospect', 'event'] as const)('blocks a third caller during a retried %s POST and lets the retry finish', async type => {
     const provider = type === 'prospect' ? mocks.createProspect : mocks.createEvent
     const service = type === 'prospect' ? resolveLawmaticsProspect : syncLawmaticsAppointment
@@ -185,7 +264,7 @@ describe('Lawmatics Event convergence', () => {
     try {
       const [third] = await Promise.allSettled([service(thirdAppointmentId)])
       expect(provider).toHaveBeenCalledTimes(2)
-      expect(third).toMatchObject({ status: 'rejected', reason: { kind: 'attention', code: 'create_outcome_unknown' } })
+      expect(third).toMatchObject({ status: 'rejected', reason: { kind: 'retryable', code: 'integration_busy' } })
       expect(record(type)).toMatchObject({ status: 'pending', external_id: null,
         last_attempt_at: retryAttemptAt, last_error_code: null, last_error_message: null })
     } finally {
@@ -202,7 +281,7 @@ describe('Lawmatics Event convergence', () => {
   it('creates and records one scheduled Event with only safe appointment information', async () => {
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'created', externalId: 'event-1' })
     expect(mocks.createEvent).toHaveBeenCalledWith(expect.objectContaining({ start: '2026-09-20T14:00:00Z', end: '2026-09-20T15:00:00Z',
-      timezone: 'America/New_York', prospectId: 'prospect-1', eventTypeId: 'event-type-1', locationId: 'location-1', userIds: ['user-1'] }))
+      timezone: 'America/New_York', prospectId: 'prospect-1', eventTypeId: 'event-type-1', locationId: 'location-1', userIds: ['user-1'] }), undefined)
     expect(record('event')).toMatchObject({ external_id: 'event-1', status: 'synced', source_version: expect.stringMatching(/^[a-f0-9]{64}$/) })
     const sent = JSON.stringify(mocks.createEvent.mock.calls)
     for (const secret of ['PRIVATE-NOTES', 'SECRET-TOKEN', 'PRIVATE-ANSWERS']) expect(sent).not.toContain(secret)
@@ -221,7 +300,7 @@ describe('Lawmatics Event convergence', () => {
     const before = record('event').source_version
     appointment()[field] = ({ start_time: '2026-09-21T14:00:00Z', end_time: '2026-09-21T15:00:00Z', status: 'no_show', location_type: 'teams' })[field]
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'updated' })
-    expect(mocks.updateEvent).toHaveBeenCalledWith('event-1', expect.any(Object))
+    expect(mocks.updateEvent).toHaveBeenCalledWith('event-1', expect.any(Object), undefined)
     expect(record('event').source_version).not.toBe(before)
     expect(mocks.createEvent).toHaveBeenCalledTimes(1)
   })
@@ -241,7 +320,7 @@ describe('Lawmatics Event convergence', () => {
     await syncLawmaticsAppointment('appointment-1')
     record('prospect').external_id = 'corrected-prospect'
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'updated' })
-    expect(mocks.updateEvent).toHaveBeenCalledWith('event-1', expect.objectContaining({ prospectId: 'corrected-prospect' }))
+    expect(mocks.updateEvent).toHaveBeenCalledWith('event-1', expect.objectContaining({ prospectId: 'corrected-prospect' }), undefined)
   })
 
   it('reuses the Event when configured users are only reordered', async () => {
@@ -256,7 +335,7 @@ describe('Lawmatics Event convergence', () => {
     await syncLawmaticsAppointment('appointment-1')
     appointment().status = 'cancelled'
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'cancelled', externalId: 'event-1' })
-    expect(mocks.cancelEvent).toHaveBeenCalledWith('event-1')
+    expect(mocks.cancelEvent).toHaveBeenCalledWith('event-1', undefined)
     expect(record('event')).toMatchObject({ status: 'synced', metadata: { operation: 'cancelled' } })
     await syncLawmaticsAppointment('appointment-1')
     expect(mocks.cancelEvent).toHaveBeenCalledTimes(1)
@@ -278,7 +357,7 @@ describe('Lawmatics Event convergence', () => {
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'created' })
     appointment().status = 'cancelled'
     await syncLawmaticsAppointment('appointment-1')
-    expect(mocks.cancelEvent).toHaveBeenCalledWith('event-1')
+    expect(mocks.cancelEvent).toHaveBeenCalledWith('event-1', undefined)
   })
 
   it('requires an appointment type mapping before calling the provider', async () => {
@@ -323,7 +402,7 @@ describe('Lawmatics Event convergence', () => {
     await expect(syncLawmaticsAppointment('appointment-1')).rejects.toMatchObject({ code: 'validation_failed' })
     settings.lawmaticsEventTypeIdMap.discovery = 'corrected-type'
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'created' })
-    expect(mocks.createEvent).toHaveBeenLastCalledWith(expect.objectContaining({ eventTypeId: 'corrected-type' }))
+    expect(mocks.createEvent).toHaveBeenLastCalledWith(expect.objectContaining({ eventTypeId: 'corrected-type' }), undefined)
   })
 
   it('treats an already-removed Event as successfully cancelled', async () => {

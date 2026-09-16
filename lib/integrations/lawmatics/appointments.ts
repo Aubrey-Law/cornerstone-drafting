@@ -10,8 +10,15 @@ import type { IntegrationResult } from '@/lib/integrations/types'
 import { cancelLawmaticsEvent, createLawmaticsEvent, updateLawmaticsEvent } from './client'
 import {
   createAndRecordLawmatics, isCompletedLawmaticsCancellation, lawmaticsDatabase, lawmaticsFailure, loadLawmaticsAppointment,
-  requireSafeCreate, resolveLawmaticsProspect, sourceHash,
+  requireLawmaticsActive, requireSafeCreate, resolveLawmaticsProspect, sourceHash,
 } from './prospect'
+
+async function requireEnabled(signal?: AbortSignal) {
+  requireLawmaticsActive(signal)
+  const settings = await getIntegrationSettings()
+  requireLawmaticsActive(signal)
+  if (!settings.lawmaticsAppointmentSyncEnabled) throw lawmaticsFailure('integration_disabled', 'Lawmatics appointment synchronization is disabled.')
+}
 
 /** The single canonical source definition used by the worker and reconciliation. */
 export function buildLawmaticsAppointmentSource(
@@ -32,7 +39,8 @@ export function buildLawmaticsAppointmentSource(
   return { snapshot, version: sourceHash(snapshot) }
 }
 
-export async function syncLawmaticsAppointment(appointmentId: string): Promise<IntegrationResult> {
+export async function syncLawmaticsAppointment(appointmentId: string, signal?: AbortSignal): Promise<IntegrationResult> {
+  requireLawmaticsActive(signal)
   const appointment = await loadLawmaticsAppointment(appointmentId)
   const settings = await getIntegrationSettings()
   if (!settings.lawmaticsAppointmentSyncEnabled) throw lawmaticsFailure('integration_disabled', 'Lawmatics appointment synchronization is disabled.')
@@ -47,8 +55,10 @@ export async function syncLawmaticsAppointment(appointmentId: string): Promise<I
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'appointment',
     internalEntityId: appointment.id, externalRecordType: 'event' }
   const existing = await getExternalRecord(ref)
-  requireSafeCreate(existing)
-  const prospectId = cancelled ? null : await resolveLawmaticsProspect(appointmentId)
+  requireLawmaticsActive(signal)
+  await requireSafeCreate(existing, ref)
+  const prospectId = cancelled ? null : await resolveLawmaticsProspect(appointmentId, { signal })
+  await requireEnabled(signal)
   const { snapshot, version } = buildLawmaticsAppointmentSource(appointment, type, settings, scheduling.timezone, prospectId)
   const { eventTypeId, locationId, userIds } = snapshot
   const result = (operation: IntegrationResult['operation'], externalId: string): IntegrationResult => ({
@@ -60,14 +70,18 @@ export async function syncLawmaticsAppointment(appointmentId: string): Promise<I
   if (claimed.status === 'synced' && claimed.source_version === version) return result('reused', claimed.external_id ?? '')
 
   if (!cancelled && !claimed.external_id) {
-    const id = await createAndRecordLawmatics(ref, claimed, () => createLawmaticsEvent({
-      name: type!.label, description: `Cornerstone appointment reference: ${appointment.id}`,
-      start: appointment.start_time, end: appointment.end_time, timezone: scheduling.timezone,
-      prospectId: prospectId!, eventTypeId: eventTypeId!, userIds, ...(locationId ? { locationId } : {}),
-    }), existing)
+    const id = await createAndRecordLawmatics(ref, claimed, async () => {
+      await requireEnabled(signal)
+      return createLawmaticsEvent({
+        name: type!.label, description: `Cornerstone appointment reference: ${appointment.id}`,
+        start: appointment.start_time, end: appointment.end_time, timezone: scheduling.timezone,
+        prospectId: prospectId!, eventTypeId: eventTypeId!, userIds, ...(locationId ? { locationId } : {}),
+      }, signal)
+    }, existing, signal)
     return result('created', id)
   }
 
+  requireLawmaticsActive(signal)
   const fenced = await beginIntegrationAttempt({ ...ref, idempotencyKey: claimed.idempotency_key,
     expectedLastAttemptAt: claimed.last_attempt_at })
   const attempt = { ...ref, idempotencyKey: claimed.idempotency_key, attemptAt: fenced.last_attempt_at! }
@@ -75,20 +89,26 @@ export async function syncLawmaticsAppointment(appointmentId: string): Promise<I
     if (cancelled) {
       const alreadyCancelled = isCompletedLawmaticsCancellation(existing)
       if (claimed.external_id && !alreadyCancelled) {
-        try { await cancelLawmaticsEvent(claimed.external_id) }
+        try {
+          await requireEnabled(signal)
+          await cancelLawmaticsEvent(claimed.external_id, signal)
+        }
         catch (error) {
           // DELETE retries converge even after the first successful response was lost.
           if (!(error instanceof IntegrationError) || error.code !== 'not_found') throw error
         }
       }
+      requireLawmaticsActive(signal)
       await recordIntegrationCancellation(attempt)
       return result('cancelled', claimed.external_id ?? '')
     }
+    await requireEnabled(signal)
     await updateLawmaticsEvent(claimed.external_id!, {
       name: type!.label, description: `Cornerstone appointment reference: ${appointment.id}`,
       start: appointment.start_time, end: appointment.end_time, timezone: scheduling.timezone,
       prospectId: prospectId!, eventTypeId: eventTypeId!, userIds, ...(locationId ? { locationId } : {}),
-    })
+    }, signal)
+    requireLawmaticsActive(signal)
     await recordIntegrationSuccess({ ...attempt, externalId: claimed.external_id! })
     return result('updated', claimed.external_id!)
   } catch (error) {
