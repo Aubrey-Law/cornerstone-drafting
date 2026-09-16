@@ -3,6 +3,7 @@ import { HeadBucketCommand } from '@aws-sdk/client-s3'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getR2Client, r2Bucket } from '@/lib/r2'
 import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
+import { isEngagementApprovalConfigured } from '@/lib/engagement/approvalConfig'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 
 // Default GET returns liveness only (200 {ok:true}) for Vercel uptime checks
@@ -65,6 +66,27 @@ function checkCommunications(): Check {
     : { status: 'ok' }
 }
 
+// Config-only, like checkCommunications above. It exists because the absence of
+// this one variable is otherwise discovered halfway through the agreement
+// workspace — after creating a lead, drafting an agreement and clicking approve
+// — as a bare "not configured" error. It went unset in production for months
+// because nothing asked for it until someone walked that flow by hand.
+//
+// It gates readiness rather than merely reporting, because approve and send both
+// fail without it whichever e-signature provider is selected: the workspace is
+// genuinely unusable, not degraded.
+// Not exported, and the predicate it calls lives in lib: a Next.js route file
+// may only export its handlers and config, so exporting this to make it
+// testable fails `next build` — which `npm run typecheck` does not catch.
+function checkEngagementSigning(): Check {
+  return isEngagementApprovalConfigured()
+    ? { status: 'ok' }
+    : {
+        status: 'fail',
+        detail: 'ENGAGEMENT_APPROVAL_SECRET is not set; engagement approve and send will fail',
+      }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   if (url.searchParams.get('check') !== 'full') {
@@ -73,7 +95,12 @@ export async function GET(req: NextRequest) {
 
   const [supabase, r2] = await Promise.all([checkSupabase(), checkR2()])
 
-  const checks = { supabase, r2, communications: checkCommunications() }
+  const checks = {
+    supabase,
+    r2,
+    communications: checkCommunications(),
+    engagementSigning: checkEngagementSigning(),
+  }
   const ok = Object.values(checks).every((c) => c.status !== 'fail')
 
   return NextResponse.json(
