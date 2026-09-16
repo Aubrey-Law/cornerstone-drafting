@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { createNativeEsignProvider } from '@/lib/esign/native'
 
 /**
- * The native provider against a real database.
+ * The native provider against the real migrated schema.
  *
  * It shipped writing `agreement_id: crypto.randomUUID()` into a column declared
  * `references engagement_agreements(id)`. That insert could not succeed on any
@@ -12,9 +12,16 @@ import { createNativeEsignProvider } from '@/lib/esign/native'
  * it was written — and 5,704 unit tests passed over it, because those tests mock
  * getAdminClient() and a mock enforces no foreign keys.
  *
- * That is the gap this closes. Everything external stays stubbed — R2, and the
- * anchor lookup, which wants a LibreOffice-rendered PDF — and the database
- * stays real, because the database is the only part that could have caught it.
+ * Nor could the integration suite have caught it. The five files in the parent
+ * directory run against tests/integration/fixtures/firm-remediation.sql, a
+ * deliberately minimal synthetic catalog with two foreign keys in total and no
+ * e-sign tables at all. Only the real migrations carry the constraint that makes
+ * this defect impossible, which is why this file lives here and runs against
+ * them. See tests/integration/fixtures/README.md.
+ *
+ * Everything external stays stubbed — R2, and the anchor lookup, which wants a
+ * LibreOffice-rendered PDF. The database stays real, because the database is the
+ * only part that could have caught it.
  */
 
 vi.mock('@/lib/documentUpload', () => ({ putFileToR2: vi.fn(async () => {}) }))
@@ -30,7 +37,10 @@ if (!['postgres:', 'postgresql:'].includes(target.protocol)
 }
 
 function sql(query: string): string {
-  return execFileSync('psql', ['-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', query], {
+  // -q as well as -t: without it psql appends the command tag to the tuples of
+  // an INSERT ... RETURNING, so a returned id arrives as "<uuid>\nINSERT 0 1".
+  // This test no longer reads ids back, but the next one might.
+  return execFileSync('psql', ['-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', query], {
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -61,30 +71,33 @@ function request(agreementId: string) {
   })
 }
 
-let leadId = ''
-let agreementId = ''
+// Minted here rather than read back from `returning`, which is how every other
+// integration test in this repo seeds (md5(prefix||n)::uuid). Both columns are
+// `uuid primary key default gen_random_uuid()`, so supplying one is free.
+const leadId = randomUUID()
+const agreementId = randomUUID()
 
 beforeAll(() => {
   // engagement_agreements requires exactly one of matter_id / lead_id, both
   // foreign keys. A lead is the cheaper parent: client_intake needs no column
-  // set. Both cascade on delete, and so do the signing sessions, so removing
-  // the lead in afterAll removes everything this test created.
-  leadId = sql('insert into public.client_intake default values returning id')
-  agreementId = sql(`insert into public.engagement_agreements(lead_id) values ('${leadId}') returning id`)
+  // set. lead_id and esign_signing_sessions.agreement_id both cascade on
+  // delete, so removing the lead in afterAll removes everything below it.
+  sql(`insert into public.client_intake(id) values ('${leadId}')`)
+  sql(`insert into public.engagement_agreements(id, lead_id) values ('${agreementId}', '${leadId}')`)
 })
 
 afterAll(() => {
-  if (leadId) sql(`delete from public.client_intake where id = '${leadId}'`)
+  sql(`delete from public.client_intake where id = '${leadId}'`)
 })
 
 beforeEach(() => {
   // The integration setup replaces the environment wholesale and does not carry
   // an app origin, which signingUrl requires before it will build a link.
   process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.com'
-  if (agreementId) sql(`delete from public.esign_signing_sessions where agreement_id = '${agreementId}'`)
+  sql(`delete from public.esign_signing_sessions where agreement_id = '${agreementId}'`)
 })
 
-describe('createDocumentRequest against a real database', () => {
+describe('createDocumentRequest against the real migrated schema', () => {
   it('writes a session for every recipient, keyed to the agreement itself', async () => {
     const result = await request(agreementId)
 
@@ -103,7 +116,9 @@ describe('createDocumentRequest against a real database', () => {
 
   it('refuses an agreement that does not exist', async () => {
     // The shipped defect, reproduced. A fresh UUID satisfies every type and
-    // every mock, and no database will accept it.
+    // every mock, and no real schema will accept it. This case and the one
+    // above are the same code path over a real parent and an invented one —
+    // the difference between them is what #494 was.
     const orphan = randomUUID()
 
     await expect(request(orphan)).rejects.toThrow(/foreign key|violates/i)

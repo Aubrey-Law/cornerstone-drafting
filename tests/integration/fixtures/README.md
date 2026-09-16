@@ -35,3 +35,22 @@ Clean up only the container you created:
 ```sh
 docker stop cornerstone-remediation-test
 ```
+
+## Two kinds of integration test
+
+This fixture is one of two incompatible catalogs, and pointing a test at the wrong one produces
+confusing failures (`relation "public.matter_fixture" does not exist`, or a not-null constraint on a
+column this fixture's stub tables do not have).
+
+- **`tests/integration/*.test.ts`** — the five files above. They need *this* fixture: a synthetic
+  catalog with stub tables (`public.matters` is `(id uuid primary key)`) and fixture-only tables
+  (`matter_fixture`, `lead_fixture`). Run by hand, per the procedure above, under
+  `vitest.integration.config.ts` (`npm run test:integration`).
+- **`tests/integration/schema/**/*.test.ts`** — tests that need the *real migrated schema*, built by
+  `supabase start` applying `supabase/migrations`. Real constraints are the point: this fixture
+  declares two foreign keys in total and no e-sign tables, so it cannot express a defect like an
+  invented `agreement_id` violating `esign_signing_sessions_agreement_id_fkey`. Run under
+  `vitest.schema.config.ts` (`npm run test:schema`), automatically by
+  `.github/workflows/integration-schema.yml`.
+
+A new test belongs in `schema/` if it is about what the database refuses.

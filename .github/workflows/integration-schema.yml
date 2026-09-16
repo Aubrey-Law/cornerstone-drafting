@@ -1,4 +1,4 @@
-name: Engagement sending works against a real database
+name: Tests that need the real migrated schema
 
 # Three of the four defects that reached production on the native e-signature
 # path were invisible to the whole local gate, and one of them is the reason
@@ -9,10 +9,13 @@ name: Engagement sending works against a real database
 # and thousands of unit tests passed over it, because those tests mock
 # getAdminClient() and a mock enforces no foreign keys.
 #
-# tests/integration/ and vitest.integration.config.ts already existed and
-# already spoke to a loopback Postgres. Nothing ran them. A suite nobody runs
-# protects nobody, so the test alone would have left the same hole in a new
-# place — this is the half that makes it real.
+# Nor would the existing integration suite have caught it. Those five files run
+# by hand against tests/integration/fixtures/firm-remediation.sql — a
+# deliberately minimal synthetic catalog with two foreign keys in total and no
+# e-sign tables at all. Only the real migrations carry the constraint, so this
+# job runs the tests that need them (tests/integration/schema/, under
+# vitest.schema.config.ts) and only those. The fixture-catalog suite keeps its
+# own documented procedure and is untouched here.
 #
 # No stored secrets. `supabase start` brings up a local stack, applies
 # supabase/migrations itself, and prints its own keys; the job reads them out of
@@ -28,10 +31,11 @@ on:
       - 'lib/esign/**'
       - 'lib/engagement/**'
       - 'supabase/migrations/**'
-      - 'tests/integration/**'
+      - 'tests/integration/schema/**'
+      - 'tests/integration/setup.ts'
       - 'tests/support/verificationEnvironment.ts'
-      - 'vitest.integration.config.ts'
-      - '.github/workflows/esign-integration.yml'
+      - 'vitest.schema.config.ts'
+      - '.github/workflows/integration-schema.yml'
   schedule:
     # 12:40 UTC on Mondays — after the anchor probe at 12:20, so a red Monday
     # morning arrives as one thing at a time.
@@ -42,12 +46,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: esign-integration-${{ github.ref }}
+  group: integration-schema-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   integration:
-    name: Engagement sending works against a real database
+    name: Tests that need the real migrated schema
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -74,12 +78,12 @@ jobs:
       # They are per-run and local to this container; masking them keeps them
       # out of the log even so.
       #
-      # The names are checked rather than trusted. This workflow was written in
-      # a container whose egress proxy blocks public.ecr.aws, so `supabase
-      # start` could not run there and the variable names came from memory. A
-      # wrong name would otherwise export an empty string and fail later as an
-      # unhelpful connection error; this fails here and prints what the CLI
-      # actually emitted, with the values stripped.
+      # The names are checked rather than trusted, because this workflow was
+      # written in a container whose egress proxy blocks public.ecr.aws, so
+      # `supabase start` could not run there and the names came from memory. The
+      # first CI run confirmed all four; the check stays as a guard against the
+      # CLI renaming one, which would otherwise export an empty string and
+      # surface later as an unhelpful connection error.
       - name: Point the suite at the local stack
         run: |
           set -euo pipefail
@@ -106,8 +110,8 @@ jobs:
             echo "INTEGRATION_DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
-      - name: Run the integration suite
-        run: npm run test:integration
+      - name: Run the schema tests
+        run: npm run test:schema
 
       - name: Stack logs on failure
         if: failure()
