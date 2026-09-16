@@ -520,6 +520,11 @@ describe('durable Statular client creation', () => {
   })
 
   it('awaits an accepted legacy-placeholder promotion before cancellation settles', async () => {
+    mocks.config.mockReturnValue({
+      clientWebhookUrl: 'https://statular.test/client-secret',
+      matterWebhookUrl: 'https://statular.test/matter-secret',
+      generation: 'preflight',
+    })
     db.integration_external_records.push(externalRecord({
       status: 'attention', source_version: 'preflight',
       idempotency_key: 'cornerstone:statular:client:lead-1:preflight',
@@ -545,7 +550,7 @@ describe('durable Statular client creation', () => {
     resumeWrite.resolve()
     await expect(syncing).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
     expect(record()).toMatchObject({
-      status: 'pending', idempotency_key: 'cornerstone:statular:client:lead-1:v1',
+      status: 'pending', idempotency_key: 'cornerstone:statular:client:lead-1:preflight',
       request_hash: expect.stringMatching(/^[a-f0-9]{64}$/), last_attempt_at: null,
     })
     expect(mutations).toHaveLength(2)
