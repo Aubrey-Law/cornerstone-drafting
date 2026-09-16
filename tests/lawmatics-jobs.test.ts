@@ -158,6 +158,34 @@ describe('Lawmatics appointment jobs', () => {
     expect(leases.size).toBe(0)
   })
 
+  it.each(['configuration_required', 'identity_required'])('preserves unattempted %s attention when a later queued version is disabled', async code => {
+    mocks.sync.mockRejectedValueOnce(error('attention', code))
+    await runLawmaticsAppointmentSyncJob('appointment-1', 'preflight-version')
+    expect(record()).toMatchObject({ status: 'attention', last_attempt_at: null,
+      last_error_code: code, last_error_message: 'Safe integration error.', source_version: 'preflight-version',
+      idempotency_key: 'lawmatics:event:appointment-1:preflight:preflight-version' })
+    const original = structuredClone(record())
+
+    db.integration_settings[0].lawmatics_appointment_sync_enabled = false
+    await expect(runLawmaticsAppointmentSyncJob('appointment-1', 'later-queued-version')).resolves.toBeUndefined()
+
+    expect(record()).toEqual(original)
+    expect(mocks.sync).toHaveBeenCalledTimes(1)
+  })
+
+  it('still marks a truly unattempted non-attention record disabled', async () => {
+    const pending = { provider: 'lawmatics', internal_entity_type: 'appointment', internal_entity_id: 'appointment-1',
+      external_record_type: 'event', status: 'pending', source_version: 'pending-version', idempotency_key: 'pending-key',
+      last_attempt_at: null, last_error_code: null, last_error_message: null, request_snapshot: null, external_id: null }
+    db.integration_external_records.push({ ...pending })
+    db.integration_settings[0].lawmatics_appointment_sync_enabled = false
+
+    await runLawmaticsAppointmentSyncJob('appointment-1', 'later-queued-version')
+
+    expect(record()).toEqual({ ...pending, status: 'disabled' })
+    expect(mocks.sync).not.toHaveBeenCalled()
+  })
+
   it('preserves the attempt fence and snapshot already persisted by Task 3', async () => {
     const persisted = { provider: 'lawmatics', internal_entity_type: 'appointment', internal_entity_id: 'appointment-1',
       external_record_type: 'event', status: 'attention', source_version: 'provider-version', idempotency_key: 'provider-key',
