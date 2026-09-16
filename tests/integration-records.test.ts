@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getIntegrationSettings, updateIntegrationSettings, sanitizeProviderIdMap, sanitizeDocIdMap, sanitizeProviderIds } from '@/lib/integrations/settings'
-import { beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation, recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
+import { beginCreateIntegrationAttempt, beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation, recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
@@ -189,6 +189,18 @@ describe('external records', () => {
     expect(Date.parse(acquired.last_attempt_at!)).toBeGreaterThan(Date.parse(before))
     expect(store.value).toMatchObject({ status: 'pending', last_attempt_at: acquired.last_attempt_at,
       last_error_code: null, last_error_message: null })
+  })
+
+  it('does not reopen a create-only record after a concurrent success', async () => {
+    const before = row({ status: 'synced', external_id: 'winner', last_attempt_at: '2026-09-15T12:00:00.000Z' })
+    const store = { value: before }
+    const write = atomicQuery(store)
+    await expect(beginCreateIntegrationAttempt({
+      ...ref, idempotencyKey: 'matter-1:v1', expectedLastAttemptAt: '2026-09-15T12:00:00.000Z',
+    })).rejects.toMatchObject({ code: 'integration_record_changed', kind: 'retryable' })
+    expect(store.value).toEqual(before)
+    expect(write.is).toHaveBeenCalledWith('external_id', null)
+    expect(write.neq).toHaveBeenCalledWith('status', 'synced')
   })
 
   it.each(['success', 'failure', 'cancellation'])('rejects stale %s completion for a superseded attempt', async operation => {

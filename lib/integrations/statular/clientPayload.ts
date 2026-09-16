@@ -7,6 +7,7 @@ import type { StatularAddress, StatularChild, StatularClientPayload, StatularGen
 
 type IntakeRow = GeneratedDatabase['public']['Tables']['client_intake']['Row']
 type ContactRow = GeneratedDatabase['public']['Tables']['contacts']['Row']
+type MatterContactRow = GeneratedDatabase['public']['Tables']['matter_contacts']['Row']
 
 function database(): SupabaseClient<GeneratedDatabase> {
   return getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
@@ -122,7 +123,7 @@ function partnerFromContact(contact: ContactRow): Partial<StatularClientPayload>
 
 async function appointmentPartner(clientIntakeId: string): Promise<Partial<StatularClientPayload>> {
   const { data, error } = await database().from('appointments')
-    .select('second_attendee_first_name, second_attendee_last_name, second_attendee_email, created_at')
+    .select('second_attendee_first_name, second_attendee_last_name, second_attendee_email, second_attendee_name, created_at')
     .eq('linked_lead_id', clientIntakeId)
     .eq('status', 'scheduled')
     .order('created_at', { ascending: false })
@@ -132,7 +133,8 @@ async function appointmentPartner(clientIntakeId: string): Promise<Partial<Statu
   if (!data) return {}
   const firstName = text(data.second_attendee_first_name)
   const lastName = text(data.second_attendee_last_name)
-  if (!firstName && !lastName) return {}
+  const hasEvidence = Boolean(firstName || lastName || text(data.second_attendee_email) || text(data.second_attendee_name))
+  if (!hasEvidence) return {}
   if (!firstName || !lastName) {
     throw failure('invalid_source_data', 'The linked appointment needs explicit spouse first and last names.')
   }
@@ -142,6 +144,55 @@ async function appointmentPartner(clientIntakeId: string): Promise<Partial<Statu
     partner_last_name: lastName,
     ...(text(data.second_attendee_email) ? { partner_email: text(data.second_attendee_email) } : {}),
   }
+}
+
+const CONTACT_FIELDS = 'id, client_intake_id, relationship_type, first_name, middle_name, last_name, email, phone, date_of_birth, gender, address_line1, address_line2, city, county, state, zip, parentage, deceased, created_at'
+
+async function householdContacts(
+  admin: SupabaseClient<GeneratedDatabase>,
+  clientIntakeId: string,
+): Promise<ContactRow[]> {
+  const { data: matter, error: matterError } = await admin.from('matters')
+    .select('id')
+    .eq('client_intake_id', clientIntakeId)
+    .maybeSingle()
+  if (matterError) throw failure('source_unavailable', 'The linked matter could not be read.', 'retryable')
+
+  if (!matter) {
+    const { data, error } = await admin.from('contacts')
+      .select(CONTACT_FIELDS)
+      .eq('client_intake_id', clientIntakeId)
+      .in('relationship_type', ['spouse', 'child'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+    if (error) throw failure('source_unavailable', 'The household contacts could not be read.', 'retryable')
+    return (data ?? []) as ContactRow[]
+  }
+
+  const { data: membershipRows, error: membershipError } = await admin.from('matter_contacts')
+    .select('contact_id, relationship_type, parentage')
+    .eq('matter_id', matter.id)
+    .in('relationship_type', ['spouse', 'child'])
+  if (membershipError) throw failure('source_unavailable', 'The matter household could not be read.', 'retryable')
+  const memberships = (membershipRows ?? []) as MatterContactRow[]
+  if (!memberships.length) return []
+
+  const { data: contactRows, error: contactsError } = await admin.from('contacts')
+    .select(CONTACT_FIELDS)
+    .in('id', memberships.map(row => row.contact_id))
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (contactsError) throw failure('source_unavailable', 'The household contacts could not be read.', 'retryable')
+  const membershipByContact = new Map(memberships.map(row => [row.contact_id, row]))
+  return ((contactRows ?? []) as ContactRow[]).map(contact => {
+    const membership = membershipByContact.get(contact.id)
+    if (!membership) throw failure('invalid_source_data', 'The matter household contains an invalid contact reference.')
+    return {
+      ...contact,
+      relationship_type: membership.relationship_type,
+      parentage: membership.parentage,
+    }
+  })
 }
 
 /** Builds the allow-listed client webhook body from service-role source reads. */
@@ -158,15 +209,7 @@ export async function buildStatularClientPayload(clientIntakeId: string): Promis
   const lastName = requiredName(intake.last_name)
   if (!firstName || !lastName) throw failure('identity_required', 'The client intake needs explicit first and last names.')
 
-  const { data: contactRows, error: contactsError } = await admin.from('contacts')
-    .select('id, client_intake_id, relationship_type, first_name, middle_name, last_name, email, phone, date_of_birth, gender, address_line1, address_line2, city, county, state, zip, parentage, deceased, created_at')
-    .eq('client_intake_id', clientIntakeId)
-    .in('relationship_type', ['spouse', 'child'])
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-  if (contactsError) throw failure('source_unavailable', 'The household contacts could not be read.', 'retryable')
-
-  const contacts = (contactRows ?? []) as ContactRow[]
+  const contacts = await householdContacts(admin, clientIntakeId)
   const spouse = contacts.find(contact => contact.relationship_type === 'spouse')
   const children = contacts.filter(contact => contact.relationship_type === 'child').map(child)
   const intakeAddress = address(intake as IntakeRow)

@@ -97,7 +97,7 @@ interface RecordAttempt extends ExternalRecordRef {
   attemptAt?: string
 }
 
-export async function beginIntegrationAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }): Promise<ExternalRecord> {
+async function beginAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }, createOnly: boolean): Promise<ExternalRecord> {
   const previous = input.expectedLastAttemptAt === null ? 0 : Date.parse(input.expectedLastAttemptAt)
   const at = new Date(Math.max(Date.now(), previous + 1)).toISOString()
   // Consume prior retry eligibility in the same CAS that acquires the attempt.
@@ -110,10 +110,22 @@ export async function beginIntegrationAttempt(input: RecordAttempt & { expectedL
     .eq('idempotency_key', input.idempotencyKey)
   update = input.expectedLastAttemptAt === null
     ? update.is('last_attempt_at', null) : update.eq('last_attempt_at', input.expectedLastAttemptAt)
+  // Create-only callers must not reopen a record that completed after they
+  // read their claim. Keep this in the same UPDATE as the timestamp CAS.
+  if (createOnly) update = update.is('external_id', null).neq('status', 'synced')
   const { data, error } = await update.select('*').maybeSingle()
   if (error) throw persistenceError(input)
   if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   return data
+}
+
+export function beginIntegrationAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }): Promise<ExternalRecord> {
+  return beginAttempt(input, false)
+}
+
+/** Acquire an exclusive create attempt without reopening a completed record. */
+export function beginCreateIntegrationAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }): Promise<ExternalRecord> {
+  return beginAttempt(input, true)
 }
 
 async function updateAttempt(input: RecordAttempt, patch: RecordUpdate): Promise<ExternalRecord> {
