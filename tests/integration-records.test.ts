@@ -10,12 +10,42 @@ vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from }) }))
 function query(data: unknown = null, error: unknown = null) {
   const result = { data, error }
   const builder = {
-    select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), is: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), neq: vi.fn().mockReturnThis(), is: vi.fn().mockReturnThis(),
     upsert: vi.fn().mockReturnThis(), update: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue(result), single: vi.fn().mockResolvedValue(result),
     then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
   }
   from.mockReturnValueOnce(builder)
+  return builder
+}
+
+// Evaluate UPDATE predicates against the row at execution time, as PostgREST
+// does in one SQL statement. A failed predicate returns no updated row.
+function atomicQuery(store: { value: Record<string, unknown> }) {
+  const builder = query()
+  const predicates: Array<(value: Record<string, unknown>) => boolean> = []
+  let patch: Record<string, unknown> = {}
+  builder.eq.mockImplementation((column: string, value: unknown) => {
+    predicates.push(current => current[column] === value)
+    return builder
+  })
+  builder.neq.mockImplementation((column: string, value: unknown) => {
+    predicates.push(current => current[column] !== value)
+    return builder
+  })
+  builder.is.mockImplementation((column: string, value: unknown) => {
+    predicates.push(current => current[column] === value)
+    return builder
+  })
+  builder.update.mockImplementation((value: Record<string, unknown>) => {
+    patch = value
+    return builder
+  })
+  builder.maybeSingle.mockImplementation(async () => {
+    if (!predicates.every(matches => matches(store.value))) return { data: null, error: null }
+    store.value = { ...store.value, ...patch }
+    return { data: { ...store.value }, error: null }
+  })
   return builder
 }
 
@@ -128,19 +158,71 @@ describe('external records', () => {
   it('claims a new version without resetting an existing external ID', async () => {
     query()
     query(row({ status: 'synced', external_id: 'remote-1' }))
-    const write = query(row({ status: 'pending', external_id: 'remote-1', idempotency_key: 'matter-1:v2', source_version: 'v2', request_hash: 'hash-2' }))
+    const store = { value: row({ status: 'synced', external_id: 'remote-1' }) }
+    const write = atomicQuery(store)
     expect(await claimExternalRecord({ ...claim, sourceVersion: 'v2', idempotencyKey: 'matter-1:v2', requestHash: 'hash-2' })).toMatchObject({ external_id: 'remote-1', status: 'pending' })
     expect(write.update.mock.calls[0][0]).not.toHaveProperty('external_id')
-    expect(write.eq).toHaveBeenCalledWith('idempotency_key', 'matter-1:v1')
+    expect(write.eq.mock.calls).toEqual([['provider', 'statular'], ['internal_entity_type', 'matter'], ['internal_entity_id', 'matter-1'], ['external_record_type', 'matter'], ['idempotency_key', 'matter-1:v1'], ['request_hash', 'hash-1']])
+    expect(store.value).toMatchObject({ external_id: 'remote-1', status: 'pending', source_version: 'v2', idempotency_key: 'matter-1:v2', request_hash: 'hash-2' })
+  })
+
+  it('claims a previously unhashed row using an IS NULL predicate', async () => {
+    query()
+    query(row({ request_hash: null }))
+    const store = { value: row({ request_hash: null }) }
+    const write = atomicQuery(store)
+    await claimExternalRecord({ ...claim, sourceVersion: 'v2', idempotencyKey: 'matter-1:v2', requestHash: 'hash-2' })
+    expect(write.is.mock.calls).toEqual([['request_hash', null]])
+    expect(write.eq.mock.calls).toEqual([['provider', 'statular'], ['internal_entity_type', 'matter'], ['internal_entity_id', 'matter-1'], ['external_record_type', 'matter'], ['idempotency_key', 'matter-1:v1']])
+    expect(store.value).toMatchObject({ idempotency_key: 'matter-1:v2', request_hash: 'hash-2' })
+  })
+
+  it.each([
+    { idempotency_key: 'concurrent-key' },
+    { request_hash: 'concurrent-hash' },
+  ])('rejects a claim if its prior delivery changed before the atomic update: %j', async concurrentChange => {
+    query()
+    query(row())
+    const before = row(concurrentChange)
+    const store = { value: before }
+    atomicQuery(store)
+    await expect(claimExternalRecord({ ...claim, sourceVersion: 'v2', idempotencyKey: 'matter-1:v2', requestHash: 'hash-2' })).rejects.toMatchObject({ code: 'integration_record_changed', kind: 'retryable' })
+    expect(store.value).toEqual(before)
   })
 
   it.each(['attention', 'retryable'] as const)('persists only normalized %s failure fields', async kind => {
-    const write = query(row())
+    const store = { value: row() }
+    const write = atomicQuery(store)
     const error = new IntegrationError({ provider: 'statular', kind, code: 'validation_failed', safeMessage: 'Statular rejected the client fields.', retryAfterMs: null }, { cause: { body: 'RAW_PROVIDER_SECRET', request_snapshot: 'SNAPSHOT_SECRET' } })
     await recordIntegrationFailure({ ...ref, idempotencyKey: 'matter-1:v1', error })
     expect(write.update).toHaveBeenCalledWith({ status: kind === 'attention' ? 'attention' : 'pending', last_error_code: 'validation_failed', last_error_message: 'Statular rejected the client fields.', last_attempt_at: expect.any(String) })
     expect(write.eq).toHaveBeenCalledWith('idempotency_key', 'matter-1:v1')
     expect(JSON.stringify(write.update.mock.calls)).not.toMatch(/SECRET|request_snapshot|cause/)
+    expect(store.value).toMatchObject({ status: kind === 'attention' ? 'attention' : 'pending', last_error_code: 'validation_failed', last_error_message: 'Statular rejected the client fields.' })
+  })
+
+  it.each(['attention', 'retryable'] as const)('preserves success when a late same-key %s failure arrives', async kind => {
+    const store = { value: row() }
+    atomicQuery(store)
+    await recordIntegrationSuccess({ ...ref, idempotencyKey: 'matter-1:v1', externalId: 'remote-1' })
+    const synced = { ...store.value }
+    const write = atomicQuery(store)
+    const error = new IntegrationError({ provider: 'statular', kind, code: 'concurrent_attempt_failed', safeMessage: 'Concurrent delivery failed.', retryAfterMs: null })
+    await expect(recordIntegrationFailure({ ...ref, idempotencyKey: 'matter-1:v1', error })).rejects.toMatchObject({ code: 'integration_record_changed' })
+    expect(store.value).toEqual(synced)
+    expect(store.value).toMatchObject({ status: 'synced', external_id: 'remote-1', last_error_code: null, last_error_message: null })
+    expect(write.neq).toHaveBeenCalledWith('status', 'synced')
+    expect(from).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a stale failure without changing the newer delivery', async () => {
+    const before = row({ idempotency_key: 'matter-1:v2', request_hash: 'hash-2' })
+    const store = { value: before }
+    const write = atomicQuery(store)
+    const error = new IntegrationError({ provider: 'statular', kind: 'attention', code: 'failed', safeMessage: 'Delivery failed.', retryAfterMs: null })
+    await expect(recordIntegrationFailure({ ...ref, idempotencyKey: 'matter-1:v1', error })).rejects.toMatchObject({ code: 'integration_record_changed' })
+    expect(store.value).toEqual(before)
+    expect(write.eq.mock.calls).toEqual([['provider', 'statular'], ['internal_entity_type', 'matter'], ['internal_entity_id', 'matter-1'], ['external_record_type', 'matter'], ['idempotency_key', 'matter-1:v1']])
   })
 
   it('rejects unnormalized or mismatched provider errors before persistence', async () => {

@@ -96,10 +96,14 @@ interface RecordAttempt extends ExternalRecordRef {
 }
 
 async function updateAttempt(input: RecordAttempt, patch: RecordUpdate): Promise<ExternalRecord> {
-  const { data, error } = await admin().from('integration_external_records').update(patch)
+  let update = admin().from('integration_external_records').update(patch)
     .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
-    .eq('idempotency_key', input.idempotencyKey).select('*').maybeSingle()
+    .eq('idempotency_key', input.idempotencyKey)
+  // Concurrent attempts share an idempotency key. Check status in the UPDATE
+  // itself so a late failure cannot downgrade a success committed by a peer.
+  if (patch.status !== 'synced') update = update.neq('status', 'synced')
+  const { data, error } = await update.select('*').maybeSingle()
   if (error) throw persistenceError(input)
   if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   return data
