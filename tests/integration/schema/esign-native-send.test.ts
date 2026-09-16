@@ -72,22 +72,31 @@ function request(agreementId: string) {
 }
 
 // Minted here rather than read back from `returning`, which is how every other
-// integration test in this repo seeds (md5(prefix||n)::uuid). Both columns are
+// integration test in this repo seeds (md5(prefix||n)::uuid). Every id below is
 // `uuid primary key default gen_random_uuid()`, so supplying one is free.
-const leadId = randomUUID()
+const intakeId = randomUUID()
+const matterId = randomUUID()
 const agreementId = randomUUID()
 
 beforeAll(() => {
-  // engagement_agreements requires exactly one of matter_id / lead_id, both
-  // foreign keys. A lead is the cheaper parent: client_intake needs no column
-  // set. lead_id and esign_signing_sessions.agreement_id both cascade on
-  // delete, so removing the lead in afterAll removes everything below it.
-  sql(`insert into public.client_intake(id) values ('${leadId}')`)
-  sql(`insert into public.engagement_agreements(id, lead_id) values ('${agreementId}', '${leadId}')`)
+  // An engagement agreement is matter-owned: 20260802000000_unify_leads_matters
+  // replaced the old matter_id/lead_id XOR with
+  // `engagement_agreements_matter_owner_check check (matter_id is not null)`,
+  // leaving lead_id as a deprecated always-null compatibility column. This is
+  // the chain lib/engagement/repository.ts:30 writes, so it is the chain to
+  // seed — and a lead alone, which an earlier draft of this test seeded, is
+  // exactly what the real schema now refuses.
+  sql(`insert into public.client_intake(id) values ('${intakeId}')`)
+  sql(`insert into public.matters(id, client_intake_id) values ('${matterId}', '${intakeId}')`)
+  sql(`insert into public.engagement_agreements(id, matter_id) values ('${agreementId}', '${matterId}')`)
 })
 
 afterAll(() => {
-  sql(`delete from public.client_intake where id = '${leadId}'`)
+  // Order matters: matters.client_intake_id is ON DELETE RESTRICT, so the
+  // intake cannot go first. Removing the matter cascades to the agreement and
+  // from there to its signing sessions.
+  sql(`delete from public.matters where id = '${matterId}'`)
+  sql(`delete from public.client_intake where id = '${intakeId}'`)
 })
 
 beforeEach(() => {
