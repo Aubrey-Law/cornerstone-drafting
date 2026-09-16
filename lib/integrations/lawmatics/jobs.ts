@@ -50,11 +50,11 @@ async function recordNonAttemptState(ref: ExternalRecordRef, sourceVersion: stri
     if (error) throw persistenceFailure()
     return
   }
-  // An unresolved provider attempt must retain its outcome evidence, even when
-  // a queued job observes disablement. No new attempt timestamp is fabricated.
+  // Attention requires staff review even without a provider attempt. Retain it
+  // and prior attempt evidence when disabled; never fabricate an attempt time.
   if ((status === 'disabled' && before.last_attempt_at)
     || (before.status === 'pending' && before.last_attempt_at && !before.last_error_code)
-    || (before.status === 'attention' && status === 'attention')) return
+    || before.status === 'attention') return
   let update = admin.from('integration_external_records').update(patch)
     .eq('provider', ref.provider).eq('internal_entity_type', ref.internalEntityType)
     .eq('internal_entity_id', ref.internalEntityId).eq('external_record_type', ref.externalRecordType)
