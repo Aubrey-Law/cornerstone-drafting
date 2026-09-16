@@ -105,13 +105,14 @@ beforeEach(() => {
   mocks.rpc.mockImplementation(async (name: string, args: Row) => {
     if (name === 'enqueue_workflow_job') {
       const key = args.p_dedupe_key as string
-      if (!jobs.has(key)) jobs.set(key, { ...args, status: 'queued' })
+      if (!jobs.has(key)) jobs.set(key, { ...args, status: 'pending' })
       return { data: jobs.get(key), error: null }
     }
     if (name === 'reopen_integration_workflow_job') {
       const job = jobs.get(args.p_dedupe_key as string)
-      if (job) job.status = 'queued'
-      return { data: 'job-1', error: null }
+      const terminal = job && job.p_job_type === args.p_job_type && ['succeeded', 'failed'].includes(String(job.status))
+      if (terminal) job.status = 'pending'
+      return { data: terminal ? 'job-1' : null, error: null }
     }
     throw new Error('Unexpected RPC')
   })
@@ -212,6 +213,7 @@ describe('Lawmatics appointment reconciliation', () => {
     await syncLawmaticsAppointment('appointment-001')
     event().status = 'pending'
     await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 1 })
+    vi.clearAllMocks()
     event().status = 'attention'
     appointment().start_time = '2026-09-25T14:00:00Z'
     await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 0 })
@@ -222,16 +224,86 @@ describe('Lawmatics appointment reconciliation', () => {
     await syncLawmaticsAppointment('appointment-001')
     event().status = 'pending'
     await reconcileLawmaticsAppointments(10)
+    vi.clearAllMocks()
     const job = [...jobs.values()][0]
     job.status = 'succeeded'
     jobs.set('unrelated', { status: 'succeeded' })
     event().status = 'disabled'
     await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 1 })
-    expect(job.status).toBe('queued')
+    expect(job.status).toBe('pending')
     expect(jobs.get('unrelated')!.status).toBe('succeeded')
     expect(mocks.rpc.mock.calls.filter(([name]) => name === 'reopen_integration_workflow_job')).toEqual([
       ['reopen_integration_workflow_job', { p_job_type: 'lawmatics_sync_appointment', p_dedupe_key: job.p_dedupe_key }],
     ])
+  })
+
+  it('makes the original terminal job executable when canonical configuration returns from A to B to A', async () => {
+    await reconcileLawmaticsAppointments(10)
+    const jobA = [...jobs.values()][0]
+    expect(jobA.status).toBe('pending')
+    await syncLawmaticsAppointment('appointment-001')
+    jobA.status = 'succeeded'
+    const versionA = event().source_version
+
+    settings.lawmaticsEventTypeIdMap.discovery = 'type-B'
+    await reconcileLawmaticsAppointments(10)
+    const jobB = [...jobs.values()][1]
+    expect(jobB.status).toBe('pending')
+    await syncLawmaticsAppointment('appointment-001')
+    jobB.status = 'succeeded'
+    const versionB = event().source_version
+    expect(versionB).not.toBe(versionA)
+
+    settings.lawmaticsEventTypeIdMap.discovery = 'type-provider'
+    await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 1 })
+    expect(jobs.size).toBe(2)
+    expect(jobA.status).toBe('pending')
+    expect(jobB.status).toBe('succeeded')
+    // Reconciliation makes queue work executable, without pretending it ran.
+    expect(event().source_version).toBe(versionB)
+    expect(mocks.updateEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['missing', 'failed'], ['missing', 'succeeded'], ['pending', 'failed'], ['pending', 'succeeded'],
+  ])('reopens the exact %s-record repair job previously marked %s', async (recordState, terminalState) => {
+    if (recordState === 'pending') {
+      await syncLawmaticsAppointment('appointment-001')
+      event().status = 'pending'
+    }
+    await reconcileLawmaticsAppointments(10)
+    const job = [...jobs.values()][0]
+    job.status = terminalState
+    jobs.set('unrelated', { status: terminalState })
+    await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 1 })
+    expect(jobs.size).toBe(2)
+    expect(job.status).toBe('pending')
+    expect(jobs.get('unrelated')!.status).toBe(terminalState)
+  })
+
+  it.each(['succeeded', 'failed'])('does not reopen %s jobs when the external record requires attention', async status => {
+    await reconcileLawmaticsAppointments(10)
+    const job = [...jobs.values()][0]
+    await syncLawmaticsAppointment('appointment-001')
+    event().status = 'attention'
+    job.status = status
+    const originalRecord = structuredClone(event())
+    vi.clearAllMocks()
+    await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 0 })
+    expect(job.status).toBe(status)
+    expect(event()).toEqual(originalRecord)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('does not reopen succeeded jobs when the canonical source is already synchronized', async () => {
+    await reconcileLawmaticsAppointments(10)
+    const job = [...jobs.values()][0]
+    await syncLawmaticsAppointment('appointment-001')
+    job.status = 'succeeded'
+    vi.clearAllMocks()
+    await expect(reconcileLawmaticsAppointments(10)).resolves.toEqual({ scanned: 1, enqueued: 0 })
+    expect(job.status).toBe('succeeded')
+    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 })
 

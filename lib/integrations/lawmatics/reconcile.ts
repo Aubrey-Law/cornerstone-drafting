@@ -8,7 +8,7 @@ import { buildLawmaticsAppointmentSource } from './appointments'
 import { enqueueLawmaticsAppointmentSync } from './jobs'
 import { lawmaticsDatabase, lawmaticsFailure, resolveLawmaticsProspect } from './prospect'
 
-/** Bounded repair only; all provider work remains in the durable worker. */
+/** Bounded repair only; enqueued counts repair submissions, never provider completion. */
 export async function reconcileLawmaticsAppointments(limit = 100): Promise<{ scanned: number; enqueued: number }> {
   const counts = { scanned: 0, enqueued: 0 }
   const settings = await getIntegrationSettings()
@@ -51,7 +51,9 @@ export async function reconcileLawmaticsAppointments(limit = 100): Promise<{ sca
       if (canCompare && existing?.status === 'synced' && existing.source_version === version) continue
       const job = await enqueueLawmaticsAppointmentSync(appointment.id, null, {
         ...(canCompare ? { sourceVersion: version } : {}),
-        reopenTerminal: existing?.status === 'disabled',
+        // Canonical versions can recur (A -> B -> A). Once repair is proven,
+        // revive this exact terminal delivery; the RPC leaves active jobs alone.
+        reopenTerminal: true,
       })
       if (job) counts.enqueued++
     }
