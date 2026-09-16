@@ -9,6 +9,7 @@ node_modules
 .next/
 .DS_Store
 .vercel
+.worktrees/
 
 # Build artifacts
 next-env.d.ts
