@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ enabled: false, rpc: vi.fn(), prepare: vi.fn() }))
+const mocks = vi.hoisted(() => ({ enabled: false, rpc: vi.fn(), prepare: vi.fn(), lawmatics: vi.fn() }))
+vi.mock('@/lib/integrations/lawmatics/jobs', () => ({ runLawmaticsAppointmentSyncJob: mocks.lawmatics }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc: mocks.rpc, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { durable_workflow_jobs_enabled: mocks.enabled }, error: null }) }) }) }) }) }))
 vi.mock('@/lib/designSheet/ensureDesignSheetSeeded', () => ({ ensureDesignSheetSeededFromIntake: vi.fn() }))
 vi.mock('@/lib/slaTasks/generate', () => ({ ensureMatterSlaTasks: vi.fn() }))
@@ -7,8 +8,19 @@ vi.mock('@/lib/stage-engine/fireStageTasks', () => ({ fireEngineStageTask: vi.fn
 vi.mock('@/lib/billing/prepareInvoiceReminders', () => ({ prepareInvoiceReminderDrafts: mocks.prepare }))
 import { processWorkflowJobs } from '@/lib/workflowJobs'
 const job = { id: 'job', claim_token: 'claim', job_type: 'prepare_invoice_reminders', attempts: 1, max_attempts: 5, payload: {}, matter_id: null, lease_expires_at: '' }
-beforeEach(() => { mocks.enabled = false; mocks.rpc.mockReset(); mocks.prepare.mockReset() })
+beforeEach(() => { mocks.enabled = false; mocks.rpc.mockReset(); mocks.prepare.mockReset(); mocks.lawmatics.mockReset() })
 describe('bounded workflow worker', () => {
+  it('dispatches a Lawmatics job and finishes it with the existing claim token', async () => {
+    mocks.enabled = true
+    const payload = { appointmentId: 'appointment-1', sourceVersion: 'version-1' }
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'claim_workflow_jobs_v2'
+      ? [{ ...job, job_type: 'lawmatics_sync_appointment', payload }] : true, error: null }))
+    expect(await processWorkflowJobs(1)).toMatchObject({ succeeded: 1, failed: 0 })
+    expect(mocks.lawmatics).toHaveBeenCalledWith('appointment-1', 'version-1')
+    expect(mocks.rpc).toHaveBeenLastCalledWith('finish_workflow_job_v2', {
+      p_job_id: 'job', p_claim_token: 'claim', p_error: undefined,
+    })
+  })
   it('returns before claiming or preparing reminders when disabled', async () => {
     expect(await processWorkflowJobs()).toMatchObject({ claimed: 0, disabled: true })
     expect(mocks.rpc).not.toHaveBeenCalled(); expect(mocks.prepare).not.toHaveBeenCalled()

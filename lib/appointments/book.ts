@@ -286,9 +286,19 @@ async function sendConfirmationEmails(input: {
   }
 }
 
+async function enqueueLawmaticsAfterCommit(appointmentId: string, actorId?: string | null) {
+  try {
+    const { enqueueLawmaticsAppointmentSync } = await import('@/lib/integrations/lawmatics/jobs')
+    await enqueueLawmaticsAppointmentSync(appointmentId, actorId)
+  } catch {
+    // Reconciliation repairs missed jobs; provider detail must never enter logs.
+    console.error('[appointments] lawmatics enqueue failed', appointmentId, 'enqueue_failed')
+  }
+}
+
 /**
  * Book an appointment: verify the slot against fresh busy data, insert the
- * row (the exclusion constraint is the final race guard), create the Outlook
+ * row (the exclusion constraint is the final race guard), create the calendar
  * event, link lead/matter, and send confirmations.
  */
 export async function bookAppointment(input: BookAppointmentInput): Promise<BookAppointmentResult> {
@@ -463,6 +473,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     autoIntakeInvite: settings.autoIntakeInvite,
   })
 
+  // The queue's optional actor is staff-only; portal attribution stays on the booking.
+  await enqueueLawmaticsAfterCommit(appointmentId, input.source === 'admin' ? input.bookedByUserId : null)
   return { appointmentId, startIso, endIso, manageToken: manage.token }
 }
 
@@ -483,6 +495,8 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     .eq('id', appointment.id)
     .eq('status', 'scheduled')
   if (error) throw error
+
+  await enqueueLawmaticsAfterCommit(appointment.id)
 
   try {
     await cancelAppointmentEvent(appointment)
@@ -649,6 +663,8 @@ export async function rescheduleAppointment(
     if (isOverlapViolation(error)) throw new SlotTakenError()
     throw error
   }
+
+  await enqueueLawmaticsAfterCommit(appointment.id)
 
   try {
     await rescheduleAppointmentEvent(appointment, startIso, endIso)

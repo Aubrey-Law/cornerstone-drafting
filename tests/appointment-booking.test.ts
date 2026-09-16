@@ -23,6 +23,9 @@ const state = vi.hoisted(() => ({
   automationCalls: [] as Array<Record<string, unknown>>,
   pmpsAnchors: [] as Array<Record<string, unknown>>,
   discoveryAnchors: [] as Array<Record<string, unknown>>,
+  lawmaticsEnabled: false,
+  jobs: [] as Array<Record<string, unknown>>,
+  enqueueError: false,
   reset() {
     this.inserts = []
     this.updates = []
@@ -39,6 +42,9 @@ const state = vi.hoisted(() => ({
     this.automationCalls = []
     this.pmpsAnchors = []
     this.discoveryAnchors = []
+    this.lawmaticsEnabled = false
+    this.jobs = []
+    this.enqueueError = false
   },
 }))
 
@@ -80,7 +86,13 @@ vi.mock('@/lib/supabaseAdmin', () => {
           eq: vi.fn(() => chain),
           order: vi.fn(() => chain),
           limit: vi.fn(() => chain),
-          maybeSingle: vi.fn(async () => ({ data: state.matterLookup, error: null })),
+          maybeSingle: vi.fn(async () => ({ data: table === 'integration_settings'
+            ? { lawmatics_appointment_sync_enabled: state.lawmaticsEnabled }
+            : table === 'appointments'
+              ? { id: 'appointments-id-1', source: 'public', updated_at: '2026-08-03T12:00:00Z',
+                ...state.inserts.find(row => row.table === 'appointments')?.values,
+                ...Object.assign({}, ...state.updates.filter(row => row.table === 'appointments').map(row => row.values)) }
+              : state.matterLookup, error: null })),
         }
         return chain
       }),
@@ -88,7 +100,14 @@ vi.mock('@/lib/supabaseAdmin', () => {
   }
   return {
     ADMIN_EMAIL: 'scott@aubreylegal.com',
-    getAdminClient: vi.fn(() => ({ from: vi.fn((table: string) => builderFor(table)) })),
+    getAdminClient: vi.fn(() => ({ from: vi.fn((table: string) => builderFor(table)),
+      rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+        if (name !== 'enqueue_workflow_job') throw new Error('Unexpected RPC')
+        if (state.enqueueError) throw new Error('PRIVATE-TOKEN-PROVIDER-BODY')
+        state.jobs.push(args)
+        return { data: { id: 'job-1' }, error: null }
+      }),
+    })),
   }
 })
 
@@ -233,6 +252,37 @@ afterEach(() => {
 })
 
 describe('bookAppointment', () => {
+  it.each([false, true])('enqueues the committed linked booking only when Lawmatics is enabled (%s)', async enabled => {
+    state.lawmaticsEnabled = enabled
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    const result = await bookAppointment(bookingInput())
+    expect(state.jobs).toHaveLength(enabled ? 1 : 0)
+    if (enabled) {
+      expect(state.jobs[0]).toMatchObject({ p_job_type: 'lawmatics_sync_appointment',
+        p_payload: { appointmentId: result.appointmentId, sourceVersion: expect.any(String) } })
+      expect(Object.keys(state.jobs[0].p_payload as object).sort()).toEqual(['appointmentId', 'sourceVersion'])
+    }
+  })
+
+  it('keeps the booking successful and logs no provider detail when enqueue fails', async () => {
+    state.lawmaticsEnabled = true
+    state.enqueueError = true
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(bookAppointment(bookingInput())).resolves.toMatchObject({ appointmentId: 'appointments-id-1' })
+      expect(log).toHaveBeenCalledWith('[appointments] lawmatics enqueue failed', 'appointments-id-1', 'enqueue_failed')
+      expect(JSON.stringify(log.mock.calls)).not.toContain('PRIVATE-TOKEN')
+    } finally { log.mockRestore() }
+  })
+
+  it.each(['portal', 'public', 'admin'] as const)('uses staff-only job attribution for %s booking', async source => {
+    state.lawmaticsEnabled = true
+    await bookAppointment({ ...bookingInput(), source, bookedByUserId: 'booking-user' })
+    // enqueue_workflow_job validates non-null actor IDs as billing staff. Portal
+    // clients are already attributed on appointments and must not fail that gate.
+    expect(state.jobs[0].p_actor_id).toBe(source === 'admin' ? 'booking-user' : null)
+  })
+
   it('books a valid slot: inserts row, creates the calendar event, sends emails', async () => {
     const result = await bookAppointment(bookingInput())
 
@@ -503,6 +553,23 @@ describe('cancelAppointment', () => {
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
   })
 
+  it.each([false, true])('enqueues cancellation only when enabled (%s)', async enabled => {
+    state.lawmaticsEnabled = enabled
+    await cancelAppointment({ appointment: ROW, type: TYPE })
+    expect(state.jobs).toHaveLength(enabled ? 1 : 0)
+    if (enabled) expect(state.jobs[0].p_payload).toMatchObject({ appointmentId: ROW.id })
+  })
+
+  it('keeps cancellation successful if enqueue fails', async () => {
+    state.lawmaticsEnabled = true
+    state.enqueueError = true
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(cancelAppointment({ appointment: ROW, type: TYPE })).resolves.toBeUndefined()
+      expect(log).toHaveBeenCalledWith('[appointments] lawmatics enqueue failed', ROW.id, 'enqueue_failed')
+    } finally { log.mockRestore() }
+  })
+
   // ── a cancel does not roll back the key dates ─────────────────────────────
   //
   // Decided, not overlooked. `pmps_at` is the firm's commitment date, keyed off
@@ -580,6 +647,24 @@ describe('rescheduleAppointment', () => {
 
   // Tue 2026-08-11 10:00 ET = 14:00 UTC — inside tue 09:00–17:00.
   const MOVED_ISO = '2026-08-11T14:00:00.000Z'
+
+  it.each([false, true])('enqueues rescheduling only when enabled (%s)', async enabled => {
+    state.lawmaticsEnabled = enabled
+    await rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso: MOVED_ISO })
+    expect(state.jobs).toHaveLength(enabled ? 1 : 0)
+    if (enabled) expect(state.jobs[0].p_payload).toMatchObject({ appointmentId: ROW.id })
+  })
+
+  it('keeps rescheduling successful if enqueue fails', async () => {
+    state.lawmaticsEnabled = true
+    state.enqueueError = true
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso: MOVED_ISO }))
+        .resolves.toEqual({ startIso: MOVED_ISO, endIso: '2026-08-11T14:30:00.000Z' })
+      expect(log).toHaveBeenCalledWith('[appointments] lawmatics enqueue failed', ROW.id, 'enqueue_failed')
+    } finally { log.mockRestore() }
+  })
 
   it('re-stamps the pmps anchor at the new day', async () => {
     await rescheduleAppointment({
