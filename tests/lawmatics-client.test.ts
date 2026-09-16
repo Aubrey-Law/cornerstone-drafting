@@ -26,6 +26,22 @@ const event: LawmaticsEventInput = {
 }
 
 describe('Lawmatics resource contracts', () => {
+  describe.each(['prospect', 'event'] as const)('%s creation', resourceType => {
+    it.each([
+      ['malformed JSON', providerBody],
+      ['missing data', JSON.stringify({ message: providerBody })],
+    ])('requires attention after successful create with %s instead of risking a duplicate', async (_description, body) => {
+      vi.mocked(fetch).mockResolvedValue(new Response(body, { status: 201 }))
+      const pending = resourceType === 'prospect'
+        ? createLawmaticsProspect({ firstName: 'Jane', lastName: 'Doe', email })
+        : createLawmaticsEvent(event)
+      const error = await pending.catch(e => e)
+      expect(error).toMatchObject({ provider: 'lawmatics', kind: 'attention', code: 'invalid_response', retryAfterMs: null })
+      expectSafe(error)
+      expect(fetch).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('creates a Prospect using only explicit contact fields', async () => {
     vi.mocked(fetch).mockResolvedValue(Response.json({ data: { id: '101', type: 'prospect', attributes: {}, relationships: {} } }))
     const input = { firstName: 'Jane', lastName: 'Doe', email, phone: '+16175550100', privateNotes: 'do not transmit' }

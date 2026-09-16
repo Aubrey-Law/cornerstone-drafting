@@ -37,6 +37,14 @@ function responseFailure(response: Response): IntegrationError {
   }
 }
 
+function invalidResponse(method: LawmaticsRequestInit['method']): IntegrationError {
+  // A successful POST may have committed a new record despite an unusable response.
+  if (method === 'POST') {
+    return failure('attention', 'invalid_response', 'Lawmatics returned an invalid create response. Review the provider record before retrying.')
+  }
+  return failure('retryable', 'invalid_response', 'Lawmatics returned an invalid response.')
+}
+
 export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestInit): Promise<T> {
   if (!path.startsWith('/v1/')) throw failure('attention', 'invalid_request', 'The Lawmatics API path is invalid.')
 
@@ -74,10 +82,10 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
       json = await response.json()
     } catch {
       if (controller.signal.aborted) throw failure('retryable', 'timeout', 'The Lawmatics request timed out.')
-      throw failure('retryable', 'invalid_response', 'Lawmatics returned an invalid response.')
+      throw invalidResponse(init.method)
     }
     if (!json || typeof json !== 'object' || !('data' in json)) {
-      throw failure('retryable', 'invalid_response', 'Lawmatics returned an invalid response.')
+      throw invalidResponse(init.method)
     }
     return json.data as T
   } catch (error) {
