@@ -6,7 +6,7 @@ import type { GeneratedDatabase } from '@/types/supabase'
 import { IntegrationError } from '@/lib/integrations/errors'
 import {
   beginIntegrationAttempt, claimExternalRecord, getExternalRecord,
-  recordIntegrationFailure, recordIntegrationSuccess,
+  recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess,
   type ExternalRecord, type ExternalRecordRef,
 } from '@/lib/integrations/records'
 import { createLawmaticsProspect } from './client'
@@ -47,7 +47,7 @@ export function requireLawmaticsActive(signal?: AbortSignal): void {
 
 export async function requireSafeCreate(record: ExternalRecord | null, ref: ExternalRecordRef,
   exclusiveEntityLease = false): Promise<void> {
-  if (record && !record.external_id && record.last_attempt_at && record.status !== 'synced'
+  if (record && !record.external_id && record.last_attempt_at && record.status !== 'synced' && record.status !== 'disabled'
     && !REJECTED_CREATES.has(record.last_error_code ?? '')) {
     // Match the fixed entity lease: 120 seconds exceeds the 30-second HTTP
     // timeout and 50-second worker budget plus bounded cancellation cleanup.
@@ -81,10 +81,11 @@ export async function createAndRecordLawmatics(
 ): Promise<string> {
   requireLawmaticsActive(signal)
   if (claimed.external_id) return claimed.external_id
-  // A new source version clears failure fields. Only carry rejection evidence
-  // forward if the attempt timestamp still matches; a newer POST invalidates it.
+  // A new source version clears failure/disabled state. Carry unsent evidence
+  // forward only if the attempt timestamp still matches; a newer POST consumes it.
   const previousSafe = previous?.last_attempt_at === claimed.last_attempt_at
     && (REJECTED_CREATES.has(previous?.last_error_code ?? '')
+      || previous?.status === 'disabled'
       || (!previous?.external_id && isCompletedLawmaticsCancellation(previous)))
   if (!previousSafe) await requireSafeCreate(claimed, ref)
   const fenced = await beginIntegrationAttempt({ ...ref, idempotencyKey: claimed.idempotency_key,
@@ -97,6 +98,10 @@ export async function createAndRecordLawmatics(
     await recordIntegrationSuccess({ ...attempt, externalId: result.id })
     return result.id
   } catch (error) {
+    if (ref.externalRecordType === 'event' && error instanceof IntegrationError && error.code === 'integration_disabled') {
+      await recordIntegrationDisabled(attempt)
+      throw error
+    }
     const safe = error instanceof IntegrationError && REJECTED_CREATES.has(error.code) ? error : unknownCreate()
     // A persistence outage leaves the pre-POST fence intact, preventing duplicate creation.
     await recordIntegrationFailure({ ...attempt, error: safe })

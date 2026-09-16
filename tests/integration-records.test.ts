@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getIntegrationSettings, updateIntegrationSettings, sanitizeProviderIdMap, sanitizeDocIdMap, sanitizeProviderIds } from '@/lib/integrations/settings'
-import { beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
+import { beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation, recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
@@ -124,6 +124,40 @@ describe('integration settings', () => {
 })
 
 describe('external records', () => {
+  it.each([true, false])('completes disabled with all evidence preserved and optional attempt fencing=%s', async fenced => {
+    const attemptAt = '2026-09-15T12:00:00Z'
+    const before = row({ external_id: 'existing-remote', last_attempt_at: attemptAt,
+      last_error_code: 'old-error', last_error_message: 'Old safe error.',
+      last_succeeded_at: '2026-09-14T12:00:00Z', metadata: { evidence: 'original' } })
+    const store = { value: before }
+    atomicQuery(store)
+    await recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1', ...(fenced ? { attemptAt } : {}) })
+    expect(store.value).toEqual({ ...before, status: 'disabled', last_error_code: null, last_error_message: null })
+  })
+
+  it.each([
+    { status: 'synced', external_id: 'winner' },
+    { idempotency_key: 'new-key' },
+    { last_attempt_at: '2026-09-15T12:00:01Z' },
+    { internal_entity_id: 'other-matter' },
+    { external_record_type: 'client' },
+    { internal_entity_type: 'lead' },
+    { provider: 'lawmatics' },
+  ])('does not disable a stale, different, or synced delivery: %j', async difference => {
+    const before = row({ last_attempt_at: '2026-09-15T12:00:00Z', ...difference })
+    const store = { value: before }
+    atomicQuery(store)
+    await expect(recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1', attemptAt: '2026-09-15T12:00:00Z' }))
+      .rejects.toMatchObject({ kind: 'retryable', code: 'integration_record_changed' })
+    expect(store.value).toEqual(before)
+  })
+
+  it('normalizes database failure while recording a disabled delivery', async () => {
+    query(null, { message: 'PRIVATE-SNAPSHOT-TOKEN' })
+    await expect(recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1' }))
+      .rejects.toMatchObject({ code: 'integration_persistence_failed', message: 'Unable to persist or read integration record.' })
+  })
+
   it('fences concurrent attempts so only one caller wins the same prior timestamp', async () => {
     const store = { value: row() }
     const first = atomicQuery(store)

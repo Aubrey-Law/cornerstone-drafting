@@ -3,7 +3,7 @@ import { getIntegrationSettings } from '@/lib/integrations/settings'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import {
   beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation,
-  recordIntegrationFailure, recordIntegrationSuccess, type ExternalRecordRef,
+  recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess, type ExternalRecordRef,
 } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
 import type { IntegrationResult } from '@/lib/integrations/types'
@@ -113,7 +113,8 @@ export async function syncLawmaticsAppointment(appointmentId: string, signal?: A
     return result('updated', claimed.external_id!)
   } catch (error) {
     const safe = error instanceof IntegrationError ? error : lawmaticsFailure('synchronization_failed', 'Lawmatics synchronization could not be completed.', 'retryable')
-    await recordIntegrationFailure({ ...attempt, error: safe })
+    if (safe.code === 'integration_disabled') await recordIntegrationDisabled(attempt)
+    else await recordIntegrationFailure({ ...attempt, error: safe })
     throw safe
   }
 }
