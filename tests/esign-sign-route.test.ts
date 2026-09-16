@@ -62,13 +62,29 @@ describe('signing route security shape', () => {
     expect(route).toContain("status: 'declined'")
   })
 
-  it('derives anchor markers from position, not from the recipient role', () => {
+  it('does not derive anchor markers itself', () => {
     // The template numbers signers CLIENT_1/CLIENT_2; the spouse is CLIENT_2.
     // A role-named prefix produced [[SPOUSE_SIGNATURE]], which exists in no
-    // template, so the spouse could never sign. Both callers now share one
-    // derivation — see tests/engagement-anchors.test.ts for the template pin.
-    expect(route).toContain('engagementAnchorMarkers')
+    // template, so the spouse could never sign.
+    //
+    // The route used to derive its own markers for the one signer in front of
+    // it, which is also how it came to seal a two-party agreement with one
+    // signature on it. It now hands every signer to sealFieldsFor, which owns
+    // the derivation for all of them. That property is asserted on behaviour
+    // rather than on this file — tests/esign-seal-fields.test.ts checks that
+    // position 2 yields CLIENT_2 — and tests/engagement-anchors.test.ts pins
+    // the markers against the real template.
+    expect(route).toContain('sealFieldsFor')
+    expect(route).not.toContain('engagementAnchorMarkers')
     expect(route).not.toContain('SPOUSE')
+  })
+
+  it('seals every signature on the agreement, not just the newest', () => {
+    // Each signature rebuilds the sealed file from the approved PDF, which is
+    // what keeps one audit certificate on it. Rebuilding with a single signer
+    // erased the previous one.
+    expect(route).toContain("eq('status', 'signed')")
+    expect(route).toContain('priorMarks')
   })
 
   it('refuses to sign rather than guess a signer position', () => {
