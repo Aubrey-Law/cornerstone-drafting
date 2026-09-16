@@ -23,12 +23,20 @@ let db: Record<string, Row[]>
 let jobs: Map<string, Row>
 let readFailure: string | null
 let beforeWrite: ((table: string, patch: Row) => Promise<void>) | null
+let mutations: Row[]
 
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
   const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
   return { promise, resolve, reject }
+}
+
+async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
+  let settled = false
+  void promise.then(() => { settled = true }, () => { settled = true })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  return settled
 }
 
 function integrationError(kind: 'attention' | 'retryable', code: string) {
@@ -55,30 +63,56 @@ function query(table: string) {
       if (readFailure === table) return { data: null, error: { message: 'PRIVATE-DB-CAUSE' } }
       const rows = db[table] ?? []
       if (insertion) {
-        if (beforeWrite) await beforeWrite(table, insertion)
-        if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
-        const keys = ['provider', 'internal_entity_type', 'internal_entity_id', 'external_record_type']
-        if (rows.some(row => keys.every(key => row[key] === insertion![key]))) return { data: null, error: null }
-        const created = {
-          external_id: null, last_attempt_at: null, last_succeeded_at: null,
-          last_error_code: null, last_error_message: null, request_snapshot: null,
-          request_hash: null, metadata: {}, ...insertion,
-        }
-        rows.push(created)
-        return { data: { ...created }, error: null }
+        mutations.push(insertion)
+        const committed = (async () => {
+          if (beforeWrite) await beforeWrite(table, insertion!)
+          const keys = ['provider', 'internal_entity_type', 'internal_entity_id', 'external_record_type']
+          if (rows.some(row => keys.every(key => row[key] === insertion![key]))) return { data: null, error: null }
+          const created = {
+            external_id: null, last_attempt_at: null, last_succeeded_at: null,
+            last_error_code: null, last_error_message: null, request_snapshot: null,
+            request_hash: null, metadata: {}, ...insertion,
+          }
+          rows.push(created)
+          return { data: { ...created }, error: null }
+        })()
+        if (!signal) return committed
+        if (signal.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
+        return Promise.race([
+          committed,
+          new Promise<{ data: null; error: { message: string } }>(resolve => {
+            signal!.addEventListener('abort', () => resolve({
+              data: null, error: { message: 'AbortError: request cancelled' },
+            }), { once: true })
+          }),
+        ])
       }
-      if (patch && beforeWrite) await beforeWrite(table, patch)
+      if (patch) {
+        mutations.push(patch)
+        const committed = (async () => {
+          if (beforeWrite) await beforeWrite(table, patch!)
+          const row = rows.find(candidate => filters.every(filter => filter(candidate)))
+          if (row) Object.assign(row, patch)
+          return { data: row ? { ...row } : null, error: null }
+        })()
+        if (!signal) return committed
+        if (signal.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
+        return Promise.race([
+          committed,
+          new Promise<{ data: null; error: { message: string } }>(resolve => {
+            signal!.addEventListener('abort', () => resolve({
+              data: null, error: { message: 'AbortError: request cancelled' },
+            }), { once: true })
+          }),
+        ])
+      }
       if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
       const row = rows.find(candidate => filters.every(filter => filter(candidate)))
-      if (row && patch) Object.assign(row, patch)
-      return {
-        data: row
-          ? projection === '*'
-            ? { ...row }
-            : Object.fromEntries(projection.split(',').map(key => [key.trim(), row[key.trim()]]))
-          : null,
-        error: null,
-      }
+      return { data: row
+        ? projection === '*'
+          ? { ...row }
+          : Object.fromEntries(projection.split(',').map(key => [key.trim(), row[key.trim()]]))
+        : null, error: null }
     }),
   }
   return q
@@ -90,6 +124,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   readFailure = null
   beforeWrite = null
+  mutations = []
   jobs = new Map()
   db = {
     integration_settings: [{ id: 1, statular_sync_enabled: true }],
@@ -241,7 +276,7 @@ describe('Statular client workflow job', () => {
     expect(record()).toBeUndefined()
   })
 
-  it('does not persist a preflight write cancelled while the database request is pending', async () => {
+  it('awaits an accepted preflight insert before cancellation settles', async () => {
     db.integration_settings[0].statular_sync_enabled = false
     const writeStarted = deferred<void>()
     const resumeWrite = deferred<void>()
@@ -255,10 +290,45 @@ describe('Statular client workflow job', () => {
     const running = runStatularClientSyncJob('lead-1', controller.signal)
     await writeStarted.promise
     controller.abort()
-    resumeWrite.resolve()
 
-    await expect(running).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(await hasSettled(running)).toBe(false)
     expect(record()).toBeUndefined()
+
+    resumeWrite.resolve()
+    await expect(running).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toMatchObject({ status: 'disabled', last_attempt_at: null })
+    expect(mutations).toHaveLength(1)
+  })
+
+  it('awaits an accepted preflight update before cancellation settles', async () => {
+    db.integration_external_records.push({
+      provider: 'statular', internal_entity_type: 'lead', internal_entity_id: 'lead-1',
+      external_record_type: 'client', status: 'disabled', source_version: 'statular-client-preflight:v1',
+      idempotency_key: 'cornerstone:statular:preflight-client:lead-1:v1', request_hash: null,
+      request_snapshot: null, external_id: null, last_attempt_at: null, last_succeeded_at: null,
+      last_error_code: null, last_error_message: null, metadata: {},
+    })
+    mocks.config.mockImplementation(() => { throw integrationError('attention', 'configuration_required') })
+    const writeStarted = deferred<void>()
+    const resumeWrite = deferred<void>()
+    beforeWrite = async (table, patch) => {
+      if (table !== 'integration_external_records' || patch.status !== 'attention') return
+      writeStarted.resolve()
+      await resumeWrite.promise
+    }
+    const controller = new AbortController()
+
+    const running = runStatularClientSyncJob('lead-1', controller.signal)
+    await writeStarted.promise
+    controller.abort()
+
+    expect(await hasSettled(running)).toBe(false)
+    expect(record()).toMatchObject({ status: 'disabled', last_error_code: null })
+
+    resumeWrite.resolve()
+    await expect(running).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toMatchObject({ status: 'attention', last_error_code: 'configuration_required' })
+    expect(mutations).toHaveLength(1)
   })
 
   it('persists source-data preflight attention and completes', async () => {

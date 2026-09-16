@@ -59,6 +59,11 @@ function requirePersistenceActive(ref: ExternalRecordRef, signal?: AbortSignal):
   if (signal?.aborted) throw persistenceError(ref)
 }
 
+// Reads may use the worker signal, but mutations must not: aborting the local
+// fetch cannot cancel an already accepted database transaction. Each mutation
+// is fenced immediately before it starts, awaited to settlement, then fenced
+// again so the worker retains its claim while a server write may still commit.
+
 export async function getExternalRecord(ref: ExternalRecordRef, options: PersistenceOptions = {}): Promise<ExternalRecord | null> {
   requirePersistenceActive(ref, options.signal)
   let query = admin().from('integration_external_records').select('*')
@@ -83,10 +88,10 @@ export async function claimExternalRecord(
   }
   // DO NOTHING on conflict: a concurrent worker may already have frozen or synced
   // this delivery. A normal merging upsert could erase that worker's snapshot.
-  let insert = admin().from('integration_external_records')
+  const insert = admin().from('integration_external_records')
     .upsert(patch, { onConflict: 'provider,internal_entity_type,internal_entity_id,external_record_type', ignoreDuplicates: true })
     .select('*')
-  if (options.signal) insert = insert.abortSignal(options.signal)
+  requirePersistenceActive(input, options.signal)
   const { data: inserted, error } = await insert.maybeSingle()
   requirePersistenceActive(input, options.signal)
   if (error) throw persistenceError(input)
@@ -110,14 +115,14 @@ export async function claimExternalRecord(
         throw recordError(input, 'idempotency_payload_conflict', 'The integration request changed under the same idempotency key.')
       }
       requirePersistenceActive(input, options.signal)
-      let promotion = admin().from('integration_external_records').update(patch)
+      const promotion = admin().from('integration_external_records').update(patch)
         .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
         .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
         .eq('idempotency_key', placeholder.idempotencyKey).eq('source_version', placeholder.sourceVersion)
         .in('status', ['attention', 'disabled']).is('request_hash', null).is('request_snapshot', null)
         .is('external_id', null).is('last_attempt_at', null)
         .select('*')
-      if (options.signal) promotion = promotion.abortSignal(options.signal)
+      requirePersistenceActive(input, options.signal)
       const { data, error: promotionError } = await promotion.maybeSingle()
       requirePersistenceActive(input, options.signal)
       if (promotionError) throw persistenceError(input)
@@ -135,8 +140,8 @@ export async function claimExternalRecord(
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
     .eq('idempotency_key', existing.idempotency_key)
   update = existing.request_hash === null ? update.is('request_hash', null) : update.eq('request_hash', existing.request_hash)
-  let selected = update.select('*')
-  if (options.signal) selected = selected.abortSignal(options.signal)
+  const selected = update.select('*')
+  requirePersistenceActive(input, options.signal)
   const { data, error: updateError } = await selected.maybeSingle()
   requirePersistenceActive(input, options.signal)
   if (updateError) throw persistenceError(input)
@@ -171,8 +176,8 @@ async function beginAttempt(
   // Create-only callers must not reopen a record that completed after they
   // read their claim. Keep this in the same UPDATE as the timestamp CAS.
   if (createOnly) update = update.is('external_id', null).neq('status', 'synced')
-  let selected = update.select('*')
-  if (options.signal) selected = selected.abortSignal(options.signal)
+  const selected = update.select('*')
+  requirePersistenceActive(input, options.signal)
   const { data, error } = await selected.maybeSingle()
   requirePersistenceActive(input, options.signal)
   if (error) throw persistenceError(input)
@@ -205,8 +210,8 @@ async function updateAttempt(input: RecordAttempt, patch: RecordUpdate, options:
   // Concurrent attempts share an idempotency key. Check status in the UPDATE
   // itself so a late failure cannot downgrade a success committed by a peer.
   if (patch.status !== 'synced') update = update.neq('status', 'synced')
-  let selected = update.select('*')
-  if (options.signal) selected = selected.abortSignal(options.signal)
+  const selected = update.select('*')
+  requirePersistenceActive(input, options.signal)
   const { data, error } = await selected.maybeSingle()
   requirePersistenceActive(input, options.signal)
   if (error) throw persistenceError(input)

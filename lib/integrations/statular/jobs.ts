@@ -108,8 +108,10 @@ async function recordNonAttemptState(
     last_error_code: reason?.code ?? null,
     last_error_message: reason?.safeMessage ?? null,
   }
+  // Do not attach the worker signal to mutations. Once started, the request
+  // must settle before execution can release its workflow claim.
   if (!before) {
-    let insert = admin.from('integration_external_records').upsert({
+    const insert = admin.from('integration_external_records').upsert({
       provider: ref.provider,
       internal_entity_type: ref.internalEntityType,
       internal_entity_id: ref.internalEntityId,
@@ -123,7 +125,7 @@ async function recordNonAttemptState(
       onConflict: 'provider,internal_entity_type,internal_entity_id,external_record_type',
       ignoreDuplicates: true,
     }).select('*')
-    if (signal) insert = insert.abortSignal(signal)
+    requireActive(signal)
     const { error } = await insert.maybeSingle()
     requireActive(signal)
     if (error) throw persistenceFailure()
@@ -134,7 +136,7 @@ async function recordNonAttemptState(
   // human-review/success state. An unattempted disabled placeholder may still
   // become attention after configuration or source validation runs.
   if (before.status === 'synced' || before.status === 'attention' || !isVerifiedPreflight(before)) return
-  let update = admin.from('integration_external_records').update(patch)
+  const update = admin.from('integration_external_records').update(patch)
     .eq('provider', ref.provider)
     .eq('internal_entity_type', ref.internalEntityType)
     .eq('internal_entity_id', ref.internalEntityId)
@@ -147,7 +149,7 @@ async function recordNonAttemptState(
     .is('external_id', null)
     .is('last_attempt_at', null)
     .select('*')
-  if (signal) update = update.abortSignal(signal)
+  requireActive(signal)
   const { error } = await update.maybeSingle()
   requireActive(signal)
   if (error) throw persistenceFailure()
