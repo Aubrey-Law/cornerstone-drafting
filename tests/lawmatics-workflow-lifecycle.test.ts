@@ -19,6 +19,9 @@ let lease: boolean
 let releaseDelay: number
 let finished: Row | undefined
 let cleanupDelay: number
+let enabled: boolean
+let disableWhenFenced: boolean
+let fencedEvent: Row | undefined
 
 // Only database/HTTP boundaries are replaced; the worker, job, services, client,
 // normalized errors and record compare-and-swap operations all execute together.
@@ -46,6 +49,11 @@ function query(table: string) {
       if (row && patch) {
         if (cleanupDelay && patch.last_error_code) await new Promise(resolve => setTimeout(resolve, cleanupDelay))
         Object.assign(row, patch)
+        if (disableWhenFenced && row.external_record_type === 'event' && patch.status === 'pending' && patch.last_attempt_at) {
+          enabled = false
+          disableWhenFenced = false
+          fencedEvent = structuredClone(row)
+        }
         history.push(`persist:${String(patch.status)}`)
       }
       return { data: row ? { ...row } : null, error: null }
@@ -61,6 +69,9 @@ beforeEach(() => {
   lease = false
   releaseDelay = 0
   cleanupDelay = 0
+  enabled = true
+  disableWhenFenced = false
+  fencedEvent = undefined
   finished = undefined
   db = {
     firm_settings: [{ id: 1, durable_workflow_jobs_enabled: true }],
@@ -72,8 +83,8 @@ beforeEach(() => {
     integration_external_records: [],
   }
   mocks.from.mockImplementation(query)
-  mocks.settings.mockResolvedValue({ lawmaticsAppointmentSyncEnabled: true,
-    lawmaticsEventTypeIdMap: { discovery: 'type-provider' }, lawmaticsLocationIdMap: {}, lawmaticsUserIds: [] })
+  mocks.settings.mockImplementation(async () => ({ lawmaticsAppointmentSyncEnabled: enabled,
+    lawmaticsEventTypeIdMap: { discovery: 'type-provider' }, lawmaticsLocationIdMap: {}, lawmaticsUserIds: [] }))
   mocks.rpc.mockImplementation(async (name: string, args: Row) => {
     if (name === 'claim_workflow_jobs_v2') return { data: [{ id: 'job-1', job_type: 'lawmatics_sync_appointment',
       payload: { appointmentId: 'appointment-1', sourceVersion: 'version-1' }, claim_token: 'PRIVATE-CLAIM', attempts: 1 }], error: null }
@@ -100,6 +111,38 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks() })
 
 describe('Lawmatics workflow lifetime', () => {
+  it.each([['create', false], ['create', true], ['update', false], ['cancel', false]] as const)(
+    'resumes a fenced, unsent Event %s once after local disablement (changed source=%s)', async (operation, changed) => {
+    if (operation !== 'create') {
+      db.integration_external_records.push({ provider: 'lawmatics', internal_entity_type: 'appointment', internal_entity_id: 'appointment-1',
+        external_record_type: 'event', external_id: 'event-1', status: 'synced', source_version: 'old',
+        last_attempt_at: '2026-09-16T13:00:00Z', last_succeeded_at: '2026-09-16T13:00:00Z',
+        last_error_code: null, last_error_message: null, idempotency_key: 'old-key', request_hash: 'old-hash',
+        request_snapshot: { evidence: 'previous' }, metadata: { retained: true } })
+    }
+    if (operation === 'cancel') db.appointments[0].status = 'cancelled'
+    disableWhenFenced = true
+
+    await runLawmaticsAppointmentSyncJob('appointment-1', 'queued-version')
+
+    const event = () => db.integration_external_records.find(row => row.external_record_type === 'event')!
+    expect(fencedEvent?.last_attempt_at).toEqual(expect.any(String))
+    expect(event()).toEqual({ ...fencedEvent, status: 'disabled', last_error_code: null, last_error_message: null })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(lease).toBe(false)
+
+    enabled = true
+    if (changed) db.appointments[0].start_time = '2026-09-21T14:00:00Z'
+    vi.mocked(fetch).mockResolvedValue(operation === 'cancel' ? new Response(null, { status: 204 })
+      : Response.json({ data: { id: 'event-1', type: 'event' } }))
+    await runLawmaticsAppointmentSyncJob('appointment-1', 'queued-repair')
+    expect(event()).toMatchObject({ status: 'synced', external_id: 'event-1', last_error_code: null, last_error_message: null })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe(operation === 'create' ? 'POST' : operation === 'update' ? 'PUT' : 'DELETE')
+    await runLawmaticsAppointmentSyncJob('appointment-1', 'queued-repair-again')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['prospect', 'event', 'update', 'cancel'])('aborts %s HTTP and waits for persistence and lease release before finishing a timed-out claim', async operation => {
     if (operation === 'prospect') db.client_intake[0].lawmatics_matter_id = null
     if (operation === 'update' || operation === 'cancel') {
@@ -128,6 +171,10 @@ describe('Lawmatics workflow lifetime', () => {
     expect(lease).toBe(false)
     expect(finished?.p_error).toBe('Workflow execution timed out')
     expect(JSON.stringify(finished)).not.toContain('PRIVATE-ABORT')
+    expect(db.integration_external_records.find(row => row.external_record_type === (operation === 'prospect' ? 'prospect' : 'event')))
+      .toMatchObject(operation === 'prospect' || operation === 'event'
+        ? { status: 'attention', last_error_code: 'create_outcome_unknown' }
+        : { status: 'pending', last_error_code: 'timeout' })
     const afterFinish = structuredClone(db.integration_external_records)
     await vi.advanceTimersByTimeAsync(120_000)
     expect(db.integration_external_records).toEqual(afterFinish)

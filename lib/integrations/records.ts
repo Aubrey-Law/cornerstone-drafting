@@ -149,6 +149,11 @@ export async function recordIntegrationCancellation(input: RecordAttempt): Promi
   })
 }
 
+/** Complete a conclusively unsent attempt without erasing its evidence. */
+export async function recordIntegrationDisabled(input: RecordAttempt): Promise<ExternalRecord> {
+  return updateAttempt(input, { status: 'disabled', last_error_code: null, last_error_message: null })
+}
+
 export async function recordIntegrationFailure(input: RecordAttempt & { error: unknown }): Promise<ExternalRecord> {
   if (!(input.error instanceof IntegrationError)) throw new Error('Integration failure must be normalized.')
   if (input.error.provider !== input.provider) throw new Error('Integration failure provider does not match the record.')
