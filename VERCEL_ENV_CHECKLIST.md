@@ -107,6 +107,22 @@ Expect `✓ azure: redirects to provider login`. Then click **Continue with Micr
 
 Without this key, staff can still paste notes manually in the dialog; Granola list/fetch returns a clear configuration error.
 
+## Optional — Statular lifecycle synchronization
+
+| Variable | Purpose |
+|----------|---------|
+| `STATULAR_CLIENT_WEBHOOK_URL` | Server-only secret URL for Statular's create-client webhook. HTTPS required; production host must be `api.statular.com`. |
+| `STATULAR_MATTER_WEBHOOK_URL` | Server-only secret URL for Statular's create-matter webhook, with the same HTTPS/host requirements. |
+| `STATULAR_WEBHOOK_GENERATION` | Required nonblank, non-secret generation such as `v1`, used in durable delivery identities. Increment whenever either webhook URL rotates. |
+
+The webhook URLs are credentials: store them only in server environment secrets;
+never use `NEXT_PUBLIC_`, return them to browsers, or put them in logs/errors.
+Readiness responses expose booleans only. Both URLs and the generation are required
+for delivery. Configuration alone does not enable synchronization: keep
+`statular_sync_enabled = false` until the release verification gate passes.
+Statular creates clients and matters independently of Lawmatics and does not update
+existing Statular records. Existing Markdown export and drafting are unchanged.
+
 ## Optional — drafting / ops
 
 | Variable | Purpose |
