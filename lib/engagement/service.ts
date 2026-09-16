@@ -122,6 +122,7 @@ export function createEngagementService(deps: Dependencies) {
       let created: EsignDocumentRequestResult
       try {
         created = await deps.provider.createDocumentRequest({
+          agreementId: agreement.id,
           name: `Engagement Agreement — ${agreement.inputSnapshot.primary.name}`,
           document: agreement.activeRevision.pdf,
           recipients: [...agreement.recipients].sort((a, b) => a.order - b.order),

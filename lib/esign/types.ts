@@ -80,6 +80,18 @@ export interface EsignSigner {
 }
 
 export interface EsignDocumentRequestInput {
+  /**
+   * The engagement agreement this request is for.
+   *
+   * A vendor provider has no use for it — the envelope lives on their side and
+   * they hand back their own id. A provider backed by this database is the
+   * other way round: it has no external system to mint an id, and its rows
+   * reference the agreement directly. esign_signing_sessions.agreement_id is a
+   * foreign key to engagement_agreements(id), and the signing route reads the
+   * agreement back by it, so a locally-stored request must be keyed by the
+   * real agreement rather than by an id it invents.
+   */
+  agreementId: string
   name: string
   document: Buffer
   recipients: Array<{ key: string; name: string; email: string; order: number }>

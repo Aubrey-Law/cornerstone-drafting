@@ -16,7 +16,7 @@ describe('Firma document requests', () => {
     const pdf = Buffer.from('%PDF-1.7 rendered')
 
     const result = await provider.createDocumentRequest({
-      name: 'Agreement', document: pdf,
+      agreementId: 'agreement-1', name: 'Agreement', document: pdf,
       recipients: [
         { key: 'primary', name: 'Ada Lovelace', email: 'ada@example.com', order: 1 },
         { key: 'spouse', name: 'Grace Hopper', email: 'grace@example.com', order: 2 },
@@ -43,7 +43,7 @@ describe('Firma document requests', () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'request-1', recipients: [{ id: 'firma-1' }] }), { status: 200 }))
     const provider = createFirmaEsignProvider({ apiKey: 'key', singleTemplateId: 'legacy', jointTemplateId: null, fetcher })
     await expect(provider.createDocumentRequest({
-      name: 'Agreement', document: Buffer.from('%PDF'), recipients: [{ key: 'primary', name: 'Ada', email: 'a@example.com', order: 1 }],
+      agreementId: 'agreement-1', name: 'Agreement', document: Buffer.from('%PDF'), recipients: [{ key: 'primary', name: 'Ada', email: 'a@example.com', order: 1 }],
       anchors: [{ marker: '[[CLIENT_1_SIGNATURE]]', type: 'signature', recipientKey: 'primary', required: true }], expirationHours: 72, customMessage: 'Sign',
     })).rejects.toThrow(/correlate recipient primary/i)
   })
