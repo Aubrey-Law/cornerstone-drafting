@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     return clearStateCookie(NextResponse.redirect(
-      new URL(`/admin/matters?lm_error=${encodeURIComponent(error)}`, req.nextUrl.origin),
+      new URL('/admin/matters?lm_error=authorization_failed', req.nextUrl.origin),
     ))
   }
 
@@ -68,24 +68,21 @@ export async function GET(req: NextRequest) {
     }
 
     const tokens = await exchangeCode(code)
-    const expires_at = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString()
-
     const { error: dbError } = await admin.from('lawmatics_tokens').upsert({
       id: 'singleton',
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token ?? null,
-      expires_at,
+      refresh_token: null,
+      expires_at: null,
       updated_at: new Date().toISOString(),
     })
-    if (dbError) throw new Error(dbError.message)
+    if (dbError) throw new Error('Lawmatics connection could not be saved')
 
     return clearStateCookie(NextResponse.redirect(
       new URL('/admin/matters?lm_connected=1', req.nextUrl.origin),
     ))
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'unknown error'
+  } catch {
     return clearStateCookie(NextResponse.redirect(
-      new URL(`/admin/matters?lm_error=${encodeURIComponent(msg)}`, req.nextUrl.origin),
+      new URL('/admin/matters?lm_error=connection_failed', req.nextUrl.origin),
     ))
   }
 }

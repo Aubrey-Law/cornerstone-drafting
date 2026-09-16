@@ -5435,6 +5435,117 @@ export type Database = {
           },
         ]
       }
+      integration_external_records: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          external_record_type: string
+          id: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          last_succeeded_at: string | null
+          metadata: Json
+          provider: string
+          request_hash: string | null
+          request_snapshot: Json | null
+          source_version: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type: string
+          id?: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type?: string
+          id?: string
+          idempotency_key?: string
+          internal_entity_id?: string
+          internal_entity_type?: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider?: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_settings: {
+        Row: {
+          created_at: string
+          id: number
+          lawmatics_appointment_sync_enabled: boolean
+          lawmatics_event_type_id_map: Json
+          lawmatics_last_check_error: string | null
+          lawmatics_last_checked_at: string | null
+          lawmatics_location_id_map: Json
+          lawmatics_user_ids: Json
+          statular_doc_id_map: Json
+          statular_drafter_id: string | null
+          statular_sync_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       invoice_checkout_sessions: {
         Row: {
           amount_cents: number
@@ -12234,12 +12345,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12263,11 +12374,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12288,11 +12399,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12313,11 +12424,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12330,11 +12441,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
