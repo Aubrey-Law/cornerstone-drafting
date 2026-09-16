@@ -82,18 +82,40 @@ function ensurePdfCanvasRuntime(): void {
  * content this module reads — so the only thing at stake is whether the logs
  * are honest or full of noise nobody should act on.
  */
-function standardFontDataPath(): string {
-  const entry = requireFromHere.resolve('pdfjs-dist/package.json')
+function standardFontDataPath(): string | undefined {
+  const entry = requireFromHere.resolve('pdfjs-dist/package.json') as unknown
+  // A bundler that inlines pdfjs-dist answers this resolve with its own module
+  // id — a number — and `path.dirname` then throws
+  //   The "path" argument must be of type string. Received type number
+  // which says nothing about fonts, pdf.js, or the bundle that caused it. The
+  // first native engagement send died on exactly that, and the fix is to keep
+  // pdfjs-dist external (see `serverExternalPackages` in next.config.mjs).
+  //
+  // Returning undefined rather than throwing is deliberate: pdf.js falls back
+  // to its built-in metrics, and by the note above the glyph widths are the
+  // same either way, so text extraction — the only thing this module reads —
+  // is unaffected. Losing the font path must not take down a signature run.
+  if (typeof entry !== 'string') {
+    console.warn(
+      '[textLayer] pdfjs-dist resolved to a %s (%s) rather than a path, so its standard '
+        + 'fonts cannot be located. pdfjs-dist is probably being bundled; it belongs in '
+        + "next.config.mjs's serverExternalPackages. Continuing without standardFontDataUrl.",
+      typeof entry,
+      String(entry),
+    )
+    return undefined
+  }
   return path.join(path.dirname(entry), 'standard_fonts') + path.sep
 }
 
 async function readPages(bytes: Uint8Array): Promise<PageItems[]> {
   ensurePdfCanvasRuntime()
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const fontPath = standardFontDataPath()
   const doc = await pdfjs.getDocument({
     data: bytes,
     isEvalSupported: false,
-    standardFontDataUrl: standardFontDataPath(),
+    ...(fontPath === undefined ? {} : { standardFontDataUrl: fontPath }),
     useSystemFonts: false,
   }).promise
 
