@@ -12,22 +12,24 @@ const id = z.union([
   z.string().regex(/^\d+$/).refine(value => /[1-9]/.test(value)),
 ])
 const gender = z.enum(['male', 'female', 'nonbinary'])
+// Zod validates YYYY-MM-DD against Gregorian month lengths and leap years.
+const calendarDate = z.string().date().refine(value => !value.startsWith('0000-'))
 const address = z.object({
   streetAddress1: z.string().optional(), streetAddress2: z.string().optional(),
   city: z.string().optional(), county: z.string().optional(), state: z.string().optional(), zip: z.string().optional(),
 }).strict()
 const child = z.object({
   name: nonblank, relationship: z.enum(['joint', 'settlor1', 'settlor2']),
-  gender: gender.optional(), birthdate: z.string().optional(), phone: z.string().optional(),
+  gender: gender.optional(), birthdate: calendarDate.optional(), phone: z.string().optional(),
   email: z.string().email().optional(), address: address.optional(), deceased: z.boolean().optional(),
 }).strict()
 const clientSchema = z.object({
   first_name: nonblank, last_name: nonblank, middle_name: z.string().optional(),
-  email: z.string().email().optional(), phone: z.string().optional(), dob: z.string().optional(),
+  email: z.string().email().optional(), phone: z.string().optional(), dob: calendarDate.optional(),
   gender: gender.optional(), marital_status: z.string().optional(), address: address.optional(),
   partner: z.boolean().optional(), partner_first_name: z.string().optional(), partner_middle_name: z.string().optional(),
   partner_last_name: z.string().optional(), partner_email: z.string().email().optional(), partner_phone: z.string().optional(),
-  partner_dob: z.string().optional(), partner_gender: gender.optional(), partner_address: address.optional(),
+  partner_dob: calendarDate.optional(), partner_gender: gender.optional(), partner_address: address.optional(),
   children: z.array(child).optional(), notes: z.string().optional(),
 }).strict()
 const matterSchema = z.object({
@@ -73,7 +75,9 @@ async function createRecord(payload: StatularClientPayload | StatularMatterPaylo
   const cancelled = () => failure('retryable', 'timeout', 'The Statular request timed out or was cancelled.')
   if (signal?.aborted) throw cancelled()
   const config = getStatularConfig()
-  if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim() || idempotencyKey.length > 200 || /[\r\n]/.test(idempotencyKey)) {
+  // Keep durable keys byte-for-byte identical to their HTTP representation:
+  // visible ASCII/Latin-1 only, no C0/C1 controls or trimmed edge whitespace.
+  if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() !== idempotencyKey || !/^[\x20-\x7e\xa0-\xff]{1,200}$/.test(idempotencyKey)) {
     throw failure('attention', 'invalid_idempotency_key', 'The Statular idempotency key is invalid.')
   }
   const parsed = (type === 'client' ? clientSchema : matterSchema).safeParse(payload)
