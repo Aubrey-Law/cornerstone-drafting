@@ -47,6 +47,8 @@ function invalidResponse(method: LawmaticsRequestInit['method']): IntegrationErr
 
 export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestInit): Promise<T> {
   if (!path.startsWith('/v1/')) throw failure('attention', 'invalid_request', 'The Lawmatics API path is invalid.')
+  const cancelled = () => failure('retryable', 'timeout', 'The Lawmatics request timed out.')
+  if (init.signal?.aborted) throw cancelled()
 
   let accessToken: string
   try {
@@ -59,8 +61,12 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
   }
 
   const controller = new AbortController()
+  const abort = () => controller.abort()
+  init.signal?.addEventListener('abort', abort, { once: true })
+  if (init.signal?.aborted) controller.abort()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
+    if (controller.signal.aborted) throw cancelled()
     const response = await fetch(`${API_BASE}${path}`, {
       method: init.method,
       headers: {
@@ -73,6 +79,7 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
       cache: 'no-store',
       redirect: 'error',
     })
+    if (controller.signal.aborted) throw cancelled()
     // Never read/log provider error bodies or attach unsafe transport causes.
     if (!response.ok) throw responseFailure(response)
     if (response.status === 204) return undefined as T
@@ -84,6 +91,7 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
       if (controller.signal.aborted) throw failure('retryable', 'timeout', 'The Lawmatics request timed out.')
       throw invalidResponse(init.method)
     }
+    if (controller.signal.aborted) throw cancelled()
     if (!json || typeof json !== 'object' || !('data' in json)) {
       throw invalidResponse(init.method)
     }
@@ -94,6 +102,7 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
     throw failure('retryable', 'network_error', 'Lawmatics could not be reached.')
   } finally {
     clearTimeout(timeout)
+    init.signal?.removeEventListener('abort', abort)
   }
 }
 
@@ -106,9 +115,9 @@ function resource<Type extends 'prospect' | 'event'>(data: unknown, type: Type):
   return data as LawmaticsResource<Type>
 }
 
-export async function createLawmaticsProspect(input: LawmaticsProspectInput): Promise<LawmaticsResource<'prospect'>> {
+export async function createLawmaticsProspect(input: LawmaticsProspectInput, signal?: AbortSignal): Promise<LawmaticsResource<'prospect'>> {
   const data = await lawmaticsRequest<unknown>('/v1/prospects', {
-    method: 'POST',
+    method: 'POST', signal,
     body: { first_name: input.firstName, last_name: input.lastName, email: input.email, phone: input.phone },
   })
   return resource(data, 'prospect')
@@ -134,14 +143,14 @@ function eventBody(input: LawmaticsEventInput): Record<string, unknown> {
   }
 }
 
-export async function createLawmaticsEvent(input: LawmaticsEventInput): Promise<LawmaticsResource<'event'>> {
-  return resource(await lawmaticsRequest<unknown>('/v1/events', { method: 'POST', body: eventBody(input) }), 'event')
+export async function createLawmaticsEvent(input: LawmaticsEventInput, signal?: AbortSignal): Promise<LawmaticsResource<'event'>> {
+  return resource(await lawmaticsRequest<unknown>('/v1/events', { method: 'POST', body: eventBody(input), signal }), 'event')
 }
 
-export async function updateLawmaticsEvent(id: string, input: LawmaticsEventInput): Promise<LawmaticsResource<'event'>> {
-  return resource(await lawmaticsRequest<unknown>(`/v1/events/${encodeURIComponent(id)}`, { method: 'PUT', body: eventBody(input) }), 'event')
+export async function updateLawmaticsEvent(id: string, input: LawmaticsEventInput, signal?: AbortSignal): Promise<LawmaticsResource<'event'>> {
+  return resource(await lawmaticsRequest<unknown>(`/v1/events/${encodeURIComponent(id)}`, { method: 'PUT', body: eventBody(input), signal }), 'event')
 }
 
-export async function cancelLawmaticsEvent(id: string): Promise<void> {
-  await lawmaticsRequest<unknown>(`/v1/events/${encodeURIComponent(id)}?notify_attendees=false`, { method: 'DELETE' })
+export async function cancelLawmaticsEvent(id: string, signal?: AbortSignal): Promise<void> {
+  await lawmaticsRequest<unknown>(`/v1/events/${encodeURIComponent(id)}?notify_attendees=false`, { method: 'DELETE', signal })
 }

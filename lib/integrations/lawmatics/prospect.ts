@@ -39,11 +39,30 @@ function unknownCreate(): IntegrationError {
 
 // These failures conclusively reject a request before a new provider record exists.
 const REJECTED_CREATES = new Set(['rate_limited', 'authentication_required', 'connection_unavailable',
-  'permission_denied', 'not_found', 'validation_failed', 'request_rejected', 'invalid_request'])
+  'permission_denied', 'not_found', 'validation_failed', 'request_rejected', 'invalid_request', 'integration_disabled'])
 
-export function requireSafeCreate(record: ExternalRecord | null): void {
+export function requireLawmaticsActive(signal?: AbortSignal): void {
+  if (signal?.aborted) throw lawmaticsFailure('timeout', 'The Lawmatics request timed out.', 'retryable')
+}
+
+export async function requireSafeCreate(record: ExternalRecord | null, ref: ExternalRecordRef,
+  exclusiveEntityLease = false): Promise<void> {
   if (record && !record.external_id && record.last_attempt_at && record.status !== 'synced'
-    && !REJECTED_CREATES.has(record.last_error_code ?? '')) throw unknownCreate()
+    && !REJECTED_CREATES.has(record.last_error_code ?? '')) {
+    // Match the fixed entity lease: 120 seconds exceeds the 30-second HTTP
+    // timeout and 50-second worker budget plus bounded cancellation cleanup.
+    // Recent contention can recover automatically; stale ambiguity never POSTs.
+    const age = Date.now() - Date.parse(record.last_attempt_at)
+    if (!exclusiveEntityLease && record.status === 'pending' && !record.last_error_code && age >= -1000 && age < 120_000) {
+      throw lawmaticsFailure('integration_busy', 'Lawmatics record creation is already running.', 'retryable')
+    }
+    const error = unknownCreate()
+    if (record.status !== 'attention') {
+      await recordIntegrationFailure({ ...ref, idempotencyKey: record.idempotency_key,
+        attemptAt: record.last_attempt_at, error })
+    }
+    throw error
+  }
 }
 
 export function isCompletedLawmaticsCancellation(record: ExternalRecord | null): boolean {
@@ -58,19 +77,23 @@ export async function createAndRecordLawmatics(
   claimed: ExternalRecord,
   create: () => Promise<{ id: string }>,
   previous: ExternalRecord | null = null,
+  signal?: AbortSignal,
 ): Promise<string> {
+  requireLawmaticsActive(signal)
   if (claimed.external_id) return claimed.external_id
   // A new source version clears failure fields. Only carry rejection evidence
   // forward if the attempt timestamp still matches; a newer POST invalidates it.
   const previousSafe = previous?.last_attempt_at === claimed.last_attempt_at
     && (REJECTED_CREATES.has(previous?.last_error_code ?? '')
       || (!previous?.external_id && isCompletedLawmaticsCancellation(previous)))
-  if (!previousSafe) requireSafeCreate(claimed)
+  if (!previousSafe) await requireSafeCreate(claimed, ref)
   const fenced = await beginIntegrationAttempt({ ...ref, idempotencyKey: claimed.idempotency_key,
     expectedLastAttemptAt: claimed.last_attempt_at })
   const attempt = { ...ref, idempotencyKey: claimed.idempotency_key, attemptAt: fenced.last_attempt_at! }
   try {
+    requireLawmaticsActive(signal)
     const result = await create()
+    requireLawmaticsActive(signal)
     await recordIntegrationSuccess({ ...attempt, externalId: result.id })
     return result.id
   } catch (error) {
@@ -81,9 +104,10 @@ export async function createAndRecordLawmatics(
   }
 }
 
-export function resolveLawmaticsProspect(appointmentId: string): Promise<string>
+export function resolveLawmaticsProspect(appointmentId: string, options?: { readOnly?: false; signal?: AbortSignal }): Promise<string>
 export function resolveLawmaticsProspect(appointmentId: string, options: { readOnly: true }): Promise<string | null>
-export async function resolveLawmaticsProspect(appointmentId: string, options?: { readOnly: true }): Promise<string | null> {
+export async function resolveLawmaticsProspect(appointmentId: string, options?: { readOnly?: boolean; signal?: AbortSignal }): Promise<string | null> {
+  requireLawmaticsActive(options?.signal)
   const appointment = await loadLawmaticsAppointment(appointmentId)
   let intakeId = appointment.linked_lead_id
   if (appointment.linked_matter_id) {
@@ -99,7 +123,7 @@ export async function resolveLawmaticsProspect(appointmentId: string, options?: 
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'lead', internalEntityId: intakeId, externalRecordType: 'prospect' }
   const existing = await getExternalRecord(ref)
   if (existing?.external_id) return existing.external_id
-  if (!options?.readOnly) requireSafeCreate(existing)
+  if (!options?.readOnly) await requireSafeCreate(existing, ref)
 
   // The primary key linkage, never email similarity, verifies legacy import provenance.
   const { data: intake, error } = await lawmaticsDatabase().from('client_intake')
@@ -116,12 +140,14 @@ export async function resolveLawmaticsProspect(appointmentId: string, options?: 
     ...(intake.email ? { email: intake.email } : {}), ...(intake.phone ? { phone: intake.phone } : {}) }
   const snapshot = legacyId ? { intakeId, legacyId } : { intakeId, ...input }
   const version = sourceHash(snapshot)
+  requireLawmaticsActive(options?.signal)
   const claimed = await claimExternalRecord({ ...ref, sourceVersion: version,
     idempotencyKey: `lawmatics:prospect:${intakeId}:${version}`, requestHash: version, requestSnapshot: snapshot })
   if (claimed.external_id) return claimed.external_id
   if (legacyId) {
+    requireLawmaticsActive(options?.signal)
     await recordIntegrationSuccess({ ...ref, idempotencyKey: claimed.idempotency_key, externalId: legacyId })
     return legacyId
   }
-  return createAndRecordLawmatics(ref, claimed, () => createLawmaticsProspect(input), existing)
+  return createAndRecordLawmatics(ref, claimed, () => createLawmaticsProspect(input, options?.signal), existing, options?.signal)
 }

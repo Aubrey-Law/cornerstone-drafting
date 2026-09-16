@@ -44,6 +44,7 @@ function query(table: string) {
   const q = {
     select: (fields = '*') => { projection = fields; return q },
     eq: (key: string, value: unknown) => { filters.push(row => row[key] === value); return q },
+    neq: (key: string, value: unknown) => { filters.push(row => row[key] !== value); return q },
     is: (key: string, value: unknown) => { filters.push(row => row[key] === value); return q },
     in: (key: string, values: unknown[]) => { filters.push(row => values.includes(row[key])); return q },
     gt: (key: string, value: unknown) => { after = value; filters.push(row => String(row[key]) > String(value)); return q },
@@ -122,6 +123,21 @@ beforeEach(() => {
 })
 
 describe('Lawmatics appointment reconciliation', () => {
+  it('skips an abandoned create after the service persists fenced attention', async () => {
+    db.integration_external_records.push({ provider: 'lawmatics', internal_entity_type: 'appointment', internal_entity_id: 'appointment-001',
+      external_record_type: 'event', external_id: null, status: 'pending', source_version: 'original-version',
+      idempotency_key: 'original-key', request_snapshot: { evidence: 'original' }, request_hash: 'original-hash',
+      last_attempt_at: new Date(Date.now() - 121_000).toISOString(), last_error_code: null })
+    await expect(syncLawmaticsAppointment('appointment-001')).rejects.toMatchObject({ code: 'create_outcome_unknown' })
+    expect(event()).toMatchObject({ status: 'attention', last_error_code: 'create_outcome_unknown' })
+    const saved = structuredClone(event())
+    expect(await reconcileLawmaticsAppointments(100)).toMatchObject({ enqueued: 0 })
+    expect(await reconcileLawmaticsAppointments(100)).toMatchObject({ enqueued: 0 })
+    expect(event()).toEqual(saved)
+    expect(jobs.size).toBe(0)
+    expect(mocks.createEvent).not.toHaveBeenCalled()
+  })
+
   it('checks enablement before any source read or enqueue', async () => {
     settings.lawmaticsAppointmentSyncEnabled = false
     await expect(reconcileLawmaticsAppointments(100)).resolves.toEqual({ scanned: 0, enqueued: 0 })

@@ -16,9 +16,9 @@ describe('bounded workflow worker', () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'claim_workflow_jobs_v2'
       ? [{ ...job, job_type: 'lawmatics_sync_appointment', payload }] : true, error: null }))
     expect(await processWorkflowJobs(1)).toMatchObject({ succeeded: 1, failed: 0 })
-    expect(mocks.lawmatics).toHaveBeenCalledWith('appointment-1', 'version-1')
-    expect(mocks.rpc).toHaveBeenLastCalledWith('finish_workflow_job_v2', {
-      p_job_id: 'job', p_claim_token: 'claim', p_error: undefined,
+    expect(mocks.lawmatics).toHaveBeenCalledWith('appointment-1', 'version-1', expect.any(AbortSignal))
+    expect(mocks.rpc).toHaveBeenLastCalledWith('finish_workflow_job_v3', {
+      p_job_id: 'job', p_claim_token: 'claim', p_error: undefined, p_retry_after_ms: undefined,
     })
   })
   it('returns before claiming or preparing reminders when disabled', async () => {
@@ -38,5 +38,14 @@ describe('bounded workflow worker', () => {
     mocks.enabled = true
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'claim_workflow_jobs_v2' ? [job] : false, error: null }))
     await expect(processWorkflowJobs(1, { run: async () => {} })).rejects.toThrow('completion was not recorded')
+  })
+  it.each(['claim_workflow_jobs_v2', 'finish_workflow_job_v3'])('does not expose database detail when %s fails', async failingRpc => {
+    mocks.enabled = true
+    mocks.rpc.mockImplementation(async (name: string) => name === failingRpc
+      ? { data: null, error: { message: 'PRIVATE-SNAPSHOT-CLAIM-TOKEN' } }
+      : { data: name === 'claim_workflow_jobs_v2' ? [job] : true, error: null })
+    const error = await processWorkflowJobs(1, { run: async () => {} }).catch(error => error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).not.toContain('PRIVATE')
   })
 })
