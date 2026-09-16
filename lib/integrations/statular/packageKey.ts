@@ -225,15 +225,13 @@ export async function resolveStatularPackageKey(matterId: string): Promise<strin
 export async function resolveStatularDocId(matterId: string): Promise<number> {
   const key = await resolveStatularPackageKey(matterId)
   if (!key) throw configurationRequired()
+  let settings
   try {
-    const docId = (await getIntegrationSettings()).statularDocIdMap[key]
-    if (docId === undefined) throw configurationRequired()
-    return docId
-  } catch (error) {
-    if (error instanceof IntegrationError && error.provider === 'statular') throw error
-    if (error instanceof Error && error.message !== 'Unable to read integration settings.') {
-      throw configurationRequired()
-    }
+    settings = await getIntegrationSettings()
+  } catch {
     throw persistenceFailure()
   }
+  const docId = settings.statularDocIdMap[key]
+  if (docId === undefined) throw configurationRequired()
+  return docId
 }

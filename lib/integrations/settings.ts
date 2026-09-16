@@ -72,6 +72,25 @@ export function sanitizeDocIdMap(value: unknown): Record<string, number> {
   }))
 }
 
+function readableDocIdMap(value: unknown): Record<string, number> {
+  let entries: Array<[string, unknown]>
+  try {
+    entries = Object.entries(requireObject(value))
+  } catch {
+    return {}
+  }
+  const accepted: Array<[string, number]> = []
+  for (const [key, id] of entries) {
+    if (isValidStatularPackageKey(key)
+      && typeof id === 'number'
+      && Number.isSafeInteger(id)
+      && id > 0) {
+      accepted.push([key, id])
+    }
+  }
+  return Object.fromEntries(accepted)
+}
+
 export function sanitizeProviderIds(value: unknown): string[] {
   if (!Array.isArray(value)) throw new Error('Provider IDs must be an array.')
   return value.map(providerId)
@@ -98,7 +117,7 @@ function fromRow(row: SettingsRow | null): IntegrationSettings {
     lawmaticsLastCheckedAt: row?.lawmatics_last_checked_at ?? null,
     lawmaticsLastCheckError: row?.lawmatics_last_check_error ? 'Lawmatics connection check failed.' : null,
     statularSyncEnabled: row?.statular_sync_enabled === true,
-    statularDocIdMap: sanitizeDocIdMap(row?.statular_doc_id_map ?? {}),
+    statularDocIdMap: readableDocIdMap(row?.statular_doc_id_map ?? {}),
     statularDrafterId: row?.statular_drafter_id == null ? null : providerId(row.statular_drafter_id),
   }
 }

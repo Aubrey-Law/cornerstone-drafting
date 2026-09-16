@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntegrationError } from '@/lib/integrations/errors'
-import { sanitizeDocIdMap } from '@/lib/integrations/settings'
+import { getIntegrationSettings, sanitizeDocIdMap } from '@/lib/integrations/settings'
 import {
   packageKey,
   resolveStatularDocId,
@@ -8,13 +8,20 @@ import {
 } from '@/lib/integrations/statular/packageKey'
 
 const mocks = vi.hoisted(() => ({
-  matter: { client_intake_id: 'intake-1', matter_type: 'individual' } as Record<string, unknown> | null,
-  details: { practice_area: 'EP' } as Record<string, unknown> | null,
+  matter: { id: 'matter-1', client_intake_id: 'intake-1', matter_type: 'individual' } as Record<string, unknown> | null,
+  details: { client_id: 'matter-1', practice_area: 'EP' } as Record<string, unknown> | null,
   designs: [] as Array<Record<string, unknown>>,
-  intake: { plan_type: null, intake_track: 'estate', practice_area: 'EP' } as Record<string, unknown> | null,
-  settings: { statular_doc_id_map: {} } as Record<string, unknown> | null,
+  intake: { id: 'intake-1', plan_type: null, intake_track: 'estate', practice_area: 'EP' } as Record<string, unknown> | null,
+  settings: { id: 1, statular_doc_id_map: {} } as Record<string, unknown> | null,
   errors: {} as Record<string, unknown>,
-  reads: [] as Array<{ table: string; select: string | undefined; orders: unknown[] }>,
+  rejections: {} as Record<string, unknown>,
+  reads: [] as Array<{
+    table: string
+    select: string | undefined
+    eqs: Array<[string, unknown]>
+    orders: Array<[string, { ascending?: boolean }]>
+    limit: number | null
+  }>,
   mutations: [] as Array<{ method: string; table: string }>,
   buildDraftPayload: vi.fn(),
   seedDesignSheet: vi.fn(),
@@ -29,23 +36,45 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
     from: (table: string) => {
       let select: string | undefined
-      const orders: unknown[] = []
+      const eqs: Array<[string, unknown]> = []
+      const orders: Array<[string, { ascending?: boolean }]> = []
+      let limit: number | null = null
       const builder = {
         select(value: string) { select = value; return builder },
-        eq() { return builder },
-        order(column: string, options: unknown) { orders.push([column, options]); return builder },
-        limit() { return builder },
+        eq(column: string, value: unknown) { eqs.push([column, value]); return builder },
+        order(column: string, options: { ascending?: boolean }) { orders.push([column, options]); return builder },
+        limit(value: number) { limit = value; return builder },
         insert() { mocks.mutations.push({ method: 'insert', table }); return builder },
         update() { mocks.mutations.push({ method: 'update', table }); return builder },
         upsert() { mocks.mutations.push({ method: 'upsert', table }); return builder },
         async maybeSingle() {
-          mocks.reads.push({ table, select, orders })
+          mocks.reads.push({ table, select, eqs, orders, limit })
+          if (table in mocks.rejections) throw mocks.rejections[table]
           const error = mocks.errors[table] ?? null
-          if (table === 'matters') return { data: mocks.matter, error }
-          if (table === 'matter_details') return { data: mocks.details, error }
-          if (table === 'design_sheets') return { data: mocks.designs[0] ?? null, error }
-          if (table === 'client_intake') return { data: mocks.intake, error }
-          if (table === 'integration_settings') return { data: mocks.settings, error }
+          if (error) return { data: null, error }
+          const matches = (row: Record<string, unknown>) => eqs.every(([column, value]) => row[column] === value)
+          const identified = (row: Record<string, unknown> | null, identity: Record<string, unknown>) =>
+            row ? { ...identity, ...row } : null
+          const matter = identified(mocks.matter, { id: 'matter-1' })
+          const details = identified(mocks.details, { client_id: 'matter-1' })
+          const intake = identified(mocks.intake, { id: 'intake-1' })
+          const settings = identified(mocks.settings, { id: 1 })
+          if (table === 'matters') return { data: matter && matches(matter) ? matter : null, error: null }
+          if (table === 'matter_details') return { data: details && matches(details) ? details : null, error: null }
+          if (table === 'client_intake') return { data: intake && matches(intake) ? intake : null, error: null }
+          if (table === 'integration_settings') return { data: settings && matches(settings) ? settings : null, error: null }
+          if (table === 'design_sheets') {
+            let rows = mocks.designs.filter(matches)
+            for (const [column, options] of [...orders].reverse()) {
+              rows = [...rows].sort((a, b) => {
+                const comparison = Number(a[column]) - Number(b[column])
+                return options.ascending === false ? -comparison : comparison
+              })
+            }
+            if (limit !== null) rows = rows.slice(0, limit)
+            if (rows.length > 1) return { data: null, error: { message: 'Multiple rows returned.' } }
+            return { data: rows[0] ?? null, error: null }
+          }
           throw new Error(`Unexpected table ${table}`)
         },
       }
@@ -55,7 +84,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }))
 
 function design(planType: unknown, isJoint: unknown = null, decisions: unknown = {}) {
-  mocks.designs = [{ plan_type: planType, is_joint: isJoint, decisions, version: 3 }]
+  mocks.designs = [{ matter_id: 'matter-1', plan_type: planType, is_joint: isJoint, decisions, version: 3 }]
 }
 
 function expectConfigurationRequired(error: unknown) {
@@ -80,12 +109,13 @@ async function assertConfigurationRequired(promise: Promise<unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.matter = { client_intake_id: 'intake-1', matter_type: 'individual' }
-  mocks.details = { practice_area: 'EP' }
+  mocks.matter = { id: 'matter-1', client_intake_id: 'intake-1', matter_type: 'individual' }
+  mocks.details = { client_id: 'matter-1', practice_area: 'EP' }
   mocks.designs = []
-  mocks.intake = { plan_type: null, intake_track: 'estate', practice_area: 'EP' }
-  mocks.settings = { statular_doc_id_map: {} }
+  mocks.intake = { id: 'intake-1', plan_type: null, intake_track: 'estate', practice_area: 'EP' }
+  mocks.settings = { id: 1, statular_doc_id_map: {} }
   mocks.errors = {}
+  mocks.rejections = {}
   mocks.reads = []
   mocks.mutations = []
 })
@@ -196,10 +226,11 @@ describe('resolveStatularPackageKey', () => {
   })
 
   it('uses only the latest design and lets valid design evidence outrank intake', async () => {
-    mocks.matter = { client_intake_id: 'intake-1', matter_type: 'couple' }
+    mocks.matter = { id: 'matter-1', client_intake_id: 'intake-1', matter_type: 'couple' }
     mocks.designs = [
-      { version: 7, plan_type: 'outright_will', is_joint: false, decisions: {} },
-      { version: 6, plan_type: 'pour_over', is_joint: true, decisions: {} },
+      { matter_id: 'other-matter', version: 99, plan_type: 'pour_over', is_joint: true, decisions: {} },
+      { matter_id: 'matter-1', version: 6, plan_type: 'pour_over', is_joint: true, decisions: {} },
+      { matter_id: 'matter-1', version: 7, plan_type: 'outright_will', is_joint: false, decisions: {} },
     ]
     mocks.intake = { practice_area: 'EP', intake_track: 'estate', plan_type: 'joint_rlt' }
     expect(await resolveStatularPackageKey('matter-1')).toBe('EP:will_couple')
@@ -306,6 +337,12 @@ describe('resolveStatularPackageKey', () => {
       ['design_sheets', 'plan_type,is_joint,decisions'],
       ['client_intake', 'plan_type,intake_track,practice_area'],
     ])
+    expect(mocks.reads.map(read => [read.table, read.eqs, read.orders, read.limit])).toEqual([
+      ['matters', [['id', 'matter-1']], [], null],
+      ['matter_details', [['client_id', 'matter-1']], [], null],
+      ['design_sheets', [['matter_id', 'matter-1']], [['version', { ascending: false }]], 1],
+      ['client_intake', [['id', 'intake-1']], [], null],
+    ])
   })
 })
 
@@ -318,12 +355,34 @@ describe('resolveStatularDocId', () => {
         'EP:individual_trust': 42,
       },
     }
-    // The malformed near-match makes the whole persisted mapping invalid; it
-    // can never be silently case-folded into the exact package key.
-    await assertConfigurationRequired(resolveStatularDocId('matter-1'))
-
-    mocks.settings = { statular_doc_id_map: { 'EP:individual_trust': 42 } }
+    // The malformed near-match is ignored, never case-folded or allowed to
+    // hide the independently valid exact mapping.
     await expect(resolveStatularDocId('matter-1')).resolves.toBe(42)
+  })
+
+  it('isolates a legacy Statular key so shared Lawmatics settings remain readable', async () => {
+    mocks.settings = {
+      id: 1,
+      lawmatics_appointment_sync_enabled: true,
+      lawmatics_event_type_id_map: { consultation: 'lawmatics-event-1' },
+      lawmatics_location_id_map: {},
+      lawmatics_user_ids: ['lawmatics-user-1'],
+      lawmatics_last_checked_at: null,
+      lawmatics_last_check_error: null,
+      statular_sync_enabled: false,
+      statular_doc_id_map: { 'EP:individual_rlt': 41 },
+      statular_drafter_id: null,
+    }
+    await expect(getIntegrationSettings()).resolves.toMatchObject({
+      lawmaticsAppointmentSyncEnabled: true,
+      lawmaticsEventTypeIdMap: { consultation: 'lawmatics-event-1' },
+      lawmaticsUserIds: ['lawmatics-user-1'],
+      statularSyncEnabled: false,
+      statularDocIdMap: {},
+    })
+
+    design('pour_over', false)
+    await assertConfigurationRequired(resolveStatularDocId('matter-1'))
   })
 
   it('reports an absent exact mapping as configuration attention', async () => {
@@ -347,6 +406,18 @@ describe('resolveStatularDocId', () => {
     })
     await resolveStatularDocId('matter-1').catch(error => {
       expect(JSON.stringify(error)).not.toMatch(/RAW_SETTINGS_SECRET/)
+    })
+  })
+
+  it('normalizes an unexpected rejected settings read as safe retryable persistence failure', async () => {
+    design('pour_over', false)
+    mocks.rejections.integration_settings = new Error('RAW_SETTINGS_RUNTIME_SECRET')
+    await expect(resolveStatularDocId('matter-1')).rejects.toMatchObject({
+      provider: 'statular', kind: 'retryable', code: 'integration_persistence_failed',
+      safeMessage: 'Unable to read Statular package configuration.',
+    })
+    await resolveStatularDocId('matter-1').catch(error => {
+      expect(JSON.stringify(error)).not.toMatch(/RAW_SETTINGS_RUNTIME_SECRET/)
     })
   })
 })
