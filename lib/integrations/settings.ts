@@ -25,6 +25,28 @@ function validateKey(key: string): void {
   }
 }
 
+const STATULAR_ESTATE_PLAN_KEYS = new Set([
+  'individual_trust',
+  'joint_trust',
+  'separate_trust',
+  'will_individual',
+  'will_couple',
+  'testamentary_trust_individual',
+  'testamentary_trust_couple',
+  'incapacity_individual',
+  'incapacity_couple',
+])
+
+export function isValidStatularPackageKey(key: string): boolean {
+  if (key === 'CP:college_prep') return true
+  const separator = key.indexOf(':')
+  if (separator < 0 || separator !== key.lastIndexOf(':')) return false
+  const practiceArea = key.slice(0, separator)
+  const planKey = key.slice(separator + 1)
+  return (practiceArea === 'EP' || practiceArea === 'EP-LP')
+    && STATULAR_ESTATE_PLAN_KEYS.has(planKey)
+}
+
 function providerId(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error('Provider IDs must be non-empty strings.')
   return value.trim()
@@ -40,11 +62,33 @@ export function sanitizeProviderIdMap(value: unknown): Record<string, string> {
 export function sanitizeDocIdMap(value: unknown): Record<string, number> {
   return Object.fromEntries(Object.entries(requireObject(value)).map(([key, id]) => {
     validateKey(key)
+    if (!isValidStatularPackageKey(key)) {
+      throw new Error('Statular document mapping keys must be exact package keys.')
+    }
     if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
       throw new Error('Statular document IDs must be a positive integer.')
     }
     return [key, id]
   }))
+}
+
+function readableDocIdMap(value: unknown): Record<string, number> {
+  let entries: Array<[string, unknown]>
+  try {
+    entries = Object.entries(requireObject(value))
+  } catch {
+    return {}
+  }
+  const accepted: Array<[string, number]> = []
+  for (const [key, id] of entries) {
+    if (isValidStatularPackageKey(key)
+      && typeof id === 'number'
+      && Number.isSafeInteger(id)
+      && id > 0) {
+      accepted.push([key, id])
+    }
+  }
+  return Object.fromEntries(accepted)
 }
 
 export function sanitizeProviderIds(value: unknown): string[] {
@@ -73,7 +117,7 @@ function fromRow(row: SettingsRow | null): IntegrationSettings {
     lawmaticsLastCheckedAt: row?.lawmatics_last_checked_at ?? null,
     lawmaticsLastCheckError: row?.lawmatics_last_check_error ? 'Lawmatics connection check failed.' : null,
     statularSyncEnabled: row?.statular_sync_enabled === true,
-    statularDocIdMap: sanitizeDocIdMap(row?.statular_doc_id_map ?? {}),
+    statularDocIdMap: readableDocIdMap(row?.statular_doc_id_map ?? {}),
     statularDrafterId: row?.statular_drafter_id == null ? null : providerId(row.statular_drafter_id),
   }
 }

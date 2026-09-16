@@ -19,6 +19,7 @@ export type WorkflowJobType =
   | 'annual_review'
   | 'prepare_invoice_reminders'
   | 'lawmatics_sync_appointment'
+  | 'statular_create_client'
 
 export interface WorkflowJob {
   id: string
@@ -98,6 +99,14 @@ async function runJob(job: WorkflowJob, context: { signal: AbortSignal }) {
     }
     const { runLawmaticsAppointmentSyncJob } = await import('@/lib/integrations/lawmatics/jobs')
     await runLawmaticsAppointmentSyncJob(payload.appointmentId, payload.sourceVersion, context.signal)
+    return
+  }
+  if (job.job_type === 'statular_create_client') {
+    if (typeof payload.clientIntakeId !== 'string' || !payload.clientIntakeId.trim()) {
+      throw new Error('statular_create_client requires clientIntakeId')
+    }
+    const { runStatularClientSyncJob } = await import('@/lib/integrations/statular/jobs')
+    await runStatularClientSyncJob(payload.clientIntakeId, context.signal)
     return
   }
   if (job.job_type === 'seed_design_sheet') {

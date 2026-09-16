@@ -26,6 +26,9 @@ const state = vi.hoisted(() => ({
   pmpsAnchors: [] as Array<Record<string, unknown>>,
   discoveryAnchors: [] as Array<Record<string, unknown>>,
   lawmaticsEnabled: false,
+  statularEnabled: false,
+  statularConfigError: false,
+  statularAppointmentReadError: false,
   jobs: [] as Array<Record<string, unknown>>,
   enqueueError: false,
   claims: null as { id: string; email: string } | null,
@@ -46,6 +49,9 @@ const state = vi.hoisted(() => ({
     this.pmpsAnchors = []
     this.discoveryAnchors = []
     this.lawmaticsEnabled = false
+    this.statularEnabled = false
+    this.statularConfigError = false
+    this.statularAppointmentReadError = false
     this.jobs = []
     this.enqueueError = false
     this.claims = null
@@ -91,12 +97,15 @@ vi.mock('@/lib/supabaseAdmin', () => {
           order: vi.fn(() => chain),
           limit: vi.fn(() => chain),
           maybeSingle: vi.fn(async () => ({ data: table === 'integration_settings'
-            ? { lawmatics_appointment_sync_enabled: state.lawmaticsEnabled }
+            ? { lawmatics_appointment_sync_enabled: state.lawmaticsEnabled,
+                statular_sync_enabled: state.statularEnabled }
             : table === 'appointments'
               ? { id: 'appointments-id-1', source: 'public', updated_at: '2026-08-03T12:00:00Z',
                 ...state.inserts.find(row => row.table === 'appointments')?.values,
                 ...Object.assign({}, ...state.updates.filter(row => row.table === 'appointments').map(row => row.values)) }
-              : state.matterLookup, error: null })),
+              : state.matterLookup,
+            error: table === 'appointments' && state.statularAppointmentReadError
+              ? { message: 'PRIVATE-DB-SNAPSHOT' } : null })),
         }
         return chain
       }),
@@ -182,6 +191,17 @@ vi.mock('@/lib/appointments/settings', () => ({
     autoIntakeInvite: true,
     dateOverrides: state.dateOverrides,
   })),
+}))
+
+vi.mock('@/lib/integrations/statular/config', () => ({
+  getStatularConfig: vi.fn(() => {
+    if (state.statularConfigError) throw new Error('PRIVATE-STATULAR-WEBHOOK-URL')
+    return {
+      clientWebhookUrl: 'https://statular.test/client-secret',
+      matterWebhookUrl: 'https://statular.test/matter-secret',
+      generation: 'generation-1',
+    }
+  }),
 }))
 
 vi.mock('@/lib/appointments/publicRouteGuard', () => ({ guardPublicSchedulingRoute: vi.fn(async () => null) }))
@@ -382,6 +402,37 @@ describe('bookAppointment', () => {
       await expect(bookAppointment(bookingInput())).resolves.toMatchObject({ appointmentId: 'appointments-id-1' })
       expect(log).toHaveBeenCalledWith('[appointments] lawmatics enqueue failed', 'appointments-id-1', 'enqueue_failed')
       expect(JSON.stringify(log.mock.calls)).not.toContain('PRIVATE-TOKEN')
+    } finally { log.mockRestore() }
+  })
+
+  it('enqueues one Statular client job after committing a linked native booking', async () => {
+    state.statularEnabled = true
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    const result = await bookAppointment(bookingInput())
+
+    expect(state.updates).toContainEqual(expect.objectContaining({
+      table: 'appointments', values: expect.objectContaining({ linked_lead_id: 'lead-9' }),
+    }))
+    expect(state.jobs).toEqual([expect.objectContaining({
+      p_job_type: 'statular_create_client',
+      p_dedupe_key: 'statular-client:lead-9:generation-1',
+      p_payload: { clientIntakeId: 'lead-9' },
+    })])
+    expect(result.appointmentId).toBe('appointments-id-1')
+  })
+
+  it.each(['enqueue', 'config', 'read'] as const)('keeps a confirmed booking successful on Statular %s failure without leaking detail', async failure => {
+    state.statularEnabled = true
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    state.enqueueError = failure === 'enqueue'
+    state.statularConfigError = failure === 'config'
+    state.statularAppointmentReadError = failure === 'read'
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(bookAppointment(bookingInput())).resolves.toMatchObject({ appointmentId: 'appointments-id-1' })
+      expect(log).toHaveBeenCalledWith('[appointments] statular enqueue failed', 'appointments-id-1', 'enqueue_failed')
+      expect(JSON.stringify(log.mock.calls)).not.toMatch(/PRIVATE|statular\.test/)
     } finally { log.mockRestore() }
   })
 
@@ -671,6 +722,12 @@ describe('cancelAppointment', () => {
     if (enabled) expect(state.jobs[0].p_payload).toMatchObject({ appointmentId: ROW.id })
   })
 
+  it('does not enqueue Statular client creation for cancellation', async () => {
+    state.statularEnabled = true
+    await cancelAppointment({ appointment: ROW, type: TYPE })
+    expect(state.jobs).toHaveLength(0)
+  })
+
   it('keeps cancellation successful if enqueue fails', async () => {
     state.lawmaticsEnabled = true
     state.enqueueError = true
@@ -764,6 +821,12 @@ describe('rescheduleAppointment', () => {
     await rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso: MOVED_ISO })
     expect(state.jobs).toHaveLength(enabled ? 1 : 0)
     if (enabled) expect(state.jobs[0].p_payload).toMatchObject({ appointmentId: ROW.id })
+  })
+
+  it('does not enqueue Statular client creation for rescheduling', async () => {
+    state.statularEnabled = true
+    await rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso: MOVED_ISO })
+    expect(state.jobs).toHaveLength(0)
   })
 
   it('keeps rescheduling successful if enqueue fails', async () => {
