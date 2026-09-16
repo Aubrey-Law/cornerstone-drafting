@@ -143,6 +143,20 @@ describe('external records', () => {
     expect(Date.parse(result.last_attempt_at!)).toBeGreaterThan(Date.parse(now))
   })
 
+  it('atomically consumes the prior rejection when acquiring a retry attempt', async () => {
+    const before = '2026-09-15T12:00:00.000Z'
+    const store = { value: row({ status: 'attention', last_attempt_at: before,
+      last_error_code: 'validation_failed', last_error_message: 'Rejected.' }) }
+    const write = atomicQuery(store)
+    const acquired = await beginIntegrationAttempt({ ...ref, idempotencyKey: 'matter-1:v1', expectedLastAttemptAt: before })
+    expect(acquired).toMatchObject({ status: 'pending', last_error_code: null, last_error_message: null })
+    expect(write.update).toHaveBeenCalledExactlyOnceWith({ last_attempt_at: acquired.last_attempt_at,
+      status: 'pending', last_error_code: null, last_error_message: null })
+    expect(Date.parse(acquired.last_attempt_at!)).toBeGreaterThan(Date.parse(before))
+    expect(store.value).toMatchObject({ status: 'pending', last_attempt_at: acquired.last_attempt_at,
+      last_error_code: null, last_error_message: null })
+  })
+
   it.each(['success', 'failure', 'cancellation'])('rejects stale %s completion for a superseded attempt', async operation => {
     const store = { value: row({ last_attempt_at: '2026-09-15T12:00:01Z' }) }
     const before = { ...store.value }
