@@ -19,6 +19,7 @@ type Row = Record<string, unknown>
 
 let db: Record<string, Row[]>
 let beforeWrite: ((table: string, patch: Row) => Promise<void>) | null
+let beforeRead: ((table: string) => Promise<void>) | null
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -47,16 +48,21 @@ function query(table: string) {
   let maxRows: number | undefined
   let patch: Row | undefined
   let insertion: Row | undefined
+  let signal: AbortSignal | undefined
   const result = async (single: boolean) => {
     const rows = db[table] ?? []
     if (insertion) {
+      if (beforeWrite) await beforeWrite(table, insertion)
+      if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
       const identity = ['provider', 'internal_entity_type', 'internal_entity_id', 'external_record_type']
       if (rows.some(row => identity.every(key => row[key] === insertion![key]))) return { data: null, error: null }
       const created = externalRecord({ id: `record-${rows.length + 1}`, ...insertion })
       rows.push(created)
       return { data: { ...created }, error: null }
     }
+    if (!patch && beforeRead) await beforeRead(table)
     if (patch && beforeWrite) await beforeWrite(table, patch)
+    if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
     let matches = rows.filter(row => filters.every(filter => filter(row)))
     matches = [...matches].sort((a, b) => {
       for (const order of orders) {
@@ -83,6 +89,7 @@ function query(table: string) {
     limit: vi.fn((value: number) => { maxRows = value; return q }),
     update: vi.fn((value: Row) => { patch = value; return q }),
     upsert: vi.fn((value: Row) => { insertion = value; return q }),
+    abortSignal: vi.fn((value: AbortSignal) => { signal = value; return q }),
     maybeSingle: vi.fn(() => result(true)),
     then: (resolve: (value: Awaited<ReturnType<typeof result>>) => unknown) => result(false).then(resolve),
   }
@@ -96,6 +103,7 @@ function record(): Row | undefined {
 beforeEach(() => {
   vi.clearAllMocks()
   beforeWrite = null
+  beforeRead = null
   db = {
     client_intake: [{
       id: 'lead-1', first_name: '  Ada ', middle_name: 'M.', last_name: ' Lovelace  ',
@@ -369,6 +377,56 @@ describe('durable Statular client creation', () => {
     })
   })
 
+  it('promotes the legacy placeholder safely when the configured generation is exactly preflight', async () => {
+    mocks.config.mockReturnValue({
+      clientWebhookUrl: 'https://statular.test/client-secret',
+      matterWebhookUrl: 'https://statular.test/matter-secret',
+      generation: 'preflight',
+    })
+    db.integration_external_records.push(externalRecord({
+      status: 'attention', source_version: 'preflight',
+      idempotency_key: 'cornerstone:statular:client:lead-1:preflight',
+      request_hash: null, request_snapshot: null, last_attempt_at: null,
+      last_error_code: 'identity_required', last_error_message: 'Safe preflight failure.',
+    }))
+
+    await expect(syncStatularClient('lead-1')).resolves.toMatchObject({ operation: 'created' })
+
+    expect(record()).toMatchObject({
+      status: 'synced', idempotency_key: 'cornerstone:statular:client:lead-1:preflight',
+      request_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      request_snapshot: expect.objectContaining({ first_name: 'Ada', last_name: 'Lovelace' }),
+      last_error_code: null, last_error_message: null,
+    })
+  })
+
+  it('does not resume the compound claim CAS after cancellation during its internal read', async () => {
+    const original = externalRecord({
+      source_version: 'old-source',
+      idempotency_key: 'cornerstone:statular:client:lead-1:old-generation',
+      request_hash: 'old-hash', request_snapshot: { first_name: 'Frozen', last_name: 'Client' },
+    })
+    db.integration_external_records.push({ ...original })
+    const internalReadStarted = deferred<void>()
+    const resumeRead = deferred<void>()
+    let externalRecordReads = 0
+    beforeRead = async table => {
+      if (table !== 'integration_external_records' || ++externalRecordReads !== 2) return
+      internalReadStarted.resolve()
+      await resumeRead.promise
+    }
+    const controller = new AbortController()
+
+    const syncing = syncStatularClient('lead-1', controller.signal)
+    await internalReadStarted.promise
+    controller.abort()
+    resumeRead.resolve()
+
+    await expect(syncing).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toEqual(original)
+    expect(mocks.createClient).not.toHaveBeenCalled()
+  })
+
   it('passes cancellation to transport and performs no outcome write after abort', async () => {
     const started = deferred<void>()
     const response = deferred<{ id: string }>()
@@ -390,6 +448,28 @@ describe('durable Statular client creation', () => {
     expect(record()).toMatchObject({
       status: 'pending', external_id: null, last_attempt_at: expect.any(String),
       last_succeeded_at: null, last_error_code: null, last_error_message: null,
+    })
+  })
+
+  it('does not persist a success that is cancelled while the outcome write is pending', async () => {
+    const writeStarted = deferred<void>()
+    const resumeWrite = deferred<void>()
+    beforeWrite = async (table, patch) => {
+      if (table !== 'integration_external_records' || patch.external_id !== 'statular-client-1') return
+      writeStarted.resolve()
+      await resumeWrite.promise
+    }
+    const controller = new AbortController()
+
+    const syncing = syncStatularClient('lead-1', controller.signal)
+    await writeStarted.promise
+    controller.abort()
+    resumeWrite.resolve()
+
+    await expect(syncing).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toMatchObject({
+      status: 'pending', external_id: null, last_succeeded_at: null,
+      last_error_code: null, last_error_message: null,
     })
   })
 

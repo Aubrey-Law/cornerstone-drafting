@@ -36,6 +36,24 @@ function requireActive(signal?: AbortSignal) {
   }
 }
 
+const PREFLIGHT_SOURCE_VERSION = 'statular-client-preflight:v1'
+
+function preflightIdempotencyKey(clientIntakeId: string) {
+  // This grammar is disjoint from every real client key, which always starts
+  // `cornerstone:statular:client:<uuid>:` regardless of provider generation.
+  return `cornerstone:statular:preflight-client:${clientIntakeId}:v1`
+}
+
+function isVerifiedPreflight(record: ExternalRecord): boolean {
+  return record.source_version === PREFLIGHT_SOURCE_VERSION
+    && record.idempotency_key === preflightIdempotencyKey(record.internal_entity_id)
+    && record.request_hash === null
+    && record.request_snapshot === null
+    && record.external_id === null
+    && record.last_attempt_at === null
+    && (record.status === 'attention' || record.status === 'disabled')
+}
+
 /**
  * Resolve only explicit appointment links. Email matching is deliberately not
  * repeated here: linkage has already been committed by the booking flow.
@@ -81,7 +99,9 @@ async function recordNonAttemptState(
   before: ExternalRecord | null,
   status: 'attention' | 'disabled',
   reason?: IntegrationError,
+  signal?: AbortSignal,
 ) {
+  requireActive(signal)
   const admin = getAdminClient()
   const patch = {
     status,
@@ -89,20 +109,23 @@ async function recordNonAttemptState(
     last_error_message: reason?.safeMessage ?? null,
   }
   if (!before) {
-    const { error } = await admin.from('integration_external_records').upsert({
+    let insert = admin.from('integration_external_records').upsert({
       provider: ref.provider,
       internal_entity_type: ref.internalEntityType,
       internal_entity_id: ref.internalEntityId,
       external_record_type: ref.externalRecordType,
-      source_version: 'preflight',
-      idempotency_key: `cornerstone:statular:client:${ref.internalEntityId}:preflight`,
+      source_version: PREFLIGHT_SOURCE_VERSION,
+      idempotency_key: preflightIdempotencyKey(ref.internalEntityId),
       request_snapshot: null,
       request_hash: null,
       ...patch,
     }, {
       onConflict: 'provider,internal_entity_type,internal_entity_id,external_record_type',
       ignoreDuplicates: true,
-    }).select('*').maybeSingle()
+    }).select('*')
+    if (signal) insert = insert.abortSignal(signal)
+    const { error } = await insert.maybeSingle()
+    requireActive(signal)
     if (error) throw persistenceFailure()
     return
   }
@@ -110,16 +133,23 @@ async function recordNonAttemptState(
   // Never downgrade evidence from an active/provider attempt or a terminal
   // human-review/success state. An unattempted disabled placeholder may still
   // become attention after configuration or source validation runs.
-  if (before.last_attempt_at || before.status === 'synced' || before.status === 'attention') return
-  const update = admin.from('integration_external_records').update(patch)
+  if (before.status === 'synced' || before.status === 'attention' || !isVerifiedPreflight(before)) return
+  let update = admin.from('integration_external_records').update(patch)
     .eq('provider', ref.provider)
     .eq('internal_entity_type', ref.internalEntityType)
     .eq('internal_entity_id', ref.internalEntityId)
     .eq('external_record_type', ref.externalRecordType)
     .eq('idempotency_key', before.idempotency_key)
+    .eq('source_version', PREFLIGHT_SOURCE_VERSION)
     .eq('status', before.status)
+    .is('request_hash', null)
+    .is('request_snapshot', null)
+    .is('external_id', null)
     .is('last_attempt_at', null)
-  const { error } = await update.select('*').maybeSingle()
+    .select('*')
+  if (signal) update = update.abortSignal(signal)
+  const { error } = await update.maybeSingle()
+  requireActive(signal)
   if (error) throw persistenceFailure()
 }
 
@@ -132,29 +162,32 @@ export async function runStatularClientSyncJob(clientIntakeId: string, signal?: 
     requireActive(signal)
     const settings = await getIntegrationSettings()
     requireActive(signal)
-    const before = await getExternalRecord(ref)
+    const before = await getExternalRecord(ref, { signal })
     requireActive(signal)
     if (!settings.statularSyncEnabled) {
-      await recordNonAttemptState(ref, before, 'disabled')
+      await recordNonAttemptState(ref, before, 'disabled', undefined, signal)
       return
     }
     try {
       getStatularConfig()
     } catch (error) {
+      requireActive(signal)
       const safe = normalizedFailure(error)
       if (safe.kind === 'retryable') throw safe
-      await recordNonAttemptState(ref, before, 'attention', safe)
+      await recordNonAttemptState(ref, before, 'attention', safe, signal)
       return
     }
     requireActive(signal)
     try {
       await syncStatularClient(clientIntakeId, signal)
     } catch (error) {
+      requireActive(signal)
       const safe = normalizedFailure(error)
       if (safe.kind === 'retryable') throw safe
-      await recordNonAttemptState(ref, before, 'attention', safe)
+      await recordNonAttemptState(ref, before, 'attention', safe, signal)
     }
   } catch (error) {
+    requireActive(signal)
     throw normalizedFailure(error)
   }
 }

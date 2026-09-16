@@ -60,13 +60,20 @@ function requireActive(signal?: AbortSignal): void {
   }
 }
 
+function legacyPreflightIdentity(clientIntakeId: string) {
+  return {
+    sourceVersion: 'preflight',
+    idempotencyKey: `cornerstone:statular:client:${clientIntakeId}:preflight`,
+  }
+}
+
 /** Creates a Statular client once, with the database snapshot authoritative on retry. */
 export async function syncStatularClient(clientIntakeId: string, signal?: AbortSignal): Promise<IntegrationResult> {
   const ref: ExternalRecordRef = {
     provider: 'statular', internalEntityType: 'lead', internalEntityId: clientIntakeId, externalRecordType: 'client',
   }
   requireActive(signal)
-  const existing = await getExternalRecord(ref)
+  const existing = await getExternalRecord(ref, { signal })
   requireActive(signal)
   if (existing?.external_id) return result('reused', existing.external_id)
 
@@ -76,9 +83,15 @@ export async function syncStatularClient(clientIntakeId: string, signal?: AbortS
   const requestSnapshot = canonicalize(payload)
   const requestHash = snapshotHash(requestSnapshot)
   const idempotencyKey = `cornerstone:statular:client:${clientIntakeId}:${config.generation}`
-  const claimed = await claimExternalRecord({
-    ...ref, sourceVersion: requestHash, idempotencyKey, requestSnapshot, requestHash,
-  })
+  let claimed
+  try {
+    claimed = await claimExternalRecord({
+      ...ref, sourceVersion: requestHash, idempotencyKey, requestSnapshot, requestHash,
+    }, { signal, replaceUnattemptedPlaceholder: legacyPreflightIdentity(clientIntakeId) })
+  } catch (error) {
+    requireActive(signal)
+    throw safeFailure(error)
+  }
   requireActive(signal)
   if (claimed.external_id) return result('reused', claimed.external_id)
 
@@ -86,12 +99,13 @@ export async function syncStatularClient(clientIntakeId: string, signal?: AbortS
   try {
     fenced = await beginCreateIntegrationAttempt({
       ...ref, idempotencyKey: claimed.idempotency_key, expectedLastAttemptAt: claimed.last_attempt_at,
-    })
+    }, { signal })
     requireActive(signal)
   } catch (error) {
-    if (signal?.aborted) throw safeFailure(error)
+    requireActive(signal)
     if (error instanceof IntegrationError && error.code === 'integration_record_changed') {
-      const completed = await getExternalRecord(ref)
+      const completed = await getExternalRecord(ref, { signal })
+      requireActive(signal)
       if (completed?.external_id) return result('reused', completed.external_id)
     }
     throw safeFailure(error)
@@ -103,14 +117,14 @@ export async function syncStatularClient(clientIntakeId: string, signal?: AbortS
     requireActive(signal)
     const created = await createStatularClient(storedPayload, claimed.idempotency_key, signal)
     requireActive(signal)
-    await recordIntegrationSuccess({ ...attempt, externalId: created.id })
+    await recordIntegrationSuccess({ ...attempt, externalId: created.id }, { signal })
+    requireActive(signal)
     return result('created', created.id)
   } catch (error) {
+    requireActive(signal)
     const safe = safeFailure(error)
-    // The workflow worker retains the claim until cooperative cancellation
-    // settles. Do not append an outcome write after its signal has fired.
-    if (signal?.aborted) throw safe
-    await recordIntegrationFailure({ ...attempt, error: safe })
+    await recordIntegrationFailure({ ...attempt, error: safe }, { signal })
+    requireActive(signal)
     throw safe
   }
 }

@@ -22,6 +22,14 @@ type Row = Record<string, unknown>
 let db: Record<string, Row[]>
 let jobs: Map<string, Row>
 let readFailure: string | null
+let beforeWrite: ((table: string, patch: Row) => Promise<void>) | null
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+  return { promise, resolve, reject }
+}
 
 function integrationError(kind: 'attention' | 'retryable', code: string) {
   return new IntegrationError({
@@ -34,6 +42,7 @@ function query(table: string) {
   let patch: Row | undefined
   let insertion: Row | undefined
   let projection = '*'
+  let signal: AbortSignal | undefined
   const q = {
     select: vi.fn((fields = '*') => { projection = fields; return q }),
     eq: vi.fn((key: string, value: unknown) => { filters.push(row => row[key] === value); return q }),
@@ -41,10 +50,13 @@ function query(table: string) {
     is: vi.fn((key: string, value: unknown) => { filters.push(row => row[key] === value); return q }),
     update: vi.fn((value: Row) => { patch = value; return q }),
     upsert: vi.fn((value: Row) => { insertion = value; return q }),
+    abortSignal: vi.fn((value: AbortSignal) => { signal = value; return q }),
     maybeSingle: vi.fn(async () => {
       if (readFailure === table) return { data: null, error: { message: 'PRIVATE-DB-CAUSE' } }
       const rows = db[table] ?? []
       if (insertion) {
+        if (beforeWrite) await beforeWrite(table, insertion)
+        if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
         const keys = ['provider', 'internal_entity_type', 'internal_entity_id', 'external_record_type']
         if (rows.some(row => keys.every(key => row[key] === insertion![key]))) return { data: null, error: null }
         const created = {
@@ -55,6 +67,8 @@ function query(table: string) {
         rows.push(created)
         return { data: { ...created }, error: null }
       }
+      if (patch && beforeWrite) await beforeWrite(table, patch)
+      if (signal?.aborted) return { data: null, error: { message: 'AbortError: request cancelled' } }
       const row = rows.find(candidate => filters.every(filter => filter(candidate)))
       if (row && patch) Object.assign(row, patch)
       return {
@@ -75,6 +89,7 @@ const record = () => db.integration_external_records[0]
 beforeEach(() => {
   vi.clearAllMocks()
   readFailure = null
+  beforeWrite = null
   jobs = new Map()
   db = {
     integration_settings: [{ id: 1, statular_sync_enabled: true }],
@@ -202,7 +217,48 @@ describe('Statular client workflow job', () => {
       status: 'attention', last_error_code: 'configuration_required',
       last_error_message: 'Safe Statular failure.', last_attempt_at: null,
       request_hash: null, request_snapshot: null,
+      source_version: 'statular-client-preflight:v1',
+      idempotency_key: 'cornerstone:statular:preflight-client:lead-1:v1',
     })
+  })
+
+  it('does not persist preflight attention after the job is cancelled', async () => {
+    const syncStarted = deferred<void>()
+    const rejectSync = deferred<void>()
+    mocks.sync.mockImplementationOnce(async () => {
+      syncStarted.resolve()
+      await rejectSync.promise
+      throw integrationError('attention', 'identity_required')
+    })
+    const controller = new AbortController()
+
+    const running = runStatularClientSyncJob('lead-1', controller.signal)
+    await syncStarted.promise
+    controller.abort()
+    rejectSync.resolve()
+
+    await expect(running).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toBeUndefined()
+  })
+
+  it('does not persist a preflight write cancelled while the database request is pending', async () => {
+    db.integration_settings[0].statular_sync_enabled = false
+    const writeStarted = deferred<void>()
+    const resumeWrite = deferred<void>()
+    beforeWrite = async (table, patch) => {
+      if (table !== 'integration_external_records' || patch.status !== 'disabled') return
+      writeStarted.resolve()
+      await resumeWrite.promise
+    }
+    const controller = new AbortController()
+
+    const running = runStatularClientSyncJob('lead-1', controller.signal)
+    await writeStarted.promise
+    controller.abort()
+    resumeWrite.resolve()
+
+    await expect(running).rejects.toMatchObject({ kind: 'retryable', code: 'timeout' })
+    expect(record()).toBeUndefined()
   })
 
   it('persists source-data preflight attention and completes', async () => {
@@ -249,6 +305,23 @@ describe('Statular client workflow job', () => {
     await runStatularClientSyncJob('lead-1')
 
     expect(record()).toEqual(previous)
+  })
+
+  it('does not overwrite a real frozen pending claim before its first attempt', async () => {
+    const pending = {
+      provider: 'statular', internal_entity_type: 'lead', internal_entity_id: 'lead-1',
+      external_record_type: 'client', status: 'pending', source_version: 'real-payload-hash',
+      idempotency_key: 'cornerstone:statular:client:lead-1:generation-1',
+      request_hash: 'real-payload-hash', request_snapshot: { first_name: 'PRIVATE', last_name: 'PRIVATE' },
+      external_id: null, last_attempt_at: null, last_succeeded_at: null,
+      last_error_code: null, last_error_message: null,
+    }
+    db.integration_external_records.push({ ...pending })
+    db.integration_settings[0].statular_sync_enabled = false
+
+    await runStatularClientSyncJob('lead-1')
+
+    expect(record()).toEqual(pending)
   })
 
   it('preserves unattempted attention when a later queued job is disabled', async () => {
