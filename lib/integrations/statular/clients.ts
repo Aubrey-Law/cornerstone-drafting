@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import type { Json } from '@/types/supabase'
 import { IntegrationError } from '@/lib/integrations/errors'
 import {
-  beginIntegrationAttempt,
+  beginCreateIntegrationAttempt,
   claimExternalRecord,
   getExternalRecord,
   recordIntegrationFailure,
@@ -69,9 +69,18 @@ export async function syncStatularClient(clientIntakeId: string): Promise<Integr
   })
   if (claimed.external_id) return result('reused', claimed.external_id)
 
-  const fenced = await beginIntegrationAttempt({
-    ...ref, idempotencyKey: claimed.idempotency_key, expectedLastAttemptAt: claimed.last_attempt_at,
-  })
+  let fenced
+  try {
+    fenced = await beginCreateIntegrationAttempt({
+      ...ref, idempotencyKey: claimed.idempotency_key, expectedLastAttemptAt: claimed.last_attempt_at,
+    })
+  } catch (error) {
+    if (error instanceof IntegrationError && error.code === 'integration_record_changed') {
+      const completed = await getExternalRecord(ref)
+      if (completed?.external_id) return result('reused', completed.external_id)
+    }
+    throw safeFailure(error)
+  }
   const attempt = { ...ref, idempotencyKey: claimed.idempotency_key, attemptAt: fenced.last_attempt_at! }
   try {
     // The claimed snapshot, not the just-built object, is the replay contract.

@@ -18,6 +18,7 @@ import { syncStatularClient } from '@/lib/integrations/statular/clients'
 type Row = Record<string, unknown>
 
 let db: Record<string, Row[]>
+let beforeWrite: ((table: string, patch: Row) => Promise<void>) | null
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -55,6 +56,7 @@ function query(table: string) {
       rows.push(created)
       return { data: { ...created }, error: null }
     }
+    if (patch && beforeWrite) await beforeWrite(table, patch)
     let matches = rows.filter(row => filters.every(filter => filter(row)))
     matches = [...matches].sort((a, b) => {
       for (const order of orders) {
@@ -93,6 +95,7 @@ function record(): Row | undefined {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  beforeWrite = null
   db = {
     client_intake: [{
       id: 'lead-1', first_name: '  Ada ', middle_name: 'M.', last_name: ' Lovelace  ',
@@ -101,6 +104,8 @@ beforeEach(() => {
       notes: 'PRIVATE-NOTES', qualification_notes: 'PRIVATE-QUALIFICATION', financial_details: { netWorth: 'PRIVATE' },
     }],
     contacts: [],
+    matters: [],
+    matter_contacts: [],
     appointments: [],
     integration_external_records: [],
   }
@@ -192,6 +197,41 @@ describe('Statular client payload assembly', () => {
     })
   })
 
+  it('uses matter contact membership and matter-relative child parentage when a matter exists', async () => {
+    db.matters.push({ id: 'matter-1', client_intake_id: 'lead-1' })
+    db.contacts.push(
+      {
+        id: 'shared-spouse', client_intake_id: 'another-intake', relationship_type: 'other',
+        first_name: 'Matter', last_name: 'Spouse', email: 'matter-spouse@example.test', created_at: '2026-02-01',
+      },
+      {
+        id: 'shared-child', client_intake_id: 'another-intake', relationship_type: 'other',
+        first_name: 'Matter', last_name: 'Child', parentage: 'client', created_at: '2026-02-02',
+      },
+      {
+        id: 'legacy-spouse', client_intake_id: 'lead-1', relationship_type: 'spouse',
+        first_name: 'Legacy', last_name: 'Spouse', created_at: '2026-01-01',
+      },
+    )
+    db.matter_contacts.push(
+      { id: 'join-spouse', matter_id: 'matter-1', contact_id: 'shared-spouse', relationship_type: 'spouse', parentage: null },
+      { id: 'join-child', matter_id: 'matter-1', contact_id: 'shared-child', relationship_type: 'child', parentage: 'spouse' },
+    )
+    db.appointments.push({
+      id: 'appointment-1', linked_lead_id: 'lead-1', status: 'scheduled', created_at: '2026-09-15',
+      second_attendee_first_name: 'Booking', second_attendee_last_name: 'Fallback', second_attendee_email: 'fallback@example.test',
+    })
+
+    const payload = await buildStatularClientPayload('lead-1')
+    expect(payload).toMatchObject({
+      partner: true, partner_first_name: 'Matter', partner_last_name: 'Spouse',
+      partner_email: 'matter-spouse@example.test',
+      children: [{ name: 'Matter Child', relationship: 'settlor2' }],
+    })
+    expect(payload.partner_first_name).not.toBe('Booking')
+    expect(payload.partner_first_name).not.toBe('Legacy')
+  })
+
   it('uses only the newest scheduled appointment component fields when no spouse contact exists', async () => {
     db.appointments.push(
       {
@@ -213,15 +253,28 @@ describe('Statular client payload assembly', () => {
     })
   })
 
-  it('never splits a display name when explicit spouse components are absent', async () => {
+  it.each([
+    { second_attendee_email: 'spouse@example.test', second_attendee_name: null },
+    { second_attendee_email: null, second_attendee_name: 'Jo Ann de la Cruz' },
+  ])('returns attention without splitting incomplete second-attendee evidence: %j', async evidence => {
     db.appointments.push({
       id: 'appointment-1', linked_lead_id: 'lead-1', status: 'scheduled', created_at: '2026-09-15',
-      second_attendee_first_name: null, second_attendee_last_name: null, second_attendee_email: 'spouse@example.test',
-      second_attendee_name: 'Jo Ann de la Cruz',
+      second_attendee_first_name: null, second_attendee_last_name: null, ...evidence,
     })
-    const payload = await buildStatularClientPayload('lead-1')
-    expect(payload).not.toHaveProperty('partner')
-    expect(JSON.stringify(payload)).not.toContain('Jo Ann de la Cruz')
+    await expect(syncStatularClient('lead-1')).rejects.toMatchObject({
+      provider: 'statular', kind: 'attention', code: 'invalid_source_data',
+    })
+    expect(mocks.createClient).not.toHaveBeenCalled()
+    expect(record()).toBeUndefined()
+  })
+
+  it('omits partner fields for a true individual booking without second-attendee evidence', async () => {
+    db.appointments.push({
+      id: 'appointment-1', linked_lead_id: 'lead-1', status: 'scheduled', created_at: '2026-09-15',
+      second_attendee_first_name: null, second_attendee_last_name: null,
+      second_attendee_email: null, second_attendee_name: null,
+    })
+    await expect(buildStatularClientPayload('lead-1')).resolves.not.toHaveProperty('partner')
   })
 
   it.each(['first_name', 'last_name'] as const)('returns a safe attention error when primary %s is missing', async field => {
@@ -332,6 +385,34 @@ describe('durable Statular client creation', () => {
     }))
 
     await expect(first).resolves.toMatchObject({ code: 'integration_record_changed', kind: 'retryable' })
+    expect(record()).toMatchObject({ status: 'synced', external_id: 'winner-client', last_error_code: null })
+  })
+
+  it('reuses a winner that completes after this caller claims but before create-only acquisition', async () => {
+    const winnerStarted = deferred<void>()
+    const winnerResponse = deferred<{ id: string }>()
+    const blockedAcquisition = deferred<void>()
+    const resumeAcquisition = deferred<void>()
+    mocks.createClient.mockImplementationOnce(() => { winnerStarted.resolve(); return winnerResponse.promise })
+
+    const winner = syncStatularClient('lead-1')
+    await winnerStarted.promise
+    beforeWrite = async (_table, patch) => {
+      if (patch.status === 'pending' && !('external_id' in patch)) {
+        blockedAcquisition.resolve()
+        await resumeAcquisition.promise
+      }
+    }
+    const stale = syncStatularClient('lead-1')
+    await blockedAcquisition.promise
+    winnerResponse.resolve({ id: 'winner-client' })
+    await expect(winner).resolves.toMatchObject({ operation: 'created', externalId: 'winner-client' })
+    resumeAcquisition.resolve()
+
+    await expect(stale).resolves.toEqual({
+      provider: 'statular', externalRecordType: 'client', externalId: 'winner-client', operation: 'reused',
+    })
+    expect(mocks.createClient).toHaveBeenCalledTimes(1)
     expect(record()).toMatchObject({ status: 'synced', external_id: 'winner-client', last_error_code: null })
   })
 })
