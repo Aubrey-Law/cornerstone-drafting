@@ -40,7 +40,12 @@ describe('complete matter pages and board columns',()=>{
     expect(result.rows.filter(row=>row.stage==='intake')).toHaveLength(20)
     expect(result.rows.filter(row=>row.stage==='drafting')).toHaveLength(50)
     expect(result.columns.early).toBe(70)
-    expect(result.total).toBe(151)
+    // Not a second number: `total` counts the filtered set, and the view
+    // changes only which of those rows come back. Same 150 as the table
+    // view above. This said 151 — the default before
+    // 20261128000000_hide_closed_matters.sql took the closed stage out of
+    // the default list, which updated every other total in this file.
+    expect(result.total).toBe(150)
   })
   it('filters the complete set and counts only uploads after review',()=>{
     expect(page({search:`${prefix}-150`}).total).toBe(1)

@@ -2,6 +2,8 @@
 
 `firm-remediation.sql` is a deliberately minimal, synthetic PostgreSQL 17 catalog for the five remediation integration files. It is not a Supabase migration or a copy of client data. Use a fresh disposable container; never apply this fixture to the linked firm database or an existing Supabase instance.
 
+`.github/workflows/integration-fixture.yml` now runs all five on every pull request that touches them, on a weekly schedule, and on demand, against a `postgres:17-alpine` service container built the same way. The procedure below stays, because it is still how you run them locally and how you debug a red job.
+
 Prerequisites: Docker, local `psql`, installed project dependencies, supported Node 24. Use an unused loopback port and a unique container name. From the repository root:
 
 ```sh
@@ -17,6 +19,16 @@ PGPASSWORD=synthetic-fixture psql -h 127.0.0.1 -p 55493 -U postgres -d postgres 
   -f supabase/migrations/20261123000000_workflow_job_leases.sql \
   -f supabase/migrations/20261124000000_working_list_reads.sql
 
+PGPASSWORD=synthetic-fixture PGOPTIONS='-c check_function_bodies=off' \
+  psql -h 127.0.0.1 -p 55493 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -f supabase/migrations/20261128000000_hide_closed_matters.sql
+```
+
+The third migration goes on its own because of the second function it carries. `firm_matter_page_v1` is the one `matter-list-pagination` exercises and it reads only tables this fixture has; `drafting_hub_page`, in the same file, reads `design_sheets`, `doc_selections`, `drafting_hub_has_documents` and a dozen `matter_documents` columns the fixture deliberately does not stub, and no test here calls it. Postgres parses `language sql` bodies at creation time, so it would otherwise reject the file over a function nothing runs. `check_function_bodies=off` defers only that resolution — `ON_ERROR_STOP` still catches everything else.
+
+Leaving it out is what made these tests wrong for a while: it redefined `firm_matter_page_v1` to hide closed matters by default and to take a `closed` toggle, so without it `matter-list-pagination` asserts a toggle the database it is talking to does not implement.
+
+```sh
 INTEGRATION_SUPABASE_URL=http://127.0.0.1:9 \
 INTEGRATION_SUPABASE_SERVICE_ROLE_KEY=synthetic \
 INTEGRATION_DATABASE_URL=postgresql://postgres:synthetic-fixture@127.0.0.1:55493/postgres \
