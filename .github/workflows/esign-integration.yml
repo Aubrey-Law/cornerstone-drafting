@@ -1,0 +1,118 @@
+name: Engagement sending works against a real database
+
+# Three of the four defects that reached production on the native e-signature
+# path were invisible to the whole local gate, and one of them is the reason
+# this job exists: createDocumentRequest wrote `agreement_id:
+# crypto.randomUUID()` into a column declared `references
+# engagement_agreements(id)`. That insert could not succeed on any input. The
+# engine was incapable of creating a signing session from the day it shipped,
+# and thousands of unit tests passed over it, because those tests mock
+# getAdminClient() and a mock enforces no foreign keys.
+#
+# tests/integration/ and vitest.integration.config.ts already existed and
+# already spoke to a loopback Postgres. Nothing ran them. A suite nobody runs
+# protects nobody, so the test alone would have left the same hole in a new
+# place — this is the half that makes it real.
+#
+# No stored secrets. `supabase start` brings up a local stack, applies
+# supabase/migrations itself, and prints its own keys; the job reads them out of
+# `supabase status` and throws them away with the runner. The same property that
+# made esign-anchor-probe.yml safe to add.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Only where the answer could change. Standing up the stack is slow, and a
+    # check that is slow everywhere gets ignored.
+    paths:
+      - 'lib/esign/**'
+      - 'lib/engagement/**'
+      - 'supabase/migrations/**'
+      - 'tests/integration/**'
+      - 'tests/support/verificationEnvironment.ts'
+      - 'vitest.integration.config.ts'
+      - '.github/workflows/esign-integration.yml'
+  schedule:
+    # 12:40 UTC on Mondays — after the anchor probe at 12:20, so a red Monday
+    # morning arrives as one thing at a time.
+    - cron: '40 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esign-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Engagement sending works against a real database
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Pinned rather than latest: the CLI decides which Postgres image the
+      # stack runs, and the point of this job is that the schema behaves the way
+      # production's does.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.114.0
+
+      - name: Start the local stack
+        run: supabase start
+
+      # `supabase status -o env` prints the generated keys as shell assignments.
+      # They are per-run and local to this container; masking them keeps them
+      # out of the log even so.
+      #
+      # The names are checked rather than trusted. This workflow was written in
+      # a container whose egress proxy blocks public.ecr.aws, so `supabase
+      # start` could not run there and the variable names came from memory. A
+      # wrong name would otherwise export an empty string and fail later as an
+      # unhelpful connection error; this fails here and prints what the CLI
+      # actually emitted, with the values stripped.
+      - name: Point the suite at the local stack
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          missing=()
+          for name in API_URL DB_URL SERVICE_ROLE_KEY ANON_KEY; do
+            # An `if`, not `[ ... ] && ...`: under `set -e` the `&&` form exits
+            # the step when the test is false, which is the case where all is
+            # well.
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::supabase status -o env did not provide: ${missing[*]}"
+            echo 'Names it did provide:'
+            supabase status -o env | sed 's/=.*/=<redacted>/'
+            exit 1
+          fi
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          echo "::add-mask::$ANON_KEY"
+          {
+            echo "INTEGRATION_SUPABASE_URL=$API_URL"
+            echo "INTEGRATION_SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "INTEGRATION_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "INTEGRATION_DATABASE_URL=$DB_URL"
+          } >> "$GITHUB_ENV"
+
+      - name: Run the integration suite
+        run: npm run test:integration
+
+      - name: Stack logs on failure
+        if: failure()
+        run: supabase status || true
+
+      - name: Stop the local stack
+        if: always()
+        run: supabase stop --no-backup || true
