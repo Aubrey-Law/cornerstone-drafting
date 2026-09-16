@@ -19,8 +19,8 @@ export async function enqueueLawmaticsAppointmentSync(appointmentId: string, act
   const dedupeKey = `lawmatics:appointment:event:${appointmentId}:${sourceVersion}`
   const job = await enqueueWorkflowJob({ type: 'lawmatics_sync_appointment', dedupeKey,
     payload: { appointmentId, sourceVersion }, actorId })
-  // Reconciliation must first establish disabled state or another approved repair
-  // case. Ordinary booking hooks never restart attention/succeeded deliveries.
+  // Reconciliation must first establish missing/pending/disabled state or a
+  // canonical mismatch, excluding attention. Ordinary booking hooks never reopen.
   if (options.reopenTerminal) {
     const { error } = await lawmaticsDatabase().rpc('reopen_integration_workflow_job', {
       p_job_type: 'lawmatics_sync_appointment', p_dedupe_key: dedupeKey,
