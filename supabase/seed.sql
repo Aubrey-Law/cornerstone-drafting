@@ -62,6 +62,7 @@ REVOKE ALL ON TABLE
   public.document_template_publications,
   public.document_template_versions,
   public.intake_invite_audit,
+  public.integration_entity_leases,
   public.integration_external_records,
   public.integration_settings,
   public.telephony_webhook_events,

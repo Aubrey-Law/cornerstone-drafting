@@ -2,6 +2,19 @@ import * as Sentry from '@sentry/nextjs'
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
 
+function isStatularWebhook(url: string): boolean {
+  return [process.env.STATULAR_CLIENT_WEBHOOK_URL, process.env.STATULAR_MATTER_WEBHOOK_URL].some(value => {
+    if (!value?.trim()) return false
+    try {
+      // Match the exact canonical URL used by the server transport. The URL is
+      // a credential: never attach it to integration options, spans, or errors.
+      return url === new URL(value.trim()).href
+    } catch {
+      return false
+    }
+  })
+}
+
 if (dsn) {
   Sentry.init({
     dsn,
@@ -15,6 +28,17 @@ if (dsn) {
     // Estate-planning data flows through this app. Do NOT let Sentry attach
     // request bodies, cookies, headers, IPs, or user identifiers automatically.
     sendDefaultPii: false,
+
+    // Exclude before recording: beforeSend cannot scrub spans, and ordinary
+    // outgoing-request breadcrumbs include URLs even with sendDefaultPii false.
+    integrations(defaultIntegrations) {
+      return [
+        ...defaultIntegrations.filter(integration => integration.name !== 'NodeFetch' && integration.name !== 'Http'),
+        Sentry.nativeNodeFetchIntegration({ ignoreOutgoingRequests: isStatularWebhook }),
+        // Next.js already owns incoming request spans (the SDK default does this too).
+        Sentry.httpIntegration({ disableIncomingRequestSpans: true, ignoreOutgoingRequests: isStatularWebhook }),
+      ]
+    },
 
     beforeSend(event) {
       // Strip request data that may carry client PII (intake payloads,

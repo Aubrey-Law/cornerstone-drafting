@@ -152,6 +152,8 @@ export type Database = {
         Row: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name: string | null
+          attendee_last_name: string | null
           attendee_name: string
           attendee_phone: string | null
           booked_by_user_id: string | null
@@ -171,6 +173,8 @@ export type Database = {
           raw: Json
           reminder_sent_at: string | null
           second_attendee_email: string | null
+          second_attendee_first_name: string | null
+          second_attendee_last_name: string | null
           second_attendee_name: string | null
           source: string
           start_time: string
@@ -180,6 +184,8 @@ export type Database = {
         Insert: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -199,6 +205,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time: string
@@ -208,6 +216,8 @@ export type Database = {
         Update: {
           appointment_type_id?: string
           attendee_email?: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name?: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -227,6 +237,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time?: string
@@ -5435,6 +5447,30 @@ export type Database = {
           },
         ]
       }
+      integration_entity_leases: {
+        Row: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Insert: {
+          entity_id: string
+          entity_type: string
+          lease_expires_at: string
+          lease_token: string
+          provider: string
+        }
+        Update: {
+          entity_id?: string
+          entity_type?: string
+          lease_expires_at?: string
+          lease_token?: string
+          provider?: string
+        }
+        Relationships: []
+      }
       integration_external_records: {
         Row: {
           created_at: string
@@ -5863,21 +5899,21 @@ export type Database = {
       lawmatics_tokens: {
         Row: {
           access_token: string
-          expires_at: string
+          expires_at: string | null
           id: string
           refresh_token: string | null
           updated_at: string
         }
         Insert: {
           access_token: string
-          expires_at: string
+          expires_at?: string | null
           id: string
           refresh_token?: string | null
           updated_at?: string
         }
         Update: {
           access_token?: string
-          expires_at?: string
+          expires_at?: string | null
           id?: string
           refresh_token?: string | null
           updated_at?: string
@@ -10371,6 +10407,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_provider: string }
+        Returns: string
+      }
       approve_invoice_reminder: {
         Args: { p_actor_id: string; p_reminder_id: string }
         Returns: {
@@ -11203,6 +11243,15 @@ export type Database = {
         Args: { p_claim_token: string; p_error?: string; p_job_id: string }
         Returns: boolean
       }
+      finish_workflow_job_v3: {
+        Args: {
+          p_claim_token: string
+          p_error?: string
+          p_job_id: string
+          p_retry_after_ms?: number
+        }
+        Returns: boolean
+      }
       firm_billing_matter_options_v1: {
         Args: { p_search: string; p_selected?: string }
         Returns: Json
@@ -11756,6 +11805,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      release_integration_entity_lease: {
+        Args: { p_entity_id: string; p_entity_type: string; p_lease_token: string; p_provider: string }
+        Returns: boolean
+      }
       release_matter_fee_milestone: {
         Args: { p_actor_id: string; p_milestone_id: string }
         Returns: {
@@ -11805,6 +11858,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reopen_integration_workflow_job: {
+        Args: { p_dedupe_key: string; p_job_type: string }
+        Returns: string
       }
       release_webhook_event: {
         Args: { p_event_id: string; p_provider: string }

@@ -8,6 +8,7 @@ import { ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import type { GeneratedDatabase, Json } from '@/types/supabase'
 import { prepareInvoiceReminderDrafts } from '@/lib/billing/prepareInvoiceReminders'
+import { IntegrationError } from '@/lib/integrations/errors'
 export { prepareInvoiceReminderDrafts } from '@/lib/billing/prepareInvoiceReminders'
 
 export type WorkflowJobType =
@@ -17,6 +18,7 @@ export type WorkflowJobType =
   | 'release_billing_milestone'
   | 'annual_review'
   | 'prepare_invoice_reminders'
+  | 'lawmatics_sync_appointment'
 
 export interface WorkflowJob {
   id: string
@@ -87,8 +89,17 @@ async function createAnnualReviewTask(matterId: string, actorId: string | null) 
   if (error) throw new Error(error.message)
 }
 
-async function runJob(job: WorkflowJob) {
+async function runJob(job: WorkflowJob, context: { signal: AbortSignal }) {
   const payload = job.payload ?? {}
+  if (job.job_type === 'lawmatics_sync_appointment') {
+    if (typeof payload.appointmentId !== 'string' || !payload.appointmentId.trim()
+      || typeof payload.sourceVersion !== 'string' || !payload.sourceVersion.trim()) {
+      throw new Error('lawmatics_sync_appointment requires appointmentId and sourceVersion')
+    }
+    const { runLawmaticsAppointmentSyncJob } = await import('@/lib/integrations/lawmatics/jobs')
+    await runLawmaticsAppointmentSyncJob(payload.appointmentId, payload.sourceVersion, context.signal)
+    return
+  }
   if (job.job_type === 'seed_design_sheet') {
     if (!job.matter_id) throw new Error('seed_design_sheet requires matter_id')
     await ensureDesignSheetSeededFromIntake(job.matter_id)
@@ -151,7 +162,7 @@ async function runJob(job: WorkflowJob) {
 
 /** Claim one job at a time, reserving ten seconds of the route for cleanup. */
 export async function processWorkflowJobs(limit = 10, options: {
-  now?: () => number; run?: (job: WorkflowJob) => Promise<void>; budgetMs?: number
+  now?: () => number; run?: (job: WorkflowJob, context: { signal: AbortSignal }) => Promise<void>; budgetMs?: number
 } = {}) {
   if (!await durableWorkflowJobsEnabled()) return { claimed: 0, succeeded: 0, failed: 0, disabled: true }
   const now = options.now ?? Date.now
@@ -163,25 +174,52 @@ export async function processWorkflowJobs(limit = 10, options: {
     const { data, error } = await admin.rpc('claim_workflow_jobs_v2', {
       p_limit: 1, p_worker: worker, p_lease_seconds: 120,
     })
-    if (error) throw new Error(error.message)
+    if (error) throw new Error('Unable to claim workflow jobs')
     const job = (data as unknown as WorkflowJob[] | null)?.[0]
     if (!job) break
     claimed += 1
     let failure: string | null = null
+    let retryAfterMs: number | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    let execution: Promise<void> | undefined
     try {
-      const remaining = deadline - now() - 1000
+      // Keep five seconds for cooperative cancellation and one for finishing.
+      const remaining = deadline - now() - 6000
       if (remaining <= 0) throw new Error('Worker time budget exhausted before execution')
+      execution = (options.run ?? runJob)(job, { signal: controller.signal })
       await Promise.race([
-        (options.run ?? runJob)(job),
-        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Workflow execution timed out')), remaining) }),
+        execution,
+        new Promise<never>((_, reject) => { timer = setTimeout(() => {
+          controller.abort()
+          reject(new Error('Workflow execution timed out'))
+        }, remaining) }),
       ])
-    } catch (error) { failure = error instanceof Error ? error.message : 'Workflow job failed' }
+    } catch (error) {
+      if (controller.signal.aborted && execution) {
+        let cleanupTimer: ReturnType<typeof setTimeout> | undefined
+        const settled = await Promise.race([
+          execution.then(() => true, () => true),
+          new Promise<false>(resolve => { cleanupTimer = setTimeout(() => resolve(false), 5000) }),
+        ]).finally(() => { if (cleanupTimer) clearTimeout(cleanupTimer) })
+        // Never complete/requeue a claim while its previous execution can still
+        // persist an outcome. The job/entity leases remain the recovery fence.
+        if (!settled) throw new Error('Workflow cancellation did not settle; claim retained for lease recovery')
+        failure = 'Workflow execution timed out'
+      } else {
+        failure = error instanceof Error ? error.message : 'Workflow job failed'
+        if (error instanceof IntegrationError && error.kind === 'retryable'
+          && error.retryAfterMs !== null && Number.isFinite(error.retryAfterMs)) {
+          retryAfterMs = Math.ceil(Math.max(0, Math.min(error.retryAfterMs, 86_400_000)))
+        }
+      }
+    }
     finally { if (timer) clearTimeout(timer) }
-    const { data: finished, error: finishError } = await admin.rpc('finish_workflow_job_v2', {
+    const { data: finished, error: finishError } = await admin.rpc('finish_workflow_job_v3', {
       p_job_id: job.id, p_claim_token: job.claim_token, p_error: failure ?? undefined,
+      p_retry_after_ms: retryAfterMs,
     })
-    if (finishError) throw new Error(finishError.message)
+    if (finishError) throw new Error('Unable to finish workflow job')
     if (!finished) throw new Error('Workflow claim expired or was replaced; completion was not recorded')
     if (failure) failed += 1
     else succeeded += 1

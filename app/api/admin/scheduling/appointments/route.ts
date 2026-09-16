@@ -9,7 +9,7 @@ import {
   SlotTakenError,
 } from '@/lib/appointments/book'
 import { listAppointmentTypes } from '@/lib/appointments/settings'
-import { isAppointmentLocationType, type AppointmentRow } from '@/lib/appointments/types'
+import { BookingNameValidationError, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
 
@@ -134,12 +134,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 interface PostBody {
   typeId?: unknown
   startIso?: unknown
-  attendeeName?: unknown
+  attendeeFirstName?: unknown
+  attendeeLastName?: unknown
   attendeeEmail?: unknown
   attendeePhone?: unknown
   notes?: unknown
   locationType?: unknown
-  secondAttendeeName?: unknown
+  secondAttendeeFirstName?: unknown
+  secondAttendeeLastName?: unknown
   secondAttendeeEmail?: unknown
 }
 
@@ -155,14 +157,18 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as PostBody
   const typeId = typeof body.typeId === 'string' ? body.typeId : ''
   const startIso = typeof body.startIso === 'string' ? body.startIso : ''
-  const attendeeName = typeof body.attendeeName === 'string' ? body.attendeeName.trim().slice(0, 200) : ''
+  let names: ReturnType<typeof normalizeBookingNames>
+  try {
+    names = normalizeBookingNames({ ...body, firstName: body.attendeeFirstName, lastName: body.attendeeLastName })
+  } catch (error) {
+    if (error instanceof BookingNameValidationError) return NextResponse.json({ error: error.message }, { status: 400 })
+    throw error
+  }
   const attendeeEmail =
     typeof body.attendeeEmail === 'string' ? body.attendeeEmail.trim().toLowerCase() : ''
   const attendeePhone =
     typeof body.attendeePhone === 'string' ? body.attendeePhone.trim().slice(0, 40) : null
   const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) : null
-  const secondAttendeeName =
-    typeof body.secondAttendeeName === 'string' ? body.secondAttendeeName.trim().slice(0, 200) : null
   const secondAttendeeEmail =
     typeof body.secondAttendeeEmail === 'string' ? body.secondAttendeeEmail.trim().toLowerCase() : null
 
@@ -170,9 +176,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid second attendee email' }, { status: 400 })
   }
 
-  if (!typeId || !startIso || !attendeeName || !EMAIL_RE.test(attendeeEmail)) {
+  if (!typeId || !startIso || !EMAIL_RE.test(attendeeEmail)) {
     return NextResponse.json(
-      { error: 'typeId, startIso, attendeeName, and a valid attendeeEmail are required' },
+      { error: 'typeId, startIso, and a valid attendeeEmail are required' },
       { status: 400 },
     )
   }
@@ -197,12 +203,11 @@ export async function POST(req: NextRequest) {
     const result = await bookAppointment({
       type,
       startIso,
-      attendeeName,
+      ...names,
       attendeeEmail,
       attendeePhone: attendeePhone || null,
       notes,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
-      secondAttendeeName: secondAttendeeName || null,
       secondAttendeeEmail: secondAttendeeEmail || null,
       source: 'admin',
       bookedByUserId: userId ?? null,

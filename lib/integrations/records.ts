@@ -93,6 +93,27 @@ export async function claimExternalRecord(input: ClaimExternalRecordInput): Prom
 
 interface RecordAttempt extends ExternalRecordRef {
   idempotencyKey: string
+  /** Optional compare-and-swap fence for callers that begin an exclusive attempt. */
+  attemptAt?: string
+}
+
+export async function beginIntegrationAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }): Promise<ExternalRecord> {
+  const previous = input.expectedLastAttemptAt === null ? 0 : Date.parse(input.expectedLastAttemptAt)
+  const at = new Date(Math.max(Date.now(), previous + 1)).toISOString()
+  // Consume prior retry eligibility in the same CAS that acquires the attempt.
+  // A later reader must see an in-flight attempt, not its predecessor's rejection.
+  let update = admin().from('integration_external_records').update({
+    last_attempt_at: at, status: 'pending', last_error_code: null, last_error_message: null,
+  })
+    .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
+    .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
+    .eq('idempotency_key', input.idempotencyKey)
+  update = input.expectedLastAttemptAt === null
+    ? update.is('last_attempt_at', null) : update.eq('last_attempt_at', input.expectedLastAttemptAt)
+  const { data, error } = await update.select('*').maybeSingle()
+  if (error) throw persistenceError(input)
+  if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
+  return data
 }
 
 async function updateAttempt(input: RecordAttempt, patch: RecordUpdate): Promise<ExternalRecord> {
@@ -100,6 +121,7 @@ async function updateAttempt(input: RecordAttempt, patch: RecordUpdate): Promise
     .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
     .eq('idempotency_key', input.idempotencyKey)
+  if (input.attemptAt !== undefined) update = update.eq('last_attempt_at', input.attemptAt)
   // Concurrent attempts share an idempotency key. Check status in the UPDATE
   // itself so a late failure cannot downgrade a success committed by a peer.
   if (patch.status !== 'synced') update = update.neq('status', 'synced')
@@ -114,8 +136,22 @@ export async function recordIntegrationSuccess(input: RecordAttempt & { external
   const at = new Date().toISOString()
   return updateAttempt(input, {
     external_id: input.externalId.trim(), status: 'synced', last_error_code: null, last_error_message: null,
-    last_attempt_at: at, last_succeeded_at: at,
+    last_attempt_at: input.attemptAt ?? at, last_succeeded_at: at,
   })
+}
+
+/** Complete a cancellation without manufacturing an external ID for an unsent record. */
+export async function recordIntegrationCancellation(input: RecordAttempt): Promise<ExternalRecord> {
+  const at = new Date().toISOString()
+  return updateAttempt(input, {
+    status: 'synced', last_error_code: null, last_error_message: null,
+    last_attempt_at: input.attemptAt ?? at, last_succeeded_at: at, metadata: { operation: 'cancelled' },
+  })
+}
+
+/** Complete a conclusively unsent attempt without erasing its evidence. */
+export async function recordIntegrationDisabled(input: RecordAttempt): Promise<ExternalRecord> {
+  return updateAttempt(input, { status: 'disabled', last_error_code: null, last_error_message: null })
 }
 
 export async function recordIntegrationFailure(input: RecordAttempt & { error: unknown }): Promise<ExternalRecord> {
@@ -124,6 +160,6 @@ export async function recordIntegrationFailure(input: RecordAttempt & { error: u
   const safe = safeIntegrationError(input.error)
   return updateAttempt(input, {
     status: safe.kind === 'attention' ? 'attention' : 'pending', last_error_code: safe.code,
-    last_error_message: safe.message, last_attempt_at: new Date().toISOString(),
+    last_error_message: safe.message, last_attempt_at: input.attemptAt ?? new Date().toISOString(),
   })
 }

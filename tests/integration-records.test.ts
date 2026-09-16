@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getIntegrationSettings, updateIntegrationSettings, sanitizeProviderIdMap, sanitizeDocIdMap, sanitizeProviderIds } from '@/lib/integrations/settings'
-import { claimExternalRecord, getExternalRecord, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
+import { beginIntegrationAttempt, claimExternalRecord, getExternalRecord, recordIntegrationCancellation, recordIntegrationDisabled, recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
@@ -60,7 +60,7 @@ function row(overrides: Record<string, unknown> = {}) {
   }
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); from.mockReset() })
 
 describe('integration settings', () => {
   it('reads only the singleton and defaults both connectors to disabled when absent', async () => {
@@ -124,6 +124,101 @@ describe('integration settings', () => {
 })
 
 describe('external records', () => {
+  it.each([true, false])('completes disabled with all evidence preserved and optional attempt fencing=%s', async fenced => {
+    const attemptAt = '2026-09-15T12:00:00Z'
+    const before = row({ external_id: 'existing-remote', last_attempt_at: attemptAt,
+      last_error_code: 'old-error', last_error_message: 'Old safe error.',
+      last_succeeded_at: '2026-09-14T12:00:00Z', metadata: { evidence: 'original' } })
+    const store = { value: before }
+    atomicQuery(store)
+    await recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1', ...(fenced ? { attemptAt } : {}) })
+    expect(store.value).toEqual({ ...before, status: 'disabled', last_error_code: null, last_error_message: null })
+  })
+
+  it.each([
+    { status: 'synced', external_id: 'winner' },
+    { idempotency_key: 'new-key' },
+    { last_attempt_at: '2026-09-15T12:00:01Z' },
+    { internal_entity_id: 'other-matter' },
+    { external_record_type: 'client' },
+    { internal_entity_type: 'lead' },
+    { provider: 'lawmatics' },
+  ])('does not disable a stale, different, or synced delivery: %j', async difference => {
+    const before = row({ last_attempt_at: '2026-09-15T12:00:00Z', ...difference })
+    const store = { value: before }
+    atomicQuery(store)
+    await expect(recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1', attemptAt: '2026-09-15T12:00:00Z' }))
+      .rejects.toMatchObject({ kind: 'retryable', code: 'integration_record_changed' })
+    expect(store.value).toEqual(before)
+  })
+
+  it('normalizes database failure while recording a disabled delivery', async () => {
+    query(null, { message: 'PRIVATE-SNAPSHOT-TOKEN' })
+    await expect(recordIntegrationDisabled({ ...ref, idempotencyKey: 'matter-1:v1' }))
+      .rejects.toMatchObject({ code: 'integration_persistence_failed', message: 'Unable to persist or read integration record.' })
+  })
+
+  it('fences concurrent attempts so only one caller wins the same prior timestamp', async () => {
+    const store = { value: row() }
+    const first = atomicQuery(store)
+    atomicQuery(store)
+    const results = await Promise.allSettled([0, 1].map(() => beginIntegrationAttempt({ ...ref, idempotencyKey: 'matter-1:v1', expectedLastAttemptAt: null })))
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+    expect(first.eq.mock.calls).toEqual([['provider', 'statular'], ['internal_entity_type', 'matter'], ['internal_entity_id', 'matter-1'], ['external_record_type', 'matter'], ['idempotency_key', 'matter-1:v1']])
+    expect(first.is).toHaveBeenCalledWith('last_attempt_at', null)
+  })
+
+  it('allows a new retry with a fresh timestamp even within the same millisecond', async () => {
+    const now = new Date().toISOString()
+    const store = { value: row({ last_attempt_at: now }) }
+    atomicQuery(store)
+    const result = await beginIntegrationAttempt({ ...ref, idempotencyKey: 'matter-1:v1', expectedLastAttemptAt: now })
+    expect(Date.parse(result.last_attempt_at!)).toBeGreaterThan(Date.parse(now))
+  })
+
+  it('atomically consumes the prior rejection when acquiring a retry attempt', async () => {
+    const before = '2026-09-15T12:00:00.000Z'
+    const store = { value: row({ status: 'attention', last_attempt_at: before,
+      last_error_code: 'validation_failed', last_error_message: 'Rejected.' }) }
+    const write = atomicQuery(store)
+    const acquired = await beginIntegrationAttempt({ ...ref, idempotencyKey: 'matter-1:v1', expectedLastAttemptAt: before })
+    expect(acquired).toMatchObject({ status: 'pending', last_error_code: null, last_error_message: null })
+    expect(write.update).toHaveBeenCalledExactlyOnceWith({ last_attempt_at: acquired.last_attempt_at,
+      status: 'pending', last_error_code: null, last_error_message: null })
+    expect(Date.parse(acquired.last_attempt_at!)).toBeGreaterThan(Date.parse(before))
+    expect(store.value).toMatchObject({ status: 'pending', last_attempt_at: acquired.last_attempt_at,
+      last_error_code: null, last_error_message: null })
+  })
+
+  it.each(['success', 'failure', 'cancellation'])('rejects stale %s completion for a superseded attempt', async operation => {
+    const store = { value: row({ last_attempt_at: '2026-09-15T12:00:01Z' }) }
+    const before = { ...store.value }
+    atomicQuery(store)
+    const input = { ...ref, idempotencyKey: 'matter-1:v1', attemptAt: '2026-09-15T12:00:00Z' }
+    const error = new IntegrationError({ provider: 'statular', kind: 'attention', code: 'failed', safeMessage: 'Failed.', retryAfterMs: null })
+    const result = operation === 'success' ? recordIntegrationSuccess({ ...input, externalId: 'remote-1' })
+      : operation === 'failure' ? recordIntegrationFailure({ ...input, error }) : recordIntegrationCancellation(input)
+    await expect(result).rejects.toMatchObject({ code: 'integration_record_changed' })
+    expect(store.value).toEqual(before)
+  })
+
+  it('preserves the fence timestamp on completion even when the clock moves backward', async () => {
+    const attemptAt = '2099-09-15T12:00:00.000Z'
+    const store = { value: row({ last_attempt_at: attemptAt }) }
+    atomicQuery(store)
+    await recordIntegrationSuccess({ ...ref, idempotencyKey: 'matter-1:v1', attemptAt, externalId: 'remote-1' })
+    expect(store.value.last_attempt_at).toBe(attemptAt)
+  })
+
+  it.each([null, 'remote-1'])('completes cancellation while preserving external ID %s', async externalId => {
+    const store = { value: row({ external_id: externalId, last_attempt_at: '2026-09-15T12:00:00Z' }) }
+    atomicQuery(store)
+    await recordIntegrationCancellation({ ...ref, idempotencyKey: 'matter-1:v1', attemptAt: '2026-09-15T12:00:00Z' })
+    expect(store.value).toMatchObject({ external_id: externalId, status: 'synced', metadata: { operation: 'cancelled' },
+      last_error_code: null, last_error_message: null, last_succeeded_at: expect.any(String) })
+  })
+
   it('reads by all four identity columns', async () => {
     const read = query(row())
     expect(await getExternalRecord(ref)).toMatchObject({ id: 'record-1' })

@@ -7,7 +7,7 @@ import {
 } from '@/lib/appointments/book'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { getAppointmentTypeByKey } from '@/lib/appointments/settings'
-import { isAppointmentLocationType } from '@/lib/appointments/types'
+import { BookingNameValidationError, isAppointmentLocationType, normalizeBookingNames } from '@/lib/appointments/types'
 import { getCachedClaims } from '@/lib/supabaseServer'
 
 export const runtime = 'nodejs'
@@ -18,12 +18,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 interface BookBody {
   typeKey?: unknown
   startTime?: unknown
-  name?: unknown
+  firstName?: unknown
+  lastName?: unknown
   email?: unknown
   phone?: unknown
   notes?: unknown
   locationType?: unknown
-  secondAttendeeName?: unknown
+  secondAttendeeFirstName?: unknown
+  secondAttendeeLastName?: unknown
   secondAttendeeEmail?: unknown
 }
 
@@ -42,14 +44,16 @@ export async function POST(req: Request) {
 
   const typeKey = str(body.typeKey, 60)
   const startTime = str(body.startTime, 40)
-  const name = str(body.name, 120)
+  let names: ReturnType<typeof normalizeBookingNames>
+  try {
+    names = normalizeBookingNames({ ...body, firstName: body.firstName, lastName: body.lastName })
+  } catch (error) {
+    if (error instanceof BookingNameValidationError) return NextResponse.json({ error: error.message }, { status: 400 })
+    throw error
+  }
   const emailRaw = str(body.email, 200)
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) || null : null
   const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) || null : null
-  const secondAttendeeName =
-    typeof body.secondAttendeeName === 'string'
-      ? body.secondAttendeeName.trim().slice(0, 120) || null
-      : null
   const secondAttendeeEmail =
     typeof body.secondAttendeeEmail === 'string'
       ? body.secondAttendeeEmail.trim().toLowerCase() || null
@@ -59,9 +63,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid spouse/partner email address' }, { status: 400 })
   }
 
-  if (!typeKey || !startTime || !name || !emailRaw) {
+  if (!typeKey || !startTime || !emailRaw) {
     return NextResponse.json(
-      { error: 'typeKey, startTime, name, and email are required' },
+      { error: 'typeKey, startTime, and email are required' },
       { status: 400 },
     )
   }
@@ -97,12 +101,11 @@ export async function POST(req: Request) {
     const result = await bookAppointment({
       type,
       startIso: startTime,
-      attendeeName: name,
+      ...names,
       attendeeEmail: email,
       attendeePhone: phone,
       notes,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
-      secondAttendeeName,
       secondAttendeeEmail,
       source: claims ? 'portal' : 'public',
       bookedByUserId: claims?.id ?? null,
