@@ -81,7 +81,9 @@ export async function createAndRecordLawmatics(
   }
 }
 
-export async function resolveLawmaticsProspect(appointmentId: string): Promise<string> {
+export function resolveLawmaticsProspect(appointmentId: string): Promise<string>
+export function resolveLawmaticsProspect(appointmentId: string, options: { readOnly: true }): Promise<string | null>
+export async function resolveLawmaticsProspect(appointmentId: string, options?: { readOnly: true }): Promise<string | null> {
   const appointment = await loadLawmaticsAppointment(appointmentId)
   let intakeId = appointment.linked_lead_id
   if (appointment.linked_matter_id) {
@@ -97,7 +99,7 @@ export async function resolveLawmaticsProspect(appointmentId: string): Promise<s
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'lead', internalEntityId: intakeId, externalRecordType: 'prospect' }
   const existing = await getExternalRecord(ref)
   if (existing?.external_id) return existing.external_id
-  requireSafeCreate(existing)
+  if (!options?.readOnly) requireSafeCreate(existing)
 
   // The primary key linkage, never email similarity, verifies legacy import provenance.
   const { data: intake, error } = await lawmaticsDatabase().from('client_intake')
@@ -105,6 +107,8 @@ export async function resolveLawmaticsProspect(appointmentId: string): Promise<s
   if (error) throw lawmaticsFailure('source_unavailable', 'The linked client intake could not be read.', 'retryable')
   if (!intake) throw lawmaticsFailure('identity_required', 'The linked client intake could not be found.')
   const legacyId = intake.lawmatics_matter_id?.trim()
+  // Reconciliation only observes verified identity; the worker owns claims and POSTs.
+  if (options?.readOnly) return legacyId || null
   const firstName = intake.first_name?.trim()
   const lastName = intake.last_name?.trim()
   if (!legacyId && (!firstName || !lastName)) throw lawmaticsFailure('identity_required', 'The linked client intake needs explicit first and last names.')

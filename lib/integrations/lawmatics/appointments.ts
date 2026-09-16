@@ -13,6 +13,25 @@ import {
   requireSafeCreate, resolveLawmaticsProspect, sourceHash,
 } from './prospect'
 
+/** The single canonical source definition used by the worker and reconciliation. */
+export function buildLawmaticsAppointmentSource(
+  appointment: Awaited<ReturnType<typeof loadLawmaticsAppointment>>,
+  type: { key: string; label: string; location_type: string | null } | null,
+  settings: Awaited<ReturnType<typeof getIntegrationSettings>>,
+  timezone: string,
+  prospectId: string | null,
+) {
+  const location = appointment.location_type ?? type?.location_type ?? null
+  const snapshot = { appointmentId: appointment.id, status: appointment.status,
+    start: appointment.start_time, end: appointment.end_time, typeId: appointment.appointment_type_id,
+    typeKey: type?.key ?? null, typeLabel: type?.label ?? null, location,
+    eventTypeId: (type ? settings.lawmaticsEventTypeIdMap[type.key] : undefined) ?? null,
+    locationId: (location ? settings.lawmaticsLocationIdMap[location] : undefined) ?? null,
+    userIds: [...new Set(settings.lawmaticsUserIds)].sort(), timezone, prospectId,
+    linkedLeadId: appointment.linked_lead_id, linkedMatterId: appointment.linked_matter_id }
+  return { snapshot, version: sourceHash(snapshot) }
+}
+
 export async function syncLawmaticsAppointment(appointmentId: string): Promise<IntegrationResult> {
   const appointment = await loadLawmaticsAppointment(appointmentId)
   const settings = await getIntegrationSettings()
@@ -24,22 +43,14 @@ export async function syncLawmaticsAppointment(appointmentId: string): Promise<I
   ])
   if (error) throw lawmaticsFailure('source_unavailable', 'The appointment type could not be read.', 'retryable')
   const cancelled = appointment.status === 'cancelled'
-  const location = appointment.location_type ?? type?.location_type ?? null
-  const eventTypeId = type ? settings.lawmaticsEventTypeIdMap[type.key] : undefined
-  if (!cancelled && (!type || !eventTypeId)) throw lawmaticsFailure('configuration_required', 'Configure a Lawmatics event type for this appointment type.')
-  const locationId = location ? settings.lawmaticsLocationIdMap[location] : undefined
-  const userIds = [...new Set(settings.lawmaticsUserIds)].sort()
+  if (!cancelled && (!type || !settings.lawmaticsEventTypeIdMap[type.key])) throw lawmaticsFailure('configuration_required', 'Configure a Lawmatics event type for this appointment type.')
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'appointment',
     internalEntityId: appointment.id, externalRecordType: 'event' }
   const existing = await getExternalRecord(ref)
   requireSafeCreate(existing)
   const prospectId = cancelled ? null : await resolveLawmaticsProspect(appointmentId)
-  const snapshot = { appointmentId: appointment.id, status: appointment.status,
-    start: appointment.start_time, end: appointment.end_time, typeId: appointment.appointment_type_id,
-    typeKey: type?.key ?? null, typeLabel: type?.label ?? null, location,
-    eventTypeId: eventTypeId ?? null, locationId: locationId ?? null, userIds, timezone: scheduling.timezone, prospectId,
-    linkedLeadId: appointment.linked_lead_id, linkedMatterId: appointment.linked_matter_id }
-  const version = sourceHash(snapshot)
+  const { snapshot, version } = buildLawmaticsAppointmentSource(appointment, type, settings, scheduling.timezone, prospectId)
+  const { eventTypeId, locationId, userIds } = snapshot
   const result = (operation: IntegrationResult['operation'], externalId: string): IntegrationResult => ({
     provider: 'lawmatics', externalRecordType: 'event', externalId, operation,
   })
