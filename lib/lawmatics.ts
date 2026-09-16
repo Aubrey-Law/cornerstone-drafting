@@ -4,42 +4,16 @@ import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
 const AUTH_BASE = 'https://app.lawmatics.com'
 const API_BASE = 'https://api.lawmatics.com'
 
-export const LAWMATICS_TOKEN_COLUMNS = 'access_token, refresh_token, expires_at' as const
-
-// Read the singleton Lawmatics token, refreshing it if it expires within 5 min.
-// Returns null if Lawmatics is not connected (no token row).
-export async function getValidToken(): Promise<{ access_token: string } | null> {
-  const admin = getAdminClient()
-  const { data: stored, error } = await admin
+// Lawmatics access tokens do not expire and must only be read server-side.
+export async function getLawmaticsAccessToken(): Promise<string> {
+  const { data, error } = await getAdminClient()
     .from('lawmatics_tokens')
-    .select(LAWMATICS_TOKEN_COLUMNS)
+    .select('access_token')
     .eq('id', 'singleton')
     .maybeSingle()
-  if (error) {
-    console.error('lawmatics_tokens read error:', error.message)
-    return null
-  }
-  if (!stored) return null
-
-  const expiresAt = new Date(stored.expires_at).getTime()
-  const needsRefresh = expiresAt - Date.now() < 5 * 60 * 1000
-  if (needsRefresh && stored.refresh_token) {
-    try {
-      const fresh = await refreshAccessToken(stored.refresh_token)
-      const expires_at = new Date(Date.now() + (fresh.expires_in ?? 3600) * 1000).toISOString()
-      await admin.from('lawmatics_tokens').upsert({
-        id: 'singleton',
-        access_token: fresh.access_token,
-        refresh_token: fresh.refresh_token ?? stored.refresh_token,
-        expires_at,
-        updated_at: new Date().toISOString(),
-      })
-      return { access_token: fresh.access_token }
-    } catch (e) {
-      console.error('Lawmatics token refresh failed:', e)
-    }
-  }
-  return { access_token: stored.access_token }
+  if (error) throw new Error('Lawmatics connection could not be read')
+  if (!data?.access_token) throw new Error('Lawmatics is not connected')
+  return data.access_token
 }
 
 export function getAuthUrl(state?: string) {
@@ -52,7 +26,7 @@ export function getAuthUrl(state?: string) {
   return `${AUTH_BASE}/oauth/authorize?${params}`
 }
 
-export async function exchangeCode(code: string) {
+export async function exchangeCode(code: string): Promise<{ access_token: string }> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: process.env.LAWMATICS_CLIENT_ID!,
@@ -60,35 +34,22 @@ export async function exchangeCode(code: string) {
     redirect_uri: process.env.LAWMATICS_REDIRECT_URI!,
     code,
   })
-  const res = await fetch(`${API_BASE}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Token exchange failed (${res.status}): ${text}`)
+  try {
+    const res = await fetch(`${API_BASE}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    })
+    if (!res.ok) throw new Error('Token exchange failed')
+    const tokens = await res.json()
+    if (typeof tokens?.access_token !== 'string' || !tokens.access_token.trim()) {
+      throw new Error('Invalid token response')
+    }
+    return { access_token: tokens.access_token }
+  } catch {
+    // Provider bodies and transport errors may contain secrets.
+    throw new Error('Lawmatics token exchange failed')
   }
-  return res.json() as Promise<{ access_token: string; refresh_token: string; expires_in: number }>
-}
-
-export async function refreshAccessToken(refresh_token: string) {
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: process.env.LAWMATICS_CLIENT_ID!,
-    client_secret: process.env.LAWMATICS_CLIENT_SECRET!,
-    refresh_token,
-  })
-  const res = await fetch(`${API_BASE}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Token refresh failed (${res.status}): ${text}`)
-  }
-  return res.json() as Promise<{ access_token: string; refresh_token: string; expires_in: number }>
 }
 
 export async function createProspect(accessToken: string, fields: {
