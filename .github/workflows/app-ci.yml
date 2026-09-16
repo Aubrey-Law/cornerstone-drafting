@@ -24,9 +24,22 @@ permissions:
   # The duplicate-run guard below asks whether this commit already passed.
   actions: read
 
+# Keyed on the commit, not just the ref, and deliberately not cancelling.
+#
+# Grouped by ref alone, a second event on a commit already being tested killed
+# the run in flight and started over from zero — observed on this very pull
+# request, where marking it ready for review cancelled a run seven minutes and
+# twelve seconds in. The run being cancelled was already answering the exact
+# question the new event asks, so the guard in the job below never gets a
+# successful run to find and the replacement pays full price.
+#
+# Queued instead: the first run finishes, and the second finds it green and
+# skips in seconds. The cost is that a superseded commit's run is no longer
+# cancelled by the next push, which spends runner minutes rather than anyone's
+# wall clock.
 concurrency:
-  group: app-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: app-ci-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   verify:
