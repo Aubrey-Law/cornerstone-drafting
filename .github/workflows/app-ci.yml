@@ -21,27 +21,89 @@ on:
 
 permissions:
   contents: read
+  # The duplicate-run guard below asks whether this commit already passed.
+  actions: read
 
+# Keyed on the commit, not just the ref, and deliberately not cancelling.
+#
+# Grouped by ref alone, a second event on a commit already being tested killed
+# the run in flight and started over from zero — observed on this very pull
+# request, where marking it ready for review cancelled a run seven minutes and
+# twelve seconds in. The run being cancelled was already answering the exact
+# question the new event asks, so the guard in the job below never gets a
+# successful run to find and the replacement pays full price.
+#
+# Queued instead: the first run finishes, and the second finds it green and
+# skips in seconds. The cost is that a superseded commit's run is no longer
+# cancelled by the next push, which spends runner minutes rather than anyone's
+# wall clock.
 concurrency:
-  group: app-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: app-ci-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   verify:
     name: Lint, typecheck, and tests
     runs-on: ubuntu-latest
-    # The suite runs serially and takes about eight and a half minutes; the
-    # install and the typecheck account for most of the rest.
+    # Measured on run 335: fourteen minutes, of which the unit suite was 6m44
+    # and the production build 3m54. The suite now runs its files in parallel
+    # (see vitest.config.ts), so the build is the long pole. The timeout stays
+    # generous — it is here to stop a hung job, not to police the duration.
     timeout-minutes: 30
     steps:
+      # A pull request opened as a draft runs this workflow, and marking it
+      # ready for review runs it again on the identical commit:
+      # `ready_for_review` is a fresh event, not a retry, so a green run does
+      # not stop it. Every pull request was paying for two full runs of the
+      # same code — fourteen minutes each — and the second one delays the
+      # merge it is supposedly gating.
+      #
+      # The trigger stays. A pull request opened by a workflow using
+      # GITHUB_TOKEN starts no run at all, and a person marking it ready is
+      # the only event that ever will; that is why `ready_for_review` is in
+      # the list above. So the question to ask is not "which event is this"
+      # but "has this exact commit already passed" — those bot pull requests
+      # have no earlier run and fall through to the real thing.
+      #
+      # Guarded per step rather than with a job-level `if:`. A job skipped by
+      # `if:` reports its check run as `skipped`, and this job is a required
+      # check; leaving the job to run and guarding its steps reports a
+      # genuine success in seconds instead of asking branch protection to
+      # score a skip.
+      - name: Has this commit already passed?
+        id: prior
+        if: github.event_name == 'pull_request'
+        # A guard that cannot answer must never be the reason the suite did
+        # not run. Failing here leaves `skip` unset, which reads as "run it".
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # A failure here must not skip the suite: default to running.
+          count=$(gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/app-ci.yml/runs?head_sha=${SHA}&status=success" \
+            --jq '.total_count' 2>/dev/null) || count=0
+          case "$count" in ''|*[!0-9]*) count=0 ;; esac
+          if [ "$count" -gt 0 ]; then
+            echo 'skip=true' >> "$GITHUB_OUTPUT"
+            echo "::notice::${SHA} already passed Application CI; skipping the duplicate run."
+          else
+            echo 'skip=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: ${{ success() && steps.prior.outputs.skip != 'true' }}
 
       - uses: actions/setup-node@v4
+        if: ${{ success() && steps.prior.outputs.skip != 'true' }}
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install
+        if: ${{ success() && steps.prior.outputs.skip != 'true' }}
         run: npm ci
 
       # Incremental typecheck state. `npm run typecheck` writes
@@ -49,6 +111,7 @@ jobs:
       # files. Keyed on the lock file and the tsconfig so a dependency or
       # compiler-option change starts from a clean build.
       - name: Restore typecheck cache
+        if: ${{ success() && steps.prior.outputs.skip != 'true' }}
         uses: actions/cache@v4
         with:
           path: tsconfig.typecheck.tsbuildinfo
@@ -60,19 +123,19 @@ jobs:
       # stay green while warnings piled up. Keep the ceiling at the measured
       # post-remediation count and lower it as remaining warnings are fixed.
       - name: Lint
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run lint -- --max-warnings=10
 
       - name: Typecheck
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run typecheck
 
       - name: Test
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm test -- --reporter=dot
 
       - name: Production build
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run build:ci
 
       # Regenerates every estate document and compares it to the golden
@@ -81,7 +144,7 @@ jobs:
       # attorney has approved changes, and reports unreviewed drift without
       # blocking.
       - name: Golden corpus
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run corpus:check
 
       # The workbench is a second app in the same workspace, so it needs no
@@ -89,5 +152,5 @@ jobs:
       # separate because vitest resolves test paths from its own root, and it
       # runs last because the root app is the one currently in production.
       - name: Workbench
-        if: '!cancelled()'
+        if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run -w apps/workbench verify
