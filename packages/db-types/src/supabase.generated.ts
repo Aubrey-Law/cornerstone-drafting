@@ -152,6 +152,8 @@ export type Database = {
         Row: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name: string | null
+          attendee_last_name: string | null
           attendee_name: string
           attendee_phone: string | null
           booked_by_user_id: string | null
@@ -171,6 +173,8 @@ export type Database = {
           raw: Json
           reminder_sent_at: string | null
           second_attendee_email: string | null
+          second_attendee_first_name: string | null
+          second_attendee_last_name: string | null
           second_attendee_name: string | null
           source: string
           start_time: string
@@ -180,6 +184,8 @@ export type Database = {
         Insert: {
           appointment_type_id: string
           attendee_email: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -199,6 +205,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time: string
@@ -208,6 +216,8 @@ export type Database = {
         Update: {
           appointment_type_id?: string
           attendee_email?: string
+          attendee_first_name?: string | null
+          attendee_last_name?: string | null
           attendee_name?: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
@@ -227,6 +237,8 @@ export type Database = {
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
+          second_attendee_first_name?: string | null
+          second_attendee_last_name?: string | null
           second_attendee_name?: string | null
           source?: string
           start_time?: string

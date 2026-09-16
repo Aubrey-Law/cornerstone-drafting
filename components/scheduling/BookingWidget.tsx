@@ -24,7 +24,8 @@ export interface BookingWidgetType {
 export interface BookingWidgetProps {
   type: BookingWidgetType
   /** Prefill for signed-in portal clients. */
-  defaultName?: string
+  defaultFirstName?: string
+  defaultLastName?: string
   defaultEmail?: string
   defaultPhone?: string
   /** Locks the email field (portal: the session email is authoritative). */
@@ -55,7 +56,8 @@ function fmtSelected(iso: string): string {
 
 export default function BookingWidget({
   type,
-  defaultName = '',
+  defaultFirstName = '',
+  defaultLastName = '',
   defaultEmail = '',
   defaultPhone = '',
   emailLocked = false,
@@ -64,11 +66,13 @@ export default function BookingWidget({
     type.locationTypes && type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
   const [selected, setSelected] = useState<string | null>(null)
   const [locationType, setLocationType] = useState<LocationType>(locationOptions[0])
-  const [name, setName] = useState(defaultName)
+  const [firstName, setFirstName] = useState(defaultFirstName)
+  const [lastName, setLastName] = useState(defaultLastName)
   const [email, setEmail] = useState(defaultEmail)
   const [phone, setPhone] = useState(() => formatPhoneInput(defaultPhone))
   const [includeSpouse, setIncludeSpouse] = useState(false)
-  const [spouseName, setSpouseName] = useState('')
+  const [spouseFirstName, setSpouseFirstName] = useState('')
+  const [spouseLastName, setSpouseLastName] = useState('')
   const [spouseEmail, setSpouseEmail] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -87,12 +91,14 @@ export default function BookingWidget({
         body: JSON.stringify({
           typeKey: type.key,
           startTime: selected,
-          name,
+          firstName,
+          lastName,
           email,
           phone: phone || undefined,
           notes: notes || undefined,
           locationType,
-          secondAttendeeName: includeSpouse ? spouseName || undefined : undefined,
+          secondAttendeeFirstName: includeSpouse ? spouseFirstName || undefined : undefined,
+          secondAttendeeLastName: includeSpouse ? spouseLastName || undefined : undefined,
           secondAttendeeEmail: includeSpouse ? spouseEmail || undefined : undefined,
         }),
       })
@@ -188,13 +194,27 @@ export default function BookingWidget({
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="booking-name">Name</Label>
+              <Label htmlFor="booking-first-name">First name</Label>
               <Input
-                id="booking-name"
+                id="booking-first-name"
                 className="mt-1"
                 required
-                value={name}
-                onChange={e => setName(e.target.value)}
+                maxLength={80}
+                autoComplete="given-name"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="booking-last-name">Last name</Label>
+              <Input
+                id="booking-last-name"
+                className="mt-1"
+                required
+                maxLength={80}
+                autoComplete="family-name"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
               />
             </div>
             <div>
@@ -236,12 +256,25 @@ export default function BookingWidget({
             {includeSpouse && (
               <>
                 <div>
-                  <Label htmlFor="booking-spouse-name">Spouse/partner name</Label>
+                  <Label htmlFor="booking-spouse-first-name">Spouse/partner first name</Label>
                   <Input
-                    id="booking-spouse-name"
+                    id="booking-spouse-first-name"
                     className="mt-1"
-                    value={spouseName}
-                    onChange={e => setSpouseName(e.target.value)}
+                    required
+                    maxLength={80}
+                    value={spouseFirstName}
+                    onChange={e => setSpouseFirstName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="booking-spouse-last-name">Spouse/partner last name</Label>
+                  <Input
+                    id="booking-spouse-last-name"
+                    className="mt-1"
+                    required
+                    maxLength={80}
+                    value={spouseLastName}
+                    onChange={e => setSpouseLastName(e.target.value)}
                   />
                 </div>
                 <div>

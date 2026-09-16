@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 
 export interface SchedulePageClientProps {
   types: BookingWidgetType[]
-  defaultName: string
+  /** Historical display name only; never split into guessed components. */
+  defaultName?: string
+  defaultFirstName?: string
+  defaultLastName?: string
   defaultEmail: string
   defaultPhone: string
 }
@@ -14,6 +17,8 @@ export interface SchedulePageClientProps {
 export default function SchedulePageClient({
   types,
   defaultName,
+  defaultFirstName,
+  defaultLastName,
   defaultEmail,
   defaultPhone,
 }: SchedulePageClientProps) {
@@ -70,7 +75,8 @@ export default function SchedulePageClient({
       <div className="mt-4">
         <BookingWidget
           type={selectedType}
-          defaultName={defaultName}
+          defaultFirstName={defaultFirstName ?? defaultName ?? ''}
+          defaultLastName={defaultLastName ?? ''}
           defaultEmail={defaultEmail}
           defaultPhone={defaultPhone}
           emailLocked

@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { AppointmentRow, AppointmentType } from '@/lib/appointments/types'
+import type { Database } from '@/packages/db-types/src/supabase.generated'
+import { NextRequest } from 'next/server'
 
 vi.mock('server-only', () => ({}))
 
@@ -26,6 +28,7 @@ const state = vi.hoisted(() => ({
   lawmaticsEnabled: false,
   jobs: [] as Array<Record<string, unknown>>,
   enqueueError: false,
+  claims: null as { id: string; email: string } | null,
   reset() {
     this.inserts = []
     this.updates = []
@@ -45,6 +48,7 @@ const state = vi.hoisted(() => ({
     this.lawmaticsEnabled = false
     this.jobs = []
     this.enqueueError = false
+    this.claims = null
   },
 }))
 
@@ -156,6 +160,8 @@ vi.mock('@/lib/appointments/googleEvents', () => ({
 }))
 
 vi.mock('@/lib/appointments/settings', () => ({
+  getAppointmentTypeByKey: vi.fn(async () => TYPE),
+  listAppointmentTypes: vi.fn(async () => [TYPE]),
   getSchedulingSettings: vi.fn(async () => ({
     timezone: 'America/New_York',
     weeklyHours: {
@@ -177,6 +183,10 @@ vi.mock('@/lib/appointments/settings', () => ({
     dateOverrides: state.dateOverrides,
   })),
 }))
+
+vi.mock('@/lib/appointments/publicRouteGuard', () => ({ guardPublicSchedulingRoute: vi.fn(async () => null) }))
+vi.mock('@/lib/supabaseServer', () => ({ getCachedClaims: vi.fn(async () => state.claims) }))
+vi.mock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn(async () => ({ err: null, userId: 'staff-1' })) }))
 
 vi.mock('@/lib/appointments/automation', () => ({
   runPostBookingAutomation: vi.fn(async (input: Record<string, unknown>) => {
@@ -207,6 +217,8 @@ import {
   rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
+import { POST as publicBook } from '@/app/api/scheduling/book/route'
+import { POST as adminBook } from '@/app/api/admin/scheduling/appointments/route'
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -232,7 +244,8 @@ function bookingInput() {
   return {
     type: TYPE,
     startIso: SLOT_ISO,
-    attendeeName: 'Pat Client',
+    attendeeFirstName: 'Pat',
+    attendeeLastName: 'Client',
     attendeeEmail: 'pat@example.com',
     attendeePhone: '555-0100',
     notes: null,
@@ -251,7 +264,104 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('booking name API contracts', () => {
+  it('keeps generated component columns nullable and optional for historical inserts', () => {
+    type Names = 'attendee_first_name' | 'attendee_last_name' | 'second_attendee_first_name' | 'second_attendee_last_name'
+    type Table = Database['public']['Tables']['appointments']
+    expectTypeOf<Pick<Table['Row'], Names>>().toEqualTypeOf<Record<Names, string | null>>()
+    expectTypeOf<Pick<Table['Insert'], Names>>().toEqualTypeOf<Partial<Record<Names, string | null>>>()
+    expectTypeOf<Pick<Table['Update'], Names>>().toEqualTypeOf<Partial<Record<Names, string | null>>>()
+  })
+  function request(body: Record<string, unknown>) {
+    return new NextRequest('http://localhost/api/scheduling/book', { method: 'POST', body: JSON.stringify(body) })
+  }
+  const base = { typeKey: 'discovery_call', startTime: SLOT_ISO, firstName: 'Mary Jane', lastName: 'van Buren', email: 'pat@example.com' }
+
+  it.each(['firstName', 'lastName'])('requires separate primary %s', async field => {
+    const response = await publicBook(request({ ...base, name: 'Historical Name', [field]: '' }))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toContain(field)
+    expect(state.inserts).toHaveLength(0)
+  })
+
+  it.each([
+    { firstName: 'a'.repeat(81) }, { lastName: 123 },
+    { secondAttendeeFirstName: 'Sam' }, { secondAttendeeLastName: 'Smith' },
+    { secondAttendeeFirstName: 123, secondAttendeeLastName: 'Smith' },
+    { secondAttendeeFirstName: 'a'.repeat(81), secondAttendeeLastName: 'Smith' },
+    { secondAttendeeEmail: 'sam@example.com' },
+  ])('rejects invalid public components: %j', async invalid => {
+    expect((await publicBook(request({ ...base, ...invalid }))).status).toBe(400)
+    expect(state.inserts).toHaveLength(0)
+  })
+
+  it('normalizes components and preserves session email and portal attribution', async () => {
+    state.claims = { id: 'client-1', email: 'session@example.com' }
+    const response = await publicBook(request({ ...base, firstName: ' Mary  Jane ', lastName: ' van  Buren ',
+      secondAttendeeFirstName: ' Jo Ann ', secondAttendeeLastName: ' de la Cruz ', secondAttendeeEmail: 'JO@example.com' }))
+    expect(response.status).toBe(200)
+    expect(state.inserts.find(row => row.table === 'appointments')?.values).toMatchObject({
+      attendee_first_name: 'Mary Jane', attendee_last_name: 'van Buren', attendee_name: 'Mary Jane van Buren',
+      attendee_email: 'session@example.com', booked_by_user_id: 'client-1', source: 'portal',
+      second_attendee_first_name: 'Jo Ann', second_attendee_last_name: 'de la Cruz', second_attendee_email: 'jo@example.com',
+    })
+  })
+
+  it('accepts valid 80-character components at the boundary', async () => {
+    expect((await publicBook(request({ ...base, firstName: 'a'.repeat(80), lastName: 'b'.repeat(80) }))).status).toBe(200)
+  })
+
+  it('requires staff component names even when a display name was supplied', async () => {
+    const response = await adminBook(request({ typeId: TYPE.id, startIso: SLOT_ISO, attendeeName: 'Pat Client', attendeeEmail: 'pat@example.com' }))
+    expect(response.status).toBe(400)
+    expect(state.inserts).toHaveLength(0)
+  })
+
+  it('books staff-supplied components with staff attribution', async () => {
+    const response = await adminBook(request({ typeId: TYPE.id, startIso: SLOT_ISO, attendeeFirstName: ' Mary Jane ', attendeeLastName: ' van Buren ',
+      attendeeEmail: 'pat@example.com', secondAttendeeFirstName: 'Sam', secondAttendeeLastName: 'Smith' }))
+    expect(response.status).toBe(200)
+    expect(state.inserts.find(row => row.table === 'appointments')?.values).toMatchObject({
+      attendee_first_name: 'Mary Jane', attendee_last_name: 'van Buren', source: 'admin', booked_by_user_id: 'staff-1',
+      second_attendee_first_name: 'Sam', second_attendee_last_name: 'Smith',
+    })
+  })
+
+  it.each([
+    { attendeeFirstName: 'a'.repeat(81) }, { attendeeLastName: '  ' },
+    { secondAttendeeFirstName: 'Sam' }, { secondAttendeeLastName: 'Smith' },
+    { secondAttendeeFirstName: 'Sam', secondAttendeeLastName: 'a'.repeat(81) },
+    { secondAttendeeEmail: 'sam@example.com' },
+  ])('rejects invalid staff components: %j', async invalid => {
+    const response = await adminBook(request({ typeId: TYPE.id, startIso: SLOT_ISO,
+      attendeeFirstName: 'Pat', attendeeLastName: 'Client', attendeeEmail: 'pat@example.com', ...invalid }))
+    expect(response.status).toBe(400)
+    expect(state.inserts).toHaveLength(0)
+  })
+})
+
 describe('bookAppointment', () => {
+  it('persists supplied multi-word components without guessing a split', async () => {
+    await bookAppointment({ ...bookingInput(), attendeeFirstName: '  Mary   Jane ', attendeeLastName: ' van  Buren ',
+      secondAttendeeFirstName: ' Jo  Ann ', secondAttendeeLastName: ' de  la Cruz ' })
+    expect(state.inserts.find(row => row.table === 'appointments')?.values).toMatchObject({
+      attendee_first_name: 'Mary Jane', attendee_last_name: 'van Buren', attendee_name: 'Mary Jane van Buren',
+      second_attendee_first_name: 'Jo Ann', second_attendee_last_name: 'de la Cruz', second_attendee_name: 'Jo Ann de la Cruz',
+    })
+    expect(state.inserts.find(row => row.table === 'client_intake')?.values).toMatchObject({
+      first_name: 'Mary Jane', last_name: 'van Buren', full_name: 'Mary Jane van Buren',
+    })
+    expect(state.createdEvents[0]).toMatchObject({ attendeeName: 'Mary Jane van Buren', secondAttendeeName: 'Jo Ann de la Cruz' })
+  })
+
+  it.each([
+    { attendeeFirstName: '' }, { attendeeLastName: '  ' }, { attendeeFirstName: 'a'.repeat(81) },
+    { secondAttendeeFirstName: 'Sam' }, { secondAttendeeLastName: 'Spouse' },
+    { secondAttendeeEmail: 'sam@example.com' },
+  ])('rejects invalid component names before writing: %j', async invalid => {
+    await expect(bookAppointment({ ...bookingInput(), ...invalid })).rejects.toThrow(/name/i)
+    expect(state.inserts).toHaveLength(0)
+  })
   it.each([false, true])('enqueues the committed linked booking only when Lawmatics is enabled (%s)', async enabled => {
     state.lawmaticsEnabled = enabled
     state.lead = { id: 'lead-9', lead_status: 'lead' }
@@ -410,7 +520,8 @@ describe('bookAppointment', () => {
   it('invites the spouse on the event and stores their details', async () => {
     await bookAppointment({
       ...bookingInput(),
-      secondAttendeeName: 'Sam Spouse',
+      secondAttendeeFirstName: 'Sam',
+      secondAttendeeLastName: 'Spouse',
       secondAttendeeEmail: 'Sam@Example.com',
     })
     const insert = state.inserts.find(i => i.table === 'appointments')
