@@ -44,6 +44,25 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // The native engine locates signature anchors by reading the rendered
+    // PDF's text layer, so every route that approves, sends or seals an
+    // agreement needs pdf.js and its fonts in its own bundle. `send` and
+    // `sign` were missing: `send` locates anchors before creating the
+    // envelope, and `sign` is where the signature is actually stamped — a
+    // failure there is a client's failure, on a public route, with no
+    // attorney watching.
+    '/api/admin/engagement-agreements/[id]/approve': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
+    '/api/admin/engagement-agreements/[id]/send': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
+    '/api/sign/[token]': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
   },
   // Keep the production build as a type-safety gate by default. If a constrained
   // runner needs to skip Next's in-build checker, set NEXT_IGNORE_TYPE_ERRORS=1
@@ -55,6 +74,14 @@ const nextConfig = {
   serverExternalPackages: [
     'pdf-parse',
     '@napi-rs/canvas',
+    // Not merely "heavy": packages/citations/src/textLayer/pdf.ts resolves
+    // pdfjs-dist's own package.json to find its standard_fonts directory.
+    // Bundled, webpack answers that resolve with a numeric module id, and the
+    // path call downstream throws
+    //   The "path" argument must be of type string. Received type number
+    // which is what the first native engagement send failed on. External, the
+    // resolve returns a real filesystem path.
+    'pdfjs-dist',
     'mammoth',
     'docx',
     'pizzip',
