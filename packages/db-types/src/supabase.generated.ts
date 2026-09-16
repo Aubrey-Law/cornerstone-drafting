@@ -5863,21 +5863,21 @@ export type Database = {
       lawmatics_tokens: {
         Row: {
           access_token: string
-          expires_at: string
+          expires_at: string | null
           id: string
           refresh_token: string | null
           updated_at: string
         }
         Insert: {
           access_token: string
-          expires_at: string
+          expires_at?: string | null
           id: string
           refresh_token?: string | null
           updated_at?: string
         }
         Update: {
           access_token?: string
-          expires_at?: string
+          expires_at?: string | null
           id?: string
           refresh_token?: string | null
           updated_at?: string
