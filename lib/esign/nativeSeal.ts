@@ -45,13 +45,35 @@ export interface SealAuditEntry {
   occurredAt: string
   ip?: string | null
   userAgent?: string | null
+  /**
+   * Who the event belongs to.
+   *
+   * A trail that says only "signed" twice cannot show which party did what,
+   * and this certificate is the artefact the firm would produce to prove that
+   * a particular person signed. Absent for agreement-level events, which is
+   * why it is optional rather than guessed at.
+   */
+  signerName?: string | null
+}
+
+export interface SealSigner {
+  name: string
+  email: string
+  /** Typed or drawn. Recorded so the document says which, rather than leaving
+   * a reader to infer it from how the signature looks. */
+  adoptionMethod?: 'typed' | 'drawn' | null
+  signedAt?: Date | null
 }
 
 export interface SealInput {
   /** The exact PDF the client reviewed. */
   pdf: Buffer
   fields: SealField[]
-  signer: { name: string; email: string }
+  /**
+   * Everyone who has signed. A two-party agreement sealed with one entry names
+   * whoever sealed last and reads as though the other party did not exist.
+   */
+  signers: SealSigner[]
   agreementId: string
   /** The disclosure text the signer accepted, verbatim. */
   consentText: string
@@ -103,6 +125,15 @@ function stampField(
   anchor: LocatedAnchor,
   field: SealField,
   font: import('pdf-lib').PDFFont,
+  /**
+   * The face for a typed signature.
+   *
+   * Helvetica made a typed name read as body text — a word inserted into the
+   * sentence rather than a signature. Italic serif separates it without
+   * pretending to be handwriting; a real script face needs an embedded font
+   * and is deliberately a separate change.
+   */
+  signatureFont: import('pdf-lib').PDFFont,
   image: import('pdf-lib').PDFImage | null,
 ): void {
   const box = toPdfOrigin(anchor.bbox, page.getHeight())
@@ -135,7 +166,7 @@ function stampField(
     x: box.x,
     y: box.y + box.height * 0.2,
     size: Math.min(box.height, 11),
-    font,
+    font: field.kind === 'signature' ? signatureFont : font,
     color: rgb(0, 0, 0),
   })
 }
@@ -179,9 +210,22 @@ function drawCertificate(
   line(`Agreement ID: ${input.agreementId}`)
   line(`Certificate generated: ${now.toISOString()}`, { gap: LINE_HEIGHT * 1.6 })
 
-  line('Signer', { bold: true })
-  line(`Name: ${input.signer.name}`)
-  line(`Email: ${input.signer.email}`, { gap: LINE_HEIGHT * 1.6 })
+  line(input.signers.length === 1 ? 'Signer' : 'Signers', { bold: true })
+  input.signers.forEach((signer, index) => {
+    line(`Name: ${signer.name}`)
+    line(`Email: ${signer.email}`)
+    if (signer.signedAt) line(`Signed: ${signer.signedAt.toISOString()}`)
+    // Said plainly rather than left to be inferred from how the mark looks,
+    // which matters more now that a typed name is set in italic.
+    if (signer.adoptionMethod) {
+      line(signer.adoptionMethod === 'drawn'
+        ? 'Signature adopted by drawing.'
+        : 'Signature adopted by typing a name.')
+    }
+    const last = index === input.signers.length - 1
+    y -= last ? LINE_HEIGHT * 0.6 : LINE_HEIGHT * 0.4
+  })
+  y -= LINE_HEIGHT
 
   line('Document integrity', { bold: true })
   line(`SHA-256 of the reviewed document: ${sourceSha256}`)
@@ -203,7 +247,10 @@ function drawCertificate(
   line('Audit trail', { bold: true })
   for (const entry of input.auditTrail) {
     const where = [entry.ip, entry.userAgent].filter(Boolean).join(' · ')
-    line(`${entry.occurredAt}  ${entry.eventType}${where ? `  ${where}` : ''}`)
+    // Attribute the event. Without a name, two signers produce one list in
+    // which nothing says who opened, consented or signed.
+    const who = entry.signerName ? `  ${entry.signerName}` : ''
+    line(`${entry.occurredAt}  ${entry.eventType}${who}${where ? `  ${where}` : ''}`)
   }
 }
 
@@ -235,6 +282,7 @@ export async function sealSignedAgreement(input: SealInput): Promise<SealedDocum
   const doc = await PDFDocument.load(input.pdf)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
+  const signatureFont = await doc.embedFont(StandardFonts.TimesRomanItalic)
   const pages = doc.getPages()
 
   for (const field of input.fields) {
@@ -245,7 +293,7 @@ export async function sealSignedAgreement(input: SealInput): Promise<SealedDocum
       throw new Error(`Anchor ${field.marker} reports page ${anchor.page}, which the document does not have`)
     }
     const image = field.signaturePng ? await doc.embedPng(field.signaturePng) : null
-    stampField(page, anchor, field, font, image)
+    stampField(page, anchor, field, font, signatureFont, image)
   }
 
   drawCertificate(doc, input, sourceSha256, font, bold, input.now ?? new Date())
