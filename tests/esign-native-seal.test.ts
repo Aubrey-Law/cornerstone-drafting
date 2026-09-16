@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { buildPdfTextLayer } from '@aubrey-law/citations/textLayer/pdf'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
+import { sealFieldsFor } from '@/lib/esign/sealFields'
 import { AnchorLocationError } from '@/lib/esign/nativeAnchors'
 
 /**
@@ -90,6 +91,38 @@ describe('sealSignedAgreement', () => {
     const layer = await buildPdfTextLayer(sealed.pdf)
     expect(layer.text).toContain('A Client')
     expect(layer.text).toContain('2 January 2026')
+  })
+
+  it('carries both signers when a couple signs', async () => {
+    // The first real two-party agreement was executed with one signature on it.
+    // Each signing rebuilt the sealed file from the approved PDF and stamped a
+    // single signer, so the second seal erased the first — the spouse's typed
+    // name never reached the document while her session, artifact and audit
+    // trail all recorded success.
+    //
+    // Both are typed here so both land in the text layer; a drawn signature is
+    // an image and is covered by the embedding test below.
+    const pdf = await agreementPdf([
+      '[[CLIENT_1_SIGNATURE]]',
+      '[[CLIENT_1_DATE]]',
+      '[[CLIENT_2_SIGNATURE]]',
+      '[[CLIENT_2_DATE]]',
+    ])
+
+    const sealed = await sealSignedAgreement({
+      ...baseInput,
+      pdf,
+      fields: sealFieldsFor([
+        { position: 2, signedAt: new Date('2026-01-02T09:16:30Z'), typedName: 'Skylar White' },
+        { position: 1, signedAt: new Date('2026-01-03T14:02:00Z'), typedName: 'Walter White' },
+      ]),
+    })
+
+    const layer = await buildPdfTextLayer(sealed.pdf)
+    expect(layer.text).toContain('Walter White')
+    expect(layer.text).toContain('Skylar White')
+    expect(layer.text).toContain('January 3, 2026')
+    expect(layer.text).toContain('January 2, 2026')
   })
 
   it('keeps the reviewed document intact around the signature', async () => {

@@ -7,9 +7,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { putFileToR2 } from '@/lib/documentUpload'
 import { hashSigningToken, signingSessionGate } from '@/lib/esign/nativeTokens'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
+import { sealFieldsFor, type SignedMark } from '@/lib/esign/sealFields'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
-import { engagementAnchorMarkers } from '@/lib/engagement/anchors'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 
 export const runtime = 'nodejs'
@@ -44,6 +44,24 @@ type SessionRow = {
 }
 
 /** Resolve a presented token to its session, or explain why it cannot be used. */
+/**
+ * Read an object out of R2.
+ *
+ * Used for the approved PDF and for an earlier signer's drawing, which is
+ * fetched back because the seal is rebuilt from the original document on every
+ * signature and therefore has to redraw every mark, not only the newest one.
+ */
+async function downloadFromR2(key: string): Promise<Buffer | null> {
+  const url = await getSignedUrl(
+    getR2Client(),
+    new GetObjectCommand({ Bucket: r2Bucket(), Key: key }),
+    { expiresIn: 300 },
+  )
+  const response = await fetch(url)
+  if (!response.ok) return null
+  return Buffer.from(await response.arrayBuffer())
+}
+
 async function resolveSession(token: string): Promise<
   { ok: true; session: SessionRow } | { ok: false; status: number; error: string }
 > {
@@ -174,17 +192,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   })
 
   // Load the approved PDF — the exact bytes the client reviewed.
-  const r2Key = `esign/${session.agreement_id}/agreement.pdf`
-  const pdfUrl = await getSignedUrl(
-    getR2Client(),
-    new GetObjectCommand({ Bucket: r2Bucket(), Key: r2Key }),
-    { expiresIn: 300 },
-  )
-  const download = await fetch(pdfUrl)
-  if (!download.ok) {
+  const pdf = await downloadFromR2(`esign/${session.agreement_id}/agreement.pdf`)
+  if (!pdf) {
     return NextResponse.json({ error: 'Could not load the agreement' }, { status: 502 })
   }
-  const pdf = Buffer.from(await download.arrayBuffer())
 
   // Load every recipient in agreement order, not just this one. The markers are
   // numbered by position in that order — `anchorsFor` in lib/engagement/service.ts
@@ -211,7 +222,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return NextResponse.json({ error: 'Could not sign this agreement' }, { status: 500 })
   }
   const recipient = orderedRecipients[position - 1]
-  const markers = engagementAnchorMarkers(position)
 
   await recordAudit({ sessionId: session.id, agreementId: session.agreement_id, eventType: 'signed', req })
 
@@ -221,20 +231,62 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     .eq('agreement_id', session.agreement_id)
     .order('occurred_at', { ascending: true })
 
+  // Everyone who has signed, not just whoever just finished.
+  //
+  // The sealed file is rebuilt from the approved PDF on every signature, which
+  // is what keeps one audit certificate on it rather than one per signer. Doing
+  // that with a single signer's fields is what executed the first real
+  // agreement with `[[CLIENT_2_SIGNATURE]]` still printed on it: the spouse
+  // sealed first, the primary reloaded the original, and the overwrite erased
+  // her. Position comes from the same ordered roster the markers do.
+  const positionOf = new Map(orderedRecipients.map((r, index) => [r.role as string, index + 1]))
+  const { data: priorSessions } = await admin
+    .from('esign_signing_sessions')
+    .select('id, recipient_key, signed_at')
+    .eq('agreement_id', session.agreement_id)
+    .eq('status', 'signed')
+    .neq('id', session.id)
+
+  const priorMarks: SignedMark[] = []
+  for (const prior of priorSessions ?? []) {
+    const priorPosition = positionOf.get(prior.recipient_key as string)
+    if (!priorPosition) {
+      // Same refusal as above: a signature whose position cannot be resolved
+      // must not be dropped from the document silently.
+      console.error('[esign sign] prior signer not found on agreement', {
+        agreementId: session.agreement_id,
+        recipientKey: prior.recipient_key,
+      })
+      return NextResponse.json({ error: 'Could not sign this agreement' }, { status: 500 })
+    }
+    const { data: artifact } = await admin
+      .from('esign_signature_artifacts')
+      .select('typed_name, signature_png_r2_key')
+      .eq('session_id', prior.id as string)
+      .maybeSingle()
+    priorMarks.push({
+      position: priorPosition,
+      signedAt: new Date(prior.signed_at as string),
+      typedName: (artifact?.typed_name as string | null) ?? null,
+      signaturePng: artifact?.signature_png_r2_key
+        ? await downloadFromR2(artifact.signature_png_r2_key as string)
+        : null,
+    })
+  }
+
   const sealed = await sealSignedAgreement({
     pdf,
-    fields: [
+    fields: sealFieldsFor([
+      ...priorMarks,
+      // This signer's own mark is passed in rather than read back: the session
+      // is not marked `signed` until after sealing succeeds, and that ordering
+      // is what lets a failed seal be retried.
       {
-        marker: markers.signature,
-        kind: 'signature',
-        ...(signaturePng ? { signaturePng } : { text: typedName }),
+        position,
+        signedAt: new Date(now),
+        ...(signaturePng ? { signaturePng } : { typedName }),
       },
-      {
-        marker: markers.date,
-        kind: 'date',
-        text: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      },
-    ],
+    ]),
     signer: {
       name: (recipient?.name as string) ?? typedName,
       email: (recipient?.email as string) ?? '',
