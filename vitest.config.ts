@@ -14,8 +14,16 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     testTimeout: 30_000,
     pool: 'forks',
-    // Keep the established memory footprint for the drafting/rendering suite.
     // Real-service tests use vitest.integration.config.ts explicitly.
-    fileParallelism: false,
+    //
+    // File parallelism was off to hold down the drafting/rendering suite's
+    // memory footprint. Measured: serially the whole suite peaks at about
+    // 950 MB of node RSS and four-way peaks at about 1.6 GB, so a 16 GB runner
+    // was buying a one-file-at-a-time run it had no need to buy.
+    //
+    // Capped rather than left to the CPU count so the ceiling is a number
+    // someone chose and can point at, and so a larger runner does not silently
+    // change the footprint. Top-level: Vitest 4 removed `poolOptions`.
+    maxWorkers: 4,
   },
 })
