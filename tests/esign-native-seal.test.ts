@@ -43,7 +43,7 @@ const PNG_1PX = Buffer.from(
 )
 
 const baseInput = {
-  signer: { name: 'A Client', email: 'client@example.com' },
+  signers: [{ name: 'A Client', email: 'client@example.com' }],
   agreementId: 'agreement-1',
   consentText:
     'By checking this box I agree to sign this agreement electronically and confirm '
@@ -123,6 +123,98 @@ describe('sealSignedAgreement', () => {
     expect(layer.text).toContain('Skylar White')
     expect(layer.text).toContain('January 3, 2026')
     expect(layer.text).toContain('January 2, 2026')
+  })
+
+  it('names every signer on the certificate, with how each one signed', async () => {
+    // The certificate used to take a single signer and the route filled it with
+    // whoever was signing right then, so a couple's executed agreement named
+    // one party and read as though the other did not exist.
+    //
+    // The adoption method is stated rather than left to be inferred from how
+    // the mark looks — which matters now that a typed name is set in italic.
+    const pdf = await agreementPdf(['[[CLIENT_1_SIGNATURE]]'])
+
+    const sealed = await sealSignedAgreement({
+      ...baseInput,
+      pdf,
+      fields: [{ marker: '[[CLIENT_1_SIGNATURE]]', kind: 'signature', text: 'Walter White' }],
+      signers: [
+        {
+          name: 'Walter White',
+          email: 'walter@example.com',
+          adoptionMethod: 'typed',
+          signedAt: new Date('2026-01-02T09:16:30Z'),
+        },
+        {
+          name: 'Skylar White',
+          email: 'skylar@example.com',
+          adoptionMethod: 'drawn',
+          signedAt: new Date('2026-01-03T14:02:00Z'),
+        },
+      ],
+    })
+
+    const { text } = await buildPdfTextLayer(sealed.pdf)
+    expect(text).toContain('Walter White')
+    expect(text).toContain('walter@example.com')
+    expect(text).toContain('Skylar White')
+    expect(text).toContain('skylar@example.com')
+    expect(text).toContain('Signature adopted by typing a name.')
+    expect(text).toContain('Signature adopted by drawing.')
+  })
+
+  it('attributes each audit trail entry to the signer it belongs to', async () => {
+    // Two signers produce ten events. Without a name the certificate is one
+    // undifferentiated list, and cannot show that a particular person signed.
+    const pdf = await agreementPdf(['[[CLIENT_1_SIGNATURE]]'])
+
+    const sealed = await sealSignedAgreement({
+      ...baseInput,
+      pdf,
+      fields: [{ marker: '[[CLIENT_1_SIGNATURE]]', kind: 'signature', text: 'Walter White' }],
+      auditTrail: [
+        { eventType: 'sent', occurredAt: '2026-01-01T10:00:00Z' },
+        { eventType: 'signed', occurredAt: '2026-01-02T09:16:30Z', signerName: 'Walter White' },
+        { eventType: 'signed', occurredAt: '2026-01-03T14:02:00Z', signerName: 'Skylar White' },
+      ],
+    })
+
+    // Whitespace is normalised by the extractor, so match on order not spacing.
+    const { text } = await buildPdfTextLayer(sealed.pdf)
+    expect(text).toMatch(/2026-01-02T09:16:30Z\s+signed\s+Walter White/)
+    expect(text).toMatch(/2026-01-03T14:02:00Z\s+signed\s+Skylar White/)
+    // An agreement-level event has no signer and must not be attributed to one.
+    expect(text).toMatch(/2026-01-01T10:00:00Z\s+sent(?!\s+\w+ \w)/)
+  })
+
+  it('sets a typed signature in a different face from the date', async () => {
+    // Helvetica made a typed name read as body text — a word inserted into the
+    // sentence rather than a signature.
+    //
+    // "Looks like a signature" is not assertable. Metrics are: the same string
+    // stamped as a signature and as a date comes out a different width only if
+    // the two are drawn in different faces.
+    const pdf = await agreementPdf(['[[CLIENT_1_SIGNATURE]]', '[[CLIENT_1_DATE]]'])
+
+    const sealed = await sealSignedAgreement({
+      ...baseInput,
+      pdf,
+      fields: [
+        { marker: '[[CLIENT_1_SIGNATURE]]', kind: 'signature', text: 'Walter White' },
+        { marker: '[[CLIENT_1_DATE]]', kind: 'date', text: 'Walter White' },
+      ],
+    })
+
+    // bbox is null on a rotated page, where the extractor keeps the text and
+    // drops the geometry rather than emit boxes it knows are wrong.
+    const layer = await buildPdfTextLayer(sealed.pdf)
+    const widths = layer.spans
+      .filter(span => layer.text.slice(span.charStart, span.charEnd).includes('Walter White'))
+      .map(span => span.bbox?.width)
+      .filter((width): width is number => width !== undefined)
+
+    expect(widths).toHaveLength(2)
+    expect(widths[0]).not.toBeCloseTo(widths[1], 1)
   })
 
   it('keeps the reviewed document intact around the signature', async () => {
