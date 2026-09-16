@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       ai_usage: {
@@ -4086,8 +4081,10 @@ export type Database = {
           created_at: string
           declined_at: string | null
           email: string
+          external_recipient_id: string | null
           firma_recipient_id: string | null
           id: string
+          last_reminded_at: string | null
           name: string
           recipient_order: number
           role: string
@@ -4102,8 +4099,10 @@ export type Database = {
           created_at?: string
           declined_at?: string | null
           email: string
+          external_recipient_id?: string | null
           firma_recipient_id?: string | null
           id?: string
+          last_reminded_at?: string | null
           name: string
           recipient_order: number
           role: string
@@ -4118,8 +4117,10 @@ export type Database = {
           created_at?: string
           declined_at?: string | null
           email?: string
+          external_recipient_id?: string | null
           firma_recipient_id?: string | null
           id?: string
+          last_reminded_at?: string | null
           name?: string
           recipient_order?: number
           role?: string
@@ -4193,12 +4194,17 @@ export type Database = {
           completed_at: string | null
           completed_r2_key: string | null
           created_at: string
+          external_request_id: string | null
           firma_request_id: string | null
           id: string
+          last_provider_sync_at: string | null
           lead_id: string | null
           legacy_envelope_id: string | null
           matter_id: string | null
           prepared_by: string | null
+          provider: string
+          provider_sync_error: string | null
+          provider_sync_error_at: string | null
           send_lease_expires_at: string | null
           send_lease_id: string | null
           sent_at: string | null
@@ -4212,12 +4218,17 @@ export type Database = {
           completed_at?: string | null
           completed_r2_key?: string | null
           created_at?: string
+          external_request_id?: string | null
           firma_request_id?: string | null
           id?: string
+          last_provider_sync_at?: string | null
           lead_id?: string | null
           legacy_envelope_id?: string | null
           matter_id?: string | null
           prepared_by?: string | null
+          provider?: string
+          provider_sync_error?: string | null
+          provider_sync_error_at?: string | null
           send_lease_expires_at?: string | null
           send_lease_id?: string | null
           sent_at?: string | null
@@ -4231,12 +4242,17 @@ export type Database = {
           completed_at?: string | null
           completed_r2_key?: string | null
           created_at?: string
+          external_request_id?: string | null
           firma_request_id?: string | null
           id?: string
+          last_provider_sync_at?: string | null
           lead_id?: string | null
           legacy_envelope_id?: string | null
           matter_id?: string | null
           prepared_by?: string | null
+          provider?: string
+          provider_sync_error?: string | null
+          provider_sync_error_at?: string | null
           send_lease_expires_at?: string | null
           send_lease_id?: string | null
           sent_at?: string | null
@@ -4327,6 +4343,248 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      engagement_esign_artifacts: {
+        Row: {
+          agreement_id: string
+          byte_size: number
+          created_at: string
+          external_request_id: string | null
+          id: string
+          kind: string
+          mime_type: string
+          provider: string
+          r2_key: string
+          retrieved_at: string
+          sha256: string
+        }
+        Insert: {
+          agreement_id: string
+          byte_size: number
+          created_at?: string
+          external_request_id?: string | null
+          id?: string
+          kind: string
+          mime_type?: string
+          provider: string
+          r2_key: string
+          retrieved_at?: string
+          sha256: string
+        }
+        Update: {
+          agreement_id?: string
+          byte_size?: number
+          created_at?: string
+          external_request_id?: string | null
+          id?: string
+          kind?: string
+          mime_type?: string
+          provider?: string
+          r2_key?: string
+          retrieved_at?: string
+          sha256?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engagement_esign_artifacts_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "engagement_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      esign_audit_events: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          detail: Json
+          event_type: string
+          id: string
+          ip: unknown
+          occurred_at: string
+          session_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          detail?: Json
+          event_type: string
+          id?: string
+          ip?: unknown
+          occurred_at?: string
+          session_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          detail?: Json
+          event_type?: string
+          id?: string
+          ip?: unknown
+          occurred_at?: string
+          session_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "esign_audit_events_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "engagement_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "esign_audit_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "esign_signing_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      esign_signature_artifacts: {
+        Row: {
+          adoption_method: string
+          consent_text_sha256: string
+          created_at: string
+          id: string
+          session_id: string
+          signature_png_r2_key: string | null
+          typed_name: string | null
+        }
+        Insert: {
+          adoption_method: string
+          consent_text_sha256: string
+          created_at?: string
+          id?: string
+          session_id: string
+          signature_png_r2_key?: string | null
+          typed_name?: string | null
+        }
+        Update: {
+          adoption_method?: string
+          consent_text_sha256?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          signature_png_r2_key?: string | null
+          typed_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "esign_signature_artifacts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "esign_signing_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      esign_signing_sessions: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          expires_at: string
+          id: string
+          recipient_key: string
+          signed_at: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          expires_at: string
+          id?: string
+          recipient_key: string
+          signed_at?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          expires_at?: string
+          id?: string
+          recipient_key?: string
+          signed_at?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "esign_signing_sessions_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "engagement_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      esign_webhook_events: {
+        Row: {
+          agreement_id: string | null
+          created_at: string
+          error: string | null
+          event_id: string
+          event_type: string
+          external_request_id: string | null
+          id: string
+          payload: Json
+          processed_at: string | null
+          processing_started_at: string | null
+          provider: string
+        }
+        Insert: {
+          agreement_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_id: string
+          event_type: string
+          external_request_id?: string | null
+          id?: string
+          payload: Json
+          processed_at?: string | null
+          processing_started_at?: string | null
+          provider: string
+        }
+        Update: {
+          agreement_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string
+          event_type?: string
+          external_request_id?: string | null
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          processing_started_at?: string | null
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "esign_webhook_events_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "engagement_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       estate_clause_preview_evidence: {
         Row: {
@@ -4868,6 +5126,7 @@ export type Database = {
           email_signature_html: string | null
           email_triage_enabled: boolean
           email_triage_query: string | null
+          esign_native_enabled: boolean
           estate_tax_schedules: Json
           firm_name: string | null
           id: number
@@ -4897,6 +5156,7 @@ export type Database = {
           email_signature_html?: string | null
           email_triage_enabled?: boolean
           email_triage_query?: string | null
+          esign_native_enabled?: boolean
           estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
@@ -4926,6 +5186,7 @@ export type Database = {
           email_signature_html?: string | null
           email_triage_enabled?: boolean
           email_triage_query?: string | null
+          esign_native_enabled?: boolean
           estate_tax_schedules?: Json
           firm_name?: string | null
           id?: number
@@ -5168,6 +5429,117 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      integration_external_records: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          external_record_type: string
+          id: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          last_succeeded_at: string | null
+          metadata: Json
+          provider: string
+          request_hash: string | null
+          request_snapshot: Json | null
+          source_version: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type: string
+          id?: string
+          idempotency_key: string
+          internal_entity_id: string
+          internal_entity_type: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          external_record_type?: string
+          id?: string
+          idempotency_key?: string
+          internal_entity_id?: string
+          internal_entity_type?: string
+          last_attempt_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_succeeded_at?: string | null
+          metadata?: Json
+          provider?: string
+          request_hash?: string | null
+          request_snapshot?: Json | null
+          source_version?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_settings: {
+        Row: {
+          created_at: string
+          id: number
+          lawmatics_appointment_sync_enabled: boolean
+          lawmatics_event_type_id_map: Json
+          lawmatics_last_check_error: string | null
+          lawmatics_last_checked_at: string | null
+          lawmatics_location_id_map: Json
+          lawmatics_user_ids: Json
+          statular_doc_id_map: Json
+          statular_drafter_id: string | null
+          statular_sync_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_event_type_id_map?: Json
+          lawmatics_last_check_error?: string | null
+          lawmatics_last_checked_at?: string | null
+          lawmatics_location_id_map?: Json
+          lawmatics_user_ids?: Json
+          statular_doc_id_map?: Json
+          statular_drafter_id?: string | null
+          statular_sync_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       invoice_checkout_sessions: {
         Row: {
@@ -8932,6 +9304,44 @@ export type Database = {
           },
         ]
       }
+      work_skill_revisions: {
+        Row: {
+          created_at: string
+          edited_by: string | null
+          id: string
+          name: string
+          skill_id: string
+          skill_md: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          name: string
+          skill_id: string
+          skill_md: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          name?: string
+          skill_id?: string
+          skill_md?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_skill_revisions_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "work_skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_skill_shares: {
         Row: {
           allow_edit: boolean
@@ -10068,12 +10478,17 @@ export type Database = {
           completed_at: string | null
           completed_r2_key: string | null
           created_at: string
+          external_request_id: string | null
           firma_request_id: string | null
           id: string
+          last_provider_sync_at: string | null
           lead_id: string | null
           legacy_envelope_id: string | null
           matter_id: string | null
           prepared_by: string | null
+          provider: string
+          provider_sync_error: string | null
+          provider_sync_error_at: string | null
           send_lease_expires_at: string | null
           send_lease_id: string | null
           sent_at: string | null
@@ -10102,12 +10517,17 @@ export type Database = {
           completed_at: string | null
           completed_r2_key: string | null
           created_at: string
+          external_request_id: string | null
           firma_request_id: string | null
           id: string
+          last_provider_sync_at: string | null
           lead_id: string | null
           legacy_envelope_id: string | null
           matter_id: string | null
           prepared_by: string | null
+          provider: string
+          provider_sync_error: string | null
+          provider_sync_error_at: string | null
           send_lease_expires_at: string | null
           send_lease_id: string | null
           sent_at: string | null
@@ -10121,6 +10541,17 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_esign_webhook_event: {
+        Args: {
+          p_agreement_id: string
+          p_event_id: string
+          p_event_type: string
+          p_external_request_id: string
+          p_payload: Json
+          p_provider: string
+        }
+        Returns: string
       }
       claim_firma_webhook_event: {
         Args: {
@@ -10984,12 +11415,17 @@ export type Database = {
           completed_at: string | null
           completed_r2_key: string | null
           created_at: string
+          external_request_id: string | null
           firma_request_id: string | null
           id: string
+          last_provider_sync_at: string | null
           lead_id: string | null
           legacy_envelope_id: string | null
           matter_id: string | null
           prepared_by: string | null
+          provider: string
+          provider_sync_error: string | null
+          provider_sync_error_at: string | null
           send_lease_expires_at: string | null
           send_lease_id: string | null
           sent_at: string | null
@@ -11904,12 +12340,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11933,11 +12369,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11958,11 +12394,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -11983,11 +12419,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12000,11 +12436,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
