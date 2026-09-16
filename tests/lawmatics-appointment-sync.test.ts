@@ -29,6 +29,12 @@ const appointment = () => db.appointments[0]
 const records = () => db.integration_external_records
 const record = (type: string) => records().find(row => row.external_record_type === type)!
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => { resolve = done })
+  return { promise, resolve }
+}
+
 // Stateful database boundary: exercise the actual shared repository, including
 // ignore-duplicate upserts and conditional updates, without a remote database.
 function query(table: string) {
@@ -155,6 +161,44 @@ describe('stable Lawmatics Prospect identity', () => {
 })
 
 describe('Lawmatics Event convergence', () => {
+  it.each(['prospect', 'event'] as const)('blocks a third caller during a retried %s POST and lets the retry finish', async type => {
+    const provider = type === 'prospect' ? mocks.createProspect : mocks.createEvent
+    const service = type === 'prospect' ? resolveLawmaticsProspect : syncLawmaticsAppointment
+    const thirdAppointmentId = type === 'prospect' ? 'appointment-2' : 'appointment-1'
+    db.appointments.push({ ...appointment(), id: 'appointment-2', linked_lead_id: null, linked_matter_id: 'matter-1' })
+    provider.mockRejectedValueOnce(new IntegrationError({ provider: 'lawmatics', kind: 'retryable', code: 'rate_limited',
+      safeMessage: 'Rate limited.', retryAfterMs: 7000 }))
+    await expect(service('appointment-1')).rejects.toMatchObject({ code: 'rate_limited' })
+    expect(record(type)).toMatchObject({ external_id: null, last_error_code: 'rate_limited' })
+    const firstAttemptAt = record(type).last_attempt_at
+
+    const entered = deferred<void>()
+    const response = deferred<{ id: string; type: string }>()
+    provider.mockImplementationOnce(() => { entered.resolve(); return response.promise })
+    // Attach rejection handling before releasing the provider; the RED case must
+    // finish cleanly even when the third caller steals this retry's fence.
+    const retry = Promise.allSettled([service('appointment-1')])
+    await entered.promise
+    expect(provider).toHaveBeenCalledTimes(2)
+    expect(record(type).last_attempt_at).not.toBe(firstAttemptAt)
+    const retryAttemptAt = record(type).last_attempt_at
+    try {
+      const [third] = await Promise.allSettled([service(thirdAppointmentId)])
+      expect(provider).toHaveBeenCalledTimes(2)
+      expect(third).toMatchObject({ status: 'rejected', reason: { kind: 'attention', code: 'create_outcome_unknown' } })
+      expect(record(type)).toMatchObject({ status: 'pending', external_id: null,
+        last_attempt_at: retryAttemptAt, last_error_code: null, last_error_message: null })
+    } finally {
+      response.resolve({ id: `${type}-1`, type })
+      await retry
+    }
+    const [completed] = await retry
+    expect(completed).toMatchObject({ status: 'fulfilled' })
+    expect(record(type)).toMatchObject({ status: 'synced', external_id: `${type}-1`, last_attempt_at: retryAttemptAt })
+    await service(thirdAppointmentId)
+    expect(provider).toHaveBeenCalledTimes(2)
+  })
+
   it('creates and records one scheduled Event with only safe appointment information', async () => {
     await expect(syncLawmaticsAppointment('appointment-1')).resolves.toMatchObject({ operation: 'created', externalId: 'event-1' })
     expect(mocks.createEvent).toHaveBeenCalledWith(expect.objectContaining({ start: '2026-09-20T14:00:00Z', end: '2026-09-20T15:00:00Z',

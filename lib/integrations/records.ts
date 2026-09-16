@@ -100,7 +100,11 @@ interface RecordAttempt extends ExternalRecordRef {
 export async function beginIntegrationAttempt(input: RecordAttempt & { expectedLastAttemptAt: string | null }): Promise<ExternalRecord> {
   const previous = input.expectedLastAttemptAt === null ? 0 : Date.parse(input.expectedLastAttemptAt)
   const at = new Date(Math.max(Date.now(), previous + 1)).toISOString()
-  let update = admin().from('integration_external_records').update({ last_attempt_at: at })
+  // Consume prior retry eligibility in the same CAS that acquires the attempt.
+  // A later reader must see an in-flight attempt, not its predecessor's rejection.
+  let update = admin().from('integration_external_records').update({
+    last_attempt_at: at, status: 'pending', last_error_code: null, last_error_message: null,
+  })
     .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
     .eq('idempotency_key', input.idempotencyKey)
