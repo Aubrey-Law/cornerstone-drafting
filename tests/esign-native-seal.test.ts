@@ -115,7 +115,7 @@ describe('sealSignedAgreement', () => {
       fields: sealFieldsFor([
         { position: 2, signedAt: new Date('2026-01-02T09:16:30Z'), typedName: 'Skylar White' },
         { position: 1, signedAt: new Date('2026-01-03T14:02:00Z'), typedName: 'Walter White' },
-      ]),
+      ], 'America/New_York'),
     })
 
     const layer = await buildPdfTextLayer(sealed.pdf)
