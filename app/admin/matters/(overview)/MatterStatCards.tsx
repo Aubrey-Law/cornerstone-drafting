@@ -27,7 +27,7 @@ function StatCard({
   href: string
 }) {
   return (
-    <Card className="min-w-0 gap-0 py-0 transition-colors hover:bg-muted/50">
+    <Card className="min-w-0 gap-0 py-0 transition-colors hover:bg-accent">
       <CardContent className="px-4 py-4">
         <Link href={href} className="block">
           <div className="flex items-start justify-between gap-3">
@@ -35,7 +35,7 @@ function StatCard({
               <p className="text-xs font-medium text-muted-foreground">{label}</p>
               <p className="mt-1 text-3xl font-semibold tabular-nums">{NUMBER.format(value)}</p>
             </div>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
               <Icon className="size-4 text-muted-foreground" aria-hidden />
             </span>
           </div>

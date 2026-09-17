@@ -117,7 +117,7 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
                 <div key={asset.id} className="rounded-lg border border-border bg-card p-3">
                   {/* Category badge + delete */}
                   <div className="mb-3 flex items-center justify-between">
-                    <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', meta.color)}>
+                    <span className={cn('rounded-full border px-2 py-0.5 text-micro font-medium', meta.color)}>
                       {meta.label}
                     </span>
                     <button

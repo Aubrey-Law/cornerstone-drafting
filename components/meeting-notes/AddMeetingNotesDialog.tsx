@@ -175,7 +175,7 @@ export function AddMeetingNotesDialog({
           </DialogTitle>
           <DialogDescription>
             Pick a recent Granola meeting or fill in the fields manually. Saved as an internal{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-sans text-[10px]">meeting-notes</code>{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-sans text-micro">meeting-notes</code>{' '}
             document. Never visible to the client.
           </DialogDescription>
         </DialogHeader>
@@ -188,7 +188,7 @@ export function AddMeetingNotesDialog({
                 type="button"
                 onClick={() => void loadRecent()}
                 disabled={listLoading || !token}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="flex items-center gap-1 text-micro text-muted-foreground hover:text-foreground disabled:opacity-50"
                 title="Refresh"
               >
                 <RefreshCw className={cn('h-3 w-3', listLoading && 'animate-spin')} />
@@ -198,13 +198,13 @@ export function AddMeetingNotesDialog({
 
             <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-card">
               {listLoading && !recent ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
                 </div>
               ) : listError ? (
-                <div className="px-3 py-4 text-[12px] text-destructive">{listError}</div>
+                <div className="px-3 py-4 text-xs text-destructive">{listError}</div>
               ) : recent && recent.length === 0 ? (
-                <div className="px-3 py-4 text-[12px] text-muted-foreground">
+                <div className="px-3 py-4 text-xs text-muted-foreground">
                   No Granola meetings in the last 14 days.
                 </div>
               ) : (
@@ -220,15 +220,15 @@ export function AddMeetingNotesDialog({
                           disabled={saving || fetchingNoteId !== null}
                           className={cn(
                             'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors',
-                            'hover:bg-muted/40 disabled:opacity-60',
+                            'hover:bg-accent disabled:opacity-60',
                             isPicked && 'bg-primary/5',
                           )}
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-medium text-foreground">
+                            <p className="truncate text-compact font-medium text-foreground">
                               {note.title}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-micro text-muted-foreground">
                               {formatDate(note.createdAt)}
                             </p>
                           </div>
@@ -272,7 +272,7 @@ export function AddMeetingNotesDialog({
           <div className="space-y-1.5">
             <Label htmlFor="mn-content" className="flex items-center justify-between">
               <span>Notes</span>
-              <span className="text-[11px] font-normal text-muted-foreground">
+              <span className="text-micro font-normal text-muted-foreground">
                 Markdown supported
               </span>
             </Label>
@@ -283,10 +283,10 @@ export function AddMeetingNotesDialog({
               onChange={(e) => setContent(e.target.value)}
               placeholder="Pick a meeting above to auto-fill, or paste notes here…"
               rows={12}
-              className="text-[12px]"
+              className="text-xs"
               disabled={saving}
             />
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-micro text-muted-foreground">
               <FileText className="h-3 w-3" />
               Saved as a single .md file
             </p>

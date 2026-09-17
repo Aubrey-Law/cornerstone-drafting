@@ -22,7 +22,7 @@ export function TaskSourcePill({ source, className }: { source: TaskRow['source'
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
+        'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-micro font-medium',
         TASK_SOURCE_PILL[source],
         className,
       )}
@@ -47,7 +47,7 @@ export function TaskAssigneeAvatar({ name }: { name: string | null | undefined }
   return (
     <span
       title={name}
-      className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground"
+      className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-micro font-medium text-muted-foreground"
     >
       {initialsFor(name)}
     </span>
@@ -178,7 +178,7 @@ export function TaskListRow({
       data-selected={selected || undefined}
       aria-selected={selected || undefined}
       className={cn(
-        'transition-colors hover:bg-muted/50',
+        'transition-colors hover:bg-accent',
         focused && 'bg-muted shadow-[inset_3px_0_0] shadow-primary',
         // Deliberately a different channel from focus: focus is a left edge
         // bar, selection is the row's own fill. Both can be true at once and

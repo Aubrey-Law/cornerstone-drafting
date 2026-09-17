@@ -92,7 +92,7 @@ export function MatterOverviewHero({
           <div className="flex flex-wrap items-center gap-2">
             {unreadPortalCount > 0 && (
               <button type="button" onClick={onUnreadClick} className="inline-flex">
-                <Badge variant="outline" className="cursor-pointer text-[10px] hover:bg-muted">
+                <Badge variant="outline" className="cursor-pointer text-micro hover:bg-accent">
                   {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}
                 </Badge>
               </button>
@@ -101,7 +101,7 @@ export function MatterOverviewHero({
               <button type="button" onClick={onReviewFlagsClick} className="inline-flex">
                 <Badge
                   variant="outline"
-                  className="cursor-pointer border-amber-border bg-amber-bg text-[10px] text-amber hover:bg-amber-bg/80"
+                  className="cursor-pointer border-amber-border bg-amber-bg text-micro text-amber hover:bg-amber-bg/80"
                 >
                   <AlertTriangle className="mr-1 h-3 w-3" />
                   {reviewFlags.length} review flag{reviewFlags.length === 1 ? '' : 's'}
@@ -111,7 +111,7 @@ export function MatterOverviewHero({
             {unreviewedUploadCounts.total > 0 && (
               <Badge
                 variant="outline"
-                className="cursor-pointer border-amber-border bg-amber-bg text-[10px] text-amber hover:bg-amber-bg/80"
+                className="cursor-pointer border-amber-border bg-amber-bg text-micro text-amber hover:bg-amber-bg/80"
                 title={uploadDetail}
                 onClick={onReviewUploads}
                 onKeyDown={event => {

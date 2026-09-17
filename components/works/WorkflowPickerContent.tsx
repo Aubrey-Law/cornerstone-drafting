@@ -93,7 +93,7 @@ export function WorkflowPickerContent({ typeFilter, onPick, pickLabel = 'Use wor
                   key={skill.id}
                   type="button"
                   onClick={() => setSelected(skill)}
-                  className={`flex w-full items-start gap-2 p-3 text-left hover:bg-muted/50 ${selected?.id === skill.id ? 'bg-muted/60' : ''}`}
+                  className={`flex w-full items-start gap-2 p-3 text-left hover:bg-accent ${selected?.id === skill.id ? 'bg-muted' : ''}`}
                 >
                   <span className="mt-0.5 rounded-md bg-primary/10 p-1.5">
                     {skill.skill_type === 'tabular' ? <Table2 className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
@@ -101,7 +101,7 @@ export function WorkflowPickerContent({ typeFilter, onPick, pickLabel = 'Use wor
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                       {skill.name}
-                      {skill.is_system && <Badge variant="secondary" className="text-[10px]">System</Badge>}
+                      {skill.is_system && <Badge variant="secondary" className="text-micro">System</Badge>}
                     </span>
                     <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{skill.description}</span>
                   </span>

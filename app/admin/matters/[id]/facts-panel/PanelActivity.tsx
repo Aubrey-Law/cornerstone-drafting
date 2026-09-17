@@ -14,7 +14,7 @@ export function PanelActivity({
 }) {
   const recent = activity.slice(0, 5)
   if (recent.length === 0) {
-    return <p className="px-1.5 text-[11.5px] text-muted-foreground">No activity yet.</p>
+    return <p className="px-1.5 text-micro text-muted-foreground">No activity yet.</p>
   }
 
   return (
@@ -37,16 +37,16 @@ export function PanelActivity({
                 <EventIcon className="size-3" aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-medium">{activityEventTitle(event)}</p>
+                <p className="text-xs font-medium">{activityEventTitle(event)}</p>
                 {event.metadata?.origin === 'lead' && (
-                  <span className="inline-flex rounded-full border border-border px-1.5 py-px text-[10px] font-semibold text-muted-foreground">
+                  <span className="inline-flex rounded-full border border-border px-1.5 py-px text-micro font-semibold text-muted-foreground">
                     From lead
                   </span>
                 )}
                 {event.detail && (
-                  <p className="text-[11px] text-muted-foreground">{event.detail}</p>
+                  <p className="text-micro text-muted-foreground">{event.detail}</p>
                 )}
-                <p className="mt-px text-[11px] text-muted-foreground">
+                <p className="mt-px text-micro text-muted-foreground">
                   {formatDateTime(event.created_at)}
                   {event.actor_name ? ` · ${event.actor_name}` : ''}
                 </p>
@@ -58,7 +58,7 @@ export function PanelActivity({
       <button
         type="button"
         onClick={onOpenTab}
-        className="mt-2.5 text-[11px] font-semibold text-primary hover:underline"
+        className="mt-2.5 text-micro font-semibold text-primary hover:underline"
       >
         Open activity tab
       </button>

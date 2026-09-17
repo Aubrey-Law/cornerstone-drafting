@@ -594,7 +594,7 @@ export function LeadsClient({
       </div>
 
       {view === 'board' && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           Drag a card onto a column to run that step — Intake sent emails the intake, Engagement opens
           the send form, Hired creates the matter, and Lost closes the lead out.
         </p>
@@ -642,13 +642,13 @@ export function LeadsClient({
         */}
         {total > 0 && (
           <div className="flex items-center justify-between gap-3 pt-1">
-            <p className="text-[11px] text-muted-foreground" aria-live="polite">
+            <p className="text-micro text-muted-foreground" aria-live="polite">
               Showing {filteredLeads.length} of {total} {total === 1 ? 'lead' : 'leads'}
               {hasTableFilters || cardFilter ? ' matching these filters' : ''}
               {sortKey === 'score_desc' ? ' — highest score first' : ''}
             </p>
             {hasMore && (atRequestCeiling ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-micro text-muted-foreground">
                 Search or filter to reach the rest
               </span>
             ) : (

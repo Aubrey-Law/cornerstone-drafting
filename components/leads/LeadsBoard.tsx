@@ -132,7 +132,7 @@ export function LeadsBoard({
             key={column.key}
             aria-label={column.label}
             className={cn(
-              'flex min-w-[15rem] flex-1 flex-col rounded-lg border bg-muted/20',
+              'flex min-w-[15rem] flex-1 flex-col rounded-lg border bg-muted',
               isTarget ? 'border-primary ring-2 ring-primary/20' : 'border-border',
             )}
             onDragOver={event => {
@@ -149,13 +149,13 @@ export function LeadsBoard({
           >
             <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
               <h2 className="truncate text-xs font-semibold">{column.label}</h2>
-              <span className="shrink-0 rounded-full border border-border bg-card px-1.5 text-[10px] tabular-nums text-muted-foreground">
+              <span className="shrink-0 rounded-full border border-border bg-card px-1.5 text-micro tabular-nums text-muted-foreground">
                 {items.length}
               </span>
             </header>
             <ul className="flex min-h-[8rem] flex-1 flex-col gap-2 p-2">
               {items.length === 0 ? (
-                <li className="rounded-md border border-dashed border-border px-2 py-6 text-center text-[11px] text-muted-foreground">
+                <li className="rounded-md border border-dashed border-border px-2 py-6 text-center text-micro text-muted-foreground">
                   {column.hint}
                 </li>
               ) : (
@@ -254,7 +254,7 @@ function BoardCard({
               number stays reachable as the row's title.
             */}
             <p
-              className="mt-0.5 truncate text-[11px] text-muted-foreground"
+              className="mt-0.5 truncate text-micro text-muted-foreground"
               title={provisionalLeadNumber(lead)}
             >
               {waiting ?? provisionalLeadNumber(lead)}
@@ -275,23 +275,23 @@ function BoardCard({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {chip && (
-            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', CHIP_TONE[chip.tone])}>
+            <span className={cn('rounded-full px-2 py-0.5 text-micro font-medium', CHIP_TONE[chip.tone])}>
               {chip.label}
             </span>
           )}
           {attention && (
-            <span className="rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-medium text-red">
+            <span className="rounded-full bg-red-bg px-2 py-0.5 text-micro font-medium text-red">
               {attention}
             </span>
           )}
         </div>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground">
           <LeadScoreBadge
             score={score}
             muted={!leadScoreIsActive(lead.lead_status)}
             showLabel={false}
-            className="px-1.5 py-0 text-[10px]"
+            className="px-1.5 py-0 text-micro"
           />
           <span>{practiceAreaLabel(lead.practice_area)}</span>
           {value && (

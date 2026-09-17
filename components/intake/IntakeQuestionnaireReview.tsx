@@ -466,7 +466,7 @@ export function IntakeQuestionnaireReview({
             type="button"
             onClick={() => void handleDownloadAnswers()}
             disabled={exporting}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
           >
             {exporting
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -476,7 +476,7 @@ export function IntakeQuestionnaireReview({
         )}
       </div>
 
-      <div className="rounded-lg border border-border bg-muted/40 p-4">
+      <div className="rounded-lg border border-border bg-muted p-4">
         <h4 className="mb-3 text-sm font-semibold text-foreground">Submission checklist</h4>
         <div className="space-y-2">
           {checklist.map(({ step, errors, warnings }) => {
@@ -501,16 +501,16 @@ export function IntakeQuestionnaireReview({
                   )}
                   <span
                     className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                      'shrink-0 rounded-full px-2 py-0.5 text-micro font-medium uppercase tracking-wide',
                       step.optional
                         ? optionalDone
-                          ? 'bg-accent/10 text-accent'
+                          ? 'bg-success/10 text-success'
                           : 'bg-muted text-muted-foreground'
                         : hasErrors
                           ? 'bg-destructive/10 text-destructive'
                           : hasWarnings
                             ? 'bg-warning/10 text-warning'
-                            : 'bg-accent/10 text-accent',
+                            : 'bg-success/10 text-success',
                     )}
                   >
                     {step.optional ? optionalDone ? 'Complete' : 'Optional' : hasErrors ? 'Needs info' : hasWarnings ? 'Review' : 'Complete'}

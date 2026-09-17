@@ -173,7 +173,7 @@ export function AddressAutocomplete({
           aria-expanded={open}
         />
         {loading && (
-          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[11px] text-muted-foreground">
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-micro text-muted-foreground">
             Searching
           </span>
         )}
@@ -190,7 +190,7 @@ export function AddressAutocomplete({
                     event.preventDefault()
                     void handleSelect(result)
                   }}
-                  className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-accent"
                 >
                   <span className="font-medium text-foreground">{primary}</span>
                   {secondary && <span className="text-xs text-muted-foreground">{secondary}</span>}

@@ -29,7 +29,7 @@ export function PlanTrackNotice({ matterId, practiceArea }: PlanTrackNoticeProps
       title="Plan track"
       subtitle="Set by the matter's practice area — it decides the sections, the documents, and the drafting checks."
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted p-3">
         <div>
           <p className="text-sm font-medium text-foreground">{label}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">

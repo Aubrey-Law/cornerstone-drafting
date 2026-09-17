@@ -947,7 +947,7 @@ function MatterDetailClientInner({
                 <TabsTrigger value="tasks" className="gap-1.5">
                   Tasks
                   {taskCounts.overdue > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
                       {taskCounts.overdue}
                     </Badge>
                   )}
@@ -957,7 +957,7 @@ function MatterDetailClientInner({
                 <TabsTrigger value="documents" className="gap-1.5">
                   Documents
                   {unreviewedUploadCounts.total > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
                       {unreviewedUploadCounts.total}
                     </Badge>
                   )}
@@ -966,7 +966,7 @@ function MatterDetailClientInner({
                 <TabsTrigger value="communications" className="gap-1.5">
                   Portal messages
                   {unreadPortalCount > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
                       {unreadPortalCount}
                     </Badge>
                   )}

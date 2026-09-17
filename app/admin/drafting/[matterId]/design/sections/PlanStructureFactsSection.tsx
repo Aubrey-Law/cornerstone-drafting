@@ -122,7 +122,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
             {namedChildren.length === 0 ? (
               <p className="text-sm text-muted-foreground">Add children in Intake Details to select who should be disinherited.</p>
             ) : (
-              <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+              <div className="space-y-2 rounded-lg border border-border bg-muted p-3">
                 {namedChildren.map((child, idx) => {
                   const name = child.name.trim()
                   const selected = disinheritedChildren.includes(name)
@@ -134,7 +134,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
                       />
                       <span className="text-sm text-foreground">{name}</span>
                       {child.deceased && (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-micro">
                           Deceased
                         </Badge>
                       )}
@@ -147,11 +147,11 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
 
           <div className="mt-6">
             <FieldLabel>Disinherited Heirs</FieldLabel>
-            <p className="mb-3 text-[12px] text-muted-foreground">Enter the name and relationship of any additional disinherited heir.</p>
+            <p className="mb-3 text-xs text-muted-foreground">Enter the name and relationship of any additional disinherited heir.</p>
             {disinheritances.length > 0 && (
               <div className="mb-3 space-y-3">
                 {disinheritances.map((d, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted/40 p-3">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <AttorneyInput label="Name" value={d.name} onChange={v => editDisinheritance(i, 'name', v)} />
                       <AttorneyInput
@@ -198,7 +198,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
 
           <div className="mt-6">
             <FieldLabel>{newAssetTitle()}</FieldLabel>
-            <p className="mb-2 text-[12px] text-muted-foreground">
+            <p className="mb-2 text-xs text-muted-foreground">
               State any additional context or language related to the disinheritance. This text will appear as a
               paragraph in the disinheritance section of the trust and/or will.
             </p>
@@ -220,7 +220,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
                 Draft with AI
               </Button>
             </div>
-            <p className="mt-1.5 text-[10.5px] text-muted-foreground">Saved automatically on blur.</p>
+            <p className="mt-1.5 text-micro text-muted-foreground">Saved automatically on blur.</p>
           </div>
         </SectionBlock>
       </div>
@@ -240,7 +240,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
                 <p className="text-sm text-muted-foreground">No additional beneficiaries listed.</p>
               ) : (
                 additionalBeneficiaries.map((entry, i) => (
-                  <div key={entry.id ?? i} className="rounded-lg border border-border bg-muted/40 p-3">
+                  <div key={entry.id ?? i} className="rounded-lg border border-border bg-muted p-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <AttorneyInput
                         label="Name"

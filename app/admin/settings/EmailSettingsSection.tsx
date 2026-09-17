@@ -288,15 +288,15 @@ export function EmailSettingsSection() {
     <div className="p-6">
       <div className="mb-5 pb-3 border-b border-border">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Sending</h2>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <h2 className="text-micro font-semibold uppercase tracking-wide text-foreground">Email Sending</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
             Per-category control over outbound email. Sets to <strong>Off</strong> by default — turn each category on after you&apos;ve verified the flow.
           </p>
         </div>
       </div>
 
       {data.migrationRequired && (
-        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
           Email settings migration not applied yet. Run{' '}
           <code className="font-sans">npx supabase db push</code> and confirm{' '}
           <code className="font-sans">20260719000000_lite_email_settings.sql</code> to enable
@@ -305,25 +305,25 @@ export function EmailSettingsSection() {
       )}
 
       {data.envHardKilled && (
-        <div className="mb-4 rounded-md border border-red-strong-border bg-red-bg px-3 py-2 text-[12px] text-red">
+        <div className="mb-4 rounded-md border border-red-strong-border bg-red-bg px-3 py-2 text-xs text-red">
           <strong>EMAILS_ENABLED=false</strong> is set in the environment. All outbound email is suppressed regardless of the toggles below. Clear the env var to re-enable.
         </div>
       )}
 
       {data.allowlist.length > 0 && (
-        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
           Allowlist active (<code className="font-sans">EMAIL_ALLOWLIST</code>): only sends to <strong>{data.allowlist.join(', ')}</strong> will be delivered. Other recipients are suppressed even when a category is on.
         </div>
       )}
 
-      <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2 text-[12px] text-blue">
+      <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2 text-xs text-blue">
         <strong>Redirect mode</strong> sends the email to the test inbox <code className="font-sans">{data.testInbox}</code> instead of the real recipient (override with <code className="font-sans">EMAIL_TEST_INBOX</code>). Subject is prefixed and a banner is added so you can&apos;t mistake a test for a real send.
       </div>
 
       <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-border bg-card px-3 py-2.5">
         <div>
-          <p className="text-[12px] font-medium text-foreground">AUBREY LAW logo header</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+          <p className="text-xs font-medium text-foreground">AUBREY LAW logo header</p>
+          <p className="mt-0.5 text-micro text-muted-foreground leading-snug">
             Wraps Settings-template emails with the branded wordmark header &amp; footer. When off, those emails send as a plain body.
           </p>
         </div>
@@ -349,13 +349,13 @@ export function EmailSettingsSection() {
       </div>
 
       {data.gmail.missingScope && (
-        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
           <strong>Google account missing the Gmail send permission.</strong>{' '}
           Reconnect from <Link href="/admin/settings?tab=google" className="underline">Settings → Google</Link> to grant it.
         </div>
       )}
       {data.gmail.available && data.gmail.accountEmail && (
-        <div className="mb-4 rounded-md border border-green/40 bg-green-bg px-3 py-2 text-[12px] text-green">
+        <div className="mb-4 rounded-md border border-green/40 bg-green-bg px-3 py-2 text-xs text-green">
           <strong>Gmail connected:</strong> categories set to <em>Gmail</em> will send from <code className="font-sans">{data.gmail.accountEmail}</code> and land in that account&rsquo;s Sent Mail.
         </div>
       )}
@@ -364,37 +364,37 @@ export function EmailSettingsSection() {
         <button
           onClick={() => requestBulkSet('off')}
           disabled={bulkProgress !== null}
-          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
         >
           All off
         </button>
         <button
           onClick={() => requestBulkSet('redirect')}
           disabled={bulkProgress !== null}
-          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
         >
           All redirect
         </button>
         <button
           onClick={() => requestBulkSet('on')}
           disabled={bulkProgress !== null}
-          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
         >
           All on
         </button>
         {bulkProgress && (
-          <span className="text-[12px] text-muted-foreground" role="status" aria-live="polite">
+          <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
             Updating {bulkProgress.done} of {bulkProgress.total}…
           </span>
         )}
-        <span className="ml-auto text-[12px] text-muted-foreground">
+        <span className="ml-auto text-xs text-muted-foreground">
           {data.categories.length - offCount - redirectCount} on · {redirectCount} redirect · {offCount} off
         </span>
       </div>
 
       <div className="overflow-hidden rounded-md border border-border">
-        <table className="w-full text-[13px]">
-          <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <table className="w-full text-compact">
+          <thead className="bg-muted text-micro uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-3 py-2 text-left font-medium">Category</th>
               <th className="px-3 py-2 text-left font-medium">Recipient</th>
@@ -408,18 +408,18 @@ export function EmailSettingsSection() {
               <tr key={c.category} className={cn(i > 0 && 'border-t border-border')}>
                 <td className="px-3 py-3 align-top">
                   <div className="font-medium text-foreground">{c.label}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{c.description}</div>
+                  <div className="mt-0.5 text-micro text-muted-foreground leading-snug">{c.description}</div>
                 </td>
                 <td className="px-3 py-3 align-top">
                   <span className={cn(
-                    'inline-block rounded px-1.5 py-0.5 text-[11px]',
+                    'inline-block rounded px-1.5 py-0.5 text-micro',
                     c.recipient === 'client' && 'bg-green-bg text-green',
                     c.recipient === 'internal' && 'bg-muted text-muted-foreground',
                   )}>
                     {c.recipient}
                   </span>
                 </td>
-                <td className="px-3 py-3 align-top text-[12px] text-muted-foreground">
+                <td className="px-3 py-3 align-top text-xs text-muted-foreground">
                   {c.lastSentAt
                     ? <>{formatTime(c.lastSentAt)} <span className="text-muted-foreground/70">({c.lastSendStatus})</span></>
                     : <span className="text-muted-foreground/60">never</span>}
@@ -443,11 +443,11 @@ export function EmailSettingsSection() {
                           onClick={() => setProvider(c.category, p)}
                           title={tooltip}
                           className={cn(
-                            'rounded-[5px] border px-2 py-1 text-[11px] font-medium transition-colors',
+                            'rounded-[5px] border px-2 py-1 text-micro font-medium transition-colors',
                             c.provider === p
                               ? p === 'gmail' ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
                               :                 'border-violet-300 bg-violet-50 text-violet-900'
-                              : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                              : 'border-border bg-card text-muted-foreground hover:bg-accent',
                             disabled && 'opacity-50',
                           )}
                         >
@@ -471,12 +471,12 @@ export function EmailSettingsSection() {
                           onClick={() => requestMode(c, m)}
                           title={tooltip}
                           className={cn(
-                            'rounded-[5px] border px-2 py-1 text-[11px] font-medium transition-colors',
+                            'rounded-[5px] border px-2 py-1 text-micro font-medium transition-colors',
                             c.mode === m
                               ? m === 'on'       ? 'border-green/40 bg-green-bg text-green'
                               : m === 'redirect' ? 'border-blue-strong-border bg-blue-bg text-blue'
                               :                    'border-border bg-muted text-muted-foreground'
-                              : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                              : 'border-border bg-card text-muted-foreground hover:bg-accent',
                             disabled && 'opacity-50',
                           )}
                         >
@@ -486,12 +486,12 @@ export function EmailSettingsSection() {
                     })}
                   </div>
                   {c.mode === 'redirect' && (
-                    <div className="mt-1 text-[10px] text-blue">
+                    <div className="mt-1 text-micro text-blue">
                       Redirects to <code className="font-sans">{data.testInbox}</code>
                     </div>
                   )}
                   {c.updatedAt && (
-                    <div className="mt-1 text-[10px] text-muted-foreground/70">
+                    <div className="mt-1 text-micro text-muted-foreground/70">
                       Updated {formatTime(c.updatedAt)}
                     </div>
                   )}

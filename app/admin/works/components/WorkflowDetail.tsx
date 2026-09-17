@@ -188,7 +188,7 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
         <span>· v{skill.version}</span>
       </div>
 
-      <div className="mt-4 max-h-80 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 text-sm">
+      <div className="mt-4 max-h-80 overflow-y-auto rounded-md border border-border bg-muted p-4 text-sm">
         <ChatMarkdown content={skillBody(skill.skill_md)} />
       </div>
 

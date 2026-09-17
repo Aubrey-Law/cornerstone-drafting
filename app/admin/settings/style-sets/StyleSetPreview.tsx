@@ -84,7 +84,7 @@ export function StyleSetPreview({ settings }: { settings: StyleSetSettings }) {
       </div>
 
       <div
-        className="overflow-hidden rounded-lg border border-border bg-muted/40 p-3"
+        className="overflow-hidden rounded-lg border border-border bg-muted p-3"
         // The scaled sheet is taken out of flow by the transform, so the wrapper
         // has to be told the height it ends up occupying.
         style={{ height: preview.page.heightIn * CSS_PX_PER_INCH * scale + 24 }}

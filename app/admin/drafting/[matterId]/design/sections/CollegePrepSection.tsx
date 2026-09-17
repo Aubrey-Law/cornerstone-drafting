@@ -77,7 +77,7 @@ function NotesField({
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
-      {help ? <p className="mb-2 text-[12px] text-muted-foreground">{help}</p> : null}
+      {help ? <p className="mb-2 text-xs text-muted-foreground">{help}</p> : null}
       <Textarea
         value={draft}
         onChange={event => setDraft(event.target.value)}
@@ -292,7 +292,7 @@ export function CollegePrepSection({
 
         {design.ferpa_release ? (
           <div className="mt-4 space-y-3">
-            <p className="text-[12px] text-muted-foreground">Records the release covers:</p>
+            <p className="text-xs text-muted-foreground">Records the release covers:</p>
             {COLLEGE_FERPA_RECORD_OPTIONS.map(option => (
               <DesignSheetCheckboxOption
                 key={option.value}
@@ -360,7 +360,7 @@ export function CollegePrepSection({
         />
 
         <div className="mt-4 space-y-3">
-          <p className="text-[12px] text-muted-foreground">Powers granted to the financial agent:</p>
+          <p className="text-xs text-muted-foreground">Powers granted to the financial agent:</p>
           <DesignSheetCheckboxOption
             label="All powers in this list"
             checked={allDpoaPowers}
@@ -437,7 +437,7 @@ export function CollegePrepSection({
 
         {design.hipaa_scope === 'all_except' ? (
           <div className="mt-4 space-y-3">
-            <p className="text-[12px] text-muted-foreground">Categories withheld:</p>
+            <p className="text-xs text-muted-foreground">Categories withheld:</p>
             {COLLEGE_HIPAA_SENSITIVE_CATEGORY_OPTIONS.map(option => (
               <DesignSheetCheckboxOption
                 key={option.value}
@@ -476,7 +476,7 @@ export function CollegePrepSection({
 
         <div className="mt-6">
           <FieldLabel>People a provider may talk to</FieldLabel>
-          <p className="mb-2 text-[12px] text-muted-foreground">
+          <p className="mb-2 text-xs text-muted-foreground">
             Collected on the questionnaire. This grants no decision-making power, so the list is
             usually longer than the proxy nominations. Edit in the intake and re-sync to change it.
           </p>
@@ -485,7 +485,7 @@ export function CollegePrepSection({
               {design.hipaa_recipients.map(recipient => (
                 <li
                   key={recipient.id || recipient.name}
-                  className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
+                  className="rounded-md border border-border bg-muted px-3 py-2 text-sm"
                 >
                   <span className="font-medium text-foreground">{recipient.name}</span>
                   <span className="ml-2 text-xs text-muted-foreground">

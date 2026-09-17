@@ -37,7 +37,7 @@ function HeroCard({
       <CardContent className="flex h-full min-w-0 flex-col px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-md border border-border bg-muted/50">
+            <span className="flex size-7 items-center justify-center rounded-md border border-border bg-muted">
               <Icon className="size-3.5 text-muted-foreground" aria-hidden />
             </span>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -104,7 +104,7 @@ export function FinanceHeroCards({ snapshot }: { snapshot: BillingSnapshot }) {
         label="Pending invoices"
         action={
           snapshot.pendingInvoices.overdueCount > 0 ? (
-            <Badge variant="outline" className="border-destructive/30 bg-red-bg text-[10px] text-destructive">
+            <Badge variant="outline" className="border-destructive/30 bg-red-bg text-micro text-destructive">
               {snapshot.pendingInvoices.overdueCount} overdue
             </Badge>
           ) : undefined

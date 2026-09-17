@@ -593,7 +593,7 @@ export function RealEstateTransferWorkflow({
                   id="clientName"
                   value={form.clientName}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ clientName: event.target.value })}
                 />
               </div>
@@ -603,7 +603,7 @@ export function RealEstateTransferWorkflow({
                   id="spouseName"
                   value={form.spouseName}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ spouseName: event.target.value })}
                 />
               </div>
@@ -613,7 +613,7 @@ export function RealEstateTransferWorkflow({
                   id="clientPropertyAddress"
                   value={form.clientPropertyAddress}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ clientPropertyAddress: event.target.value })}
                 />
               </div>
@@ -623,7 +623,7 @@ export function RealEstateTransferWorkflow({
                   id="clientPropertyCity"
                   value={form.clientPropertyCity}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ clientPropertyCity: event.target.value })}
                 />
               </div>
@@ -633,7 +633,7 @@ export function RealEstateTransferWorkflow({
                   id="clientPropertyState"
                   value={form.clientPropertyState}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ clientPropertyState: event.target.value })}
                 />
               </div>
@@ -643,7 +643,7 @@ export function RealEstateTransferWorkflow({
                   id="clientPropertyCounty"
                   value={form.clientPropertyCounty}
                   readOnly={clientInfoReadOnly}
-                  className={clientInfoReadOnly ? 'bg-muted/40' : undefined}
+                  className={clientInfoReadOnly ? 'bg-muted' : undefined}
                   onChange={event => updateForm({ clientPropertyCounty: event.target.value })}
                 />
               </div>
@@ -664,7 +664,7 @@ export function RealEstateTransferWorkflow({
                   {allowTrustNameEditing && (
                     <button
                       type="button"
-                      className="rounded p-0.5 hover:bg-muted"
+                      className="rounded p-0.5 hover:bg-accent"
                       onClick={() => removeTrustName(name)}
                       aria-label={`Remove ${name}`}
                     >

@@ -34,7 +34,7 @@ export function LeadReadinessDial({ lead, spouse, className }: LeadReadinessDial
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
         style={{ background: `conic-gradient(${ringColor} ${readiness.percent}%, var(--muted) 0)` }}
       >
-        <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-card text-[11px] font-semibold tabular-nums">
+        <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-card text-micro font-semibold tabular-nums">
           {readiness.percent}%
         </span>
       </div>

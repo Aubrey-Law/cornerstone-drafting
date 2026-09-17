@@ -385,7 +385,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
             const name = `${contact.first_name} ${contact.last_name}`.trim()
             const selected = selectedIds.includes(contact.id)
             return (
-              <label key={contact.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+              <label key={contact.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted p-3">
                 <input
                   type="checkbox"
                   checked={selected}
@@ -438,7 +438,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         </p>
 
         <div className="space-y-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">HIPAA Authorization Settings</p>
+          <p className="text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">HIPAA Authorization Settings</p>
           <DesignSheetCheckboxOption
             label="Include the general (financial) durable power of attorney in the HIPAA authorization"
             description="If selected, the attorney-in-fact under any general power of attorney will be able to access the principal's medical information. If the package includes a Power of Attorney document, this document will also include provisions for access to medical information."

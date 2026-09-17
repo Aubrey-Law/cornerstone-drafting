@@ -314,7 +314,7 @@ export function FiduciaryGrid({
         <div className="space-y-2">
           <div>
             <p className="text-xs font-semibold text-foreground">For the children</p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               {married
                 ? 'Named once — both wills appoint the same guardians.'
                 : 'Named in the will.'}
@@ -381,7 +381,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
         className="grid min-w-[648px]"
         style={{ gridTemplateColumns: `168px repeat(${roles.length}, minmax(96px, 1fr))` }}
       >
-        <div className="border-b border-r border-border bg-muted/40 p-3 text-xs font-semibold text-foreground">
+        <div className="border-b border-r border-border bg-muted p-3 text-xs font-semibold text-foreground">
           Contact roster
         </div>
         {roles.map(role => {
@@ -408,14 +408,14 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               tabIndex={-1}
               className={cn(
                 'border-b border-r border-border p-2 last:border-r-0',
-                flashing ? 'bg-warning/10' : 'bg-muted/40',
+                flashing ? 'bg-warning/10' : 'bg-muted',
                 !role.applicable && 'opacity-45 grayscale-[20%]',
               )}
             >
-              <p className="text-[11px] font-semibold leading-tight text-foreground">{role.label}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">{role.document}</p>
+              <p className="text-micro font-semibold leading-tight text-foreground">{role.label}</p>
+              <p className="mt-0.5 text-micro text-muted-foreground">{role.document}</p>
               <span className={cn(
-                'mt-2 inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-semibold',
+                'mt-2 inline-flex rounded-full border px-1.5 py-0.5 text-micro font-semibold',
                 count === 0 && required
                 ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
                 : count === 1
@@ -437,10 +437,10 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                     }
                     return (
                       <li key={slot.id} className="flex items-center gap-1">
-                        <span className="w-6 shrink-0 text-[9px] font-semibold text-muted-foreground">
+                        <span className="w-6 shrink-0 text-micro font-semibold text-muted-foreground">
                           {orderLabel(index)}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[10px] text-foreground" title={name}>
+                        <span className="min-w-0 flex-1 truncate text-micro text-foreground" title={name}>
                           {name}
                         </span>
                         <button
@@ -449,7 +449,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                           onClick={() => reorder(-1)}
                           aria-label={`Move ${name} up in ${role.label} succession`}
                           title="Move up"
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                         >
                           <ChevronUp className="h-3 w-3" />
                         </button>
@@ -459,7 +459,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                           onClick={() => reorder(1)}
                           aria-label={`Move ${name} down in ${role.label} succession`}
                           title="Move down"
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                         >
                           <ChevronDown className="h-3 w-3" />
                         </button>
@@ -471,7 +471,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                           }}
                           aria-label={`Remove ${name} as ${role.label}`}
                           title="Remove"
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -483,7 +483,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               {roleConfig.allowCo ? (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {coTargets.length === 0 ? (
-                    <span className="rounded-full border border-dashed border-border px-1.5 py-0.5 text-[8px] text-muted-foreground">
+                    <span className="rounded-full border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground">
                       Pick a line to pair first
                     </span>
                   ) : (
@@ -500,7 +500,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                           ))
                         }}
                         className={cn(
-                          'rounded-full border px-1.5 py-0.5 text-[8px] transition-colors',
+                          'rounded-full border px-1.5 py-0.5 text-micro transition-colors',
                           targetedOrder === order
                             ? 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
                             : hasOpenCoSlot
@@ -519,17 +519,17 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                 </div>
               ) : null}
               {roleConfig.allowCo ? (
-                <p className="mt-1.5 text-[8px] text-muted-foreground">
+                <p className="mt-1.5 text-micro text-muted-foreground">
                   {`Co max per line: ${roleConfig.maxCo}`}
                 </p>
               ) : null}
               {targetedOrder != null && (
-                <div className="mt-1.5 rounded border border-dashed border-[var(--gi-teal)] px-1.5 py-0.5 text-[9px] text-[var(--gi-teal)]">
+                <div className="mt-1.5 rounded border border-dashed border-[var(--gi-teal)] px-1.5 py-0.5 text-micro text-[var(--gi-teal)]">
                   <span>Target line: {orderLabel(targetedOrder)}</span>
                   <button
                     type="button"
                     onClick={() => setTargetedCo(null)}
-                    className="ml-2 inline-flex items-center rounded-sm border border-[var(--gi-teal)]/35 px-1 py-0 text-[8px] text-[var(--gi-teal)] hover:bg-[color-mix(in_srgb,var(--gi-teal)_10%,transparent)]"
+                    className="ml-2 inline-flex items-center rounded-sm border border-[var(--gi-teal)]/35 px-1 py-0 text-micro text-[var(--gi-teal)] hover:bg-[color-mix(in_srgb,var(--gi-teal)_10%,transparent)]"
                     aria-label="Clear target line"
                     title="Clear target line"
                   >
@@ -545,7 +545,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
           <div key={contact.id} className="contents">
             <div className="border-b border-r border-border p-3">
               <p className="truncate text-xs font-medium text-foreground">{contactName(contact)}</p>
-              <p className="truncate text-[10px] text-muted-foreground">{contact.relationship || 'Contact'}</p>
+              <p className="truncate text-micro text-muted-foreground">{contact.relationship || 'Contact'}</p>
             </div>
             {roles.map(role => {
               const field = slotFields[role.id]
@@ -606,26 +606,26 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                         ? 'border-[var(--gi-teal)]/35 bg-[color-mix(in_srgb,var(--gi-teal)_8%,transparent)] text-[var(--gi-teal)]'
                         : flashing
                           ? 'bg-warning/10 text-muted-foreground'
-                          : 'bg-card text-muted-foreground hover:bg-muted/40',
+                          : 'bg-card text-muted-foreground hover:bg-accent',
                     targetingThisCell && 'ring-2 ring-[var(--gi-teal)]',
                     !role.applicable && 'opacity-45 grayscale-[20%]',
                   )}
                 >
                   {isPrincipal ? (
-                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-[10px] font-semibold">
+                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-micro font-semibold">
                       {targetingThisCell ? `${label} • co` : label}
                     </span>
                   ) : isCo ? (
-                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-[10px] font-semibold">
+                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-micro font-semibold">
                       {label}
                     </span>
                   ) : selectedTargetOrder == null ? (
                     <Plus className="h-4 w-4" />
                   ) : (
-                    <span className="text-[10px] font-semibold">+{roleConfig.coLabel}</span>
+                    <span className="text-micro font-semibold">+{roleConfig.coLabel}</span>
                   )}
                   {isPrincipal && roleConfig.allowCo && (
-                    <span className="mt-0.5 text-[8px] text-muted-foreground">
+                    <span className="mt-0.5 text-micro text-muted-foreground">
                       {targetingThisCell ? 'Line targeted' : 'Use “Pair with” to choose a line'}
                     </span>
                   )}

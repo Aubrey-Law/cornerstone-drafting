@@ -184,7 +184,7 @@ export default async function PortalDashboardPage() {
                   </span>
                   <span
                     className={[
-                      'text-center text-[11px] leading-tight sm:text-xs',
+                      'text-center text-micro leading-tight sm:text-xs',
                       current
                         ? 'font-semibold text-foreground'
                         : done

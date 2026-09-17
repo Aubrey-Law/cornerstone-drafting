@@ -122,7 +122,7 @@ export function MatterPipelineInsights({
               <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
             </div>
             <p className="mt-1 text-xl font-semibold tracking-tight">{value}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="mt-0.5 text-micro text-muted-foreground">
               {active ? 'Filtering — click to clear' : detail}
             </p>
           </>
@@ -140,7 +140,7 @@ export function MatterPipelineInsights({
             type="button"
             aria-pressed={active}
             onClick={() => onToggleFilter?.(filter!)}
-            className={`rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40 ${
+            className={`rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent ${
               active ? 'border-primary ring-1 ring-primary' : ''
             }`}
           >

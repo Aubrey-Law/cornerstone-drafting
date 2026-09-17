@@ -70,7 +70,7 @@ export function MatterSearchPicker({
 
   if (selected) {
     return (
-      <div className="flex max-w-xl items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2">
+      <div className="flex max-w-xl items-center justify-between gap-3 rounded-md border border-border bg-muted px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{selected.label}</p>
           <p className="truncate text-xs text-muted-foreground">

@@ -124,7 +124,7 @@ export function PartyTabs({
           aria-selected={value === tab.id}
           onClick={() => onChange(tab.id)}
           className={cn(
-            'flex-1 rounded-md px-3 py-2 text-[13px] transition-all',
+            'flex-1 rounded-md px-3 py-2 text-compact transition-all',
             value === tab.id
               ? 'bg-card font-semibold text-primary shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -251,7 +251,7 @@ export function SegControl({ value, options, onChange }: {
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            'flex-1 rounded-md px-3 py-2 text-[12px] transition-all',
+            'flex-1 rounded-md px-3 py-2 text-xs transition-all',
             value === o.value
               ? 'bg-card font-semibold text-primary shadow-sm'
               : 'text-foreground hover:text-foreground'

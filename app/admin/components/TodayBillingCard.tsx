@@ -38,27 +38,27 @@ export function TodayBillingCard({ billing }: { billing: TodayBilling }) {
       {billing.error && <p role="alert" className="p-3 text-sm text-destructive">{billing.error} <Link href="/admin/billing" className="underline">Retry billing</Link></p>}
       <ul className="divide-y divide-border">
         {milestonesReadyCount > 0 ? (
-          <li><Link href="/admin/billing?filter=to_invoice" className="block px-3 py-2 text-sm hover:bg-muted/50">
+          <li><Link href="/admin/billing?filter=to_invoice" className="block px-3 py-2 text-sm hover:bg-accent">
             <span className="font-medium text-foreground">{milestonesReadyCount} milestone{milestonesReadyCount === 1 ? '' : 's'} ready to invoice</span>
           </Link></li>
         ) : null}
         {reminderDraftCount > 0 ? (
-          <li><Link href="/admin/billing?filter=reminders" className="block px-3 py-2 text-sm hover:bg-muted/50">
+          <li><Link href="/admin/billing?filter=reminders" className="block px-3 py-2 text-sm hover:bg-accent">
             <span className="font-medium text-foreground">{reminderDraftCount} reminder draft{reminderDraftCount === 1 ? '' : 's'} awaiting approval</span>
           </Link></li>
         ) : null}
         {failedWorkflowJobCount > 0 ? (
-          <li><Link href="/admin/settings?section=workflow-jobs" className="block px-3 py-2 text-sm hover:bg-muted/50">
+          <li><Link href="/admin/settings?section=workflow-jobs" className="block px-3 py-2 text-sm hover:bg-accent">
             <span className="font-medium text-destructive">{failedWorkflowJobCount} failed workflow job{failedWorkflowJobCount === 1 ? '' : 's'}</span>
           </Link></li>
         ) : null}
         {paymentExceptionCount > 0 ? (
-          <li><Link href="/admin/billing?filter=exceptions" className="block px-3 py-2 text-sm hover:bg-muted/50">
+          <li><Link href="/admin/billing?filter=exceptions" className="block px-3 py-2 text-sm hover:bg-accent">
             <span className="font-medium text-destructive">{paymentExceptionCount} unresolved payment exception{paymentExceptionCount === 1 ? '' : 's'}</span>
           </Link></li>
         ) : null}
         {claimsAwaitingSubmissionCount + claimsAwaitingReimbursementCount > 0 ? (
-          <li><Link href="/admin/billing?filter=plan_claims" className="block px-3 py-2 text-sm hover:bg-muted/50">
+          <li><Link href="/admin/billing?filter=plan_claims" className="block px-3 py-2 text-sm hover:bg-accent">
             <span className="font-medium text-foreground">Legal-plan follow-up</span>
             <span className="block text-xs text-muted-foreground">{claimsAwaitingSubmissionCount} to submit · {claimsAwaitingReimbursementCount} awaiting reimbursement</span>
           </Link></li>
@@ -67,7 +67,7 @@ export function TodayBillingCard({ billing }: { billing: TodayBilling }) {
           <li>
             <Link
               href="/admin/billing?filter=to_invoice"
-              className="block px-3 py-2 text-sm hover:bg-muted/50"
+              className="block px-3 py-2 text-sm hover:bg-accent"
             >
               <span className="font-medium text-foreground">
                 {billing.unbilledCount} charge{billing.unbilledCount === 1 ? '' : 's'} to invoice
@@ -82,7 +82,7 @@ export function TodayBillingCard({ billing }: { billing: TodayBilling }) {
           <li key={invoice.id}>
             <Link
               href={`/admin/billing/invoices/${invoice.id}`}
-              className="block px-3 py-2 text-sm hover:bg-muted/50"
+              className="block px-3 py-2 text-sm hover:bg-accent"
             >
               <span className="font-medium text-foreground">{invoice.clientName}</span>
               <span className="block text-xs text-destructive">
@@ -96,7 +96,7 @@ export function TodayBillingCard({ billing }: { billing: TodayBilling }) {
       {overdue.length > 3 && (
         <Link
           href="/admin/billing?filter=overdue"
-          className="block border-t border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          className="block border-t border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           View {overdue.length - 3} more overdue invoice{overdue.length - 3 === 1 ? '' : 's'}
         </Link>

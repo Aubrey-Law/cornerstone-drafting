@@ -76,7 +76,7 @@ export function MatterReadinessDial({
       >
         <span
           className={cn(
-            'absolute inset-[3px] flex items-center justify-center rounded-full text-[11px] font-semibold tabular-nums',
+            'absolute inset-[3px] flex items-center justify-center rounded-full text-micro font-semibold tabular-nums',
             blocked ? 'bg-amber-bg text-amber' : 'bg-card text-green',
           )}
         >
@@ -85,7 +85,7 @@ export function MatterReadinessDial({
       </div>
       <div className="min-w-0">
         <p className="text-xs font-semibold">Drafting readiness</p>
-        <p className="truncate text-[11px] text-muted-foreground" title={subtitle}>
+        <p className="truncate text-micro text-muted-foreground" title={subtitle}>
           {subtitle}
           {blockers.length > 3 && ` · +${blockers.length - 3} more`}
         </p>

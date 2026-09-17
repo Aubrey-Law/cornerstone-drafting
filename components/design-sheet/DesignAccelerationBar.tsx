@@ -137,7 +137,7 @@ export function DesignAccelerationBar({
             className="flex-col items-start gap-0.5"
           >
             <span className="text-xs font-medium">{shortcut.label}</span>
-            <span className="text-[11px] text-muted-foreground">{shortcut.description}</span>
+            <span className="text-micro text-muted-foreground">{shortcut.description}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -187,7 +187,7 @@ export function DesignAccelerationBar({
             <Sparkles className="h-3.5 w-3.5" />
             Complete sheet
             {blockingCount > 0 && (
-              <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+              <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-micro font-medium text-warning">
                 {blockingCount}
               </span>
             )}

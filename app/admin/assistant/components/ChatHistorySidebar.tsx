@@ -84,7 +84,7 @@ export function ChatHistorySidebar({ chats, activeChatId, onChanged }: ChatHisto
         {chats.map(chat => (
           <div
             key={chat.id}
-            className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60 ${chat.id === activeChatId ? 'bg-muted' : ''}`}
+            className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-accent ${chat.id === activeChatId ? 'bg-selected text-selected-foreground' : ''}`}
           >
             <button
               type="button"

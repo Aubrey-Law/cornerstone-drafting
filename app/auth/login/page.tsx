@@ -43,7 +43,7 @@ function MicrosoftIcon() {
 }
 
 const oauthBtnCls =
-  'flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-50'
+  'flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent disabled:opacity-50'
 
 async function resolveDestination(userId: string, redirectTo: string | null): Promise<string> {
   const { data: authData } = await supabase.auth.getUser()

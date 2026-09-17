@@ -114,7 +114,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <div className="rounded-lg border border-border bg-muted p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="min-w-0 flex-1 space-y-1.5">
             <Label htmlFor="clause-search">Search clauses</Label>
@@ -152,12 +152,12 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
               {visible.map(clause => {
                 const status = statusOf(clause)
                 const review = clause.submittedRevisions.length > 0
-                return <article key={clause.id} className="space-y-2 p-3 hover:bg-muted/30">
+                return <article key={clause.id} className="space-y-2 p-3 hover:bg-accent">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{clause.title}</h4><p className="truncate font-mono text-[10px] text-muted-foreground">{clause.clauseKey}</p></div>
-                    <Badge variant={status === 'awaiting_review' ? 'default' : 'outline'} className="text-[10px]">{statusLabel[status]}</Badge>
+                    <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{clause.title}</h4><p className="truncate font-mono text-micro text-muted-foreground">{clause.clauseKey}</p></div>
+                    <Badge variant={status === 'awaiting_review' ? 'default' : 'outline'} className="text-micro">{statusLabel[status]}</Badge>
                   </div>
-                  <p className="truncate text-[11px] text-muted-foreground">{clause.documentTypes.map(type => documentTypeLabels[type]).join(' · ')}</p>
+                  <p className="truncate text-micro text-muted-foreground">{clause.documentTypes.map(type => documentTypeLabels[type]).join(' · ')}</p>
                   {review ? <div className="space-y-1.5">{clause.submittedRevisions.map(revision => (
                     <Button key={revision.id} size="sm" variant={selection?.mode === 'review' && selection.revisionId === revision.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection({ mode: 'review', clauseId: clause.id, revisionId: revision.id })}>
                       Review {clause.title}{clause.submittedRevisions.length > 1 ? ` revision ${revision.revisionNumber}` : ''}

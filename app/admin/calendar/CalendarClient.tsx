@@ -576,7 +576,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             <div className="mt-2 space-y-0.5">
               {selectedCalendarEvents.filter(e => !isBlock(e)).map(e => (
                 <p key={e.id} className="text-xs text-muted-foreground">
-                  <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">Calendar</span>
+                  <span className="mr-1 rounded bg-muted px-1 py-0.5 text-micro uppercase">Calendar</span>
                   {e.isAllDay ? 'All day' : `${fmtTime(e.startIso)}–${fmtTime(e.endIso)}`} · {e.subject}
                 </p>
               ))}
@@ -728,7 +728,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             </div>
           )}
           {selectedBlocks.length > 0 && (
-            <p className="mt-3 text-[11px] text-muted-foreground">
+            <p className="mt-3 text-micro text-muted-foreground">
               {selectedBlocks
                 .map(b =>
                   b.isAllDay
@@ -850,7 +850,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
 
       <div
         className={cn(
-          'flex-wrap items-center gap-3 text-[11px] text-foreground',
+          'flex-wrap items-center gap-3 text-micro text-foreground',
           // Month, week and day all colour events by category, so all three
           // need the key. Only the plan view has no coloured events.
           view !== 'plan' ? 'flex' : 'hidden',
@@ -1091,7 +1091,7 @@ function MonthGrid(props: {
 
   return (
     <div className="rounded-lg border border-border">
-      <div className="grid grid-cols-7 border-b border-border bg-muted/40">
+      <div className="grid grid-cols-7 border-b border-border bg-muted">
         {WEEKDAY_HEADERS.map(d => (
           <div key={d} className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
             {d}
@@ -1120,8 +1120,8 @@ function MonthGrid(props: {
                 'flex min-h-24 flex-col items-stretch gap-1 border-border p-1.5 text-left align-top transition-colors',
                 i % 7 !== 0 && 'border-l',
                 i >= 7 && 'border-t',
-                !inMonth && 'bg-muted/30',
-                key === selectedDay ? 'bg-primary/5 ring-1 ring-inset ring-primary' : 'hover:bg-muted/50',
+                !inMonth && 'bg-muted',
+                key === selectedDay ? 'bg-selected ring-1 ring-inset ring-selected-border' : 'hover:bg-accent',
               )}
             >
               <button
@@ -1140,7 +1140,7 @@ function MonthGrid(props: {
               </button>
               {blocks.length > 0 && (
                 <span
-                  className="truncate rounded px-1 text-[10px] leading-4 text-muted-foreground"
+                  className="truncate rounded px-1 text-micro leading-4 text-muted-foreground"
                   style={{ backgroundImage: BLOCK_HATCH }}
                   title={blocks.map(b => b.subject).join(', ')}
                 >
@@ -1158,7 +1158,7 @@ function MonthGrid(props: {
                       onEventClick(a)
                     }}
                     className={cn(
-                      'truncate rounded px-1 py-0.5 text-left text-[11px] leading-4',
+                      'truncate rounded px-1 py-0.5 text-left text-micro leading-4',
                       a.status === 'cancelled' && 'bg-muted text-muted-foreground line-through',
                     )}
                     style={
@@ -1171,7 +1171,7 @@ function MonthGrid(props: {
                     {fmtTime(a.startTime)} {a.attendeeName}{' '}
                     <span
                       className={cn(
-                        'inline-block rounded-full px-1.5 py-0.5 text-[10px]',
+                        'inline-block rounded-full px-1.5 py-0.5 text-micro',
                         availabilityClass(a),
                       )}
                     >
@@ -1185,7 +1185,7 @@ function MonthGrid(props: {
                 return (
                   <span
                     key={e.id}
-                    className="truncate rounded px-1 py-0.5 text-[11px] leading-4"
+                    className="truncate rounded px-1 py-0.5 text-micro leading-4"
                     style={{ background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }}
                     title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (${calendarSource(e)})`}
                   >
@@ -1194,7 +1194,7 @@ function MonthGrid(props: {
                 )
               })}
               {hiddenCount > 0 && (
-                <span className="px-1 text-[11px] text-muted-foreground">+{hiddenCount} more</span>
+                <span className="px-1 text-micro text-muted-foreground">+{hiddenCount} more</span>
               )}
             </div>
           )
@@ -1223,7 +1223,7 @@ function TimeGrid(props: {
     <div className="overflow-x-auto rounded-lg border border-border">
       <div className="min-w-[640px]">
         <div
-          className="grid border-b border-border bg-muted/40"
+          className="grid border-b border-border bg-muted"
           style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}
         >
           <div />
@@ -1244,7 +1244,7 @@ function TimeGrid(props: {
                 </span>
                 {allDayBlocked && (
                   <span
-                    className="mt-0.5 block truncate rounded px-1 text-[10px] leading-4 text-muted-foreground"
+                    className="mt-0.5 block truncate rounded px-1 text-micro leading-4 text-muted-foreground"
                     style={{ backgroundImage: BLOCK_HATCH }}
                   >
                     Blocked all day
@@ -1255,7 +1255,7 @@ function TimeGrid(props: {
                   return (
                     <span
                       key={e.id}
-                      className="mt-0.5 block truncate rounded px-1 text-[10px] leading-4"
+                      className="mt-0.5 block truncate rounded px-1 text-micro leading-4"
                       style={{
                         background: style.bg,
                         color: style.text,
@@ -1278,7 +1278,7 @@ function TimeGrid(props: {
               return minutes % 60 === 0 ? (
                 <span
                   key={i}
-                  className="absolute right-1.5 -translate-y-1/2 text-[10px] text-muted-foreground"
+                  className="absolute right-1.5 -translate-y-1/2 text-micro text-muted-foreground"
                   style={{ top: i * SLOT_PX }}
                 >
                   {fmtGridHour(minutes)}
@@ -1309,7 +1309,7 @@ function TimeGrid(props: {
                       aria-label={`Book ${key} ${hh}:${mm}`}
                       onClick={() => onSlotClick(d, `${hh}:${mm}`)}
                       className={cn(
-                        'absolute inset-x-0 hover:bg-primary/5',
+                        'absolute inset-x-0 hover:bg-accent',
                         minutes % 60 === 0 ? 'border-t border-border' : 'border-t border-border/40',
                       )}
                       style={{ top: i * SLOT_PX, height: SLOT_PX }}
@@ -1360,7 +1360,7 @@ function TimeGrid(props: {
                       }}
                       title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (${calendarSource(e)})`}
                     >
-                      <span className="block truncate text-[11px] leading-4">
+                      <span className="block truncate text-micro leading-4">
                         {fmtTime(e.startIso)} {e.subject}
                       </span>
                     </div>
@@ -1397,21 +1397,21 @@ function TimeGrid(props: {
                       }}
                       title={`${fmtTime(a.startTime)}–${fmtTime(a.endTime)} ${a.typeLabel} — ${a.attendeeName}`}
                     >
-                      <span className="block truncate text-[11px] font-medium leading-4">
+                      <span className="block truncate text-micro font-medium leading-4">
                         {fmtTime(a.startTime)} {a.attendeeName}
                       </span>
                       <span
-                        className={cn('mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px]', availabilityClass(a))}
+                        className={cn('mt-1 inline-block rounded-full px-1.5 py-0.5 text-micro', availabilityClass(a))}
                       >
                         {availabilityLabel(a)}
                       </span>
                       {showTypeLabel && (
-                        <span className="block truncate text-[10px] leading-4 opacity-80">
+                        <span className="block truncate text-micro leading-4 opacity-80">
                           {a.typeLabel}
                         </span>
                       )}
                       {matterChip && (
-                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-background/80 px-1.5 text-[9px] font-medium text-foreground">
+                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-background/80 px-1.5 text-micro font-medium text-foreground">
                           ↗ {matterChip}
                         </span>
                       )}

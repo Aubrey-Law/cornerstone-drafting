@@ -64,7 +64,7 @@ export function AssetTable({
 
   if (groups.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/30 py-12 text-center">
+      <div className="rounded-lg border border-dashed border-border bg-muted py-12 text-center">
         <p className="text-sm text-muted-foreground">No assets match this filter.</p>
       </div>
     )
@@ -74,7 +74,7 @@ export function AssetTable({
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
-          <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border bg-muted text-micro font-semibold uppercase tracking-wide text-muted-foreground">
             <th className="w-10 px-3 py-3">
               <Checkbox
                 checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
@@ -100,7 +100,7 @@ export function AssetTable({
               <Fragment key={group.key}>
                 <tr
                   key={`group-${group.key}`}
-                  className="border-b border-border bg-muted/20 font-medium"
+                  className="border-b border-border bg-muted font-medium"
                 >
                   <td className="px-4 py-2.5" colSpan={9}>
                     <button
@@ -127,7 +127,7 @@ export function AssetTable({
                       <tr
                         key={asset.id}
                         className={cn(
-                          'border-b border-border/60 hover:bg-muted/10',
+                          'border-b border-border/60 hover:bg-accent',
                           selectedIds.has(asset.id) && 'bg-brand-navy/5',
                         )}
                       >
@@ -188,7 +188,7 @@ export function AssetTable({
                     )
                   })}
                 {!isCollapsed && (
-                  <tr className="border-b border-border bg-muted/10 text-xs font-medium text-muted-foreground">
+                  <tr className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
                     <td className="px-4 py-2 pl-10" colSpan={5}>
                       {group.label} subtotal
                     </td>
@@ -203,7 +203,7 @@ export function AssetTable({
               </Fragment>
             )
           })}
-          <tr className={cn('bg-muted/30 font-semibold')}>
+          <tr className={cn('bg-muted font-semibold')}>
             <td className="px-3 py-3" />
             <td className="px-4 py-3" colSpan={4}>
               Total

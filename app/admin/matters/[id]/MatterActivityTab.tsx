@@ -78,7 +78,7 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
                   <div className="min-w-0 flex-1 pb-1">
                     <p className="text-sm font-medium">{activityEventTitle(item)}</p>
                     {item.metadata?.origin === 'lead' && (
-                      <span className="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="inline-flex rounded-full border px-2 py-0.5 text-micro font-semibold text-muted-foreground">
                         From lead
                       </span>
                     )}
@@ -101,7 +101,7 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
                         </ul>
                       </details>
                     )}
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="mt-1 text-micro text-muted-foreground">
                       {formatDateTime(item.created_at)}
                       {item.actor_name ? ` · ${item.actor_name}` : ''}
                     </p>

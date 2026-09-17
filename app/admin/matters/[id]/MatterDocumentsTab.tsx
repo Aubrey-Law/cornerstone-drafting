@@ -751,7 +751,7 @@ export function MatterDocumentsTab({
           >
             <button
               type="button"
-              className="rounded px-1.5 py-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="rounded px-1.5 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setOpenFolder(null)}
             >
               All documents
@@ -764,7 +764,7 @@ export function MatterDocumentsTab({
         )}
 
         {selectedDocuments.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-4 py-3">
             <span className="text-xs text-muted-foreground">
               {selectedDocuments.length} selected
             </span>
@@ -850,7 +850,7 @@ export function MatterDocumentsTab({
           <ul className="divide-y divide-border">
             {showFolders && folders.map(folder => (
               <li key={folder.id}>
-                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30">
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent">
                   <Checkbox
                     checked={folder.documents.length > 0
                       && folder.documents.every(doc => selectedIds.has(doc.id))}
@@ -867,7 +867,7 @@ export function MatterDocumentsTab({
                     <FolderIcon />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{folder.label}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
+                      <span className="block truncate text-micro text-muted-foreground">
                         {folder.documents.length} item{folder.documents.length === 1 ? '' : 's'} · {folder.description}
                       </span>
                     </span>
@@ -927,8 +927,8 @@ export function MatterDocumentsTab({
                   key={doc.id}
                   id={`document-row-${doc.id}`}
                   className={cn(
-                    'flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-muted/30',
-                    selectedIds.has(doc.id) && 'bg-muted/40',
+                    'flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-accent',
+                    selectedIds.has(doc.id) && 'bg-muted',
                     highlightedDocumentId === doc.id && 'bg-amber-bg ring-1 ring-inset ring-amber-border',
                   )}
                 >
@@ -950,7 +950,7 @@ export function MatterDocumentsTab({
                       {/* Only a search puts foldered files in this list, and
                           there the chip is what says where the hit lives. */}
                       {openFolder === null && folderKey !== null && (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-micro text-muted-foreground">
                           {resolveFolderLabel(folderKey, customFolders)}
                         </span>
                       )}
@@ -958,7 +958,7 @@ export function MatterDocumentsTab({
                       {isDocumentUnreviewed(doc) && (
                         <Badge
                           variant="outline"
-                          className="border-amber-border bg-amber-bg text-[10px] text-amber"
+                          className="border-amber-border bg-amber-bg text-micro text-amber"
                         >
                           Unreviewed
                         </Badge>
@@ -977,7 +977,7 @@ export function MatterDocumentsTab({
                   <span className="hidden w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
                     {formatDocumentSize(doc.size)}
                   </span>
-                  <Badge variant="outline" className="shrink-0 text-[11px]">
+                  <Badge variant="outline" className="shrink-0 text-micro">
                     {doc.source === 'client' ? 'Client' : 'Firm'}
                   </Badge>
                   <Switch
@@ -1026,7 +1026,7 @@ export function MatterDocumentsTab({
                           <Pencil className="mr-2 h-4 w-4" />Rename
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+                        <DropdownMenuLabel className="text-micro font-normal text-muted-foreground">
                           Move to folder
                         </DropdownMenuLabel>
                         {customFolders.length === 0 ? (

@@ -327,7 +327,7 @@ export function RecordTasksTab({
         ) : (
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {listed.map(task => (
-              <li key={task.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50">
+              <li key={task.id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent">
                 <TaskCheckbox
                   checked={task.status === 'done'}
                   disabled={actions.isPending(task.id)}
@@ -383,7 +383,7 @@ export function RecordTasksTab({
               type="button"
               onClick={() => setDoneOpen(prev => !prev)}
               aria-expanded={doneOpen}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               {doneOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
               Done{!loadError || tasks.length > 0 ? ` · ${done.length}` : ''}
@@ -549,7 +549,7 @@ function ViewSwitch({
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-card">
-      <h3 className="border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="border-b border-border px-3 py-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
       <div className="px-3 py-2.5">{children}</div>
@@ -574,7 +574,7 @@ function StageTaskCard({
     <div className="rounded-lg border border-amber-border bg-amber-bg p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-orange">
+          <p className="text-micro font-semibold uppercase tracking-wide text-amber-orange">
             Stage task · {engineStageLabel(task.stage_key ?? '')}
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">{task.title}</p>

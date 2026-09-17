@@ -44,7 +44,7 @@ function StatCard({
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
             <p className="mt-1 text-3xl font-semibold tabular-nums">{NUMBER.format(value.count)}</p>
           </div>
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
             <Icon className="size-4 text-muted-foreground" aria-hidden />
           </span>
         </div>

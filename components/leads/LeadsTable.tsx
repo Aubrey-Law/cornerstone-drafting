@@ -168,7 +168,7 @@ export function LeadsTable({
                   <Link href={`/admin/crm/opportunities/${lead.id}`} className="hover:underline">
                     {leadListName(lead)}
                   </Link>
-                  <div className="text-[11px] font-normal text-muted-foreground">
+                  <div className="text-micro font-normal text-muted-foreground">
                     {provisionalLeadNumber(lead)}
                   </div>
                 </TableCell>
@@ -190,7 +190,7 @@ export function LeadsTable({
                 <TableCell>
                   <LeadProgress lead={lead} />
                   {/* How long it has been waiting, or when its meeting is. */}
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{leadWaitingLabel(lead)}</p>
+                  <p className="mt-0.5 text-micro text-muted-foreground">{leadWaitingLabel(lead)}</p>
                 </TableCell>
                 <TableCell className="text-right">
                   {step.key === 'view_matter' && lead.matter_id ? (

@@ -38,7 +38,7 @@ function SegmentToggle<T extends string>({
           type="button"
           onClick={() => onChange(o.key)}
           className={cn(
-            'flex-1 rounded-md px-3 py-2 text-[12px] transition-all',
+            'flex-1 rounded-md px-3 py-2 text-xs transition-all',
             value === o.key
               ? 'bg-card font-semibold text-primary shadow-sm'
               : 'text-foreground hover:text-foreground'

@@ -63,7 +63,7 @@ export function LeadSourcesCard({ sources }: { sources: CrmSlice[] }) {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <p className="text-2xl font-semibold tabular-nums">{total}</p>
-                <p className="text-[11px] text-muted-foreground">people</p>
+                <p className="text-micro text-muted-foreground">people</p>
               </div>
             </div>
 

@@ -1,10 +1,14 @@
 /**
  * WCAG contrast for the theme's own colour tokens.
  *
- * `contrastPairs` and `statusContrastPairs` have carried the comment "must meet
- * WCAG AA (4.5:1)" since they were written, with nothing anywhere that checked
- * it. That is how the task queue's Plan pill shipped at 1.15:1 — light grey text
- * on a light grey chip, unreadable in both themes.
+ * `contrastPairs` and `statusContrastPairs` carried the comment "must meet WCAG
+ * AA (4.5:1)" for their whole life with nothing anywhere that checked it. That
+ * is how the task queue's Plan pill shipped at 1.15:1 — light grey text on a
+ * light grey chip, unreadable in both themes — and how the dark destructive,
+ * warning and info labels sat below AA unnoticed beside it.
+ *
+ * Both lists, plus `uiContrastPairs` for the 3:1 control boundaries, are now
+ * driven by tests/theme-contrast.test.ts; the task pills keep their own file.
  *
  * Tokens are written as hex or as `oklch(L C H)`, so both have to resolve here.
  */

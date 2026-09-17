@@ -123,7 +123,7 @@ export function DocumentPreviewDialog({
           <DialogTitle className="truncate text-base">{document?.name ?? 'Document preview'}</DialogTitle>
           <DialogDescription>{isWord ? 'Preview Word document' : 'Preview PDF'}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 bg-muted/30">
+        <div className="min-h-0 bg-muted">
           {error ? (
             <div className="flex h-full items-center justify-center px-6 text-sm text-destructive">{error}</div>
           ) : safeHtml !== null ? (

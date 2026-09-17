@@ -231,7 +231,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   }
 
   return (
-    <div className="-mx-4 -mb-4 flex min-h-[calc(100vh-7rem)] flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex min-h-[calc(100vh-7rem)] flex-col bg-background text-compact text-foreground md:-mx-6 md:-mb-6">
       <header className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -239,8 +239,8 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
             <p className="text-xs text-muted-foreground">Estate Planning / Couple</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="text-[11px]">Engagement drafting workspace</Badge>
-            <Badge variant={locked ? 'secondary' : 'outline'} className="text-[11px]">Status: {agreement.status}</Badge>
+            <Badge variant="outline" className="text-micro">Engagement drafting workspace</Badge>
+            <Badge variant={locked ? 'secondary' : 'outline'} className="text-micro">Status: {agreement.status}</Badge>
           </div>
         </div>
         <nav className="mt-3 flex items-center gap-1 overflow-x-auto" aria-label="Engagement drafting steps">
@@ -261,11 +261,11 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
                 onClick={() => setStep(id)}
                 className={cn(
                   'flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors',
-                  active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  active ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
                 <span className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                  'flex h-5 w-5 items-center justify-center rounded-full text-micro font-semibold',
                   complete ? 'bg-success/15 text-success' : active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
                 )}>
                   {complete ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
@@ -373,12 +373,12 @@ function DesignStep({
         />
         <aside className="space-y-3">
           <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-[11px] font-medium uppercase text-muted-foreground">Supported definition</p>
+            <p className="text-micro font-medium uppercase text-muted-foreground">Supported definition</p>
             <p className="mt-1 text-sm font-semibold">Estate Planning / Couple</p>
             <p className="mt-1 text-xs text-muted-foreground">Standard trust estate plan engagement agreement.</p>
           </div>
           <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-[11px] font-medium uppercase text-muted-foreground">Readiness</p>
+            <p className="text-micro font-medium uppercase text-muted-foreground">Readiness</p>
             {blockers.length ? (
               <ul className="mt-2 space-y-1 text-xs text-destructive">
                 {blockers.map(blocker => <li key={blocker}>{blocker}</li>)}

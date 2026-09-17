@@ -379,7 +379,7 @@ export function TaskTemplateSheet({
                     </div>
 
                     {!item.expanded && (
-                      <p className="truncate border-t border-border px-8 py-1.5 text-[11px] text-muted-foreground">
+                      <p className="truncate border-t border-border px-8 py-1.5 text-micro text-muted-foreground">
                         {itemSummary(item, assignees)}
                       </p>
                     )}

@@ -131,7 +131,7 @@ export function LeadScoreCard({
     >
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold">Priority score</h3>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-micro text-muted-foreground">
           {active ? 'Rule-based priority' : 'Closed — kept for review'}
         </span>
       </div>
@@ -148,7 +148,7 @@ export function LeadScoreCard({
       */}
       <Collapsible open={factorsOpen} onOpenChange={setFactorsOpen} className="mt-3">
         <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 rounded-md py-1 text-left hover:opacity-90">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-micro text-muted-foreground">
             {factorsOpen ? `All ${score.components.length} factors` : summary}
           </span>
           <ChevronDown
@@ -165,7 +165,7 @@ export function LeadScoreCard({
             yet. Saying so here keeps a "57 · Hot" from looking like a mistake.
           */}
           {score.attainable < 100 && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-micro text-muted-foreground">
               {score.percent}% of the {score.attainable} points on offer so far —{' '}
               {score.components.filter(component => !component.available).length} not yet asked
             </p>
@@ -173,7 +173,7 @@ export function LeadScoreCard({
 
           {gaps.length > 0 && (
             <div className="mt-3 border-t border-border pt-3">
-              <p className="text-[11px] font-medium text-muted-foreground">Missing context</p>
+              <p className="text-micro font-medium text-muted-foreground">Missing context</p>
               <ul className="mt-1.5 space-y-1">
                 {gaps.map(gap => (
                   <li key={gap.key}>
@@ -184,7 +184,7 @@ export function LeadScoreCard({
                         else if (gap.intent && onIntent) onIntent(gap.intent)
                       }}
                       disabled={gap.field ? !onFillField : !onIntent}
-                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-60"
                     >
                       <span className="min-w-0 truncate">{gap.label}</span>
                     </button>
@@ -216,7 +216,7 @@ export function LeadScoreCard({
                       style={{ width: `${share}%` }}
                     />
                   </div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{scoreReason(component)}</p>
+                  <p className="mt-0.5 text-micro text-muted-foreground">{scoreReason(component)}</p>
                 </li>
               )
             })}
@@ -232,21 +232,21 @@ export function LeadScoreCard({
                   </span>
                 </p>
                 {insight.rationale && (
-                  <p className="text-[11px] text-muted-foreground">{insight.rationale}</p>
+                  <p className="text-micro text-muted-foreground">{insight.rationale}</p>
                 )}
                 {insight.factors.length > 0 && (
                   <ul className="flex flex-wrap gap-1">
                     {insight.factors.map(factor => (
                       <li
                         key={factor}
-                        className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                        className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground"
                       >
                         {factor}
                       </li>
                     ))}
                   </ul>
                 )}
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   An advisory read on the record above. The score of record stays {score.score}.
                 </p>
               </div>

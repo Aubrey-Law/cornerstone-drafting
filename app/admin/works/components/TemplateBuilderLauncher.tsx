@@ -45,7 +45,7 @@ export function TemplateBuilderLauncher({ skills }: { skills: WorkSkill[] }) {
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-border bg-muted/30 p-4">
+    <div className="mb-4 rounded-lg border border-border bg-muted p-4">
       <div className="flex items-start gap-2">
         <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
         <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ export function TemplateBuilderLauncher({ skills }: { skills: WorkSkill[] }) {
               Start building
             </Button>
             {!builderSkill && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-micro text-muted-foreground">
                 Tip: run &quot;Sync&quot; on the Workflows tab so the Template Builder workflow attaches automatically.
               </span>
             )}

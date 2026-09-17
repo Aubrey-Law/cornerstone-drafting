@@ -296,7 +296,7 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
         <div className="mt-6 space-y-4">
           <div>
             <FieldLabel>Additional Powers</FieldLabel>
-            <p className="mb-2 text-[12px] text-muted-foreground">Describe any additional powers to include.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Describe any additional powers to include.</p>
             <Textarea
               value={additionalPowers}
               onChange={e => setAdditionalPowers(e.target.value)}
@@ -319,7 +319,7 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
 
           <div>
             <FieldLabel>Name Specific Businesses</FieldLabel>
-            <p className="mb-2 text-[12px] text-muted-foreground">
+            <p className="mb-2 text-xs text-muted-foreground">
               List specific businesses that the Attorney-in-fact(s) may manage on the principal&apos;s behalf. These will be named in the &quot;Operate Business&quot; section of the Attorney-in-fact(s) powers.
             </p>
             <Input
@@ -332,7 +332,7 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
 
           <div>
             <FieldLabel>Additional Limitations</FieldLabel>
-            <p className="mb-2 text-[12px] text-muted-foreground">Describe any additional limitations to include in the POA.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Describe any additional limitations to include in the POA.</p>
             <Textarea
               value={additionalLimitations}
               onChange={e => setAdditionalLimitations(e.target.value)}

@@ -518,7 +518,7 @@ export function SchedulingSettingsSection() {
                   Limit this type to its own hours
                 </label>
                 {t.customWeeklyHours !== null && (
-                  <div className="mt-3 rounded-md bg-muted/40 p-3">
+                  <div className="mt-3 rounded-md bg-muted p-3">
                     <p className="mb-2 text-xs text-muted-foreground">
                       {t.label} can only be booked in these windows ({settings.timezone}).
                       General weekly hours are ignored for this type; Outlook busy times and

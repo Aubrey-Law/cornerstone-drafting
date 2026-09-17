@@ -71,7 +71,7 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
         aria-label="Search"
         data-testid="mobile-global-search-trigger"
       >
@@ -87,7 +87,7 @@ export function GlobalSearch() {
           <Search className="h-3.5 w-3.5" />
           Search matters…
         </span>
-        <kbd className="hidden items-center gap-0.5 rounded border border-border bg-muted px-1 py-px text-[10px] font-medium text-muted-foreground lg:inline-flex">
+        <kbd className="hidden items-center gap-0.5 rounded border border-border bg-muted px-1 py-px text-micro font-medium text-muted-foreground lg:inline-flex">
           <span>⌘</span>K
         </kbd>
       </button>

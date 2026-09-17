@@ -185,7 +185,7 @@ function PhaseProgressBar({ progress }: { progress: SlaProgress }) {
               </div>
               <p
                 className={cn(
-                  'mt-1 truncate text-[11px]',
+                  'mt-1 truncate text-micro',
                   isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground',
                 )}
               >
@@ -285,7 +285,7 @@ function PlanTaskRow({
                 </Link>
               </Badge>
             ) : task.skill ? (
-              <Badge variant="outline" className="font-mono text-[10px]" title="Cowork skill">
+              <Badge variant="outline" className="font-mono text-micro" title="Cowork skill">
                 <Sparkles className="size-3" aria-hidden />
                 {task.skill}
               </Badge>
@@ -453,7 +453,7 @@ function KeyDatesCard({
               defaultValue={(anchors[field.key] as string | null) ?? ''}
               onChange={event => onSave({ [field.key]: event.target.value || null })}
             />
-            <span className="block text-[11px] text-muted-foreground">{field.hint}</span>
+            <span className="block text-micro text-muted-foreground">{field.hint}</span>
           </label>
         ))}
         <div className="space-y-1">
@@ -472,7 +472,7 @@ function KeyDatesCard({
               <SelectItem value="not_a_fit">Not a fit</SelectItem>
             </SelectContent>
           </Select>
-          <span className="block text-[11px] text-muted-foreground">
+          <span className="block text-micro text-muted-foreground">
             Gates the organizer and planning-session tasks
           </span>
         </div>

@@ -229,7 +229,7 @@ export default function DraftingWorkspace({
           </Button>
           <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-sm font-semibold">{currentStep.label}</p>
-            <p className="text-[11px] text-muted-foreground">Step {stepIndex + 1} of {STEPS.length}</p>
+            <p className="text-micro text-muted-foreground">Step {stepIndex + 1} of {STEPS.length}</p>
           </div>
           <Button
             type="button"
@@ -260,12 +260,12 @@ export default function DraftingWorkspace({
                   className={cn(
                     'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                     active
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                      ? 'border-selected-border bg-selected text-selected-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
                   )}
                 >
                   <span className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                    'flex h-5 w-5 items-center justify-center rounded-full text-micro font-semibold',
                     status === 'complete' ? 'bg-success/15 text-success'
                       : active ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground',

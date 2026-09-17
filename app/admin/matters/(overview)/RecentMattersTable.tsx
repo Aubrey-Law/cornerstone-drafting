@@ -80,7 +80,7 @@ export function RecentMattersTable({ matters }: { matters: MatterListRow[] }) {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={cn('text-[10px] capitalize', BADGE_TONE[badge.tone])}
+                          className={cn('text-micro capitalize', BADGE_TONE[badge.tone])}
                         >
                           {badge.label}
                         </Badge>

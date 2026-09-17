@@ -83,7 +83,7 @@ export function LeadDocumentsTab({
           <FileText aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">Engagement agreement</p>
-            <p className="text-[11px] text-muted-foreground">{agreementStatus === 'completed' || agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'partially_signed' ? 'Partially signed' : agreementStatus === 'viewed' ? 'Viewed by recipient' : agreementStatus === 'sent' ? 'Sent for signature' : agreementStatus === 'sending' ? 'Sending' : 'Draft in progress'}</p>
+            <p className="text-micro text-muted-foreground">{agreementStatus === 'completed' || agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'partially_signed' ? 'Partially signed' : agreementStatus === 'viewed' ? 'Viewed by recipient' : agreementStatus === 'sent' ? 'Sent for signature' : agreementStatus === 'sending' ? 'Sending' : 'Draft in progress'}</p>
           </div>
           <Button asChild type="button" size="sm" variant="outline">
             <Link href={`/admin/engagements/${agreementId}?step=design`}>Open</Link>

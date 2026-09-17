@@ -72,7 +72,7 @@ function Chip({
   const content = (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]',
+        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro',
         dashed
           ? 'border border-dashed border-border text-muted-foreground'
           : 'bg-muted text-foreground',
@@ -324,7 +324,7 @@ export function TaskComposer({
           className="h-[34px] min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
         {!expanded && (
-          <kbd className="hidden shrink-0 rounded border border-border bg-muted px-1 text-[10px] text-muted-foreground sm:inline">
+          <kbd className="hidden shrink-0 rounded border border-border bg-muted px-1 text-micro text-muted-foreground sm:inline">
             {shortcutHint}
           </kbd>
         )}
@@ -342,10 +342,10 @@ export function TaskComposer({
                   setRecords([])
                   clearTrigger()
                 }}
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted/50"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-accent"
               >
                 <span className="truncate font-medium text-foreground">{option.name}</span>
-                <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="ml-auto shrink-0 text-micro uppercase tracking-wide text-muted-foreground">
                   {option.kind}
                 </span>
               </button>
@@ -366,10 +366,10 @@ export function TaskComposer({
                   setValue('')
                 }}
                 disabled={!onApplyTemplate}
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted/50 disabled:opacity-50"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-accent disabled:opacity-50"
               >
                 <span className="truncate font-medium text-foreground">{template.name}</span>
-                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                <span className="ml-auto shrink-0 text-micro text-muted-foreground">
                   {template.items?.length ?? 0} tasks
                 </span>
               </button>
@@ -464,7 +464,7 @@ export function TaskComposer({
           </div>
 
           {subtasksOpen && (
-            <div className="rounded-md border border-border bg-muted/30 p-2">
+            <div className="rounded-md border border-border bg-muted p-2">
               {subtasks.length > 0 && (
                 <ul className="mb-2 space-y-1">
                   {subtasks.map((subtask, index) => (
@@ -511,7 +511,7 @@ export function TaskComposer({
             </div>
           )}
 
-          <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted p-2 text-xs text-muted-foreground">
             <label className="flex flex-wrap items-center gap-2">
               <input
                 type="checkbox"
@@ -526,7 +526,7 @@ export function TaskComposer({
             {addToCalendar && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <label className="flex items-center gap-1">
-                  <span className="text-[11px]">Minutes</span>
+                  <span className="text-micro">Minutes</span>
                   <input
                     type="number"
                     min="1"
@@ -549,7 +549,7 @@ export function TaskComposer({
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               Type <strong className="font-medium text-foreground">@</strong> for a record,{' '}
               <strong className="font-medium text-foreground">/</strong> for a template
             </p>

@@ -351,7 +351,7 @@ export function InvoiceComposer({
           {loadingCharges ? (
             <p className="py-4 text-sm text-muted-foreground">Loading charges…</p>
           ) : charges.length === 0 ? (
-            <p className="rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+            <p className="rounded-md border border-border bg-muted px-3 py-3 text-sm text-muted-foreground">
               {matterId
                 ? 'This matter has no uninvoiced charges. Add a charge on the Billing page first.'
                 : 'Choose a matter to see what can be billed.'}
@@ -375,7 +375,7 @@ export function InvoiceComposer({
                   <span className="tabular-nums text-sm">{moneyExact(charge.amountBilled)}</span>
                 </li>
               ))}
-              <li className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2.5">
+              <li className="flex items-center justify-between gap-3 bg-muted px-3 py-2.5">
                 <span className="text-sm font-medium">
                   {chosen.length} of {charges.length} selected
                 </span>

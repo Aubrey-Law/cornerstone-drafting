@@ -207,7 +207,9 @@ describe('fiduciary grid role flashing', () => {
   it('accepts flashRoleKey and tints the role column header and cells', () => {
     expect(grid).toContain('flashRoleKey = null')
     expect(grid).toContain("flashRoleKey.startsWith('spouse_') ? 'spouse' : 'client'")
-    expect(grid).toContain("flashing ? 'bg-warning/10' : 'bg-muted/40'")
+    // bg-muted, not an opacity of it: the eight-step muted ladder collapsed to
+    // the three named surface roles (card / muted / accent).
+    expect(grid).toContain("flashing ? 'bg-warning/10' : 'bg-muted'")
     expect(grid).toContain("? 'bg-warning/10 text-muted-foreground'")
   })
 })

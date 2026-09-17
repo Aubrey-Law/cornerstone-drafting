@@ -45,7 +45,7 @@ export function ChoiceCards({
               htmlFor={id}
               className={cn(
                 'flex cursor-pointer gap-3 rounded-md border p-3 transition-colors',
-                selected ? 'border-accent bg-teal-bg' : 'border-border hover:bg-muted/50',
+                selected ? 'border-accent bg-teal-bg' : 'border-border hover:bg-accent',
               )}
             >
               <input
@@ -108,7 +108,7 @@ export function CheckboxGrid({
               htmlFor={id}
               className={cn(
                 'flex cursor-pointer items-center gap-2 rounded-md border p-3 transition-colors',
-                checked ? 'border-accent bg-teal-bg' : 'border-border hover:bg-muted/50',
+                checked ? 'border-accent bg-teal-bg' : 'border-border hover:bg-accent',
               )}
             >
               <Checkbox id={id} checked={checked} onCheckedChange={() => toggle(option.value)} />
@@ -160,7 +160,7 @@ export function NotesField({
  */
 export function DocumentPrimer({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/40 p-4">
+    <div className="rounded-lg border border-border bg-muted p-4">
       <p className="text-sm font-semibold text-foreground">{title}</p>
       <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">{children}</div>
     </div>

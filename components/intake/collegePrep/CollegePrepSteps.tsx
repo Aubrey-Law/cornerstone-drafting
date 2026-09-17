@@ -327,7 +327,7 @@ export function StepCollegeParents({ data, update }: StepProps) {
       )}
 
       {parents.map((row, index) => (
-        <div key={row.id} className="rounded-lg border border-border bg-muted/40 p-4">
+        <div key={row.id} className="rounded-lg border border-border bg-muted p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">
               Parent / guardian {index + 1}
@@ -571,7 +571,7 @@ export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
           </p>
         )}
         {recipients.map((row, index) => (
-          <div key={row.id} className="rounded-lg border border-border bg-muted/40 p-4">
+          <div key={row.id} className="rounded-lg border border-border bg-muted p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Recipient {index + 1}</span>
               <button

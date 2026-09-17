@@ -41,7 +41,7 @@ export function LeadKeyDatesCard({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {LEAD_KEY_DATE_FIELDS.map(field => (
           <label className="block space-y-1" key={field.key}>
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="block text-micro font-medium uppercase tracking-wide text-muted-foreground">
               {field.label}
             </span>
             <Input
@@ -71,7 +71,7 @@ export function LeadKeyDatesCard({
                 if (!next && keyDates[field.key]) void onSaveKeyDate(field.key, null)
               }}
             />
-            <span className="block text-[10px] text-muted-foreground">{field.hint}</span>
+            <span className="block text-micro text-muted-foreground">{field.hint}</span>
           </label>
         ))}
       </div>

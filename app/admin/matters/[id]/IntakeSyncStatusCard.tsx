@@ -74,7 +74,7 @@ export function IntakeSyncStatusCard({
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted px-4 py-3 text-left"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
@@ -83,9 +83,9 @@ export function IntakeSyncStatusCard({
           <span className="text-xs font-semibold">Intake responses</span>
         </span>
         {needsAttention ? (
-          <span className="text-[10px] font-semibold text-amber-orange">Needs attention</span>
+          <span className="text-micro font-semibold text-amber-orange">Needs attention</span>
         ) : (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-green">
+          <span className="flex items-center gap-1 text-micro font-semibold text-green">
             <CheckCircle2 className="h-3 w-3" /> Ready
           </span>
         )}
@@ -131,7 +131,7 @@ export function IntakeSyncStatusCard({
                 </li>
               ))}
               {reviewFlags.length > 5 && (
-                <li className="text-[11px] text-muted-foreground">+{reviewFlags.length - 5} more</li>
+                <li className="text-micro text-muted-foreground">+{reviewFlags.length - 5} more</li>
               )}
             </ul>
           )}
@@ -156,7 +156,7 @@ export function IntakeSyncStatusCard({
           </div>
 
           {intakeUrl && (
-            <p className="break-all text-[11px] text-muted-foreground">{intakeUrl}</p>
+            <p className="break-all text-micro text-muted-foreground">{intakeUrl}</p>
           )}
         </div>
       )}
@@ -174,7 +174,7 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail: 
       )}
       <div>
         <span className="text-xs font-medium">{label}</span>
-        <p className="text-[11px] text-muted-foreground">{detail}</p>
+        <p className="text-micro text-muted-foreground">{detail}</p>
       </div>
     </div>
   )

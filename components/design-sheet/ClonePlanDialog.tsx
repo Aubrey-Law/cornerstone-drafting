@@ -113,7 +113,7 @@ export function ClonePlanDialog({ open, onOpenChange, matterId, onApply }: Clone
               <li key={source.matter_id}>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-muted/50 disabled:opacity-60"
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-accent disabled:opacity-60"
                   disabled={applyingId !== null}
                   onClick={() => void handlePick(source)}
                 >

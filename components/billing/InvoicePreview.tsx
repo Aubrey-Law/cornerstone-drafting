@@ -58,7 +58,7 @@ export function InvoicePreview({
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-teal">Bill to</p>
+          <p className="text-micro font-semibold uppercase tracking-wide text-brand-teal">Bill to</p>
           <p className="mt-1 break-words text-sm font-medium">{data.billToName}</p>
           {data.billToEmail && (
             <p className="break-words text-sm text-muted-foreground">{data.billToEmail}</p>
@@ -68,7 +68,7 @@ export function InvoicePreview({
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-teal">Invoice</p>
+          <p className="text-micro font-semibold uppercase tracking-wide text-brand-teal">Invoice</p>
           <dl className="mt-1 space-y-0.5 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Number</dt>
@@ -91,10 +91,10 @@ export function InvoicePreview({
           <caption className="sr-only">Invoice line items</caption>
           <thead>
             <tr className="border-b-2 border-brand-navy dark:border-border">
-              <th scope="col" className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-navy dark:text-foreground">
+              <th scope="col" className="py-1.5 text-left text-micro font-semibold uppercase tracking-wide text-brand-navy dark:text-foreground">
                 Description
               </th>
-              <th scope="col" className="py-1.5 text-right text-[11px] font-semibold uppercase tracking-wide text-brand-navy dark:text-foreground">
+              <th scope="col" className="py-1.5 text-right text-micro font-semibold uppercase tracking-wide text-brand-navy dark:text-foreground">
                 Amount
               </th>
             </tr>
@@ -147,14 +147,14 @@ export function InvoicePreview({
 
       {data.notes && (
         <section className="mt-5">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-brand-teal">Notes</h3>
+          <h3 className="text-micro font-semibold uppercase tracking-wide text-brand-teal">Notes</h3>
           <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{data.notes}</p>
         </section>
       )}
 
       {data.terms && (
         <section className="mt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-brand-teal">
+          <h3 className="text-micro font-semibold uppercase tracking-wide text-brand-teal">
             Payment terms
           </h3>
           <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{data.terms}</p>

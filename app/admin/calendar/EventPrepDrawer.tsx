@@ -71,9 +71,9 @@ export function EventPrepDrawer({
         {appointment && (
           <>
             <SheetHeader className="border-b border-border p-5" style={{ background: categoryColor }}>
-              <span className="w-fit rounded-full bg-card/80 px-2 py-0.5 text-[11px] font-medium text-foreground">{appointment.typeLabel}</span>
+              <span className="w-fit rounded-full bg-card/80 px-2 py-0.5 text-micro font-medium text-foreground">{appointment.typeLabel}</span>
               <span
-                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} px-2 py-0.5 text-[11px] font-medium`}
+                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} px-2 py-0.5 text-micro font-medium`}
               >
                 {calendarStatus}
               </span>
@@ -85,7 +85,7 @@ export function EventPrepDrawer({
               <div className="flex flex-wrap gap-2 pt-1">
                 {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />Join</a></Button>}
                 {appointment.source === 'calendly' ? (
-                  <span className="rounded-full bg-card/80 px-2 py-1 text-[11px] font-medium text-foreground">
+                  <span className="rounded-full bg-card/80 px-2 py-1 text-micro font-medium text-foreground">
                     Managed in Calendly
                   </span>
                 ) : (
@@ -126,7 +126,7 @@ export function EventPrepDrawer({
                       <Link key={document.id} href={`/admin/matters/${appointment.linkedMatterId}?tab=documents`} className="flex items-center gap-2 border-b border-border py-2 text-xs text-foreground last:border-0 hover:underline">
                         <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="flex-1">{document.name}</span>
-                        <span className="text-[10px] text-muted-foreground">{document.generation_id ? 'Generated version' : document.source}</span>
+                        <span className="text-micro text-muted-foreground">{document.generation_id ? 'Generated version' : document.source}</span>
                       </Link>
                     )) : <p className="text-xs text-muted-foreground">No current documents found.</p>}
                   </DrawerSection>
@@ -135,7 +135,7 @@ export function EventPrepDrawer({
                     {detail.attendees.map(attendee => (
                       <div key={attendee.email} className="flex items-center justify-between border-b border-border py-2 text-xs last:border-0">
                         <span><span className="block font-medium text-foreground">{attendee.name}</span><span className="text-muted-foreground">{attendee.email}</span></span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{attendee.status}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground">{attendee.status}</span>
                       </div>
                     ))}
                   </DrawerSection>
@@ -164,5 +164,5 @@ function DrawerSection({ title, children }: { title: string; children: React.Rea
   return <section className="rounded-lg border border-border bg-card p-3"><h2 className="mb-2 text-sm font-semibold text-foreground">{title}</h2>{children}</section>
 }
 function Fact({ label, value }: { label: string; value: string }) {
-  return <div className="rounded bg-muted p-2"><span className="block text-[10px] uppercase text-muted-foreground">{label}</span><span className="font-medium text-foreground">{value}</span></div>
+  return <div className="rounded bg-muted p-2"><span className="block text-micro uppercase text-muted-foreground">{label}</span><span className="font-medium text-foreground">{value}</span></div>
 }
