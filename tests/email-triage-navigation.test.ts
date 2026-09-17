@@ -40,14 +40,25 @@ describe('email triage navigation', () => {
     expect(getNavBadge(HREF, EMPTY_SIDEBAR_COUNTS)).toBeNull()
   })
 
-  it('shows no badge when the count failed to load', () => {
-    // A failed read must not render as a confident zero or a stale number.
+  it('marks the badge rather than hiding it when the count failed to load', () => {
+    // This case previously asserted null, on the reasoning that a failed read
+    // must render as neither a confident zero nor a stale number. The first
+    // half still holds. The second turned out to trade one wrong answer for
+    // another: hiding the badge is itself a confident claim, and the claim it
+    // makes on a nav item is "nothing is waiting". So the last known count is
+    // shown, and marked — dashed outline, muted, and announced as out of date.
     const counts = {
       ...EMPTY_SIDEBAR_COUNTS,
       emailTriageNeedsReplyCount: 4,
       errors: ['emailTriageNeedsReplyCount'],
     }
-    expect(getNavBadge(HREF, counts)).toBeNull()
+    expect(getNavBadge(HREF, counts)).toEqual({ value: 4, tone: 'accent', stale: true })
+  })
+
+  it('still shows nothing when the count failed before it ever loaded', () => {
+    // No last known value, so there is nothing to mark stale.
+    expect(getNavBadge(HREF, { ...EMPTY_SIDEBAR_COUNTS, errors: ['emailTriageNeedsReplyCount'] }))
+      .toBeNull()
   })
 
   it('leaves the retired inbox stub alone', () => {
