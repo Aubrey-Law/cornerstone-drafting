@@ -24,7 +24,7 @@ export function DocumentTypeIcon({ name, className }: { name: string; className?
   return (
     <span
       className={cn(
-        'flex size-9 shrink-0 items-center justify-center rounded-md text-[9px] font-bold tracking-tight',
+        'flex size-9 shrink-0 items-center justify-center rounded-md text-micro font-bold tracking-tight',
         tile?.className ?? 'bg-muted text-muted-foreground',
         className,
       )}

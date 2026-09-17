@@ -87,18 +87,18 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                 <div className="mb-1.5 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {isSystem ? (
-                      <span className="flex items-center gap-1 rounded-full bg-page-bg border border-border px-2 py-0.5 text-[10px] font-semibold text-text-tertiary">
+                      <span className="flex items-center gap-1 rounded-full bg-page-bg border border-border px-2 py-0.5 text-micro font-semibold text-text-tertiary">
                         <Calendar className="h-2.5 w-2.5" /> System
                       </span>
                     ) : (
-                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', isInternal ? 'bg-brand-navy/8 text-brand-navy' : 'bg-primary/8 text-primary')}>
+                      <span className={cn('rounded-full px-2 py-0.5 text-micro font-semibold', isInternal ? 'bg-brand-navy/8 text-brand-navy' : 'bg-primary/8 text-primary')}>
                         {isInternal ? 'Internal' : 'Client comm.'}
                       </span>
                     )}
-                    <span className="text-[11px] text-text-tertiary">
+                    <span className="text-micro text-text-tertiary">
                       {formatDateTime(note.created_at)}
                     </span>
-                    {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">From lead</span>}
+                    {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-micro font-semibold text-muted-foreground">From lead</span>}
                   </div>
                   {isEditable && !note.id.startsWith('opt-') && (
                     <div className="flex shrink-0 items-center gap-1">
@@ -106,7 +106,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                         <>
                           <Button
                             size="sm"
-                            className="h-7 gap-1 px-2 text-[11px]"
+                            className="h-7 gap-1 px-2 text-micro"
                             disabled={!editingNoteText.trim() || isMutating}
                             onClick={() => void (isLead ? handleUpdateLeadNote?.(note) : handleUpdateNote())}
                           >
@@ -138,7 +138,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                           key={type}
                           onClick={() => setEditingNoteType(type)}
                           className={cn(
-                            'rounded-full px-3 py-1 text-[11px] font-medium',
+                            'rounded-full px-3 py-1 text-micro font-medium',
                             editingNoteType === type
                               ? type === 'Internal'
                                 ? 'bg-brand-navy text-white'
@@ -176,7 +176,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
 
       <div className="rounded-lg border border-border bg-card p-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[11px] font-medium text-muted-foreground">AI assistant</p>
+          <p className="text-micro font-medium text-muted-foreground">AI assistant</p>
           <AssistantNotePromptButton />
         </div>
         <FormattedNoteEditor
@@ -199,7 +199,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
               key={type}
               onClick={() => setNoteType(type)}
               className={cn(
-                'rounded-full px-3 py-1 text-[11px] font-medium',
+                'rounded-full px-3 py-1 text-micro font-medium',
                 noteType === type
                   ? type === 'Internal'
                     ? 'bg-brand-navy text-white'

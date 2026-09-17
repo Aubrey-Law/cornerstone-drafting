@@ -53,7 +53,7 @@ export function PlanView({
                   <div style={{ height: internalHeight, background: 'var(--stage-active)' }} title={`${minutesLabel(day.internalMinutes)} internal`} />
                   {over > 0 && <div className="absolute inset-x-0 top-0" style={{ height: over, background: 'var(--red-strong)' }} />}
                 </div>
-                <div className="mt-1 truncate text-[10px] text-muted-foreground">
+                <div className="mt-1 truncate text-micro text-muted-foreground">
                   {new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
                 </div>
               </div>
@@ -87,7 +87,7 @@ export function PlanView({
                 ) : (
                   <span className="text-xs font-semibold text-foreground">{item.label}</span>
                 )}
-                <p className="text-[11px] text-muted-foreground">{new Date(item.date).toLocaleDateString()}</p>
+                <p className="text-micro text-muted-foreground">{new Date(item.date).toLocaleDateString()}</p>
               </div>
               <Button size="sm" variant="outline" onClick={() => onBook(item)}>
                 <CalendarPlus className="mr-1 h-3 w-3" /> Block {item.durationMinutes}m
@@ -99,7 +99,7 @@ export function PlanView({
           {data.unscheduledTasks.length ? data.unscheduledTasks.map(task => (
             <div key={task.id} className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0">
               <span className="text-xs text-foreground">{task.title}</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{task.estimateMinutes}m</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-micro text-muted-foreground">{task.estimateMinutes}m</span>
             </div>
           )) : <Empty>No estimated work waiting to schedule</Empty>}
         </PlanSection>
@@ -132,5 +132,5 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="p-4 text-xs text-muted-foreground">{children}</p>
 }
 function Stat({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-md bg-muted p-3"><div className="text-lg font-semibold text-foreground">{value}</div><div className="text-[11px] text-muted-foreground">{label}</div></div>
+  return <div className="rounded-md bg-muted p-3"><div className="text-lg font-semibold text-foreground">{value}</div><div className="text-micro text-muted-foreground">{label}</div></div>
 }

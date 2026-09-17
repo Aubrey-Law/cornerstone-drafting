@@ -13,7 +13,7 @@ export function FilterChip({ selected = false, count, className, children, ...pr
         'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors',
         selected
           ? 'bg-primary text-primary-foreground'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80',
+          : 'bg-muted text-muted-foreground hover:bg-accent',
         className,
       )}
       {...props}

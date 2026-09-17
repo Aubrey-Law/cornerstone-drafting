@@ -780,21 +780,21 @@ export function LeadDetailClient({
         <div className="flex min-w-0 flex-1 basis-40 items-center gap-1.5">
           <span
             aria-hidden
-            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-[10px] font-semibold text-muted-foreground"
+            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-micro font-semibold text-muted-foreground"
           >
             {clientInitial}
           </span>
           <h1 className="break-words text-base font-semibold">{clientName}</h1>
         </div>
-        <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground lg:inline">
+        <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-micro font-medium text-muted-foreground lg:inline">
           {provisionalLeadNumber(lead)}
         </span>
-        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
           {statusLabel} · day {leadDay}
         </span>
         <span className="text-xs text-muted-foreground">{leadProgressLabel(lead, activeAgreement?.status)}</span>
         {effectiveLastTouchAt !== null && lastTouchDays !== null && (
-          <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground md:inline">
+          <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground md:inline">
             Last contact {lastTouchDays}d ago
           </span>
         )}
@@ -862,7 +862,7 @@ export function LeadDetailClient({
             </div>
           )}
           {snoozed && lead.lead_status === 'lead' && (
-            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted p-3 text-sm">
               <span>Next action snoozed until {leadDisplayDate(lead.lead_next_action_snoozed_until, firmTimezone)}</span>
               <Button variant="outline" size="sm" disabled={interactionBusy} onClick={() => void clearNextActionSnooze()}>Undo snooze</Button>
             </div>
@@ -887,7 +887,7 @@ export function LeadDetailClient({
               <TabsTrigger value="tasks" className="gap-1.5">
                 Tasks
                 {taskCounts.overdue > 0 && (
-                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
                     {taskCounts.overdue}
                   </Badge>
                 )}

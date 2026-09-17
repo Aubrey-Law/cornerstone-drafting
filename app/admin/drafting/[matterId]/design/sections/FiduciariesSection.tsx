@@ -109,10 +109,10 @@ export default function FiduciariesSection({
         title="Fiduciary assignments"
         subtitle="Set the order in which each person serves across every document."
       >
-        <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+        <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted p-3">
           <div>
             <p className="text-sm font-semibold text-foreground">People in this matter</p>
-            <p className="mt-1 text-[12px] text-muted-foreground">Only these people can be selected as fiduciaries below.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Only these people can be selected as fiduciaries below.</p>
           </div>
           {listedContacts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No people are listed yet. Add one first.</p>
@@ -121,7 +121,7 @@ export default function FiduciariesSection({
               {listedContacts.map(contact => (
                 <div key={contact.id} className="rounded-lg border border-border bg-card p-2">
                   <p className="truncate text-sm font-medium text-foreground">{contactName(contact)}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{contact.relationship || 'Contact'}</p>
+                  <p className="truncate text-micro text-muted-foreground">{contact.relationship || 'Contact'}</p>
                 </div>
               ))}
             </div>

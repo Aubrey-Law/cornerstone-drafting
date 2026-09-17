@@ -203,13 +203,13 @@ export function DesignTextareaField<TSheet = DesignSheetLike>({
         maxLength={maxLength}
       />
       {isOverride && (
-        <p className="mt-1 text-[10.5px] font-medium text-warning">
+        <p className="mt-1 text-micro font-medium text-warning">
           Prefilled: {originalValue?.trim() ? originalValue : 'Blank'}
         </p>
       )}
       <div className="mt-2 flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground">Saved automatically on blur.</p>
-        <p className="text-[10px] text-muted-foreground tabular-nums">
+        <p className="text-micro text-muted-foreground">Saved automatically on blur.</p>
+        <p className="text-micro text-muted-foreground tabular-nums">
           {draft.length} / {maxLength}
         </p>
       </div>

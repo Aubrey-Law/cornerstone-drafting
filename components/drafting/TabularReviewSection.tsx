@@ -196,7 +196,7 @@ export function TabularReviewSection({ matterId, documentIds, documents, onOpenC
           <Table2 className="h-4 w-4 text-muted-foreground" />
           <div>
             <h3 className="text-sm font-medium">Estate multi-doc review</h3>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               Compare drafts across estate-specific columns (fiduciaries, residuary, markers).
             </p>
           </div>
@@ -227,8 +227,8 @@ export function TabularReviewSection({ matterId, documentIds, documents, onOpenC
               key={r.id}
               type="button"
               onClick={() => void loadReview(r.id)}
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
-                r.id === activeId ? 'border-foreground bg-accent' : 'border-border text-muted-foreground'
+              className={`rounded-full border px-2.5 py-0.5 text-micro ${
+                r.id === activeId ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border text-muted-foreground'
               }`}
             >
               {r.title}
@@ -250,9 +250,9 @@ export function TabularReviewSection({ matterId, documentIds, documents, onOpenC
           <table className="w-full min-w-[720px] border-collapse text-xs">
             <thead>
               <tr>
-                <th className="border border-border bg-muted/50 px-2 py-1.5 text-left font-medium">Document</th>
+                <th className="border border-border bg-muted px-2 py-1.5 text-left font-medium">Document</th>
                 {columns.map(col => (
-                  <th key={col.index} className="border border-border bg-muted/50 px-2 py-1.5 text-left font-medium">
+                  <th key={col.index} className="border border-border bg-muted px-2 py-1.5 text-left font-medium">
                     {col.name}
                   </th>
                 ))}
@@ -272,7 +272,7 @@ export function TabularReviewSection({ matterId, documentIds, documents, onOpenC
                     return (
                       <td key={col.index} className="border border-border px-2 py-1.5 align-top">
                         {cell?.status === 'generating' ? (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-micro">
                             generating
                           </Badge>
                         ) : cell?.status === 'error' ? (
@@ -286,7 +286,7 @@ export function TabularReviewSection({ matterId, documentIds, documents, onOpenC
                                   <button
                                     key={`${cell?.id ?? docId}-${col.index}-${i}`}
                                     type="button"
-                                    className="block w-full rounded px-1 py-0.5 text-left text-[10px] text-primary hover:bg-accent/60"
+                                    className="block w-full rounded px-1 py-0.5 text-left text-micro text-primary hover:bg-accent"
                                     title={`Open in viewer: ${citation.quote}`}
                                     onClick={() =>
                                       onOpenCitation?.({

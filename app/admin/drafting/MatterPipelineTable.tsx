@@ -101,7 +101,7 @@ function MatterPipelineCard({
         data-drafting-card-index={index}
         data-drafting-row-index={index}
         data-state={focused ? 'selected' : undefined}
-        className="block w-full rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=selected]:border-primary/40 data-[state=selected]:bg-muted/50"
+        className="block w-full rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=selected]:border-primary/40 data-[state=selected]:bg-selected"
         onClick={() => onFocusIndex(index)}
         onMouseEnter={schedulePrefetch}
         onMouseLeave={cancelPrefetch}
@@ -131,7 +131,7 @@ function MatterPipelineCard({
           <span className="min-w-0">
             <Badge
               className={cn(
-                'border-0 text-[10px]',
+                'border-0 text-micro',
                 action.tone === 'success' && 'bg-success/10 text-success',
                 action.tone === 'info' && 'bg-blue-bg text-blue',
                 action.tone === 'warning' && 'bg-warning/10 text-warning',
@@ -139,7 +139,7 @@ function MatterPipelineCard({
             >
               {action.label}
             </Badge>
-            <span className="mt-1 block truncate text-[11px] text-muted-foreground">{action.detail}</span>
+            <span className="mt-1 block truncate text-micro text-muted-foreground">{action.detail}</span>
           </span>
         </span>
 
@@ -157,8 +157,8 @@ function MatterPipelineCard({
 function CardMetric({ label, value, dataValue }: { label: string; value: string; dataValue?: string }) {
   return (
     <span className="min-w-0">
-      <span className="block text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="mt-0.5 block truncate text-[11px] font-medium tabular-nums text-foreground" data-value={dataValue}>
+      <span className="block text-micro font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="mt-0.5 block truncate text-micro font-medium tabular-nums text-foreground" data-value={dataValue}>
         {value}
       </span>
     </span>
@@ -204,7 +204,7 @@ function MatterPipelineTableRow({
           onBlur={cancelPrefetch}
         >{matter.client_name || 'Unnamed client'}</Link>
         {matter.spouse_name && (
-          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+          <span className="block truncate text-micro font-normal text-muted-foreground">
             & {matter.spouse_name}
           </span>
         )}
@@ -218,7 +218,7 @@ function MatterPipelineTableRow({
         <div className="space-y-1">
           <Badge
             className={cn(
-              'border-0 text-[10px]',
+              'border-0 text-micro',
               action.tone === 'success' && 'bg-success/10 text-success',
               action.tone === 'info' && 'bg-blue-bg text-blue',
               action.tone === 'warning' && 'bg-warning/10 text-warning',
@@ -226,7 +226,7 @@ function MatterPipelineTableRow({
           >
             {action.label}
           </Badge>
-          <span className="block text-[11px] text-muted-foreground">{action.detail}</span>
+          <span className="block text-micro text-muted-foreground">{action.detail}</span>
         </div>
       </TableCell>
       <TableCell className="text-right tabular-nums">{item.includedDocumentLabels.length}</TableCell>

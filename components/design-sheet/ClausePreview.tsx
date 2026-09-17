@@ -72,13 +72,13 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
   }, [accessToken, matterId, sheet])
 
   return (
-    <div className="h-full overflow-y-auto bg-muted/20 px-4 py-4">
+    <div className="h-full overflow-y-auto bg-muted px-4 py-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Clause preview</h2>
-          <p className="text-[11px] text-muted-foreground">Live drafting language · read only</p>
+          <p className="text-micro text-muted-foreground">Live drafting language · read only</p>
         </div>
-        {loading ? <span className="text-[10px] text-muted-foreground">Updating…</span> : null}
+        {loading ? <span className="text-micro text-muted-foreground">Updating…</span> : null}
       </div>
 
       {error ? (
@@ -96,18 +96,18 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
       <div className="space-y-3">
         {clauses.map(clause => (
           <article key={clause.id} className="rounded-lg border border-border bg-card p-3 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--gi-teal)]">
+            <p className="text-micro font-semibold uppercase tracking-[0.1em] text-[var(--gi-teal)]">
               {clause.document}
             </p>
             <h3 className="mt-0.5 text-xs font-semibold text-foreground">{clause.section}</h3>
             <p
-              className="mt-3 text-[15px] leading-6 text-foreground"
+              className="mt-3 text-sm leading-6 text-foreground"
               style={{ fontFamily: 'var(--font-eb-garamond), Georgia, serif' }}
             >
               {clause.parts.map((part, index) => <ClausePart key={`${clause.id}-${index}`} part={part} />)}
             </p>
             {clause.annotation ? (
-              <p className="mt-3 border-t border-border pt-2 text-[11px] leading-4 text-[var(--gi-amber)]">
+              <p className="mt-3 border-t border-border pt-2 text-micro leading-4 text-[var(--gi-amber)]">
                 {clause.annotation}
               </p>
             ) : null}

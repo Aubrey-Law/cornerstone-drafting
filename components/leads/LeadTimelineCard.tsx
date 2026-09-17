@@ -248,7 +248,7 @@ export function LeadTimelineCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={variant === 'card' ? 'text-sm font-semibold' : 'sr-only'}>Timeline</h2>
-          {variant === 'card' && <p className="text-[11px] text-muted-foreground">Internal only</p>}
+          {variant === 'card' && <p className="text-micro text-muted-foreground">Internal only</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => setGranolaOpen(true)}>

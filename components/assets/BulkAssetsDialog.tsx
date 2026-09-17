@@ -267,7 +267,7 @@ export function BulkAssetsDialog({
           <TabsContent value="rows" className="space-y-3 pt-2">
             <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[640px] text-sm">
-                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-2 py-2 font-medium">Category</th>
                     <th className="px-2 py-2 font-medium">Description</th>
@@ -385,7 +385,7 @@ export function BulkAssetsDialog({
             </button>
 
             {file && (
-              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
                 {isSpreadsheet ? (
                   <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" />
                 ) : (

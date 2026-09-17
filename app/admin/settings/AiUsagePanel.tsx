@@ -102,7 +102,7 @@ export function AiUsagePanel() {
 
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full min-w-[640px] text-left text-xs">
-              <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <thead className="bg-muted text-micro uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">When</th>
                   <th className="px-3 py-2 font-medium">Route</th>
@@ -127,11 +127,11 @@ export function AiUsagePanel() {
                     return (
                       <tr key={row.id} className="border-t border-border">
                         <td className="px-3 py-2 text-foreground">{fmtTime(row.created_at)}</td>
-                        <td className="px-3 py-2 font-mono text-[11px]">{row.route}</td>
+                        <td className="px-3 py-2 font-mono text-micro">{row.route}</td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {row.context_type ?? '—'}
                         </td>
-                        <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                        <td className="px-3 py-2 font-mono text-micro text-muted-foreground">
                           {row.model}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
@@ -180,7 +180,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-md border border-border bg-card p-3">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-micro uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
         className={`mt-1 text-lg font-semibold tabular-nums ${
           tone === 'warn' ? 'text-destructive' : 'text-foreground'

@@ -648,7 +648,7 @@ export function ChatPanel({
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span
           className={cn(
-            'inline-flex min-w-0 items-center rounded-full px-2 py-1 text-[11px] font-semibold',
+            'inline-flex min-w-0 items-center rounded-full px-2 py-1 text-micro font-semibold',
             chatContext.type === 'general'
               ? 'bg-muted text-muted-foreground'
               : 'bg-primary text-primary-foreground',
@@ -660,7 +660,7 @@ export function ChatPanel({
           <button
             type="button"
             onClick={() => setOverrideGeneral(true)}
-            className="shrink-0 whitespace-nowrap rounded-sm text-[11px] font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="shrink-0 whitespace-nowrap rounded-sm text-micro font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Switch to general
           </button>
@@ -681,12 +681,12 @@ export function ChatPanel({
                     type="button"
                     onClick={() => setSaveNoteType(option.key)}
                     className={cn(
-                      'inline-flex h-6 items-center rounded-full px-2 text-[10px] font-semibold transition-colors',
+                      'inline-flex h-6 items-center rounded-full px-2 text-micro font-semibold transition-colors',
                       saveNoteType === option.key
                         ? option.key === 'internal'
                           ? 'bg-brand-navy text-white'
                           : 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                        : 'bg-muted text-muted-foreground hover:bg-accent',
                     )}
                   >
                     {option.label}
@@ -697,7 +697,7 @@ export function ChatPanel({
                 type="button"
                 onClick={() => void handleSaveNote()}
                 disabled={!canSaveNote}
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <NotebookPen size={12} />
                 {savingNote ? 'Saving…' : 'Save to matter notes'}
@@ -708,7 +708,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => void handleCopyLastResponse()}
-              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ClipboardCopy size={12} />
               Copy last response
@@ -718,7 +718,7 @@ export function ChatPanel({
             type="button"
             onClick={() => void handleExportDocx()}
             disabled={!hasContent}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <FileType2 size={12} />
             Export as Word
@@ -727,7 +727,7 @@ export function ChatPanel({
             type="button"
             onClick={handleExportText}
             disabled={!hasContent}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <FileText size={12} />
             Export as text
@@ -736,7 +736,7 @@ export function ChatPanel({
             type="button"
             onClick={() => void handleClearConversation()}
             disabled={loading}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Trash2 size={12} />
             Clear chat
@@ -745,7 +745,7 @@ export function ChatPanel({
             <span
               role="status"
               className={cn(
-                'ml-auto text-[11px] font-medium',
+                'ml-auto text-micro font-medium',
                 actionStatus.kind === 'success' ? 'text-green' : 'text-destructive',
               )}
             >
@@ -820,7 +820,7 @@ export function ChatPanel({
         )}
 
         {error && (
-          <div className="mt-2.5 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
+          <div className="mt-2.5 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-compact text-destructive">
             {error}
           </div>
         )}
@@ -828,18 +828,18 @@ export function ChatPanel({
         {savedNote && (
           <div
             role="status"
-            className="mt-2.5 rounded-lg border border-green bg-green-bg px-3 py-2.5 text-[13px] text-green"
+            className="mt-2.5 rounded-lg border border-green bg-green-bg px-3 py-2.5 text-compact text-green"
           >
             <div className="flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
               Saved to matter notes · {savedNoteLabel}
             </div>
-            <p className="mt-1 text-[12px] opacity-90">
+            <p className="mt-1 text-xs opacity-90">
               This conversation is now part of the matter file and shows in the notes timeline.
             </p>
             <Link
               href={`/admin/matters/${savedNote.matterId}?tab=notes`}
-              className="mt-1.5 inline-block text-[12px] font-semibold underline underline-offset-2"
+              className="mt-1.5 inline-block text-xs font-semibold underline underline-offset-2"
             >
               View
             </Link>
@@ -849,12 +849,12 @@ export function ChatPanel({
 
       {/* Model + context provenance, immediately above the composer. */}
       {assistantModelLabel ? (
-        <div className="flex shrink-0 items-start gap-1.5 border-t border-amber-border bg-amber-bg px-3 py-1.5 text-[11px] text-amber">
+        <div className="flex shrink-0 items-start gap-1.5 border-t border-amber-border bg-amber-bg px-3 py-1.5 text-micro text-amber">
           <Info className="mt-px h-3 w-3 shrink-0" aria-hidden />
           <span>{assistantModelLabel} · {contextWord} context loaded · answers are drafts, not filed advice</span>
         </div>
       ) : (
-        <div className="flex shrink-0 items-start gap-1.5 border-t border-destructive/25 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
+        <div className="flex shrink-0 items-start gap-1.5 border-t border-destructive/25 bg-destructive/10 px-3 py-1.5 text-micro text-destructive">
           <Info className="mt-px h-3 w-3 shrink-0" aria-hidden />
           <span>No assistant model is configured for this workspace.</span>
         </div>
@@ -869,7 +869,7 @@ export function ChatPanel({
             controls={composerResize}
             label="Resize the message box"
             edge="top"
-            className="rounded-t-md border-x border-t border-input bg-muted/20"
+            className="rounded-t-md border-x border-t border-input bg-muted"
           />
           <textarea
             ref={textareaRef}
@@ -894,7 +894,7 @@ export function ChatPanel({
             onClick={() => abortRef.current?.abort()}
             aria-label="Stop generating"
             title="Stop generating"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Square size={16} />
           </button>
@@ -903,7 +903,7 @@ export function ChatPanel({
             type="submit"
             disabled={!input.trim()}
             aria-label="Send message"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowUp size={18} />
           </button>

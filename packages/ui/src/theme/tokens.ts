@@ -8,9 +8,14 @@
  *
  * Add a new theme by defining `themes.<name>` and running `npm run theme:generate`.
  *
- * Current theme: monochrome zinc (shadcnuikit CRM), Outfit UI face. The
- * `brand.navy` / `brand.teal` fields are legacy aliases now mapped to neutrals
- * (dark inverse surface / primary respectively).
+ * Current theme: zinc neutrals (shadcnuikit CRM), Outfit UI face, with
+ * `brand.navy` / `brand.teal` carrying Aubrey Law's own two colours again.
+ * They are an accent — headings, marks, the invoice, a selected surface — not
+ * a repaint: buttons, body text and every surface stay neutral.
+ *
+ * Every pair listed in `contrastPairs`, `statusContrastPairs` and
+ * `uiContrastPairs` below is enforced by tests/theme-contrast.test.ts. A value
+ * changed here that breaks one fails the suite; that is the point.
  */
 
 export type ThemeId = 'light' | 'dark'
@@ -58,10 +63,27 @@ export type SemanticTokens = {
     primaryFg: string
     secondary: string
     secondaryFg: string
+    /** THE hover fill. Nothing else sets a surface on hover. */
     accent: string
     accentFg: string
     destructive: string
     destructiveFg: string
+  }
+  /**
+   * THE "you are here" fill, and the only tinted surface in the app.
+   *
+   * Every selection signal used to be a neutral: `bg-accent` in the sidebar,
+   * `bg-muted` in the design sheet index, `bg-primary/10` in the drafting
+   * stepper, `bg-primary/5` on a selected day. Four of them are visible on one
+   * screen and nothing ranked them, because with a near-black primary every
+   * "this one" collapses to a grey. These carry the firm's teal so selection is
+   * the one thing on screen wearing a colour.
+   */
+  selection: {
+    bg: string
+    fg: string
+    /** The rule, underline or left marker beside the fill — never colour alone. */
+    border: string
   }
   sidebar: {
     bg: string
@@ -86,13 +108,25 @@ export type ThemeDefinition = {
   extended: Record<string, string>
 }
 
-/** Fixed brand + neutral primitives (monochrome zinc palette). */
+/** Fixed brand + neutral primitives (zinc neutrals + the firm's own two colours). */
 export const primitives = {
-  // Zinc monochrome palette (shadcnuikit CRM). The legacy "navy"/"blue" names
-  // are kept so existing consumers keep compiling; they now map to neutrals.
+  // Zinc monochrome palette (shadcnuikit CRM). `brandNavy` is the neutral dark
+  // *surface*, which is all `bg.inverse` ever wanted from it — it is not the
+  // firm's navy and no longer stands in for one.
   brandNavy: '#18181b',       // dark inverse surface
   brandBlue: '#09090b',       // near-black primary (buttons, active states)
   brandBlueHover: '#27272b',  // primary hover
+  // Aubrey Law's actual marks, read off public/aubrey-law-logo.svg. The zinc
+  // retheme pointed `brand.navy`/`brand.teal` at neutrals and left the names in
+  // place, so `text-brand-teal` in components/billing/InvoicePreview.tsx drew
+  // near-black and the firm's colours survived only inside the client
+  // interview's own `--gi-*` scope. These put the names back on the colours.
+  firmNavy: '#1F2D5A',
+  firmNavyDark: '#22304f',    // dark-theme navy *surface* (bg-brand-navy)
+  firmTeal: '#1A6B72',        // 6.19:1 on white
+  firmTealHover: '#145A60',
+  firmTealDark: '#6FC7CE',    // dark-theme teal *foreground* (text-brand-teal)
+  firmTealDarkHover: '#8FD8DE',
   brandBlueBright: '#09090b', // active indicator / accent
   white: '#ffffff',
   black: '#09090b',
@@ -100,29 +134,44 @@ export const primitives = {
 
 const lightSemantic: SemanticTokens = {
   bg: {
-    canvas: '#ffffff',
-    subtle: '#f4f4f6',
-    muted: '#f5f5f5',
+    // `canvas` is the page; `elevated` is what sits on it. They were both
+    // #ffffff, so every card in the app was the same colour as its background
+    // and the only thing marking its edge was a 1.27:1 hairline. Tinting the
+    // canvas is what makes a card a card — the border stays decorative.
+    canvas: '#f4f4f5',
+    subtle: '#ebebed',
+    // Must stay distinguishable from `elevated`: `bg-muted` is overwhelmingly
+    // drawn *on* a card, so it is one step below the card, not one below the
+    // page.
+    muted: '#e9e9ec',
     elevated: '#ffffff',
     inverse: primitives.brandNavy,
   },
   text: {
     default: '#27272b',
     secondary: '#3f3f46',
-    muted: '#737373',
+    // Was #737373: 4.74:1 on white but 4.35:1 on `muted` and 4.32:1 on the
+    // sidebar, and the app draws it at 10px and 11px. Darkening `muted` made
+    // that near-miss a real one, so the text moves with it — 5.05:1 on the new
+    // `muted`, 6.12:1 on a card.
+    muted: '#61616b',
     inverse: '#fafafb',
     onBrand: primitives.white,
   },
   border: {
-    default: '#e4e4e8',
-    strong: '#9f9fa7',
+    default: '#d4d4d8',
+    strong: '#71717b',
     focus: '#27272b',
-    input: '#d4d4da',
+    // WCAG 1.4.11: an input is a UI component, so its boundary owes 3:1 — and
+    // the design sheet and the client interview are almost entirely inputs.
+    // #d4d4da gave 1.48:1. This is 3.42:1 on a card and 3.11:1 on the canvas,
+    // measured both ways because inputs appear on both.
+    input: '#8a8a94',
   },
   brand: {
-    navy: primitives.brandNavy,
-    teal: primitives.brandBlue,
-    tealHover: primitives.brandBlueHover,
+    navy: primitives.firmNavy,
+    teal: primitives.firmTeal,
+    tealHover: primitives.firmTealHover,
     onNavy: '#fafafb',
     onTeal: primitives.white,
   },
@@ -141,29 +190,42 @@ const lightSemantic: SemanticTokens = {
     primaryFg: primitives.white,
     secondary: '#d4d4da',
     secondaryFg: '#27272b',
-    accent: '#e4e4e8',
+    accent: '#e0e0e4',
     accentFg: '#27272b',
     destructive: '#e7000b',
     destructiveFg: primitives.white,
   },
+  selection: {
+    bg: '#e2efef',
+    fg: '#14444a',   // 8.99:1 on the fill
+    border: primitives.firmTeal,
+  },
   sidebar: {
-    bg: '#f4f4f6',
-    fg: '#71717b',
+    // White, like the admin shell's own aside (which uses `bg-card`), so the
+    // portal sidebar reads as a panel raised off the tinted canvas rather than
+    // dissolving into it.
+    bg: '#ffffff',
+    fg: '#61616b',
     primary: primitives.brandBlue,
     primaryFg: primitives.white,
-    accent: '#e4e4e8',
+    accent: '#e0e0e4',
     accentFg: '#09090b',
-    border: '#e4e4e8',
+    border: '#d4d4d8',
     ring: '#27272b',
   },
 }
 
 const darkSemantic: SemanticTokens = {
   bg: {
-    canvas: '#09090b',
-    subtle: '#18181b',
-    muted: '#18181b',
-    elevated: '#09090b',
+    // Same split as light, inverted: `elevated` lifts off `canvas` instead of
+    // being the identical near-black. Near black the WCAG ratio compresses and
+    // no two dark greys will ever reach 3:1, so a dark card is read from the
+    // fill step *plus* a border that clears 3:1 against the card — which is
+    // what `border.input` below is for.
+    canvas: '#0a0a0c',
+    subtle: '#101013',
+    muted: '#212126',
+    elevated: '#161619',
     inverse: '#fafafb',
   },
   text: {
@@ -174,46 +236,73 @@ const darkSemantic: SemanticTokens = {
     onBrand: '#18181b',
   },
   border: {
-    default: '#27272b',
-    strong: '#3f3f46',
+    default: '#2e2e34',
+    // Not decorative: `border-border-strong` draws the not-yet-reached markers
+    // in components/leads/LeadProgress.tsx and the incomplete connector in the
+    // matter stage strip, both of which carry progress state on their own. That
+    // puts them under 1.4.11 too. 4.26:1 on a card.
+    strong: '#7a7a85',
     focus: '#e4e4e8',
-    input: '#3f3f46',
+    // 3.46:1 against the new `elevated`, 3.76:1 against `canvas`. Was #3f3f46
+    // at 1.91:1.
+    input: '#6b6b76',
   },
   brand: {
-    navy: '#27272b',
-    teal: '#fafafb',
-    tealHover: '#e4e4e8',
+    // Dark mode uses these in opposite roles: `bg-brand-navy` is a surface
+    // (the assistant's code block, selected note chips), `text-brand-teal` is
+    // a foreground (the invoice preview). So navy goes dark and teal goes
+    // light — the same two hues, each at the lightness its role needs.
+    navy: primitives.firmNavyDark,
+    teal: primitives.firmTealDark,
+    tealHover: primitives.firmTealDarkHover,
     onNavy: '#e4e4e8',
     onTeal: '#18181b',
   },
   feedback: {
-    success: 'oklch(0.55 0.14 155)',
-    successFg: primitives.white,
+    // Every dark feedback foreground was #ffffff, against fills that had been
+    // brightened for dark mode and never revisited: white measured 2.89:1 on
+    // error, 3.58:1 on info, 3.75:1 on warning. Darkening the fills is not the
+    // fix — these tokens are used far more often as `bg-warning/10
+    // text-warning`, where a darker fill would sink the *text* below AA on a
+    // near-black card. So the label goes dark and the fill stays bright, which
+    // is what a bright fill wants anyway. Success rises to 0.62 to match the
+    // others' lightness, which is what lets it carry a dark label too.
+    success: 'oklch(0.62 0.14 155)',
+    successFg: '#0a0a0c',
     warning: 'oklch(0.62 0.14 70)',
-    warningFg: primitives.white,
+    warningFg: '#0a0a0c',
     error: '#ff6467',
-    errorFg: primitives.white,
+    errorFg: '#0a0a0c',
     info: 'oklch(0.62 0.14 240)',
-    infoFg: primitives.white,
+    infoFg: '#0a0a0c',
   },
   interactive: {
     primary: '#fafafb',
     primaryFg: '#18181b',
-    secondary: '#71717b',
+    // Was #71717b, which put its own label at 3.81:1. A secondary button in
+    // dark is a dark fill with a light label, not a mid grey with either.
+    secondary: '#3f3f46',
     secondaryFg: '#e4e4e8',
-    accent: '#18181b',
+    // One step above `muted`, not just above `elevated`: a hover has to read on
+    // a sunken well as well as on a card, and those are only 3 points apart.
+    accent: '#2b2b32',
     accentFg: '#e4e4e8',
     destructive: '#ff6467',
-    destructiveFg: primitives.white,
+    destructiveFg: '#0a0a0c',
+  },
+  selection: {
+    bg: '#16302f',
+    fg: '#a8dfe2',   // 9.58:1 on the fill
+    border: primitives.firmTealDark,
   },
   sidebar: {
-    bg: '#18181b',
+    bg: '#101013',
     fg: '#e4e4e8',
     primary: '#fafafb',
     primaryFg: '#18181b',
-    accent: '#27272b',
+    accent: '#24242a',
     accentFg: '#e4e4e8',
-    border: '#27272b',
+    border: '#2e2e34',
     ring: '#e4e4e8',
   },
 }
@@ -247,6 +336,9 @@ function legacyFromSemantic(s: SemanticTokens): LegacyTokens {
     '--muted-foreground': s.text.muted,
     '--accent': s.interactive.accent,
     '--accent-foreground': s.interactive.accentFg,
+    '--selected': s.selection.bg,
+    '--selected-foreground': s.selection.fg,
+    '--selected-border': s.selection.border,
     '--destructive': s.interactive.destructive,
     '--destructive-foreground': s.interactive.destructiveFg,
     '--border': s.border.default,
@@ -282,10 +374,15 @@ function legacyFromSemantic(s: SemanticTokens): LegacyTokens {
 }
 
 const lightExtended: Record<string, string> = {
+  // `--navy-*` are neutral hairlines (a calendar chip border), not brand: they
+  // keep the zinc values on purpose.
   '--navy-06': 'rgba(9, 9, 11, 0.06)',
   '--navy-12': 'rgba(9, 9, 11, 0.12)',
-  '--teal-12': 'rgba(9, 9, 11, 0.12)',
-  '--teal-30': 'rgba(9, 9, 11, 0.30)',
+  // `--teal-12` is the focus glow the client interview draws, and `--teal-bg`
+  // is what a selected option goes. Both were near-black under the retheme,
+  // which is why a focused field looked like a grey smudge.
+  '--teal-12': 'rgba(26, 107, 114, 0.22)',
+  '--teal-30': 'rgba(26, 107, 114, 0.38)',
   '--chart-1': '#09090b',
   '--chart-2': '#52525b',
   '--chart-3': '#27272b',
@@ -321,10 +418,14 @@ const lightExtended: Record<string, string> = {
   // lib/theme/contrast.ts rather than picked by eye.
   '--violet': '#5b21b6',
   '--violet-bg': '#f5f3ff',
-  '--gray-mid': '#71717b',
+  // Feeds `--gi-faint`, the faintest text tier in the admin design sheet
+  // (app/globals.css maps it there). Tinting the canvas took #71717b to 4.39:1
+  // on it, so it tracks the muted-text token instead of carrying its own hex
+  // and drifting away from it again.
+  '--gray-mid': lightSemantic.text.muted,
   '--gray-soft': '#d4d4da',
-  '--gray-bg': '#f4f4f6',
-  '--teal-bg': '#f4f4f6',
+  '--gray-bg': '#ebebed',
+  '--teal-bg': '#e2efef',
   '--stage-early': '#2563eb',
   '--stage-early-bg': '#dbeafe',
   '--stage-early-text': '#1e40af',
@@ -357,8 +458,8 @@ const lightExtended: Record<string, string> = {
 const darkExtended: Record<string, string> = {
   '--navy-06': 'rgba(250, 250, 251, 0.06)',
   '--navy-12': 'rgba(250, 250, 251, 0.12)',
-  '--teal-12': 'rgba(250, 250, 251, 0.12)',
-  '--teal-30': 'rgba(250, 250, 251, 0.30)',
+  '--teal-12': 'rgba(111, 199, 206, 0.22)',
+  '--teal-30': 'rgba(111, 199, 206, 0.38)',
   '--chart-1': '#fafafb',
   '--chart-2': '#9f9fa7',
   '--chart-3': '#e4e4e8',
@@ -389,10 +490,10 @@ const darkExtended: Record<string, string> = {
   // is measured, not assumed.
   '--violet': 'oklch(0.78 0.14 295)',
   '--violet-bg': 'oklch(0.22 0.05 295)',
-  '--gray-mid': '#9f9fa7',
+  '--gray-mid': darkSemantic.text.muted,
   '--gray-soft': '#52525b',
-  '--gray-bg': '#18181b',
-  '--teal-bg': '#27272b',
+  '--gray-bg': '#101013',
+  '--teal-bg': '#16302f',
   '--stage-early': 'oklch(0.68 0.12 262)',
   '--stage-early-bg': 'oklch(0.22 0.04 262)',
   '--stage-early-text': 'oklch(0.78 0.10 262)',
@@ -439,121 +540,79 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
   },
 }
 
-/** Foreground/background pairs that must meet WCAG AA (4.5:1). */
-export const contrastPairs: Array<{
+export type ThemePair = {
   name: string
   theme: ThemeId
   foreground: (t: ThemeDefinition) => string
   background: (t: ThemeDefinition) => string
-}> = [
-  {
-    name: 'canvas/default text',
-    theme: 'light',
-    foreground: (t) => t.semantic.text.default,
-    background: (t) => t.semantic.bg.canvas,
-  },
-  {
-    name: 'elevated/default text',
-    theme: 'light',
-    foreground: (t) => t.semantic.text.default,
-    background: (t) => t.semantic.bg.elevated,
-  },
-  {
-    name: 'muted/muted text',
-    theme: 'light',
-    foreground: (t) => t.semantic.text.muted,
-    background: (t) => t.semantic.bg.muted,
-  },
-  {
-    name: 'primary button',
-    theme: 'light',
-    foreground: (t) => t.semantic.interactive.primaryFg,
-    background: (t) => t.semantic.interactive.primary,
-  },
-  {
-    name: 'secondary button',
-    theme: 'light',
-    foreground: (t) => t.semantic.interactive.secondaryFg,
-    background: (t) => t.semantic.interactive.secondary,
-  },
-  {
-    name: 'destructive button',
-    theme: 'light',
-    foreground: (t) => t.semantic.interactive.destructiveFg,
-    background: (t) => t.semantic.interactive.destructive,
-  },
-  {
-    name: 'sidebar nav',
-    theme: 'light',
-    foreground: (t) => t.semantic.sidebar.fg,
-    background: (t) => t.semantic.sidebar.bg,
-  },
-  {
-    name: 'sidebar accent',
-    theme: 'light',
-    foreground: (t) => t.semantic.sidebar.accentFg,
-    background: (t) => t.semantic.sidebar.accent,
-  },
-  {
-    name: 'sidebar primary',
-    theme: 'light',
-    foreground: (t) => t.semantic.sidebar.primaryFg,
-    background: (t) => t.semantic.sidebar.primary,
-  },
-  {
-    name: 'canvas/default text',
-    theme: 'dark',
-    foreground: (t) => t.semantic.text.default,
-    background: (t) => t.semantic.bg.canvas,
-  },
-  {
-    name: 'elevated/default text',
-    theme: 'dark',
-    foreground: (t) => t.semantic.text.default,
-    background: (t) => t.semantic.bg.elevated,
-  },
-  {
-    name: 'muted/muted text',
-    theme: 'dark',
-    foreground: (t) => t.semantic.text.muted,
-    background: (t) => t.semantic.bg.muted,
-  },
-  {
-    name: 'primary button',
-    theme: 'dark',
-    foreground: (t) => t.semantic.interactive.primaryFg,
-    background: (t) => t.semantic.interactive.primary,
-  },
-  {
-    name: 'secondary button',
-    theme: 'dark',
-    foreground: (t) => t.semantic.interactive.secondaryFg,
-    background: (t) => t.semantic.interactive.secondary,
-  },
-  {
-    name: 'destructive button',
-    theme: 'dark',
-    foreground: (t) => t.semantic.interactive.destructiveFg,
-    background: (t) => t.semantic.interactive.destructive,
-  },
-  {
-    name: 'sidebar nav',
-    theme: 'dark',
-    foreground: (t) => t.semantic.sidebar.fg,
-    background: (t) => t.semantic.sidebar.bg,
-  },
-  {
-    name: 'sidebar accent',
-    theme: 'dark',
-    foreground: (t) => t.semantic.sidebar.accentFg,
-    background: (t) => t.semantic.sidebar.accent,
-  },
-  {
-    name: 'sidebar primary',
-    theme: 'dark',
-    foreground: (t) => t.semantic.sidebar.primaryFg,
-    background: (t) => t.semantic.sidebar.primary,
-  },
+}
+
+const THEME_IDS: readonly ThemeId[] = ['light', 'dark']
+
+/** Declares one pair against both themes, so neither can drift alone. */
+function bothThemes(
+  name: string,
+  foreground: (t: ThemeDefinition) => string,
+  background: (t: ThemeDefinition) => string,
+): ThemePair[] {
+  return THEME_IDS.map((theme) => ({ name, theme, foreground, background }))
+}
+
+/**
+ * Foreground/background pairs that must meet WCAG AA (4.5:1).
+ *
+ * This list carried the comment "must meet WCAG AA" for its whole life with
+ * nothing anywhere that checked it, and it only ever named nine pairs. That is
+ * how the dark destructive, warning and info labels sat at 2.89:1, 3.58:1 and
+ * 3.75:1 undisturbed. tests/theme-contrast.test.ts now drives every entry.
+ */
+export const contrastPairs: ThemePair[] = [
+  ...bothThemes('canvas/default text', (t) => t.semantic.text.default, (t) => t.semantic.bg.canvas),
+  ...bothThemes('elevated/default text', (t) => t.semantic.text.default, (t) => t.semantic.bg.elevated),
+  ...bothThemes('muted surface/default text', (t) => t.semantic.text.default, (t) => t.semantic.bg.muted),
+  ...bothThemes('elevated/secondary text', (t) => t.semantic.text.secondary, (t) => t.semantic.bg.elevated),
+  // The three that the app draws at 10px and 11px, so they get no large-text
+  // allowance and no rounding in their favour.
+  ...bothThemes('canvas/muted text', (t) => t.semantic.text.muted, (t) => t.semantic.bg.canvas),
+  ...bothThemes('elevated/muted text', (t) => t.semantic.text.muted, (t) => t.semantic.bg.elevated),
+  ...bothThemes('muted surface/muted text', (t) => t.semantic.text.muted, (t) => t.semantic.bg.muted),
+  ...bothThemes('subtle/muted text', (t) => t.semantic.text.muted, (t) => t.semantic.bg.subtle),
+  ...bothThemes('inverse surface/inverse text', (t) => t.semantic.text.inverse, (t) => t.semantic.bg.inverse),
+  // `--gray-mid` is the design sheet's faintest text tier, via `--gi-faint`.
+  ...bothThemes('canvas/faint text', (t) => t.extended['--gray-mid'], (t) => t.semantic.bg.canvas),
+  ...bothThemes('elevated/faint text', (t) => t.extended['--gray-mid'], (t) => t.semantic.bg.elevated),
+  ...bothThemes('primary button', (t) => t.semantic.interactive.primaryFg, (t) => t.semantic.interactive.primary),
+  ...bothThemes('secondary button', (t) => t.semantic.interactive.secondaryFg, (t) => t.semantic.interactive.secondary),
+  ...bothThemes('destructive button', (t) => t.semantic.interactive.destructiveFg, (t) => t.semantic.interactive.destructive),
+  ...bothThemes('accent surface', (t) => t.semantic.interactive.accentFg, (t) => t.semantic.interactive.accent),
+  ...bothThemes('selected surface', (t) => t.semantic.selection.fg, (t) => t.semantic.selection.bg),
+  ...bothThemes('success fill', (t) => t.semantic.feedback.successFg, (t) => t.semantic.feedback.success),
+  ...bothThemes('warning fill', (t) => t.semantic.feedback.warningFg, (t) => t.semantic.feedback.warning),
+  ...bothThemes('error fill', (t) => t.semantic.feedback.errorFg, (t) => t.semantic.feedback.error),
+  ...bothThemes('info fill', (t) => t.semantic.feedback.infoFg, (t) => t.semantic.feedback.info),
+  ...bothThemes('brand navy fill', (t) => t.semantic.brand.onNavy, (t) => t.semantic.brand.navy),
+  ...bothThemes('sidebar nav', (t) => t.semantic.sidebar.fg, (t) => t.semantic.sidebar.bg),
+  ...bothThemes('sidebar accent', (t) => t.semantic.sidebar.accentFg, (t) => t.semantic.sidebar.accent),
+  ...bothThemes('sidebar primary', (t) => t.semantic.sidebar.primaryFg, (t) => t.semantic.sidebar.primary),
+]
+
+/**
+ * Pairs that must meet WCAG 1.4.11 Non-text Contrast (3:1).
+ *
+ * Only boundaries that *identify a control* belong here. A card's hairline does
+ * not: a card is identified by its fill step away from the canvas, which
+ * `elevatedLiftsOffCanvas` in the test guards instead. An input's boundary is
+ * the whole of what says "this is a field", and it is the one the app has most
+ * of, so it is held to the letter.
+ */
+export const uiContrastPairs: ThemePair[] = [
+  ...bothThemes('input border on a card', (t) => t.semantic.border.input, (t) => t.semantic.bg.elevated),
+  ...bothThemes('input border on the canvas', (t) => t.semantic.border.input, (t) => t.semantic.bg.canvas),
+  ...bothThemes('focus ring on a card', (t) => t.semantic.border.focus, (t) => t.semantic.bg.elevated),
+  ...bothThemes('focus ring on the canvas', (t) => t.semantic.border.focus, (t) => t.semantic.bg.canvas),
+  ...bothThemes('strong border on a card', (t) => t.semantic.border.strong, (t) => t.semantic.bg.elevated),
+  ...bothThemes('selection marker on a card', (t) => t.semantic.selection.border, (t) => t.semantic.bg.elevated),
+  ...bothThemes('selection marker on its own fill', (t) => t.semantic.selection.border, (t) => t.semantic.selection.bg),
 ]
 
 /** Status badge pairs (bg + text) per theme. */

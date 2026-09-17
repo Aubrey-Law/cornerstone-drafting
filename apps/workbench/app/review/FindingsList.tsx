@@ -88,7 +88,7 @@ export function FindingsList({
             key={finding.ruleNumber}
             data-testid={`finding-${finding.ruleNumber}`}
             aria-current={selected === finding.ruleNumber ? 'true' : undefined}
-            className={`space-y-3 p-4 ${selected === finding.ruleNumber ? 'bg-muted/60' : ''}`}
+            className={`space-y-3 p-4 ${selected === finding.ruleNumber ? 'bg-muted' : ''}`}
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">Rule {finding.ruleNumber}</span>

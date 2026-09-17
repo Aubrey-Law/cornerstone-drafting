@@ -373,12 +373,12 @@ export function DesignSheetImportDialog({
                       className={cn(
                         'rounded-md border px-3 py-2.5 text-left transition-colors disabled:opacity-60',
                         sourceMode === option.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:bg-muted/50',
+                          ? 'border-selected-border bg-selected'
+                          : 'border-border hover:bg-accent',
                       )}
                     >
                       <span className="block text-sm font-medium">{option.label}</span>
-                      <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      <span className="mt-0.5 block text-micro leading-snug text-muted-foreground">
                         {option.hint}
                       </span>
                     </button>
@@ -389,11 +389,11 @@ export function DesignSheetImportDialog({
               <RejectedValues rejected={rejected} />
 
               {!allowUpload ? (
-                <div className="rounded-md border bg-muted/40 px-4 py-5 text-sm text-muted-foreground">
+                <div className="rounded-md border bg-muted px-4 py-5 text-sm text-muted-foreground">
                   No proposed design sheet updates are ready to review.
                 </div>
               ) : sourceMode === 'gaps' ? (
-                <div className="rounded-md border bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-md border bg-muted px-4 py-4 text-sm text-muted-foreground">
                   Reviews what this design sheet is still missing and proposes values from the
                   matter&rsquo;s own record &mdash; intake, the people on the matter, the asset
                   schedule, recent meeting notes, and your saved standards.
@@ -420,8 +420,8 @@ export function DesignSheetImportDialog({
                     onDrop={handleDrop}
                     disabled={submitting}
                     className={cn(
-                      'flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                      dragOver && 'border-primary bg-muted/60',
+                      'flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60',
+                      dragOver && 'border-primary bg-muted',
                     )}
                   >
                     <Upload className="h-7 w-7 text-muted-foreground" />
@@ -436,7 +436,7 @@ export function DesignSheetImportDialog({
                     onChange={handleFileChange}
                   />
                   {file && (
-                    <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
+                    <div className="flex items-center gap-3 rounded-md border bg-muted px-3 py-2">
                       <FileText className="h-4 w-4 text-primary" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{file.name}</p>
@@ -471,14 +471,14 @@ export function DesignSheetImportDialog({
                       : ''}
                   </p>
                 </div>
-                <div className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                <div className="rounded-full bg-muted px-2.5 py-1 text-micro font-medium text-muted-foreground">
                   Review before save
                 </div>
               </div>
 
               {fiduciaryRows.length > 0 && (
                 <div className="rounded-md border">
-                  <div className="flex items-center gap-2 border-b bg-muted/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <div className="flex items-center gap-2 border-b bg-muted px-3 py-2 text-micro font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
                     People
                   </div>
@@ -487,7 +487,7 @@ export function DesignSheetImportDialog({
                       <label
                         key={row.id}
                         className={cn(
-                          'flex cursor-pointer items-start gap-3 px-3 py-3 text-sm transition-colors hover:bg-muted/40',
+                          'flex cursor-pointer items-start gap-3 px-3 py-3 text-sm transition-colors hover:bg-accent',
                           row.replacement && 'bg-warning/10',
                         )}
                       >
@@ -513,7 +513,7 @@ export function DesignSheetImportDialog({
                           <span className="block font-medium">{row.fullName}</span>
                           <span
                             className={cn(
-                              'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium',
+                              'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-micro font-medium',
                               row.matchedContactId
                                 ? 'bg-muted text-muted-foreground'
                                 : 'bg-primary/10 text-primary',
@@ -531,7 +531,7 @@ export function DesignSheetImportDialog({
               {previewRows.length > 0 && (
                 <div className="overflow-x-auto rounded-md border">
                   <div className="min-w-[720px]">
-                    <div className="grid grid-cols-[40px_minmax(140px,0.9fr)_minmax(110px,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b bg-muted/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    <div className="grid grid-cols-[40px_minmax(140px,0.9fr)_minmax(110px,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b bg-muted px-3 py-2 text-micro font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <span />
                       <span>Field</span>
                       <span>Section</span>
@@ -543,7 +543,7 @@ export function DesignSheetImportDialog({
                         <label
                           key={row.field}
                           className={cn(
-                            'grid cursor-pointer grid-cols-[40px_minmax(140px,0.9fr)_minmax(110px,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-3 py-3 text-sm transition-colors hover:bg-muted/40',
+                            'grid cursor-pointer grid-cols-[40px_minmax(140px,0.9fr)_minmax(110px,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-3 py-3 text-sm transition-colors hover:bg-accent',
                             row.replacement && 'bg-warning/10',
                           )}
                         >
@@ -560,7 +560,7 @@ export function DesignSheetImportDialog({
                           <span className="min-w-0">
                             <span className="block truncate font-medium">{row.label}</span>
                             {row.replacement && (
-                              <span className="mt-1 inline-flex rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">
+                              <span className="mt-1 inline-flex rounded-full bg-warning/15 px-2 py-0.5 text-micro font-medium text-warning">
                                 Replacement
                               </span>
                             )}

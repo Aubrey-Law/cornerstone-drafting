@@ -81,7 +81,7 @@ function emptyChild(): AdminIntakeChild {
 
 function GroupLabel({ children, section }: { children: React.ReactNode; section?: string }) {
   return (
-    <div role="heading" aria-level={3} tabIndex={section ? -1 : undefined} data-intake-section={section} className="mt-6 mb-2.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+    <div role="heading" aria-level={3} tabIndex={section ? -1 : undefined} data-intake-section={section} className="mt-6 mb-2.5 text-micro font-medium uppercase tracking-[0.05em] text-muted-foreground">
       {children}
     </div>
   )
@@ -96,13 +96,13 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 }
 
 // Compact variants of the shared Input/Textarea density for this dense sheet.
-const inputCls = 'h-[34px] px-2.5 text-[13px] md:text-[13px]'
-const textareaCls = 'min-h-20 px-2.5 py-2 text-[13px] md:text-[13px]'
-const errorCls = 'text-[11px]'
+const inputCls = 'h-[34px] px-2.5 text-compact md:text-compact'
+const textareaCls = 'min-h-20 px-2.5 py-2 text-compact md:text-compact'
+const errorCls = 'text-micro'
 
 // Native <select> (platform picker) styled with the Input primitive's tokens.
 const selectCls =
-  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-[34px] w-full cursor-pointer rounded-md border bg-transparent px-2.5 text-[13px] shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
+  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-[34px] w-full cursor-pointer rounded-md border bg-transparent px-2.5 text-compact shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
 function SegmentedYesNo({
   value, onChange,
@@ -521,7 +521,7 @@ export default function AdminIntakeSheet({
       <SheetContent side="right" className="w-[520px] max-w-[100vw] gap-0 border-l bg-card p-0 sm:max-w-[520px]">
         {/* ── Header ── */}
         <SheetHeader className="shrink-0 gap-1 border-b border-border px-6 pt-5 pb-4">
-          <SheetTitle className="text-[15px] leading-tight font-medium text-foreground">
+          <SheetTitle className="text-sm leading-tight font-medium text-foreground">
             Intake — {clientName || 'Client'}
           </SheetTitle>
           <SheetDescription className="mt-1 text-xs text-muted-foreground">
@@ -532,13 +532,13 @@ export default function AdminIntakeSheet({
         {/* ── Body ── */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="py-12 text-center text-[13px] text-muted-foreground">
+            <div className="py-12 text-center text-compact text-muted-foreground">
               Loading intake data…
             </div>
           ) : (
             <>
               {isCollegePrep && (
-                <div data-intake-section="guided" tabIndex={-1} className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                <div data-intake-section="guided" tabIndex={-1} className="mb-4 rounded-md border border-border bg-muted p-3 text-xs leading-relaxed text-muted-foreground">
                   <span className="font-medium text-foreground">College Preparation Plan intake.</span>{' '}
                   The student is the client. School, parent, HIPAA, and living-will answers are captured in
                   the guided questionnaire — this sheet edits the student&apos;s details and agents.
@@ -637,7 +637,7 @@ export default function AdminIntakeSheet({
                   <button
                     type="button"
                     onClick={() => setManualAddress(v => !v)}
-                    className="text-[11px] text-primary hover:underline"
+                    className="text-micro text-primary hover:underline"
                   >
                     {manualAddress ? 'Use search' : 'Enter manually'}
                   </button>
@@ -986,7 +986,7 @@ export default function AdminIntakeSheet({
                         { key: 'has_poa' as const, label: 'Power of Attorney' },
                         { key: 'has_hcp' as const, label: 'Healthcare Proxy' },
                       ].map(({ key, label }) => (
-                        <label key={key} htmlFor={`${checkboxId}-${key}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                        <label key={key} htmlFor={`${checkboxId}-${key}`} className="flex cursor-pointer items-center gap-2 text-compact text-foreground">
                           <Controller
                             control={control}
                             name={key}
@@ -1019,7 +1019,7 @@ export default function AdminIntakeSheet({
                             'Tax planning',
                             'Medicaid planning',
                           ].map(val => (
-                            <label key={val} htmlFor={`${checkboxId}-${val}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                            <label key={val} htmlFor={`${checkboxId}-${val}`} className="flex cursor-pointer items-center gap-2 text-compact text-foreground">
                               <Checkbox
                                 id={`${checkboxId}-${val}`}
                                 checked={field.value.includes(val)}

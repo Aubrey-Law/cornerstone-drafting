@@ -54,7 +54,7 @@ export function ThemeToggle({ collapsed = false, variant = 'default' }: ThemeTog
         className={cn(
           'flex items-center rounded-md border-0 bg-transparent text-sm transition-colors',
           collapsed ? 'justify-center px-2 py-2' : 'w-full gap-3 px-3 py-2',
-          'text-muted-foreground hover:bg-muted hover:text-foreground',
+          'text-muted-foreground hover:bg-accent hover:text-foreground',
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />

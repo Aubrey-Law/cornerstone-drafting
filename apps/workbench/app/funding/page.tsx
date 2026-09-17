@@ -53,7 +53,7 @@ export default async function FundingPage() {
             <li key={matter.matterId}>
               <Link
                 href={`/funding/${matter.matterId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4 hover:bg-muted/50"
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4 hover:bg-accent"
               >
                 <span className="font-medium">{matter.title}</span>
                 <span className="flex items-baseline gap-3 text-sm">

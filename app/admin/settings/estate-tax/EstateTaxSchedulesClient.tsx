@@ -223,7 +223,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
                 exclusion · {Math.round(federal.schedule.rate * 100)}% above it ·{' '}
                 {federal.schedule.effectiveFrom.slice(0, 4)}
               </p>
-              <p className="mt-2 text-[11px] text-muted-foreground">{federal.schedule.source}</p>
+              <p className="mt-2 text-micro text-muted-foreground">{federal.schedule.source}</p>
             </>
           ) : (
             <>
@@ -252,7 +252,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
                 exemption · {massachusetts.schedule.brackets.length} brackets · in force since{' '}
                 {massachusetts.schedule.effectiveFrom}
               </p>
-              <p className="mt-2 text-[11px] text-muted-foreground">{massachusetts.schedule.source}</p>
+              <p className="mt-2 text-micro text-muted-foreground">{massachusetts.schedule.source}</p>
             </>
           ) : (
             <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-400">
@@ -323,7 +323,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
                   value={draft.source}
                   onChange={event => setDraft({ ...draft, source: event.target.value })}
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   Required. A figure nobody can trace back to an authority is a figure nobody can
                   check.
                 </p>

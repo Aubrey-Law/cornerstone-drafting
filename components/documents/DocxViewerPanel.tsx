@@ -310,7 +310,7 @@ export function DocxViewerPanel({
     edits.length > 0 ? (
       <div className={`flex min-h-0 flex-col border-b border-border ${maximized ? 'flex-1' : ''}`}>
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
-          <span className="mr-auto text-[11px] font-medium text-muted-foreground">
+          <span className="mr-auto text-micro font-medium text-muted-foreground">
             {activeIndex >= 0 ? `Change ${activeIndex + 1} of ${edits.length}` : `${edits.length} pending change${edits.length === 1 ? '' : 's'}`}
           </span>
           <Button size="icon" variant="outline" className="h-6 w-6" disabled={busy} onClick={() => goToChange(-1)} aria-label="Previous change" title="Previous change">
@@ -319,11 +319,11 @@ export function DocxViewerPanel({
           <Button size="icon" variant="outline" className="h-6 w-6" disabled={busy} onClick={() => goToChange(1)} aria-label="Next change" title="Next change">
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
-          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px]" disabled={busy} onClick={() => void resolveAll('accept')}>
+          <Button size="sm" variant="outline" className="h-6 gap-1 text-micro" disabled={busy} onClick={() => void resolveAll('accept')}>
             {bulkResolving === 'accept' ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCheck className="h-3 w-3" />}
             Accept all
           </Button>
-          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px]" disabled={busy} onClick={() => void resolveAll('reject')}>
+          <Button size="sm" variant="outline" className="h-6 gap-1 text-micro" disabled={busy} onClick={() => void resolveAll('reject')}>
             {bulkResolving === 'reject' ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
             Reject all
           </Button>
@@ -335,7 +335,7 @@ export function DocxViewerPanel({
               type="button"
               onClick={() => focusEdit(index)}
               className={`block w-full rounded border p-2 text-left text-xs transition-colors ${
-                index === activeIndex ? 'border-primary bg-primary/10' : 'border-border bg-muted/40 hover:bg-muted/70'
+                index === activeIndex ? 'border-selected-border bg-selected' : 'border-border bg-muted hover:bg-accent'
               }`}
             >
               {edit.reason ? <p className="mb-1 text-muted-foreground">{edit.reason}</p> : null}
@@ -353,7 +353,7 @@ export function DocxViewerPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 gap-1 text-[11px]"
+                  className="h-6 gap-1 text-micro"
                   disabled={busy}
                   onClick={e => {
                     e.stopPropagation()
@@ -365,7 +365,7 @@ export function DocxViewerPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 gap-1 text-[11px]"
+                  className="h-6 gap-1 text-micro"
                   disabled={busy}
                   onClick={e => {
                     e.stopPropagation()
@@ -384,7 +384,7 @@ export function DocxViewerPanel({
     ) : null
 
   const docBlock = (
-    <div className={`relative min-h-0 flex-1 overflow-auto bg-muted/20 p-4 md:p-6 ${maximized ? 'order-1' : 'order-2'}`}>
+    <div className={`relative min-h-0 flex-1 overflow-auto bg-muted p-4 md:p-6 ${maximized ? 'order-1' : 'order-2'}`}>
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -403,7 +403,7 @@ export function DocxViewerPanel({
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{documentName}</p>
-          <p className="text-[11px] text-muted-foreground">In-app DOCX review</p>
+          <p className="text-micro text-muted-foreground">In-app DOCX review</p>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-0.5 rounded-md border border-border px-0.5">
@@ -413,7 +413,7 @@ export function DocxViewerPanel({
             <button
               type="button"
               onClick={() => applyZoom(1)}
-              className="min-w-[3ch] text-center text-[11px] tabular-nums text-muted-foreground hover:text-foreground"
+              className="min-w-[3ch] text-center text-micro tabular-nums text-muted-foreground hover:text-foreground"
               title="Reset zoom"
             >
               {Math.round(zoom * 100)}%
@@ -428,7 +428,7 @@ export function DocxViewerPanel({
           {onConvert ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-[11px]" disabled={converting} onClick={onConvert}>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-micro" disabled={converting} onClick={onConvert}>
                   {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType2 className="h-3.5 w-3.5" />}
                   Convert to PDF
                 </Button>

@@ -137,7 +137,7 @@ export function PromptsWorkspace({
               <li key={blocker.matterId}>
                 <Link
                   href={`/prompts/${blocker.runId}`}
-                  className="flex items-baseline justify-between gap-3 py-2 text-sm hover:bg-muted/50"
+                  className="flex items-baseline justify-between gap-3 py-2 text-sm hover:bg-accent"
                 >
                   <span className="font-medium">{blocker.matterTitle}</span>
                   <span className="text-xs text-muted-foreground">
@@ -219,7 +219,7 @@ export function PromptsWorkspace({
                 <li key={run.runId}>
                   <Link
                     href={`/prompts/${run.runId}`}
-                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-muted/50"
+                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-accent"
                   >
                     <span className="min-w-0">
                       <span className="font-medium">{run.promptTitle ?? 'Field audit'}</span>

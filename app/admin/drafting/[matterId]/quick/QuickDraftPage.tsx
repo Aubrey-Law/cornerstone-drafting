@@ -359,7 +359,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
                 </div>
               )}
               {analysis.warnings.length > 0 && (
-                <div className="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+                <div className="rounded-md border border-muted bg-muted p-3 text-xs text-muted-foreground">
                   <ul className="list-inside list-disc">
                     {analysis.warnings.map(warning => <li key={warning}>{warning}</li>)}
                   </ul>

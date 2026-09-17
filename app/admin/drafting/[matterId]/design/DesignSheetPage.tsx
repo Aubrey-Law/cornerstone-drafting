@@ -644,7 +644,7 @@ function DesignSheetPageContent({
                               key={item.id}
                               type="button"
                               onClick={() => handleBlockerSelect(item)}
-                              className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning hover:bg-warning/15"
+                              className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-micro font-medium text-warning hover:bg-warning/15"
                             >
                               {groups.find(group => group.id === groupId)?.title}: {item.label}
                             </button>
@@ -695,7 +695,7 @@ function DesignSheetPageContent({
 
               <div className="pt-4">
                 <div className="mb-3">
-                  <p className="text-category text-muted-foreground">
+                  <p className="admin-category text-muted-foreground">
                     Section {activeIndex + 1} of {navGroups.length}
                   </p>
                   <h2

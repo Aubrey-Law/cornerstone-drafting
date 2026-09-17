@@ -80,7 +80,7 @@ function VariableInsertSelect({
         if (event.target.value) onInsert(event.target.value)
         event.target.value = ''
       }}
-      className="h-6 rounded border border-input bg-background px-1 text-[10px] text-muted-foreground"
+      className="h-6 rounded border border-input bg-background px-1 text-micro text-muted-foreground"
     >
       <option value="">Insert variable…</option>
       {options.map(option => (
@@ -287,8 +287,8 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
       <div className="mb-6 space-y-3 rounded-md border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Signature</h3>
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <h3 className="text-micro font-semibold uppercase tracking-wide text-foreground">Email Signature</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
               Firm-wide signature offered on manual emails. Automated notices are unchanged.
             </p>
           </div>
@@ -312,7 +312,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
         />
         {showSignaturePreview && (
           <div
-            className="rounded-md border border-border bg-muted/30 p-3 text-sm leading-relaxed [&_a]:text-primary [&_a]:underline"
+            className="rounded-md border border-border bg-muted p-3 text-sm leading-relaxed [&_a]:text-primary [&_a]:underline"
             dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(signatureHtml) || '<span>No signature configured.</span>' }}
           />
         )}
@@ -333,8 +333,8 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
 
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Templates</h3>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <h3 className="text-micro font-semibold uppercase tracking-wide text-foreground">Email Templates</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
             Stored subjects and message bodies for manual sends and email categories.
           </p>
         </div>
@@ -417,15 +417,15 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
               placeholder="Hi {{first_name}},"
               variableOptions={variableOptions}
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               Variables are filled in when the email is sent.{' '}
               {variableOptions.map(option => option.label).join(', ')} are available for this category.
             </p>
           </div>
 
           {showPreview && (
-            <div className="rounded-md border border-border bg-muted/30 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+            <div className="rounded-md border border-border bg-muted p-3">
+              <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
               <p className="mt-2 text-sm font-medium text-foreground">
                 {form.subject.trim()
                   ? <PlaceholderText text={form.subject} />
@@ -439,7 +439,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                   dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(form.body) }}
                 />
               )}
-              <p className="mt-2 text-[10px] text-muted-foreground">
+              <p className="mt-2 text-micro text-muted-foreground">
                 Formatting is preserved — <span className="font-mono">{'{{placeholders}}'}</span> are filled in when the email is sent.
               </p>
             </div>
@@ -479,7 +479,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                 if (group.length === 0) return null
                 return (
                   <div key={category} className="border-b border-border last:border-b-0">
-                    <div className="bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div className="bg-muted px-3 py-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                       {EMAIL_CATEGORY_META[category].label}
                     </div>
                     {group.map((template, index) => (
@@ -491,18 +491,18 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-medium text-foreground">{template.name}</p>
                             {template.isDefault && (
-                              <span className="rounded bg-blue-bg px-1.5 py-0.5 text-[10px] font-medium text-blue">
+                              <span className="rounded bg-blue-bg px-1.5 py-0.5 text-micro font-medium text-blue">
                                 Default
                               </span>
                             )}
                             {!template.isActive && (
-                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-micro font-medium text-muted-foreground">
                                 Inactive
                               </span>
                             )}
                           </div>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">{template.subject}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground/80">
+                          <p className="mt-1 text-micro text-muted-foreground/80">
                             Updated {formatTemplateDate(template.updatedAt)}
                           </p>
                         </div>

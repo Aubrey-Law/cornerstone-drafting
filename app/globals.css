@@ -37,16 +37,25 @@
 
 /* Type scale utilities */
 @layer utilities {
-  .text-title-1  { font-size: 30px; font-weight: 700; letter-spacing: -0.018em; line-height: 1.21; }
-  .text-title-2  { font-size: 24px; font-weight: 700; letter-spacing: -0.016em; line-height: 1.26; }
-  .text-title-3  { font-size: 21px; font-weight: 600; letter-spacing: -0.014em; line-height: 1.30; }
-  .text-headline { font-size: 18px; font-weight: 600; letter-spacing: -0.012em; line-height: 1.38; }
-  .text-body     { font-size: 18px; font-weight: 400; letter-spacing: -0.010em; line-height: 1.60; }
-  .text-callout  { font-size: 16px; font-weight: 400; letter-spacing: -0.008em; line-height: 1.55; }
-  .text-field-label { font-size: 14px; font-style: italic; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
-  .text-field-value { font-size: 15px; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
-  .text-footnote { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.55; }
-  .text-category { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.60; }
+  /* ── client-*: the 18px-base scale ──────────────────────────────────────────
+     Sized against `body { font-size: 18px }`, which is what the client portal
+     and the guided interview actually run at. It was written as `text-*`, which
+     read like Tailwind's own size utilities, so nothing in the admin app (13px
+     base, `.admin-root`) could use it without looking wrong — and nothing did:
+     all nine had zero callers. The prefix says which surface they belong to.
+     Admin code wants `text-micro`/`text-xs`/`text-compact`/`text-sm` instead. */
+  .client-title-1  { font-size: 30px; font-weight: 700; letter-spacing: -0.018em; line-height: 1.21; }
+  .client-title-2  { font-size: 24px; font-weight: 700; letter-spacing: -0.016em; line-height: 1.26; }
+  .client-title-3  { font-size: 21px; font-weight: 600; letter-spacing: -0.014em; line-height: 1.30; }
+  .client-headline { font-size: 18px; font-weight: 600; letter-spacing: -0.012em; line-height: 1.38; }
+  .client-body     { font-size: 18px; font-weight: 400; letter-spacing: -0.010em; line-height: 1.60; }
+  .client-callout  { font-size: 16px; font-weight: 400; letter-spacing: -0.008em; line-height: 1.55; }
+  .client-field-label { font-size: 14px; font-style: italic; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
+  .client-field-value { font-size: 15px; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
+  .client-footnote { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.55; }
+
+  /* ── admin-*: the 13px-base surfaces ──────────────────────────────────────── */
+  .admin-category { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.60; }
 
   .admin-section-title {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -116,6 +125,12 @@
   --input: #C9D3E0;
   --ring: #1E4A8C;
   --teal-bg: #dcf7ef;
+  /* The interview uses the same `bg-selected` API as the rest of the app, and
+     the freeze keeps it looking exactly as it did: its own teal tint, not the
+     theme's. 8.30:1. */
+  --selected: #dcf7ef;
+  --selected-foreground: #0f4f4a;
+  --selected-border: #1A6B72;
 }
 
 /* ── Guided zinc re-skin (attorney-facing design sheet / drafting steps) ────

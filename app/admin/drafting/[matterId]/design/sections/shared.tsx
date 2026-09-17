@@ -66,7 +66,7 @@ function useFieldValidation(fieldName?: keyof DesignSheet | string) {
 
 function RequiredForDraftingNote() {
   return (
-    <p className="mt-1 text-[10.5px] font-medium text-destructive">Required for drafting</p>
+    <p className="mt-1 text-micro font-medium text-destructive">Required for drafting</p>
   )
 }
 
@@ -77,7 +77,7 @@ export { PRONOUN_OPTIONS } from '@/lib/sharedFields/options'
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground">
+    <p className="mb-1.5 text-micro font-semibold uppercase tracking-[0.08em] text-foreground">
       {children}
     </p>
   )
@@ -86,7 +86,7 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
 export function FieldHelpLabel({ children, help }: { children: React.ReactNode; help: string }) {
   return (
     <div className="mb-1.5 flex items-center gap-1.5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground">{children}</p>
+      <p className="text-micro font-semibold uppercase tracking-[0.08em] text-foreground">{children}</p>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -117,7 +117,7 @@ export function DesignSheetCheckboxOption({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted p-3">
       <Checkbox checked={checked} onCheckedChange={value => onChange(value === true)} className="mt-0.5" />
       <span>
         <span className="block text-sm font-medium text-foreground">{label}</span>
@@ -168,7 +168,7 @@ export function DecisionRow<T extends string>({
         <p className="text-sm font-semibold text-foreground">{question}</p>
         {help ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{help}</p> : null}
         {blocking ? (
-          <span className="mt-2 inline-flex rounded-full border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--gi-amber)]">
+          <span className="mt-2 inline-flex rounded-full border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] px-2 py-1 text-micro font-semibold uppercase tracking-wide text-[var(--gi-amber)]">
             Blocks drafting
           </span>
         ) : null}
@@ -193,7 +193,7 @@ export function DecisionRow<T extends string>({
             >
               <span className="block">{option.label}</span>
               {option.description ? (
-                <span className="mt-0.5 block max-w-64 text-[11px] font-normal leading-snug text-muted-foreground">
+                <span className="mt-0.5 block max-w-64 text-micro font-normal leading-snug text-muted-foreground">
                   {option.description}
                 </span>
               ) : null}
@@ -218,7 +218,7 @@ export function DobAgeHint({ dob }: { dob: string | null | undefined }) {
   const label = formatAgeLabel(dob)
   if (!label) return null
   return (
-    <p className="mt-1 text-[10.5px] font-medium text-muted-foreground">{label}</p>
+    <p className="mt-1 text-micro font-medium text-muted-foreground">{label}</p>
   )
 }
 
@@ -245,7 +245,7 @@ export function SlotStateToggle({ slotKey: _slotKey, state, onChange }: {
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              'rounded px-2 py-0.5 transition-all text-[10px] leading-tight font-medium',
+              'rounded px-2 py-0.5 transition-all text-micro leading-tight font-medium',
               isActive && opt.value === 'filled' && 'bg-card text-foreground shadow-sm',
               isActive && opt.value === 'pending_client' && 'bg-amber-bg text-amber shadow-sm',
               isActive && opt.value === 'optional' && 'bg-blue-bg text-blue shadow-sm',
@@ -291,7 +291,7 @@ function OverrideIndicator({ originalValue, className = 'right-2.5' }: {
 
 function PrefilledValueNote({ originalValue }: { originalValue: string }) {
   return (
-    <p className="mt-1 text-[10.5px] font-medium text-warning">
+    <p className="mt-1 text-micro font-medium text-warning">
       Prefilled: {displayOriginalValue(originalValue)}
     </p>
   )
@@ -613,7 +613,7 @@ export function GroupCard({
         {headerAction}
         {openCount > 0 ? (
           <span className={cn(
-            'rounded-full border px-2 py-1 text-[10px] font-semibold',
+            'rounded-full border px-2 py-1 text-micro font-semibold',
             blockingCount > 0
               ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
               : 'border-border bg-muted text-muted-foreground',
@@ -629,7 +629,7 @@ export function GroupCard({
         {collapsible ? (
           <button
             type="button"
-            className="rounded p-1 text-muted-foreground hover:bg-muted"
+            className="rounded p-1 text-muted-foreground hover:bg-accent"
             aria-label={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
             aria-expanded={!isCollapsed}
             aria-controls={`${id}-content`}
@@ -642,8 +642,8 @@ export function GroupCard({
         ) : null}
       </div>
       {openCount > 0 && openNames.length > 0 && !isCollapsed ? (
-        <div className="border-t border-border bg-muted/30 px-5 py-2">
-          <p className="text-[11px] leading-4 text-muted-foreground">
+        <div className="border-t border-border bg-muted px-5 py-2">
+          <p className="text-micro leading-4 text-muted-foreground">
             <span className="font-semibold text-foreground">
               Still {blockingCount > 0 ? 'required' : 'open'}:
             </span>{' '}
@@ -676,8 +676,8 @@ export function SectionBlock({ title, subtitle, children }: {
       !insideGroupCard && 'rounded-lg border border-border bg-card p-4 sm:p-5',
     )}>
       <div className="mb-4">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{subtitle}</p>}
+        <h3 className="text-micro font-bold uppercase tracking-[0.12em] text-foreground">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -688,7 +688,7 @@ export function SectionBlock({ title, subtitle, children }: {
 export function SectionHelp({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2">
-      <p className="text-[11px] text-blue">{children}</p>
+      <p className="text-micro text-blue">{children}</p>
     </div>
   )
 }
@@ -697,7 +697,7 @@ export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) 
   return (
     <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-      <p className="text-[13px] leading-relaxed text-warning">{children}</p>
+      <p className="text-compact leading-relaxed text-warning">{children}</p>
     </div>
   )
 }
@@ -706,7 +706,7 @@ export function ClientDecisionCallout({ children }: { children: React.ReactNode 
   return (
     <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-border bg-amber-bg px-3 py-2">
       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber">
+      <span className="text-micro font-semibold uppercase tracking-[0.08em] text-amber">
         Client decision required — {children}
       </span>
     </div>
@@ -753,7 +753,7 @@ export const AccordionSection = forwardRef<AccordionSectionHandle, AccordionSect
           ref={headerRef}
           type="button"
           onClick={onToggle}
-          className="flex w-full items-center gap-3 px-[1.125rem] py-[0.8rem] text-left transition-colors hover:bg-muted cursor-pointer rounded-[var(--radius)]"
+          className="flex w-full items-center gap-3 px-[1.125rem] py-[0.8rem] text-left transition-colors hover:bg-accent cursor-pointer rounded-[var(--radius)]"
         >
           <span
             className={cn(
@@ -819,7 +819,7 @@ export function InheritanceCard({ title, description, selected, onClick }: {
       className={cn(
         'flex flex-col items-start rounded-lg border-2 p-4 text-left transition-colors',
         selected
-          ? 'border-primary bg-primary/10'
+          ? 'border-selected-border bg-selected'
           : 'border-border bg-card hover:border-muted-foreground'
       )}
     >
@@ -842,7 +842,7 @@ export function InheritanceCard({ title, description, selected, onClick }: {
  */
 export function SectionPlaceholder({ title, note }: { title: string; note: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/40 p-5 text-sm">
+    <div className="rounded-lg border border-dashed border-border bg-muted p-5 text-sm">
       <p className="font-medium text-foreground">{title}</p>
       <p className="mt-1 text-muted-foreground">{note}</p>
     </div>

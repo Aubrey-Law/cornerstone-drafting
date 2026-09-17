@@ -185,20 +185,20 @@ export default function ContactPicker({ role, required, value, onChange, contact
   return (
     <div>
       <div className="mb-1 flex items-center gap-1.5">
-        <span className="text-[12px] font-medium text-foreground">{role}</span>
-        {required && <span className="text-[10px] text-destructive">*</span>}
+        <span className="text-xs font-medium text-foreground">{role}</span>
+        {required && <span className="text-micro text-destructive">*</span>}
       </div>
 
       {value ? (
         /* Selected contact chip */
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/50 px-3 py-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted px-3 py-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-primary-foreground">
             {getInitials(value)}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium text-foreground">{contactFullName(value)}</div>
+            <div className="text-compact font-medium text-foreground">{contactFullName(value)}</div>
             {(value.relationship || value.preferred_name || value.preferred_pronoun) && (
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-micro text-muted-foreground">
                 {[value.relationship, value.preferred_name ? `Goes by ${value.preferred_name}` : null, value.preferred_pronoun].filter(Boolean).join(' · ')}
               </div>
             )}
@@ -210,13 +210,13 @@ export default function ContactPicker({ role, required, value, onChange, contact
                 setEditForm(contactToForm(value))
                 setShowEditModal(true)
               }}
-              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
               aria-label="Edit contact"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          <button type="button" onClick={() => onChange(null)} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button type="button" onClick={() => onChange(null)} className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -237,7 +237,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
               aria-activedescendant={showDropdown && filtered[activeIndex] ? `${listboxId}-option-${activeIndex}` : undefined}
               placeholder="Search contacts…"
               className={cn(
-                'w-full rounded-lg border border-border bg-card py-2 pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground',
+                'w-full rounded-lg border border-border bg-card py-2 pl-8 pr-3 text-compact text-foreground placeholder:text-muted-foreground',
                 'outline-none transition-shadow focus:border-primary focus:shadow-[0_0_0_3px_var(--teal-12)]'
               )}
             />
@@ -258,16 +258,16 @@ export default function ContactPicker({ role, required, value, onChange, contact
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => selectContact(c)}
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
-                        index === activeIndex && 'bg-muted/50'
+                        'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent',
+                        index === activeIndex && 'bg-muted'
                       )}
                     >
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-primary-foreground">
                         {getInitials(c)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-medium text-foreground">{contactFullName(c)}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-compact font-medium text-foreground">{contactFullName(c)}</div>
+                        <div className="text-micro text-muted-foreground">
                           {[c.relationship, formatPhoneDisplay(c.phone)].filter(Boolean).join(' · ') || ''}
                         </div>
                       </div>
@@ -276,7 +276,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
                 )}
               </div>
               {filtered.length === 0 && query.trim() ? (
-                <div role="status" className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
+                <div role="status" className="px-3 py-3 text-center text-xs text-muted-foreground">No matches</div>
               ) : null}
               <button
                 type="button"
@@ -290,7 +290,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
                       : { ...f, first_name: parts[0] ?? '', middle_name: '', last_name: parts.slice(1).join(' ') })
                   }
                 }}
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10"
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-accent"
               >
                 <Plus className="h-3.5 w-3.5" />
                 {query.trim() ? `Add "${query.trim()}" as new contact` : 'Add new contact'}
@@ -310,7 +310,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
             <Button
               onClick={handleAdd}
               disabled={adding || !addForm.first_name.trim() || !addForm.last_name.trim()}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-accent"
             >
               {adding ? 'Adding…' : 'Add Contact'}
             </Button>
@@ -327,7 +327,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
             <Button
               onClick={handleEdit}
               disabled={updating || !editForm.first_name.trim() || !editForm.last_name.trim()}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-accent"
             >
               {updating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
               {updating ? 'Saving...' : 'Save Contact'}

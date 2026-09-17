@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
+const getSchedulingSettings = vi.fn(async () => ({
+  hiddenCalendarIds: [] as string[],
+  blockingCalendarIds: [] as string[],
+}))
+vi.mock('@/lib/appointments/settings', () => ({
+  getSchedulingSettings: () => getSchedulingSettings(),
+}))
+
 const getAccessToken = vi.fn(async () => 'token')
 const getGoogleConnectionForUser = vi.fn(async () => ({ user_id: 'user-1' }))
 vi.mock('@/lib/googleCalendar', () => ({
@@ -62,6 +70,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   getAccessToken.mockResolvedValue('token')
   getGoogleConnectionForUser.mockResolvedValue({ user_id: 'user-1' })
+  getSchedulingSettings.mockResolvedValue({ hiddenCalendarIds: [], blockingCalendarIds: [] })
 })
 
 describe('listCalendarView fan-out', () => {
@@ -228,5 +237,64 @@ describe('listCalendarView fan-out', () => {
     vi.stubGlobal('fetch', fetchMock)
     await listCalendarView(FROM, TO)
     expect(fetchMock.mock.calls[0][0]).toContain('showDeleted=true')
+  })
+})
+
+describe('listCalendarView hidden calendars', () => {
+  it('never fetches a hidden calendar', async () => {
+    const fetchMock = stubGoogle({
+      calendars: [
+        { id: 'primary', summary: 'Aubrey Law', primary: true },
+        { id: 'personal@example.com', summary: 'Personal' },
+        { id: 'holidays@example.com', summary: 'US Holidays' },
+      ],
+      primaryEvents: [event('primary-1')],
+      calendarEvents: {
+        'personal@example.com': [event('personal-1')],
+        'holidays@example.com': [event('holiday-1')],
+      },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: ['holidays@example.com'],
+      blockingCalendarIds: [],
+    })
+
+    const view = await listCalendarView(FROM, TO)
+
+    // Hidden means not read, not merely filtered after paying for it.
+    const urls = fetchMock.mock.calls.map(call => String(call[0]))
+    expect(urls.some(url => url.includes('holidays%40example.com'))).toBe(false)
+    expect(view.calendars.map(c => c.id)).toEqual(['primary', 'personal@example.com'])
+  })
+
+  it('reads the primary calendar even when its id is hidden', async () => {
+    vi.stubGlobal('fetch', stubGoogle({
+      calendars: [{ id: 'primary', summary: 'Aubrey Law', primary: true }],
+      primaryEvents: [event('primary-1')],
+    }))
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: ['primary'],
+      blockingCalendarIds: [],
+    })
+
+    const view = await listCalendarView(FROM, TO)
+
+    expect(view.calendars.map(c => c.id)).toEqual(['primary'])
+  })
+
+  it('reads every calendar when nothing is hidden', async () => {
+    vi.stubGlobal('fetch', stubGoogle({
+      calendars: [
+        { id: 'primary', summary: 'Aubrey Law', primary: true },
+        { id: 'personal@example.com', summary: 'Personal' },
+      ],
+      primaryEvents: [event('primary-1')],
+      calendarEvents: { 'personal@example.com': [event('personal-1')] },
+    }))
+
+    const view = await listCalendarView(FROM, TO)
+
+    expect(view.calendars.map(c => c.id)).toEqual(['primary', 'personal@example.com'])
   })
 })

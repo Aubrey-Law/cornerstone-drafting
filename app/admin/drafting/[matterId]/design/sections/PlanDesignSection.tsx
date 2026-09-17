@@ -319,7 +319,7 @@ export function PlanDesignSection({
         )}
         <div className="space-y-5 pt-1">
           <div>
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Core Documents</p>
+            <p className="mb-3 text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">Core Documents</p>
             <div className="space-y-3">
               {[
                 { key: 'trust', label: 'Trust' },
@@ -336,7 +336,7 @@ export function PlanDesignSection({
                 <ApplicableDecision key={item.key} applicable={applicable} showInapplicable={showInapplicable}>
                 <label
                   className={cn(
-                    'flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5',
+                    'flex items-start gap-3 rounded-md border border-border bg-muted px-3 py-2.5',
                     disabled && 'cursor-not-allowed opacity-60',
                   )}
                 >
@@ -364,7 +364,7 @@ export function PlanDesignSection({
           </div>
 
           {isMarried && (
-            <div className="rounded-lg border border-border bg-muted/50 p-4">
+            <div className="rounded-lg border border-border bg-muted p-4">
               <label className="flex cursor-pointer items-center gap-3">
                 <Checkbox checked={inclusions.spouse_docs} onCheckedChange={value => updateDocument('spouse_docs', value === true)} />
                 <span>
@@ -376,13 +376,13 @@ export function PlanDesignSection({
           )}
 
           <div>
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Ancillary Documents</p>
+            <p className="mb-3 text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">Ancillary Documents</p>
             <div className="space-y-3">
               <ApplicableDecision
                 applicable={revocableTrustDecisionApplies}
                 showInapplicable={showInapplicable}
               >
-              <div className="rounded-md border border-border bg-muted/20 p-4">
+              <div className="rounded-md border border-border bg-muted p-4">
                 <p className="mb-3 text-sm font-semibold text-foreground">Funding Documents</p>
                 <div className="space-y-2">
                   {fundingDocKeys.map(key => (
@@ -407,7 +407,7 @@ export function PlanDesignSection({
                     applicable={!trustOnly || revocableTrustDecisionApplies}
                     showInapplicable={showInapplicable}
                   >
-                  <label key={key} className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+                  <label key={key} className="flex items-start gap-3 rounded-md border border-border bg-muted px-3 py-2.5">
                     <Checkbox
                       checked={estatePlanSetup.ancillary_documents[key]}
                       onCheckedChange={value => updateAncillaryDocument(key, value === true)}
@@ -419,7 +419,7 @@ export function PlanDesignSection({
                 })}
               </div>
 
-              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4">
+              <div className="rounded-md border border-dashed border-border bg-muted p-4">
                 <p className="mb-1 text-sm font-semibold text-foreground">Captured, Not Drafted</p>
                 <p className="mb-3 text-xs text-muted-foreground">
                   Recorded on the design sheet and printed on the interview worksheet. No
@@ -456,7 +456,7 @@ export function PlanDesignSection({
           </div>
 
           <div>
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Document Titles</p>
+            <p className="mb-3 text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">Document Titles</p>
             <p className="mb-3 text-xs text-muted-foreground">
               How the documents are named on their own cover and signature pages. The
               defaults are what the firm drafts in Massachusetts.
@@ -489,7 +489,7 @@ export function PlanDesignSection({
           </div>
 
           <div>
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Asset Transfer Documents</p>
+            <p className="mb-3 text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">Asset Transfer Documents</p>
             <p className="mb-3 text-xs text-muted-foreground">
               Selected documents are generated with the estate plan. Transfers &amp; Assignments only shows fields needed for the checked documents.
             </p>
@@ -497,7 +497,7 @@ export function PlanDesignSection({
               {REAL_ESTATE_TRANSFER_DOC_TYPES.map(docType => (
                 <label
                   key={docType}
-                  className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5"
+                  className="flex items-start gap-3 rounded-md border border-border bg-muted px-3 py-2.5"
                 >
                   <Checkbox
                     checked={selectedAssetTransferDocs.has(docType)}

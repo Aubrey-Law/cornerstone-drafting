@@ -74,12 +74,12 @@ export function MatterEngineStageTaskCard({
     <div className={cn('rounded-lg border border-border bg-card', compact ? 'p-3' : 'p-4')}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
             SLA task · {engineStageLabel(task.stage_key ?? '')}
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">{task.title}</p>
           {task.batch_tag && (
-            <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px]">{task.batch_tag}</span>
+            <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-micro">{task.batch_tag}</span>
           )}
         </div>
         <div className="text-right text-xs">

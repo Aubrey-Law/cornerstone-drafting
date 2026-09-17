@@ -35,7 +35,7 @@ function Figure({
       >
         {value}
       </p>
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-micro text-muted-foreground">{hint}</p>}
     </div>
   )
 }

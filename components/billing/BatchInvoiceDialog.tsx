@@ -159,7 +159,7 @@ export function BatchInvoiceDialog({
                     <span className="tabular-nums text-sm">{moneyExact(group.subtotalCents)}</span>
                   </li>
                 ))}
-                <li className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2.5">
+                <li className="flex items-center justify-between gap-3 bg-muted px-3 py-2.5">
                   <span className="text-sm font-medium">Total to bill</span>
                   <span className="tabular-nums text-sm font-semibold">{moneyExact(total)}</span>
                 </li>

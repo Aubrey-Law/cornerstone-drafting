@@ -265,7 +265,7 @@ export function RichTextEmailEditor({
               insertVariable(event.target.value)
               event.target.value = ''
             }}
-            className="ml-1 h-7 max-w-32 rounded border border-input bg-background px-1 text-[11px]"
+            className="ml-1 h-7 max-w-32 rounded border border-input bg-background px-1 text-micro"
           >
             <option value="">Insert variable…</option>
             {variableOptions.map(option => (

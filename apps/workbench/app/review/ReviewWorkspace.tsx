@@ -242,7 +242,7 @@ export function ReviewWorkspace({
                   <li key={run.runId}>
                     <Link
                       href={`/review/${run.runId}`}
-                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-muted/50"
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-sm hover:bg-accent"
                     >
                       <span className="min-w-0">
                         <span className="font-medium">{run.documentName}</span>

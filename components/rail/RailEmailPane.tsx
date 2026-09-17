@@ -197,7 +197,7 @@ function AddressField({
     <div className="relative space-y-1">
       <label
         htmlFor={id}
-        className={cn('text-[11px] font-medium text-muted-foreground', hideLabel && 'sr-only')}
+        className={cn('text-micro font-medium text-muted-foreground', hideLabel && 'sr-only')}
       >
         {label}
       </label>
@@ -250,11 +250,11 @@ function AddressField({
               onClick={() => choose(entry)}
               className={cn(
                 'block w-full px-2.5 py-1.5 text-left',
-                index === activeIndex ? 'bg-muted' : 'hover:bg-muted/60',
+                index === activeIndex ? 'bg-selected text-selected-foreground' : 'hover:bg-accent',
               )}
             >
               <span className="block truncate text-xs font-medium">{entry.name}</span>
-              <span className="block truncate text-[10px] text-muted-foreground">
+              <span className="block truncate text-micro text-muted-foreground">
                 {entry.email}
                 {entry.detail ? ` · ${entry.detail}` : ''}
               </span>
@@ -264,11 +264,11 @@ function AddressField({
       )}
 
       {invalid.length > 0 ? (
-        <p role="alert" className="text-[11px] text-destructive">
+        <p role="alert" className="text-micro text-destructive">
           Not a valid address: {invalid.join(', ')}
         </p>
       ) : (
-        hint && <p className="text-[10px] text-muted-foreground">{hint}</p>
+        hint && <p className="text-micro text-muted-foreground">{hint}</p>
       )}
     </div>
   )
@@ -871,7 +871,7 @@ export function ManualEmailComposer({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <label htmlFor="rail-email-to" className="text-[11px] font-medium text-muted-foreground">
+            <label htmlFor="rail-email-to" className="text-micro font-medium text-muted-foreground">
               To
             </label>
             <span className="flex items-center gap-2">
@@ -879,7 +879,7 @@ export function ManualEmailComposer({
                 <button
                   type="button"
                   onClick={() => setShowCc(true)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-primary"
+                  className="text-micro font-medium text-muted-foreground hover:text-primary"
                 >
                   Cc
                 </button>
@@ -888,7 +888,7 @@ export function ManualEmailComposer({
                 <button
                   type="button"
                   onClick={() => setShowBcc(true)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-primary"
+                  className="text-micro font-medium text-muted-foreground hover:text-primary"
                 >
                   Bcc
                 </button>
@@ -912,7 +912,7 @@ export function ManualEmailComposer({
                   <button
                     type="button"
                     onClick={() => setTo(option.email)}
-                    className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+                    className="rounded-full border border-border px-2 py-0.5 text-micro text-muted-foreground hover:border-primary hover:text-primary"
                   >
                     {option.label}
                   </button>
@@ -927,7 +927,7 @@ export function ManualEmailComposer({
                           : [...parseAddressList(prev), option.email].join(', '),
                       )
                     }}
-                    className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+                    className="rounded-full border border-border px-1.5 py-0.5 text-micro text-muted-foreground hover:border-primary hover:text-primary"
                   >
                     +cc
                   </button>
@@ -963,7 +963,7 @@ export function ManualEmailComposer({
         )}
 
         <div className="space-y-1">
-          <label htmlFor="rail-email-template" className="text-[11px] font-medium text-muted-foreground">
+          <label htmlFor="rail-email-template" className="text-micro font-medium text-muted-foreground">
             Template
           </label>
           <select
@@ -983,7 +983,7 @@ export function ManualEmailComposer({
 
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <label htmlFor="rail-email-subject" className="text-[11px] font-medium text-muted-foreground">
+            <label htmlFor="rail-email-subject" className="text-micro font-medium text-muted-foreground">
               Subject
             </label>
             {draftRoute && (
@@ -1002,7 +1002,7 @@ export function ManualEmailComposer({
                 if (option) setSubject(value => `${value}${option.value || `{{${option.key}}}`}`)
                 event.target.value = ''
               }}
-              className="h-6 rounded border border-input bg-background px-1 text-[10px]"
+              className="h-6 rounded border border-input bg-background px-1 text-micro"
             >
               <option value="">Insert variable…</option>
               {resolvedVariableOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
@@ -1018,14 +1018,14 @@ export function ManualEmailComposer({
 
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground">Message</span>
+            <span className="text-micro font-medium text-muted-foreground">Message</span>
             {schedulingTypes.length > 0 && (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowSchedulingPicker(prev => !prev)}
                   aria-expanded={showSchedulingPicker}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-primary"
+                  className="inline-flex items-center gap-1 text-micro font-medium text-muted-foreground hover:text-primary"
                 >
                   <CalendarPlus className="h-3.5 w-3.5" />
                   Scheduling link
@@ -1037,7 +1037,7 @@ export function ManualEmailComposer({
                         key={type.key}
                         type="button"
                         onClick={() => insertSchedulingLink(type)}
-                        className="block w-full px-2.5 py-1.5 text-left text-[11px] hover:bg-muted"
+                        className="block w-full px-2.5 py-1.5 text-left text-micro hover:bg-accent"
                       >
                         {type.label}
                       </button>
@@ -1059,7 +1059,7 @@ export function ManualEmailComposer({
         </div>
 
         {unresolved.length > 0 && (
-          <p role="alert" className="rounded-md border border-amber-border bg-amber-bg px-2.5 py-1.5 text-[11px] text-amber">
+          <p role="alert" className="rounded-md border border-amber-border bg-amber-bg px-2.5 py-1.5 text-micro text-amber">
             Resolve or remove: {unresolved.join(', ')}
           </p>
         )}
@@ -1073,7 +1073,7 @@ export function ManualEmailComposer({
             />
             Include signature
           </label>
-          {!hasSignature && <span className="text-[10px] text-muted-foreground">Configure it in Settings → Templates.</span>}
+          {!hasSignature && <span className="text-micro text-muted-foreground">Configure it in Settings → Templates.</span>}
           <Button type="button" variant="outline" size="sm" className="ml-auto h-7 text-xs" disabled={previewing || emailHtmlIsEmpty(bodyHtml)} onClick={() => void preview()}>
             {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
             Preview
@@ -1082,9 +1082,9 @@ export function ManualEmailComposer({
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">Attachments</span>
+            <span className="text-micro font-medium text-muted-foreground">Attachments</span>
             {attachmentCount > 0 && (
-              <span className={cn('text-[10px]', overLimit ? 'text-destructive' : 'text-muted-foreground')}>
+              <span className={cn('text-micro', overLimit ? 'text-destructive' : 'text-muted-foreground')}>
                 {attachmentCount} · {formatBytes(totalBytes)}
               </span>
             )}
@@ -1096,7 +1096,7 @@ export function ManualEmailComposer({
                 type="button"
                 onClick={() => setShowDocumentPicker(prev => !prev)}
                 aria-expanded={showDocumentPicker}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium hover:bg-muted"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium hover:bg-accent"
               >
                 <FileText className="h-3.5 w-3.5" />
                 From documents
@@ -1111,7 +1111,7 @@ export function ManualEmailComposer({
             */}
             <label
               htmlFor={fileInputId}
-              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
+              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"
             >
               <Upload className="h-3.5 w-3.5" />
               From computer
@@ -1132,14 +1132,14 @@ export function ManualEmailComposer({
           {showDocumentPicker && context?.recordType === 'matter' && (
             <div className="max-h-44 overflow-y-auto rounded-md border border-border">
               {context.documents.length === 0 ? (
-                <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
+                <p className="px-2.5 py-2 text-micro text-muted-foreground">
                   This matter has no documents yet.
                 </p>
               ) : (
                 context.documents.map(doc => (
                   <label
                     key={doc.id}
-                    className="flex cursor-pointer items-start gap-2 px-2.5 py-1.5 text-[11px] hover:bg-muted/60"
+                    className="flex cursor-pointer items-start gap-2 px-2.5 py-1.5 text-micro hover:bg-accent"
                   >
                     <input
                       type="checkbox"
@@ -1155,7 +1155,7 @@ export function ManualEmailComposer({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{doc.name}</span>
-                      <span className="block text-[10px] text-muted-foreground">
+                      <span className="block text-micro text-muted-foreground">
                         {[doc.source, doc.size ? formatBytes(doc.size) : null].filter(Boolean).join(' · ')}
                       </span>
                     </span>
@@ -1170,7 +1170,7 @@ export function ManualEmailComposer({
               {selectedDocuments.map(doc => (
                 <li
                   key={doc.id}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px]"
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-micro"
                 >
                   <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{doc.name}</span>
@@ -1187,11 +1187,11 @@ export function ManualEmailComposer({
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${index}`}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px]"
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-micro"
                 >
                   <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{formatBytes(file.size)}</span>
+                  <span className="shrink-0 text-micro text-muted-foreground">{formatBytes(file.size)}</span>
                   <button
                     type="button"
                     onClick={() => setFiles(prev => prev.filter((_, i) => i !== index))}
@@ -1206,43 +1206,43 @@ export function ManualEmailComposer({
           )}
 
           {overUploadLimit ? (
-            <p role="alert" className="text-[11px] text-destructive">
+            <p role="alert" className="text-micro text-destructive">
               Files from this computer total {formatBytes(uploadBytes)} — the upload limit is{' '}
               {formatBytes(MAX_UPLOAD_BYTES)}.
               {context?.recordType === 'matter' &&
                 ' Add the larger ones to the matter\u2019s documents and attach them from there.'}
             </p>
           ) : overLimit ? (
-            <p role="alert" className="text-[11px] text-destructive">
+            <p role="alert" className="text-micro text-destructive">
               Attachments total {formatBytes(totalBytes)} — the limit is {formatBytes(MAX_TOTAL_BYTES)}.
             </p>
           ) : null}
           {files.length > 0 && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               Files from this computer must be reattached after a refresh. Linked matter documents are restored.
             </p>
           )}
           {mentionsAttachment && attachmentCount === 0 && (
-            <p className="text-[11px] text-amber">
+            <p className="text-micro text-amber">
               This message mentions an attachment, but none is selected.
             </p>
           )}
         </div>
 
         {error && (
-          <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
+          <p role="alert" className="rounded-md border border-destructive/25 bg-destructive/10 px-2.5 py-1.5 text-micro text-destructive">
             {error}
           </p>
         )}
         {sentNotice && (
-          <p role="status" className="rounded-md border border-green bg-green-bg px-2.5 py-1.5 text-[11px] text-green">
+          <p role="status" className="rounded-md border border-green bg-green-bg px-2.5 py-1.5 text-micro text-green">
             {sentNotice}
           </p>
         )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
-        <span className="truncate text-[11px] text-muted-foreground">
+        <span className="truncate text-micro text-muted-foreground">
           <span>
             {context?.recordType === 'matter'
               ? 'Logs to the matter timeline'
@@ -1275,7 +1275,7 @@ export function ManualEmailComposer({
           type="button"
           onClick={() => void send()}
           disabled={!ready || sending}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           {sending ? 'Sending…' : embedded ? 'Send email' : 'Send'}

@@ -165,7 +165,7 @@ export default function DraftingHubClient({ result, query }: DraftingHubClientPr
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-1 w-full sm:w-auto">
             <h1 className="text-xl font-semibold tracking-tight">Drafting</h1>
-            <p className="text-[11px] text-muted-foreground">Next actions across active document work</p>
+            <p className="text-micro text-muted-foreground">Next actions across active document work</p>
           </div>
           <SearchField
             ref={searchRef}
@@ -189,7 +189,7 @@ export default function DraftingHubClient({ result, query }: DraftingHubClientPr
                   aria-pressed={selected}
                   onClick={() => setActionFilter(chip.value)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+                    'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-micro font-medium transition-colors',
                     selected ? 'bg-primary text-primary-foreground' : cn(chip.tone, 'hover:opacity-80'),
                   )}
                 >
@@ -199,7 +199,7 @@ export default function DraftingHubClient({ result, query }: DraftingHubClientPr
               )
             })}
           </div>
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <label className="flex items-center gap-1.5 text-micro text-muted-foreground">
             <ArrowDownAZ className="h-3 w-3" aria-hidden />
             <span className="sr-only">Sort</span>
             <select
@@ -228,7 +228,7 @@ export default function DraftingHubClient({ result, query }: DraftingHubClientPr
             </select>
           )}
           <SavedDraftingViews view={{ search, sort: sortKey, action: actionFilter, practice: practiceFilter }} onChange={applyView} />
-          <span className="hidden text-[10px] text-muted-foreground xl:inline">
+          <span className="hidden text-micro text-muted-foreground xl:inline">
             ↑↓ navigate · Enter open · / search
           </span>
         </div>

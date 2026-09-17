@@ -96,7 +96,7 @@ export function ExcludedGuardians({
       {enabled && (
         <div className="mt-4 space-y-4">
           {entries.map((entry, index) => (
-            <div key={`excluded-guardian-${index}`} className="rounded-lg border border-border bg-muted/20 p-3">
+            <div key={`excluded-guardian-${index}`} className="rounded-lg border border-border bg-muted p-3">
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <div>
                   <FieldLabel>Excluded individual</FieldLabel>

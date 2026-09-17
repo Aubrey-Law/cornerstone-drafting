@@ -107,12 +107,12 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <span
           aria-hidden
-          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-[10px] font-semibold text-muted-foreground"
+          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-micro font-semibold text-muted-foreground"
         >
           {contact.name.trim().charAt(0).toUpperCase() || '—'}
         </span>
         <span className="truncate text-sm font-semibold">{contact.name}</span>
-        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
           {CONTACT_KIND_LABELS[contact.kind]}
         </span>
         {contact.href && (

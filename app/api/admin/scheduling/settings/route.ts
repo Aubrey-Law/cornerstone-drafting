@@ -34,6 +34,8 @@ interface PutBody {
     autoIntakeInvite?: unknown
     dateOverrides?: unknown
     calendlyUrls?: unknown
+    hiddenCalendarIds?: unknown
+    blockingCalendarIds?: unknown
   }
   types?: Array<{
     id?: unknown
@@ -89,6 +91,8 @@ export async function PUT(req: NextRequest) {
       autoIntakeInvite: typeof s.autoIntakeInvite === 'boolean' ? s.autoIntakeInvite : undefined,
       dateOverrides: 'dateOverrides' in s ? s.dateOverrides : undefined,
       calendlyUrls: s.calendlyUrls,
+      hiddenCalendarIds: s.hiddenCalendarIds,
+      blockingCalendarIds: s.blockingCalendarIds,
       updatedBy: userId ?? null,
     })
   }

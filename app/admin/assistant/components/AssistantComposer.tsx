@@ -40,11 +40,11 @@ export function AssistantComposer({
           <Badge variant="secondary" className="gap-1 pr-1">
             <Workflow className="h-3 w-3" />
             {workflow.title}
-            <button type="button" aria-label="Remove workflow" onClick={() => onWorkflowChange(null)} className="rounded-full p-0.5 hover:bg-muted">
+            <button type="button" aria-label="Remove workflow" onClick={() => onWorkflowChange(null)} className="rounded-full p-0.5 hover:bg-accent">
               <X className="h-3 w-3" />
             </button>
           </Badge>
-          <span className="text-[11px] text-muted-foreground">will guide this message</span>
+          <span className="text-micro text-muted-foreground">will guide this message</span>
         </div>
       )}
       <ResizableTextarea

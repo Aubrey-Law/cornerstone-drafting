@@ -98,7 +98,7 @@ export function EstateClauseReviewPanel({
     <section aria-label="Clause review" className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Attorney review</p>
+          <p className="text-micro font-medium uppercase tracking-[0.14em] text-muted-foreground">Attorney review</p>
           <h3 className="text-xl font-semibold">{clause.title}</h3>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{clause.clauseKey} · revision {revision.revisionNumber}</p>
         </div>
@@ -106,7 +106,7 @@ export function EstateClauseReviewPanel({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <article className="min-w-0 rounded-md border border-border bg-muted/20 p-3">
+        <article className="min-w-0 rounded-md border border-border bg-muted p-3">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Published revision</h4>
           <pre className="mt-3 whitespace-pre-wrap break-words font-mono text-xs leading-5">{published?.text ?? 'No revision is currently published.'}</pre>
         </article>
@@ -134,7 +134,7 @@ export function EstateClauseReviewPanel({
         {validation.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{validation.map(item => <li key={item}>{item}</li>)}</ul> : <p className="mt-2 text-muted-foreground">No validation findings.</p>}
       </div>
 
-      <div className="rounded-md border border-border bg-muted/20 p-3">
+      <div className="rounded-md border border-border bg-muted p-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1">
             <MatterSearchPicker
@@ -157,7 +157,7 @@ export function EstateClauseReviewPanel({
           <Button variant="outline" disabled={!matterId.trim() || busy !== null} onClick={() => void preview()}>{busy === 'preview' ? <Loader2 className="animate-spin" /> : <Eye />} Preview</Button>
         </div>
         {previewFiles.length > 0 && <ul className="mt-3 space-y-1">{previewFiles.map(file => <li key={file.filename}><a className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline" download={file.filename} href={`data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${file.base64}`}><Download className="size-3.5" />{file.filename}</a></li>)}</ul>}
-        {previewReport !== null && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background p-2 text-[11px]">{JSON.stringify(previewReport, null, 2)}</pre>}
+        {previewReport !== null && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background p-2 text-micro">{JSON.stringify(previewReport, null, 2)}</pre>}
       </div>
 
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
@@ -172,8 +172,8 @@ export function EstateClauseReviewPanel({
         <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
           <Label htmlFor={`confirm-${revision.id}`}>Type {clause.clauseKey} to confirm</Label>
           <Input id={`confirm-${revision.id}`} className="font-mono text-xs" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" />
-          <p className="text-[11px] text-muted-foreground">Publication is immediate and this revision becomes the current immutable clause.</p>
-          {previewApproved && <p className="text-[11px] text-muted-foreground">A representative-matter preview has been recorded for this review session.</p>}
+          <p className="text-micro text-muted-foreground">Publication is immediate and this revision becomes the current immutable clause.</p>
+          {previewApproved && <p className="text-micro text-muted-foreground">A representative-matter preview has been recorded for this review session.</p>}
           <Button disabled={confirmation !== clause.clauseKey || busy !== null} onClick={() => void publish()}>{busy === 'publish' ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Approve and publish</Button>
         </div>
       </div>

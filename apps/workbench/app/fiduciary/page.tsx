@@ -46,7 +46,7 @@ export default async function FiduciaryPage() {
               <li key={matter.matterId}>
                 <Link
                   href={`/fiduciary/${matter.matterId}`}
-                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4 hover:bg-muted/50"
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4 hover:bg-accent"
                 >
                   <span className="font-medium">{matter.title}</span>
                   <span className="text-sm text-muted-foreground">

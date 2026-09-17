@@ -55,12 +55,12 @@ export function MatterProgressTimeline({
                 !complete && !current && 'border-muted-foreground/30 bg-muted',
               )}
             />
-            <span className="mt-1.5 block truncate text-[11px] font-medium">{step.label}</span>
-            <span className="block truncate text-[10px] text-muted-foreground">
+            <span className="mt-1.5 block truncate text-micro font-medium">{step.label}</span>
+            <span className="block truncate text-micro text-muted-foreground">
               {step.at ? formatDateDetail(step.at) : '—'}
             </span>
             {step.target && (
-              <span className="block truncate text-[10px] text-muted-foreground">
+              <span className="block truncate text-micro text-muted-foreground">
                 Target {formatDate(step.target)}
               </span>
             )}

@@ -190,7 +190,7 @@ export function QuickBookPopover({
       <PopoverTrigger asChild>
         <Button size="sm">
           <CalendarPlus className="mr-1 h-4 w-4" /> Quick book
-          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-[10px]">⌘⇧K</kbd>
+          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-micro">⌘⇧K</kbd>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] p-0">
@@ -210,7 +210,7 @@ export function QuickBookPopover({
                   <button
                     key={person.id}
                     type="button"
-                    className="flex w-full items-center justify-between border-b border-border px-3 py-2 text-left last:border-0 hover:bg-muted"
+                    className="flex w-full items-center justify-between border-b border-border px-3 py-2 text-left last:border-0 hover:bg-accent"
                     onClick={() => {
                       setDraft(current => ({
                         ...current,
@@ -226,13 +226,13 @@ export function QuickBookPopover({
                       setPeople([])
                     }}
                   >
-                    <span><span className="block text-xs font-medium text-foreground">{person.name}</span><span className="text-[11px] text-muted-foreground">{person.email}</span></span>
-                    <span className="text-[10px] uppercase text-muted-foreground">{person.kind}</span>
+                    <span><span className="block text-xs font-medium text-foreground">{person.name}</span><span className="text-micro text-muted-foreground">{person.email}</span></span>
+                    <span className="text-micro uppercase text-muted-foreground">{person.kind}</span>
                   </button>
                 ))}
               </div>
             )}
-            {draft.attendeeEmail && <p className="mt-1 text-[11px] text-green-700"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
+            {draft.attendeeEmail && <p className="mt-1 text-micro text-green-700"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="quick-book-first-name">First name</Label>
@@ -286,7 +286,7 @@ export function QuickBookPopover({
                       : allowedFormats(type)[0],
                     startIso: '',
                   }))}
-                  className={cn('rounded-full border px-2.5 py-1 text-xs', draft.typeId === type.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-muted')}
+                  className={cn('rounded-full border px-2.5 py-1 text-xs', draft.typeId === type.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-accent')}
                 >
                   {type.label} · {type.durationMinutes}m
                 </button>
@@ -301,7 +301,7 @@ export function QuickBookPopover({
                   key={format}
                   type="button"
                   onClick={() => setDraft(current => ({ ...current, locationType: format, startIso: '' }))}
-                  className={cn('rounded-full border px-2.5 py-1 text-xs', draft.locationType === format ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-muted')}
+                  className={cn('rounded-full border px-2.5 py-1 text-xs', draft.locationType === format ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-accent')}
                 >
                   {LOCATION_LABEL[format]}
                 </button>
@@ -326,7 +326,7 @@ export function QuickBookPopover({
           </Step>
         </div>
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
-          <span className="text-[11px] text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString() : 'Choose a verified slot'}</span>
+          <span className="text-micro text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString() : 'Choose a verified slot'}</span>
           <Button size="sm" disabled={booking || !draft.startIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
             {booking ? 'Booking…' : 'Book & email confirmation'}
           </Button>
@@ -337,15 +337,15 @@ export function QuickBookPopover({
 }
 
 function Step({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
-  return <section><h3 className="mb-1.5 text-xs font-semibold text-foreground"><span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-muted text-[10px]">{number}</span>{title}</h3>{children}</section>
+  return <section><h3 className="mb-1.5 text-xs font-semibold text-foreground"><span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-muted text-micro">{number}</span>{title}</h3>{children}</section>
 }
 
 function SlotButton({ slot, selected, onClick }: { slot: OpenSlot; selected: boolean; onClick: () => void }) {
   const date = new Date(slot.startIso)
   return (
-    <button type="button" onClick={onClick} className={cn('rounded-md border px-2 py-1.5 text-left', selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted')}>
+    <button type="button" onClick={onClick} className={cn('rounded-md border px-2 py-1.5 text-left', selected ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border hover:bg-accent')}>
       <span className="block text-xs font-medium text-foreground">{date.toLocaleDateString('en-US', { weekday: 'short' })} · {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
-      <span className="text-[10px] text-muted-foreground">
+      <span className="text-micro text-muted-foreground">
         {slot.afterHours ? 'after hours · ' : ''}{slot.meetingOrdinal >= 2 ? `meeting #${slot.meetingOrdinal}` : 'first client meeting'}
       </span>
     </button>

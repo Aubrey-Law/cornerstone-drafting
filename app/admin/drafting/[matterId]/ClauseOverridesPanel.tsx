@@ -109,7 +109,7 @@ export function ClauseOverridesPanel({ matterId, onMutated }: { matterId: string
             Attorney exceptions apply only to conditional clauses in the selected current templates.
           </p>
         </div>
-        {data && <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">{data.clauses.length} eligible</span>}
+        {data && <span className="rounded-full border border-border px-2 py-1 text-micro text-muted-foreground">{data.clauses.length} eligible</span>}
       </div>
 
       {error && (
@@ -134,8 +134,8 @@ export function ClauseOverridesPanel({ matterId, onMutated }: { matterId: string
               <div key={clause.clauseKey} className="grid gap-3 p-4 lg:grid-cols-[minmax(220px,1fr)_200px_minmax(260px,1.4fr)_auto] lg:items-end">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{clause.title}</p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{clause.clauseKey}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                  <p className="mt-0.5 truncate font-mono text-micro text-muted-foreground">{clause.clauseKey}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-micro">
                     <span className="rounded bg-muted px-2 py-1">Default: {clause.defaultOutcome}</span>
                     <span className="rounded bg-muted px-2 py-1">Published revision {clause.revisionNumber}</span>
                   </div>
@@ -213,7 +213,7 @@ export function ClauseOverridesPanel({ matterId, onMutated }: { matterId: string
                   <div key={override.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/30 bg-background px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium">{override.title}</p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">{override.clauseKey}</p>
+                      <p className="truncate font-mono text-micro text-muted-foreground">{override.clauseKey}</p>
                     </div>
                     <Button
                       type="button"

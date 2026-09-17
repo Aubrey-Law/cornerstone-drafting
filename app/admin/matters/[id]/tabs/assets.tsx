@@ -227,7 +227,7 @@ function MatterAssetsTabImpl({
 
   if (!intakeId) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
+      <div className="rounded-lg border border-dashed border-border bg-muted px-6 py-12 text-center">
         <p className="text-sm font-medium text-foreground">No intake linked to this matter</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Create or import an intake before managing assets.
@@ -284,7 +284,7 @@ function MatterAssetsTabImpl({
           <Skeleton className="h-64 w-full" />
         </div>
       ) : assets.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
+        <div className="rounded-lg border border-dashed border-border bg-muted px-6 py-12 text-center">
           <p className="text-sm text-muted-foreground">No assets added yet.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={openAdd}>

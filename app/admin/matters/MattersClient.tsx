@@ -686,7 +686,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                           {m.client_name || m.matter_name || 'Untitled'}
                         </Link>
                         {m.matter_number && (
-                          <span className="ml-1.5 text-[11px] text-muted-foreground">
+                          <span className="ml-1.5 text-micro text-muted-foreground">
                             {m.matter_number}
                           </span>
                         )}
@@ -696,7 +696,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                       </TableCell>
                       <TableCell>
                         <span
-                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-micro font-medium"
                           style={{ background: groupColor.bg, color: groupColor.text }}
                         >
                           <span
@@ -709,7 +709,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] capitalize ${
+                          className={`text-micro capitalize ${
                             INTAKE_BADGE_CLASS[m.intake_status ?? ''] ?? 'text-muted-foreground'
                           }`}
                         >
@@ -724,14 +724,14 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                           {unreviewed.total > 0 && (
                             <Badge
                               variant="outline"
-                              className="border-amber-border bg-amber-bg text-[10px] text-amber"
+                              className="border-amber-border bg-amber-bg text-micro text-amber"
                               title={formatUnreviewedUploadDetail(unreviewed)}
                             >
                               {formatUnreviewedUploadLabel(unreviewed)}
                             </Badge>
                           )}
                           {quietDays !== null && quietDays > QUIET_DAYS && (
-                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            <Badge variant="outline" className="text-micro text-muted-foreground">
                               quiet {quietDays}d
                             </Badge>
                           )}
@@ -740,7 +740,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                       <TableCell className="text-right">
                         <Link
                           href={`/admin/matters/${m.matter_id}`}
-                          className="inline-flex rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="inline-flex rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                           aria-label={`Open matter for ${m.client_name || 'client'}`}
                         >
                           <ChevronRight className="h-3.5 w-3.5" />

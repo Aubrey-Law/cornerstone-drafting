@@ -95,7 +95,7 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
           <Button variant="link" className="h-auto p-0" onClick={onTasks}>View tasks ({taskCount})</Button>
         </OverviewFact>
       </div>
-      <dl className="grid gap-3 rounded-lg border border-border bg-muted/20 p-4 text-sm @[640px]:grid-cols-3">
+      <dl className="grid gap-3 rounded-lg border border-border bg-muted p-4 text-sm @[640px]:grid-cols-3">
         <div><dt className="text-xs text-muted-foreground">Last client contact</dt><dd className="mt-1">{leadDisplayDate(lastContactAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Last client response</dt><dd className="mt-1">{leadDisplayDate(lastResponseAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Record updated</dt><dd className="mt-1">{leadDisplayDate(updatedAt, timeZone)}</dd></div>

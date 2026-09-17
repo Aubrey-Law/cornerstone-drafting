@@ -84,11 +84,11 @@ export function EmailMessagesSection({
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1">
-              <Label htmlFor="email-to" className="text-[11px]">To</Label>
+              <Label htmlFor="email-to" className="text-micro">To</Label>
               <Input id="email-to" type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)} />
             </div>
             <div className="grid gap-1">
-              <Label htmlFor="email-subject" className="text-[11px]">Subject</Label>
+              <Label htmlFor="email-subject" className="text-micro">Subject</Label>
               <Input id="email-subject" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
             </div>
           </div>

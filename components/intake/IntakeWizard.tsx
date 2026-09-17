@@ -418,7 +418,7 @@ export function AssetModal({ open, onClose, title, children }: {
           <DialogTitle className="text-base">{title}</DialogTitle>
         </DialogHeader>
         <div className="p-6">
-          <DialogDescription className="mb-4 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs">
+          <DialogDescription className="mb-4 rounded-md border border-border bg-muted px-3 py-2 text-xs">
             These details are optional. Rough estimates are fine, and you can skip for now and add more at your appointment.
           </DialogDescription>
           {children}
@@ -858,7 +858,7 @@ export function StepEstate({ data, update }: StepProps) {
           {INTAKE_ASSET_TYPE_VALUES.map((asset) => {
             const isChecked = currentAssets.includes(asset)
             return (
-              <div key={asset} className={cn('rounded-md border p-3 transition-colors', isChecked ? 'border-accent bg-teal-bg' : 'border-border hover:bg-muted/50')}>
+              <div key={asset} className={cn('rounded-md border p-3 transition-colors', isChecked ? 'border-accent bg-teal-bg' : 'border-border hover:bg-accent')}>
                 <div className="flex items-center justify-between gap-2">
                   <label className="flex cursor-pointer items-center gap-2 flex-1" htmlFor={`${assetCheckboxId}-${asset}`}>
                     <Checkbox
@@ -995,7 +995,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
                 className={cn(
                   'rounded-lg border p-4 text-left transition-colors',
                   selected
-                    ? 'border-accent bg-accent/5'
+                    ? 'border-selected-border bg-selected'
                     : 'border-gray-200 hover:border-gray-300'
                 )}
               >

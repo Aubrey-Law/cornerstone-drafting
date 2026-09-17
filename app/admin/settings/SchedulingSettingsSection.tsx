@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { WeeklyHours } from '@/lib/appointments/types'
+import type { ExternalCalendarRef } from '@/app/admin/calendar/types'
 import { WeeklyHoursEditor } from './WeeklyHoursEditor'
+import { BlockingCalendarsEditor } from './BlockingCalendarsEditor'
 
 interface SettingsShape {
   timezone: string
@@ -21,6 +23,8 @@ interface SettingsShape {
   smsRemindersEnabled: boolean
   autoIntakeInvite: boolean
   dateOverrides: Record<string, Array<{ start: string; end: string }>>
+  hiddenCalendarIds: string[]
+  blockingCalendarIds: string[]
 }
 
 interface TypeShape {
@@ -76,6 +80,8 @@ export function SchedulingSettingsSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [newOverrideDate, setNewOverrideDate] = useState('')
+  const [accountCalendars, setAccountCalendars] = useState<ExternalCalendarRef[]>([])
+  const [calendarsConnected, setCalendarsConnected] = useState(false)
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -117,14 +123,39 @@ export function SchedulingSettingsSection() {
     }
   }, [authHeaders])
 
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/scheduling/calendars', { headers: authHeaders() })
+        if (cancelled || !res.ok) return
+        const json = await res.json()
+        if (cancelled) return
+        setAccountCalendars(json.calendars ?? [])
+        setCalendarsConnected(Boolean(json.connected))
+      } catch {
+        // The rest of scheduling settings stays editable without this.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders])
+
   async function save() {
     if (!settings) return
     setSaving(true)
     try {
+      // Which calendars are *visible* belongs to the calendar page's popover,
+      // not here. Sending it back would post whatever was loaded when this page
+      // mounted, so hiding a calendar on the calendar page and then saving
+      // anything here would quietly undo it. An absent field is left alone by
+      // updateSchedulingSettings, which is what makes omitting it the fix.
+      const { hiddenCalendarIds: _ownedByTheCalendarPage, ...owned } = settings
       const res = await fetch('/api/admin/scheduling/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ settings, types }),
+        body: JSON.stringify({ settings: owned, types }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
@@ -253,6 +284,15 @@ export function SchedulingSettingsSection() {
             />
             Auto-send the intake invite when a lead books a discovery call
           </label>
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <BlockingCalendarsEditor
+            calendars={accountCalendars}
+            connected={calendarsConnected}
+            blockingIds={settings.blockingCalendarIds ?? []}
+            disabled={saving}
+            onChange={next => setSettings({ ...settings, blockingCalendarIds: next })}
+          />
         </div>
       </section>
 
@@ -478,7 +518,7 @@ export function SchedulingSettingsSection() {
                   Limit this type to its own hours
                 </label>
                 {t.customWeeklyHours !== null && (
-                  <div className="mt-3 rounded-md bg-muted/40 p-3">
+                  <div className="mt-3 rounded-md bg-muted p-3">
                     <p className="mb-2 text-xs text-muted-foreground">
                       {t.label} can only be booked in these windows ({settings.timezone}).
                       General weekly hours are ignored for this type; Outlook busy times and

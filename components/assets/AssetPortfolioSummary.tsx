@@ -25,7 +25,7 @@ export function AssetPortfolioSummary({ aggregates, married = false }: AssetPort
         <p className="text-2xl font-semibold tracking-tight text-foreground">
           {formatAssetCurrency(grossValue)}
         </p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           based on {valuedAssetCount} valued asset{valuedAssetCount === 1 ? '' : 's'}
         </p>
       </div>
@@ -34,7 +34,7 @@ export function AssetPortfolioSummary({ aggregates, married = false }: AssetPort
         <p className="text-xl font-semibold text-foreground">{formatAssetCurrency(netValue)}</p>
         <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Estimated Federal Estate Tax</p>
+            <p className="text-micro font-medium text-muted-foreground">Estimated Federal Estate Tax</p>
             {federal === null ? (
               /*
                * No figure rather than a wrong one. formatAssetCurrency turns
@@ -46,7 +46,7 @@ export function AssetPortfolioSummary({ aggregates, married = false }: AssetPort
                 <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
                   Not on file
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   {!federalLookup.ok && federalLookup.mostRecent
                     ? `No federal exclusion recorded for ${federalLookup.asOf.slice(0, 4)}; the most recent on file is ${federalLookup.mostRecent.effectiveFrom.slice(0, 4)}. Add this year's figure in firm settings.`
                     : 'Add the federal exclusion for this year in firm settings.'}
@@ -57,7 +57,7 @@ export function AssetPortfolioSummary({ aggregates, married = false }: AssetPort
             )}
           </div>
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Estimated Massachusetts Estate Tax</p>
+            <p className="text-micro font-medium text-muted-foreground">Estimated Massachusetts Estate Tax</p>
             <p className="text-sm font-semibold text-foreground">{formatAssetCurrency(massachusetts)}</p>
           </div>
         </div>

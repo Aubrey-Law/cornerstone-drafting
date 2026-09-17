@@ -75,7 +75,7 @@ function equalValue(left: unknown, right: unknown) {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</span>
+  return <span className="block text-micro font-medium uppercase tracking-wide text-muted-foreground">{children}</span>
 }
 
 export function LeadFieldsRail({
@@ -416,7 +416,7 @@ export function LeadFieldsRail({
       <span className="inline-flex items-center gap-1.5">
         <span
           aria-hidden
-          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-[9px] font-semibold text-muted-foreground"
+          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-micro font-semibold text-muted-foreground"
         >
           {initials(spouse?.first_name, spouse?.last_name)}
         </span>
@@ -522,7 +522,7 @@ export function LeadFieldsRail({
     >
       {onStageChange && (
         <section className="mb-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
             Stage
           </h3>
           {stageIsMutable ? (
@@ -540,7 +540,7 @@ export function LeadFieldsRail({
           ) : (
             <>
               <p className="mt-1 text-sm font-medium">{stageLabel}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
+              <p className="mt-0.5 text-micro text-muted-foreground">
                 Hiring runs through convert, so this stage is not set by hand.
               </p>
             </>
@@ -577,7 +577,7 @@ export function LeadFieldsRail({
       <LeadEstateTaxCard className="mt-4" lead={lead} onOpenField={onActiveFieldChange} />
 
       {statusLabel && (
-        <span aria-label={`${statusLabel} save status`} aria-live="polite" className="mt-2 block text-[11px] text-muted-foreground" role="status">
+        <span aria-label={`${statusLabel} save status`} aria-live="polite" className="mt-2 block text-micro text-muted-foreground" role="status">
           {savingField ? 'Saving' : 'Saved'}
         </span>
       )}
@@ -589,7 +589,7 @@ export function LeadFieldsRail({
       )}
 
       <footer className="pt-2">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           Intake answers land here automatically — you rarely need to type these.
         </p>
         <MatterAssistantQuickPrompts className="mt-1.5 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />

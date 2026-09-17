@@ -181,10 +181,10 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
         </div>
 
         {record && scope === 'record' && (
-          <p className="mt-2 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+          <p className="mt-2 flex items-center gap-1.5 truncate text-micro text-muted-foreground">
             Scoped to <span className="font-medium text-foreground">{recordName ?? 'this record'}</span>
             {stageTask?.stage_key && (
-              <span className="rounded bg-stage-work-bg px-1.5 py-0.5 text-[10px] font-medium text-stage-work-text">
+              <span className="rounded bg-stage-work-bg px-1.5 py-0.5 text-micro font-medium text-stage-work-text">
                 {engineStageLabel(stageTask.stage_key)}
               </span>
             )}
@@ -193,7 +193,7 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
 
         {scope === 'record' && stageTask && <RailStageTaskCard task={stageTask} onToggle={actions.toggleChecklistItem} />}
 
-        <h3 className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="px-1 pb-1 pt-3 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
           {scope === 'record' ? 'Open on this matter' : scope === 'mine' ? 'Open — mine' : 'Open — team'}
         </h3>
 
@@ -218,11 +218,11 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
                   <button
                     type="button"
                     onClick={() => setSelectedTask(task)}
-                    className="block w-full truncate text-left text-[13px] text-foreground hover:underline"
+                    className="block w-full truncate text-left text-compact text-foreground hover:underline"
                   >
                     {task.title}
                   </button>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="mt-0.5 flex items-center gap-1.5 text-micro text-muted-foreground">
                     <TaskSourcePill source={task.source} />
                     {task.assignee_name && <span>{initialsFor(task.assignee_name)}</span>}
                     {scope !== 'record' && task.record_name && (
@@ -242,7 +242,7 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
               type="button"
               onClick={() => setDoneOpen(prev => !prev)}
               aria-expanded={doneOpen}
-              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               {doneOpen ? <ChevronDown className="size-3.5" aria-hidden /> : <ChevronRight className="size-3.5" aria-hidden />}
               Done on this matter · {doneOnRecord.length}
@@ -257,10 +257,10 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
                       label={task.title}
                       onToggle={() => void toggle(task)}
                     />
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground line-through">
+                    <span className="min-w-0 flex-1 truncate text-compact text-muted-foreground line-through">
                       {task.title}
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                    <span className="shrink-0 text-micro tabular-nums text-muted-foreground">
                       {formatTaskDate(task.completed_at)}
                     </span>
                   </li>
@@ -348,12 +348,12 @@ function RailStageTaskCard({
 
   return (
     <div className="mt-3 rounded-lg border border-amber-border bg-amber-bg p-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-orange">
+      <p className="text-micro font-semibold uppercase tracking-wide text-amber-orange">
         Stage task
         {slaDay && ` · SLA day ${slaDay.elapsed} of ${slaDay.total}`}
       </p>
       <div className="mt-1 flex items-start justify-between gap-2">
-        <p className="min-w-0 text-[13px] font-medium text-foreground">{task.title}</p>
+        <p className="min-w-0 text-compact font-medium text-foreground">{task.title}</p>
         <span className={cn('shrink-0 text-xs tabular-nums', overdue ? 'text-red-strong' : 'text-amber-orange')}>
           {progress.done}/{progress.total}
         </span>
@@ -361,7 +361,7 @@ function RailStageTaskCard({
       {task.checklist.length > 0 && (
         <ul className="mt-2 space-y-1.5">
           {task.checklist.map((item, index) => (
-            <li key={index} className="flex items-start gap-2 text-[13px]">
+            <li key={index} className="flex items-start gap-2 text-compact">
               <Checkbox
                 id={`rail-stage-${task.id}-${index}`}
                 checked={item.done}

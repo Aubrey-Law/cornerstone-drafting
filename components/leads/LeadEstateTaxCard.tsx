@@ -36,13 +36,13 @@ export function LeadEstateTaxCard({
       aria-label="Estate tax at a glance"
       className={cn('rounded-lg border border-border bg-card p-3', className)}
     >
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
         Estate tax at a glance
       </h3>
       {estate === null ? (
         <>
           <p className="mt-2 text-xl font-semibold tabular-nums text-muted-foreground">Unknown</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-micro text-muted-foreground">
             No estimated estate value on this lead yet.
           </p>
           <Button
@@ -71,7 +71,7 @@ export function LeadEstateTaxCard({
               style={{ width: `${thresholdShare}%` }}
             />
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-micro text-muted-foreground">
             MA threshold {money(MA_ESTATE_TAX_EXEMPTION)} · exposure without planning ≈{' '}
             <span className="font-medium text-foreground tabular-nums">{money(exposure ?? 0)}</span>
           </p>

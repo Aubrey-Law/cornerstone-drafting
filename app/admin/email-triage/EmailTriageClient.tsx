@@ -345,7 +345,7 @@ function QueueRow({
       onClick={onSelect}
       aria-current={selected}
       className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
-        selected ? 'border-primary bg-accent' : 'border-border bg-card hover:bg-accent'
+        selected ? 'border-selected-border bg-selected' : 'border-border bg-card hover:bg-accent'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -424,7 +424,7 @@ function DraftPane({
         )}
       </div>
 
-      <blockquote className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+      <blockquote className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
         {row.snippet}
       </blockquote>
 

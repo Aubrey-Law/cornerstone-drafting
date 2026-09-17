@@ -576,32 +576,32 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
               Drafts use the saved design decisions, intake, and matter contacts.
             </p>
           </div>
-          <Badge variant="outline" className="text-[11px]">Drafts stay internal</Badge>
+          <Badge variant="outline" className="text-micro">Drafts stay internal</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-md border border-border bg-background px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-muted-foreground">Matter details</p>
+            <p className="text-micro font-semibold uppercase text-muted-foreground">Matter details</p>
             <p className="mt-1 text-sm font-medium">{sourcePreview.matter.client_name || 'Unnamed client'}</p>
             <p className="text-xs text-muted-foreground">
               {sourcePreview.matter.matter_name || 'Matter'} · {sourcePreview.matter.practice_area || 'Practice area missing'}
             </p>
           </div>
           <div className="rounded-md border border-border bg-background px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-muted-foreground">Design sheet</p>
+            <p className="text-micro font-semibold uppercase text-muted-foreground">Design sheet</p>
             <p className="mt-1 text-sm font-medium">{sourceStatus(Boolean(sourcePreview.sheet?.id))}</p>
             <p className="text-xs text-muted-foreground">
               {sourcePreview.sheet ? `Version ${sourcePreview.sheet.version} · ${sourcePreview.sheet.status}` : 'Complete or save the design sheet before drafting'}
             </p>
           </div>
           <div className="rounded-md border border-border bg-background px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-muted-foreground">Client intake</p>
+            <p className="text-micro font-semibold uppercase text-muted-foreground">Client intake</p>
             <p className="mt-1 text-sm font-medium">{sourceStatus(Boolean(sourcePreview.intakeSnapshot))}</p>
             <p className="text-xs text-muted-foreground">
               {sourcePreview.intakeSnapshot?.email || 'No linked intake email'}
             </p>
           </div>
           <div className="rounded-md border border-border bg-background px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-muted-foreground">Contacts & fiduciaries</p>
+            <p className="text-micro font-semibold uppercase text-muted-foreground">Contacts & fiduciaries</p>
             <p className="mt-1 text-sm font-medium">{sourcePreview.contacts.length} contact{sourcePreview.contacts.length === 1 ? '' : 's'}</p>
             <p className="text-xs text-muted-foreground">
               Fiduciary roles and design-sheet slots are merged into generated documents.
@@ -632,7 +632,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
                   onClick={() => setDeliveryMode(opt.value)}
                   disabled={busy !== null}
                   className={cn(
-                    'rounded-md px-3 py-2 text-[12px] transition-all',
+                    'rounded-md px-3 py-2 text-xs transition-all',
                     deliveryMode === opt.value
                       ? 'bg-card font-semibold text-primary shadow-sm'
                       : 'text-foreground hover:text-foreground',
@@ -642,7 +642,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               {deliveryMode === 'save'
                 ? 'Drafts are stored in the matter and appear on the Review step.'
                 : 'Drafts download as a ZIP file and are not saved to this matter.'}
@@ -684,7 +684,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
         </div>
 
         {cachedZip && !isGenerating && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs">
             <p className="text-muted-foreground">
               Last ZIP download: {cachedZip.documentNames.length} document{cachedZip.documentNames.length === 1 ? '' : 's'} · {formatDate(cachedZip.savedAt)}
             </p>
@@ -729,7 +729,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
                     )}
                     <span className="min-w-0">
                       <span className="block truncate text-xs font-medium">{d.title}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{d.filename}</span>
+                      <span className="block truncate text-micro text-muted-foreground">{d.filename}</span>
                     </span>
                   </div>
                 )
@@ -837,11 +837,11 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
             {preflight.documentsToGenerate.length > 0 && (
               <>
                 <div className="mt-3 flex items-center justify-between">
-                  <p className="text-[11px] font-medium uppercase text-muted-foreground">Choose documents to generate</p>
+                  <p className="text-micro font-medium uppercase text-muted-foreground">Choose documents to generate</p>
                   <button
                     type="button"
                     onClick={toggleAllDocs}
-                    className="text-[11px] font-medium text-primary hover:underline"
+                    className="text-micro font-medium text-primary hover:underline"
                   >
                     {selectedCount === preflight.documentsToGenerate.length ? 'Clear all' : 'Select all'}
                   </button>
@@ -890,7 +890,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
                           <span className="font-medium">
                             {missingFieldDisplayLabel(target.label, field.subjectKind, field.subjectName)}
                           </span>
-                          <span className="ml-1.5 text-[11px] text-muted-foreground">{target.sectionLabel ?? target.sectionId}</span>
+                          <span className="ml-1.5 text-micro text-muted-foreground">{target.sectionLabel ?? target.sectionId}</span>
                         </span>
                         <Link
                           href={`/admin/drafting/${matterId}?step=design&focus=${encodeURIComponent(focus)}`}
@@ -934,7 +934,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
             </AlertDialogDescription>
           </AlertDialogHeader>
           {preflight && preflight.missingFields.length > 0 && (
-            <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted/40 p-2 text-xs">
+            <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted p-2 text-xs">
               {preflight.missingFields.map(field => {
                 const target = designTargetForMissingField(field.path)
                 return (
