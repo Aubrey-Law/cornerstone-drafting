@@ -24,7 +24,7 @@ export default async function PublicBookingPage({
   const firm = getFirmConfig()
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="client-root mx-auto max-w-2xl px-4 py-10">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {firm.firmName}
       </p>

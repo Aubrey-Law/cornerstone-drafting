@@ -15,24 +15,28 @@ import {
   Settings,
   Sparkles,
   Sun,
+  User,
   UsersRound,
 } from 'lucide-react'
 import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
+  CommandInput,
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
-import { useMatterSearch } from '@/lib/matters/useMatterSearch'
+import { useGlobalSearch } from '@/lib/search/useGlobalSearch'
+import { recentHit, type SearchHit } from '@/lib/search/globalSearchSources'
+import { useSharedSidebarMatters } from '@/lib/matters/SidebarMattersContext'
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
   { label: 'Email triage', href: '/admin/email-triage', icon: MailSearch },
   { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters/list', icon: Briefcase },
+  { label: 'Contacts', href: '/admin/contacts', icon: User },
   { label: 'Tasks', href: '/admin/tasks', icon: ListTodo },
   { label: 'Calendar', href: '/admin/calendar', icon: CalendarDays },
   { label: 'Billing', href: '/admin/billing', icon: ReceiptText },
@@ -43,11 +47,24 @@ const NAV_ITEMS = [
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 
+const KIND_ICON = {
+  matter: Briefcase,
+  contact: User,
+  task: ListTodo,
+  invoice: ReceiptText,
+} as const
+
 export function GlobalSearch() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const { matters, searching, error: searchError } = useMatterSearch(query, open)
+  const { hits, searching, error: searchError, failedSources } = useGlobalSearch(query, open)
   const router = useRouter()
+
+  // The shell already fetches these for the sidebar, so the empty palette costs
+  // no request. Null when the palette renders outside the shell's provider, in
+  // which case there is simply nothing to suggest.
+  const sidebarMatters = useSharedSidebarMatters()
+  const recents = (sidebarMatters?.recent ?? []).slice(0, 5).map(recentHit)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -65,6 +82,35 @@ export function GlobalSearch() {
     setQuery('')
     router.push(href)
   }
+
+  const typed = query.trim().length > 0
+  const navMatches = NAV_ITEMS.filter(item =>
+    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  )
+
+  const renderGroup = (heading: string, items: SearchHit[]) =>
+    items.length > 0 && (
+      <CommandGroup heading={heading}>
+        {items.map(hit => {
+          const Icon = KIND_ICON[hit.kind]
+          return (
+            <CommandItem
+              key={`${hit.kind}:${hit.id}`}
+              value={`${hit.kind}:${hit.id}`}
+              onSelect={() => navigate(hit.href)}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="truncate">{hit.label}</span>
+              {hit.detail && (
+                <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">
+                  {hit.detail}
+                </span>
+              )}
+            </CommandItem>
+          )
+        })}
+      </CommandGroup>
+    )
 
   return (
     <>
@@ -85,7 +131,7 @@ export function GlobalSearch() {
       >
         <span className="inline-flex items-center gap-2">
           <Search className="h-3.5 w-3.5" />
-          Search matters…
+          Search everything…
         </span>
         <kbd className="hidden items-center gap-0.5 rounded border border-border bg-muted px-1 py-px text-micro font-medium text-muted-foreground lg:inline-flex">
           <span>⌘</span>K
@@ -94,37 +140,48 @@ export function GlobalSearch() {
 
       <CommandDialog shouldFilter={false} open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search matters or jump to a page…"
+          placeholder="Search matters, contacts, tasks, invoices…"
           value={query}
           onValueChange={setQuery}
         />
         <CommandList>
-          {searchError && <p role="alert" className="px-3 py-2 text-sm text-destructive">{searchError}</p>}
-          <CommandEmpty>{searching ? 'Searching…' : searchError ?? 'No results.'}</CommandEmpty>
-          {matters.length > 0 && (
-            <CommandGroup heading="Matters">
-              {matters.map(m => (
-                <CommandItem
-                  key={m.matter_id}
-                  value={`matter:${m.matter_id}`}
-                  onSelect={() => navigate(`/admin/matters/${m.matter_id}`)}
-                >
-                  <Briefcase className="h-4 w-4" />
-                  <span className="truncate">{m.client_name || m.matter_name || 'Untitled'}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">{m.stage ?? ''}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+          {searchError && (
+            <p role="alert" className="px-3 py-2 text-sm text-destructive">
+              {searchError}
+            </p>
           )}
-          <CommandSeparator />
-          <CommandGroup heading="Navigate">
-            {NAV_ITEMS.filter(item => item.label.toLowerCase().includes(query.trim().toLowerCase())).map(item => (
-              <CommandItem key={item.href} onSelect={() => navigate(item.href)}>
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <CommandEmpty>{searching ? 'Searching…' : searchError ?? 'No results.'}</CommandEmpty>
+
+          {/* Before anything is typed: where you already were. ⌘K then Enter
+              returns you to the matter you had open. */}
+          {!typed && renderGroup('Recent matters', recents)}
+
+          {renderGroup('Matters', hits.matters)}
+          {renderGroup('Contacts', hits.contacts)}
+          {renderGroup('Tasks', hits.tasks)}
+          {renderGroup('Invoices', hits.invoices)}
+
+          {/* Said once, under the results, rather than as an error over them:
+              some of what was asked for came back, and some did not. */}
+          {!searchError && failedSources > 0 && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              Some results could not be loaded.
+            </p>
+          )}
+
+          {navMatches.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Navigate">
+                {navMatches.map(item => (
+                  <CommandItem key={item.href} onSelect={() => navigate(item.href)}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
         </CommandList>
       </CommandDialog>
     </>

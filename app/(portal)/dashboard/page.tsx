@@ -145,10 +145,10 @@ export default async function PortalDashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {progress.heading}
           </p>
-          <h1
-            className="mt-1 text-3xl font-semibold text-foreground"
-            style={{ fontFamily: 'var(--font-lora), ui-serif, Georgia, serif' }}
-          >
+          {/* The serif comes from `.client-root` on the portal shell now; it
+              was this one inline style before, and every client-facing heading
+              gets it rather than just this one. */}
+          <h1 className="mt-1 text-3xl font-semibold text-foreground">
             Welcome back{firstName ? `, ${firstName}` : ''}
           </h1>
         </div>

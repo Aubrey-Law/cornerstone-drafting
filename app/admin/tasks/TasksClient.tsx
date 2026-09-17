@@ -177,7 +177,11 @@ export function TasksClient({
   const [groupBy, setGroupBy] = useState<GroupKey>('due')
   const [laterOpen, setLaterOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
-  const [focusId, setFocusId] = useState<string | null>(null)
+  // ⌘K links a task as `/admin/tasks?focus=<id>`, so the row it found is the
+  // one highlighted on arrival. It is a seed, not a binding: the keyboard
+  // moves focus from here as usual, and a task outside the current scope or
+  // filter simply has no row to highlight — the same as landing on the list.
+  const [focusId, setFocusId] = useState<string | null>(() => searchParams?.get('focus') ?? null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
   const [assignMenuOpen, setAssignMenuOpen] = useState(false)
   const [assigning, setAssigning] = useState(false)
