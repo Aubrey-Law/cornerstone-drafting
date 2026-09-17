@@ -15,7 +15,7 @@
 ## File Structure
 
 **Create:**
-- `supabase/migrations/20261203000000_calendar_selection.sql` — the two columns
+- `supabase/migrations/20261208000000_calendar_selection.sql` — the two columns
 - `lib/appointments/calendarSelection.ts` — pure selection logic, no I/O
 - `tests/calendar-selection.test.ts` — unit tests for the above
 - `app/api/admin/scheduling/calendars/route.ts` — lists account calendars for the settings UI
@@ -41,12 +41,12 @@
 ## Task 1: Migration and generated types
 
 **Files:**
-- Create: `supabase/migrations/20261203000000_calendar_selection.sql`
+- Create: `supabase/migrations/20261208000000_calendar_selection.sql`
 - Modify: `packages/db-types/src/supabase.generated.ts`
 
 - [ ] **Step 1: Write the migration**
 
-Create `supabase/migrations/20261203000000_calendar_selection.sql`:
+Create `supabase/migrations/20261208000000_calendar_selection.sql`:
 
 ```sql
 -- Which Google calendars the firm sees, and which protect its time.
@@ -118,7 +118,7 @@ Expected: exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20261203000000_calendar_selection.sql packages/db-types/src/supabase.generated.ts
+git add supabase/migrations/20261208000000_calendar_selection.sql packages/db-types/src/supabase.generated.ts
 git commit -m "feat: record which calendars display and which block booking"
 ```
 
