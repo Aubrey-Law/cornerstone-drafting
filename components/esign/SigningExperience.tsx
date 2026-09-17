@@ -1,10 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 /**
@@ -15,6 +26,11 @@ import { cn } from '@/lib/utils'
  * is not the thing the firm needs to be able to show. And declining is a
  * first-class button, not a way of closing the tab: a client who does not want
  * to sign should be able to say so and have the firm find out.
+ *
+ * Declining is also final and asks before it fires. The server marks the
+ * session `declined` and every later visit to the link gets a 410, so a client
+ * who declines by accident cannot undo it from here — they have to telephone
+ * the firm. That is worth one dialog.
  */
 
 type Loaded = {
@@ -34,6 +50,10 @@ export function SigningExperience({ token }: { token: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [declineOpen, setDeclineOpen] = useState(false)
+  // Kept when the dialog closes rather than cleared, so backing out and
+  // reopening does not throw away what the client had already written.
+  const [declineReason, setDeclineReason] = useState('')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   // State, not a ref: the Sign button's enabled-ness depends on this, and a
   // ref would leave it disabled after the client had already drawn.
@@ -98,7 +118,7 @@ export function SigningExperience({ token }: { token: string }) {
     setHasDrawing(false)
   }
 
-  async function submit(action: 'sign' | 'decline') {
+  async function submit(action: 'sign' | 'decline', reason?: string) {
     setBusy(true)
     setError(null)
     try {
@@ -111,8 +131,8 @@ export function SigningExperience({ token }: { token: string }) {
           payload.typedName = typedName.trim()
         }
       } else {
-        const reason = window.prompt('If you would like, tell the firm why (optional):')
-        if (reason) payload.declineReason = reason
+        const trimmed = reason?.trim()
+        if (trimmed) payload.declineReason = trimmed
       }
       const response = await fetch(`/api/sign/${encodeURIComponent(token)}`, {
         method: 'POST',
@@ -239,8 +259,9 @@ export function SigningExperience({ token }: { token: string }) {
             Sign agreement
           </Button>
           {/* Declining has to be as reachable as signing, or the only way out
-              is to close the tab and leave the firm guessing. */}
-          <Button type="button" variant="outline" onClick={() => submit('decline')} disabled={busy}>
+              is to close the tab and leave the firm guessing. Reachable, but
+              not instant — it opens the question below rather than firing. */}
+          <Button type="button" variant="outline" onClick={() => setDeclineOpen(true)} disabled={busy}>
             Decline
           </Button>
           <span className={cn('text-micro text-muted-foreground', consent && 'sr-only')}>
@@ -248,6 +269,55 @@ export function SigningExperience({ token }: { token: string }) {
           </span>
         </div>
       </section>
+
+      {/*
+        One dialog that both confirms and collects the reason. The reason used
+        to come from `window.prompt`, which returns null on Cancel and '' on an
+        empty submit — both falsy, so both fell through to the same decline. A
+        client who pressed Cancel expecting to back out declined anyway, and the
+        link was dead by the time they noticed.
+
+        Here the two answers are different buttons. Cancel, Escape and the
+        overlay all close without sending anything.
+      */}
+      <AlertDialog open={declineOpen} onOpenChange={setDeclineOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Decline this agreement?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone here. Your signing link stops working, and the firm
+              will need to send a new one if you change your mind.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-1">
+            <Label htmlFor="esign-decline-reason" className="text-xs">
+              Tell the firm why (optional)
+            </Label>
+            <Textarea
+              id="esign-decline-reason"
+              value={declineReason}
+              onChange={event => setDeclineReason(event.target.value)}
+              rows={3}
+              placeholder="You do not have to give a reason."
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go back</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={() => {
+                setDeclineOpen(false)
+                void submit('decline', declineReason)
+              }}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Decline agreement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   )
 }
