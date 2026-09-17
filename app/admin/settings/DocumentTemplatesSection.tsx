@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MatterSearchPicker } from './MatterSearchPicker'
-import { useConfirm } from '@/components/useConfirm'
+import { useConfirm, usePrompt } from '@/components/useConfirm'
 
 interface TemplateVersion {
   id: string
@@ -72,6 +72,7 @@ function templateLastUpload(template: TemplateRow): TemplateVersion | null {
 
 export function DocumentTemplatesSection() {
   const { confirm, confirmDialog } = useConfirm()
+  const { prompt, promptDialog } = usePrompt()
   const token = useAccessToken()
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [migrationRequired, setMigrationRequired] = useState(false)
@@ -149,8 +150,25 @@ export function DocumentTemplatesSection() {
   }
 
   async function publish(template: TemplateRow, version: TemplateVersion, rollback: boolean) {
-    const confirmation = window.prompt(`Type ${template.id} to ${rollback ? 'roll back' : 'publish'} this template.`)
-    if (confirmation !== template.id) return
+    // This one was never wrong — `!== template.id` already told Cancel apart
+    // from an empty answer. It moves for the reasons the native dialog is bad
+    // everywhere else: it ignores the theme, it cannot mark the dangerous
+    // button, and Firefox and Chrome both offer "prevent this page from
+    // creating more dialogs", which turns every later prompt into an instant
+    // null. The action now stays disabled until the id matches, rather than
+    // accepting a wrong answer and silently doing nothing.
+    const confirmation = await prompt({
+      title: rollback ? 'Roll back this template?' : 'Publish this template?',
+      body: rollback
+        ? 'Future documents generate from the version you are rolling back to.'
+        : 'Future documents generate from this version.',
+      label: `Type ${template.id} to confirm`,
+      placeholder: template.id,
+      confirmLabel: rollback ? 'Roll back' : 'Publish',
+      requireExact: template.id,
+      destructive: rollback,
+    })
+    if (confirmation === null) return
     setBusy(version.id)
     try {
       const response = await fetch(`/api/admin/settings/document-templates/${template.id}/publish`, {
@@ -265,6 +283,7 @@ export function DocumentTemplatesSection() {
   return (
     <div className="space-y-6">
       {confirmDialog}
+      {promptDialog}
       {migrationRequired && (
         <div className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm text-amber">
           Apply pending Supabase migrations, including <code>20260713222004_cancel_document_template_uploads.sql</code>, to enable the complete staged-template workflow.

@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { useConfirm } from '@/components/useConfirm'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
@@ -217,6 +218,7 @@ function MatterDetailClientInner({
 }: MatterDetailClientProps) {
   usePrimaryReady('Matter detail', matterId)
   const token = useAccessToken()
+  const { confirm: confirmDelete, confirmDialog } = useConfirm()
   const router = useRouter()
   useEffect(() => listenForMatterContacts(matterId, () => router.refresh()), [matterId, router])
   const pathname = usePathname()
@@ -474,6 +476,19 @@ function MatterDetailClientInner({
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
+
+  // The matter-note delete asks here rather than in useMatterNotes: a hook has
+  // nowhere to render a dialog, which is how this one kept window.confirm.
+  const confirmThenDeleteNote = async (noteId: string) => {
+    const confirmed = await confirmDelete({
+      title: 'Delete this note?',
+      body: 'This cannot be undone.',
+      confirmLabel: 'Delete note',
+      destructive: true,
+    })
+    if (!confirmed) return
+    await handleDeleteNote(noteId)
+  }
 
   const handleDeleteLeadNote = async (note: LinkedMatterNote) => {
     if (!note.leadId) return
@@ -1200,7 +1215,7 @@ function MatterDetailClientInner({
                 setNoteType={setNoteType}
                 cancelEditingNote={cancelEditingNote}
                 handleAddNote={handleAddNote}
-                handleDeleteNote={handleDeleteNote}
+                handleDeleteNote={confirmThenDeleteNote}
                 handleUpdateNote={handleUpdateNote}
                 handleDeleteLeadNote={handleDeleteLeadNote}
                 handleUpdateLeadNote={handleUpdateLeadNote}
@@ -1357,6 +1372,7 @@ function MatterDetailClientInner({
           router.refresh()
         }}
       />
+      {confirmDialog}
     </div>
   )
 }

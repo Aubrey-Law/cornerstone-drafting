@@ -5,6 +5,7 @@ import { AlertTriangle, Ban, Download, RefreshCw, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { usePrompt } from '@/components/useConfirm'
 import { cn } from '@/lib/utils'
 
 /**
@@ -87,6 +88,7 @@ function recipientTimeline(recipient: StatusView['recipients'][number]): string 
 }
 
 export function EngagementStatusPanel({ agreementId }: { agreementId: string }) {
+  const { prompt, promptDialog } = usePrompt()
   const [view, setView] = useState<StatusView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<null | 'refresh' | 'resend' | 'cancel'>(null)
@@ -145,9 +147,22 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
   }
 
   async function cancel() {
-    const reason = window.prompt('Why is this agreement being cancelled? The client is notified.')
-    if (!reason?.trim()) return
-    await act('cancel', 'cancel', { confirm: true, reason: reason.trim() })
+    // The reason reaches the client, so it is required rather than optional —
+    // and `null` here means they backed out, which is not the same as an empty
+    // answer. `if (!reason)` would have cancelled the agreement on a dismissal.
+    const reason = await prompt({
+      title: 'Cancel this agreement?',
+      body: 'Signing stops and the client is notified, with the reason you give below.',
+      label: 'Why is this being cancelled? The client sees this.',
+      placeholder: 'Terms changed after the agreement was sent.',
+      confirmLabel: 'Cancel agreement',
+      cancelLabel: 'Keep it open',
+      required: true,
+      multiline: true,
+      destructive: true,
+    })
+    if (reason === null) return
+    await act('cancel', 'cancel', { confirm: true, reason })
   }
 
   if (!view) {
@@ -260,6 +275,7 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
           ))}
         </div>
       )}
+      {promptDialog}
     </section>
   )
 }
