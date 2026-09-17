@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { embedSignatureFont, type SignatureFace } from '@/lib/esign/signatureFont'
 import { locateAnchors, toPdfOrigin, type LocatedAnchor } from '@/lib/esign/nativeAnchors'
 
 /**
@@ -126,14 +127,15 @@ function stampField(
   field: SealField,
   font: import('pdf-lib').PDFFont,
   /**
-   * The face for a typed signature.
+   * The face for a typed signature, with the size multiplier that keeps its
+   * capitals on the signature line wherever the face came from.
    *
    * Helvetica made a typed name read as body text — a word inserted into the
-   * sentence rather than a signature. Italic serif separates it without
-   * pretending to be handwriting; a real script face needs an embedded font
-   * and is deliberately a separate change.
+   * sentence rather than a signature. It is now an embedded handwriting face
+   * (lib/esign/signatureFont.ts), which falls back to the italic serif that
+   * shipped in #498 if the font file cannot be read.
    */
-  signatureFont: import('pdf-lib').PDFFont,
+  signature: SignatureFace,
   image: import('pdf-lib').PDFImage | null,
 ): void {
   const box = toPdfOrigin(anchor.bbox, page.getHeight())
@@ -162,11 +164,13 @@ function stampField(
 
   const text = field.text ?? ''
   if (!text) return
+  const isSignature = field.kind === 'signature'
+  const size = Math.min(box.height, 11) * (isSignature ? signature.sizeScale : 1)
   page.drawText(text, {
     x: box.x,
     y: box.y + box.height * 0.2,
-    size: Math.min(box.height, 11),
-    font: field.kind === 'signature' ? signatureFont : font,
+    size,
+    font: isSignature ? signature.font : font,
     color: rgb(0, 0, 0),
   })
 }
@@ -282,7 +286,7 @@ export async function sealSignedAgreement(input: SealInput): Promise<SealedDocum
   const doc = await PDFDocument.load(input.pdf)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
-  const signatureFont = await doc.embedFont(StandardFonts.TimesRomanItalic)
+  const signature = await embedSignatureFont(doc)
   const pages = doc.getPages()
 
   for (const field of input.fields) {
@@ -293,7 +297,7 @@ export async function sealSignedAgreement(input: SealInput): Promise<SealedDocum
       throw new Error(`Anchor ${field.marker} reports page ${anchor.page}, which the document does not have`)
     }
     const image = field.signaturePng ? await doc.embedPng(field.signaturePng) : null
-    stampField(page, anchor, field, font, signatureFont, image)
+    stampField(page, anchor, field, font, signature, image)
   }
 
   drawCertificate(doc, input, sourceSha256, font, bold, input.now ?? new Date())

@@ -62,6 +62,12 @@ const nextConfig = {
     '/api/sign/[token]': [
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
+      // The handwriting face a typed signature is stamped in, read from disk by
+      // lib/esign/signatureFont.ts. nft would probably trace it anyway — it
+      // evaluates that module's literal path.join(process.cwd(), …) — but that
+      // holds only while the string stays literal, and this is the one route
+      // where losing it silently downgrades a client's signature.
+      './assets/fonts/NothingYouCouldDo-Regular.ttf',
     ],
   },
   // Keep the production build as a type-safety gate by default. If a constrained

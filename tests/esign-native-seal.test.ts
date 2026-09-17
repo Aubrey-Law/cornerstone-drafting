@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PDFDocument, StandardFonts } from 'pdf-lib'
+import { PDFDict, PDFDocument, PDFName, StandardFonts } from 'pdf-lib'
 import { buildPdfTextLayer } from '@aubrey-law/citations/textLayer/pdf'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
 import { sealFieldsFor } from '@/lib/esign/sealFields'
@@ -315,6 +315,39 @@ describe('sealSignedAgreement', () => {
     const layer = await buildPdfTextLayer(sealed.pdf)
     expect(layer.text).toContain('ELECTRONIC SIGNATURE AUDIT CERTIFICATE')
     expect(sealed.sha256).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('stamps a typed signature in the embedded handwriting face', async () => {
+    // The end-to-end claim behind lib/esign/signatureFont.ts: not that the
+    // helper returns a font, but that a sealed agreement actually carries it.
+    // Read back out of the saved document's own font resources, so a wiring
+    // mistake between signatureFont.ts and this module cannot pass.
+    const pdf = await agreementPdf(['[[CLIENT_1_SIGNATURE]]'])
+
+    const sealed = await sealSignedAgreement({
+      ...baseInput,
+      pdf,
+      fields: [{ marker: '[[CLIENT_1_SIGNATURE]]', kind: 'signature', text: 'A Client' }],
+    })
+
+    const reloaded = await PDFDocument.load(sealed.pdf)
+    const embedded = new Set<string>()
+    for (const page of reloaded.getPages()) {
+      const fonts = page.node.normalizedEntries().Font
+      if (!fonts) continue
+      for (const [, ref] of fonts.asMap()) {
+        const dict = reloaded.context.lookup(ref)
+        const base = dict instanceof PDFDict ? dict.get(PDFName.of('BaseFont')) : undefined
+        if (base) embedded.add(String(base))
+      }
+    }
+
+    // Subsetting prefixes the name with a six-letter tag, e.g.
+    // `/AAAAAB+NothingYouCouldDo`, so match the family rather than the whole.
+    expect(
+      [...embedded].some(name => name.includes('NothingYouCouldDo')),
+      `sealed document embeds: ${[...embedded].join(', ')}`,
+    ).toBe(true)
   })
 
   it('draws nothing when an anchor cannot be located', async () => {
