@@ -87,6 +87,17 @@ describe('signing route security shape', () => {
     expect(route).toContain('priorMarks')
   })
 
+  it('dates the signature lines in the firm timezone, not the runtime\'s', () => {
+    // The serverless runtime is UTC, so an agreement signed between 8pm and
+    // midnight Eastern was stamped with the *following* day's date on its
+    // signature line — a term of an executed legal document decided by which
+    // machine happened to seal it. sealFieldsFor takes the zone as a required
+    // argument now, so this is about the route handing it the right one: the
+    // firm's own, the same zone the scheduler books against.
+    expect(route).toContain('getSchedulingSettings')
+    expect(route).toMatch(/sealFieldsFor\([\s\S]*?\],\s*timezone\)/)
+  })
+
   it('refuses to sign rather than guess a signer position', () => {
     // Defaulting to position 1 would stamp this signature on another signer's
     // line and produce an executed agreement that looks finished and is wrong.

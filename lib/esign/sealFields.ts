@@ -38,12 +38,39 @@ export interface SignedMark {
  * Each signer gets their own signing instant rather than the moment of the
  * latest signature: re-stamping an earlier signer with "now" would silently
  * move the date on a line they already signed.
+ *
+ * **The zone is a required argument because no sensible default exists.** A
+ * `Date` is an instant; the day it falls on is a question you cannot answer
+ * without a zone. This used to omit `timeZone` and so inherited whichever zone
+ * the machine running the seal was set to — UTC on the deployed runtime, the
+ * local zone on a developer's laptop. That is not a formatting detail: an
+ * agreement signed at 9:43pm on the 15th in the firm's own zone would have been
+ * stamped "September 16" for no reason except that the sealing process thinks
+ * in UTC, and the date on the signature line of an executed legal document is a
+ * term of the document. Caught while no agreement had yet been sealed through
+ * this path, so it corrected a latent defect rather than an executed one.
+ * Callers pass `getSchedulingSettings().timezone`, the same firm zone the
+ * scheduler books against.
+ *
+ * Deliberately not defaulted and deliberately not read from settings here: a
+ * default would let a new call site inherit the wrong zone in silence, and
+ * reaching for settings would make this async and cost the module the purity
+ * that lets the behaviour be asserted directly. An unusable zone throws out of
+ * `toLocaleDateString` rather than falling back, for the same reason the
+ * refusals below throw — a loud failure on a retryable seal beats a quietly
+ * wrong date on a document that reads as executed.
  */
-export function formatSigningDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+export function formatSigningDate(date: Date, timeZone: string): string {
+  return date.toLocaleDateString('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 
-export function sealFieldsFor(marks: SignedMark[]): SealField[] {
+/** @param timeZone IANA zone the signing dates are written in — the firm's. */
+export function sealFieldsFor(marks: SignedMark[], timeZone: string): SealField[] {
   const ordered = [...marks].sort((a, b) => a.position - b.position)
 
   const positions = new Set<number>()
@@ -78,7 +105,7 @@ export function sealFieldsFor(marks: SignedMark[]): SealField[] {
       {
         marker: markers.date,
         kind: 'date' as const,
-        text: formatSigningDate(mark.signedAt),
+        text: formatSigningDate(mark.signedAt, timeZone),
       },
     ]
   })
