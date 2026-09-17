@@ -70,10 +70,10 @@ export function BlockingCalendarsEditor({
       {stale.map(id => (
         <div
           key={id}
-          className="flex items-center gap-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-sm"
+          className="flex items-center gap-2 rounded border border-amber-border bg-amber-bg px-2 py-1 text-sm"
         >
-          <span className="truncate text-warning">{id}</span>
-          <span className="shrink-0 text-xs text-warning">
+          <span className="truncate text-amber">{id}</span>
+          <span className="shrink-0 text-xs text-amber">
             Google no longer serves this calendar — it will block all booking until removed
           </span>
           <button
