@@ -187,7 +187,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [showCalendar, setShowCalendar] = useState(true)
   const [calendarEvents, setCalendarEvents] = useState<ExternalCalendarEvent[]>([])
   const [calendarConnected, setCalendarConnected] = useState(true)
-  const [syncedCalendars, setSyncedCalendars] = useState<ExternalCalendarRef[]>([])
   const [accountCalendars, setAccountCalendars] = useState<ExternalCalendarRef[]>([])
   const [hiddenCalendarIds, setHiddenCalendarIds] = useState<string[]>([])
   const [calendarTruncated, setCalendarTruncated] = useState(false)
@@ -246,7 +245,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           : { connected: false, events: [], calendars: [], truncated: false }
         setCalendarEvents(calendarJson.events ?? [])
         setCalendarConnected(Boolean(calendarJson.connected))
-        setSyncedCalendars(calendarJson.calendars ?? [])
         setCalendarTruncated(Boolean(calendarJson.truncated))
         setCalendarSkipped(calendarJson.skipped ?? [])
         setCalendarError(
@@ -272,7 +270,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         }
       } else {
         setCalendarEvents([])
-        setSyncedCalendars([])
         setCalendarTruncated(false)
         setCalendarSkipped([])
         setCalendarError(null)
