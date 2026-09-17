@@ -12,6 +12,14 @@ vi.mock('@/lib/googleCalendar', () => ({
 }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: vi.fn() }))
 
+const getSchedulingSettings = vi.fn(async () => ({
+  hiddenCalendarIds: [] as string[],
+  blockingCalendarIds: [] as string[],
+}))
+vi.mock('@/lib/appointments/settings', () => ({
+  getSchedulingSettings: () => getSchedulingSettings(),
+}))
+
 import {
   AvailabilityUnavailableError,
   fetchCalendarBusy,
@@ -28,6 +36,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   mocks.getConnection.mockResolvedValue({ user_id: 'user-1', email: 'firm@example.com' })
   mocks.getAccessToken.mockResolvedValue('token')
+  getSchedulingSettings.mockResolvedValue({ hiddenCalendarIds: [], blockingCalendarIds: [] })
 })
 
 describe('fetchCalendarBusy', () => {
@@ -89,5 +98,105 @@ describe('fetchCalendarBusy', () => {
       calendars: { primary: { errors: [{ reason: 'notFound' }], busy: [] } },
     })))
     await expect(fetchCalendarBusy(FROM, TO)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
+  })
+})
+
+describe('fetchCalendarBusy blocking calendars', () => {
+  it('asks only about primary when nothing else blocks', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) =>
+      jsonResponse({ calendars: { primary: { busy: [] } } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchCalendarBusy(FROM, TO)
+
+    const [, init] = fetchMock.mock.calls[0]!
+    const body = JSON.parse(String(init.body))
+    expect(body.items).toEqual([{ id: 'primary' }])
+  })
+
+  it('sends primary plus each blocking calendar', async () => {
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: [],
+      blockingCalendarIds: ['personal@example.com'],
+    })
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => jsonResponse({
+      calendars: {
+        primary: { busy: [] },
+        'personal@example.com': { busy: [] },
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchCalendarBusy(FROM, TO)
+
+    const [, init] = fetchMock.mock.calls[0]!
+    const body = JSON.parse(String(init.body))
+    expect(body.items).toEqual([{ id: 'primary' }, { id: 'personal@example.com' }])
+  })
+
+  it('merges busy blocks from a blocking calendar', async () => {
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: [],
+      blockingCalendarIds: ['personal@example.com'],
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      calendars: {
+        primary: { busy: [{ start: '2026-09-10T14:00:00Z', end: '2026-09-10T15:00:00Z' }] },
+        'personal@example.com': {
+          busy: [{ start: '2026-09-10T18:00:00Z', end: '2026-09-10T19:00:00Z' }],
+        },
+      },
+    })))
+
+    expect(await fetchCalendarBusy(FROM, TO)).toEqual([
+      { start: Date.parse('2026-09-10T14:00:00Z'), end: Date.parse('2026-09-10T15:00:00Z') },
+      { start: Date.parse('2026-09-10T18:00:00Z'), end: Date.parse('2026-09-10T19:00:00Z') },
+    ])
+  })
+
+  // freeBusy reports per-calendar errors rather than failing the request, so an
+  // unchecked error reads exactly like a free calendar. A calendar the firm
+  // marked as blocking is one it asked to protect its time; dropping its error
+  // quietly reopens the exact hole this feature closes.
+  it('throws when a blocking calendar reports errors', async () => {
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: [],
+      blockingCalendarIds: ['personal@example.com'],
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      calendars: {
+        primary: { busy: [] },
+        'personal@example.com': { errors: [{ domain: 'global', reason: 'notFound' }] },
+      },
+    })))
+
+    await expect(fetchCalendarBusy(FROM, TO)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
+  })
+
+  it('throws when a blocking calendar is missing from the response entirely', async () => {
+    getSchedulingSettings.mockResolvedValue({
+      hiddenCalendarIds: [],
+      blockingCalendarIds: ['personal@example.com'],
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      calendars: { primary: { busy: [] } },
+    })))
+
+    await expect(fetchCalendarBusy(FROM, TO)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
+  })
+
+  // The other half of the rule: a calendar nobody asked to block must not be
+  // able to take availability down.
+  it('is unaffected by a calendar that does not block', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      calendars: {
+        primary: { busy: [{ start: '2026-09-10T14:00:00Z', end: '2026-09-10T15:00:00Z' }] },
+        'personal@example.com': { errors: [{ reason: 'notFound' }] },
+      },
+    })))
+
+    expect(await fetchCalendarBusy(FROM, TO)).toEqual([
+      { start: Date.parse('2026-09-10T14:00:00Z'), end: Date.parse('2026-09-10T15:00:00Z') },
+    ])
   })
 })

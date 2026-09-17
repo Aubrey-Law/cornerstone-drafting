@@ -2,6 +2,8 @@ import 'server-only'
 import { getAccessToken, getGoogleConnectionForUser } from '@/lib/googleCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getRawBoolean } from '@/lib/appointments/rawMetadata'
+import { busyCalendarIds } from './calendarSelection'
+import { getSchedulingSettings } from './settings'
 import type { Interval } from './types'
 
 const CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3'
@@ -52,6 +54,9 @@ export async function fetchCalendarBusy(rangeStart: Date, rangeEnd: Date): Promi
     )
   }
 
+  const { blockingCalendarIds } = await getSchedulingSettings()
+  const requestedIds = busyCalendarIds(blockingCalendarIds)
+
   const r = await googleFetch(`${CALENDAR_BASE}/freeBusy`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -59,8 +64,9 @@ export async function fetchCalendarBusy(rangeStart: Date, rangeEnd: Date): Promi
       timeMin: rangeStart.toISOString(),
       timeMax: rangeEnd.toISOString(),
       // `primary` is the account's own calendar whatever its address is, so
-      // this keeps working if the firm ever changes the Google address.
-      items: [{ id: 'primary' }],
+      // this keeps working if the firm ever changes the Google address. The
+      // rest are the calendars the firm asked to protect its time.
+      items: requestedIds.map(id => ({ id })),
     }),
   })
 
@@ -74,18 +80,24 @@ export async function fetchCalendarBusy(rangeStart: Date, rangeEnd: Date): Promi
     calendars?: Record<string, { busy?: Array<{ start?: string; end?: string }>; errors?: unknown[] }>
   }
 
-  const calendar = json.calendars?.primary
-  if (!calendar || (calendar.errors?.length ?? 0) > 0) {
-    console.error('[appointments] freeBusy returned calendar errors', calendar?.errors)
-    throw new AvailabilityUnavailableError('Could not read Google Calendar availability')
-  }
-
+  // Every requested calendar must answer cleanly. freeBusy reports per-calendar
+  // errors instead of failing the request, so an unchecked error reads as a free
+  // calendar — which is how a client books on top of a real commitment. A
+  // calendar the firm did not mark as blocking is never requested and so can
+  // never reach this check.
   const busy: Interval[] = []
-  for (const slot of calendar.busy ?? []) {
-    const start = slot.start ? Date.parse(slot.start) : NaN
-    const end = slot.end ? Date.parse(slot.end) : NaN
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
-    busy.push({ start, end })
+  for (const id of requestedIds) {
+    const calendar = json.calendars?.[id]
+    if (!calendar || (calendar.errors?.length ?? 0) > 0) {
+      console.error('[appointments] freeBusy returned calendar errors', id, calendar?.errors)
+      throw new AvailabilityUnavailableError('Could not read Google Calendar availability')
+    }
+    for (const slot of calendar.busy ?? []) {
+      const start = slot.start ? Date.parse(slot.start) : NaN
+      const end = slot.end ? Date.parse(slot.end) : NaN
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
+      busy.push({ start, end })
+    }
   }
   return busy
 }
