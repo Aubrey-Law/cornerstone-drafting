@@ -25,6 +25,7 @@ import { appointedFiduciaryRolesByContact } from '@/lib/matter/planMirror'
 import { contactFullName } from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 import type { PersonFormValues } from '@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog'
 import type { PersonAddRequest } from './MatterPeopleTab'
+import { useConfirm } from '@/components/useConfirm'
 
 const AddPersonDialog = dynamic(
   () => import('@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog').then(m => ({ default: m.AddPersonDialog })),
@@ -46,6 +47,7 @@ export function MatterAdditionalContactsTab({
   embedded = false,
   addRequest,
 }: Props) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [contacts, setContacts] = useState(initialContacts)
   const [sheet, setSheet] = useState<DesignSheet | null>(null)
@@ -235,7 +237,12 @@ export function MatterAdditionalContactsTab({
 
   const handleDeleteContact = async (contact: MatterContact) => {
     const label = contactFullName(contact)
-    if (!window.confirm(`Remove ${label} from this matter?`)) return
+    if (!(await confirm({
+      title: `Remove ${label} from this matter?`,
+      body: 'The person stays in your contacts; only their role on this matter is removed.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    }))) return
     if (!token) return
     try {
       const res = await fetch(
@@ -264,6 +271,7 @@ export function MatterAdditionalContactsTab({
 
   return (
     <div className="space-y-8">
+      {confirmDialog}
       {!embedded && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

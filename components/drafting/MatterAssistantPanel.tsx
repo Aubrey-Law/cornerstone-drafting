@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
+import { useConfirm } from '@/components/useConfirm'
 
 interface MatterAssistantPanelProps {
   matterId: string
@@ -39,6 +40,7 @@ function parseSseChunk(buffer: string): { events: Array<{ event: string; data: s
 }
 
 export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterAssistantPanelProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -86,7 +88,12 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
 
   const clearHistory = async () => {
     if (!token || busy) return
-    if (!window.confirm('Clear this matter’s assistant chat history?')) return
+    if (!(await confirm({
+      title: 'Clear this matter’s assistant chat history?',
+      body: 'The conversation is removed for everyone. Drafts and documents are not affected.',
+      confirmLabel: 'Clear history',
+      destructive: true,
+    }))) return
     setBusy(true)
     try {
       const res = await fetch(`/api/admin/matters/${matterId}/assistant`, {
@@ -273,6 +280,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
+      {confirmDialog}
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4" />
