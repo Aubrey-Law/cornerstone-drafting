@@ -463,6 +463,60 @@ describe('MatterFactsPanel', () => {
     })
   })
 
+  it('reads the whole address on two lines and opens an editor on the pencil', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    // Both lines read in full: the rail is too narrow for one, so it wraps
+    // rather than clipping the way the old always-on input did.
+    expect(await screen.findByText('42 Larchmont Rd')).toBeTruthy()
+    expect(screen.getByText('Newton, MA 02459')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Edit Address' }))
+    expect((screen.getByLabelText('Address street') as HTMLInputElement).value).toBe('42 Larchmont Rd')
+    expect((screen.getByLabelText('Address city') as HTMLInputElement).value).toBe('Newton')
+    expect((screen.getByLabelText('Address state') as HTMLInputElement).value).toBe('MA')
+    expect((screen.getByLabelText('Address ZIP') as HTMLInputElement).value).toBe('02459')
+  })
+
+  it('saves an address edited by hand, without an autocomplete pick', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('42 Larchmont Rd')
+    await user.click(screen.getByRole('button', { name: 'Edit Address' }))
+
+    const city = screen.getByLabelText('Address city')
+    await user.clear(city)
+    await user.type(city, 'Newton Centre')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(patchCalls().length).toBeGreaterThan(0))
+    const [, init] = patchCalls()[patchCalls().length - 1]
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      target: 'client',
+      patch: {
+        address_line1: '42 Larchmont Rd',
+        city: 'Newton Centre',
+        state: 'MA',
+        zip: '02459',
+      },
+    })
+    // The rail goes back to reading the saved address.
+    expect(await screen.findByText('Newton Centre, MA 02459')).toBeTruthy()
+  })
+
+  it('leaves the address alone when the editor is cancelled', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('42 Larchmont Rd')
+    await user.click(screen.getByRole('button', { name: 'Edit Address' }))
+    await user.clear(screen.getByLabelText('Address city'))
+    await user.type(screen.getByLabelText('Address city'), 'Nowhere')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(patchCalls().length).toBe(0)
+    expect(await screen.findByText('Newton, MA 02459')).toBeTruthy()
+  })
+
   it('renders activity with the shared labels and the From lead pill', async () => {
     const user = userEvent.setup()
     renderPanel()

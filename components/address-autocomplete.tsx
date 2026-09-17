@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
 
 export interface ParsedAddress {
@@ -17,7 +17,14 @@ interface AddressAutocompleteProps {
   onPlaceSelected: (parsed: ParsedAddress) => void
   placeholder?: string
   id?: string
+  /** Applied to the positioning wrapper, not the input. */
   className?: string
+  /** Applied to the input itself — compact rails shrink it from the default. */
+  inputClassName?: string
+  'aria-label'?: string
+  /** Lets a caller focus the field — React's autoFocus does not survive the
+   *  read-to-edit swap these inline rows do. */
+  inputRef?: Ref<HTMLInputElement>
   disabled?: boolean
 }
 
@@ -52,6 +59,9 @@ export function AddressAutocomplete({
   placeholder = 'Start typing an address...',
   id,
   className,
+  inputClassName,
+  'aria-label': ariaLabel,
+  inputRef,
   disabled,
 }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -149,6 +159,9 @@ export function AddressAutocomplete({
         <Input
           id={id}
           type="text"
+          className={inputClassName}
+          aria-label={ariaLabel}
+          ref={inputRef}
           value={value}
           onChange={(event) => {
             onChange(event.target.value)
