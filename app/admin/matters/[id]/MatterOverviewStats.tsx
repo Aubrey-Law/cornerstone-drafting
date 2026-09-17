@@ -41,7 +41,7 @@ function StatTile({
     <button
       type="button"
       onClick={onClick}
-      className="flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border border-border bg-card px-4 py-3 text-start transition-colors hover:bg-muted/50"
+      className="flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border border-border bg-card px-4 py-3 text-start transition-colors hover:bg-accent"
     >
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon className="size-3.5" aria-hidden />

@@ -99,7 +99,7 @@ export function LedgerTable({
             // hand. Its checkbox selects the whole matter, which is exactly the
             // selection batch invoicing wants.
             ...(group.rows.length > 1 ? [(
-              <TableRow key={`group-${group.matterId}`} className="bg-muted/40">
+              <TableRow key={`group-${group.matterId}`} className="bg-muted">
                 <TableCell className="pl-4">
                   <Checkbox
                     checked={group.rows.every(row => selected[row.id])}

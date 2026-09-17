@@ -400,8 +400,8 @@ export function ContactPickerField({
                     className={cn(
                       'flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors',
                       checked
-                        ? 'border-accent/40 bg-accent/5'
-                        : 'border-transparent hover:bg-muted',
+                        ? 'border-selected-border bg-selected'
+                        : 'border-transparent hover:bg-accent',
                     )}
                   >
                     <Checkbox
@@ -413,7 +413,7 @@ export function ContactPickerField({
                       <span className="block font-medium text-gray-900">
                         {c.first_name} {c.last_name}
                         {c._label && (
-                          <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[10px] capitalize text-muted-foreground">
+                          <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-micro capitalize text-muted-foreground">
                             {c._label}
                           </span>
                         )}

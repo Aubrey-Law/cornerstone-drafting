@@ -29,7 +29,7 @@ export function CollectionsTrendCard({
         <ul className="flex flex-1 items-end gap-2">
           {points.map(point => (
             <li key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-              <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+              <span className="text-micro font-medium tabular-nums text-muted-foreground">
                 {point.amount > 0 ? money(point.amount) : '—'}
               </span>
               <span

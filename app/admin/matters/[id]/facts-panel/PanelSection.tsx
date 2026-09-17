@@ -33,11 +33,11 @@ export function PanelSection({
           aria-controls={`${id}-content`}
           className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
         >
-          <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+          <span className="text-micro font-semibold uppercase tracking-[0.07em] text-muted-foreground">
             {title}
           </span>
           <span className="flex min-w-0 items-center gap-2">
-            {hint && <span className="truncate text-[11px] text-muted-foreground">{hint}</span>}
+            {hint && <span className="truncate text-micro text-muted-foreground">{hint}</span>}
             <ChevronDown
               className={cn(
                 'size-3.5 shrink-0 text-muted-foreground transition-transform',

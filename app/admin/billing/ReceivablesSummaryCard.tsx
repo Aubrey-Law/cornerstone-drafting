@@ -58,7 +58,7 @@ export function ReceivablesSummaryCard({ snapshot }: { snapshot: BillingSnapshot
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <p className="text-xl font-semibold tabular-nums">{money(total)}</p>
-            <p className="text-[11px] text-muted-foreground">open</p>
+            <p className="text-micro text-muted-foreground">open</p>
           </div>
         </div>
 

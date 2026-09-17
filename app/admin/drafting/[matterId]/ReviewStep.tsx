@@ -452,7 +452,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--gi-divider)' }}>
           <div>
             <h3 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Current documents</h3>
-            <p className="mt-1 text-[12px]" style={{ color: 'var(--gi-muted)' }}>
+            <p className="mt-1 text-xs" style={{ color: 'var(--gi-muted)' }}>
               Review status and missing-field eligibility are separate. Sharing checks unfilled fields again.
             </p>
           </div>
@@ -464,7 +464,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1.5 text-[11px] text-green hover:bg-green-bg"
+                className="h-7 gap-1.5 text-micro text-green hover:bg-green-bg"
                 disabled={bulkBusy !== null}
                 onClick={() => setPendingBulkShare(bulkShareables)}
               >
@@ -476,7 +476,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1.5 text-[11px]"
+                className="h-7 gap-1.5 text-micro"
                 onClick={() => setCombineOpen(true)}
               >
                 <Combine className="h-3.5 w-3.5" />
@@ -493,7 +493,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 text-[11px]"
+              className="h-7 gap-1.5 text-micro"
               disabled={uploadingPdf}
               onClick={() => pdfUploadRef.current?.click()}
             >
@@ -504,18 +504,18 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 border-amber-border bg-amber-bg text-[11px] text-amber hover:bg-amber-light"
+                className="h-7 gap-1 border-amber-border bg-amber-bg text-micro text-amber hover:bg-amber-light"
                 onClick={() => setShowPrevious(prev => !prev)}
               >
                 {showPrevious ? 'Hide' : 'Show'} previous versions ({supersededDrafts.length})
               </Button>
             )}
             {supersededDrafts.length > 0 && (
-              <Badge variant="outline" className="border-amber-border bg-amber-bg text-[11px] text-amber">
+              <Badge variant="outline" className="border-amber-border bg-amber-bg text-micro text-amber">
                 {supersededDrafts.length} superseded
               </Badge>
             )}
-            <Badge variant="outline" className="text-[11px]">{draftCount} current</Badge>
+            <Badge variant="outline" className="text-micro">{draftCount} current</Badge>
           </div>
         </div>
         {recentDrafts.length === 0 ? (
@@ -536,7 +536,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       {formatSize(doc.size)} · Generated {formatDateTime(doc.created_at)}
                       {reviewedAt ? ` · Reviewed ${formatDateTime(reviewedAt)}` : ' · Needs review'}
                     </p>
@@ -544,22 +544,22 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   {isModelDrafted(doc.generationEngine) && (
                     <Badge
                       variant="outline"
-                      className="gap-1 border-amber-border bg-amber-bg text-[11px] text-amber"
+                      className="gap-1 border-amber-border bg-amber-bg text-micro text-amber"
                       title="Template generation failed for this document, so its text was drafted by the model. Read it in full before approving."
                     >
                       <Sparkles className="h-3 w-3" /> AI-drafted
                     </Badge>
                   )}
                   {doc.markerCount === 0 ? (
-                    <Badge variant="outline" className="gap-1 border-success/30 text-[11px] text-success">
+                    <Badge variant="outline" className="gap-1 border-success/30 text-micro text-success">
                       <CheckCircle2 className="h-3 w-3" /> No recorded markers
                     </Badge>
                   ) : typeof doc.markerCount === 'number' && doc.markerCount > 0 ? (
-                    <Badge variant="outline" className="gap-1 border-destructive/30 text-[11px] text-destructive">
+                    <Badge variant="outline" className="gap-1 border-destructive/30 text-micro text-destructive">
                       <AlertTriangle className="h-3 w-3" /> {doc.markerCount} marker{doc.markerCount === 1 ? '' : 's'}
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[11px] text-muted-foreground">Not scanned</Badge>
+                    <Badge variant="outline" className="text-micro text-muted-foreground">Not scanned</Badge>
                   )}
                   <Badge variant="outline" className={doc.missingCount ? 'text-destructive' : 'text-muted-foreground'}>
                     {currentEligibility(doc)?.shareable ? 'Missing-field check passed' : currentEligibility(doc)?.shareable === false ? 'Sharing blocked' : doc.missingCount ? `${doc.missingCount} unfilled fields · sharing blocked` : isPdf ? 'Eligible to share' : 'Check fields in viewer'}
@@ -619,7 +619,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         </div>
         {showPrevious && supersededDrafts.length > 0 && (
           <div className="border-t" style={{ borderColor: 'var(--gi-divider)' }}>
-            <p className="px-5 pt-3 text-[11px] font-medium uppercase" style={{ color: 'var(--gi-faint)' }}>
+            <p className="px-5 pt-3 text-micro font-medium uppercase" style={{ color: 'var(--gi-faint)' }}>
               Previous versions — replaced by a later generation, kept for reference
             </p>
             <div className="divide-y" style={{ borderColor: 'var(--gi-divider)' }}>
@@ -628,12 +628,12 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{doc.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       {formatSize(doc.size)} · Generated {formatDateTime(doc.created_at)}
                       {doc.supersededAt ? ` · Superseded ${formatDateTime(doc.supersededAt)}` : ''}
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-[11px] text-muted-foreground">Superseded</Badge>
+                  <Badge variant="outline" className="text-micro text-muted-foreground">Superseded</Badge>
                   <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'view', doc.name)}>
                     <Eye className="h-3.5 w-3.5" /> View
                   </Button>
@@ -713,7 +713,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 type="button"
                 size="sm"
                 variant={assistantOpen ? 'secondary' : 'outline'}
-                className="h-7 gap-1.5 text-[11px]"
+                className="h-7 gap-1.5 text-micro"
                 onClick={() => setAssistantOpen(open => !open)}
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -738,7 +738,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1.5 text-[11px]"
+                className="h-7 gap-1.5 text-micro"
                 onClick={closeViewer}
               >
                 Done
@@ -756,7 +756,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
             }
           >
             <nav aria-label="Documents to review" className="max-h-36 shrink-0 overflow-y-auto border-b p-2 lg:max-h-none lg:w-48 lg:border-r lg:border-b-0">
-              {wordDrafts.map(doc => <button key={doc.id} type="button" aria-current={doc.id === viewerDoc.id ? 'true' : undefined} onClick={() => switchToDraft(doc.id)} className={`mb-1 block w-full rounded p-2 text-left text-xs ${doc.id === viewerDoc.id ? 'bg-primary/10' : 'hover:bg-muted'}`}><span className="block break-words font-medium">{doc.name}</span><span className="text-muted-foreground">{effectiveReviewedAt(doc) ? 'Reviewed' : 'Needs review'}</span></button>)}
+              {wordDrafts.map(doc => <button key={doc.id} type="button" aria-current={doc.id === viewerDoc.id ? 'true' : undefined} onClick={() => switchToDraft(doc.id)} className={`mb-1 block w-full rounded p-2 text-left text-xs ${doc.id === viewerDoc.id ? 'bg-selected text-selected-foreground' : 'hover:bg-accent'}`}><span className="block break-words font-medium">{doc.name}</span><span className="text-muted-foreground">{effectiveReviewedAt(doc) ? 'Reviewed' : 'Needs review'}</span></button>)}
             </nav>
             <div className="min-h-0 min-w-0 flex-1 border-b border-border lg:border-b-0 lg:border-r">
               <DocxViewerPanel
@@ -832,7 +832,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               These become visible in the client portal and the client is notified by email.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted/40 p-2 text-xs">
+          <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted p-2 text-xs">
             {(pendingBulkShare ?? []).map(doc => (
               <li key={doc.id} className="truncate font-medium">{doc.name}</li>
             ))}

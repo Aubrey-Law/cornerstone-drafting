@@ -152,7 +152,7 @@ export function DragResizeHandle({
       tabIndex={disabled ? -1 : 0}
       {...controls.handleProps}
       className={cn(
-        'flex h-3 shrink-0 cursor-ns-resize items-center justify-center bg-muted/30 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        'flex h-3 shrink-0 cursor-ns-resize items-center justify-center bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
         edge === 'top' ? 'border-b border-border/60' : 'border-t border-border/60',
         disabled && 'pointer-events-none opacity-60',
         className,
@@ -206,7 +206,7 @@ export function ResizableTextarea({
       disabled={disabled}
       edge={handleEdge}
       className={cn(
-        'border-x border-input bg-muted/20',
+        'border-x border-input bg-muted',
         handleEdge === 'top' ? 'rounded-t-md border-t' : 'rounded-b-md border-b',
         handleClassName,
       )}

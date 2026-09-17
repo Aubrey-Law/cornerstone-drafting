@@ -314,11 +314,11 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
             <div
               key={`${t.role}-${i}`}
               className={`rounded-md px-2.5 py-2 text-xs ${
-                t.role === 'user' ? 'bg-accent/60 ml-6 whitespace-pre-wrap' : 'bg-muted mr-4'
+                t.role === 'user' ? 'bg-secondary ml-6 whitespace-pre-wrap' : 'bg-muted mr-4'
               }`}
             >
               {t.toolStatus ? (
-                <div className="mb-1 text-[10px] text-muted-foreground italic">{t.toolStatus}</div>
+                <div className="mb-1 text-micro text-muted-foreground italic">{t.toolStatus}</div>
               ) : null}
               {t.role === 'assistant' ? <ChatMarkdown content={t.text} /> : t.text}
               {t.streaming ? (
@@ -329,7 +329,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
                   type="button"
                   aria-label="Copy message"
                   title="Copy message"
-                  className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+                  className="mt-1 inline-flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-foreground"
                   onClick={() => {
                     void navigator.clipboard.writeText(t.text).then(() => {
                       setCopiedIndex(i)
@@ -342,12 +342,12 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
                 </button>
               ) : null}
               {t.error ? (
-                <div className="mt-1 flex items-center gap-2 text-[10px] text-destructive">
+                <div className="mt-1 flex items-center gap-2 text-micro text-destructive">
                   <span>{t.error}</span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-5 px-1.5 text-[10px]"
+                    className="h-5 px-1.5 text-micro"
                     disabled={busy}
                     onClick={() => retry(i)}
                   >

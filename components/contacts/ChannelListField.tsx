@@ -80,7 +80,7 @@ export function ChannelListField({
   if (!editing) {
     return (
       <div className="flex items-start justify-between gap-2.5 rounded-md px-1.5 py-1">
-        <span className="text-[11.5px] text-muted-foreground">{label}</span>
+        <span className="text-micro text-muted-foreground">{label}</span>
         <button
           type="button"
           aria-label={`${channels.length === 0 ? 'Add' : 'Edit'} ${label}`}
@@ -90,7 +90,7 @@ export function ChannelListField({
             setDraft(channels.length > 0 ? channels : [{ label: '', value: '' }])
             setEditing(true)
           }}
-          className="min-w-0 text-right text-[12.5px] hover:text-primary"
+          className="min-w-0 text-right text-xs hover:text-primary"
         >
           {channels.length === 0 ? (
             <span className="text-muted-foreground">+ Add</span>
@@ -107,8 +107,8 @@ export function ChannelListField({
   }
 
   return (
-    <div className="space-y-1 rounded-md bg-muted/40 px-1.5 py-1.5">
-      <span className="text-[11.5px] text-muted-foreground">{label}</span>
+    <div className="space-y-1 rounded-md bg-muted px-1.5 py-1.5">
+      <span className="text-micro text-muted-foreground">{label}</span>
       {draft.map((row, index) => (
         <div key={index} className="flex items-center gap-1">
           <input
@@ -117,7 +117,7 @@ export function ChannelListField({
             value={row.label}
             placeholder={kind === 'email' ? 'Work' : 'Mobile'}
             onChange={event => update(index, { label: event.target.value })}
-            className="h-7 w-16 shrink-0 rounded-md border border-input bg-background px-1.5 text-[11.5px] outline-none focus:border-ring"
+            className="h-7 w-16 shrink-0 rounded-md border border-input bg-background px-1.5 text-micro outline-none focus:border-ring"
           />
           <input
             disabled={saving}
@@ -140,7 +140,7 @@ export function ChannelListField({
                 setEditing(false)
               }
             }}
-            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-[12.5px] outline-none focus:border-ring"
+            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:border-ring"
           />
           <button
             type="button"
@@ -154,7 +154,7 @@ export function ChannelListField({
         </div>
       ))}
       {error && (
-        <p role="alert" className="text-[11px] text-red-strong">{error}</p>
+        <p role="alert" className="text-micro text-red-strong">{error}</p>
       )}
       <div className="flex items-center justify-between gap-2">
         <button
@@ -162,7 +162,7 @@ export function ChannelListField({
           disabled={saving || draft.length >= MAX_ADDITIONAL_CHANNELS}
           onClick={() => setDraft(current => [...current, { label: '', value: '' }])}
           className={cn(
-            'inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline',
+            'inline-flex items-center gap-1 text-micro font-semibold text-primary hover:underline',
             draft.length >= MAX_ADDITIONAL_CHANNELS && 'pointer-events-none text-muted-foreground',
           )}
         >
@@ -178,7 +178,7 @@ export function ChannelListField({
               setError(null)
               setEditing(false)
             }}
-            className="text-[11.5px] text-muted-foreground hover:text-foreground"
+            className="text-micro text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>
@@ -186,7 +186,7 @@ export function ChannelListField({
             type="button"
             disabled={saving}
             onClick={() => void commit()}
-            className="text-[11.5px] font-semibold text-primary hover:underline"
+            className="text-micro font-semibold text-primary hover:underline"
           >
             {saving ? 'Saving…' : error ? 'Retry' : 'Save'}
           </button>

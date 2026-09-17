@@ -111,25 +111,25 @@ export function MatterDetailHeader({
         <span className="flex min-w-0 items-center gap-1.5">
           <span
             aria-hidden
-            className="flex size-[18px] shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold text-muted-foreground"
+            className="flex size-[18px] shrink-0 items-center justify-center rounded bg-muted text-micro font-semibold text-muted-foreground"
           >
             {clientInitial(matter)}
           </span>
           <MatterSwitcher matterId={matter.matter_id} label={clientName} />
         </span>
-        <Badge variant="outline" className="hidden shrink-0 text-[10px] font-medium tabular-nums sm:inline-flex">
+        <Badge variant="outline" className="hidden shrink-0 text-micro font-medium tabular-nums sm:inline-flex">
           {matterNumber ? `#${matterNumber}` : 'No matter number'}
         </Badge>
         <span
           aria-label="Matter stage"
-          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold lg:inline-flex"
+          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-micro font-semibold lg:inline-flex"
           style={{ background: stageColors.bg, color: stageColors.text }}
         >
           {stageLabel(matter.stage)}
           {agingSummary && ` · day ${agingSummary.daysInStage}`}
         </span>
         {health && (
-          <Badge variant="outline" className={cn('shrink-0 text-[10px]', health.className)}>
+          <Badge variant="outline" className={cn('shrink-0 text-micro', health.className)}>
             {health.label}
           </Badge>
         )}
@@ -138,7 +138,7 @@ export function MatterDetailHeader({
             variant="outline"
             title={`Next action ${nextAction.date}`}
             className={cn(
-              'hidden shrink-0 text-[10px] lg:inline-flex',
+              'hidden shrink-0 text-micro lg:inline-flex',
               nextAction.tone === 'overdue' && 'border-red-strong-border bg-red-strong-bg text-red-strong',
               nextAction.tone === 'today' && 'border-amber-border bg-amber-bg text-amber',
             )}

@@ -175,7 +175,7 @@ export function MatterDetailsCard({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[11px] leading-snug text-muted-foreground">
+          <p className="text-micro leading-snug text-muted-foreground">
             {practiceArea === 'CP'
               ? 'This matter uses the College Preparation Plan intake and drafts the student package. Switch to an estate practice area to move it back to the estate questionnaire.'
               : 'Switching to College Preparation Plan moves the intake to the student questionnaire and drafts the student package. Answers on both are kept.'}

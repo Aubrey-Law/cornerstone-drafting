@@ -284,8 +284,8 @@ export function AdminRail({
                     className={cn(
                       'rounded-full bg-destructive/15 font-medium tabular-nums text-destructive',
                       active
-                        ? 'px-1.5 py-0.5 text-[10px]'
-                        : 'absolute right-0.5 top-1.5 min-w-3.5 px-1 text-[9px] leading-[14px]',
+                        ? 'px-1.5 py-0.5 text-micro'
+                        : 'absolute right-0.5 top-1.5 min-w-3.5 px-1 text-micro leading-[14px]',
                     )}
                   >
                     {item.count}
@@ -300,7 +300,7 @@ export function AdminRail({
               onClick={rail.minimize}
               aria-label="Minimize rail"
               title="Minimize rail"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Minus className="h-4 w-4" />
             </button>
@@ -309,7 +309,7 @@ export function AdminRail({
               onClick={rail.close}
               aria-label="Close rail"
               title="Close rail"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="h-4 w-4" />
             </button>

@@ -163,7 +163,7 @@ function TrustNameQuickFill({
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-micro"
           onClick={() => onSelect(suggestion)}
         >
           {suggestion}
@@ -490,7 +490,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           {(trustDetails.allow_special_trustee || trustDetails.protect_us_trust_status) && (
             <div>
               <FieldLabel>Special Trustee Instructions (optional)</FieldLabel>
-              <p className="mb-2 text-[12px] text-muted-foreground">
+              <p className="mb-2 text-xs text-muted-foreground">
                 Add additional provisions following the default Special Trustee paragraphs, e.g. to pre-appoint a specific person to serve as Special Trustee over a specific asset or act, like rental property. Leave blank if the Special Trustee provision should only operate as a contingent power.
               </p>
               <Textarea
@@ -784,14 +784,14 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           <div className="mt-4">
             <FieldLabel>Staggered Distributions</FieldLabel>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">Quick fill:</span>
+              <span className="text-micro text-muted-foreground">Quick fill:</span>
               {STAGGERED_DISTRIBUTION_PRESETS.map(preset => (
                 <Button
                   key={preset.label}
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 text-[11px]"
+                  className="h-7 text-micro"
                   onClick={() => setStaggers(buildStaggeredTiersFromPreset(preset, () => crypto.randomUUID()))}
                 >
                   {preset.label}
@@ -863,7 +863,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
             onChange={checked => writeProvision('creditor_divorce', checked)}
           />
           {autoMaritalDeductionSavings ? (
-            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-foreground">
+            <div className="rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
               <span className="font-medium">Include marital deduction savings language in spendthrift clause</span>
               <p className="mt-0.5 text-xs text-muted-foreground">This language is required for this trust structure and will be included automatically.</p>
             </div>

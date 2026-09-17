@@ -84,7 +84,7 @@ function SideCard({
       <header className="mb-1 flex items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
         {side.relationship_type && (
-          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-micro text-muted-foreground">
             {side.relationship_label || side.relationship_type}
           </span>
         )}

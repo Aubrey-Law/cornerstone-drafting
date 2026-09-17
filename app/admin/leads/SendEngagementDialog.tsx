@@ -124,7 +124,7 @@ export function SendEngagementDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
               Client
             </span>
             <Input
@@ -140,7 +140,7 @@ export function SendEngagementDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
               Spouse (optional)
             </span>
             <Input
@@ -156,7 +156,7 @@ export function SendEngagementDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
               {feeRequired ? 'Quoted flat fee' : 'Quoted flat fee (optional)'}
             </span>
             <Input
@@ -169,7 +169,7 @@ export function SendEngagementDialog({
               onChange={e => setForm(f => ({ ...f, fee: e.target.value }))}
             />
             {feeRequired && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 Recorded on the lead so the quoted pipeline totals stay accurate.
               </p>
             )}

@@ -378,7 +378,7 @@ export function MatterFactsPanel({
       {/* Identity */}
       <div className="rounded-xl border border-border bg-card px-4 py-3.5 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="grid size-9.5 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold text-muted-foreground">
+          <div className="grid size-9.5 shrink-0 place-items-center rounded-full bg-muted text-compact font-bold text-muted-foreground">
             {initialsFor(clientName) || '—'}
           </div>
           <div className="min-w-0 flex-1">
@@ -390,15 +390,15 @@ export function MatterFactsPanel({
                 const next = event.target.value.trim()
                 if (next && next !== clientName) void saveClientField('full_name', next).catch(() => {})
               }}
-              className="-ml-1.5 h-6.5 w-full rounded-md border border-transparent bg-transparent px-1.5 text-[15px] font-semibold tracking-[-0.012em] outline-none hover:border-input hover:bg-background focus:border-ring focus:bg-background"
+              className="-ml-1.5 h-6.5 w-full rounded-md border border-transparent bg-transparent px-1.5 text-sm font-semibold tracking-[-0.012em] outline-none hover:border-input hover:bg-background focus:border-ring focus:bg-background"
             />
-            <div className="flex items-center gap-1 text-[11.5px] text-muted-foreground">
+            <div className="flex items-center gap-1 text-micro text-muted-foreground">
               {age !== null && <span className="tabular-nums">{age} ·</span>}
               <select
                 aria-label="Marital status"
                 value={maritalStatus}
                 onChange={event => void saveClientField('marital_status', event.target.value || null).catch(() => {})}
-                className="h-5.5 rounded border border-transparent bg-transparent px-1 text-[11.5px] text-muted-foreground hover:border-input hover:bg-background focus:border-ring focus:outline-none"
+                className="h-5.5 rounded border border-transparent bg-transparent px-1 text-micro text-muted-foreground hover:border-input hover:bg-background focus:border-ring focus:outline-none"
               >
                 {MARITAL_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -414,7 +414,7 @@ export function MatterFactsPanel({
             aria-label="Urgency"
             value={details?.urgency ?? 'normal'}
             onChange={event => void onSaveField('urgency', event.target.value)}
-            className="h-5.5 rounded-full border border-amber-border bg-amber-bg px-1.5 text-[10.5px] font-semibold text-amber focus:outline-none"
+            className="h-5.5 rounded-full border border-amber-border bg-amber-bg px-1.5 text-micro font-semibold text-amber focus:outline-none"
           >
             {URGENCY_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -424,7 +424,7 @@ export function MatterFactsPanel({
             aria-label="Fee status"
             value={details?.fee_payment_status ?? (details?.fee_collected ? 'paid_in_full' : 'unpaid')}
             onChange={event => void onSaveField('fee_payment_status', event.target.value)}
-            className="h-5.5 rounded-full border border-transparent bg-muted px-1.5 text-[10.5px] font-semibold text-foreground focus:outline-none"
+            className="h-5.5 rounded-full border border-transparent bg-muted px-1.5 text-micro font-semibold text-foreground focus:outline-none"
           >
             {FEE_STATUS_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -437,7 +437,7 @@ export function MatterFactsPanel({
               'ep_ma_estate_taxable',
               event.target.value === 'not-reviewed' ? null : event.target.value === 'tax-sensitive',
             )}
-            className="h-5.5 rounded-full border border-transparent bg-primary/10 px-1.5 text-[10.5px] font-semibold text-primary focus:outline-none"
+            className="h-5.5 rounded-full border border-transparent bg-primary/10 px-1.5 text-micro font-semibold text-primary focus:outline-none"
           >
             {TAX_DECISION_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -445,7 +445,7 @@ export function MatterFactsPanel({
           </select>
         </div>
 
-        <div className="mt-2 flex items-center justify-between gap-2.5 text-[10.5px] text-muted-foreground">
+        <div className="mt-2 flex items-center justify-between gap-2.5 text-micro text-muted-foreground">
           <span>{restored ? 'Sections restored' : 'Sections remember their state'}</span>
           <span className="flex items-center gap-2.5">
             <button
@@ -481,7 +481,7 @@ export function MatterFactsPanel({
           <div className="px-1.5 pb-1">
             <span
               className={cn(
-                'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
+                'rounded-full border px-1.5 py-0.5 text-micro font-semibold',
                 quiet >= 21
                   ? 'border-amber-border bg-amber-bg text-amber'
                   : 'border-border bg-muted text-muted-foreground',
@@ -522,7 +522,7 @@ export function MatterFactsPanel({
             />
             {(showEmpty || Boolean(addressValue)) && (
             <div className="flex items-start justify-between gap-2.5 rounded-md px-1.5 py-1">
-              <span className="pt-1.5 text-[11.5px] text-muted-foreground">Address</span>
+              <span className="pt-1.5 text-micro text-muted-foreground">Address</span>
               <div className="w-52">
                 <AddressAutocomplete
                   value={addressValue}
@@ -544,7 +544,7 @@ export function MatterFactsPanel({
                       },
                     ).catch(() => {})
                   }}
-                  className="h-7 text-[12.5px]"
+                  className="h-7 text-xs"
                 />
               </div>
             </div>
@@ -556,7 +556,7 @@ export function MatterFactsPanel({
               onSave={next => saveClientField('date_of_birth', next || null)}
             />
             {dob && (
-              <p className="px-1.5 text-right text-[11px] text-muted-foreground tabular-nums">
+              <p className="px-1.5 text-right text-micro text-muted-foreground tabular-nums">
                 {formatDobWithAge(dob)}
               </p>
             )}
@@ -650,7 +650,7 @@ export function MatterFactsPanel({
                 onSave={next => saveSpouseField('date_of_birth', next || null)}
               />
               {spouseDob && (
-                <p className="px-1.5 text-right text-[11px] text-muted-foreground tabular-nums">
+                <p className="px-1.5 text-right text-micro text-muted-foreground tabular-nums">
                   {formatDobWithAge(spouseDob)}
                 </p>
               )}
@@ -659,7 +659,7 @@ export function MatterFactsPanel({
             <button
               type="button"
               onClick={() => onOpenTab('people')}
-              className="px-1.5 text-[11.5px] text-primary hover:underline"
+              className="px-1.5 text-micro text-primary hover:underline"
             >
               Add a spouse on the People tab
             </button>
@@ -715,26 +715,26 @@ export function MatterFactsPanel({
         {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}
         <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
           <div className="bg-card px-2.5 py-2">
-            <div className="text-[10.5px] text-muted-foreground">Gross estate est.</div>
-            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] tabular-nums">
+            <div className="text-micro text-muted-foreground">Gross estate est.</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
               {formatAssetCurrency(estate.grossEstateEstimate)}
             </div>
           </div>
           <div className="bg-amber-bg px-2.5 py-2">
-            <div className="text-[10.5px] text-amber">Estimated MA tax</div>
-            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] text-amber tabular-nums">
+            <div className="text-micro text-amber">Estimated MA tax</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-amber tabular-nums">
               {formatAssetCurrency(estate.estimatedMaTax)}
             </div>
           </div>
           <div className="bg-card px-2.5 py-2">
-            <div className="text-[10.5px] text-muted-foreground">With credit shelter</div>
-            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] tabular-nums">
+            <div className="text-micro text-muted-foreground">With credit shelter</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
               {formatAssetCurrency(estate.maTaxWithCreditShelter)}
             </div>
           </div>
           <div className="bg-card px-2.5 py-2">
-            <div className="text-[10.5px] text-muted-foreground">Difference</div>
-            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] text-green tabular-nums">
+            <div className="text-micro text-muted-foreground">Difference</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-green tabular-nums">
               {formatAssetCurrency(estate.creditShelterSavings)}
             </div>
           </div>
@@ -771,7 +771,7 @@ export function MatterFactsPanel({
         <div className="flex flex-wrap gap-1.5 px-1.5 pb-1">
           {planFlagChips.map(chip => {
             const className = cn(
-              'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
+              'rounded-full border px-1.5 py-0.5 text-micro font-semibold',
               chip.on
                 ? 'border-primary/30 bg-primary/10 text-primary'
                 : 'border-border bg-muted text-muted-foreground',
@@ -817,7 +817,7 @@ export function MatterFactsPanel({
         <ReadOnlyRow label="County" empty={!county} hideWhenEmpty={hideWhenEmpty}>
           {county || '—'}
         </ReadOnlyRow>
-        <p className="px-1.5 pt-1 text-[11px] leading-snug text-muted-foreground">
+        <p className="px-1.5 pt-1 text-micro leading-snug text-muted-foreground">
           Matter type — not marital status — decides whether the spouse section and
           second-death provisions appear. Trust name, plan and credit shelter are
           read-only mirrors of the design sheet.
@@ -863,7 +863,7 @@ export function MatterFactsPanel({
             {draftsDue.value ? formatDate(draftsDue.value) : '—'}
           </span>
           {draftsDue.derived && (
-            <span className="text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">
+            <span className="text-micro font-semibold uppercase tracking-[.05em] text-primary">
               auto
             </span>
           )}
@@ -919,14 +919,14 @@ export function MatterFactsPanel({
             value={noteText}
             onChange={event => onNoteTextChange(event.target.value)}
             onBlur={() => { if (noteText.trim()) onAddNote() }}
-            className="text-[12.5px]"
+            className="text-xs"
           />
           <div className="mt-1.5 flex items-center justify-between gap-2.5">
-            <span className="text-[11px] text-muted-foreground">Saves on blur</span>
+            <span className="text-micro text-muted-foreground">Saves on blur</span>
             <Button
               type="button"
               size="sm"
-              className="h-7 text-[11.5px]"
+              className="h-7 text-micro"
               disabled={noteSaving || !noteText.trim()}
               onClick={onAddNote}
             >
@@ -950,7 +950,7 @@ export function MatterFactsPanel({
       {saveStatus && (
         <p
           role={error ? 'alert' : 'status'}
-          className={cn('px-1 text-[11px]', error ? 'text-red-strong' : 'text-muted-foreground')}
+          className={cn('px-1 text-micro', error ? 'text-red-strong' : 'text-muted-foreground')}
         >
           {saveStatus}
         </p>

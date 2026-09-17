@@ -118,7 +118,7 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
       </div>
 
       {open && (
-        <form onSubmit={handleManualSubmit} className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+        <form onSubmit={handleManualSubmit} className="space-y-2 rounded-md border border-border bg-muted p-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="fiduciary-name" className="text-xs">Name</Label>
@@ -126,7 +126,7 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
                 id="fiduciary-name"
                 value={draft.name}
                 onChange={event => update('name', event.target.value)}
-                className="h-8 text-[13px]"
+                className="h-8 text-compact"
                 required
               />
             </div>
@@ -136,7 +136,7 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
                 id="fiduciary-relationship"
                 value={draft.relationship}
                 onChange={event => update('relationship', event.target.value)}
-                className="h-8 text-[13px]"
+                className="h-8 text-compact"
                 placeholder="Sister, trustee, friend"
               />
             </div>
@@ -145,17 +145,17 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
             <Input
               value={draft.suffix}
               onChange={event => update('suffix', event.target.value)}
-              className="h-8 text-[13px]"
+              className="h-8 text-compact"
               placeholder="Suffix"
             />
             <Input
               value={draft.preferred_name}
               onChange={event => update('preferred_name', event.target.value)}
-              className="h-8 text-[13px]"
+              className="h-8 text-compact"
               placeholder="Preferred name"
             />
             <Select value={draft.preferred_pronoun || undefined} onValueChange={value => update('preferred_pronoun', value)}>
-              <SelectTrigger className="h-8 text-[13px]">
+              <SelectTrigger className="h-8 text-compact">
                 <SelectValue placeholder="Pronouns" />
               </SelectTrigger>
               <SelectContent>
@@ -170,29 +170,29 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
               type="email"
               value={draft.email}
               onChange={event => update('email', event.target.value)}
-              className="h-8 text-[13px]"
+              className="h-8 text-compact"
               placeholder="Email"
             />
             <Input
               type="tel"
               value={draft.phone}
               onChange={event => update('phone', formatPhoneInput(event.target.value))}
-              className="h-8 text-[13px]"
+              className="h-8 text-compact"
               placeholder="(555) 555-5555"
             />
           </div>
           <Input
             value={draft.address}
             onChange={event => update('address', event.target.value)}
-            className="h-8 text-[13px]"
+            className="h-8 text-compact"
             placeholder="Address"
           />
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={reset} disabled={saving}>
+            <Button type="button" size="sm" variant="ghost" className="h-7 text-micro" onClick={reset} disabled={saving}>
               <X className="mr-1 h-3 w-3" />
               Cancel
             </Button>
-            <Button type="submit" size="sm" className="h-7 text-[11px]" disabled={saving}>
+            <Button type="submit" size="sm" className="h-7 text-micro" disabled={saving}>
               {saving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Plus className="mr-1 h-3 w-3" />}
               Save
             </Button>
@@ -379,9 +379,9 @@ export function FiduciaryContactImportDialog({
                 disabled={parsing || attaching}
                 rows={10}
                 placeholder="Paste names, emails, phone numbers, relationship notes, or a contact list..."
-                className="tabular-nums text-[12px]"
+                className="tabular-nums text-xs"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 {text.length.toLocaleString()} characters
               </p>
             </div>
@@ -395,8 +395,8 @@ export function FiduciaryContactImportDialog({
                 onDrop={handleDrop}
                 disabled={parsing || attaching}
                 className={cn(
-                  'flex min-h-36 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                  dragOver && 'border-primary bg-muted/60',
+                  'flex min-h-36 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60',
+                  dragOver && 'border-primary bg-muted',
                 )}
               >
                 <Upload className="h-7 w-7 text-muted-foreground" />
@@ -411,7 +411,7 @@ export function FiduciaryContactImportDialog({
                 onChange={handleFileChange}
               />
               {file && (
-                <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
+                <div className="flex items-center gap-3 rounded-md border bg-muted px-3 py-2">
                   {file.name.toLowerCase().endsWith('.xlsx')
                     ? <FileSpreadsheet className="h-4 w-4 text-primary" />
                     : <FileText className="h-4 w-4 text-primary" />}
@@ -429,7 +429,7 @@ export function FiduciaryContactImportDialog({
 
           {contacts.length > 0 && (
             <div className="rounded-md border border-border">
-              <div className="border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium">
+              <div className="border-b border-border bg-muted px-3 py-2 text-xs font-medium">
                 {contacts.length} contact{contacts.length === 1 ? '' : 's'} ready to attach
               </div>
               <div className="max-h-56 divide-y divide-border overflow-y-auto">

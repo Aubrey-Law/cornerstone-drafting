@@ -229,7 +229,7 @@ export function SigningExperience({ token }: { token: string }) {
         )}
 
         {error && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-micro text-destructive">
             {error}
           </p>
         )}
@@ -243,7 +243,7 @@ export function SigningExperience({ token }: { token: string }) {
           <Button type="button" variant="outline" onClick={() => submit('decline')} disabled={busy}>
             Decline
           </Button>
-          <span className={cn('text-[11px] text-muted-foreground', consent && 'sr-only')}>
+          <span className={cn('text-micro text-muted-foreground', consent && 'sr-only')}>
             Consent is required before signing.
           </span>
         </div>

@@ -110,7 +110,7 @@ function AttentionBand({
 function CategoryStrip({ label, style }: { label: string; style: { bg: string; text: string; dot: string } }) {
   return (
     <div
-      className="flex items-center gap-1.5 rounded-t-[3px] px-2 py-1 text-[11px] font-medium leading-4"
+      className="flex items-center gap-1.5 rounded-t-[3px] px-2 py-1 text-micro font-medium leading-4"
       style={{ background: style.bg, color: style.text }}
     >
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: style.dot }} aria-hidden />
@@ -135,7 +135,7 @@ function CalendarEventRow({ event }: { event: ExternalCalendarEvent }) {
         <CategoryStrip label={CATEGORY_LABEL[category]} style={style} />
         <div className="px-3 py-2 text-muted-foreground">
           <p className="text-sm font-medium text-foreground">{event.subject}</p>
-          <p className="text-[11px]">
+          <p className="text-micro">
             {event.calendarName ? `Google · ${event.calendarName}` : 'Calendar event'}
           </p>
         </div>
@@ -163,7 +163,7 @@ function AgendaRow({
     <div className={cn('flex gap-3', past && 'opacity-55')}>
       <div className="w-[62px] shrink-0 pt-2 text-right">
         <div className="text-xs font-semibold tabular-nums text-foreground">{fmtTime(appointment.startTime)}</div>
-        <div className="text-[11px] text-muted-foreground">{minutesLabel(minutes)}</div>
+        <div className="text-micro text-muted-foreground">{minutesLabel(minutes)}</div>
       </div>
       <article
         className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card"
@@ -176,7 +176,7 @@ function AgendaRow({
               <button
                 type="button"
                 onClick={onOpen}
-                className={cn('truncate text-left text-[15px] font-semibold text-foreground hover:underline', past && 'line-through')}
+                className={cn('truncate text-left text-sm font-semibold text-foreground hover:underline', past && 'line-through')}
               >
                 {appointment.attendeeName}
               </button>
@@ -185,7 +185,7 @@ function AgendaRow({
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
                 <span className="inline-block">
                   {' '}
-                  · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-[10px]`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
+                  · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-micro`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
                 </span>
                 {appointment.source === 'calendly'
                   ? ' · Calendly'
@@ -196,13 +196,13 @@ function AgendaRow({
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {appointment.linkedMatterNumber && (
-                <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-micro text-foreground">
                   {appointment.linkedMatterNumber}
                 </span>
               )}
               {appointment.linkedMatterStage && (
                 <span
-                  className="rounded-full px-1.5 py-0.5 text-[11px]"
+                  className="rounded-full px-1.5 py-0.5 text-micro"
                   style={{ background: 'var(--stage-active-bg)', color: 'var(--stage-active-text)' }}
                 >
                   {appointment.linkedMatterStage.replace(/_/g, ' ')}
@@ -210,7 +210,7 @@ function AgendaRow({
               )}
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-[11px]">
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-micro">
             <span className="inline-flex items-center gap-1 text-success">
               <Check className="h-3 w-3" /> calendar synced
             </span>
@@ -295,11 +295,11 @@ export function DayAgenda({
         <div className="space-y-2">
           {blocks.map(event => (
             <div key={event.id} className="flex gap-3">
-              <div className="w-[62px] shrink-0 pt-1 text-right text-[11px] text-muted-foreground">
+              <div className="w-[62px] shrink-0 pt-1 text-right text-micro text-muted-foreground">
                 {event.isAllDay ? 'All day' : fmtTime(event.startIso)}
               </div>
               <div
-                className="min-h-6 flex-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground"
+                className="min-h-6 flex-1 rounded border border-border px-2 py-1 text-micro text-muted-foreground"
                 style={{ backgroundImage: BLOCK_HATCH }}
               >
                 {event.subject}
@@ -330,9 +330,9 @@ export function DayAgenda({
       <aside className="space-y-3">
         <RailSection icon={CalendarDays} title="Dates this week">
           {rail.datesThisWeek.length ? rail.datesThisWeek.map(item => (
-            <Link key={item.id} href={`/admin/matters/${item.matterId}`} className="block rounded px-2 py-1.5 hover:bg-muted">
+            <Link key={item.id} href={`/admin/matters/${item.matterId}`} className="block rounded px-2 py-1.5 hover:bg-accent">
               <span className="block text-xs font-medium text-foreground">{item.label}</span>
-              <span className="text-[11px] text-muted-foreground">{new Date(item.date).toLocaleDateString()}</span>
+              <span className="text-micro text-muted-foreground">{new Date(item.date).toLocaleDateString()}</span>
             </Link>
           )) : <Empty>Nothing due this week</Empty>}
         </RailSection>
@@ -341,7 +341,7 @@ export function DayAgenda({
             <Link
               key={item.id}
               href={item.matterId ? `/admin/matters/${item.matterId}?tab=tasks` : `/admin/crm/opportunities/${item.leadId}`}
-              className="block rounded px-2 py-1.5 text-xs text-foreground hover:bg-muted"
+              className="block rounded px-2 py-1.5 text-xs text-foreground hover:bg-accent"
             >
               {item.title}
             </Link>

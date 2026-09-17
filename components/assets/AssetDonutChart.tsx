@@ -71,7 +71,7 @@ export function AssetDonutChart({ title, segments, className, size = 120 }: Asse
             ) : null}
           </svg>
           {total <= 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground">
+            <div className="absolute inset-0 flex items-center justify-center text-micro text-muted-foreground">
               No data
             </div>
           )}

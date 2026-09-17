@@ -59,7 +59,7 @@ function SummaryTile({
       onClick={onClick}
       className={cn(
         'rounded-lg border bg-card px-4 py-3 text-left transition-colors',
-        active ? 'border-primary ring-1 ring-primary/30' : 'border-border hover:bg-muted/40',
+        active ? 'border-primary ring-1 ring-primary/30' : 'border-border hover:bg-accent',
       )}
     >
       <div className="text-2xl font-semibold tabular-nums" style={{ color: accent ?? 'var(--primary)' }}>
@@ -89,7 +89,7 @@ function StageChurn({ row }: { row: MatterAgingRow }) {
   return (
     <p
       className={cn(
-        'flex items-center gap-1 text-[10px]',
+        'flex items-center gap-1 text-micro',
         breached ? 'font-semibold text-red-strong' : 'text-muted-foreground',
       )}
       title={
@@ -111,11 +111,11 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
   if (row.is_snoozed) {
     return (
       <div className="space-y-1">
-        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+        <Badge variant="outline" className="text-micro text-muted-foreground">
           Snoozed until {row.snoozed_until ? formatDate(row.snoozed_until) : '—'}
         </Badge>
         {row.snooze_reason && (
-          <p className="max-w-[140px] truncate text-[10px] text-muted-foreground">{row.snooze_reason}</p>
+          <p className="max-w-[140px] truncate text-micro text-muted-foreground">{row.snooze_reason}</p>
         )}
       </div>
     )
@@ -127,11 +127,11 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
   if (row.is_scheduled) {
     return (
       <div className="space-y-1">
-        <Badge variant="outline" className="border-green/30 bg-green-bg text-[10px] text-green">
+        <Badge variant="outline" className="border-green/30 bg-green-bg text-micro text-green">
           <CalendarCheck aria-hidden className="mr-1 h-3 w-3 shrink-0" />
           {formatDate(row.stage_entered_at)}
         </Badge>
-        <p className="text-[10px] text-muted-foreground">Scheduled — clock starts then</p>
+        <p className="text-micro text-muted-foreground">Scheduled — clock starts then</p>
       </div>
     )
   }
@@ -139,11 +139,11 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
   if (row.stage_clock_suspect) {
     return (
       <div className="space-y-1">
-        <Badge variant="outline" className="border-amber-border bg-amber-bg text-[10px] text-amber">
+        <Badge variant="outline" className="border-amber-border bg-amber-bg text-micro text-amber">
           <AlertTriangle aria-hidden className="mr-1 h-3 w-3 shrink-0" />
           Check the date
         </Badge>
-        <p className="max-w-[150px] text-[10px] leading-snug text-muted-foreground">
+        <p className="max-w-[150px] text-micro leading-snug text-muted-foreground">
           The recorded milestone predates the record; measured from creation instead.
         </p>
       </div>

@@ -25,8 +25,8 @@ export function GoalsSection({ sheet, onChange }: SectionProps) {
           maxLength={GOALS_TEXTAREA_MAX_LENGTH}
         />
         <div className="mt-2 flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">Saved automatically on blur.</p>
-          <p className="text-[10px] text-muted-foreground tabular-nums">{goals.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
+          <p className="text-micro text-muted-foreground">Saved automatically on blur.</p>
+          <p className="text-micro text-muted-foreground tabular-nums">{goals.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
         </div>
       </SectionBlock>
 
@@ -43,8 +43,8 @@ export function GoalsSection({ sheet, onChange }: SectionProps) {
           maxLength={GOALS_TEXTAREA_MAX_LENGTH}
         />
         <div className="mt-2 flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">Saved automatically on blur.</p>
-          <p className="text-[10px] text-muted-foreground tabular-nums">{concerns.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
+          <p className="text-micro text-muted-foreground">Saved automatically on blur.</p>
+          <p className="text-micro text-muted-foreground tabular-nums">{concerns.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
         </div>
       </SectionBlock>
 

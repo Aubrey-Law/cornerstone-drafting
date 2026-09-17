@@ -227,7 +227,7 @@ export default function WorksClient({ canManageMasters = false }: WorksClientPro
                       key={skill.id}
                       type="button"
                       onClick={() => setSelectedId(skill.id)}
-                      className={`flex w-full items-start gap-3 p-4 text-left hover:bg-muted/50 ${selected?.id === skill.id ? 'bg-muted/60' : ''}`}
+                      className={`flex w-full items-start gap-3 p-4 text-left hover:bg-accent ${selected?.id === skill.id ? 'bg-selected' : ''}`}
                     >
                       <span className="mt-0.5 rounded-md bg-primary/10 p-2">
                         {skill.skill_type === 'tabular' ? <Table2 className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
@@ -235,9 +235,9 @@ export default function WorksClient({ canManageMasters = false }: WorksClientPro
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{skill.name}</span>
-                          {skill.is_system && <Badge variant="secondary" className="text-[10px]">System</Badge>}
-                          {skill.is_shared && <Badge variant="secondary" className="text-[10px]">Shared</Badge>}
-                          {!skill.is_active && <Badge variant="destructive" className="text-[10px]">Inactive</Badge>}
+                          {skill.is_system && <Badge variant="secondary" className="text-micro">System</Badge>}
+                          {skill.is_shared && <Badge variant="secondary" className="text-micro">Shared</Badge>}
+                          {!skill.is_active && <Badge variant="destructive" className="text-micro">Inactive</Badge>}
                         </span>
                         <span className="mt-1 block text-sm text-muted-foreground">{skill.description}</span>
                         <span className="mt-2 block text-xs text-muted-foreground">

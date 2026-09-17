@@ -474,12 +474,12 @@ export function StaffSettingsClient({
                     <Label htmlFor={`model-${provider}`} className="text-sm">
                       {LLM_PROVIDER_LABELS[provider]}
                       {isDefault ? (
-                        <span className="ml-2 text-[10px] font-normal uppercase text-primary">
+                        <span className="ml-2 text-micro font-normal uppercase text-primary">
                           default
                         </span>
                       ) : null}
                     </Label>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-micro text-muted-foreground">
                       {key?.configured ? 'Key configured' : 'Key missing'}
                     </span>
                   </div>
@@ -519,7 +519,7 @@ export function StaffSettingsClient({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium capitalize">{k.provider}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-micro text-muted-foreground">
                     {k.configured
                       ? `Configured (${k.source}${k.hint ? ` · ${k.hint}` : ''})`
                       : 'Not configured'}
@@ -610,7 +610,7 @@ export function StaffSettingsClient({
                 <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{c.name}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-micro text-muted-foreground">
                       {c.serverUrl} · {c.authMode}
                       {c.hasAuthConfig ? ' · auth stored' : ''}
                     </p>

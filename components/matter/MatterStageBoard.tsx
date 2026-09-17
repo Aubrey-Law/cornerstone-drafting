@@ -143,7 +143,7 @@ export function MatterStageBoard({
               key={group}
               aria-label={`${STAGE_GROUP_LABELS[group]} · ${count}`}
               className={cn(
-                'flex min-w-0 flex-col rounded-lg border bg-muted/20',
+                'flex min-w-0 flex-col rounded-lg border bg-muted',
                 isTarget ? 'border-primary ring-2 ring-primary/20' : 'border-border',
               )}
               onDragOver={e => {
@@ -166,14 +166,14 @@ export function MatterStageBoard({
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colors.dot }} aria-hidden />
                   <h2 className="truncate text-xs font-semibold">{STAGE_GROUP_LABELS[group]}</h2>
                 </div>
-                <Badge variant="outline" className="border-current/20 bg-background/60 text-[10px] tabular-nums">
+                <Badge variant="outline" className="border-current/20 bg-background/60 text-micro tabular-nums">
                   {count}
                 </Badge>
               </header>
               {paging && <div className="flex items-center justify-between px-2 py-1 text-xs"><Button variant="ghost" size="sm" disabled={paging.page<=1} onClick={()=>onPageChange?.(group,paging.page-1)}>Previous</Button><span>{paging.page}</span><Button variant="ghost" size="sm" disabled={paging.page*paging.pageSize>=paging.total} onClick={()=>onPageChange?.(group,paging.page+1)}>Next</Button></div>}
               <ul className="flex min-h-[8rem] flex-1 flex-col gap-2 p-2">
                 {items.length === 0 ? (
-                  <li className="rounded-md border border-dashed border-border px-2 py-6 text-center text-[11px] text-muted-foreground">
+                  <li className="rounded-md border border-dashed border-border px-2 py-6 text-center text-micro text-muted-foreground">
                     Drop matters here
                   </li>
                 ) : (
@@ -245,11 +245,11 @@ function BoardCard({
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
             <p className="truncate text-sm font-semibold text-foreground hover:text-primary">{card.title}</p>
             {card.subtitle && (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{card.subtitle}</p>
+              <p className="mt-0.5 truncate text-micro text-muted-foreground">{card.subtitle}</p>
             )}
           </button>
           {card.badge && (
-            <Badge className={cn('shrink-0 border-0 text-[10px]', BADGE_TONE_CLASS[card.badge.tone])}>
+            <Badge className={cn('shrink-0 border-0 text-micro', BADGE_TONE_CLASS[card.badge.tone])}>
               {card.badge.label}
             </Badge>
           )}
@@ -260,7 +260,7 @@ function BoardCard({
               <button
                 type="button"
                 disabled={updating}
-                className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-micro font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 style={{ backgroundColor: stageColors.bg, color: stageColors.text }}
                 aria-label={`Stage for ${card.title}: ${stageLabel(card.stage)}`}
                 onClick={e => e.stopPropagation()}
@@ -273,7 +273,7 @@ function BoardCard({
               {STAGE_GROUP_ORDER.map((group, groupIndex) => (
                 <DropdownMenuGroup key={group}>
                   {groupIndex > 0 && <DropdownMenuSeparator />}
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <DropdownMenuLabel className="text-micro uppercase tracking-wide text-muted-foreground">
                     {STAGE_GROUP_LABELS[group]}
                   </DropdownMenuLabel>
                   {STAGES.filter(stage => stage.group === group).map(stage => (
@@ -283,7 +283,7 @@ function BoardCard({
                       onSelect={() => onStageSelect(stage.key)}
                     >
                       {stage.label}
-                      {stage.key === card.stage && <span className="ml-auto text-[10px] text-muted-foreground">Current</span>}
+                      {stage.key === card.stage && <span className="ml-auto text-micro text-muted-foreground">Current</span>}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
@@ -292,7 +292,7 @@ function BoardCard({
           </DropdownMenu>
           {isQuiet && (
             <span
-              className="inline-flex items-center rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-medium text-red"
+              className="inline-flex items-center rounded-full bg-red-bg px-2 py-0.5 text-micro font-medium text-red"
               title={`No activity for ${card.quietDays} days`}
             >
               Quiet {card.quietDays}d
@@ -300,7 +300,7 @@ function BoardCard({
           )}
         </div>
         {card.meta && card.meta.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground">
             {card.meta.map((entry, index) => (
               // Index keys are stable here: `meta` is a fixed-length list built
               // per card, never reordered or filtered after render.

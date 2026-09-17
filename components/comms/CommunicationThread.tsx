@@ -160,10 +160,10 @@ export function CommunicationThread({
               key={`${item.channel}-${item.id}`}
               className={cn(
                 'rounded-md px-2.5 py-2 text-xs',
-                item.direction === 'inbound' ? 'bg-muted/50' : 'bg-primary/10',
+                item.direction === 'inbound' ? 'bg-muted' : 'bg-primary/10',
               )}
             >
-              <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
+              <div className="mb-0.5 flex justify-between gap-2 text-micro text-muted-foreground">
                 <span>
                   {CHANNEL_LABEL[item.channel]}
                   {' · '}
@@ -179,7 +179,7 @@ export function CommunicationThread({
       </ol>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-micro text-muted-foreground">
           <Badge variant="secondary">Reply by {CHANNEL_LABEL[replyChannel].toLowerCase()}</Badge>
           <span className="inline-flex items-center gap-1">
             <Lock className="size-3" aria-hidden />

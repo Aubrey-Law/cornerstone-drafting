@@ -92,7 +92,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 <item.icon className="h-4 w-4 shrink-0" />
                 <span className="flex-1">{item.label}</span>
                 {item.href === '/messages' && unreadCount > 0 && (
-                  <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+                  <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-micro font-semibold tabular-nums text-primary-foreground">
                     {unreadCount}
                   </span>
                 )}
@@ -164,7 +164,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span className="flex-1">{item.label}</span>
                       {item.href === '/messages' && unreadCount > 0 && (
-                        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+                        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-micro font-semibold tabular-nums text-primary-foreground">
                           {unreadCount}
                         </span>
                       )}

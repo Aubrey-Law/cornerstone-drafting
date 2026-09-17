@@ -167,8 +167,8 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">Signing status</h2>
-          <Badge variant="outline" className="text-[11px]">{view.status}</Badge>
-          <Badge variant="outline" className="text-[11px]">{view.provider}</Badge>
+          <Badge variant="outline" className="text-micro">{view.status}</Badge>
+          <Badge variant="outline" className="text-micro">{view.provider}</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -200,7 +200,7 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
         </div>
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground md:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-micro text-muted-foreground md:grid-cols-4">
         <div><dt className="inline font-medium">Sent </dt><dd className="inline">{when(view.sentAt)}</dd></div>
         <div><dt className="inline font-medium">Completed </dt><dd className="inline">{when(view.completedAt)}</dd></div>
         <div><dt className="inline font-medium">Last checked </dt><dd className="inline">{when(view.lastProviderSyncAt)}</dd></div>
@@ -208,7 +208,7 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
       </dl>
 
       {(error || view.providerSyncError) && (
-        <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+        <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-micro text-destructive">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{error ?? `${view.providerSyncError} (${when(view.providerSyncErrorAt)})`}</span>
         </p>
@@ -229,13 +229,13 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
               <p className="truncate text-xs font-medium text-foreground">
                 {recipient.name} <span className="font-normal text-muted-foreground">({recipient.role})</span>
               </p>
-              <p className="truncate text-[11px] text-muted-foreground">{recipient.email}</p>
+              <p className="truncate text-micro text-muted-foreground">{recipient.email}</p>
             </div>
             <div className="text-right">
-              <Badge variant="outline" className="text-[10px]">{recipient.status}</Badge>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">{recipientTimeline(recipient)}</p>
+              <Badge variant="outline" className="text-micro">{recipient.status}</Badge>
+              <p className="mt-0.5 text-micro text-muted-foreground">{recipientTimeline(recipient)}</p>
               {recipient.lastRemindedAt && (
-                <p className="text-[10px] text-muted-foreground">Reminded {when(recipient.lastRemindedAt)}</p>
+                <p className="text-micro text-muted-foreground">Reminded {when(recipient.lastRemindedAt)}</p>
               )}
             </div>
           </li>
@@ -243,7 +243,7 @@ export function EngagementStatusPanel({ agreementId }: { agreementId: string }) 
       </ul>
 
       {eligible.length === 0 && view.live && (
-        <p className="text-[11px] text-muted-foreground">Every recipient has already acted; there is no one to remind.</p>
+        <p className="text-micro text-muted-foreground">Every recipient has already acted; there is no one to remind.</p>
       )}
 
       {view.artifacts.length > 0 && (

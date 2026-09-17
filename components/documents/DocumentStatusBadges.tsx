@@ -17,7 +17,7 @@ export function DocumentStatusBadges({ badges }: { badges: DocumentBadgeModel[] 
   return (
     <div className="flex flex-wrap gap-1.5">
       {badges.map(badge => (
-        <Badge key={badge.label} variant="outline" className={cn('text-[11px]', TONE_CLASS[badge.tone])}>
+        <Badge key={badge.label} variant="outline" className={cn('text-micro', TONE_CLASS[badge.tone])}>
           {badge.label}
         </Badge>
       ))}

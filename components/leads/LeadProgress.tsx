@@ -53,7 +53,7 @@ export function LeadProgress({ lead }: { lead: LeadListRow }) {
   const hired: StepState = lead.lead_status === 'hired' ? 'done' : 'todo'
 
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-micro">
       <Step state={intake.state} label={intake.label} />
       <span className="h-px w-3 bg-border" />
       <Step state={engagement.state} label={engagement.label} />

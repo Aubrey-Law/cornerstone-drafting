@@ -139,7 +139,7 @@ export function TrustBeneficiariesSection({
               {remoteCharities.length > 0 && (
                 <div className="space-y-3">
                   {remoteCharities.map((c, i) => (
-                    <div key={c.id ?? i} className="rounded-lg border border-border bg-muted/40 p-3">
+                    <div key={c.id ?? i} className="rounded-lg border border-border bg-muted p-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <AttorneyInput label="Charity Name" value={c.name} onChange={v => editRemoteCharity(i, { name: v })} />
                         <AttorneyInput label="Organization Type" value={c.org_type ?? ''} placeholder="e.g. 501(c)(3)" onChange={v => editRemoteCharity(i, { org_type: v || null })} />
@@ -175,7 +175,7 @@ export function TrustBeneficiariesSection({
             {bequests.map((b, idx) => (
               <div key={b.id ?? idx} className="rounded-lg border border-border p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  <span className="text-micro font-bold uppercase tracking-[0.12em] text-muted-foreground">
                     {b.kind === 'cash' ? 'Cash Legacy' : b.kind === 'item' ? 'Specific Item' : 'Charitable Bequest'}
                   </span>
                   <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => removeBequest(idx)}>

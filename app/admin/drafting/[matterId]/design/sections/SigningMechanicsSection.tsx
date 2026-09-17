@@ -82,7 +82,7 @@ export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
           <span className="block text-sm font-semibold text-foreground">Signing mechanics</span>
           <span className="block text-xs text-muted-foreground">Completed at the signing meeting</span>
         </span>
-        <span className="rounded-full border border-border bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded-full border border-border bg-muted px-2 py-1 text-micro font-medium text-muted-foreground">
           Deferred
         </span>
       </button>

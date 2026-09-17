@@ -131,7 +131,7 @@ export function MatterMeetingNotesCard({
                   <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       {formatSize(doc.size)}
                       {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
                     </p>

@@ -63,10 +63,27 @@ export type SemanticTokens = {
     primaryFg: string
     secondary: string
     secondaryFg: string
+    /** THE hover fill. Nothing else sets a surface on hover. */
     accent: string
     accentFg: string
     destructive: string
     destructiveFg: string
+  }
+  /**
+   * THE "you are here" fill, and the only tinted surface in the app.
+   *
+   * Every selection signal used to be a neutral: `bg-accent` in the sidebar,
+   * `bg-muted` in the design sheet index, `bg-primary/10` in the drafting
+   * stepper, `bg-primary/5` on a selected day. Four of them are visible on one
+   * screen and nothing ranked them, because with a near-black primary every
+   * "this one" collapses to a grey. These carry the firm's teal so selection is
+   * the one thing on screen wearing a colour.
+   */
+  selection: {
+    bg: string
+    fg: string
+    /** The rule, underline or left marker beside the fill — never colour alone. */
+    border: string
   }
   sidebar: {
     bg: string
@@ -178,6 +195,11 @@ const lightSemantic: SemanticTokens = {
     destructive: '#e7000b',
     destructiveFg: primitives.white,
   },
+  selection: {
+    bg: '#e2efef',
+    fg: '#14444a',   // 8.99:1 on the fill
+    border: primitives.firmTeal,
+  },
   sidebar: {
     // White, like the admin shell's own aside (which uses `bg-card`), so the
     // portal sidebar reads as a panel raised off the tinted canvas rather than
@@ -261,12 +283,17 @@ const darkSemantic: SemanticTokens = {
     // dark is a dark fill with a light label, not a mid grey with either.
     secondary: '#3f3f46',
     secondaryFg: '#e4e4e8',
-    // One step above `elevated`, so a row hover is visible on a card rather
-    // than matching it.
-    accent: '#24242a',
+    // One step above `muted`, not just above `elevated`: a hover has to read on
+    // a sunken well as well as on a card, and those are only 3 points apart.
+    accent: '#2b2b32',
     accentFg: '#e4e4e8',
     destructive: '#ff6467',
     destructiveFg: '#0a0a0c',
+  },
+  selection: {
+    bg: '#16302f',
+    fg: '#a8dfe2',   // 9.58:1 on the fill
+    border: primitives.firmTealDark,
   },
   sidebar: {
     bg: '#101013',
@@ -309,6 +336,9 @@ function legacyFromSemantic(s: SemanticTokens): LegacyTokens {
     '--muted-foreground': s.text.muted,
     '--accent': s.interactive.accent,
     '--accent-foreground': s.interactive.accentFg,
+    '--selected': s.selection.bg,
+    '--selected-foreground': s.selection.fg,
+    '--selected-border': s.selection.border,
     '--destructive': s.interactive.destructive,
     '--destructive-foreground': s.interactive.destructiveFg,
     '--border': s.border.default,
@@ -555,6 +585,7 @@ export const contrastPairs: ThemePair[] = [
   ...bothThemes('secondary button', (t) => t.semantic.interactive.secondaryFg, (t) => t.semantic.interactive.secondary),
   ...bothThemes('destructive button', (t) => t.semantic.interactive.destructiveFg, (t) => t.semantic.interactive.destructive),
   ...bothThemes('accent surface', (t) => t.semantic.interactive.accentFg, (t) => t.semantic.interactive.accent),
+  ...bothThemes('selected surface', (t) => t.semantic.selection.fg, (t) => t.semantic.selection.bg),
   ...bothThemes('success fill', (t) => t.semantic.feedback.successFg, (t) => t.semantic.feedback.success),
   ...bothThemes('warning fill', (t) => t.semantic.feedback.warningFg, (t) => t.semantic.feedback.warning),
   ...bothThemes('error fill', (t) => t.semantic.feedback.errorFg, (t) => t.semantic.feedback.error),
@@ -580,6 +611,8 @@ export const uiContrastPairs: ThemePair[] = [
   ...bothThemes('focus ring on a card', (t) => t.semantic.border.focus, (t) => t.semantic.bg.elevated),
   ...bothThemes('focus ring on the canvas', (t) => t.semantic.border.focus, (t) => t.semantic.bg.canvas),
   ...bothThemes('strong border on a card', (t) => t.semantic.border.strong, (t) => t.semantic.bg.elevated),
+  ...bothThemes('selection marker on a card', (t) => t.semantic.selection.border, (t) => t.semantic.bg.elevated),
+  ...bothThemes('selection marker on its own fill', (t) => t.semantic.selection.border, (t) => t.semantic.selection.bg),
 ]
 
 /** Status badge pairs (bg + text) per theme. */

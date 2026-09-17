@@ -200,9 +200,9 @@ export default function ImportIntakeDialog({
                 disabled={submitting}
                 rows={14}
                 placeholder="Paste anything: prior questionnaire answers, an email from the client, a Lawmatics activity dump, or notes from a phone call..."
-                className="tabular-nums text-[12px]"
+                className="tabular-nums text-xs"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 {text.length.toLocaleString()} characters
                 {text.length > 60_000 && ' - over the 60,000 limit'}
               </p>
@@ -217,8 +217,8 @@ export default function ImportIntakeDialog({
                 onDrop={handleDrop}
                 disabled={submitting}
                 className={cn(
-                  'flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                  dragOver && 'border-primary bg-muted/60',
+                  'flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60',
+                  dragOver && 'border-primary bg-muted',
                 )}
               >
                 <Upload className="h-7 w-7 text-muted-foreground" />
@@ -237,7 +237,7 @@ export default function ImportIntakeDialog({
                 onChange={handleFileChange}
               />
               {file && (
-                <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
+                <div className="flex items-center gap-3 rounded-md border bg-muted px-3 py-2">
                   <FileText className="h-4 w-4 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{file.name}</p>

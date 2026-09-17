@@ -97,7 +97,7 @@ function ProposalCard({ event }: { event: ToolEvent }) {
           {failed}
         </div>
       )}
-      <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-t border-border bg-muted px-3 py-2">
         <button
           type="button"
           disabled={acting || rows.every(row => accepted.has(row.id))}
@@ -169,7 +169,7 @@ function DesignSheetImportToolEventCard({
         type="button"
         onClick={() => onReviewDesignSheetImport?.(event)}
         disabled={!event.preview?.length || !event.proposed || !onReviewDesignSheetImport}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
       >
         <ClipboardList className="h-3.5 w-3.5" />
         Review proposed updates
@@ -265,7 +265,7 @@ function ExportToolEventCard({ event }: { event: ToolEvent }) {
           type="button"
           disabled={downloading}
           onClick={() => void download(url, filename)}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download className="h-3.5 w-3.5" />
           {downloading ? 'Preparing…' : 'Download CSV'}
@@ -395,20 +395,20 @@ function HandoffBlock({
 
   return (
     <div className="my-2">
-      <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-brand-navy p-3 text-[11px] leading-relaxed text-sidebar-foreground">
+      <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-brand-navy p-3 text-micro leading-relaxed text-sidebar-foreground">
         {segment.content}
       </pre>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {matterId ? (
           <Link
             href={`/admin/drafting/${matterId}`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-accent"
           >
             <FilePenLine className="h-3.5 w-3.5" aria-hidden />
             Send to drafting
           </Link>
         ) : (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-micro text-muted-foreground">
             Open this from a matter to send it to drafting.
           </span>
         )}
@@ -420,7 +420,7 @@ function HandoffBlock({
               window.setTimeout(() => setCopied(false), 1500)
             })
           }}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copied' : 'Copy block'}
@@ -437,7 +437,7 @@ function CopyMessageButton({ content }: { content: string }) {
       type="button"
       aria-label="Copy message"
       title="Copy message"
-      className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+      className="mt-1 inline-flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-foreground"
       onClick={() => {
         void navigator.clipboard.writeText(content).then(() => {
           setCopied(true)

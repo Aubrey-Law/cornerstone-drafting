@@ -131,8 +131,8 @@ export function CombineWordDraftsDialog({
                 onDrop={event => event.preventDefault()}
                 className={`flex items-center gap-3 rounded-md border px-3 py-2 ${
                   isDragging
-                    ? 'border-primary bg-primary/10 opacity-60'
-                    : 'border-border bg-muted/30'
+                    ? 'border-selected-border bg-selected opacity-60'
+                    : 'border-border bg-muted'
                 }`}
               >
                 <span
@@ -146,7 +146,7 @@ export function CombineWordDraftsDialog({
                   onCheckedChange={checked => toggle(doc.id, checked === true)}
                   aria-label={`Include ${doc.name}`}
                 />
-                <span className="w-5 shrink-0 text-center text-[11px] font-semibold text-muted-foreground">
+                <span className="w-5 shrink-0 text-center text-micro font-semibold text-muted-foreground">
                   {position ?? '—'}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={doc.name}>

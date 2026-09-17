@@ -125,7 +125,7 @@ export function EstateClauseEditor({
     <section aria-label="Clause editor" className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Working draft</p>
+          <p className="text-micro font-medium uppercase tracking-[0.14em] text-muted-foreground">Working draft</p>
           <h3 className="text-xl font-semibold">{clause.title}</h3>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{clause.clauseKey}</p>
         </div>
@@ -139,7 +139,7 @@ export function EstateClauseEditor({
         <aside className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm">
           <p className="font-medium">Changes requested on revision {clause.latestChangeRequest.revisionNumber}</p>
           <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{clause.latestChangeRequest.comment}</p>
-          <p className="mt-2 text-[11px] text-muted-foreground">Continue in this working draft, then save and submit a new immutable revision.</p>
+          <p className="mt-2 text-micro text-muted-foreground">Continue in this working draft, then save and submit a new immutable revision.</p>
         </aside>
       )}
 
@@ -147,7 +147,7 @@ export function EstateClauseEditor({
         <div className="space-y-2">
           <Label htmlFor={`clause-text-${clause.id}`}>Structured clause text</Label>
           <Textarea id={`clause-text-${clause.id}`} className="min-h-72 resize-y font-mono text-xs leading-5" value={draft.text} disabled={busy !== null} onChange={event => patch('text', event.target.value)} />
-          <p className="text-[11px] text-muted-foreground">Structured text only. Word styles, numbering, and sections remain template-owned.</p>
+          <p className="text-micro text-muted-foreground">Structured text only. Word styles, numbering, and sections remain template-owned.</p>
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -170,7 +170,7 @@ export function EstateClauseEditor({
         <Input id={`summary-${clause.id}`} value={draft.changeSummary} disabled={busy !== null} onChange={event => patch('changeSummary', event.target.value)} placeholder="Required: explain the legal or drafting change" />
       </div>
 
-      <div className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="rounded-md border border-border bg-muted p-3">
         <div className="flex items-center gap-2"><Bot className="size-4 text-primary" /><Label htmlFor={`ai-${clause.id}`}>AI drafting instructions</Label></div>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <Input id={`ai-${clause.id}`} value={aiInstructions} disabled={busy !== null} onChange={event => setAiInstructions(event.target.value)} placeholder="Describe a narrow revision; do not include client facts" />

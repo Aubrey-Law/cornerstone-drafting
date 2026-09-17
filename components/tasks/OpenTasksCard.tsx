@@ -64,7 +64,7 @@ export function OpenTasksCard({ tasks, error = null }: { tasks: TaskRow[]; error
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge
                   variant="outline"
-                  className={cn('text-[10px]', PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.low)}
+                  className={cn('text-micro', PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.low)}
                 >
                   {TASK_PRIORITY_LABEL[task.priority]}
                 </Badge>

@@ -108,7 +108,7 @@ export function AdditionalVariablesSection({ sheet, onChange }: SectionProps) {
             <Plus className="mr-1 h-4 w-4" /> Add variable
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           Letters, numbers, and underscores only (must start with a letter). Reference in a
           template as {'{{ extras.variable_name }}'} — saved automatically.
         </p>

@@ -369,7 +369,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                 <div
                   className={`flex items-start justify-between rounded-lg border border-border p-3 ${
                     isDeceased
-                      ? 'bg-muted/60'
+                      ? 'bg-muted'
                       : child.is_minor
                         ? 'bg-blue-bg'
                         : 'bg-card'
@@ -424,15 +424,15 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                           />
                         )}
                         <div className="flex items-end gap-3 md:col-span-2">
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-micro text-muted-foreground">
                             {derivedMinor ? 'Minor' : (ageLabel ? 'Adult' : 'Age unknown')}
                           </span>
                           {child.dob && child.is_minor !== derivedMinor && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-micro text-muted-foreground">
                               Override (DOB → {derivedMinor ? 'minor' : 'adult'})
                             </span>
                           )}
-                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-micro text-muted-foreground">
                             <input
                               type="checkbox"
                               checked={child.is_minor}

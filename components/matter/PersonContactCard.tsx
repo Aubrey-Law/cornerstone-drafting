@@ -65,7 +65,7 @@ export function PersonContactCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="truncate text-sm font-semibold">{name}</p>
           {roles.map(role => (
-            <span key={role} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span key={role} className="rounded-full bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
               {role}
             </span>
           ))}
@@ -84,7 +84,7 @@ export function PersonContactCard({
             <button
               type="button"
               aria-label={`Actions for ${name}`}
-              className="rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+              className="rounded p-1 text-muted-foreground opacity-60 hover:bg-accent hover:text-foreground focus:opacity-100 group-hover:opacity-100"
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>

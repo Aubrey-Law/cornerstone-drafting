@@ -95,7 +95,7 @@ function GroupShell({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
         <Badge
           variant="secondary"
-          className={cn('text-[11px] tabular-nums', accent && 'bg-destructive/15 text-destructive')}
+          className={cn('text-micro tabular-nums', accent && 'bg-destructive/15 text-destructive')}
         >
           {count}
         </Badge>
@@ -133,7 +133,7 @@ function CollapsedGroup({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
           <span>{title}</span>
@@ -500,7 +500,7 @@ export function TasksClient({
             >
               <Plus className="size-4" />
               New task
-              <kbd className="ml-1 hidden rounded border border-primary-foreground/30 px-1 text-[10px] sm:inline">
+              <kbd className="ml-1 hidden rounded border border-primary-foreground/30 px-1 text-micro sm:inline">
                 ⌘⇧T
               </kbd>
             </Button>
@@ -585,7 +585,7 @@ export function TasksClient({
                 setOpenOnly(false)
                 setDoneOpen(true)
               }}
-              className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-micro font-medium text-primary-foreground"
             >
               Open only
               <X className="size-3" aria-hidden />
@@ -611,7 +611,7 @@ export function TasksClient({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground lg:inline-flex">
+          <span className="hidden items-center gap-1.5 text-micro text-muted-foreground lg:inline-flex">
             <kbd className="rounded border border-border bg-muted px-1">J</kbd>
             <kbd className="rounded border border-border bg-muted px-1">K</kbd>
             move

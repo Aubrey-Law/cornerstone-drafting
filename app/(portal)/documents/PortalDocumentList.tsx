@@ -38,9 +38,9 @@ function DocumentRow({
   onAction: (doc: MatterDocument, action: DocumentAction) => void
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-muted/40 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-accent sm:flex-row sm:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[10px] font-bold uppercase text-muted-foreground">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-micro font-bold uppercase text-muted-foreground">
           {(doc.name.split('.').pop() ?? 'file').slice(0, 4)}
         </div>
         <div className="min-w-0">
@@ -58,7 +58,7 @@ function DocumentRow({
           type="button"
           onClick={() => onAction(doc, 'view')}
           disabled={anyPending}
-          className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
           title="View document"
           aria-label={`View ${doc.name}`}
         >
@@ -69,7 +69,7 @@ function DocumentRow({
           type="button"
           onClick={() => onAction(doc, 'download')}
           disabled={anyPending}
-          className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
           title="Download document"
           aria-label={`Download ${doc.name}`}
         >
@@ -157,7 +157,7 @@ export default function PortalDocumentList({ documents }: { documents: MatterDoc
       </div>
 
       <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="border-b border-border bg-muted/40 px-4 py-3">
+        <div className="border-b border-border bg-muted px-4 py-3">
           <p className="text-sm font-semibold text-foreground">Shared documents</p>
           <p className="text-xs text-muted-foreground">
             {documents.length} document{documents.length === 1 ? '' : 's'}

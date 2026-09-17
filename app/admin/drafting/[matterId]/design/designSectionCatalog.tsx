@@ -245,7 +245,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
           <div className="mt-6 border-t border-border pt-6">
             <div className="mb-4 flex items-center gap-2">
               <Scale className="h-4 w-4 text-muted-foreground" />
-              <span className="text-[13px] font-semibold text-foreground">Residuary Estate</span>
+              <span className="text-compact font-semibold text-foreground">Residuary Estate</span>
               <AccordionBadge variant="lp">LP</AccordionBadge>
             </div>
             <ResiduarySection

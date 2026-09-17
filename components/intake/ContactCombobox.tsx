@@ -97,7 +97,7 @@ export default function ContactCombobox({
           }}
           placeholder={placeholder}
           disabled={disabled}
-          className="h-[34px] px-2.5 text-[13px] md:text-[13px]"
+          className="h-[34px] px-2.5 text-compact md:text-compact"
           style={style}
           autoComplete="off"
         />

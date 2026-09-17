@@ -132,7 +132,7 @@ export default function SlotPicker({
       </div>
 
       {error ? (
-        <div className="mt-6 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="mt-6 rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground">
           {error}
         </div>
       ) : loading ? (
@@ -142,7 +142,7 @@ export default function SlotPicker({
           ))}
         </div>
       ) : slots.length === 0 ? (
-        <div className="mt-6 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="mt-6 rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground">
           No open times this week. Try the next week.
         </div>
       ) : (

@@ -66,19 +66,19 @@ export function DesignSectionNav({
 }: DesignSectionNavProps) {
   return (
     <nav aria-label="Design sheet groups" className="w-full min-w-0 py-4">
-      <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <p className="mb-2 px-2 text-micro font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         Design sheet
       </p>
-      <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-md border border-border bg-muted/30 px-2 py-2">
+      <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-md border border-border bg-muted px-2 py-2">
         <input
           type="checkbox"
           checked={hideUnusedDecisions}
           onChange={event => onHideUnusedChange(event.target.checked)}
           className="mt-0.5 h-3.5 w-3.5 accent-primary"
         />
-        <span className="text-[11px] leading-4 text-foreground">
+        <span className="text-micro leading-4 text-foreground">
           Hide what this plan doesn&apos;t use
-          <span className="block text-[10px] text-muted-foreground">
+          <span className="block text-micro text-muted-foreground">
             {hiddenDecisionCount} decision{hiddenDecisionCount === 1 ? '' : 's'} hidden
           </span>
         </span>
@@ -92,8 +92,10 @@ export function DesignSectionNav({
             aria-label={navGroupAriaLabel(group)}
             onClick={() => onSelectGroup(group.id)}
             className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium hover:bg-muted',
-              group.id === activeGroupId ? 'bg-muted text-foreground' : 'text-foreground',
+              'flex w-full items-center gap-2 rounded-md border-l-2 py-2 pl-[6px] pr-2 text-left text-xs font-medium hover:bg-accent',
+              group.id === activeGroupId
+                ? 'border-selected-border bg-selected font-semibold text-selected-foreground'
+                : 'border-transparent text-foreground',
             )}
           >
             <span
@@ -112,7 +114,7 @@ export function DesignSectionNav({
                 title={`${group.blockingCount} blocking${
                   group.blockingLabels?.length ? `: ${joinLabels(group.blockingLabels)}` : ''
                 }`}
-                className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+                className="rounded-full bg-warning/10 px-1.5 py-0.5 text-micro font-semibold text-warning"
               >
                 {group.blockingCount}
               </span>
@@ -122,7 +124,7 @@ export function DesignSectionNav({
                 title={`${group.optionalCount} optional${
                   group.optionalLabels?.length ? `: ${joinLabels(group.optionalLabels)}` : ''
                 }`}
-                className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                className="rounded-full bg-muted px-1.5 py-0.5 text-micro font-semibold text-muted-foreground"
               >
                 {group.optionalCount}
               </span>

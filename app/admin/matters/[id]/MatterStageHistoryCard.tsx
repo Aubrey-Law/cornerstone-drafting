@@ -57,7 +57,7 @@ export function MatterStageHistoryCard({
       <button
         type="button"
         onClick={() => setOpen(value => !value)}
-        className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted px-4 py-3 text-left"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
@@ -65,7 +65,7 @@ export function MatterStageHistoryCard({
           <History className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-semibold">Stage history</span>
         </span>
-        <span className="text-[10px] font-semibold text-muted-foreground">
+        <span className="text-micro font-semibold text-muted-foreground">
           {entries.length === 0
             ? 'No moves recorded'
             : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}`}
@@ -105,10 +105,10 @@ export function MatterStageHistoryCard({
                       <p className="text-xs font-medium">
                         {historicalStageLabel(entry.stage)}
                         {entry.isCurrent && (
-                          <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">current</span>
+                          <span className="ml-1.5 text-micro font-normal text-muted-foreground">current</span>
                         )}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-micro text-muted-foreground">
                         {/* The earliest row is a starting point, not an observed
                             move — either the matter's creation or the row seeded
                             for a matter that predates the table. */}
@@ -121,7 +121,7 @@ export function MatterStageHistoryCard({
                         {duration(entry.days, entry.isCurrent)}
                       </p>
                       {entry.actorName && (
-                        <p className="text-[11px] text-muted-foreground">By {entry.actorName}</p>
+                        <p className="text-micro text-muted-foreground">By {entry.actorName}</p>
                       )}
                     </div>
                   </li>
@@ -131,7 +131,7 @@ export function MatterStageHistoryCard({
                 <button
                   type="button"
                   onClick={() => setShowAll(true)}
-                  className="rounded-sm text-[11px] font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-sm text-micro font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Show {hidden} earlier {hidden === 1 ? 'entry' : 'entries'}
                 </button>

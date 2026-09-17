@@ -6,8 +6,8 @@ import { isSettledDateEntry } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
 
 const ROW = 'flex items-center justify-between gap-2.5 rounded-md px-1.5 py-1'
-const LABEL = 'text-[11.5px] text-muted-foreground'
-const VALUE = 'text-[12.5px]'
+const LABEL = 'text-micro text-muted-foreground'
+const VALUE = 'text-xs'
 
 export function ReadOnlyRow({
   label,
@@ -41,7 +41,7 @@ export function ReadOnlyRow({
     )
   }
   return (
-    <button type="button" onClick={onClick} className={cn(ROW, 'w-full text-left hover:bg-muted')}>
+    <button type="button" onClick={onClick} className={cn(ROW, 'w-full text-left hover:bg-accent')}>
       <span className={LABEL}>{label}</span>
       {value}
     </button>
@@ -121,12 +121,12 @@ export function InlineText({
           setError(null)
           setEditing(true)
         }}
-        className={cn(ROW, 'group w-full text-left hover:bg-muted')}
+        className={cn(ROW, 'group w-full text-left hover:bg-accent')}
       >
         <span className={LABEL}>{label}</span>
         <span className={cn(VALUE, 'flex min-w-0 items-center gap-1.5', tabular && 'tabular-nums')}>
           <span className="truncate">{value || placeholder}</span>
-          {saved && <span role="status" className="text-[11px] text-muted-foreground">Saved</span>}
+          {saved && <span role="status" className="text-micro text-muted-foreground">Saved</span>}
           <Pencil
             className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
             aria-hidden
@@ -159,7 +159,7 @@ export function InlineText({
             }
           }}
           className={cn(
-            'h-7 w-44 rounded-md border border-input bg-background px-1.5 text-right text-[12.5px] outline-none focus:border-ring',
+            'h-7 w-44 rounded-md border border-input bg-background px-1.5 text-right text-xs outline-none focus:border-ring',
             tabular && 'tabular-nums',
           )}
         />
@@ -232,7 +232,7 @@ export function InlineSelect({ label, value, options, accent = false, disabled =
   const [draft, setDraft] = useState<string | null>(null)
   const state = useFieldSave(async next => { await onSave(next); setDraft(null) })
   return <div>
-    <div className={cn(ROW, 'hover:bg-muted')}>
+    <div className={cn(ROW, 'hover:bg-accent')}>
       <span className={LABEL}>{label}</span>
       <select
         aria-label={label}
@@ -240,7 +240,7 @@ export function InlineSelect({ label, value, options, accent = false, disabled =
         value={draft ?? value}
         disabled={disabled || state.status === 'saving'}
         onChange={event => { setDraft(event.target.value); void state.save(event.target.value) }}
-        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] hover:border-input hover:bg-background focus:border-ring focus:outline-none', accent && 'font-semibold text-primary')}
+        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-xs hover:border-input hover:bg-background focus:border-ring focus:outline-none', accent && 'font-semibold text-primary')}
       >
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
@@ -264,10 +264,10 @@ export function InlineDate({ label, value, emphasized = false, derived = false, 
   useEffect(() => { lastSaved.current = value }, [value])
   if (hideWhenEmpty && !value && state.status === 'idle') return null
   return <div>
-    <div className={cn(ROW, 'hover:bg-muted')}>
+    <div className={cn(ROW, 'hover:bg-accent')}>
       <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>
         {label}
-        {derived && <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">auto</span>}
+        {derived && <span className="ml-1 text-micro font-semibold uppercase tracking-[.05em] text-primary">auto</span>}
       </span>
       <input
         ref={inputRef}
@@ -287,7 +287,7 @@ export function InlineDate({ label, value, emphasized = false, derived = false, 
           const next = event.target.value
           if (next !== lastSaved.current && (next === '' || isSettledDateEntry(next))) void state.save(next)
         }}
-        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none', emphasized && 'border-input bg-background font-semibold text-primary')}
+        className={cn('h-7 rounded-md border border-transparent bg-transparent px-1.5 text-xs tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none', emphasized && 'border-input bg-background font-semibold text-primary')}
       />
     </div>
     <FieldSaveStatus label={label} state={state} onDiscard={() => { if (inputRef.current) inputRef.current.value = value }} />

@@ -38,7 +38,7 @@ export async function ComingDueCard({ limit = 5 }: { limit?: number }) {
             <li key={task.id}>
               <Link
                 href={`/admin/matters/${task.matter_id}?tab=tasks&view=plan`}
-                className="block px-3 py-2 text-sm hover:bg-muted/50"
+                className="block px-3 py-2 text-sm hover:bg-accent"
               >
                 <span
                   className={cn(

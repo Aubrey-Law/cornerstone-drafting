@@ -284,9 +284,9 @@ export function DocumentTemplatesSection() {
                           {template.activeSource === 'published' ? 'Published override' : 'Bundled'}
                         </Badge>
                       </div>
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">{template.bundledPath}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Used by: {template.packageNames.join(', ')}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1 font-mono text-micro text-muted-foreground">{template.bundledPath}</p>
+                      <p className="mt-1 text-micro text-muted-foreground">Used by: {template.packageNames.join(', ')}</p>
+                      <p className="mt-1 text-micro text-muted-foreground">
                         Last uploaded:{' '}
                         {lastUpload ? (
                           <time dateTime={lastUpload.createdAt} title={lastUpload.createdAt}>
@@ -295,7 +295,7 @@ export function DocumentTemplatesSection() {
                         ) : 'Never — bundled baseline only'}
                       </p>
                       {template.publishedAt && (
-                        <p className="mt-1 text-[11px] text-muted-foreground">
+                        <p className="mt-1 text-micro text-muted-foreground">
                           Active version published{' '}
                           <time dateTime={template.publishedAt} title={template.publishedAt}>
                             {new Date(template.publishedAt).toLocaleString()}
@@ -308,7 +308,7 @@ export function DocumentTemplatesSection() {
                       <Button size="sm" variant="outline" onClick={() => void download(template, template.activeVersionId ?? 'bundled')}>
                         <Download className="h-4 w-4" /> Current
                       </Button>
-                      <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                      <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-accent">
                         <Upload className="h-4 w-4" /> Upload DOCX
                         <Input
                           type="file"
@@ -349,7 +349,7 @@ export function DocumentTemplatesSection() {
                       const report = variablesByTemplate[template.id]
                       if (!report || report === 'loading') return null
                       return (
-                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+                        <div className="space-y-2 rounded-md border border-border bg-muted p-3 text-xs">
                           <p className="font-medium">
                             {report.variables.length} variable{report.variables.length === 1 ? '' : 's'} ·{' '}
                             {report.clauses.length} clause{report.clauses.length === 1 ? '' : 's'} ·{' '}
@@ -400,7 +400,7 @@ export function DocumentTemplatesSection() {
                               {version.validationStatus}
                             </Badge>
                           </div>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
+                          <p className="mt-1 text-micro text-muted-foreground">
                             {(version.byteSize / 1024).toFixed(1)} KB · {new Date(version.createdAt).toLocaleString()}
                           </p>
                           {version.validationReport?.error && <p className="mt-1 text-xs text-destructive">{version.validationReport.error}</p>}

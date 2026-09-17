@@ -208,7 +208,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
               className="flex items-center gap-3"
             >
               <span className="h-px flex-1 bg-border" aria-hidden="true" />
-              <span className="text-[11px] font-medium text-muted-foreground">
+              <span className="text-micro font-medium text-muted-foreground">
                 {formatDayLabel(group.messages[0].created_at)}
               </span>
               <span className="h-px flex-1 bg-border" aria-hidden="true" />
@@ -224,7 +224,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
                     isClient ? 'items-end' : 'items-start',
                   )}
                 >
-                  <span className="px-1 text-[11px] font-medium text-muted-foreground">
+                  <span className="px-1 text-micro font-medium text-muted-foreground">
                     {isClient ? 'You' : firm.firmName}
                   </span>
                   <div
@@ -237,7 +237,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
                   >
                     {linkifyText(message.body)}
                   </div>
-                  <span className="px-1 text-[11px] text-muted-foreground">
+                  <span className="px-1 text-micro text-muted-foreground">
                     {formatTime(message.created_at)}
                   </span>
                 </div>
@@ -273,7 +273,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
+        <p className="mt-1.5 text-micro text-muted-foreground">
           {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'}+Enter to send
         </p>
         {sendError && (
