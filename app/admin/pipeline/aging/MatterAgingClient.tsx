@@ -10,6 +10,7 @@ import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
 import type { MatterAgingRow, MatterAgingTiles } from '@/lib/queries/pipelineAging'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -380,25 +381,28 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pipeline aging</h1>
-          <p className="text-sm text-muted-foreground">
-            {tiles.active} active pipeline record{tiles.active === 1 ? '' : 's'} across leads and matters, oldest risk first. Snooze anything
-            that&apos;s waiting on something out of your hands.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void refresh()}
-          disabled={refreshing || !token}
-        >
-          <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="Pipeline aging"
+        description={
+          <>
+            {tiles.active} active pipeline record{tiles.active === 1 ? '' : 's'} across leads and
+            matters, oldest risk first. Snooze anything that&apos;s waiting on something out of your
+            hands.
+          </>
+        }
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refresh()}
+            disabled={refreshing || !token}
+          >
+            <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
+            Refresh
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile

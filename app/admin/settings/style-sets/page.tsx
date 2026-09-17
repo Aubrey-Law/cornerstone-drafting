@@ -1,4 +1,5 @@
 import { listStyleSets } from '@/lib/styleSets/data'
+import { PageHeader } from '@/components/PageHeader'
 import { StyleSetsClient, type StyleSetSummary } from './StyleSetsClient'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,7 @@ export default async function StyleSetsPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold">Style sets</h1>
+        <PageHeader title="Style sets" />
         <p role="alert" className="text-sm text-destructive">
           Could not load style sets ({error}).
         </p>
