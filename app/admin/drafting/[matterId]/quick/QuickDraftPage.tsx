@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { PageHeader } from '@/components/PageHeader'
+import { useConfirm } from '@/components/useConfirm'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { logMatterActivity } from '@/lib/matterActivity'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,7 @@ interface QuickDraftPageProps {
 }
 
 export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPageProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const accessToken = useAccessToken()
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [savedAnswers, setSavedAnswers] = useState<Record<string, Record<string, string>>>({})
@@ -227,6 +229,13 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
 
   const removeCustomTemplate = useCallback(async (id: string) => {
     if (!accessToken) return
+    const confirmed = await confirm({
+      title: 'Remove this custom template?',
+      body: 'The uploaded file is deleted. Drafts already generated from it are unaffected.',
+      confirmLabel: 'Remove template',
+      destructive: true,
+    })
+    if (!confirmed) return
     const response = await fetch(`/api/admin/quick-draft/custom-templates/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -239,7 +248,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
     setTemplates(previous => previous.filter(template => template.id !== id))
     if (templateId === id) selectTemplate('')
     toast.success('Custom template removed')
-  }, [accessToken, selectTemplate, templateId])
+  }, [accessToken, confirm, selectTemplate, templateId])
 
   const missingUnanswered = analysis
     ? analysis.missingFields.filter(field => !(filledAnswers[field.path] ?? '').trim()).length
@@ -449,6 +458,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
           )}
         </Card>
       )}
+      {confirmDialog}
     </div>
   )
 }

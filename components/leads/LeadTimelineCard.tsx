@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormattedNote } from '@/components/notes/FormattedNote'
 import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
+import { useConfirm } from '@/components/useConfirm'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   buildLeadTimeline,
@@ -119,6 +120,7 @@ export function LeadTimelineCard({
   variant = 'card',
   lockedFilter,
 }: Props) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [notes, setNotes] = useState(() => sortNotes(initialNotes))
   const [meetings, setMeetings] = useState(() => sortMeetings(initialMeetingNotes))
@@ -203,6 +205,13 @@ export function LeadTimelineCard({
   }
 
   async function removeNote(id: string) {
+    const confirmed = await confirm({
+      title: 'Delete this note?',
+      body: 'This cannot be undone.',
+      confirmLabel: 'Delete note',
+      destructive: true,
+    })
+    if (!confirmed) return
     await mutate(async () => {
       await call(`/api/admin/leads/${leadId}/notes/${id}`, 'DELETE')
       updateNotes(notes.filter(note => note.id !== id))
@@ -441,6 +450,7 @@ export function LeadTimelineCard({
           }}
         />
       )}
+      {confirmDialog}
     </section>
   )
 }

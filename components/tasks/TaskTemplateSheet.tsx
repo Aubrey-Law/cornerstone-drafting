@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { useConfirm } from '@/components/useConfirm'
 
 export interface TaskTemplate {
   id: string
@@ -127,6 +128,7 @@ export function TaskTemplateSheet({
   assignees = [],
   onTemplatesChange,
 }: TaskTemplateSheetProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -239,6 +241,15 @@ export function TaskTemplateSheet({
   ])
 
   const archive = useCallback(async (template: TaskTemplate) => {
+    // Named archive, but it is a DELETE and the toast says "Removed" — there is
+    // no restore anywhere in the app, so it is asked for as what it does.
+    const confirmed = await confirm({
+      title: `Remove “${template.name}”?`,
+      body: 'Tasks already created from it are unaffected. The template itself cannot be restored.',
+      confirmLabel: 'Remove template',
+      destructive: true,
+    })
+    if (!confirmed) return
     const res = await fetch(`/api/admin/task-templates/${template.id}`, { method: 'DELETE', headers })
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
@@ -248,7 +259,7 @@ export function TaskTemplateSheet({
     onTemplatesChange(templates.filter(item => item.id !== template.id))
     if (editingId === template.id) reset()
     toast.success(`Removed “${template.name}”`)
-  }, [headers, templates, onTemplatesChange, editingId, reset])
+  }, [confirm, headers, templates, onTemplatesChange, editingId, reset])
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -550,6 +561,7 @@ export function TaskTemplateSheet({
           )}
         </div>
       </SheetContent>
+      {confirmDialog}
     </Sheet>
   )
 }

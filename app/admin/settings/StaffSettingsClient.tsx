@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/PageHeader'
+import { useConfirm } from '@/components/useConfirm'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
@@ -84,6 +85,7 @@ export function StaffSettingsClient({
   const [keys, setKeys] = useState<ApiKeyStatus[]>([])
   const [connectors, setConnectors] = useState<ConnectorRow[]>([])
   const [saving, setSaving] = useState(false)
+  const { confirm, confirmDialog } = useConfirm()
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({})
   const [newConnector, setNewConnector] = useState({
     name: '',
@@ -227,6 +229,13 @@ export function StaffSettingsClient({
 
   const removeKey = async (provider: string) => {
     if (!token) return
+    const confirmed = await confirm({
+      title: `Remove your personal ${provider} key?`,
+      body: 'Requests fall back to the shared environment key if one is set, and stop working if it is not.',
+      confirmLabel: 'Remove key',
+      destructive: true,
+    })
+    if (!confirmed) return
     setSaving(true)
     try {
       const res = await fetch('/api/admin/me/api-keys', {
@@ -281,8 +290,53 @@ export function StaffSettingsClient({
     }
   }
 
+  /**
+   * Both mailbox disconnects, which were identical inline handlers on their
+   * buttons — the shape that made it easy for neither to ask. Reconnecting
+   * means going back out to the provider's consent screen, so this is not the
+   * one-click toggle the button looked like.
+   */
+  const disconnectMailbox = async (provider: 'google' | 'outlook') => {
+    if (!token) return
+    const label = provider === 'google' ? 'Google' : 'Outlook'
+    const confirmed = await confirm({
+      title: `Disconnect ${label}?`,
+      body: `Mail and calendar sync stop, and reconnecting means signing in to ${label} again.`,
+      confirmLabel: `Disconnect ${label}`,
+      destructive: true,
+    })
+    if (!confirmed) return
+    setSaving(true)
+    try {
+      const endpoint = provider === 'google' ? '/api/admin/google/status' : '/api/admin/microsoft/status'
+      const res = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Disconnect failed')
+      if (provider === 'google') {
+        setGoogle(g => (g ? { ...g, connected: false, email: null } : g))
+      } else {
+        setOutlook(o => (o ? { ...o, connected: false, email: null } : o))
+        setTab('google')
+      }
+      toast.success(`${label} disconnected`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Disconnect failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const removeConnector = async (id: string) => {
     if (!token) return
+    const confirmed = await confirm({
+      title: 'Remove this connector?',
+      body: 'Anything relying on it stops working until it is set up again.',
+      confirmLabel: 'Remove connector',
+      destructive: true,
+    })
+    if (!confirmed) return
     const res = await fetch(`/api/admin/me/connectors/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -676,25 +730,7 @@ export function StaffSettingsClient({
                   size="sm"
                   variant="outline"
                   disabled={saving}
-                  onClick={() => {
-                    if (!token) return
-                    void (async () => {
-                      setSaving(true)
-                      try {
-                        const res = await fetch('/api/admin/google/status', {
-                          method: 'DELETE',
-                          headers: { Authorization: `Bearer ${token}` },
-                        })
-                        if (!res.ok) throw new Error('Disconnect failed')
-                        setGoogle((g) => (g ? { ...g, connected: false, email: null } : g))
-                        toast.success('Google disconnected')
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : 'Disconnect failed')
-                      } finally {
-                        setSaving(false)
-                      }
-                    })()
-                  }}
+                  onClick={() => void disconnectMailbox('google')}
                 >
                   Disconnect
                 </Button>
@@ -766,26 +802,7 @@ export function StaffSettingsClient({
                 size="sm"
                 variant="outline"
                 disabled={saving}
-                onClick={() => {
-                  if (!token) return
-                  void (async () => {
-                    setSaving(true)
-                    try {
-                      const res = await fetch('/api/admin/microsoft/status', {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` },
-                      })
-                      if (!res.ok) throw new Error('Disconnect failed')
-                      setOutlook((o) => (o ? { ...o, connected: false, email: null } : o))
-                      setTab('google')
-                      toast.success('Outlook disconnected')
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : 'Disconnect failed')
-                    } finally {
-                      setSaving(false)
-                    }
-                  })()
-                }}
+                onClick={() => void disconnectMailbox('outlook')}
               >
                 Disconnect
               </Button>
@@ -813,6 +830,7 @@ export function StaffSettingsClient({
       {tab === 'ai-usage' && <AiUsagePanel />}
 
       {tab === 'sla' && <PipelineSlaSettings />}
+      {confirmDialog}
     </div>
   )
 }

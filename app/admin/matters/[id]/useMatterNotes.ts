@@ -100,11 +100,15 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
     }
   }
 
+  /**
+   * Deletes without asking. The question belongs to whoever renders the button
+   * — MatterDetailClient asks it with the app's own dialog — because a hook
+   * cannot render one, which is why this was still calling window.confirm
+   * after the rest of the app had moved off it.
+   */
   const handleDeleteNote = async (noteId: string) => {
     const note = notes.find(item => item.id === noteId)
     if (!note || (note.note_type !== 'internal' && note.note_type !== 'client_comm')) return
-    const confirmed = window.confirm('Delete this note? This cannot be undone.')
-    if (!confirmed) return
 
     setNoteMutatingId(noteId)
     try {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,6 +15,10 @@ const notes = [
   { id: 'n1', body: 'Older note', actorId: 'u2', createdAt: '2026-07-01T00:00:00Z', updatedAt: '2026-07-01T00:00:00Z' },
 ]
 const meetings = [{ id: 'm1', title: 'Planning call', date: '2026-07-03T00:00:00Z', attendees: ['Jane', 'John'], body: 'Discussed the plan in detail.', source: 'manual', granolaNoteId: null, actorId: 'u1', createdAt: '2026-07-03T00:00:00Z', updatedAt: '2026-07-03T00:00:00Z' }]
+
+Element.prototype.hasPointerCapture = vi.fn(() => false)
+Element.prototype.releasePointerCapture = vi.fn()
+Element.prototype.scrollIntoView = vi.fn()
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
@@ -49,8 +53,24 @@ describe('lead notes', () => {
     render(<LeadTimelineCard leadId="l1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
     await user.type(screen.getByLabelText('New note'), 'Fresh note'); await user.click(screen.getByRole('button', { name: 'Add note' }))
     await user.click(screen.getByRole('button', { name: 'Edit note' })); const edit = screen.getByLabelText('Edit note body'); await user.clear(edit); await user.type(edit, 'Edited note'); await user.click(screen.getByRole('button', { name: 'Save note' }))
+    // Deleting now asks first. The trash icon opens the app's own dialog
+    // instead of firing a DELETE, so the confirm step is part of the path.
     await user.click(screen.getByRole('button', { name: 'Delete note' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete note' }))
     expect(fetchMock.mock.calls.map(call => call[1]?.method)).toEqual(['POST', 'PATCH', 'DELETE'])
+  })
+
+  it('does not delete a note when the confirmation is dismissed', async () => {
+    // The point of the dialog: backing out must leave the note alone.
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const user = userEvent.setup()
+    render(<LeadTimelineCard leadId="l1" initialNotes={notes} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'admin' }} />)
+    await user.click(screen.getAllByRole('button', { name: 'Delete note' })[0])
+    await screen.findByRole('alertdialog')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('keeps a committed note successful and warns separately when activity refresh fails', async () => {
