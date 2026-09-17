@@ -50,19 +50,7 @@ function failedCounts(errors: string[] | undefined): Set<keyof SidebarCounts> {
   return out
 }
 
-/** True when this nav item's badge is drawn from a count that failed to refresh. */
-function isStale(href: string, counts: SidebarCounts): boolean {
-  const failed = failedCounts(counts.errors)
-  if (href === '/admin') return failed.has('inboxNeedsReplyCount')
-  if (href === '/admin/matters' || href === '/admin/matters/list') return failed.has('intakeReviewCount')
-  if (href === '/admin/drafting') {
-    return failed.has('agingRedCount') || failed.has('draftingNeedsDesignCount')
-  }
-  if (href === '/admin/email-triage') return failed.has('emailTriageNeedsReplyCount')
-  if (href === '/admin/tasks') return failed.has('tasksOverdueCount')
-  if (href === '/admin/billing') return failed.has('overdueInvoiceCount')
-  return false
-}
+type SidebarCountKey = Exclude<keyof SidebarCounts, 'errors'>
 
 export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   inboxNeedsReplyCount: 0,
@@ -83,36 +71,41 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
  * meaning it must never carry. `mergeSidebarCounts` keeps the last good value
  * through a failure, so that value is shown and marked stale instead. When
  * nothing has ever loaded there is genuinely nothing to show and null is right.
+ *
+ * Staleness is a property of the count that ends up on the badge, not of the
+ * nav item: Drafting can draw on three counts from two sections, so asking
+ * whether *any* of them failed would mark a current red-aging figure as out of
+ * date because a different section behind the same item went down.
  */
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
-  const stale = isStale(href, counts)
-  const badge = (value: number, tone: SidebarBadgeTone): SidebarBadge =>
-    stale ? { value, tone, stale: true } : { value, tone }
+  const failed = failedCounts(counts.errors)
+  const badge = (key: SidebarCountKey, tone: SidebarBadgeTone): SidebarBadge =>
+    failed.has(key) ? { value: counts[key], tone, stale: true } : { value: counts[key], tone }
 
   if (href === '/admin' && counts.inboxNeedsReplyCount > 0) {
-    return badge(counts.inboxNeedsReplyCount, 'accent')
+    return badge('inboxNeedsReplyCount', 'accent')
   }
   if ((href === '/admin/matters' || href === '/admin/matters/list') && counts.intakeReviewCount > 0) {
-    return badge(counts.intakeReviewCount, 'destructive')
+    return badge('intakeReviewCount', 'destructive')
   }
   if (href === '/admin/drafting') {
     // Aging folded into the Drafting hub: overdue matters take badge priority.
-    if (counts.agingRedCount > 0) return badge(counts.agingRedCount, 'destructive')
-    if (counts.draftingNeedsDesignCount > 0) return badge(counts.draftingNeedsDesignCount, 'accent')
-    if (counts.agingAmberCount > 0) return badge(counts.agingAmberCount, 'accent')
+    if (counts.agingRedCount > 0) return badge('agingRedCount', 'destructive')
+    if (counts.draftingNeedsDesignCount > 0) return badge('draftingNeedsDesignCount', 'accent')
+    if (counts.agingAmberCount > 0) return badge('agingAmberCount', 'accent')
   }
   // Accent, not destructive: unanswered mail is work waiting, not the firm
   // being owed or a missed deadline.
   if (href === '/admin/email-triage' && counts.emailTriageNeedsReplyCount > 0) {
-    return badge(counts.emailTriageNeedsReplyCount, 'accent')
+    return badge('emailTriageNeedsReplyCount', 'accent')
   }
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
-    return badge(counts.tasksOverdueCount, 'destructive')
+    return badge('tasksOverdueCount', 'destructive')
   }
   // Late money is destructive, not accent: an overdue invoice is the firm
   // being owed, which is the same urgency as an overdue task.
   if (href === '/admin/billing' && counts.overdueInvoiceCount > 0) {
-    return badge(counts.overdueInvoiceCount, 'destructive')
+    return badge('overdueInvoiceCount', 'destructive')
   }
   return null
 }
@@ -132,7 +125,7 @@ export function mergeSidebarCounts(
 ): SidebarCounts {
   if (!next) return prev
   const failed = failedCounts(next.errors)
-  const take = (key: Exclude<keyof SidebarCounts, 'errors'>): number =>
+  const take = (key: SidebarCountKey): number =>
     failed.has(key) ? prev[key] : next[key] ?? prev[key]
 
   return {

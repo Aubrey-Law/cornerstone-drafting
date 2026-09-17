@@ -208,7 +208,13 @@ export function AdminSidebar({
                       )}
                     </>
                   ) : (
-                    <span className="sr-only">{item.label}</span>
+                    // The rail's badge is an 8px dot, hidden from assistive
+                    // tech along with its count — so the one thing it must
+                    // still say is that the count behind it is out of date.
+                    <span className="sr-only">
+                      {item.label}
+                      {badge?.stale ? ' (last known count, could not be refreshed)' : ''}
+                    </span>
                   )}
                 </Link>
               )

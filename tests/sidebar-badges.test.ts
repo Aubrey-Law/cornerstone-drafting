@@ -53,6 +53,34 @@ describe('sidebar badges', () => {
       .toEqual({ value: 2, tone: 'destructive', stale: true })
   })
 
+  it('marks Drafting by the count it actually shows, not by the nav item', () => {
+    // Drafting draws on three counts from two sections. A failure in one must
+    // not brand a figure that came from the other as out of date — a current
+    // red-aging count wearing "could not be refreshed" teaches the attorney to
+    // distrust the number that most needs acting on.
+    expect(getNavBadge('/admin/drafting', {
+      ...EMPTY_SIDEBAR_COUNTS,
+      agingRedCount: 3,
+      draftingNeedsDesignCount: 5,
+      errors: ['draftingNeedsDesignCount'],
+    })).toEqual({ value: 3, tone: 'destructive' })
+
+    // ...and the other way round: aging is down, so the needs-design count on
+    // show is the fresh one.
+    expect(getNavBadge('/admin/drafting', {
+      ...EMPTY_SIDEBAR_COUNTS,
+      draftingNeedsDesignCount: 5,
+      errors: ['aging'],
+    })).toEqual({ value: 5, tone: 'accent' })
+
+    // Amber falls back to aging, which is the section that failed.
+    expect(getNavBadge('/admin/drafting', {
+      ...EMPTY_SIDEBAR_COUNTS,
+      agingAmberCount: 6,
+      errors: ['aging'],
+    })).toEqual({ value: 6, tone: 'accent', stale: true })
+  })
+
   describe('mergeSidebarCounts', () => {
     const loaded = { ...EMPTY_SIDEBAR_COUNTS, tasksOverdueCount: 4, overdueInvoiceCount: 3 }
 
