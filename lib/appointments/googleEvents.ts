@@ -1,6 +1,8 @@
 import 'server-only'
 import { revalidateTag } from 'next/cache'
 import { getAccessToken, getGoogleConnectionForUser } from '@/lib/googleCalendar'
+import { visibleCalendars } from './calendarSelection'
+import { getSchedulingSettings } from './settings'
 import type {
   CalendarAttendee,
   CalendarEvent,
@@ -499,7 +501,14 @@ export async function listCalendarView(
     return { raw, calendars: [], truncated: primary.truncated, skipped: [] }
   }
 
-  const others = account.filter(calendar => !calendar.isDefault)
+  // Hidden calendars are never fetched. Deselecting is therefore how the
+  // attorney spends the secondary budget deliberately: MAX_SECONDARY_CALENDARS
+  // and SECONDARY_CALENDAR_BUDGET_MS apply to whatever survives this filter, so
+  // hiding noise is what keeps a calendar they care about out of `skipped`.
+  const { hiddenCalendarIds } = await getSchedulingSettings()
+  const others = visibleCalendars(account, hiddenCalendarIds).filter(
+    calendar => !calendar.isDefault,
+  )
   const secondary = others.slice(0, MAX_SECONDARY_CALENDARS)
   const skipped = others.slice(MAX_SECONDARY_CALENDARS).map(calendar => calendar.name)
   const deadline = Date.now() + SECONDARY_CALENDAR_BUDGET_MS
