@@ -12,6 +12,7 @@ import type { SealSigner } from '@/lib/esign/nativeSeal'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
+import { getSchedulingSettings } from '@/lib/appointments/settings'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -293,6 +294,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     signerBySession.set(prior.id as string, nameOf.get(priorKey) ?? priorKey)
   }
 
+  // The signature lines are dated in the firm's own zone, never in whatever
+  // zone the machine doing the sealing runs in — UTC on the deployed runtime,
+  // the developer's own locally. An agreement signed between 8pm and midnight
+  // Eastern would otherwise carry the following day's date.
+  const { timezone } = await getSchedulingSettings()
+
   const sealed = await sealSignedAgreement({
     pdf,
     fields: sealFieldsFor([
@@ -305,7 +312,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         signedAt: new Date(now),
         ...(signaturePng ? { signaturePng } : { typedName }),
       },
-    ]),
+    ], timezone),
     // Every signer, in agreement order, so a couple's certificate names both
     // rather than whoever happened to seal last.
     signers: [...priorSigners, {
