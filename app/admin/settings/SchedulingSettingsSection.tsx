@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { WeeklyHours } from '@/lib/appointments/types'
+import type { ExternalCalendarRef } from '@/app/admin/calendar/types'
 import { WeeklyHoursEditor } from './WeeklyHoursEditor'
+import { BlockingCalendarsEditor } from './BlockingCalendarsEditor'
 
 interface SettingsShape {
   timezone: string
@@ -21,6 +23,8 @@ interface SettingsShape {
   smsRemindersEnabled: boolean
   autoIntakeInvite: boolean
   dateOverrides: Record<string, Array<{ start: string; end: string }>>
+  hiddenCalendarIds: string[]
+  blockingCalendarIds: string[]
 }
 
 interface TypeShape {
@@ -76,6 +80,8 @@ export function SchedulingSettingsSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [newOverrideDate, setNewOverrideDate] = useState('')
+  const [accountCalendars, setAccountCalendars] = useState<ExternalCalendarRef[]>([])
+  const [calendarsConnected, setCalendarsConnected] = useState(false)
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -112,6 +118,25 @@ export function SchedulingSettingsSection() {
       }
     }
     void load()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/scheduling/calendars', { headers: authHeaders() })
+        if (cancelled || !res.ok) return
+        const json = await res.json()
+        if (cancelled) return
+        setAccountCalendars(json.calendars ?? [])
+        setCalendarsConnected(Boolean(json.connected))
+      } catch {
+        // The rest of scheduling settings stays editable without this.
+      }
+    })()
     return () => {
       cancelled = true
     }
@@ -253,6 +278,15 @@ export function SchedulingSettingsSection() {
             />
             Auto-send the intake invite when a lead books a discovery call
           </label>
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <BlockingCalendarsEditor
+            calendars={accountCalendars}
+            connected={calendarsConnected}
+            blockingIds={settings.blockingCalendarIds ?? []}
+            disabled={saving}
+            onChange={next => setSettings({ ...settings, blockingCalendarIds: next })}
+          />
         </div>
       </section>
 
