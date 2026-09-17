@@ -131,7 +131,7 @@ export function SigningExperience({ token }: { token: string }) {
 
   if (loadError) {
     return (
-      <main className="mx-auto max-w-lg p-8 text-center">
+      <main className="client-root mx-auto max-w-lg p-8 text-center">
         <h1 className="text-lg font-semibold text-foreground">This link cannot be opened</h1>
         <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
         <p className="mt-4 text-xs text-muted-foreground">
@@ -143,7 +143,7 @@ export function SigningExperience({ token }: { token: string }) {
 
   if (outcome) {
     return (
-      <main className="mx-auto max-w-lg p-8 text-center">
+      <main className="client-root mx-auto max-w-lg p-8 text-center">
         <h1 className="text-lg font-semibold text-foreground">
           {outcome === 'signed' ? 'Thank you — your agreement is signed' : 'You have declined this agreement'}
         </h1>
@@ -157,13 +157,13 @@ export function SigningExperience({ token }: { token: string }) {
   }
 
   if (!loaded) {
-    return <main className="mx-auto max-w-lg p-8 text-sm text-muted-foreground">Loading your agreement…</main>
+    return <main className="client-root mx-auto max-w-lg p-8 text-sm text-muted-foreground">Loading your agreement…</main>
   }
 
   const canSign = consent && (mode === 'drawn' ? hasDrawing : typedName.trim().length > 0)
 
   return (
-    <main className="mx-auto max-w-3xl space-y-5 p-4 md:p-8">
+    <main className="client-root mx-auto max-w-3xl space-y-5 p-4 md:p-8">
       <header>
         <h1 className="text-lg font-semibold text-foreground">Your engagement agreement</h1>
         <p className="text-sm text-muted-foreground">
