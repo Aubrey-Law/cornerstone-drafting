@@ -1,0 +1,138 @@
+name: Tests that run against the synthetic fixture catalog
+
+# The five files in tests/integration/*.test.ts have never had a job. They ran
+# only when someone followed tests/integration/fixtures/README.md by hand, which
+# is to say they ran rarely, and they had already rotted in two places by the
+# time this workflow was written:
+#
+#   * 20261128000000_hide_closed_matters.sql redefined firm_matter_page_v1 to
+#     hide closed matters by default and added the `closed` toggle. The README's
+#     apply list was never extended to include it, so the fixture catalog still
+#     carried the previous definition and matter-list-pagination asserted a
+#     toggle the database it ran against did not implement.
+#   * The same migration moved the default total from 151 to 150.
+#     matter-list-pagination was updated at four assertions and missed a fifth.
+#
+# Neither is exotic. Both survived because nothing ran these tests.
+#
+# This is the fixture-catalog suite, not the schema suite. It runs against the
+# deliberately minimal synthetic catalog in tests/integration/fixtures/, applied
+# to a disposable postgres:17-alpine service container — never against a
+# Supabase instance or the firm database, where that stub catalog
+# (`public.matters` is `(id uuid primary key)`) would be destructive. Tests that
+# need the real migrated schema live in tests/integration/schema/ and run under
+# .github/workflows/integration-schema.yml.
+#
+# No stored secrets. The fixture password is synthetic, it is written in this
+# file on purpose, and it reaches nothing but a container that is discarded with
+# the runner.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Only where the answer could change. `tests/integration/*.test.ts` is the
+    # top level only, matching vitest.integration.config.ts: tests under
+    # schema/ belong to the other job.
+    paths:
+      - 'tests/integration/*.test.ts'
+      - 'tests/integration/fixtures/**'
+      - 'tests/integration/setup.ts'
+      - 'tests/support/verificationEnvironment.ts'
+      - 'vitest.integration.config.ts'
+      # ledger-pagination imports the real @/lib/billing reducers and checks
+      # them against the same rows read back through SQL.
+      - 'lib/billing/**'
+      # The three migrations this catalog applies on top of the fixture.
+      - 'supabase/migrations/20261123000000_workflow_job_leases.sql'
+      - 'supabase/migrations/20261124000000_working_list_reads.sql'
+      - 'supabase/migrations/20261128000000_hide_closed_matters.sql'
+      - '.github/workflows/integration-fixture.yml'
+  schedule:
+    # 13:00 UTC on Mondays — after the anchor probe at 12:20 and the schema
+    # suite at 12:40, so a red Monday morning still arrives one thing at a time.
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-fixture-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Tests that run against the synthetic fixture catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # The README's `docker run` in the shape Actions prefers. Same image, same
+    # throwaway lifetime; the runner waits on pg_isready instead of the reader.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: synthetic-fixture
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: postgres
+      PGPASSWORD: synthetic-fixture
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply the synthetic catalog
+        run: |
+          set -euo pipefail
+          psql --version
+          psql -v ON_ERROR_STOP=1 \
+            -f tests/integration/fixtures/firm-remediation.sql \
+            -f supabase/migrations/20261123000000_workflow_job_leases.sql \
+            -f supabase/migrations/20261124000000_working_list_reads.sql
+
+      # Applied on its own because of the second function it carries.
+      # firm_matter_page_v1 is the one the suite exercises and it reads only
+      # tables this fixture has. drafting_hub_page, in the same migration, reads
+      # design_sheets, doc_selections, drafting_hub_has_documents and a dozen
+      # matter_documents columns that the fixture deliberately does not stub,
+      # and no test here calls it. Postgres parses `language sql` bodies at
+      # creation time, so it would reject the file over a function nothing runs.
+      # check_function_bodies=off is the standard way through that — it is what
+      # pg_dump emits for the same reason — and it defers only body resolution:
+      # ON_ERROR_STOP still catches every other error in the file, and the
+      # function that matters is validated far better than parsing could, by
+      # being called.
+      - name: Apply the closed-matter redefinition
+        run: |
+          set -euo pipefail
+          PGOPTIONS='-c check_function_bodies=off' psql -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20261128000000_hide_closed_matters.sql
+
+      # The two loopback markers satisfy the guard in
+      # tests/support/verificationEnvironment.ts; nothing here speaks REST.
+      # INTEGRATION_DATABASE_URL is what the tests actually connect with, and
+      # that guard requires it to be loopback too, which the mapped service
+      # port is.
+      - name: Run the fixture-catalog integration tests
+        env:
+          INTEGRATION_SUPABASE_URL: http://127.0.0.1:9
+          INTEGRATION_SUPABASE_SERVICE_ROLE_KEY: synthetic
+          INTEGRATION_DATABASE_URL: postgresql://postgres:synthetic-fixture@127.0.0.1:5432/postgres
+        run: npm run test:integration
