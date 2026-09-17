@@ -103,10 +103,17 @@ grid clean.
 
 ## Read path
 
-`listCalendarView` takes a set of hidden calendar ids and filters the account
-list returned by `fetchAccountCalendars` before fetching any events. A hidden
-calendar is never fetched — deselecting does not merely hide events after
-paying for them.
+`listCalendarView` reads `hidden_calendar_ids` from `getSchedulingSettings()`
+itself and filters the account list returned by `fetchAccountCalendars` before
+fetching any events. A hidden calendar is never fetched — deselecting does not
+merely hide events after paying for them.
+
+It reads the setting rather than taking it as a parameter because it has five
+production callers — the calendar-events route, the calendar plan route,
+`lib/queries/today.ts`, `lib/adminChat/calendarTools.ts`, and
+`calendarSnapshot.ts`. Threading a parameter through all five is five chances to
+forget one, and every one of those surfaces renders calendar events. The
+30-second settings cache makes this one read.
 
 This has a second effect worth stating, because it is a reason to deselect
 rather than an incidental saving. The existing `MAX_SECONDARY_CALENDARS` cap and
@@ -125,8 +132,10 @@ down.
 
 ## Booking path
 
-`fetchCalendarBusy` sends `items: [{ id: 'primary' }, ...blockingCalendarIds]`
-and merges the busy intervals from every calendar in the response.
+`fetchCalendarBusy` reads `blocking_calendar_ids` from `getSchedulingSettings()`
+itself, sends `items: [{ id: 'primary' }, ...blockingCalendarIds]`, and merges
+the busy intervals from every calendar in the response. As on the read path,
+reading the setting inside covers all six `fetchAllBusy` callers at once.
 
 **A blocking calendar's error is fatal, exactly as primary's is.**
 
@@ -176,8 +185,18 @@ takes availability down, so the surface that creates them is the surface that
 has to make them visible and removable.
 
 `CalendarClient` is already 1401 lines. The popover is added as its own
-component file rather than inline, and the calendar-list fetch it needs is
-lifted into a small hook, so this feature does not deepen that file's problem.
+component file rather than inline, so this feature does not deepen that file's
+problem.
+
+**Each surface writes only the field it owns.** The popover sends
+`hiddenCalendarIds` and nothing else. The scheduling settings section saves the
+whole settings object, so it explicitly omits `hiddenCalendarIds` before
+sending: otherwise it would post back whatever was loaded when that page
+mounted, and hiding a calendar on the calendar page and then saving anything in
+settings — a buffer, a blocking calendar — would silently undo it. Because
+`updateSchedulingSettings` leaves an absent field alone, omitting it is the
+whole fix. The same property is what makes the popover's single-field save safe
+in the other direction.
 
 ## Testing
 
