@@ -8,6 +8,7 @@ import {
   Briefcase,
   BookOpen,
   CalendarDays,
+  ChevronDown,
   FilePenLine,
   ListTodo,
   LogOut,
@@ -25,6 +26,14 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
@@ -37,6 +46,8 @@ import {
 } from '@/lib/sidebarBadges'
 import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 import { AdminSidebar } from './components/AdminSidebar'
+import { AdminBreadcrumbs } from './components/AdminBreadcrumbs'
+import { adminBreadcrumbs } from '@/lib/adminBreadcrumbs'
 import { SidebarMattersContext } from '@/lib/matters/SidebarMattersContext'
 import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
 
@@ -160,6 +171,10 @@ export default function AdminLayoutClient({
     }
   }, [])
 
+  // `matterDisplayName` is already resolved for the rail, so naming the record
+  // in the trail costs no extra request.
+  const crumbs = adminBreadcrumbs(pathname, { recordLabel: matterDisplayName })
+
   const railForced = forceCollapsed ?? isIconRailRoute(pathname)
   // Forced collapse is presentational only — `collapsed` (and localStorage)
   // still holds the preference the user gets back on every other route.
@@ -246,19 +261,46 @@ export default function AdminLayoutClient({
           <div className="ml-auto md:ml-0 md:block md:flex-1 md:max-w-md">
             <GlobalSearch />
           </div>
-          <div className="hidden md:block md:flex-1" />
+          <div className="hidden min-w-0 md:block md:flex-1">
+            <AdminBreadcrumbs crumbs={crumbs} />
+          </div>
           <div className="flex items-center gap-2">
             <RailToggleButton rail={rail} />
             <ThemeToggle variant="default" />
-            <div className="hidden text-right sm:block">
-              <p className="text-xs font-medium">{userName}</p>
-            </div>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
-            </Avatar>
-            <Button variant="ghost" size="icon" onClick={() => void handleSignOut()} aria-label="Sign out">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-9 gap-2 px-1.5"
+                  aria-label={`Account: ${userName}`}
+                >
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+                  </Avatar>
+                  <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {/* The name moves in here from the header, where it was text
+                    beside the avatar taking horizontal room on every page. */}
+                <DropdownMenuLabel className="truncate font-normal">
+                  <span className="block text-xs text-muted-foreground">Signed in as</span>
+                  <span className="block truncate text-sm font-medium">{userName}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/settings">
+                    <Settings className="size-4" aria-hidden />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => void handleSignOut()}>
+                  <LogOut className="size-4" aria-hidden />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <div className="flex min-h-0 flex-1">
