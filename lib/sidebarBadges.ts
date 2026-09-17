@@ -18,7 +18,39 @@ export type SidebarBadgeTone = 'destructive' | 'accent'
 export interface SidebarBadge {
   value: number
   tone: SidebarBadgeTone
+  /**
+   * The last count that loaded, shown because the newest refresh of this
+   * category failed. Rendered differently and announced as out of date — a
+   * stale "3 overdue" is useful, a stale one presented as current is not.
+   */
+  stale?: boolean
 }
+
+/**
+ * Which counts each failing section takes down with it. The keys are the ones
+ * `fetchSidebarCounts` pushes into `errors`, which are section names rather
+ * than count names — `aging` alone feeds two counts.
+ */
+const COUNTS_BY_SECTION: Record<string, (keyof SidebarCounts)[]> = {
+  intakeReviewCount: ['intakeReviewCount'],
+  draftingNeedsDesignCount: ['draftingNeedsDesignCount'],
+  aging: ['agingRedCount', 'agingAmberCount'],
+  tasksOverdueCount: ['tasksOverdueCount'],
+  inboxNeedsReplyCount: ['inboxNeedsReplyCount'],
+  emailTriageNeedsReplyCount: ['emailTriageNeedsReplyCount'],
+  overdueInvoiceCount: ['overdueInvoiceCount'],
+}
+
+/** The counts invalidated by this response's failed sections. */
+function failedCounts(errors: string[] | undefined): Set<keyof SidebarCounts> {
+  const out = new Set<keyof SidebarCounts>()
+  for (const section of errors ?? []) {
+    for (const key of COUNTS_BY_SECTION[section] ?? []) out.add(key)
+  }
+  return out
+}
+
+type SidebarCountKey = Exclude<keyof SidebarCounts, 'errors'>
 
 export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   inboxNeedsReplyCount: 0,
@@ -31,54 +63,80 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   overdueInvoiceCount: 0,
 }
 
+/**
+ * The badge for a nav item, or null when there is nothing to show.
+ *
+ * A category whose refresh failed used to return null, which hid the badge —
+ * and a hidden badge reads as "nothing needs your attention", which is the one
+ * meaning it must never carry. `mergeSidebarCounts` keeps the last good value
+ * through a failure, so that value is shown and marked stale instead. When
+ * nothing has ever loaded there is genuinely nothing to show and null is right.
+ *
+ * Staleness is a property of the count that ends up on the badge, not of the
+ * nav item: Drafting can draw on three counts from two sections, so asking
+ * whether *any* of them failed would mark a current red-aging figure as out of
+ * date because a different section behind the same item went down.
+ */
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
-  const category = href === '/admin' ? 'inboxNeedsReplyCount' : href.startsWith('/admin/matters') ? 'intakeReviewCount'
-    : href === '/admin/email-triage' ? 'emailTriageNeedsReplyCount'
-    : href === '/admin/tasks' ? 'tasksOverdueCount' : href === '/admin/billing' ? 'overdueInvoiceCount' : null
-  if (category && counts.errors?.includes(category)) return null
-  if (href === '/admin/drafting' && counts.errors?.some(key => key === 'aging' || key === 'draftingNeedsDesignCount')) return null
+  const failed = failedCounts(counts.errors)
+  const badge = (key: SidebarCountKey, tone: SidebarBadgeTone): SidebarBadge =>
+    failed.has(key) ? { value: counts[key], tone, stale: true } : { value: counts[key], tone }
+
   if (href === '/admin' && counts.inboxNeedsReplyCount > 0) {
-    return { value: counts.inboxNeedsReplyCount, tone: 'accent' }
+    return badge('inboxNeedsReplyCount', 'accent')
   }
   if ((href === '/admin/matters' || href === '/admin/matters/list') && counts.intakeReviewCount > 0) {
-    return { value: counts.intakeReviewCount, tone: 'destructive' }
+    return badge('intakeReviewCount', 'destructive')
   }
   if (href === '/admin/drafting') {
     // Aging folded into the Drafting hub: overdue matters take badge priority.
-    if (counts.agingRedCount > 0) return { value: counts.agingRedCount, tone: 'destructive' }
-    if (counts.draftingNeedsDesignCount > 0) return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
-    if (counts.agingAmberCount > 0) return { value: counts.agingAmberCount, tone: 'accent' }
+    if (counts.agingRedCount > 0) return badge('agingRedCount', 'destructive')
+    if (counts.draftingNeedsDesignCount > 0) return badge('draftingNeedsDesignCount', 'accent')
+    if (counts.agingAmberCount > 0) return badge('agingAmberCount', 'accent')
   }
   // Accent, not destructive: unanswered mail is work waiting, not the firm
   // being owed or a missed deadline.
   if (href === '/admin/email-triage' && counts.emailTriageNeedsReplyCount > 0) {
-    return { value: counts.emailTriageNeedsReplyCount, tone: 'accent' }
+    return badge('emailTriageNeedsReplyCount', 'accent')
   }
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
-    return { value: counts.tasksOverdueCount, tone: 'destructive' }
+    return badge('tasksOverdueCount', 'destructive')
   }
   // Late money is destructive, not accent: an overdue invoice is the firm
   // being owed, which is the same urgency as an overdue task.
   if (href === '/admin/billing' && counts.overdueInvoiceCount > 0) {
-    return { value: counts.overdueInvoiceCount, tone: 'destructive' }
+    return badge('overdueInvoiceCount', 'destructive')
   }
   return null
 }
 
+/**
+ * Fold a response into the counts already on screen.
+ *
+ * The subtlety is that a failed section is not absent from the response — the
+ * server substitutes its fallback, which is `0`. `??` does not fall back on a
+ * zero, so taking the response at face value replaced every failed count with
+ * "nothing to do" and destroyed the value the badge could otherwise have kept
+ * showing. Counts named in `errors` keep what they had.
+ */
 export function mergeSidebarCounts(
   prev: SidebarCounts,
   next: Partial<SidebarCounts> | null | undefined,
 ): SidebarCounts {
   if (!next) return prev
+  const failed = failedCounts(next.errors)
+  const take = (key: SidebarCountKey): number =>
+    failed.has(key) ? prev[key] : next[key] ?? prev[key]
+
   return {
     errors: next.errors ?? [],
-    inboxNeedsReplyCount: next.inboxNeedsReplyCount ?? prev.inboxNeedsReplyCount,
-    emailTriageNeedsReplyCount: next.emailTriageNeedsReplyCount ?? prev.emailTriageNeedsReplyCount,
-    intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
-    draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
-    agingRedCount: next.agingRedCount ?? prev.agingRedCount,
-    agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
-    tasksOverdueCount: next.tasksOverdueCount ?? prev.tasksOverdueCount,
-    overdueInvoiceCount: next.overdueInvoiceCount ?? prev.overdueInvoiceCount,
+    inboxNeedsReplyCount: take('inboxNeedsReplyCount'),
+    emailTriageNeedsReplyCount: take('emailTriageNeedsReplyCount'),
+    intakeReviewCount: take('intakeReviewCount'),
+    draftingNeedsDesignCount: take('draftingNeedsDesignCount'),
+    agingRedCount: take('agingRedCount'),
+    agingAmberCount: take('agingAmberCount'),
+    tasksOverdueCount: take('tasksOverdueCount'),
+    overdueInvoiceCount: take('overdueInvoiceCount'),
   }
 }

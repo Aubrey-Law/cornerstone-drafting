@@ -137,7 +137,6 @@ export function AdminSidebar({
 
   return (
     <nav className="flex min-h-0 flex-1 flex-col p-2">
-      {!!badgeCounts.errors?.length && <p role="status" className="px-3 py-1 text-xs text-muted-foreground" title="Some attention counts could not be refreshed">{compact ? '!' : 'Some counts unavailable'}</p>}
       {navGroups.map(group => (
         <div key={group} className={cn('flex flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
           {!compact ? (
@@ -175,7 +174,13 @@ export function AdminSidebar({
                         aria-hidden="true"
                         className={cn(
                           'absolute -right-1 -top-1 h-2 w-2 rounded-full',
-                          badge.tone === 'destructive' ? 'bg-destructive' : 'bg-primary',
+                          // Hollow, not filled: at 8px a hue change is not a
+                          // signal, but a ring against a dot is.
+                          badge.stale
+                            ? 'border border-border-strong bg-card'
+                            : badge.tone === 'destructive'
+                              ? 'bg-destructive'
+                              : 'bg-primary',
                         )}
                       />
                     )}
@@ -185,19 +190,31 @@ export function AdminSidebar({
                       <span className="flex-1">{item.label}</span>
                       {badge && (
                         <span
+                          // An outline instead of a fill, so a stale count is
+                          // told apart by shape rather than by shade alone.
                           className={cn(
                             'ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-micro font-medium tabular-nums',
-                            badge.tone === 'destructive'
-                              ? 'bg-destructive/15 text-destructive'
-                              : 'bg-primary/15 text-primary',
+                            badge.stale
+                              ? 'border border-dashed border-border-strong text-muted-foreground'
+                              : badge.tone === 'destructive'
+                                ? 'bg-destructive/15 text-destructive'
+                                : 'bg-primary/15 text-primary',
                           )}
+                          title={badge.stale ? 'Last known count — this could not be refreshed' : undefined}
                         >
                           {badge.value}
+                          {badge.stale && <span className="sr-only"> (last known count, could not be refreshed)</span>}
                         </span>
                       )}
                     </>
                   ) : (
-                    <span className="sr-only">{item.label}</span>
+                    // The rail's badge is an 8px dot, hidden from assistive
+                    // tech along with its count — so the one thing it must
+                    // still say is that the count behind it is out of date.
+                    <span className="sr-only">
+                      {item.label}
+                      {badge?.stale ? ' (last known count, could not be refreshed)' : ''}
+                    </span>
                   )}
                 </Link>
               )

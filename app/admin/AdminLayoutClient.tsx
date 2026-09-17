@@ -130,18 +130,52 @@ export default function AdminLayoutClient({
   useEffect(() => {
     let cancelled = false
 
-    async function loadBadgeCounts(opts?: { fresh?: boolean }) {
+    /**
+     * Retry a failed refresh quietly, rather than leaving the badges as they
+     * are until the next navigation happens to invalidate them.
+     *
+     * Spaced past the route's own 30s cache on purpose: `unstable_cache` stores
+     * a partial failure like any other result, so a retry inside that window
+     * would be served the same failure back. The route drops a failed entry
+     * now, but the delays hold independently of that.
+     *
+     * Three attempts and then it stops. The badges are an aid, and a shell that
+     * polls a broken endpoint forever is worse than one showing a count marked
+     * out of date.
+     */
+    const RETRY_DELAYS_MS = [4_000, 35_000, 120_000]
+    let retryTimer: number | null = null
+
+    function scheduleRetry(attempt: number) {
+      if (cancelled || attempt >= RETRY_DELAYS_MS.length) return
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null
+        void loadBadgeCounts({ fresh: true, attempt: attempt + 1 })
+      }, RETRY_DELAYS_MS[attempt])
+    }
+
+    async function loadBadgeCounts(opts?: { fresh?: boolean; attempt?: number }) {
+      const attempt = opts?.attempt ?? 0
       try {
         const response = await fetch(
           '/api/admin/sidebar-counts',
           opts?.fresh ? { cache: 'no-store' } : undefined,
         )
-        if (!response.ok) return
+        if (!response.ok) {
+          scheduleRetry(attempt)
+          return
+        }
         const counts = await response.json() as Partial<SidebarCounts>
         if (cancelled) return
         setBadgeCounts(prev => mergeSidebarCounts(prev, counts))
+        // A 200 carrying `errors` is a partial failure: some sections answered
+        // and some did not, and the ones that did not are showing a stale
+        // count until this succeeds.
+        if (counts.errors?.length) scheduleRetry(attempt)
       } catch {
         // Sidebar badges are helpful, not critical to rendering the shell.
+        scheduleRetry(attempt)
       }
     }
 
@@ -150,6 +184,8 @@ export default function AdminLayoutClient({
       if (invalidateTimer !== null) window.clearTimeout(invalidateTimer)
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = null
+        // A real invalidation restarts the retry budget: something changed, so
+        // an endpoint that failed three times is worth asking again.
         void loadBadgeCounts({ fresh: true })
       }, 3000)
     }
@@ -159,6 +195,7 @@ export default function AdminLayoutClient({
     return () => {
       cancelled = true
       if (invalidateTimer !== null) window.clearTimeout(invalidateTimer)
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
       window.removeEventListener(SIDEBAR_COUNTS_INVALIDATE_EVENT, handleInvalidate)
     }
   }, [])
