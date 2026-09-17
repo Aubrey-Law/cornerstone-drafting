@@ -146,10 +146,16 @@ export function SchedulingSettingsSection() {
     if (!settings) return
     setSaving(true)
     try {
+      // Which calendars are *visible* belongs to the calendar page's popover,
+      // not here. Sending it back would post whatever was loaded when this page
+      // mounted, so hiding a calendar on the calendar page and then saving
+      // anything here would quietly undo it. An absent field is left alone by
+      // updateSchedulingSettings, which is what makes omitting it the fix.
+      const { hiddenCalendarIds: _ownedByTheCalendarPage, ...owned } = settings
       const res = await fetch('/api/admin/scheduling/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ settings, types }),
+        body: JSON.stringify({ settings: owned, types }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
