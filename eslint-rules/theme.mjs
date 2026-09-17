@@ -22,10 +22,15 @@ function classPatternRule({ description, pattern, messageId, message }) {
       messages: { [messageId]: message },
     },
     create(context) {
+      // Every match, not just the first. One className holds many classes, and
+      // reporting only the first hid `bg-amber-50` behind `border-amber-300`
+      // on the same line — so a fix guided by the output left a violation
+      // behind and the count understated the work.
+      const all = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+
       function check(node, text) {
         if (typeof text !== 'string') return
-        const found = text.match(pattern)
-        if (found) {
+        for (const found of text.matchAll(all)) {
           context.report({ node, messageId, data: { match: found[0] } })
         }
       }
