@@ -73,7 +73,7 @@ export function EventPrepDrawer({
             <SheetHeader className="border-b border-border p-5" style={{ background: categoryColor }}>
               <span className="w-fit rounded-full bg-card/80 px-2 py-0.5 text-micro font-medium text-foreground">{appointment.typeLabel}</span>
               <span
-                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} px-2 py-0.5 text-micro font-medium`}
+                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-green-bg text-green' : 'bg-red-bg text-red'} px-2 py-0.5 text-micro font-medium`}
               >
                 {calendarStatus}
               </span>
@@ -114,7 +114,7 @@ export function EventPrepDrawer({
                   <DrawerSection title="Prep checklist">
                     {detail.checklist.length ? detail.checklist.map(item => (
                       <div key={item.id} className="flex items-center gap-2 border-b border-border py-2 last:border-0">
-                        {item.blocker ? <span className="text-red-700">●</span> : item.status === 'done' ? <Check className="h-3.5 w-3.5 text-green-700" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}
+                        {item.blocker ? <span className="text-red">●</span> : item.status === 'done' ? <Check className="h-3.5 w-3.5 text-green" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}
                         <span className="flex-1 text-xs text-foreground">{item.title}</span>
                         {appointment.linkedMatterId && <Button asChild size="sm" variant="ghost"><Link href={`/admin/matters/${appointment.linkedMatterId}?tab=tasks`}>Resolve</Link></Button>}
                       </div>

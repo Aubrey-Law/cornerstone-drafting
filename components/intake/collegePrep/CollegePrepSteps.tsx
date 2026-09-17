@@ -336,7 +336,7 @@ export function StepCollegeParents({ data, update }: StepProps) {
               type="button"
               onClick={() => removeParent(index)}
               aria-label={`Remove parent or guardian ${index + 1}`}
-              className="text-red-500 hover:text-red-700"
+              className="text-destructive hover:text-red"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -578,7 +578,7 @@ export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
                 type="button"
                 onClick={() => setRecipients(recipients.filter((_, i) => i !== index))}
                 aria-label={`Remove HIPAA recipient ${index + 1}`}
-                className="text-red-500 hover:text-red-700"
+                className="text-destructive hover:text-red"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

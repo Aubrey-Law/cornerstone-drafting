@@ -108,7 +108,7 @@ export function StepPersonal({ data, update }: StepProps) {
           if (address.county) update('county', address.county)
         }}
       />
-      <p className="text-xs text-gray-400">Search to auto-fill, or enter manually below.</p>
+      <p className="text-xs text-muted-foreground">Search to auto-fill, or enter manually below.</p>
     </div>
   )
 }

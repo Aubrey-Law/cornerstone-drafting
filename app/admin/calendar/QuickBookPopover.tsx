@@ -232,7 +232,7 @@ export function QuickBookPopover({
                 ))}
               </div>
             )}
-            {draft.attendeeEmail && <p className="mt-1 text-micro text-green-700"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
+            {draft.attendeeEmail && <p className="mt-1 text-micro text-green"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="quick-book-first-name">First name</Label>

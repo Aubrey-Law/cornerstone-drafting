@@ -48,41 +48,25 @@ const config = [
   },
   {
     /**
-     * The 120 remaining raw palette classes, by file. Converting them is its
-     * own pass with its own diff — mapping `bg-amber-50 text-amber-700` onto
-     * the theme's amber tokens is a judgement per site, not a codemod, and
-     * several of these render inside the client interview's frozen scope where
-     * the hardcoded palette may be deliberate.
+     * What is left of the raw palette, and why it is not a sweep.
      *
-     * Nothing may be added to this list. Delete entries as files are converted;
-     * when it is empty, delete the block.
+     * Each of these three is a CATEGORICAL set — asset categories, contact
+     * kinds, email providers — where the hue is the only thing telling one
+     * value from another. The theme has no categorical scale to map them onto:
+     * `--chart-1` to `--chart-5` are five greys, and the stage and status
+     * colours already mean stages and statuses. Converting these needs a
+     * palette designed for the job, which is a design decision rather than a
+     * cleanup, and all three already carry correct light and dark variants —
+     * they are the least broken raw palette in the tree, not the most.
+     *
+     * The other 20 files that were here are converted. Nothing may be added to
+     * this list; delete an entry when its set gets real tokens, and when it is
+     * empty delete the block.
      */
     files: [
-      'app/admin/calendar/CalendarClient.tsx',
-      'app/admin/calendar/DayAgenda.tsx',
-      'app/admin/calendar/EventPrepDrawer.tsx',
-      'app/admin/calendar/QuickBookPopover.tsx',
-      'app/admin/contacts/ContactsClient.tsx',
-      'app/admin/contacts/merge/MergeReviewClient.tsx',
-      // `*`, not the literal `[matterId]`: eslint's globs read `[...]` as a
-      // character class, so the real directory name never matches.
       'app/admin/drafting/*/design/sections/AssetsSection.tsx',
+      'app/admin/contacts/ContactsClient.tsx',
       'app/admin/settings/EmailSettingsSection.tsx',
-      'app/admin/settings/estate-tax/EstateTaxSchedulesClient.tsx',
-      'app/intake/(shell)/RequestUnlockButton.tsx',
-      'app/intake/(shell)/page.tsx',
-      'app/intake/start/PublicIntakeStartForm.tsx',
-      'components/assets/AssetPortfolioSummary.tsx',
-      'components/design-sheet/DesignSheetConflictDialog.tsx',
-      'components/intake/FiduciaryContactPicker.tsx',
-      'components/intake/IntakeChildrenStep.tsx',
-      'components/intake/IntakeFamilySteps.tsx',
-      'components/intake/IntakePersonalStep.tsx',
-      'components/intake/IntakeReferralStep.tsx',
-      'components/intake/IntakeWizard.tsx',
-      'components/intake/collegePrep/CollegePrepSteps.tsx',
-      'components/sharedFields/IntakeField.tsx',
-      'packages/citations/src/react/PdfCitationViewer.tsx',
     ],
     rules: { 'theme/no-raw-palette': 'off' },
   },

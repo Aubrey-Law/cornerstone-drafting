@@ -38,7 +38,7 @@ export function StepReferral({ data, update }: StepProps) {
                 'rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors',
                 source === option
                   ? 'border-accent bg-accent text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
+                  : 'border-border bg-white text-foreground hover:border-input',
               )}
             >
               {option}
@@ -61,7 +61,7 @@ export function StepReferral({ data, update }: StepProps) {
                     'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
                     data.legal_insurance_plan === plan
                       ? 'border-accent bg-accent text-white'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
+                      : 'border-border bg-white text-foreground hover:border-input',
                   )}
                 >
                   {plan}

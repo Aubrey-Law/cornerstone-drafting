@@ -207,12 +207,12 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
         <div
           className={cn(
             'rounded-lg border p-4',
-            federal.ok ? 'border-border bg-card' : 'border-amber-500/50 bg-amber-500/5',
+            federal.ok ? 'border-border bg-card' : 'border-amber-border bg-amber-bg',
           )}
         >
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Federal</h2>
-            {!federal.ok && <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            {!federal.ok && <AlertTriangle className="h-4 w-4 text-amber" />}
           </div>
           {federal.ok ? (
             <>
@@ -227,7 +227,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
             </>
           ) : (
             <>
-              <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-400">
+              <p className="mt-1 text-lg font-semibold text-amber">
                 Not on file for {payload.effective.asOf.slice(0, 4)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -255,7 +255,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
               <p className="mt-2 text-micro text-muted-foreground">{massachusetts.schedule.source}</p>
             </>
           ) : (
-            <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-400">
+            <p className="mt-1 text-lg font-semibold text-amber">
               Not on file for {payload.effective.asOf.slice(0, 4)}
             </p>
           )}

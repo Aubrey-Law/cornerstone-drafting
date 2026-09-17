@@ -43,8 +43,8 @@ function availabilityLabel(calendarShowAsBusy?: boolean): string {
 
 function availabilityClass(calendarShowAsBusy?: boolean): string {
   return calendarShowAsBusy === false
-    ? 'bg-emerald-100 text-emerald-700'
-    : 'bg-rose-100 text-rose-700'
+    ? 'bg-green-bg text-green'
+    : 'bg-red-bg text-red'
 }
 
 function durationMinutes(start: string, end: string) {

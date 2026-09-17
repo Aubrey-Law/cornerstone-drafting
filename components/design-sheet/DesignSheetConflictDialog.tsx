@@ -25,7 +25,7 @@ export function DesignSheetConflictDialog({ conflict, saving, onResolve, onReloa
   const differences = useMemo(() => conflict.latest ? compareDesignSheets(conflict.local, conflict.latest) : [], [conflict])
   const complete = Boolean(conflict.latest) && differences.every(d => choices[d.path])
   return <>
-    <div role="alert" className="flex items-center justify-between gap-3 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+    <div role="alert" className="flex items-center justify-between gap-3 border border-amber-border bg-amber-bg p-3 text-sm text-amber">
       <p>Editing and autosave are paused. Your unsaved changes are preserved in this tab until you resolve the saved versions.</p>
       <Button variant="outline" onClick={() => setOpen(true)}>Review versions</Button>
     </div>

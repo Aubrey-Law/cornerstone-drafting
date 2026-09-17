@@ -80,16 +80,16 @@ function WhyWeAsk({ children }: { children: ReactNode }) {
       <summary className="cursor-pointer text-xs font-medium text-accent hover:underline">
         Why we ask
       </summary>
-      <p className="mt-1.5 text-xs leading-relaxed text-gray-500">{children}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{children}</p>
     </details>
   )
 }
 
 export function ExpandableHelp({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-      <summary className="cursor-pointer text-sm font-medium text-gray-800">{title}</summary>
-      <div className="mt-3 space-y-3 text-sm text-gray-600">{children}</div>
+    <details className="rounded-lg border border-border bg-muted px-4 py-3">
+      <summary className="cursor-pointer text-sm font-medium text-foreground">{title}</summary>
+      <div className="mt-3 space-y-3 text-sm text-muted-foreground">{children}</div>
     </details>
   )
 }
@@ -120,8 +120,8 @@ export function ReviewChoiceControl({
   }
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <p className="text-sm font-medium text-amber-950">{label}</p>
+    <div className="rounded-lg border border-amber-border bg-amber-bg p-4">
+      <p className="text-sm font-medium text-amber">{label}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <button
           type="button"
@@ -130,8 +130,8 @@ export function ReviewChoiceControl({
           className={cn(
             'rounded-md border px-3 py-2 text-left text-sm transition-colors',
             current === 'discuss_with_attorney'
-              ? 'border-amber-700 bg-white text-amber-950'
-              : 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-white',
+              ? 'border-amber-border bg-white text-amber'
+              : 'border-amber-border bg-amber-bg text-amber hover:bg-white',
           )}
         >
           Discuss with attorney
@@ -143,8 +143,8 @@ export function ReviewChoiceControl({
           className={cn(
             'rounded-md border px-3 py-2 text-left text-sm transition-colors',
             current === 'not_provided_yet'
-              ? 'border-amber-700 bg-white text-amber-950'
-              : 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-white',
+              ? 'border-amber-border bg-white text-amber'
+              : 'border-amber-border bg-amber-bg text-amber hover:bg-white',
           )}
         >
           Not provided yet
@@ -258,11 +258,11 @@ export function FiduciaryRole({
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
-        <p className="text-xs text-gray-500">{description}</p>
+        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+        <p className="text-xs text-muted-foreground">{description}</p>
         {example && (
-          <p className="mt-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
-            <span className="font-medium text-gray-700">Example: </span>
+          <p className="mt-2 rounded-md border border-border bg-white px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Example: </span>
             {example}
           </p>
         )}
@@ -276,7 +276,7 @@ export function FiduciaryRole({
         return (
           <div key={principal.priority} className="space-y-2">
             {/* Principal row */}
-            <div className="relative rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="relative rounded-lg border border-border bg-muted p-4">
               <ContactPickerField
                 intakeId={intakeId}
                 value={principal}
@@ -296,7 +296,7 @@ export function FiduciaryRole({
 
             {/* Co-agent row (indented) — not shown for HCP */}
             {allowCoAgent && ca && (
-              <div className="relative ml-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="relative ml-6 rounded-lg border border-border bg-muted p-4">
                 <ContactPickerField
                   intakeId={intakeId}
                   value={ca}
@@ -463,44 +463,44 @@ function RealEstateModalContent({ items, onChange }: {
   return (
     <div className="space-y-4">
       {items.length === 0 && (
-        <p className="text-sm text-gray-400">No properties added yet. Click &quot;Add Property&quot; below.</p>
+        <p className="text-sm text-muted-foreground">No properties added yet. Click &quot;Add Property&quot; below.</p>
       )}
       {items.map((row, idx) => (
-        <div key={row.id} className="rounded-lg border border-gray-200 p-4">
+        <div key={row.id} className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Property {idx + 1}</span>
-            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove property ${idx + 1}`} className="text-gray-400 hover:text-red-500">
+            <span className="text-sm font-medium text-foreground">Property {idx + 1}</span>
+            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove property ${idx + 1}`} className="text-muted-foreground hover:text-destructive">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Type</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Type</label>
               <select value={row.type} onChange={e => updateRow(row.id, 'type', e.target.value)} className={inputCls}>
                 <option value="">Select type</option>
                 {propertyTypes.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Owner</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Owner</label>
               <select value={row.owner} onChange={e => updateRow(row.id, 'owner', e.target.value)} className={inputCls}>
                 {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Address</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Address</label>
               <input type="text" value={row.address} onChange={e => updateRow(row.id, 'address', e.target.value)} placeholder="123 Main St, Boston, MA 02101" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Estimated Value</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Estimated Value</label>
               <input type="text" value={row.value} onChange={e => updateRow(row.id, 'value', e.target.value)} placeholder="$500,000" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Mortgage Balance</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Mortgage Balance</label>
               <input type="text" value={row.mortgage} onChange={e => updateRow(row.id, 'mortgage', e.target.value)} placeholder="$200,000 (or None)" className={inputCls} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Notes</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Notes</label>
               <Textarea
                 value={row.notes ?? ''}
                 onChange={e => updateRow(row.id, 'notes', e.target.value)}
@@ -515,7 +515,7 @@ function RealEstateModalContent({ items, onChange }: {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 hover:border-accent hover:text-accent"
+        className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-4 py-2 text-sm text-muted-foreground hover:border-accent hover:text-accent"
       >
         <Plus className="h-4 w-4" /> Add Property
       </button>
@@ -545,40 +545,40 @@ function BusinessModalContent({ items, onChange }: {
   return (
     <div className="space-y-4">
       {items.length === 0 && (
-        <p className="text-sm text-gray-400">No businesses added yet. Click &quot;Add Business&quot; below.</p>
+        <p className="text-sm text-muted-foreground">No businesses added yet. Click &quot;Add Business&quot; below.</p>
       )}
       {items.map((row, idx) => (
-        <div key={row.id} className="rounded-lg border border-gray-200 p-4">
+        <div key={row.id} className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Business {idx + 1}</span>
-            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove business ${idx + 1}`} className="text-gray-400 hover:text-red-500">
+            <span className="text-sm font-medium text-foreground">Business {idx + 1}</span>
+            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove business ${idx + 1}`} className="text-muted-foreground hover:text-destructive">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Name of Business</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Name of Business</label>
               <input type="text" value={row.name} onChange={e => updateRow(row.id, 'name', e.target.value)} placeholder="Acme Holdings LLC" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Type</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Type</label>
               <select value={row.business_type} onChange={e => updateRow(row.id, 'business_type', e.target.value)} className={inputCls}>
                 <option value="">Select type</option>
                 {businessTypes.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Owner</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Owner</label>
               <select value={row.owner} onChange={e => updateRow(row.id, 'owner', e.target.value)} className={inputCls}>
                 {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Size of Interest (%)</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Size of Interest (%)</label>
               <input type="text" value={row.interest_pct} onChange={e => updateRow(row.id, 'interest_pct', e.target.value)} placeholder="100%" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Estimated Value</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Estimated Value</label>
               <input type="text" value={row.value} onChange={e => updateRow(row.id, 'value', e.target.value)} placeholder="$250,000" className={inputCls} />
             </div>
           </div>
@@ -587,7 +587,7 @@ function BusinessModalContent({ items, onChange }: {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 hover:border-accent hover:text-accent"
+        className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-4 py-2 text-sm text-muted-foreground hover:border-accent hover:text-accent"
       >
         <Plus className="h-4 w-4" /> Add Business
       </button>
@@ -616,27 +616,27 @@ function LiabilityModalContent({ items, onChange }: {
   return (
     <div className="space-y-4">
       {items.length === 0 && (
-        <p className="text-sm text-gray-400">No liabilities added yet. Click &quot;Add Liability&quot; below.</p>
+        <p className="text-sm text-muted-foreground">No liabilities added yet. Click &quot;Add Liability&quot; below.</p>
       )}
       {items.map((row, idx) => (
-        <div key={row.id} className="rounded-lg border border-gray-200 p-4">
+        <div key={row.id} className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Liability {idx + 1}</span>
-            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove liability ${idx + 1}`} className="text-gray-400 hover:text-red-500">
+            <span className="text-sm font-medium text-foreground">Liability {idx + 1}</span>
+            <button type="button" onClick={() => removeRow(row.id)} aria-label={`Remove liability ${idx + 1}`} className="text-muted-foreground hover:text-destructive">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Description</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
               <input type="text" value={row.description} onChange={e => updateRow(row.id, 'description', e.target.value)} placeholder="Mortgage, auto loan, credit card…" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Amount Owed</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount Owed</label>
               <input type="text" value={row.value} onChange={e => updateRow(row.id, 'value', e.target.value)} placeholder="$25,000" className={inputCls} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Owner</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Owner</label>
               <select value={row.owner} onChange={e => updateRow(row.id, 'owner', e.target.value)} className={inputCls}>
                 {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
@@ -647,7 +647,7 @@ function LiabilityModalContent({ items, onChange }: {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 hover:border-accent hover:text-accent"
+        className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-4 py-2 text-sm text-muted-foreground hover:border-accent hover:text-accent"
       >
         <Plus className="h-4 w-4" /> Add Liability
       </button>
@@ -692,7 +692,7 @@ function AssetTextContent({ label, value, onChange }: {
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm text-gray-500">Describe your {label.toLowerCase()} — include approximate values if known.</p>
+      <p className="text-sm text-muted-foreground">Describe your {label.toLowerCase()} — include approximate values if known.</p>
       <Textarea
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -851,7 +851,7 @@ export function StepEstate({ data, update }: StepProps) {
       </FormField>
 
       <FormField label="What types of assets do you own?">
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="mb-2 text-xs text-muted-foreground">
           Check everything that applies. Tap &quot;Add details&quot; only if you want to share more now — it is optional.
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -996,19 +996,19 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
                   'rounded-lg border p-4 text-left transition-colors',
                   selected
                     ? 'border-selected-border bg-selected'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-border hover:border-border'
                 )}
               >
                 <div className="flex items-start gap-3">
                   <div className={cn(
                     'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border',
-                    selected ? 'border-accent bg-accent text-white' : 'border-gray-300'
+                    selected ? 'border-accent bg-accent text-white' : 'border-border'
                   )}>
                     {selected && <Check className="h-3 w-3" />}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{goal.label}</p>
-                    <p className="text-xs text-gray-500">{goal.desc}</p>
+                    <p className="text-sm font-medium text-foreground">{goal.label}</p>
+                    <p className="text-xs text-muted-foreground">{goal.desc}</p>
                   </div>
                 </div>
               </button>
@@ -1155,10 +1155,10 @@ export function StepAdditionalContacts({ data, update }: StepProps) {
       )}
 
       {nominees.map((row, idx) => (
-        <div key={row.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div key={row.id} className="rounded-lg border border-border bg-muted p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Additional contact {idx + 1}</span>
-            <button type="button" onClick={() => removeRow(idx)} aria-label={`Remove additional contact ${idx + 1}`} className="text-red-500 hover:text-red-700">
+            <span className="text-sm font-medium text-foreground">Additional contact {idx + 1}</span>
+            <button type="button" onClick={() => removeRow(idx)} aria-label={`Remove additional contact ${idx + 1}`} className="text-destructive hover:text-red">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -1362,7 +1362,7 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
 
       {/* Intro */}
       <div className="space-y-3">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Name the people who would step in to manage your trust, settle your estate, and make decisions if you cannot.
           Many clients choose a spouse, adult child, or trusted sibling — you can leave any role blank and discuss options with Aubrey Law.
         </p>
@@ -1371,15 +1371,15 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
             If your plan includes a Trust, you&apos;ll need to decide who manages and distributes your assets. The same person can serve in both roles, but each carries distinct responsibilities.
           </p>
           <p>
-            <span className="font-medium text-gray-800">Successor Trustee:</span> Manages trust assets — property titled in the name of the Trust during your lifetime or made payable to the Trust at death. You will be the initial trustee of your own trust; the people you name here step in as successor trustees when you can no longer serve.
+            <span className="font-medium text-foreground">Successor Trustee:</span> Manages trust assets — property titled in the name of the Trust during your lifetime or made payable to the Trust at death. You will be the initial trustee of your own trust; the people you name here step in as successor trustees when you can no longer serve.
           </p>
           <p>
-            <span className="font-medium text-gray-800">Personal Representative (Executor):</span> Settles your probate estate — generally any property titled solely in your name at death that lacks a designated beneficiary, a Transfer/Payable on Death instruction, or Rights of Survivorship.
+            <span className="font-medium text-foreground">Personal Representative (Executor):</span> Settles your probate estate — generally any property titled solely in your name at death that lacks a designated beneficiary, a Transfer/Payable on Death instruction, or Rights of Survivorship.
           </p>
-          <p className="font-medium text-gray-700">Which role does the heavy lifting?</p>
+          <p className="font-medium text-foreground">Which role does the heavy lifting?</p>
           <ul className="ml-4 list-disc space-y-1">
-            <li><span className="font-medium text-gray-800">Trust-Based Plan:</span> Both roles are necessary, but the Trustee typically carries more long-term responsibility, managing assets according to your Trust&apos;s instructions.</li>
-            <li><span className="font-medium text-gray-800">Will-Based Plan:</span> There is no Trustee. The Personal Representative handles all administrative work to close the estate through probate.</li>
+            <li><span className="font-medium text-foreground">Trust-Based Plan:</span> Both roles are necessary, but the Trustee typically carries more long-term responsibility, managing assets according to your Trust&apos;s instructions.</li>
+            <li><span className="font-medium text-foreground">Will-Based Plan:</span> There is no Trustee. The Personal Representative handles all administrative work to close the estate through probate.</li>
           </ul>
         </ExpandableHelp>
       </div>

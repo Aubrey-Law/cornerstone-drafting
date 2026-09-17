@@ -70,8 +70,8 @@ function availabilityLabel(appointment: CalendarAppointment): string {
 
 function availabilityClass(appointment: CalendarAppointment): string {
   return appointment.calendarShowAsBusy === false
-    ? 'bg-emerald-100 text-emerald-700'
-    : 'bg-rose-100 text-rose-700'
+    ? 'bg-green-bg text-green'
+    : 'bg-red-bg text-red'
 }
 
 function fmtDayHeading(d: Date): string {
@@ -619,7 +619,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                             <span className="ml-2 text-primary">Calendly</span>
                           )}
                           {a.source !== 'calendly' && !a.calendarSynced && a.status === 'scheduled' && (
-                            <span className="ml-2 text-amber-700">⚠ not on the calendar</span>
+                            <span className="ml-2 text-amber">⚠ not on the calendar</span>
                           )}
                         </p>
                         {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
@@ -799,13 +799,13 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             />
             Calendar events
             {showCalendar && !calendarConnected && (
-              <span className="text-amber-700" title={calendarError ?? undefined}>
+              <span className="text-amber" title={calendarError ?? undefined}>
                 ⚠ not connected{calendarError ? ` — ${calendarError}` : ''}
               </span>
             )}
             {showCalendar && calendarConnected && calendarSkipped.length > 0 && (
               <span
-                className="text-amber-700"
+                className="text-amber"
                 title={`Google would not return these calendars: ${calendarSkipped.join(', ')}`}
               >
                 ⚠ {calendarSkipped.length} calendar
@@ -814,7 +814,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             )}
             {showCalendar && calendarTruncated && (
               <span
-                className="text-amber-700"
+                className="text-amber"
                 title="Google returned more events than this view reads. Narrow the range to see the rest."
               >
                 ⚠ partial
