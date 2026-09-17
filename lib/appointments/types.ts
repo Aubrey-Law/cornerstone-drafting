@@ -36,6 +36,10 @@ export interface SchedulingSettings {
   dateOverrides: Record<string, DayWindow[]>
   /** Calendly booking page URL per meeting type key; unset types have no link. */
   calendlyUrls: import('@/lib/calendly/links').CalendlyUrlMap
+  /** Google calendar ids hidden from the admin calendar (primary is never hidden). */
+  hiddenCalendarIds: string[]
+  /** Google calendar ids that block client booking, in addition to primary. */
+  blockingCalendarIds: string[]
 }
 
 /** Per-weekday bookable windows in the firm timezone ("HH:MM" 24h). */

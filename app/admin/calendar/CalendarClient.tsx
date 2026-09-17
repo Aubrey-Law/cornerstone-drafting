@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { CalendarVisibilityPopover } from './CalendarVisibilityPopover'
 import { DayAgenda } from './DayAgenda'
 import { EventPrepDrawer } from './EventPrepDrawer'
 import { PlanView } from './PlanView'
@@ -186,7 +187,8 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [showCalendar, setShowCalendar] = useState(true)
   const [calendarEvents, setCalendarEvents] = useState<ExternalCalendarEvent[]>([])
   const [calendarConnected, setCalendarConnected] = useState(true)
-  const [syncedCalendars, setSyncedCalendars] = useState<ExternalCalendarRef[]>([])
+  const [accountCalendars, setAccountCalendars] = useState<ExternalCalendarRef[]>([])
+  const [hiddenCalendarIds, setHiddenCalendarIds] = useState<string[]>([])
   const [calendarTruncated, setCalendarTruncated] = useState(false)
   const [calendarError, setCalendarError] = useState<string | null>(null)
   const [calendarSkipped, setCalendarSkipped] = useState<string[]>([])
@@ -243,7 +245,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           : { connected: false, events: [], calendars: [], truncated: false }
         setCalendarEvents(calendarJson.events ?? [])
         setCalendarConnected(Boolean(calendarJson.connected))
-        setSyncedCalendars(calendarJson.calendars ?? [])
         setCalendarTruncated(Boolean(calendarJson.truncated))
         setCalendarSkipped(calendarJson.skipped ?? [])
         setCalendarError(
@@ -269,7 +270,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         }
       } else {
         setCalendarEvents([])
-        setSyncedCalendars([])
         setCalendarTruncated(false)
         setCalendarSkipped([])
         setCalendarError(null)
@@ -285,6 +285,27 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const [calendarsRes, settingsRes] = await Promise.all([
+          fetch('/api/admin/scheduling/calendars', { headers: authHeaders() }),
+          fetch('/api/admin/scheduling/settings', { headers: authHeaders() }),
+        ])
+        if (cancelled || !calendarsRes.ok || !settingsRes.ok) return
+        const calendarsJson = await calendarsRes.json()
+        const settingsJson = await settingsRes.json()
+        if (cancelled) return
+        setAccountCalendars(calendarsJson.calendars ?? [])
+        setHiddenCalendarIds(settingsJson.settings?.hiddenCalendarIds ?? [])
+      } catch {
+        // The popover is a convenience; the grid renders without it.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -791,11 +812,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                 {calendarSkipped.length === 1 ? '' : 's'} unavailable
               </span>
             )}
-            {showCalendar && calendarConnected && syncedCalendars.length > 1 && (
-              <span title={syncedCalendars.map(c => c.name).join(', ')}>
-                · {syncedCalendars.length} calendars
-              </span>
-            )}
             {showCalendar && calendarTruncated && (
               <span
                 className="text-amber-700"
@@ -805,6 +821,17 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               </span>
             )}
           </label>
+          {showCalendar && calendarConnected && accountCalendars.length > 1 && (
+            <CalendarVisibilityPopover
+              calendars={accountCalendars}
+              hiddenIds={hiddenCalendarIds}
+              authHeaders={authHeaders}
+              onChange={next => {
+                setHiddenCalendarIds(next)
+                void load()
+              }}
+            />
+          )}
           <QuickBookPopover
             open={quickBookOpen}
             onOpenChange={setQuickBookOpen}
