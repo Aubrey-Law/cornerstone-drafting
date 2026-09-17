@@ -41,14 +41,14 @@ export default async function IntakeHomePage() {
     const firstName = (intakeRow.first_name as string) || null
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <div className="rounded-xl border border-amber-border bg-amber-bg p-6">
           <div className="flex items-start gap-3">
-            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber" aria-hidden />
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-amber-900 dark:text-amber-100">
+              <h1 className="text-lg font-semibold text-amber">
                 Thank you{firstName ? `, ${firstName}` : ''}
               </h1>
-              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/90">
+              <p className="mt-1 text-sm text-amber">
                 We&apos;ve received your questionnaire. We look forward to reviewing it with you at our meeting.
                 To request changes, email{' '}
                 <a href={`mailto:${firm.email}`} className="underline">{firm.email}</a>.

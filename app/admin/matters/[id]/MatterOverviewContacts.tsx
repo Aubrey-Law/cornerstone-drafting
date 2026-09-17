@@ -11,6 +11,7 @@ import { formatPhoneDisplay } from '@/lib/phone'
 import type { ClientFormValues, ContactFormValues } from './FamilyMemberDialog'
 import { clientRowToForm, contactRowToForm } from './FamilyMemberDialog'
 import type { PersonAddRequest } from './MatterPeopleTab'
+import { useConfirm } from '@/components/useConfirm'
 
 const FamilyMemberDialog = dynamic(
   () => import('./FamilyMemberDialog').then(m => ({ default: m.FamilyMemberDialog })),
@@ -116,6 +117,7 @@ export function MatterOverviewContacts({
   matter: PipelineMatter
   addRequest?: PersonAddRequest | null
 }) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -228,7 +230,12 @@ export function MatterOverviewContacts({
   }
 
   async function handleDeleteChild(contact: MatterContact) {
-    if (!window.confirm(`Remove ${contactName(contact)} from this matter?`)) return
+    if (!(await confirm({
+      title: `Remove ${contactName(contact)} from this matter?`,
+      body: 'The person stays in your contacts; only their role on this matter is removed.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    }))) return
     try {
       const res = await fetch(
         `/api/admin/matters/${matterId}/contacts?contactId=${encodeURIComponent(contact.id)}`,
@@ -254,6 +261,7 @@ export function MatterOverviewContacts({
 
   return (
     <section className="space-y-4">
+      {confirmDialog}
       <div>
         <h3 className="text-sm font-semibold">Family</h3>
         <p className="text-xs text-muted-foreground">

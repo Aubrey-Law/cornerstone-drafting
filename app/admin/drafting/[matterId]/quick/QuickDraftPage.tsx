@@ -6,6 +6,8 @@ import { ArrowLeft, Download, FileText, Loader2, Save, Sparkles } from 'lucide-r
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { PageHeader } from '@/components/PageHeader'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { logMatterActivity } from '@/lib/matterActivity'
 import { cn } from '@/lib/utils'
@@ -245,22 +247,24 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/admin/drafting/${matterId}`}
-            className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to drafting workspace
-          </Link>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Sparkles className="h-6 w-6 text-primary" /> Quick Draft
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Generate a single document for {matterLabel}. Everything the matter already knows is
-            filled automatically — you only answer what&apos;s left.
-          </p>
-        </div>
+      <div className="space-y-2">
+        <Link
+          href={`/admin/drafting/${matterId}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to drafting workspace
+        </Link>
+        <PageHeader
+          eyebrow="Drafting"
+          icon={Sparkles}
+          title="Quick Draft"
+          description={
+            <>
+              Generate a single document for {matterLabel}. Everything the matter already knows is
+              filled automatically — you only answer what&apos;s left.
+            </>
+          }
+        />
       </div>
 
       {loadError ? (
@@ -268,7 +272,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
           {loadError}
         </div>
       ) : (
-        <div className="space-y-4 rounded-lg border bg-card p-5">
+        <Card className="gap-4 p-5">
           <div className="space-y-2">
             <label htmlFor="quick-draft-template" className="text-sm font-medium">Document</label>
             <div className="flex flex-wrap items-center gap-2">
@@ -390,11 +394,11 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
               </div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {!loadError && (
-        <div className="space-y-3 rounded-lg border bg-card p-5">
+        <Card className="gap-3 p-5">
           <div>
             <h2 className="text-sm font-semibold">Custom templates</h2>
             <p className="text-xs text-muted-foreground">
@@ -443,7 +447,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
               ))}
             </ul>
           )}
-        </div>
+        </Card>
       )}
     </div>
   )

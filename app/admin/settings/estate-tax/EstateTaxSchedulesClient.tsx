@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/utils'
 import type {
   FederalEstateTaxSchedule,
@@ -184,14 +185,10 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Estate tax</h1>
-        <p className="text-sm text-muted-foreground">
-          The figures the app uses to estimate estate tax exposure. Each carries the dates it
-          applies to and the authority it came from, and a date no schedule covers reports
-          “not on file” rather than falling back to an older number.
-        </p>
-      </header>
+      <PageHeader
+        title="Estate tax"
+        description="The figures the app uses to estimate estate tax exposure. Each carries the dates it applies to and the authority it came from, and a date no schedule covers reports “not on file” rather than falling back to an older number."
+      />
 
       {errors.length > 0 && (
         <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
@@ -207,12 +204,12 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
         <div
           className={cn(
             'rounded-lg border p-4',
-            federal.ok ? 'border-border bg-card' : 'border-amber-500/50 bg-amber-500/5',
+            federal.ok ? 'border-border bg-card' : 'border-amber-border bg-amber-bg',
           )}
         >
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Federal</h2>
-            {!federal.ok && <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            {!federal.ok && <AlertTriangle className="h-4 w-4 text-amber" />}
           </div>
           {federal.ok ? (
             <>
@@ -227,7 +224,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
             </>
           ) : (
             <>
-              <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-400">
+              <p className="mt-1 text-lg font-semibold text-amber">
                 Not on file for {payload.effective.asOf.slice(0, 4)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -255,7 +252,7 @@ export function EstateTaxSchedulesClient({ initial }: { initial: Payload }) {
               <p className="mt-2 text-micro text-muted-foreground">{massachusetts.schedule.source}</p>
             </>
           ) : (
-            <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-400">
+            <p className="mt-1 text-lg font-semibold text-amber">
               Not on file for {payload.effective.asOf.slice(0, 4)}
             </p>
           )}

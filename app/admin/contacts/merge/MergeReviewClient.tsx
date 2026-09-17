@@ -52,7 +52,7 @@ function Field({ label, value, differs }: { label: string; value: string | null;
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
-      <span className={cn('min-w-0 truncate text-right', differs && 'font-medium text-amber-700 dark:text-amber-400')}>
+      <span className={cn('min-w-0 truncate text-right', differs && 'font-medium text-amber')}>
         {value || <span className="text-muted-foreground">—</span>}
       </span>
     </div>
@@ -78,7 +78,7 @@ function SideCard({
     <section
       className={cn(
         'flex-1 rounded-md border px-3 py-2',
-        tone === 'keep' ? 'border-emerald-600/40 bg-emerald-50/40 dark:bg-emerald-950/20' : 'border-border',
+        tone === 'keep' ? 'border-green/40 bg-green-bg' : 'border-border',
       )}
     >
       <header className="mb-1 flex items-center gap-2">
@@ -194,7 +194,7 @@ export function MergeReviewClient() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
       {merged.map((line, i) => (
-        <p key={i} className="rounded-md border border-emerald-600/40 bg-emerald-50/40 px-3 py-2 text-sm dark:bg-emerald-950/20">
+        <p key={i} className="rounded-md border border-green/40 bg-green-bg px-3 py-2 text-sm">
           {line} <span className="text-muted-foreground">Reversible — the removed row is kept, not deleted.</span>
         </p>
       ))}
@@ -212,8 +212,8 @@ export function MergeReviewClient() {
       {visible.map(candidate => (
         <article key={candidate.loser.id} className="rounded-lg border border-border bg-card p-3">
           {!candidate.namesMatch && (
-            <p className="mb-2 flex items-start gap-2 rounded-md border border-amber-600/40 bg-amber-50/60 px-3 py-2 text-sm dark:bg-amber-950/20">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="mb-2 flex items-start gap-2 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
               <span>
                 <strong>Different names on the same email.</strong> This is much more often a couple
                 sharing an inbox than one person entered twice. Check before merging.

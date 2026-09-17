@@ -19,6 +19,7 @@ import { buildOwnershipLabels } from '@/lib/assets/labels'
 import type { AssetIntakeInput, AssetIntakeRow } from '@/types/assetIntake'
 import { useMatterAssets } from '../useMatterAssets'
 import { openCornerstoneAssistant } from '@/app/admin/components/adminChatEvents'
+import { useConfirm } from '@/components/useConfirm'
 
 interface MatterAssetsTabProps {
   matterId?: string
@@ -46,6 +47,7 @@ function MatterAssetsTabImpl({
   anticipatedInheritance = false,
   onAnticipatedInheritanceChange,
 }: MatterAssetsTabProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const [filter, setFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -188,7 +190,12 @@ function MatterAssetsTabImpl({
   }
 
   async function handleDelete(asset: AssetIntakeRow) {
-    const confirmed = window.confirm(`Delete "${asset.description || 'this asset'}"? This cannot be undone.`)
+    const confirmed = await confirm({
+      title: `Delete "${asset.description || 'this asset'}"?`,
+      body: 'This cannot be undone.',
+      confirmLabel: 'Delete asset',
+      destructive: true,
+    })
     if (!confirmed) return
     await deleteAsset(asset.id)
     setSelectedIds(prev => {
@@ -202,9 +209,12 @@ function MatterAssetsTabImpl({
   async function handleBulkDelete() {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    const confirmed = window.confirm(
-      `Delete ${ids.length} selected asset${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
-    )
+    const confirmed = await confirm({
+      title: `Delete ${ids.length} selected asset${ids.length === 1 ? '' : 's'}?`,
+      body: 'This cannot be undone.',
+      confirmLabel: `Delete ${ids.length} asset${ids.length === 1 ? '' : 's'}`,
+      destructive: true,
+    })
     if (!confirmed) return
     await deleteAssets(ids)
     setSelectedIds(new Set())
@@ -238,6 +248,7 @@ function MatterAssetsTabImpl({
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-center gap-3">
         <Button className="gap-1.5 bg-brand-navy hover:bg-brand-navy/90" onClick={openAdd}>
           <Plus className="h-4 w-4" />

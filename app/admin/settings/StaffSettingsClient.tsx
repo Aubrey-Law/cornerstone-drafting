@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PageHeader } from '@/components/PageHeader'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
@@ -352,13 +353,10 @@ export function StaffSettingsClient({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, API keys, MCP connectors, Google, firm templates, AI usage,
-          and matter stage SLA.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Model preferences, API keys, MCP connectors, Google, firm templates, AI usage, and matter stage SLA."
+      />
 
       <div className="flex flex-wrap gap-1 border-b border-border">
         {(

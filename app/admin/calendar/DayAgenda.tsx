@@ -43,8 +43,8 @@ function availabilityLabel(calendarShowAsBusy?: boolean): string {
 
 function availabilityClass(calendarShowAsBusy?: boolean): string {
   return calendarShowAsBusy === false
-    ? 'bg-emerald-100 text-emerald-700'
-    : 'bg-rose-100 text-rose-700'
+    ? 'bg-green-bg text-green'
+    : 'bg-red-bg text-red'
 }
 
 function durationMinutes(start: string, end: string) {
@@ -285,7 +285,8 @@ export function DayAgenda({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
       <div className="min-w-0 space-y-3">
         <header>
-          <h1 className="text-xl font-semibold text-foreground">{heading}</h1>
+          {/* CalendarClient owns this page's <h1>; the agenda is a section within it. */}
+          <h2 className="text-xl font-semibold text-foreground">{heading}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {active.length + external.length} events · {minutesLabel(booked)} booked ·{' '}
             {minutesLabel(Math.max(0, workday - booked))} open · {nextMeetingLabel(active)}

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MatterSearchPicker } from './MatterSearchPicker'
+import { useConfirm } from '@/components/useConfirm'
 
 interface TemplateVersion {
   id: string
@@ -70,6 +71,7 @@ function templateLastUpload(template: TemplateRow): TemplateVersion | null {
 }
 
 export function DocumentTemplatesSection() {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [migrationRequired, setMigrationRequired] = useState(false)
@@ -173,9 +175,12 @@ export function DocumentTemplatesSection() {
   }
 
   async function cancelUpload(template: TemplateRow, version: TemplateVersion) {
-    const confirmed = window.confirm(
-      `Discard v${version.versionNumber} (${version.originalFilename})? The staged DOCX will be removed and can be uploaded again later.`,
-    )
+    const confirmed = await confirm({
+      title: `Discard v${version.versionNumber}?`,
+      body: `${version.originalFilename} is removed from staging and can be uploaded again later.`,
+      confirmLabel: 'Discard version',
+      destructive: true,
+    })
     if (!confirmed) return
     setBusy(version.id)
     try {
@@ -259,6 +264,7 @@ export function DocumentTemplatesSection() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {migrationRequired && (
         <div className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm text-amber">
           Apply pending Supabase migrations, including <code>20260713222004_cancel_document_template_uploads.sql</code>, to enable the complete staged-template workflow.

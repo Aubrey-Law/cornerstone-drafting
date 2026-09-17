@@ -124,7 +124,7 @@ export function PdfCitationViewer({ bytes, layer, citation, scale = 1.5 }: PdfCi
               // Boxes are stored in PDF points with a top-left origin, so a
               // percentage of the page dimensions scales with whatever width the
               // canvas ends up at — no coupling to the render scale.
-              className="pointer-events-none absolute rounded-sm bg-amber-300/40 ring-1 ring-amber-500/70"
+              className="pointer-events-none absolute rounded-sm bg-amber-bg ring-1 ring-amber-border"
               style={{
                 left: `${(box.x / (page.canvas.width / scale)) * 100}%`,
                 top: `${(box.y / (page.canvas.height / scale)) * 100}%`,

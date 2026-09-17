@@ -359,15 +359,15 @@ export function ContactPickerField({
     <div className="space-y-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <span className="text-xs font-medium uppercase text-gray-500">{label}</span>
+          <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
           {summary ? (
-            <p className="mt-1 text-sm font-medium text-gray-900">{summary}</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{summary}</p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">Choose one contact from the list below.</p>
           )}
         </div>
         {onRemove && (
-          <button type="button" onClick={onRemove} aria-label={`Remove ${label}`} className="text-red-500 hover:text-red-700">
+          <button type="button" onClick={onRemove} aria-label={`Remove ${label}`} className="text-destructive hover:text-red">
             <Trash2 className="h-4 w-4" />
           </button>
         )}
@@ -410,7 +410,7 @@ export function ContactPickerField({
                       className="mt-1"
                     />
                     <span className="min-w-0 flex-1 leading-tight">
-                      <span className="block font-medium text-gray-900">
+                      <span className="block font-medium text-foreground">
                         {c.first_name} {c.last_name}
                         {c._label && (
                           <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-micro capitalize text-muted-foreground">

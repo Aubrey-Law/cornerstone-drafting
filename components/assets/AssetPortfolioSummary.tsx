@@ -43,7 +43,7 @@ export function AssetPortfolioSummary({ aggregates, married = false }: AssetPort
                * dated schedules exist to prevent.
                */
               <>
-                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                <p className="text-sm font-semibold text-amber">
                   Not on file
                 </p>
                 <p className="text-micro text-muted-foreground">

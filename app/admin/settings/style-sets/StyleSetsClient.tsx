@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/PageHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -185,38 +186,40 @@ export function StyleSetsClient({ initialStyleSets }: { initialStyleSets: StyleS
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Style sets</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+      <PageHeader
+        title="Style sets"
+        description={
+          <>
             How generated documents are formatted. Anything left as{' '}
             <span className="font-medium">the template&rsquo;s own</span> keeps whatever formatting
             the Word template already carried, so a style set only changes what it names.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".docx"
-            className="hidden"
-            onChange={event => {
-              const file = event.target.files?.[0]
-              // Reset so re-picking the same file fires change again.
-              event.target.value = ''
-              if (file) void extractFrom(file)
-            }}
-          />
-          <Button variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>
-            <Upload className="size-4" aria-hidden />
-            Read from a template
-          </Button>
-          <Button disabled={busy} onClick={() => { setDraft(emptyDraft()); setNotes([]) }}>
-            <Plus className="size-4" aria-hidden />
-            New style set
-          </Button>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".docx"
+              className="hidden"
+              onChange={event => {
+                const file = event.target.files?.[0]
+                // Reset so re-picking the same file fires change again.
+                event.target.value = ''
+                if (file) void extractFrom(file)
+              }}
+            />
+            <Button variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>
+              <Upload className="size-4" aria-hidden />
+              Read from a template
+            </Button>
+            <Button disabled={busy} onClick={() => { setDraft(emptyDraft()); setNotes([]) }}>
+              <Plus className="size-4" aria-hidden />
+              New style set
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">

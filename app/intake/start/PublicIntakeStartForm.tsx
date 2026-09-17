@@ -197,7 +197,7 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
           <FieldError message={errors.turnstileToken?.message} />
         </div>
       ) : (
-        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm text-amber">
           Public intake registration is not configured.
         </p>
       )}

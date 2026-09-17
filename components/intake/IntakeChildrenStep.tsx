@@ -79,14 +79,14 @@ export function StepChildren({ data, update }: StepProps) {
   return (
     <div className="space-y-4">
       {children.map((child, index) => (
-        <div key={child.id ?? index} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div key={child.id ?? index} className="rounded-lg border border-border bg-muted p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-600">Child {index + 1}</span>
+            <span className="text-sm font-medium text-muted-foreground">Child {index + 1}</span>
             <button
               type="button"
               onClick={() => removeChild(index)}
               aria-label={`Remove child ${index + 1}`}
-              className="text-red-500 hover:text-red-700"
+              className="text-destructive hover:text-red"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -148,7 +148,7 @@ export function StepChildren({ data, update }: StepProps) {
               label="Same address as client"
             />
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Parent</p>
+              <p className="mb-2 text-sm font-medium text-foreground">Parent</p>
               <div className="flex flex-wrap gap-2">
                 {(['both', clientFirstName, ...(isMarried && spouseFirstName ? [spouseFirstName] : [])]).map((option) => (
                   <button
@@ -160,7 +160,7 @@ export function StepChildren({ data, update }: StepProps) {
                       'rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors',
                       (child.parent ?? 'both') === option
                         ? 'border-accent bg-accent text-white'
-                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
+                        : 'border-border bg-white text-foreground hover:border-input',
                     )}
                   >
                     {option === 'both' ? 'Both' : option}

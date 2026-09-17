@@ -52,7 +52,7 @@ export function StepFamily({ data, update }: StepProps) {
                 'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
                 data.has_children === option.value
                   ? 'border-accent bg-accent text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
+                  : 'border-border bg-white text-foreground hover:border-input',
               )}
             >
               {option.label}
@@ -77,7 +77,7 @@ export function StepFamily({ data, update }: StepProps) {
                   'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
                   data.has_minor_children === option.value
                     ? 'border-accent bg-accent text-white'
-                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
+                    : 'border-border bg-white text-foreground hover:border-input',
                 )}
               >
                 {option.label}

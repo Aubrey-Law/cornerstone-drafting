@@ -75,6 +75,7 @@ import type {
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTabContent } from '@/app/admin/matters/[id]/MatterPeopleTab'
+import { useConfirm } from '@/components/useConfirm'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -198,6 +199,7 @@ export function LeadDetailClient({
   initialIntakeLinkRevoked = false,
   smsEnabled = true,
 }: LeadDetailClientProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const router = useRouter()
   const pathname = usePathname()
@@ -446,7 +448,12 @@ export function LeadDetailClient({
 
   async function rotateIntakeUrl() {
     const replacing = Boolean(intakeUrl)
-    if (replacing && !window.confirm('Replace this intake link? The previous link will stop working immediately.')) {
+    if (replacing && !(await confirm({
+      title: 'Replace this intake link?',
+      body: 'The previous link stops working immediately, including for anyone part-way through the questionnaire.',
+      confirmLabel: 'Replace link',
+      destructive: true,
+    }))) {
       return
     }
     setIntakeLinkBusy(true)
@@ -464,7 +471,12 @@ export function LeadDetailClient({
   }
 
   async function revokeIntakeUrl() {
-    if (!window.confirm('Revoke this intake link? It will stop working until a new link is prepared.')) return
+    if (!(await confirm({
+      title: 'Revoke this intake link?',
+      body: 'It stops working until a new link is prepared.',
+      confirmLabel: 'Revoke link',
+      destructive: true,
+    }))) return
     setIntakeLinkBusy(true)
     try {
       await call('/api/admin/intake/link', { intakeId: lead.id }, 'DELETE')
@@ -771,6 +783,7 @@ export function LeadDetailClient({
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
+      {confirmDialog}
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-card px-4 py-3">
         <Link href="/admin/crm/opportunities" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" />

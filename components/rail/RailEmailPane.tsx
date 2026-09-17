@@ -27,6 +27,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { DragResizeHandle, useDragResize } from '@/components/ui/drag-resize'
+import { useConfirm } from '@/components/useConfirm'
 
 /**
  * Compose pane for the admin rail: a one-off email or one started from a
@@ -291,6 +292,7 @@ export function ManualEmailComposer({
   variableValues = {},
   initialContext,
 }: ManualEmailComposerProps = {}) {
+  const { confirm, confirmDialog } = useConfirm()
   const pathname = usePathname()
   const record = recordOverride === undefined ? railRecordForPath(pathname) : recordOverride
   const token = useAccessToken()
@@ -681,7 +683,13 @@ export function ManualEmailComposer({
   ])
 
   async function discardDraft() {
-    if (!token || !window.confirm('Discard this email draft?')) return
+    if (!token) return
+    if (!(await confirm({
+      title: 'Discard this email draft?',
+      body: 'Anything written here is lost.',
+      confirmLabel: 'Discard draft',
+      destructive: true,
+    }))) return
     await fetch(`/api/admin/email/draft?${draftQuery}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -868,6 +876,7 @@ export function ManualEmailComposer({
       )}
       style={embedded && paneResize.height !== null ? { height: paneResize.height } : undefined}
     >
+      {confirmDialog}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">

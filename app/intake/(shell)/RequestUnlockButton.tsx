@@ -11,7 +11,7 @@ export function RequestUnlockButton({ requestedAt }: { requestedAt: string | nul
 
   if (sentAt) {
     return (
-      <p className="text-sm text-amber-800">
+      <p className="text-sm text-amber">
         Unlock requested — we&apos;ll reach out shortly to reopen your questionnaire.
       </p>
     )

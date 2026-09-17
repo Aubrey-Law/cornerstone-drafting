@@ -48,6 +48,7 @@ import type {
   DesignSheetImportProposal,
 } from '@/lib/designSheetImport/shared'
 import { forEachSseFrame, toolEventFrom } from '@/app/admin/components/chatStream'
+import { useConfirm } from '@/components/useConfirm'
 
 interface ChatPanelProps {
   open: boolean
@@ -216,6 +217,7 @@ export function ChatPanel({
   matterDisplayName = null,
   assistantModelLabel = null,
 }: ChatPanelProps) {
+  const { confirm, confirmDialog } = useConfirm()
   const detectedContext = useChatContext()
   const [overrideGeneral, setOverrideGeneral] = useState(false)
   const [messages, setMessages] = useState<FloatingChatMessage[]>([])
@@ -577,7 +579,12 @@ export function ChatPanel({
 
   async function handleClearConversation() {
     if (chatContext.type === 'matter') {
-      if (!window.confirm('Clear this matter’s assistant chat history?')) return
+      if (!(await confirm({
+        title: 'Clear this matter’s assistant chat history?',
+        body: 'The conversation is removed for everyone. Drafts and documents are not affected.',
+        confirmLabel: 'Clear history',
+        destructive: true,
+      }))) return
       try {
         const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch(`/api/admin/matters/${chatContext.id}/assistant`, {
@@ -627,6 +634,7 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
+      {confirmDialog}
       {designSheetProposal && (
         <DesignSheetImportDialog
           open={Boolean(designSheetProposal)}
