@@ -33,6 +33,25 @@
     font-size: 13px;
     line-height: 1.5;
   }
+
+  /* ── Serif headings on the surfaces a client sees ───────────────────────────
+     The logo is a serif and nothing else in the client's path was. Lora is
+     already vendored and already carried the portal dashboard's one heading
+     through an inline style, so this costs no new font bytes — it makes that
+     one-off the rule.
+
+     Opt-in rather than a default with an admin exception, because Radix
+     portals its dialogs to <body>: a default would put a serif on every admin
+     dialog title, which sit outside `.admin-root` entirely.
+
+     h1–h3 only. Lower headings in these flows are section labels inside forms,
+     where a serif reads as decoration rather than hierarchy. Body text, form
+     controls and buttons all stay sans. */
+  .client-root :is(h1, h2, h3),
+  .guided-interview:not(.guided-zinc) :is(h1, h2, h3) {
+    font-family: var(--font-lora), ui-serif, Georgia, serif;
+    letter-spacing: -0.01em;
+  }
 }
 
 /* Type scale utilities */
@@ -111,26 +130,45 @@
   --card-foreground: #111827;
   --popover: #ffffff;
   --popover-foreground: #111827;
-  --primary: #1E4A8C;
+  /* The interview's brand colour, and it is the theme's own navy rather than a
+     second blue. guided.css has always drawn the headings and structure in
+     #1f2d5a; these Tailwind utilities were drawing the fills beside them in
+     #1E4A8C, so one screen carried two blues that were close enough to look
+     like a mistake and far enough apart to be one. Driving both from
+     --brand-navy also means the interview follows if the brand ever moves.
+     Contrast improves on every pair: white on navy is 13.28:1 against the
+     8.70:1 it replaces, and navy text on the card the same. */
+  --primary: var(--brand-navy);
   --primary-foreground: oklch(0.99 0.005 85);
   --secondary: #DFE5EE;
   --secondary-foreground: #334155;
   --muted: #E7EBF2;
   --muted-foreground: #4D5763;
-  --accent: #1E4A8C;
+  /* `accent` is the brand fill here, not the hover surface it is in the admin
+     app — the interview reaches for bg/text/border-accent 52 times and for
+     `primary` twice. Keeping it saturated is deliberate. */
+  --accent: var(--brand-navy);
   --accent-foreground: oklch(0.99 0.005 85);
   --destructive: oklch(0.48 0.18 25);
   --destructive-foreground: oklch(0.99 0.005 85);
+  /* Divider, decorative, matching the admin theme's own soft border. */
   --border: #C9D3E0;
-  --input: #C9D3E0;
-  --ring: #1E4A8C;
+  /* Field borders carry the 3:1 that WCAG 1.4.11 asks of a control boundary.
+     #C9D3E0 was 1.51:1 on the card — Wave 1 fixed this for the admin app and
+     the freeze kept the old value here. 3.70:1 on the card, 3.26:1 on the
+     page, 3.10:1 on muted, so it holds on every surface a field sits on. */
+  --input: #7486A2;
+  /* Focus in the firm's teal, which is what selection and attention mean
+     everywhere else in the app after Wave 2. `focus-visible:border-ring`
+     makes the focused border full-strength teal at 6.19:1. */
+  --ring: var(--brand-teal);
   --teal-bg: #dcf7ef;
   /* The interview uses the same `bg-selected` API as the rest of the app, and
      the freeze keeps it looking exactly as it did: its own teal tint, not the
      theme's. 8.30:1. */
   --selected: #dcf7ef;
   --selected-foreground: #0f4f4a;
-  --selected-border: #1A6B72;
+  --selected-border: var(--brand-teal);
 }
 
 /* ── Guided zinc re-skin (attorney-facing design sheet / drafting steps) ────
