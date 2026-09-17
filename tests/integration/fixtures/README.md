@@ -56,8 +56,9 @@ column this fixture's stub tables do not have).
 
 - **`tests/integration/*.test.ts`** — the five files above. They need *this* fixture: a synthetic
   catalog with stub tables (`public.matters` is `(id uuid primary key)`) and fixture-only tables
-  (`matter_fixture`, `lead_fixture`). Run by hand, per the procedure above, under
-  `vitest.integration.config.ts` (`npm run test:integration`).
+  (`matter_fixture`, `lead_fixture`). Run under `vitest.integration.config.ts`
+  (`npm run test:integration`), automatically by
+  `.github/workflows/integration-fixture.yml`, and by hand per the procedure above.
 - **`tests/integration/schema/**/*.test.ts`** — tests that need the *real migrated schema*, built by
   `supabase start` applying `supabase/migrations`. Real constraints are the point: this fixture
   declares two foreign keys in total and no e-sign tables, so it cannot express a defect like an
