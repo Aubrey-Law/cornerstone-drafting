@@ -69,3 +69,28 @@ describe('matter-scoped assistant workflows can find their matter', () => {
     }
   })
 })
+
+describe('finding the bundled tree at runtime', () => {
+  it('falls back to the working directory when the package-derived path does not exist', async () => {
+    const path = await import('node:path')
+    const { resolveSystemWorkflowsRoot } = await import('@/lib/works/systemSkills')
+
+    // On Vercel the package URL points at the build machine's checkout, which
+    // is gone at runtime; the traced copy lives under process.cwd().
+    const root = resolveSystemWorkflowsRoot(['/vercel/path0/tools/workflows/system'])
+
+    expect(root).toBe(path.join(process.cwd(), 'tools', 'workflows', 'system'))
+  })
+
+  it('prefers the package-derived path when it exists', async () => {
+    const path = await import('node:path')
+    const { resolveSystemWorkflowsRoot } = await import('@/lib/works/systemSkills')
+    const packagePath = path.join(process.cwd(), 'tools', 'workflows', 'system')
+
+    expect(resolveSystemWorkflowsRoot([packagePath])).toBe(packagePath)
+  })
+
+  it('reads skills through the resolved root, not a path fixed at import time', () => {
+    expect(listBundledSystemSkills().length).toBeGreaterThanOrEqual(5)
+  })
+})

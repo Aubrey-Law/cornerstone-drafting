@@ -8,10 +8,31 @@ import { worksDb } from '@/lib/works/data'
 // tools/workflows/system/<type>/<slug>/SKILL.md; the directory name is the
 // stable slug and slugify(frontmatter.name) must equal it.
 //
-// Resolved from the package's own location rather than process.cwd(): a second
-// app in the workspace builds from its own directory and would otherwise look
-// for a tools/workflows tree that only exists at the repository root.
-export const SYSTEM_WORKFLOWS_ROOT = path.join(systemWorkflowsRoot, 'system')
+// Two candidate roots, checked at call time:
+//  1. The package's own location. Right for a second app in the workspace that
+//     builds from its own directory — but on Vercel webpack rewrites
+//     `import.meta.url` to the build machine's checkout, which does not exist
+//     when the function runs, so this candidate is missing there.
+//  2. process.cwd()/tools/workflows/system. Where `outputFileTracingIncludes`
+//     puts the traced copy at runtime (/var/task on Vercel), and the repo
+//     root locally.
+// Between 2026-09-02 and this fix only (1) was consulted, so production
+// never found the tree: the Library's Sync reported nothing to sync and every
+// prompt fell back to the stale work_skills copy.
+const PACKAGE_ROOT = path.join(systemWorkflowsRoot, 'system')
+const CWD_ROOT = path.join(process.cwd(), 'tools', 'workflows', 'system')
+
+/** First candidate directory that exists; the package path when none does, so errors name it. */
+export function resolveSystemWorkflowsRoot(candidates: string[] = [PACKAGE_ROOT, CWD_ROOT]): string {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+  if (!candidates.includes(CWD_ROOT) && fs.existsSync(CWD_ROOT)) return CWD_ROOT
+  return candidates[0] ?? PACKAGE_ROOT
+}
+
+/** @deprecated resolved at import time; prefer resolveSystemWorkflowsRoot() so a runtime path is honoured. */
+export const SYSTEM_WORKFLOWS_ROOT = resolveSystemWorkflowsRoot()
 
 export const SYSTEM_SKILL_TYPES: WorkSkillType[] = ['assistant', 'tabular']
 
@@ -31,7 +52,7 @@ export interface BundledSystemSkill {
 
 /** Read and validate a single bundled SKILL.md. Throws on any invalid skill. */
 export function readBundledSystemSkill(type: WorkSkillType, slug: string): BundledSystemSkill {
-  const filePath = path.join(SYSTEM_WORKFLOWS_ROOT, type, slug, 'SKILL.md')
+  const filePath = path.join(resolveSystemWorkflowsRoot(), type, slug, 'SKILL.md')
   const raw = fs.readFileSync(filePath, 'utf8')
   const parsed = parseSkillMarkdown(raw)
   if (parsed.metadata.type !== type) {
@@ -44,7 +65,7 @@ export function readBundledSystemSkill(type: WorkSkillType, slug: string): Bundl
 }
 
 /** Walk the bundled tree and validate every skill. Throws on the first invalid one. */
-export function listBundledSystemSkills(root = SYSTEM_WORKFLOWS_ROOT): BundledSystemSkill[] {
+export function listBundledSystemSkills(root = resolveSystemWorkflowsRoot()): BundledSystemSkill[] {
   const skills: BundledSystemSkill[] = []
   for (const type of SYSTEM_SKILL_TYPES) {
     const typeDir = path.join(root, type)
@@ -64,7 +85,7 @@ export function listBundledSystemSkills(root = SYSTEM_WORKFLOWS_ROOT): BundledSy
 
 function findBundledSkillBody(slug: string): string | null {
   for (const type of SYSTEM_SKILL_TYPES) {
-    const filePath = path.join(SYSTEM_WORKFLOWS_ROOT, type, slug, 'SKILL.md')
+    const filePath = path.join(resolveSystemWorkflowsRoot(), type, slug, 'SKILL.md')
     if (!fs.existsSync(filePath)) continue
     return parseSkillMarkdown(fs.readFileSync(filePath, 'utf8')).body
   }

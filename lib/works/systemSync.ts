@@ -3,7 +3,7 @@ import { worksDb } from '@/lib/works/data'
 import {
   listBundledSystemSkills,
   clearSystemSkillBodyCache,
-  SYSTEM_WORKFLOWS_ROOT,
+  resolveSystemWorkflowsRoot,
   type BundledSystemSkill,
 } from '@/lib/works/systemSkills'
 
@@ -144,7 +144,7 @@ let bootSync: Promise<SystemSyncResult | null> | null = null
  */
 export function ensureSystemWorkflowsSynced(options: { root?: string } = {}): Promise<SystemSyncResult | null> {
   if (!bootSync) {
-    const root = options.root ?? SYSTEM_WORKFLOWS_ROOT
+    const root = options.root ?? resolveSystemWorkflowsRoot()
     if (!fs.existsSync(root)) {
       console.info('[works] system workflow tree not in this bundle; boot sync skipped')
       bootSync = Promise.resolve(null)
