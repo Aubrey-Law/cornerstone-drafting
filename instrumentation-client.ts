@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs'
+import { redactEventLinkTokens } from '@/lib/sentry/redact'
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
 
@@ -48,7 +49,20 @@ if (dsn) {
         delete event.request.query_string
       }
       delete event.user
-      return event
+      // request.url survives all four deletes above, and on the signing,
+      // booking-manage and intake-invite pages it is the credential itself.
+      return redactEventLinkTokens(event)
+    },
+
+    // Transactions do not go through beforeSend, and the browser SDK samples
+    // them on an ordinary page load — no error required. HttpContext puts the
+    // full href on the segment span as `url.full`, so this hook is not optional.
+    beforeSendTransaction(event) {
+      if (event.request) {
+        delete event.request.headers
+        delete event.request.query_string
+      }
+      return redactEventLinkTokens(event)
     },
   })
 }
