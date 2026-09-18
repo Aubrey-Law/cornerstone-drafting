@@ -1,5 +1,6 @@
 import 'server-only'
 import { NextResponse } from 'next/server'
+import { clientIpFrom } from '@/lib/clientIp'
 import { consumeRateLimit } from '@/lib/rateLimit'
 
 /**
@@ -11,10 +12,7 @@ export async function guardPublicSchedulingRoute(
   bucket: string,
   limit: number,
 ): Promise<NextResponse | null> {
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    'unknown'
+  const ip = clientIpFrom(req.headers)
 
   const rl = await consumeRateLimit({ bucket, limit, windowSeconds: 60 }, ip)
   if (!rl.ok) {

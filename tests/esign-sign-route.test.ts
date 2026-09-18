@@ -48,8 +48,22 @@ describe('signing route security shape', () => {
     expect(route).toContain('Could not record the')
   })
 
-  it('rate limits the public endpoint', () => {
-    expect(route).toContain('guardPublicSchedulingRoute')
+  it('rate limits both public handlers, in their own buckets', () => {
+    // `route.toContain('guardPublicSchedulingRoute')` is what this asserted
+    // before, and it passed for months while GET was entirely unguarded —
+    // POST's call satisfied it. So slice each handler and ask separately.
+    for (const handler of ['export async function POST', 'export async function GET']) {
+      const start = route.indexOf(handler)
+      expect(start, `${handler} is missing`).toBeGreaterThan(-1)
+      const opening = route.slice(start, start + 2000)
+      expect(opening, `${handler} is not rate limited`).toContain('guardPublicSchedulingRoute(req,')
+    }
+
+    // Distinct buckets: a shared counter would let the page's own loads spend
+    // the budget the client needs to submit a signature.
+    const buckets = [...route.matchAll(/guardPublicSchedulingRoute\(req, '([^']+)'/g)].map(m => m[1])
+    expect(buckets).toHaveLength(2)
+    expect(new Set(buckets).size).toBe(2)
   })
 
   it('finishes through the shared completion module, not its own copy', () => {
