@@ -421,6 +421,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
 /** GET — the signing page's own data fetch; also records that it was opened. */
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
+  // Its own bucket, and a generous one.
+  //
+  // Separate from the POST bucket on purpose: this is the fetch the page makes
+  // on load, and sharing a counter would let a client's reloads eat the budget
+  // they need to actually submit their signature. That is the worst possible
+  // coupling on this endpoint.
+  //
+  // 60/min because the cost of a false 429 here is a client who cannot open
+  // their fee agreement, and the traffic this is guarding against is not human.
+  // SigningExperience fetches this exactly once per page load and never polls,
+  // so a real signer spends one — a dozen even while reloading in frustration,
+  // and several signers can share one address behind household or carrier NAT.
+  // Sixty is a request a second, which no one reaches by hand while still
+  // capping a script. It matches scheduling_availability, the other endpoint
+  // whose traffic is "a public page rendering itself".
+  //
+  // consumeRateLimit fails open if its RPC errors, which is the right way round
+  // here: serving the agreement beats refusing it over a database hiccup.
+  const limited = await guardPublicSchedulingRoute(req, 'esign-view', 60)
+  if (limited) return limited
+
   const { token } = await params
   const resolved = await resolveSession(token)
   if (!resolved.ok) {
