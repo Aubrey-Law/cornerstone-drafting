@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { decideThreadAction, type ExistingTriageRow } from '@/lib/emailTriage/scan'
+import { decideThreadAction, describeError, type ExistingTriageRow } from '@/lib/emailTriage/scan'
 
 /**
  * What a rescan does to a thread it has seen before.
@@ -105,5 +105,34 @@ describe('decideThreadAction', () => {
     for (const reason of ['draft_in_progress', 'trashed', 'no_inbound']) {
       expect(decideThreadAction(settled(reason), row())).toEqual({ kind: 'skip' })
     }
+  })
+})
+
+describe('describeError', () => {
+  it('reads the message off a Supabase error, which is a plain object and not an Error', () => {
+    // The 14 September cron run failed during a Supabase gateway outage and
+    // recorded its cause as "[object Object]".
+    const supabaseNetworkFailure = {
+      message: 'TypeError: fetch failed',
+      details: 'TypeError: fetch failed\n\nCaused by: Error: connect ECONNRESET',
+      hint: '',
+      code: '',
+    }
+    expect(describeError(supabaseNetworkFailure)).toBe('TypeError: fetch failed')
+  })
+
+  it('appends the Postgres error code when there is one', () => {
+    expect(describeError({ message: 'permission denied for table matters', code: '42501' }))
+      .toBe('permission denied for table matters (42501)')
+  })
+
+  it('uses an Error’s message', () => {
+    expect(describeError(new Error('the message is no longer in Gmail')))
+      .toBe('the message is no longer in Gmail')
+  })
+
+  it('falls back to the string form of anything else', () => {
+    expect(describeError('boom')).toBe('boom')
+    expect(describeError(42)).toBe('42')
   })
 })

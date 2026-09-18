@@ -122,7 +122,7 @@ describe('ChatPanel as a rail pane', () => {
 
     await waitFor(() => {
       const chatCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
-        .find(call => String(call[0]).includes('/api/admin/chat'))
+        .find(call => String(call[0]).endsWith('/api/admin/chat'))
       expect(chatCall).toBeTruthy()
       const body = JSON.parse(String((chatCall![1] as RequestInit).body))
       expect(body.context_type).toBe('matter')
@@ -140,7 +140,7 @@ describe('ChatPanel as a rail pane', () => {
 
     await waitFor(() => {
       const chatCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
-        .find(call => String(call[0]).includes('/api/admin/chat'))
+        .find(call => String(call[0]).endsWith('/api/admin/chat'))
       expect(chatCall).toBeTruthy()
       const body = JSON.parse(String((chatCall![1] as RequestInit).body))
       expect(body.context_type).toBe('lead')
@@ -172,7 +172,7 @@ describe('ChatPanel as a rail pane', () => {
 
     await waitFor(() => {
       const chatCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
-        .filter(call => String(call[0]).includes('/api/admin/chat'))
+        .filter(call => String(call[0]).endsWith('/api/admin/chat'))
       const body = JSON.parse(String((chatCalls.at(-1)![1] as RequestInit).body))
       expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-2' })
       expect(body.messages).toEqual([
@@ -181,32 +181,40 @@ describe('ChatPanel as a rail pane', () => {
     })
   })
 
-  it('retains a lead thread when the assistant rail closes and reopens', async () => {
+  it('saves a lead thread on the server and reads it back when the rail reopens', async () => {
     pathname.current = '/admin/leads/lead-3'
+    // A reply has to land for the pair to be saved: stream one for the chat call.
+    ;(fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/api/admin/chat') && init?.method === 'POST') {
+        return new Response('data: {"text":"Here is the situation."}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+      }
+      return new Response(JSON.stringify({ turns: [], ok: true }), { status: 200 })
+    })
     const view = renderPanel()
     await screen.findByText('Lead · Lead context loaded')
     await userEvent.click(screen.getByRole('button', { name: /Summarize this client's situation/ }))
+
+    // The turn is persisted to the per-attorney thread store, not sessionStorage.
     await waitFor(() => {
-      expect(window.sessionStorage.getItem('cornerstone-admin-chat-messages:lead:lead-3')).toContain(
-        "Summarize this client's situation",
-      )
+      const saves = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+        .filter(call => String(call[0]).includes('/api/admin/chat/history') && (call[1] as RequestInit | undefined)?.method === 'PATCH')
+      expect(saves.length).toBeGreaterThan(0)
+      const body = JSON.parse(String((saves.at(-1)![1] as RequestInit).body))
+      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-3' })
+      expect(body.turns[0]).toEqual({ role: 'user', content: "Summarize this client's situation" })
     })
+    expect(window.sessionStorage.getItem('cornerstone-admin-chat-messages:lead:lead-3')).toBeNull()
 
-    view.rerender(
-      <ChatPanel
-        open={false}
-        matterDisplayName="Whitfield Family Trust"
-        assistantModelLabel="Claude Opus 4.8"
-      />,
-    )
-    view.rerender(
-      <ChatPanel
-        open
-        matterDisplayName="Whitfield Family Trust"
-        assistantModelLabel="Claude Opus 4.8"
-      />,
-    )
+    // On reopen the thread comes from the server.
+    ;(fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/api/admin/chat/history') && (!init?.method || init.method === 'GET')) {
+        return new Response(JSON.stringify({ turns: [{ role: 'user', content: 'Saved on the server', createdAt: '2026-09-18T00:00:00Z' }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    })
+    view.rerender(<ChatPanel open={false} matterDisplayName="Whitfield Family Trust" assistantModelLabel="Claude Opus 4.8" />)
+    view.rerender(<ChatPanel open matterDisplayName="Whitfield Family Trust" assistantModelLabel="Claude Opus 4.8" />)
 
-    expect(await screen.findByText("Summarize this client's situation")).toBeTruthy()
+    expect(await screen.findByText('Saved on the server')).toBeTruthy()
   })
 })

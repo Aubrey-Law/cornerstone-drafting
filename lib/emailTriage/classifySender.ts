@@ -40,8 +40,12 @@ export const EMPTY_IGNORE_RULES: IgnoreRules = { domains: new Set(), addresses: 
  * `email_triage_ignore_rules` where the attorney can edit it.
  */
 const HARD_AUTOMATED_LOCAL_PARTS = [
-  /^no-?reply$/i,
-  /^do-?not-?reply$/i,
+  // `noreply` wherever it sits in the local part, as long as it is its own
+  // word: `mssecurity-noreply@` and `noreply-billing@` are as unanswerable as
+  // `noreply@`, and both reached the queue in the first week. The delimiter is
+  // what keeps a person whose name happens to contain the letters out of it.
+  /(^|[-._])no[-_]?reply([-._]|$)/i,
+  /(^|[-._])do[-_]?not[-_]?reply([-._]|$)/i,
   /^mailer-daemon$/i,
   /^postmaster$/i,
   /^bounces?$/i,
@@ -73,8 +77,14 @@ const SOFT_AUTOMATED_LOCAL_PARTS = new Set([
 const ROLE_LOCAL_PART_PREFIX =
   /^(ar|ap|claims?|panel|billing|invoices?|accounts?|notifications?|alerts?|mailer|messenger|support|service|updates?|news)[-._]/i
 
+/**
+ * Autoresponders, and calendar traffic. A lead accepting the consultation
+ * invite is a notification the calendar generated, not a message to answer,
+ * and one was drafted a reply in the first week. The colon is load-bearing:
+ * "Accepted the offer on the house" is a person.
+ */
 const AUTOMATED_SUBJECTS =
-  /^\s*(out of office|automatic reply|undeliverable|delivery status notification|read:|auto(matic)? response)/i
+  /^\s*(out of office|automatic reply|undeliverable|delivery status notification|read:|auto(matic)? response|(accepted|declined|tentative|(updated |new )?invitation|cancell?ed event):)/i
 
 /**
  * A reference number in the subject — `Claim #43667`, `Invoice #000189`,
@@ -90,6 +100,23 @@ const BULK_CATEGORY_LABELS = new Set([
   'CATEGORY_FORUMS',
   'CATEGORY_UPDATES',
 ])
+
+/**
+ * The ignore rule that covers this domain, if any: the domain itself or a
+ * parent of it. A rule for `fedex.com` silences `message.fedex.com`, because
+ * a vendor's notification subdomains are the vendor and nobody wants to add
+ * them one at a time as they turn up — which is what the first week required.
+ * `notfedex.com` is a different domain and stays untouched.
+ */
+export function matchIgnoredDomain(domain: string, ignored: Set<string>): string | null {
+  let candidate = domain.toLowerCase()
+  for (;;) {
+    if (ignored.has(candidate)) return candidate
+    const dot = candidate.indexOf('.')
+    if (dot < 0) return null
+    candidate = candidate.slice(dot + 1)
+  }
+}
 
 export function emailDomain(email: string): string {
   return email.slice(email.lastIndexOf('@') + 1).toLowerCase()
@@ -171,8 +198,9 @@ export function isAutomatedSender(args: AutomatedCheckArgs): {
   if (ignore.addresses.has(email)) {
     return { automated: true, hard: true, reason: 'sender on the ignore list' }
   }
-  if (ignore.domains.has(domain)) {
-    return { automated: true, hard: true, reason: `${domain} on the ignore list` }
+  const ignoredDomain = matchIgnoredDomain(domain, ignore.domains)
+  if (ignoredDomain) {
+    return { automated: true, hard: true, reason: `${ignoredDomain} on the ignore list` }
   }
 
   const soft: string[] = []
