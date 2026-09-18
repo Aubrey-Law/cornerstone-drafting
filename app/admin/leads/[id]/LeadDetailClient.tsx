@@ -47,7 +47,6 @@ import {
 import { LeadKeyDatesCard, type LeadKeyDates } from '@/components/leads/LeadKeyDatesCard'
 import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
-import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
 import { computeLeadScore, leadScoreInputFromRow, type LeadScoreInput } from '@/lib/leads/score'
 import { clientContactTimestamps } from '@/lib/leads/contactEvents'
@@ -1013,7 +1012,6 @@ export function LeadDetailClient({
                 smsEnabled={smsEnabled}
                 onClientContact={async () => { await refreshActivityBestEffort(); router.refresh() }}
               />
-              <details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Marketing preferences</summary><div className="mt-3"><MarketingProfileCard intakeId={lead.id} /></div></details>
             </TabsContent>
 
             <TabsContent value="assets" className="mt-4">

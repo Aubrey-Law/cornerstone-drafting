@@ -13,7 +13,6 @@ import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
 import { resolveIntakeReviewFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { buildMatterPlanMirror } from '@/lib/matter/planMirror'
-import { normalizeMarketingConsent, type MarketingConsentStatus } from '@/lib/crm/consent'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
@@ -180,24 +179,6 @@ async function loadClientIntakeShell(admin: ReturnType<typeof getAdminClient>, i
   return normalizeClientIntakeShell(base.data as Partial<ClientIntakeShellRow> | null)
 }
 
-/** Marketing consent is read-only on the rail; the Communications tab edits it. */
-async function loadMarketingConsent(
-  admin: ReturnType<typeof getAdminClient>,
-  intakeId: string | null,
-): Promise<MarketingConsentStatus> {
-  if (!intakeId) return 'unknown'
-  const { data, error } = await admin
-    .from('cornerstone_crm_people')
-    .select('marketing_status')
-    .eq('client_intake_id', intakeId)
-    .maybeSingle()
-  if (error) {
-    console.warn('Marketing consent unavailable; showing unknown:', error.message)
-    return 'unknown'
-  }
-  return normalizeMarketingConsent(data?.marketing_status)
-}
-
 async function loadIntakeSnapshotOptional(matterId: string): Promise<IntakeSnapshot | null> {
   try {
     return await fetchIntakeForMatter(matterId)
@@ -258,14 +239,13 @@ export default async function MatterDetailPage({ params }: Params) {
         admin, id, intakeId, row?.uploads_reviewed_at ?? null,
         matterRow?.portal_uploads_reviewed_at ?? null,
       )))
-      const [initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts] = await Promise.all([
+      const [initialEstateSnapshot, clientIntakeRow, linkedHistory, unreviewedUploadCounts] = await Promise.all([
         measure('estate', () => fetchMatterEstateSnapshot(intakeId)),
         clientIntake,
         measure('lead-history', () => loadLinkedLeadHistory(admin, intakeId)),
-        measure('consent', () => loadMarketingConsent(admin, intakeId)),
         uploads,
       ])
-      return { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts }
+      return { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, unreviewedUploadCounts }
     })
     const [matter, contacts, agingSummary, matterRow,
       { data: detailsRow, error: detailsError }, notes, designSheet,
@@ -289,7 +269,7 @@ export default async function MatterDetailPage({ params }: Params) {
     const coreLoadError = detailsError
     if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
-    const { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, marketingConsent, unreviewedUploadCounts } = context
+    const { intakeId, initialEstateSnapshot, clientIntakeRow, linkedHistory, unreviewedUploadCounts } = context
     const { leadNotes, leadMeetingNotes, leadActivity } = linkedHistory
 
     const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
@@ -337,7 +317,6 @@ export default async function MatterDetailPage({ params }: Params) {
         matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
         designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
         planMirror={planMirror}
-        marketingConsent={marketingConsent}
         initialEstateSnapshot={initialEstateSnapshot}
         unreviewedUploadCounts={unreviewedUploadCounts}
         initialNotes={notes as MatterNoteRow[]}

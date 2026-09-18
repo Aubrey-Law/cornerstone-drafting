@@ -212,7 +212,7 @@ describe('MatterFactsPanel', () => {
     const user = userEvent.setup()
     renderPanel()
     await screen.findByText('margaret.chen@example.com')
-    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'Minor children', 'Consent']) {
+    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'Minor children']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     for (const label of ['Practice area', 'Plan', 'Lead source', 'Flat fee']) {

@@ -13,7 +13,6 @@ vi.mock('@/lib/draftPayload/resolveMatterId', () => ({ resolveMatterId: async (i
 vi.mock('@/lib/designSheet/seedFromIntake', () => ({ isDesignSheetUnseeded: () => true, buildIntakeResyncPreview: () => [] }))
 vi.mock('@/lib/intakeReadiness', () => ({ resolveIntakeReviewFlags: () => [] }))
 vi.mock('@/lib/matter/planMirror', () => ({ buildMatterPlanMirror: () => ({}) }))
-vi.mock('@/lib/crm/consent', () => ({ normalizeMarketingConsent: () => 'unknown' }))
 vi.mock('@/lib/communications/providers', () => ({ manualCommunicationsEnabled: () => false }))
 vi.mock('@/lib/communications/config', () => ({ isSmsConfigured: () => false }))
 vi.mock('@/lib/esign/firma', () => ({ isEsignConfigured: () => false }))

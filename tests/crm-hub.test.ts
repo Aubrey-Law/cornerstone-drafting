@@ -36,17 +36,30 @@ describe('unified CRM hub', () => {
       'lib/crm/campaignDispatch.ts',
       'lib/crm/campaignPolicy.ts',
       'lib/crm/mailgunCampaigns.ts',
+      // The consent record outlived the campaigns for a while; with nothing
+      // left to send, it went too.
+      'lib/crm/consent.ts',
+      'components/crm/MarketingProfileCard.tsx',
+      'app/api/admin/crm/profiles',
     ]) {
       expect(fs.existsSync(path.join(process.cwd(), gone))).toBe(false)
     }
   })
 
-  it('keeps the marketing consent record that outlives campaigns', () => {
-    // Consent is a compliance record, not campaign machinery: the matter page
-    // and messages tab read it to gate nurture email.
-    expect(fs.existsSync(path.join(process.cwd(), 'lib/crm/consent.ts'))).toBe(true)
-    expect(fs.existsSync(path.join(process.cwd(), 'components/crm/MarketingProfileCard.tsx'))).toBe(true)
-    expect(read('app/admin/matters/[id]/page.tsx')).toContain('normalizeMarketingConsent')
+  it('asks for consent nowhere the firm can no longer market from', () => {
+    // The opt-in/opt-out UI gated a nurture send that no longer exists, so it
+    // was collecting a permission nothing could act on. The columns stay in
+    // the database; nothing in the app reads or writes them.
+    for (const surface of [
+      'app/admin/contacts/ContactSidePanel.tsx',
+      'app/admin/leads/[id]/LeadDetailClient.tsx',
+      'app/admin/matters/[id]/MatterDetailClient.tsx',
+      'app/admin/matters/[id]/page.tsx',
+      'app/admin/matters/[id]/tabs/messages.tsx',
+      'app/admin/matters/[id]/facts-panel/MatterFactsPanel.tsx',
+    ]) {
+      expect(read(surface)).not.toMatch(/marketing|nurture/i)
+    }
   })
 
   it('preserves legacy lead and contact URLs with framework redirects', async () => {
