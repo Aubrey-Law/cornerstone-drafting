@@ -191,7 +191,8 @@ recording a payment stays a decision a person makes.
 Mint a **Read Only** token, not Read-and-Write. Read-only needs no IP
 allowlisting, which is what lets this run on Vercel at all; a write token
 requires a whitelisted static egress IP that serverless does not have. See the
-implementation plan before attempting to push invoices into Mercury.
+[Mercury bank integration](docs/integrations/mercury-bank-reconciliation.md) plan before
+attempting to push invoices into Mercury.
 
 The account allowlist is deliberately not defaulted. With it unset every deposit
 classifies as "other account" and the card says so — a legible failure, where a
