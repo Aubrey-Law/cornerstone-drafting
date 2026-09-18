@@ -5,6 +5,7 @@ import { fetchBillingData, fetchBillingMatterOptions, fetchLedgerPage } from '@/
 import { InvoiceRegister } from './InvoiceRegister'
 import { Suspense } from 'react'
 import { BillingSummary } from './BillingSummary'
+import { MercuryDeposits } from './MercuryDeposits'
 import { buildBillingSnapshot } from '@/lib/billing/metrics'
 import type { BillingFilter } from '@/lib/billing/types'
 import { monthRange, pageRequest } from '@/lib/queries/page'
@@ -51,6 +52,11 @@ export default async function BillingPage({
       weekStart={data.weekStart}
       matterOptions={matterOptions}
       invoices={[]}
+      bankDeposits={
+        <Suspense fallback={<p className="text-xs text-muted-foreground">Loading bank deposits…</p>}>
+          <MercuryDeposits />
+        </Suspense>
+      }
     />
   )
 }

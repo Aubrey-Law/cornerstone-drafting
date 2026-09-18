@@ -360,3 +360,38 @@ describe('external records', () => {
     await expect(getExternalRecord(ref)).rejects.toMatchObject({ code: 'integration_persistence_failed', message: 'Unable to persist or read integration record.' })
   })
 })
+
+/**
+ * `integration_external_records.provider` is constrained in SQL. A provider
+ * added to IntegrationProvider for its error vocabulary alone — Mercury, which
+ * persists nothing — would otherwise typecheck here and fail at the database.
+ */
+describe('providers that do not persist external records', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  const mercuryRef = {
+    provider: 'mercury' as const,
+    internalEntityType: 'matter' as const,
+    internalEntityId: 'matter-1',
+    externalRecordType: 'matter' as const,
+  }
+
+  it('refuses to claim a record for Mercury before reaching the database', async () => {
+    await expect(claimExternalRecord({
+      ...mercuryRef, sourceVersion: 'v1', idempotencyKey: 'matter-1:v1',
+      requestSnapshot: {}, requestHash: 'hash',
+    })).rejects.toMatchObject({ provider: 'mercury', code: 'provider_not_persistable' })
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('refuses to read one', async () => {
+    await expect(getExternalRecord(mercuryRef))
+      .rejects.toMatchObject({ code: 'provider_not_persistable' })
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('still allows the providers the constraint lists', async () => {
+    query({ provider: 'statular' })
+    await expect(getExternalRecord({ ...mercuryRef, provider: 'statular' })).resolves.toBeTruthy()
+  })
+})

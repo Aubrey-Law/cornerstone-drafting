@@ -1,4 +1,4 @@
-export type IntegrationProvider = 'lawmatics' | 'statular'
+export type IntegrationProvider = 'lawmatics' | 'statular' | 'mercury'
 
 export type IntegrationFailureKind = 'retryable' | 'attention'
 

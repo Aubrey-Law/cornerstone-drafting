@@ -135,6 +135,13 @@ estate generator, clause library and template corpus that are the firm's real IP
 | **Practice scope** | **Adds probate and trust administration** | New matter types, stage H prompts, dated task generation |
 | **Integrations** | **Lawmatics two-way sync** on contacts and stage. QuickBooks not now | Reverses scope-reduction 7.8 |
 
+> **Correction (September 2026): QuickBooks Online is not used.** The firm banks with
+> Mercury and will run **Mercury Accounting as its sole accounting system from 2027**.
+> References to QBO as the accounting system elsewhere in this document are stale.
+> Cornerstone therefore originates AR (matter context, fee schedules, legal-plan claims,
+> the gapless invoice number) and Mercury owns delivery, collection and accounting.
+> Open question 2 below is answered by that split.
+
 > **Email is the consequential one, and it needs care.** The plan had email removed
 > because MS365 already owns it. Keeping it on **Gmail** is a different decision, not a
 > reversal to the status quo: the current stack sends through **Resend**
@@ -1144,6 +1151,6 @@ workbench can write is mapped by `crm_stage_slug_for_intake`. Watch
 ## Open questions for the owner
 
 1. **`estate-fields` ownership** — sibling repo or Cornerstone? Two committed docs disagree; blocks Phase 1.
-2. **Billing system of record** — QuickBooks Online is stated, but `invoices`/`billing_*` hold live data. Where does history go before the tables drop?
+2. ~~**Billing system of record** — QuickBooks Online is stated, but `invoices`/`billing_*` hold live data.~~ **Answered (September 2026):** QBO is not used. Mercury Accounting is the 2027 system of record; Cornerstone keeps `invoices`/`billing_*` as the origination side and feeds Mercury. The tables do not drop.
 3. **Scanned PDFs** — accept "no text layer, upload the DOCX" for v1, or budget an OCR worker?
 4. **Add-in distribution** — stay sideloaded firm-internal, or publish to AppSource (which adds a review cycle and a hosting requirement)?

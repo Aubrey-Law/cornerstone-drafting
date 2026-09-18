@@ -66,7 +66,7 @@ export default function BillingClient({
   loadError,
   weekStart,
   matterOptions,
-  invoices, pagination, summary,
+  invoices, pagination, summary, bankDeposits,
 }: {
   initialSnapshot: BillingSnapshot
   loadError: string | null
@@ -75,6 +75,7 @@ export default function BillingClient({
   invoices: InvoiceListRowView[]
   pagination?: LedgerPage
   summary?: ReactNode
+  bankDeposits?: ReactNode
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -628,6 +629,7 @@ export default function BillingClient({
             <RevenueSourcesCard revenue={initialSnapshot.revenue} />
             <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
             <ReceivablesSummaryCard snapshot={initialSnapshot} />
+            {bankDeposits}
           </div>
         </TabsContent>
       </Tabs>
