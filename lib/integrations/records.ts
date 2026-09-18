@@ -37,6 +37,17 @@ interface ClaimExternalRecordOptions extends PersistenceOptions {
   replaceUnattemptedPlaceholder?: { sourceVersion: string; idempotencyKey: string }
 }
 
+/**
+ * Providers `integration_external_records` will actually accept.
+ *
+ * The table constrains `provider` in SQL, so a provider added to
+ * IntegrationProvider for its error/reporting vocabulary alone would typecheck
+ * here and then fail at the database. Mercury is exactly that case: it reuses
+ * IntegrationError but persists nothing. Keep this set in step with the CHECK
+ * constraint, and widen both together.
+ */
+const PERSISTABLE_PROVIDERS: ReadonlySet<IntegrationProvider> = new Set(['lawmatics', 'statular'])
+
 function identity(ref: ExternalRecordRef) {
   return {
     provider: ref.provider,
@@ -55,7 +66,15 @@ function persistenceError(ref: ExternalRecordRef) {
   return recordError(ref, 'integration_persistence_failed', 'Unable to persist or read integration record.', 'retryable')
 }
 
-function requirePersistenceActive(ref: ExternalRecordRef, signal?: AbortSignal): void {
+/**
+ * The gate every exported path passes through before touching the table, and
+ * again after each await. It enforces two things: that the caller still holds
+ * its claim, and that this provider is one the table will accept at all.
+ */
+function requirePersistable(ref: ExternalRecordRef, signal?: AbortSignal): void {
+  if (!PERSISTABLE_PROVIDERS.has(ref.provider)) {
+    throw recordError(ref, 'provider_not_persistable', 'This integration does not store external records.')
+  }
   if (signal?.aborted) throw persistenceError(ref)
 }
 
@@ -65,13 +84,13 @@ function requirePersistenceActive(ref: ExternalRecordRef, signal?: AbortSignal):
 // again so the worker retains its claim while a server write may still commit.
 
 export async function getExternalRecord(ref: ExternalRecordRef, options: PersistenceOptions = {}): Promise<ExternalRecord | null> {
-  requirePersistenceActive(ref, options.signal)
+  requirePersistable(ref, options.signal)
   let query = admin().from('integration_external_records').select('*')
     .eq('provider', ref.provider).eq('internal_entity_type', ref.internalEntityType)
     .eq('internal_entity_id', ref.internalEntityId).eq('external_record_type', ref.externalRecordType)
   if (options.signal) query = query.abortSignal(options.signal)
   const { data, error } = await query.maybeSingle()
-  requirePersistenceActive(ref, options.signal)
+  requirePersistable(ref, options.signal)
   if (error) throw persistenceError(ref)
   return data
 }
@@ -80,7 +99,7 @@ export async function claimExternalRecord(
   input: ClaimExternalRecordInput,
   options: ClaimExternalRecordOptions = {},
 ): Promise<ExternalRecord> {
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const patch = {
     ...identity(input), source_version: input.sourceVersion, idempotency_key: input.idempotencyKey,
     request_snapshot: input.requestSnapshot, request_hash: input.requestHash, status: 'pending',
@@ -91,14 +110,14 @@ export async function claimExternalRecord(
   const insert = admin().from('integration_external_records')
     .upsert(patch, { onConflict: 'provider,internal_entity_type,internal_entity_id,external_record_type', ignoreDuplicates: true })
     .select('*')
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const { data: inserted, error } = await insert.maybeSingle()
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   if (error) throw persistenceError(input)
   if (inserted) return inserted
 
   const existing = await getExternalRecord(input, options)
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   if (!existing) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   if (existing.idempotency_key === input.idempotencyKey) {
     if (existing.request_hash !== input.requestHash) {
@@ -114,7 +133,7 @@ export async function claimExternalRecord(
       if (!replaceable) {
         throw recordError(input, 'idempotency_payload_conflict', 'The integration request changed under the same idempotency key.')
       }
-      requirePersistenceActive(input, options.signal)
+      requirePersistable(input, options.signal)
       const promotion = admin().from('integration_external_records').update(patch)
         .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
         .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
@@ -122,9 +141,9 @@ export async function claimExternalRecord(
         .in('status', ['attention', 'disabled']).is('request_hash', null).is('request_snapshot', null)
         .is('external_id', null).is('last_attempt_at', null)
         .select('*')
-      requirePersistenceActive(input, options.signal)
+      requirePersistable(input, options.signal)
       const { data, error: promotionError } = await promotion.maybeSingle()
-      requirePersistenceActive(input, options.signal)
+      requirePersistable(input, options.signal)
       if (promotionError) throw persistenceError(input)
       if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
       return data
@@ -134,16 +153,16 @@ export async function claimExternalRecord(
 
   // Compare-and-swap the prior delivery identity. Never write external_id here:
   // it remains stable even if a concurrent success has just saved it.
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   let update = admin().from('integration_external_records').update(patch)
     .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
     .eq('idempotency_key', existing.idempotency_key)
   update = existing.request_hash === null ? update.is('request_hash', null) : update.eq('request_hash', existing.request_hash)
   const selected = update.select('*')
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const { data, error: updateError } = await selected.maybeSingle()
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   if (updateError) throw persistenceError(input)
   if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   return data
@@ -160,7 +179,7 @@ async function beginAttempt(
   createOnly: boolean,
   options: PersistenceOptions,
 ): Promise<ExternalRecord> {
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const previous = input.expectedLastAttemptAt === null ? 0 : Date.parse(input.expectedLastAttemptAt)
   const at = new Date(Math.max(Date.now(), previous + 1)).toISOString()
   // Consume prior retry eligibility in the same CAS that acquires the attempt.
@@ -177,9 +196,9 @@ async function beginAttempt(
   // read their claim. Keep this in the same UPDATE as the timestamp CAS.
   if (createOnly) update = update.is('external_id', null).neq('status', 'synced')
   const selected = update.select('*')
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const { data, error } = await selected.maybeSingle()
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   if (error) throw persistenceError(input)
   if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   return data
@@ -201,7 +220,7 @@ export function beginCreateIntegrationAttempt(
 }
 
 async function updateAttempt(input: RecordAttempt, patch: RecordUpdate, options: PersistenceOptions): Promise<ExternalRecord> {
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   let update = admin().from('integration_external_records').update(patch)
     .eq('provider', input.provider).eq('internal_entity_type', input.internalEntityType)
     .eq('internal_entity_id', input.internalEntityId).eq('external_record_type', input.externalRecordType)
@@ -211,9 +230,9 @@ async function updateAttempt(input: RecordAttempt, patch: RecordUpdate, options:
   // itself so a late failure cannot downgrade a success committed by a peer.
   if (patch.status !== 'synced') update = update.neq('status', 'synced')
   const selected = update.select('*')
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   const { data, error } = await selected.maybeSingle()
-  requirePersistenceActive(input, options.signal)
+  requirePersistable(input, options.signal)
   if (error) throw persistenceError(input)
   if (!data) throw recordError(input, 'integration_record_changed', 'Integration record changed; retry the operation.', 'retryable')
   return data

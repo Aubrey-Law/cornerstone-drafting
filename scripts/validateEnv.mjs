@@ -44,6 +44,15 @@ const PARTIAL_FEATURES = [
     // Only Stripe needs keys today; LawPay is a stub with nothing to configure.
     requires: (value) => (value === 'stripe' ? ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] : []),
   },
+  {
+    name: 'Mercury bank reconciliation',
+    trigger: 'MERCURY_API_TOKEN',
+    // Without the account allowlist every deposit reads as "wrong account",
+    // which looks like an empty feature rather than a missing setting.
+    requires: () => ['MERCURY_INCOME_ACCOUNT_IDS'],
+    // The trigger is a credential, so its value must never reach the output.
+    secret: true,
+  },
 ]
 
 for (const feature of PARTIAL_FEATURES) {
@@ -52,7 +61,8 @@ for (const feature of PARTIAL_FEATURES) {
   const absent = feature.requires(value).filter((name) => !process.env[name])
   if (absent.length > 0) {
     console.warn(
-      `\n⚠ ${feature.name} is switched on via ${feature.trigger}=${value} but ` +
+      `\n⚠ ${feature.name} is switched on via ${feature.trigger}` +
+        `${feature.secret ? '' : `=${value}`} but ` +
         `${absent.join(', ')} ${absent.length === 1 ? 'is' : 'are'} unset — the feature will stay disabled.\n`,
     )
   }

@@ -172,6 +172,36 @@ to `checkout.session.completed`, `checkout.session.expired` and
 
 Stripe is the implemented online processor. LawPay is unsupported; changing the environment variable does not add an integration.
 
+## Optional — Mercury bank reconciliation
+
+Absent by default. With `MERCURY_API_TOKEN` unset the Bank deposits card never
+renders and `/api/admin/billing/mercury/deposits` returns 503 — every other
+billing surface is unchanged.
+
+Read-only, in both directions. It reads Mercury and reads the ledger; it writes
+nothing to either. Deposits are matched against open invoices and *proposed*, so
+recording a payment stays a decision a person makes.
+
+| Variable | Purpose |
+|----------|---------|
+| `MERCURY_API_TOKEN` | A **Read Only** token from the Mercury dashboard (Settings → API Tokens). Unset disables the feature. |
+| `MERCURY_INCOME_ACCOUNT_IDS` | Comma-separated Mercury account IDs that receive client money. Required when the token is set. Currently the Income account, `40e1b452-85d1-11f1-92ba-23367ea93847` (Mercury Checking ••0876). |
+| `MERCURY_API_BASE_URL` | Optional. Defaults to `https://api.mercury.com/api/v1`; only `api-sandbox.mercury.com` is otherwise accepted. |
+
+Mint a **Read Only** token, not Read-and-Write. Read-only needs no IP
+allowlisting, which is what lets this run on Vercel at all; a write token
+requires a whitelisted static egress IP that serverless does not have. See the
+implementation plan before attempting to push invoices into Mercury.
+
+The account allowlist is deliberately not defaulted. With it unset every deposit
+classifies as "other account" and the card says so — a legible failure, where a
+guessed account would produce a confident, wrong worklist.
+
+**Mercury deletes an API token after 45 days with no activity**, and downgrades
+a Read-and-Write token to read-only after 45 days with no *write*. Neither is
+recoverable; mint a new token. A dead token shows as "Reconnect Mercury" on the
+billing page rather than an error.
+
 ## Optional — Resend (lite alerts)
 
 | Variable | Purpose |
