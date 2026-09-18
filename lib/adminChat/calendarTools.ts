@@ -62,6 +62,9 @@ interface CreateTaskInput {
   calendarShowAsBusy: boolean
 }
 
+/** Outreach-style task titles, for the opt-in narrowing of the overdue list. */
+const FOLLOW_UP_TASK = /follow.?up|\bcall\b|\bemail\b|\btext\b|\bnote\b|reach out|check.?in/i
+
 const tool = (
   name: string,
   description: string,
@@ -136,7 +139,14 @@ const definitions = {
     matter_id: { type: 'string' },
     through: { type: 'string' },
   }),
-  list_overdue_followups: tool('list_overdue_followups', 'List overdue follow-up tasks.', {}),
+  list_overdue_followups: tool(
+    'list_overdue_followups',
+    'List every overdue open firm task, soonest-due first: title, how many days overdue, priority, the matter or lead it hangs off, and the link to act on it. Set only_followups to narrow to outreach-style tasks (follow-ups, calls, emails, notes). Read-only.',
+    {
+      only_followups: { type: 'boolean', description: 'Only tasks that are follow-ups, calls, emails or notes. Defaults to false: every overdue task.' },
+      limit: { type: 'number', description: 'Maximum rows to return (1-100). Defaults to 50; total always reports the full count.' },
+    },
+  ),
   week_review: tool('week_review', 'Summarize last week meetings, no-shows, stage advances, and slipped work.', {}),
 }
 
@@ -550,11 +560,56 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
     },
     {
       tool: definitions.list_overdue_followups,
-      execute: async () => {
-        // Overdue is a due-window question; the old read took an arbitrary 500
-        // of every open task and filtered that, so it answered from a sample.
-        const tasks = await fetchDueTasks(new Date().toISOString())
-        return { content: JSON.stringify(tasks.filter(task => taskDueGroup(task) === 'overdue' && /follow.?up|call|email|note/i.test(task.title)).slice(0, 50)) }
+      execute: async (input, { toolUseId, emit }) => {
+        const fields = (input ?? {}) as { only_followups?: unknown; limit?: unknown }
+        const onlyFollowups = fields.only_followups === true
+        const limit = Math.min(100, Math.max(1, typeof fields.limit === 'number' ? Math.trunc(fields.limit) : 50))
+        try {
+          // Overdue is a due-window question, so read through the due window
+          // rather than sampling open tasks. The title regex used to be the
+          // only filter, which hid every overdue task that was not phrased as
+          // outreach; it is now an opt-in narrowing.
+          const now = new Date()
+          const tasks = await fetchDueTasks(now.toISOString())
+          const overdue = tasks
+            .filter(task => taskDueGroup(task, now) === 'overdue')
+            .filter(task => !onlyFollowups || FOLLOW_UP_TASK.test(task.title))
+          const rows = overdue.slice(0, limit).map(task => {
+            const due = effectiveDueAt(task)
+            const dueMs = due ? Date.parse(due) : NaN
+            return {
+              id: task.id,
+              title: task.title,
+              due_at: due,
+              days_overdue: Number.isFinite(dueMs) ? Math.max(0, Math.floor((now.getTime() - dueMs) / 86_400_000)) : null,
+              priority: task.priority,
+              task_type: task.task_type,
+              record_name: task.record_name ?? null,
+              matter_id: task.matter_id,
+              lead_id: task.lead_id,
+              url: task.matter_id
+                ? `/admin/matters/${task.matter_id}?tab=tasks`
+                : task.lead_id
+                  ? `/admin/crm/opportunities/${task.lead_id}`
+                  : '/admin/tasks',
+            }
+          })
+          emit({ tool: 'list_overdue_followups', tool_use_id: toolUseId, status: 'done', result: { count: overdue.length } })
+          return {
+            content: JSON.stringify({
+              ok: true,
+              total: overdue.length,
+              returned: rows.length,
+              truncated: rows.length < overdue.length,
+              only_followups: onlyFollowups,
+              tasks: rows,
+            }),
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unable to read overdue tasks'
+          emit({ tool: 'list_overdue_followups', tool_use_id: toolUseId, status: 'error', error: message })
+          return { content: JSON.stringify({ ok: false, error: message }), isError: true }
+        }
       },
     },
     {
@@ -580,7 +635,9 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
 }
 
 export function calendarPlanningSystemPromptNote() {
-  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to propose tasks for a matter or lead when needed. Task creation is a proposal like calendar writes: the task is created only when the attorney presses accept. Never say a task was created — say you have proposed it and it needs their acceptance. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
+  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nOVERDUE WORK: list_overdue_followups returns every overdue open task with its record and link, not only follow-ups; pass only_followups when the attorney asks specifically about outreach. For a firm-wide picture combine it with read_firm_today.
+
+TASK MANAGEMENT: Use create_task to propose tasks for a matter or lead when needed. Task creation is a proposal like calendar writes: the task is created only when the attorney presses accept. Never say a task was created — say you have proposed it and it needs their acceptance. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
 
 RECORD LOOKUP: Whenever any tool needs a matter_id or lead_id — creating tasks, calendar holds, listing matter dates, rendering templates, or anything else — and the attorney has named a client or matter without an id in context, call find_matter with the client name, email, or matter name to resolve it yourself. Never ask the attorney to supply a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
 }
