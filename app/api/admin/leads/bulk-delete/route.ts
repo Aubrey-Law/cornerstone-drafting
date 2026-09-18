@@ -1,13 +1,23 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/apiAuth'
+import { requireAdmin, requirePermanentDeletionRole } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { deleteLead } from '@/lib/leads/deleteLead'
+import { archiveLead, deleteLeadPermanently } from '@/lib/leads/removeLead'
+import { MatterDeletionError } from '@/lib/matters/deleteMatter'
 
+/**
+ * POST /api/admin/leads/bulk-delete — archive the selected leads, or destroy
+ * them outright with `{ permanent: true }`.
+ *
+ * One acknowledgement covers the selection, the same way the matter bulk route
+ * handles it: a lead the caller has not been told is protected comes back as a
+ * failure carrying `requiresConfirmation`, and the caller retries with
+ * `confirm`.
+ */
 export async function POST(req: Request) {
-  const { err } = await requireAdmin(req)
+  const { err, userId, user } = await requireAdmin(req)
   if (err) return err
 
-  let body: { ids?: unknown }
+  let body: { ids?: unknown; permanent?: unknown; confirm?: unknown; reason?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -21,18 +31,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No lead ids provided' }, { status: 400 })
   }
 
+  const permanent = body.permanent === true
+  if (permanent) {
+    const forbidden = await requirePermanentDeletionRole(userId)
+    if (forbidden) return forbidden
+  }
+
   const admin = getAdminClient()
-  const results: { id: string; ok: boolean; error?: string }[] = []
+  const results: { id: string; ok: boolean; error?: string; requiresConfirmation?: boolean }[] = []
   for (const id of ids) {
     try {
-      await deleteLead(admin, id)
+      if (permanent) {
+        await deleteLeadPermanently(admin, id, {
+          confirmProtected: body.confirm === true,
+          actorId: userId,
+          actorEmail: user?.email ?? null,
+          reason: typeof body.reason === 'string' ? body.reason : null,
+        })
+      } else {
+        await archiveLead(admin, id)
+      }
       results.push({ id, ok: true })
     } catch (e) {
-      results.push({ id, ok: false, error: e instanceof Error ? e.message : 'Could not delete lead' })
+      results.push({
+        id,
+        ok: false,
+        error: e instanceof Error ? e.message : 'Could not delete lead',
+        requiresConfirmation: e instanceof MatterDeletionError && e.code === 'confirmation_required',
+      })
     }
   }
 
   const deleted = results.filter(r => r.ok).length
   const failed = results.filter(r => !r.ok)
-  return NextResponse.json({ ok: failed.length === 0, deleted, total: ids.length, results })
+  return NextResponse.json({
+    ok: failed.length === 0,
+    deleted,
+    total: ids.length,
+    permanent,
+    requiresConfirmation: failed.some(r => r.requiresConfirmation),
+    results,
+  })
 }

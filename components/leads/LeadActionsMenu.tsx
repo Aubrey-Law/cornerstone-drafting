@@ -22,6 +22,8 @@ export type LeadActionsMenuProps = {
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
+  /** Destroy the lead outright. Archiving keeps it; this does not. */
+  onDelete: (lead: LeadListRow) => void
   onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
 }
 
@@ -36,6 +38,7 @@ export function LeadActionsMenu({
   onSendEngagement,
   onHire,
   onArchive,
+  onDelete,
   onStatusChange,
 }: LeadActionsMenuProps) {
   const status = lead.lead_status ?? 'lead'
@@ -82,14 +85,17 @@ export function LeadActionsMenu({
         {closed && (
           <DropdownMenuItem onSelect={() => onStatusChange(lead, 'lead')}>Reactivate</DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
         {!hired && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => onArchive(lead)}>
-              Archive lead
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem variant="destructive" onSelect={() => onArchive(lead)}>
+            Archive lead
+          </DropdownMenuItem>
         )}
+        {/* Offered on hired leads too: the route asks for confirmation before
+            destroying a client's records rather than hiding the option. */}
+        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(lead)}>
+          Delete permanently
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -46,6 +46,15 @@ export function contactRowId(id: string): string | null {
   return id.startsWith('contact:') ? id.slice('contact:'.length) : null
 }
 
+/**
+ * The `client_intake` row behind a directory id, or null for a contacts-backed
+ * one. The other half of `contactRowId`: between them they say which table a
+ * directory row actually lives in.
+ */
+export function intakeRowId(id: string): string | null {
+  return id.startsWith('intake:') ? id.slice('intake:'.length) : null
+}
+
 export type ContactKindFilter = 'all' | ContactKind
 
 export type ContactTableFilters = {

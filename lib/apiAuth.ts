@@ -88,6 +88,16 @@ export async function isAdministrator(userId: string): Promise<boolean> {
   return (await resolveUserRole(userId)) === 'admin'
 }
 
+/**
+ * Gate for deleting a record outright, in the shape the delete routes want:
+ * null when the caller may go ahead, the 403 response when they may not.
+ * Archiving is open to every admin-role user; destroying is not.
+ */
+export async function requirePermanentDeletionRole(userId: string | null) {
+  if (userId && (await isAdministrator(userId))) return null
+  return NextResponse.json({ error: 'Permanent deletion requires an administrator' }, { status: 403 })
+}
+
 /** Strict administrator gate for destructive firm-wide settings. */
 export async function requireAdministrator(req: Request) {
   const auth = await requireAdmin(req)

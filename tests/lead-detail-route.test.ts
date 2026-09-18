@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), createMatter: vi.fn(), 
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: mocks.requireAdmin }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => mocks.admin }))
 vi.mock('@/lib/matters/createFromIntake', () => ({ createMatterFromIntake: mocks.createMatter }))
-vi.mock('@/lib/leads/deleteLead', () => ({ deleteLead: vi.fn() }))
+vi.mock('@/lib/leads/removeLead', () => ({ archiveLead: vi.fn(), deleteLeadPermanently: vi.fn() }))
 
 import { PATCH } from '@/app/api/admin/leads/[id]/route'
 import { newestTimestamp } from '@/lib/leads/timeline'

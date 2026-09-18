@@ -1,17 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deleteR2Key } from '@/lib/r2Delete'
+import {
+  MATTER_DELETION_PROTECTION_LABELS,
+  type MatterDeletionProtection,
+} from '@/lib/matters/deletionProtections'
 
-/**
- * Why a matter cannot be destroyed on a single click. Neither is a refusal —
- * both are satisfied by an administrator confirming the permanent deletion —
- * but each names client work that is about to be destroyed with the matter.
- */
-export type MatterDeletionProtection = 'hired' | 'signed_engagement'
-
-export const MATTER_DELETION_PROTECTION_LABELS: Record<MatterDeletionProtection, string> = {
-  hired: 'this is a hired client matter, not a prospect',
-  signed_engagement: 'a signed engagement agreement is attached to it',
-}
+export {
+  MATTER_DELETION_PROTECTION_LABELS,
+  type MatterDeletionProtection,
+} from '@/lib/matters/deletionProtections'
 
 export type MatterDeletionErrorCode = 'not_found' | 'blocked' | 'confirmation_required'
 
@@ -56,6 +53,47 @@ function protectionSentence(protections: MatterDeletionProtection[]): string {
 }
 
 /**
+ * What a matter carries that makes destroying it worth a second look.
+ *
+ * Split out of `deleteMatter` so a caller about to delete several at once — a
+ * person's whole history with the firm, say — can ask once, before the first
+ * one is gone, instead of stopping halfway through with part of it already
+ * destroyed.
+ */
+export async function matterDeletionProtections(
+  admin: SupabaseClient,
+  matterId: string,
+): Promise<MatterDeletionProtection[]> {
+  const { data: matter, error } = await admin
+    .from('matters')
+    .select('id, relationship_status')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!matter) throw new MatterDeletionError('Matter not found', 'not_found')
+
+  const protections: MatterDeletionProtection[] = []
+  if (matter.relationship_status === 'hired') protections.push('hired')
+
+  const { data: signedAgreement, error: agreementError } = await admin
+    .from('engagement_agreements')
+    .select('id')
+    .eq('matter_id', matterId)
+    .eq('status', 'completed')
+    .limit(1)
+    .maybeSingle()
+  if (agreementError) throw new Error(agreementError.message)
+  if (signedAgreement) protections.push('signed_engagement')
+
+  return protections
+}
+
+/** The sentence a caller shows before asking for confirmation. */
+export function matterDeletionConfirmationMessage(protections: MatterDeletionProtection[]): string {
+  return `Permanently deleting this matter destroys client records — ${protectionSentence(protections)}. Confirm the deletion to proceed, or close or archive the matter instead.`
+}
+
+/**
  * Permanently delete a matter, its intake, documents (DB + best-effort R2), and
  * related rows.
  *
@@ -97,22 +135,11 @@ export async function deleteMatter(
     )
   }
 
-  const protections: MatterDeletionProtection[] = []
-  if (matter.relationship_status === 'hired') protections.push('hired')
-
-  const { data: signedAgreement, error: agreementError } = await admin
-    .from('engagement_agreements')
-    .select('id')
-    .eq('matter_id', matterId)
-    .eq('status', 'completed')
-    .limit(1)
-    .maybeSingle()
-  if (agreementError) throw new Error(agreementError.message)
-  if (signedAgreement) protections.push('signed_engagement')
+  const protections = await matterDeletionProtections(admin, matterId)
 
   if (protections.length > 0 && !options.confirmProtected) {
     throw new MatterDeletionError(
-      `Permanently deleting this matter destroys client records — ${protectionSentence(protections)}. Confirm the deletion to proceed, or close or archive the matter instead.`,
+      matterDeletionConfirmationMessage(protections),
       'confirmation_required',
       protections,
     )

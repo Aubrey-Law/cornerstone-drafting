@@ -3,7 +3,7 @@ import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Columns3, Plus, Table2, Trash2 } from 'lucide-react'
+import { Archive, Columns3, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
@@ -40,6 +40,8 @@ import { FilterChip } from '@/components/FilterChip'
 import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { computeLeadScore, leadScoreInputFromRow, type LeadScore } from '@/lib/leads/score'
 import { apiRequest } from '@/lib/clientApi'
+import { Checkbox } from '@/components/ui/checkbox'
+import { describeDeletionProtections } from '@/lib/matters/deletionProtections'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
 import { LeadsBoard } from '@/components/leads/LeadsBoard'
 import { cn } from '@/lib/utils'
@@ -129,7 +131,16 @@ export function LeadsClient({
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
+  const [purgeTarget, setPurgeTarget] = useState<LeadRow | null>(null)
+  /**
+   * What the server said it would destroy along with the lead, once it has
+   * been asked. Empty until then — the dialog only names client work it has
+   * actually been told about, and the second click acknowledges it.
+   */
+  const [purgeProtections, setPurgeProtections] = useState<string[]>([])
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkPurgeOpen, setBulkPurgeOpen] = useState(false)
+  const [bulkPurgeConfirmed, setBulkPurgeConfirmed] = useState(false)
   const [signingUrl, setSigningUrl] = useState<string | null>(null)
   const [engagementLead, setEngagementLead] = useState<LeadRow | null>(null)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
@@ -345,6 +356,102 @@ export function LeadsClient({
     }
   }
 
+  const openPurge = (lead: LeadRow) => {
+    setPurgeProtections([])
+    setPurgeTarget(lead)
+  }
+
+  const closePurge = () => {
+    setPurgeTarget(null)
+    setPurgeProtections([])
+  }
+
+  /**
+   * Destroy a lead outright — the intake, the opportunity behind it, its
+   * documents and its history.
+   *
+   * A lead holding client work (hired, or a signed engagement) comes back
+   * unharmed with the reasons named instead of an error; the dialog shows them
+   * and the next click carries the acknowledgement.
+   */
+  const handlePurgeLead = async () => {
+    if (!token || !purgeTarget) return
+    const leadId = purgeTarget.id
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/leads/${leadId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permanent: true, confirm: purgeProtections.length > 0 }),
+      })
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string
+        requiresConfirmation?: boolean
+        protections?: string[]
+      }
+      if (json.requiresConfirmation) {
+        setPurgeProtections(json.protections?.length ? json.protections : ['hired'])
+        return
+      }
+      if (!res.ok) throw new Error(json.error ?? 'Could not delete lead')
+      toast.success('Lead deleted permanently')
+      closePurge()
+      setSelected(current => {
+        const next = { ...current }
+        delete next[leadId]
+        return next
+      })
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete lead')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleBulkPurge = async () => {
+    if (!token || selectedIds.length === 0) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/admin/leads/bulk-delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds, permanent: true, confirm: bulkPurgeConfirmed }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        deleted?: number
+        requiresConfirmation?: boolean
+        results?: { ok?: boolean }[]
+      }
+      if (!res.ok) throw new Error(body.error ?? 'Could not delete leads')
+      const deleted = typeof body.deleted === 'number' ? body.deleted : selectedIds.length
+      const failed = Array.isArray(body.results) ? body.results.filter(r => !r.ok).length : 0
+
+      if (body.requiresConfirmation) {
+        // Those leads were skipped, not lost. The dialog stays up so the
+        // acknowledgement is one click away.
+        setBulkPurgeConfirmed(true)
+        toast.error(
+          `Deleted ${deleted} lead${deleted === 1 ? '' : 's'}; ${failed} hold client records. Confirm below to delete those too.`,
+        )
+        router.refresh()
+        return
+      }
+
+      if (failed > 0) toast.error(`Deleted ${deleted} lead${deleted === 1 ? '' : 's'}; ${failed} failed`)
+      else toast.success(`Deleted ${deleted} lead${deleted === 1 ? '' : 's'} permanently`)
+      setBulkPurgeOpen(false)
+      setBulkPurgeConfirmed(false)
+      setSelected({})
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete leads')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleBulkDelete = async () => {
     if (!token || selectedIds.length === 0) return
     setDeleting(true)
@@ -485,9 +592,19 @@ export function LeadsClient({
             <span className="text-xs text-muted-foreground">{selectedIds.length} selected</span>
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
               onClick={() => setBulkDeleteOpen(true)}
+              disabled={deleting}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Archive selected
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => { setBulkPurgeConfirmed(false); setBulkPurgeOpen(true) }}
               disabled={deleting}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -613,6 +730,7 @@ export function LeadsClient({
             onSendEngagement={setEngagementLead}
             onHire={setConvertTarget}
             onArchive={setDeleteTarget}
+            onDelete={openPurge}
             onMarkLost={lead => void handleStatusChange(lead, 'lost')}
             onMarkDeclined={lead => void handleStatusChange(lead, 'declined')}
             onReopen={lead => void handleStatusChange(lead, 'lead')}
@@ -633,6 +751,7 @@ export function LeadsClient({
             onSendEngagement={setEngagementLead}
             onHire={setConvertTarget}
             onArchive={setDeleteTarget}
+            onDelete={openPurge}
           />
         )}
         {/*
@@ -707,6 +826,77 @@ export function LeadsClient({
             </Button>
             <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
               {deleting ? 'Archiving…' : `Archive ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={purgeTarget !== null} onOpenChange={open => !open && closePurge()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {purgeTarget ? leadName(purgeTarget) : 'this lead'} permanently?</DialogTitle>
+            <DialogDescription>
+              This destroys the lead and everything under it — intake answers, documents, notes,
+              activity and messages. It cannot be undone. Archiving keeps all of it.
+            </DialogDescription>
+          </DialogHeader>
+          {purgeProtections.length > 0 && (
+            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              This lead holds client work — {describeDeletionProtections(purgeProtections).join(', and ')}.
+              Nothing has been deleted yet. Confirm to go through with it.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closePurge} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handlePurgeLead()} disabled={deleting}>
+              {deleting
+                ? 'Deleting…'
+                : purgeProtections.length > 0
+                  ? 'Delete anyway'
+                  : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={bulkPurgeOpen}
+        onOpenChange={open => { if (!open) { setBulkPurgeOpen(false); setBulkPurgeConfirmed(false) } }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.length} lead{selectedIds.length === 1 ? '' : 's'} permanently?
+            </DialogTitle>
+            <DialogDescription>
+              This destroys the selected leads and everything under them — intake answers, documents,
+              notes, activity and messages. It cannot be undone. Archiving keeps all of it.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
+            <Checkbox
+              checked={bulkPurgeConfirmed}
+              onCheckedChange={checked => setBulkPurgeConfirmed(checked === true)}
+              aria-label="Include hired leads and leads with a signed engagement"
+              className="mt-0.5"
+            />
+            <span className="text-muted-foreground">
+              Also delete hired leads and leads with a signed engagement. Without this they are
+              skipped.
+            </span>
+          </label>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setBulkPurgeOpen(false); setBulkPurgeConfirmed(false) }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleBulkPurge()} disabled={deleting}>
+              {deleting ? 'Deleting…' : `Delete ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, FilePlus, Mail, Phone, X } from 'lucide-react'
+import { ExternalLink, FilePlus, Mail, Phone, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
 import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
@@ -14,8 +14,18 @@ import { ContactCard } from '@/components/contacts/ContactCard'
 import {
   CONTACT_KIND_LABELS,
   contactRowId,
+  intakeRowId,
   type ContactDirectoryRow,
 } from '@/lib/adminTables/contactTable'
+import { describeDeletionProtections } from '@/lib/matters/deletionProtections'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ContactSidePanelProps {
   contact: ContactDirectoryRow
@@ -30,6 +40,54 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
   const [openingMatter, setOpeningMatter] = useState(false)
   const [openMatterError, setOpenMatterError] = useState<string | null>(null)
   const openMatterRequestId = useRef<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  /**
+   * What the server said would be destroyed with this person, once it has been
+   * asked. Empty until then: the dialog only names client work it has actually
+   * been told about, and the second click acknowledges it.
+   */
+  const [deleteProtections, setDeleteProtections] = useState<string[]>([])
+
+  /**
+   * Remove this person from the directory for good.
+   *
+   * The People list has no archive, so this is its only exit — a duplicate, a
+   * misspelled entry, somebody added in error. A person whose engagements hold
+   * client work comes back untouched with the reasons named; the next click
+   * carries the acknowledgement.
+   */
+  async function deletePerson() {
+    if (!token) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch(`/api/admin/people/${encodeURIComponent(contact.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: deleteProtections.length > 0 }),
+      })
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string
+        requiresConfirmation?: boolean
+        protections?: string[]
+      }
+      if (json.requiresConfirmation) {
+        setDeleteProtections(json.protections?.length ? json.protections : ['hired'])
+        return
+      }
+      if (!res.ok) throw new Error(json.error ?? 'Could not delete this person')
+      setDeleteOpen(false)
+      setDeleteProtections([])
+      onClose()
+      router.refresh()
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete this person')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   /**
    * Open a matter for this person, reusing the `contacts` row the firm already
@@ -76,7 +134,7 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
   }, [onClose])
 
   const contactId = contactRowId(contact.id)
-  const intakeId = contact.id.startsWith('intake:') ? contact.id.slice('intake:'.length) : null
+  const intakeId = intakeRowId(contact.id)
 
   // A contacts-table row threads through itself, not through the household it
   // hangs off — otherwise a trustee's panel shows the client's whole message
@@ -158,17 +216,28 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           </div>
         )}
 
-        {contact.self_contact_id && (
+        <div className="flex flex-wrap items-center gap-2">
+          {contact.self_contact_id && (
+            <Button
+              type="button" size="sm" variant="outline"
+              disabled={openingMatter}
+              onClick={openMatter}
+              title="Open a new matter for this person, reusing their record and household"
+            >
+              <FilePlus className="h-3.5 w-3.5" />
+              {openingMatter ? 'Opening…' : 'New matter'}
+            </Button>
+          )}
           <Button
-            type="button" size="sm" variant="outline"
-            disabled={openingMatter}
-            onClick={openMatter}
-            title="Open a new matter for this person, reusing their record and household"
+            type="button" size="sm" variant="ghost"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => { setDeleteProtections([]); setDeleteError(null); setDeleteOpen(true) }}
+            title="Remove this person from the directory for good"
           >
-            <FilePlus className="h-3.5 w-3.5" />
-            {openingMatter ? 'Opening…' : 'New matter'}
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
           </Button>
-        )}
+        </div>
         {openMatterError && (
           <p role="alert" className="text-sm text-destructive">{openMatterError}</p>
         )}
@@ -201,6 +270,49 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           </p>
         )}
       </div>
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={open => { if (!open) { setDeleteOpen(false); setDeleteProtections([]); setDeleteError(null) } }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {contact.name}?</DialogTitle>
+            <DialogDescription>
+              {intakeId
+                ? 'This destroys their record and every matter opened for them — intake answers, documents, notes, activity and messages. It cannot be undone.'
+                : 'This removes them from the firm directory for good, along with the roles they hold on any matter. Emails, texts and calls already logged are kept. It cannot be undone.'}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteProtections.length > 0 && (
+            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              This person holds client work — {describeDeletionProtections(deleteProtections).join(', and ')}.
+              Nothing has been deleted yet. Confirm to go through with it.
+            </p>
+          )}
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button" variant="outline" disabled={deleting}
+              onClick={() => { setDeleteOpen(false); setDeleteProtections([]); setDeleteError(null) }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button" variant="destructive" disabled={deleting}
+              onClick={() => void deletePerson()}
+            >
+              {deleting
+                ? 'Deleting…'
+                : deleteProtections.length > 0
+                  ? 'Delete anyway'
+                  : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {composerTarget && (
         <CommunicationDialog
