@@ -11,6 +11,7 @@ import {
   Trash2,
   Upload,
   Clock as UnlockIcon,
+  Sparkles,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -134,6 +135,12 @@ export function MatterDetailHeader({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button type="button" size="sm" variant="outline" className="gap-1.5" asChild>
+          <Link href={`/admin/assistant?matter=${matter.matter_id}`} title="Start an Assistant chat on this matter">
+            <Sparkles className="size-3.5" />
+            Open in Assistant
+          </Link>
+        </Button>
         <Button type="button" size="sm" asChild>
           <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
         </Button>

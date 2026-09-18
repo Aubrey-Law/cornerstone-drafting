@@ -291,6 +291,7 @@ const TOOL_ACTIVITY_LABELS: Record<string, { running: string; done: string }> = 
   list_matter_dates: { running: 'Reading matter dates', done: 'Read matter dates' },
   list_overdue_followups: { running: 'Reading overdue follow-ups', done: 'Read overdue follow-ups' },
   week_review: { running: 'Reviewing the week', done: 'Reviewed the week' },
+  read_firm_today: { running: 'Reading the firm’s day', done: 'Read the firm’s day' },
   draft_reschedule_email: { running: 'Drafting reschedule email', done: 'Drafted reschedule email' },
   analyze_template_upload: { running: 'Analyzing upload', done: 'Analyzed upload' },
   list_template_fields: { running: 'Searching template fields', done: 'Searched template fields' },

@@ -78,3 +78,12 @@ describe('MatterDetailHeader communication actions', () => {
     expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
   })
 })
+
+describe('MatterDetailHeader hands the matter to the Assistant', () => {
+  it('links to an Assistant chat already pointed at this matter', () => {
+    renderHeader({}, { onEmail: vi.fn() })
+
+    const link = screen.getByRole('link', { name: /open in assistant/i })
+    expect(link.getAttribute('href')).toBe('/admin/assistant?matter=m-1')
+  })
+})
