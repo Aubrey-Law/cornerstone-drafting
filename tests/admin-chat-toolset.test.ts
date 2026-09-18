@@ -67,3 +67,15 @@ describe('one tool list serves both chat surfaces', () => {
     }
   })
 })
+
+describe('the Word add-in gets a read-only tool set', () => {
+  it('includes the record, design-sheet status, today and workflow reads and nothing that proposes or exports', () => {
+    const tools = names({ contextType: 'matter', contextId: 'm1', user, surface: 'addin' })
+    for (const expected of ['find_matter', 'read_matter_record', 'read_document_text', 'read_design_sheet_status', 'read_firm_today', 'list_workflows', 'read_workflow']) {
+      expect(tools).toContain(expected)
+    }
+    for (const excluded of ['create_task', 'create_lead', 'create_hold', 'propose_reschedule', 'propose_design_sheet_updates', 'export_leads', 'export_matters', 'analyze_template_upload']) {
+      expect(tools).not.toContain(excluded)
+    }
+  })
+})

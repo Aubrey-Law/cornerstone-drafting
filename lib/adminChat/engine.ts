@@ -341,6 +341,8 @@ export interface AdminChatStreamOptions {
   tools?: AdminChatToolExecutor[]
   /** Defensive cap on tool-use rounds. The floating panel uses 4; the assistant page 6. */
   maxIterations?: number
+  /** Reply ceiling per model call. The Word add-in raises it for long <EDITS> blocks. */
+  maxTokens?: number
   /** Emitted before the model stream starts (e.g. a context-load warning). */
   preamble?: string
   /**
@@ -394,7 +396,7 @@ function isRetryableStreamError(error: unknown): boolean {
 }
 
 export function createAdminChatStream(options: AdminChatStreamOptions): Response {
-  const { system, messages, tools = [], maxIterations = 4, preamble, initialEvents = [], usage, onEvent, onToolRound, onComplete, retryDelayMs = 500 } = options
+  const { system, messages, tools = [], maxIterations = 4, maxTokens = 4096, preamble, initialEvents = [], usage, onEvent, onToolRound, onComplete, retryDelayMs = 500 } = options
   const encoder = new TextEncoder()
   const executorsByName = new Map(tools.map(executor => [executor.tool.name, executor]))
   const anthropicTools = tools.map(executor => executor.tool)
@@ -464,7 +466,7 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
           if (clientGone) break
           const anthropicStream = await openStream(() => anthropic.messages.stream({
             model: chatModel,
-            max_tokens: 4096,
+            max_tokens: maxTokens,
             // Cache the large matter context prompt so the tool loop and
             // follow-up turns read it at ~10% of input cost. Below the model's
             // minimum cacheable prefix (small general prompts) this is a no-op.

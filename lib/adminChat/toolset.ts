@@ -20,9 +20,11 @@ export interface AdminChatToolsetOptions {
   }
   /**
    * Which chat surface is asking. The Assistant page is where Template Builder
-   * uploads arrive, so only it carries those tools; everything else is common.
+   * uploads arrive, so only it carries those tools. The Word add-in's pane can
+   * render text but not a proposal card or a download, so it gets the
+   * read-only tools only; everything else is common to the page and the rail.
    */
-  surface: 'assistant' | 'rail'
+  surface: 'assistant' | 'rail' | 'addin'
 }
 
 export interface AdminChatToolset {
@@ -44,6 +46,17 @@ export function adminChatToolset(options: AdminChatToolsetOptions): AdminChatToo
   const matterId = contextType === 'matter' ? contextId : null
   const leadId = contextType === 'lead' ? contextId : null
   const workflowUser = { userId: user.id, email: user.email ?? null }
+
+  if (surface === 'addin') {
+    const tools: AdminChatToolExecutor[] = [
+      ...(matterId ? [designSheetStatusExecutor(matterId)] : []),
+      ...workflowToolExecutors(workflowUser),
+      firmTodayToolExecutor,
+      ...matterKnowledgeToolExecutors({ defaultRecordId: contextId }),
+    ]
+    const promptNotes = workflowSystemPromptNote() + firmTodaySystemPromptNote() + matterKnowledgeSystemPromptNote()
+    return { tools, promptNotes }
+  }
 
   const tools: AdminChatToolExecutor[] = [
     createLeadToolExecutor,

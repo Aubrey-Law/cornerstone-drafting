@@ -1,10 +1,11 @@
 import { requireAdmin } from '@/lib/apiAuth'
-import { getAdminClient } from '@/lib/supabaseAdmin'
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { logAiUsage } from '@/lib/aiUsage'
 import { consumeRateLimit } from '@/lib/rateLimit'
-import { runLlmChat, resolveLlmConfig, type LlmMessage } from '@/lib/llm'
+import { createAdminChatStream, DESIGN_SHEET_STATUS_TOOL_NAME, type ChatContextType } from '@/lib/adminChat/engine'
+import { adminChatToolset } from '@/lib/adminChat/toolset'
+import { READ_MATTER_RECORD_TOOL_NAME } from '@/lib/adminChat/matterKnowledgeTools'
+import { forEachSseFrame } from '@/app/admin/components/chatStream'
 import {
   MAX_DOCUMENT_CONTEXT_CHARS,
   buildEditProtocolInstructions,
@@ -45,6 +46,8 @@ The document reaches you as markdown whose structure markers — leading "#" on 
 ${matterSection ? `\n${matterSection}\n` : ''}
 ${buildEditProtocolInstructions()}
 
+IN WORD: Your tools here are read-only. Use \`${READ_MATTER_RECORD_TOOL_NAME}\` for the matter's people, notes, tasks, documents and dates when the design sheet above does not answer, and \`${DESIGN_SHEET_STATUS_TOOL_NAME}\` for what the sheet still needs. You cannot propose tasks, holds or design-sheet changes from Word; when one is needed, say so and point the attorney to the matter in the web app.
+
 ${PROMPT_INJECTION_GUARDRAIL}`
 }
 
@@ -69,7 +72,7 @@ export async function POST(req: Request) {
     })
   }
 
-  const messages: LlmMessage[] = (body.messages ?? [])
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = (body.messages ?? [])
     .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-MAX_HISTORY_MESSAGES)
     .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content as string }))
@@ -77,15 +80,6 @@ export async function POST(req: Request) {
   if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
     return new Response(JSON.stringify({ error: 'Expected a trailing user message' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  const admin = getAdminClient()
-  const llm = await resolveLlmConfig(admin, userId)
-  if (!llm.ok) {
-    return new Response(JSON.stringify({ error: llm.error }), {
-      status: 501,
       headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -123,9 +117,35 @@ export async function POST(req: Request) {
       ? { state: 'applied' as const, matterNumber: briefResult.brief.matterNumber, clientName: briefResult.brief.clientName }
       : { state: 'unavailable' as const, reason: briefResult?.reason ?? 'Design sheet unavailable' }
 
-  const startedAt = Date.now()
-  const encoder = new TextEncoder()
+  // The shared engine, with the read-only tool set: the pane renders text and
+  // applies <EDITS>, but has no card for a proposal or a download.
+  const contextType: ChatContextType = matterId ? 'matter' : 'general'
+  const toolset = adminChatToolset({
+    contextType,
+    contextId: matterId,
+    user: { id: userId, email: auth.user?.email ?? null, user_metadata: auth.user?.user_metadata },
+    surface: 'addin',
+  })
 
+  const engineResponse = createAdminChatStream({
+    system: buildSystemPrompt(body.documentName ?? null, matterSection) + toolset.promptNotes,
+    messages,
+    tools: toolset.tools,
+    maxIterations: 4,
+    // Long <EDITS> blocks need more room than a chat reply.
+    maxTokens: 8192,
+    usage: { route: 'addin/chat', contextType, matterId, userId },
+  })
+
+  /*
+   * Translate the engine's frames into the dialect the deployed add-in reads:
+   * `{delta}` per text chunk and one terminal `{done, reply, matterContext}`.
+   * The pane parses the <EDITS> block from that complete reply, never from the
+   * deltas — a truncated `original` would still match somewhere in the
+   * document, at the wrong boundary. Translating here means an add-in already
+   * installed in Word keeps working against the new engine.
+   */
+  const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: Record<string, unknown>) => {
@@ -135,45 +155,32 @@ export async function POST(req: Request) {
           // Client hung up mid-stream; nothing to do but stop writing.
         }
       }
-
+      let reply = ''
+      let failed = false
       try {
-        const result = await runLlmChat(llm.config, {
-          system: buildSystemPrompt(body.documentName ?? null, matterSection),
-          messages,
-          maxTokens: 8192,
-          hooks: { onDelta: text => send({ delta: text }) },
+        if (!engineResponse.body) throw new Error('Chat stream unavailable')
+        await forEachSseFrame(engineResponse.body, frame => {
+          if (frame.error && !frame.tool) {
+            failed = true
+            send({ error: frame.error })
+            return
+          }
+          if (frame.tool && frame.tool_use_id && frame.status) {
+            // A status line for the pane, if it ever chooses to show one; the
+            // current pane ignores keys it does not know.
+            send({ tool: frame.tool, status: frame.status })
+            return
+          }
+          if (typeof frame.text === 'string' && frame.text) {
+            reply += frame.text
+            send({ delta: frame.text })
+          }
         })
-
-        // The pane parses the <EDITS> block from the complete reply, never from
-        // the deltas: a truncated `original` would still match somewhere in the
-        // document, at the wrong boundary.
-        send({ done: true, reply: result.reply, matterContext })
-
-        await logAiUsage({
-          route: 'addin/chat',
-          userId,
-          matterId,
-          model: result.model,
-          inputTokens: result.usage?.inputTokens,
-          outputTokens: result.usage?.outputTokens,
-          cacheReadInputTokens: result.usage?.cacheReadInputTokens,
-          cacheCreationInputTokens: result.usage?.cacheCreationInputTokens,
-          durationMs: Date.now() - startedAt,
-          success: true,
-        })
+        if (!failed) send({ done: true, reply, matterContext })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Chat failed'
         console.error('[addin/chat]', err)
         send({ error: message })
-        await logAiUsage({
-          route: 'addin/chat',
-          userId,
-          matterId,
-          model: llm.config.model,
-          durationMs: Date.now() - startedAt,
-          success: false,
-          errorMessage: message,
-        })
       } finally {
         controller.close()
       }
