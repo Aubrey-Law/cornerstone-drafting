@@ -1,4 +1,4 @@
-import { engagementAnchorMarkers } from '@/lib/engagement/anchors'
+import { engagementAnchorMarkers, type EngagementAnchorMarkers } from '@/lib/engagement/anchors'
 import type { SealField } from '@/lib/esign/nativeSeal'
 
 /**
@@ -70,7 +70,20 @@ export function formatSigningDate(date: Date, timeZone: string): string {
 }
 
 /** @param timeZone IANA zone the signing dates are written in — the firm's. */
-export function sealFieldsFor(marks: SignedMark[], timeZone: string): SealField[] {
+export function sealFieldsFor(
+  marks: SignedMark[],
+  timeZone: string,
+  /**
+   * How to name the anchor markers for a 1-based position.
+   *
+   * Defaults to the engagement template's `[[CLIENT_n_*]]`, so every existing
+   * caller is unchanged. A generated signature page passes its own namespace
+   * (`documentAnchorMarkers` in lib/esign/subject.ts) — the markers are the one
+   * thing that differs between signable documents, and the rest of this
+   * function does not care which it got.
+   */
+  markersFor: (position: number) => EngagementAnchorMarkers = engagementAnchorMarkers,
+): SealField[] {
   const ordered = [...marks].sort((a, b) => a.position - b.position)
 
   const positions = new Set<number>()
@@ -85,7 +98,7 @@ export function sealFieldsFor(marks: SignedMark[], timeZone: string): SealField[
   }
 
   return ordered.flatMap(mark => {
-    const markers = engagementAnchorMarkers(mark.position)
+    const markers = markersFor(mark.position)
     const typed = mark.typedName?.trim()
 
     // Neither a drawing nor a name means there is nothing to draw, and
