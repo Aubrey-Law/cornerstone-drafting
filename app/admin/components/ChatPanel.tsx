@@ -167,47 +167,11 @@ function makeMessage(role: FloatingChatMessage['role'], content: string, context
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-// Conversation survives close/reopen within the browser session.
-const CHAT_STORAGE_KEY = 'cornerstone-admin-chat-messages'
-
-function storageKeyForThread(threadKey: string) {
-  return threadKey === 'general' ? CHAT_STORAGE_KEY : `${CHAT_STORAGE_KEY}:${threadKey}`
-}
-
-function loadStoredMessages(threadKey = 'general'): FloatingChatMessage[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.sessionStorage.getItem(storageKeyForThread(threadKey))
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((m): m is FloatingChatMessage =>
-      isRecord(m) &&
-      typeof m.id === 'string' &&
-      (m.role === 'user' || m.role === 'assistant') &&
-      typeof m.content === 'string' &&
-      typeof m.timestamp === 'string',
-    )
-  } catch {
-    return []
-  }
-}
-
-function storeMessages(messages: FloatingChatMessage[], threadKey = 'general') {
-  try {
-    const storageKey = storageKeyForThread(threadKey)
-    if (messages.length === 0) {
-      window.sessionStorage.removeItem(storageKey)
-    } else {
-      window.sessionStorage.setItem(storageKey, JSON.stringify(messages))
-    }
-  } catch {
-    // sessionStorage may be unavailable (private mode, quota) — chat still works.
-  }
+/** Query string naming the thread the server keeps for this context. */
+function historyQuery(context: ChatContextType) {
+  const params = new URLSearchParams({ context_type: context.type })
+  if (context.type !== 'general') params.set('context_id', context.id)
+  return params.toString()
 }
 
 export function ChatPanel({
@@ -246,8 +210,10 @@ export function ChatPanel({
   const contextType = chatContext.type
   const contextId = chatContext.type === 'general' ? null : chatContext.id
   const prompts = useMemo(() => suggestedPrompts[chatContext.type], [chatContext.type])
-  // Matter threads are shared with the Draft assistant via matter_assistant_messages;
-  // the general thread stays in sessionStorage.
+  // Every thread is kept on the server, per attorney: matter threads are the
+  // ones the Review step shares; lead threads are filed under the lead's
+  // matter; the general thread is one per attorney. sessionStorage used to
+  // hold general and lead threads, and lost them on reload.
   const threadKey = chatContext.type === 'general' ? 'general' : `${chatContext.type}:${chatContext.id}`
 
   // Isolate record threads before paint. This prevents the previous record's
@@ -255,7 +221,7 @@ export function ChatPanel({
   useLayoutEffect(() => {
     loadedThreadRef.current = null
     setMessages([])
-    setHistoryLoading(contextType === 'matter')
+    setHistoryLoading(true)
   }, [contextType, threadKey])
 
   useEffect(() => {
@@ -275,24 +241,14 @@ export function ChatPanel({
 
   useEffect(() => {
     if (!open) return
-    if (contextType === 'general') {
-      setMessages(loadStoredMessages('general'))
-      loadedThreadRef.current = 'general'
-      return
-    }
-    if (contextType === 'lead') {
-      setMessages(loadStoredMessages(threadKey))
-      loadedThreadRef.current = threadKey
-      setHistoryLoading(false)
-      return
-    }
     let stale = false
     setHistoryLoading(true)
+    const context = chatContext
     void (async () => {
       let loaded: FloatingChatMessage[] = []
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/admin/matters/${contextId}/assistant`, {
+        const res = await fetch(`/api/admin/chat/history?${historyQuery(context)}`, {
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
         })
         const body = await res.json().catch(() => ({})) as {
@@ -304,7 +260,7 @@ export function ChatPanel({
             role: turn.role === 'user' ? 'user' as const : 'assistant' as const,
             content: turn.content,
             timestamp: turn.createdAt ?? new Date().toISOString(),
-            contextSnapshot: { type: 'matter', id: contextId ?? undefined },
+            contextSnapshot: snapshotContext(context),
           }))
         }
       } catch {
@@ -318,13 +274,9 @@ export function ChatPanel({
     return () => {
       stale = true
     }
-  }, [contextId, contextType, open, threadKey])
-
-  useEffect(() => {
-    if (loadedThreadRef.current !== threadKey) return
-    if (contextType !== 'general' && contextType !== 'lead') return
-    storeMessages(messages, threadKey)
-  }, [contextType, messages, threadKey])
+    // chatContext is derived from contextType/contextId; threadKey covers both.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextType, contextId, open, threadKey])
 
   useEffect(() => {
     const element = threadRef.current
@@ -444,19 +396,21 @@ export function ChatPanel({
     } finally {
       abortRef.current = null
       setLoading(false)
-      // Share matter conversations with the Draft assistant's per-matter
-      // thread. Failed sends persist nothing (matches Draft assistant).
-      if (contextAtSend.type === 'matter' && persistReply) {
+      // Save the pair to the attorney's server-side thread for this context.
+      // Failed sends persist nothing (matches the Review step).
+      if (persistReply) {
         void (async () => {
           try {
             const { data: { session } } = await supabase.auth.getSession()
-            await fetch(`/api/admin/matters/${contextAtSend.id}/assistant`, {
+            await fetch('/api/admin/chat/history', {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
                 ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
               },
               body: JSON.stringify({
+                context_type: contextAtSend.type,
+                ...(contextAtSend.type === 'general' ? {} : { context_id: contextAtSend.id }),
                 turns: [
                   { role: 'user', content: trimmed },
                   { role: 'assistant', content: persistReply },
@@ -578,24 +532,25 @@ export function ChatPanel({
   }
 
   async function handleClearConversation() {
-    if (chatContext.type === 'matter') {
-      if (!(await confirm({
-        title: 'Clear this matter’s assistant chat history?',
-        body: 'The conversation is removed for everyone. Drafts and documents are not affected.',
-        confirmLabel: 'Clear history',
-        destructive: true,
-      }))) return
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/admin/matters/${chatContext.id}/assistant`, {
-          method: 'DELETE',
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-        })
-        if (!res.ok) throw new Error('Could not clear history')
-      } catch (err) {
-        flashStatus('error', (err as Error).message || 'Could not clear history.')
-        return
-      }
+    const what = chatContext.type === 'matter' ? 'this matter’s' : chatContext.type === 'lead' ? 'this lead’s' : 'your general'
+    if (!(await confirm({
+      title: `Clear ${what} assistant chat history?`,
+      body: chatContext.type === 'general'
+        ? 'Your saved general conversation is removed. Matters and leads are not affected.'
+        : 'The conversation is removed for everyone. Drafts and documents are not affected.',
+      confirmLabel: 'Clear history',
+      destructive: true,
+    }))) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/admin/chat/history?${historyQuery(chatContext)}`, {
+        method: 'DELETE',
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+      if (!res.ok) throw new Error('Could not clear history')
+    } catch (err) {
+      flashStatus('error', (err as Error).message || 'Could not clear history.')
+      return
     }
     setMessages([])
     setError(null)
