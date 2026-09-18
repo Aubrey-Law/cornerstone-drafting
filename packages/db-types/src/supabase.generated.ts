@@ -2221,13 +2221,9 @@ export type Database = {
       cornerstone_crm_people: {
         Row: {
           assigned_to_user_id: string | null
-          campaign_opt_out: boolean
           city: string | null
           client_intake_id: string | null
           company_name: string | null
-          consent_captured_at: string | null
-          consent_captured_by: string | null
-          consent_source: string | null
           contact_id: string | null
           cornerstone_matter_id: string | null
           country: string | null
@@ -2242,8 +2238,6 @@ export type Database = {
           lead_id: string | null
           lead_source: string | null
           lifecycle_status: string
-          marketing_segment: string
-          marketing_status: string
           mobile_phone: string | null
           next_follow_up_at: string | null
           normalized_email: string | null
@@ -2251,26 +2245,19 @@ export type Database = {
           owner_user_id: string | null
           person_kind: string
           phone: string | null
-          preferred_frequency: string | null
           record_status: string
           referral_source: string | null
           source_system: string
           stage_entered_at: string | null
           stage_id: string
           state: string | null
-          topic_preferences: Json
-          unsubscribed_at: string | null
           updated_at: string
         }
         Insert: {
           assigned_to_user_id?: string | null
-          campaign_opt_out?: boolean
           city?: string | null
           client_intake_id?: string | null
           company_name?: string | null
-          consent_captured_at?: string | null
-          consent_captured_by?: string | null
-          consent_source?: string | null
           contact_id?: string | null
           cornerstone_matter_id?: string | null
           country?: string | null
@@ -2285,8 +2272,6 @@ export type Database = {
           lead_id?: string | null
           lead_source?: string | null
           lifecycle_status?: string
-          marketing_segment?: string
-          marketing_status?: string
           mobile_phone?: string | null
           next_follow_up_at?: string | null
           normalized_email?: string | null
@@ -2294,26 +2279,19 @@ export type Database = {
           owner_user_id?: string | null
           person_kind?: string
           phone?: string | null
-          preferred_frequency?: string | null
           record_status?: string
           referral_source?: string | null
           source_system?: string
           stage_entered_at?: string | null
           stage_id: string
           state?: string | null
-          topic_preferences?: Json
-          unsubscribed_at?: string | null
           updated_at?: string
         }
         Update: {
           assigned_to_user_id?: string | null
-          campaign_opt_out?: boolean
           city?: string | null
           client_intake_id?: string | null
           company_name?: string | null
-          consent_captured_at?: string | null
-          consent_captured_by?: string | null
-          consent_source?: string | null
           contact_id?: string | null
           cornerstone_matter_id?: string | null
           country?: string | null
@@ -2328,8 +2306,6 @@ export type Database = {
           lead_id?: string | null
           lead_source?: string | null
           lifecycle_status?: string
-          marketing_segment?: string
-          marketing_status?: string
           mobile_phone?: string | null
           next_follow_up_at?: string | null
           normalized_email?: string | null
@@ -2337,15 +2313,12 @@ export type Database = {
           owner_user_id?: string | null
           person_kind?: string
           phone?: string | null
-          preferred_frequency?: string | null
           record_status?: string
           referral_source?: string | null
           source_system?: string
           stage_entered_at?: string | null
           stage_id?: string
           state?: string | null
-          topic_preferences?: Json
-          unsubscribed_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2368,13 +2341,6 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "v_lead_list"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_people_consent_captured_by_fkey"
-            columns: ["consent_captured_by"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -9986,8 +9952,6 @@ export type Database = {
           lead_id: string | null
           lead_source: string | null
           lifecycle_status: string | null
-          marketing_segment: string | null
-          marketing_status: string | null
           matter_id: string | null
           name: string | null
           next_follow_up_at: string | null
@@ -9995,7 +9959,6 @@ export type Database = {
           person_kind: string | null
           phone: string | null
           practice_area: string | null
-          preferred_frequency: string | null
           record_status: string | null
           referral_source: string | null
           related_intake_id: string | null
@@ -10005,7 +9968,6 @@ export type Database = {
           stage_name: string | null
           stage_slug: string | null
           state: string | null
-          topic_preferences: Json | null
           updated_at: string | null
         }
         Relationships: [

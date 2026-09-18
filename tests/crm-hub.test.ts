@@ -48,8 +48,7 @@ describe('unified CRM hub', () => {
 
   it('asks for consent nowhere the firm can no longer market from', () => {
     // The opt-in/opt-out UI gated a nurture send that no longer exists, so it
-    // was collecting a permission nothing could act on. The columns stay in
-    // the database; nothing in the app reads or writes them.
+    // was collecting a permission nothing could act on.
     for (const surface of [
       'app/admin/contacts/ContactSidePanel.tsx',
       'app/admin/leads/[id]/LeadDetailClient.tsx',
@@ -60,6 +59,44 @@ describe('unified CRM hub', () => {
     ]) {
       expect(read(surface)).not.toMatch(/marketing|nurture/i)
     }
+  })
+
+  it('drops the marketing consent columns, and the view that selected them', () => {
+    const migration = read('supabase/migrations/20261210000000_drop_crm_marketing_consent.sql')
+
+    for (const column of [
+      'marketing_status',
+      'marketing_segment',
+      'topic_preferences',
+      'preferred_frequency',
+      'consent_source',
+      'consent_captured_at',
+      'consent_captured_by',
+      'unsubscribed_at',
+      'campaign_opt_out',
+    ]) {
+      expect(migration).toContain(`drop column if exists ${column}`)
+      expect(read('packages/db-types/src/supabase.generated.ts')).not.toContain(`  ${column}: `)
+    }
+
+    // A view cannot be `create or replace`d into dropping a column, and a view
+    // still selecting one blocks the drop — so the recreate has to come first.
+    expect(migration.indexOf('drop view if exists public.v_cornerstone_crm_people'))
+      .toBeLessThan(migration.indexOf('alter table public.cornerstone_crm_people'))
+    expect(migration).toContain('create view public.v_cornerstone_crm_people')
+    expect(migration).toContain('grant select on public.v_cornerstone_crm_people')
+  })
+
+  it('leaves the campaign recipients snapshot alone', () => {
+    // Enrollment-time snapshots on the (dead) campaign tables, named by
+    // `enforce_crm_recipient_snapshot_immutable`. A separate decision from the
+    // consent columns, and not one this migration made.
+    // Named in the header comment, which is the point — so this asserts no DDL
+    // touches it, rather than that the name never appears.
+    const migration = read('supabase/migrations/20261210000000_drop_crm_marketing_consent.sql')
+    expect(migration).not.toMatch(/(alter|drop) table[^\n]*cornerstone_crm_campaign_recipients/i)
+    expect(migration).not.toMatch(/drop column[^\n]*snapshot_marketing_status/i)
+    expect(read('packages/db-types/src/supabase.generated.ts')).toContain('snapshot_marketing_status')
   })
 
   it('preserves legacy lead and contact URLs with framework redirects', async () => {
