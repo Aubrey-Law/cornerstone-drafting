@@ -5,25 +5,17 @@ import {
   appendAssistantChatMessage,
   getAssistantChat,
   listAssistantChatMessages,
+  replayMessagesForModel,
   setAssistantChatTitleIfEmpty,
 } from '@/lib/assistantChats'
 import {
   buildContext,
   createAdminChatStream,
   generalSystemPrompt,
-  type AdminChatToolExecutor,
   type MatterContext,
 } from '@/lib/adminChat/engine'
-import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
-import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
-import { exportLeadsToolExecutor, leadExportSystemPromptNote } from '@/lib/adminChat/leadExportTool'
-import { exportMattersToolExecutor, matterExportSystemPromptNote } from '@/lib/adminChat/matterExportTool'
-import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
-import { templateBuilderSystemPromptNote, templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
-import {
-  matterKnowledgeSystemPromptNote,
-  matterKnowledgeToolExecutors,
-} from '@/lib/adminChat/matterKnowledgeTools'
+import { adminChatToolset } from '@/lib/adminChat/toolset'
+import { attachedWorkflowPromptNote, loadAttachedWorkflow } from '@/lib/adminChat/workflowAttachment'
 
 export const maxDuration = 120
 
@@ -82,39 +74,53 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     contextLoadNote = `Note: I wasn't able to load full ${chat.context_type} context (${detail}) - answering from general knowledge.\n\n`
   }
 
+  // The workflow's text goes into the system prompt here. Leaving it to the
+  // model to fetch via read_workflow meant it sometimes did not, and then
+  // answered as if nothing had been attached.
+  let workflowNote = ''
+  const initialEvents: Record<string, unknown>[] = []
+  if (workflow) {
+    const attached = await loadAttachedWorkflow(workflow.id, { userId: auth.userId, email: auth.user?.email ?? null })
+    if (attached) {
+      workflowNote = attachedWorkflowPromptNote(attached, { contextType: chat.context_type })
+      initialEvents.push({ workflow_applied: { workflow_id: attached.id, title: attached.title } })
+    } else {
+      contextLoadNote += `Note: the attached workflow "${workflow.title}" is no longer available, so I am answering without it.\n\n`
+    }
+  }
+
   const contextMatterId = chat.context_type === 'matter' ? chat.context_id : null
-  const tools: AdminChatToolExecutor[] = [
-    exportLeadsToolExecutor,
-    exportMattersToolExecutor,
-    ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, auth.userId)] : []),
-    ...workflowToolExecutors({ userId: auth.userId, email: auth.user?.email ?? null }),
-    ...calendarPlanningToolExecutors(),
-    ...templateBuilderToolExecutors(auth.userId),
-    // A lead is matter-owned, so its record reads by the same id.
-    ...matterKnowledgeToolExecutors({ defaultRecordId: chat.context_id }),
-  ]
+  const toolset = adminChatToolset({
+    contextType: chat.context_type,
+    contextId: chat.context_id,
+    user: { id: auth.userId, email: auth.user?.email ?? null, user_metadata: auth.user?.user_metadata },
+    surface: 'assistant',
+  })
 
   // Mike OSS handoff convention: an attached workflow becomes a [Workflow: ...]
-  // prefix on the outgoing turn; the model reads the body via read_workflow.
+  // prefix on the outgoing turn. The body itself is already in the system
+  // prompt (workflowNote); the tag survives so the turn reads the same in
+  // history and so the model can name what it is following.
   const outgoingContent = workflow
     ? `[Workflow: ${workflow.title} (id: ${workflow.id})]\n\n${content}`
     : content
 
+  // Stored tool rounds replay as the blocks the API saw, so the model keeps
+  // what it read on earlier turns instead of re-reading or guessing.
   const messages = [
-    ...history.map(message => ({ role: message.role, content: message.content })),
+    ...replayMessagesForModel(history),
     { role: 'user' as const, content: outgoingContent },
   ]
 
   const events: Record<string, unknown>[] = []
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + leadExportSystemPromptNote()
-      + matterExportSystemPromptNote() + calendarPlanningSystemPromptNote() + templateBuilderSystemPromptNote()
-      + matterKnowledgeSystemPromptNote(),
+    system: context.systemPrompt + toolset.promptNotes + workflowNote,
     messages,
-    tools,
+    tools: toolset.tools,
     maxIterations: 6,
     preamble: contextLoadNote || undefined,
+    initialEvents,
     usage: {
       route: 'admin/assistant',
       contextType: chat.context_type,
@@ -124,13 +130,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     onEvent: data => {
       if (typeof data.text !== 'string') events.push(data)
     },
+    onToolRound: ({ assistantContent, toolResults }) => {
+      events.push({ tool_round: { assistant_content: assistantContent, tool_results: toolResults } })
+    },
     onComplete: async ({ text, success, errorMessage }) => {
-      const contentToSave = text || (events.length ? '[Tool activity — see events]' : '')
-      if (!contentToSave && success) return
+      // A reply that was all tool activity is saved with empty text and its
+      // events; the thread renders the chips, and replay closes the round.
+      if (!text && events.length === 0 && success) return
       try {
         await appendAssistantChatMessage(chatId, {
           role: 'assistant',
-          content: contentToSave || `Error: ${errorMessage ?? 'stream failed'}`,
+          content: success ? text : (text || `Error: ${errorMessage ?? 'stream failed'}`),
           events,
         })
       } catch (error) {

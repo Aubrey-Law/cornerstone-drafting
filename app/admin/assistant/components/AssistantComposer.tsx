@@ -82,9 +82,14 @@ export function AssistantComposer({
           </DialogHeader>
           <WorkflowPickerContent
             typeFilter="assistant"
+            executionMode="chat"
             pickLabel="Attach workflow"
             onPick={skill => {
-              onWorkflowChange({ id: skill.id, title: skill.name })
+              onWorkflowChange({
+                id: skill.id,
+                title: skill.name,
+                matterScoped: Array.isArray(skill.allowed_context) && skill.allowed_context.includes('matter'),
+              })
               setPickerOpen(false)
             }}
           />

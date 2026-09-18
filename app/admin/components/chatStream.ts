@@ -53,6 +53,7 @@ export function toolEventFrom(event: EmittedToolEvent): ToolEvent {
     proposed: isRecord(result?.proposed) ? result.proposed as ToolEvent['proposed'] : undefined,
     proposal: Array.isArray(result?.proposal) ? result.proposal as ToolEvent['proposal'] : undefined,
     error: typeof event.error === 'string' ? event.error : undefined,
+    detail: result,
   }
 }
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { MessageSquarePlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { Briefcase, MessageSquarePlus, MoreHorizontal, Pencil, Trash2, UserRound } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,10 +89,12 @@ export function ChatHistorySidebar({ chats, activeChatId, onChanged }: ChatHisto
             <button
               type="button"
               onClick={() => router.push(`/admin/assistant/chat/${chat.id}`)}
-              className="min-w-0 flex-1 truncate text-left"
-              title={chat.title ?? 'New chat'}
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+              title={`${chat.title ?? 'New chat'}${chat.context_type === 'general' ? '' : ` · ${chat.context_type} chat`}`}
             >
-              {chat.title ?? 'New chat'}
+              {chat.context_type === 'matter' && <Briefcase aria-label="Matter chat" className="h-3 w-3 shrink-0 text-muted-foreground" />}
+              {chat.context_type === 'lead' && <UserRound aria-label="Lead chat" className="h-3 w-3 shrink-0 text-muted-foreground" />}
+              <span className="truncate">{chat.title ?? 'New chat'}</span>
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

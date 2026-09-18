@@ -8,21 +8,11 @@ import {
   createAdminChatStream,
   generalSystemPrompt,
   sse,
-  type AdminChatToolExecutor,
   type ChatContextType,
   type MatterContext,
 } from '@/lib/adminChat/engine'
 import { isDraftingSummaryRequest, formatClaudeDraftingSkillInput } from '@/lib/adminChat/prompts'
-import { designSheetImportExecutor, designSheetStatusExecutor } from '@/lib/adminChat/designSheetTool'
-import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
-import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
-import { exportLeadsToolExecutor, leadExportSystemPromptNote } from '@/lib/adminChat/leadExportTool'
-import { exportMattersToolExecutor, matterExportSystemPromptNote } from '@/lib/adminChat/matterExportTool'
-import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
-import {
-  matterKnowledgeSystemPromptNote,
-  matterKnowledgeToolExecutors,
-} from '@/lib/adminChat/matterKnowledgeTools'
+import { adminChatToolset } from '@/lib/adminChat/toolset'
 
 export const maxDuration = 120
 
@@ -123,33 +113,17 @@ export async function POST(req: Request) {
   }
 
   const contextMatterId = contextType === 'matter' && body.context_id ? body.context_id : null
-  const contextLeadId = contextType === 'lead' && body.context_id ? body.context_id : null
-  const tools: AdminChatToolExecutor[] = [
-    createLeadToolExecutor,
-    exportLeadsToolExecutor,
-    exportMattersToolExecutor,
-    ...(contextMatterId
-      ? [
-          designSheetImportExecutor(contextMatterId, adminUserId ?? null),
-          designSheetStatusExecutor(contextMatterId),
-        ]
-      : []),
-    ...workflowToolExecutors({ userId: adminUserId ?? '', email: user?.email ?? null }),
-    ...calendarPlanningToolExecutors({
-      defaultMatterId: contextMatterId,
-      defaultLeadId: contextLeadId,
-      actor: user,
-    }),
-    // A lead is matter-owned, so its record reads by the same id.
-    ...matterKnowledgeToolExecutors({ defaultRecordId: contextMatterId ?? contextLeadId }),
-  ]
+  const toolset = adminChatToolset({
+    contextType,
+    contextId: body.context_id ?? null,
+    user: { id: adminUserId ?? '', email: user?.email ?? null, user_metadata: user?.user_metadata },
+    surface: 'rail',
+  })
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote()
-      + leadExportSystemPromptNote() + matterExportSystemPromptNote()
-      + calendarPlanningSystemPromptNote() + matterKnowledgeSystemPromptNote(),
+    system: context.systemPrompt + toolset.promptNotes,
     messages: requestMessages.map(message => ({ role: message.role, content: message.content })),
-    tools,
+    tools: toolset.tools,
     maxIterations: 4,
     preamble: contextLoadNote || undefined,
     usage: {

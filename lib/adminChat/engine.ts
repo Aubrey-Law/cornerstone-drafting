@@ -62,7 +62,7 @@ You specialize in:
 - MA estate tax (threshold: $2M, top rate 16%, QTIP elections, credit shelter trusts)
 - Practice management for a solo estate planning practice
 
-You can also answer general questions about the attorney's pipeline, matter stages, and client management. If asked about a specific matter and you don't have its context, say so and suggest the attorney navigate to that matter page to ask there.
+You can also answer questions about the attorney's pipeline, matter stages, and client management. When the attorney asks about a specific client or matter, look it up: call find_matter with the name, then read_matter_record for the sections the question needs. Do not tell the attorney to open the matter page instead — the record is available to you here.
 
 Be concise. Use plain language unless the attorney asks for technical detail.
 
@@ -343,6 +343,12 @@ export interface AdminChatStreamOptions {
   maxIterations?: number
   /** Emitted before the model stream starts (e.g. a context-load warning). */
   preamble?: string
+  /**
+   * Non-text events the route already knows before the model speaks (e.g. the
+   * workflow it injected). Emitted after the preamble and handed to onEvent so
+   * they persist and replay like any tool event.
+   */
+  initialEvents?: Record<string, unknown>[]
   usage: {
     route: string
     contextType: ChatContextType
@@ -351,6 +357,15 @@ export interface AdminChatStreamOptions {
   }
   /** Observe every SSE data event (used to persist assistant messages/events). */
   onEvent?: (data: Record<string, unknown>) => void
+  /**
+   * Called after each tool round with the assistant's blocks and the results
+   * handed back, so a route can persist what the model read and replay it on
+   * later turns. Not sent to the client.
+   */
+  onToolRound?: (round: {
+    assistantContent: Anthropic.ContentBlock[]
+    toolResults: Anthropic.ToolResultBlockParam[]
+  }) => void
   /** Called once the stream finishes (success or failure) with the accumulated text. */
   /** Backoff between retries of a failure that landed before any text. Tests set it to 1. */
   retryDelayMs?: number
@@ -379,7 +394,7 @@ function isRetryableStreamError(error: unknown): boolean {
 }
 
 export function createAdminChatStream(options: AdminChatStreamOptions): Response {
-  const { system, messages, tools = [], maxIterations = 4, preamble, usage, onEvent, onComplete, retryDelayMs = 500 } = options
+  const { system, messages, tools = [], maxIterations = 4, preamble, initialEvents = [], usage, onEvent, onToolRound, onComplete, retryDelayMs = 500 } = options
   const encoder = new TextEncoder()
   const executorsByName = new Map(tools.map(executor => [executor.tool.name, executor]))
   const anthropicTools = tools.map(executor => executor.tool)
@@ -440,6 +455,7 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
       const anthropic = await getAnthropicClient()
       try {
         if (preamble) emit({ text: preamble })
+        for (const event of initialEvents) emit(event)
 
         const conversation: Anthropic.MessageParam[] = [...messages]
 
@@ -523,6 +539,7 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
           }
 
           conversation.push({ role: 'user', content: toolResults })
+          onToolRound?.({ assistantContent: finalMessage.content, toolResults })
 
           if (iteration === maxIterations - 1) {
             // Falling out of the loop here used to emit [DONE] over a partial

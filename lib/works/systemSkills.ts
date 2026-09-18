@@ -75,29 +75,35 @@ const skillBodyCache = new Map<string, { body: string; loadedAt: number }>()
 const SKILL_BODY_TTL_MS = 5 * 60 * 1000
 
 /**
- * Load a system skill's Markdown body by slug. The synced `work_skills` row is
- * the runtime source of truth (admins may re-sync edited trees); the bundled
- * SKILL.md file is the fallback so fresh environments work before any sync.
- * Template placeholders in `vars` are substituted as `{{KEY}}`.
+ * Load a system skill's Markdown body by slug.
+ *
+ * The bundled SKILL.md is the source of truth: it ships with the code, so it
+ * is always the version the rest of the deployment expects. The synced
+ * `work_skills` row is a copy that lags until someone re-syncs — in production
+ * it sat a version behind for a month, and every chat ran the superseded
+ * instructions. It is now only the fallback for a slug the bundle no longer
+ * carries. Template placeholders in `vars` are substituted as `{{KEY}}`.
  */
 export async function loadSystemSkillBody(slug: string, vars?: Record<string, string>): Promise<string> {
   const cached = skillBodyCache.get(slug)
   let body = cached && Date.now() - cached.loadedAt < SKILL_BODY_TTL_MS ? cached.body : null
 
   if (body === null) {
-    try {
-      const { data } = await worksDb()
-        .from('work_skills')
-        .select('skill_md')
-        .eq('slug', slug)
-        .eq('is_system', true)
-        .eq('is_active', true)
-        .maybeSingle()
-      if (data?.skill_md) body = parseSkillMarkdown(data.skill_md).body
-    } catch {
-      // DB unavailable (tests, missing env, pre-migration) — fall through to the bundled file.
+    body = findBundledSkillBody(slug)
+    if (body === null) {
+      try {
+        const { data } = await worksDb()
+          .from('work_skills')
+          .select('skill_md')
+          .eq('slug', slug)
+          .eq('is_system', true)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (data?.skill_md) body = parseSkillMarkdown(data.skill_md).body
+      } catch {
+        // DB unavailable (tests, missing env, pre-migration) — nothing more to try.
+      }
     }
-    if (body === null) body = findBundledSkillBody(slug)
     if (body === null) throw new Error(`System skill not found: ${slug}`)
     skillBodyCache.set(slug, { body, loadedAt: Date.now() })
   }

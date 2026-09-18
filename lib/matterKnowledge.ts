@@ -152,6 +152,34 @@ export async function searchMatterRecords(
 }
 
 /**
+ * A short label for one record — the matter's name (or the client's), its
+ * number, and whether it is a lead. What a chat header shows for the record it
+ * is pointed at.
+ */
+export async function describeRecord(
+  id: string,
+): Promise<{ id: string; type: 'matter' | 'lead'; label: string; url: string } | null> {
+  const matterId = await resolveRecordMatterId(id)
+  if (!matterId) return null
+  const admin = getAdminClient() as Client
+  const [matterRes, pipelineRes] = await Promise.all([
+    admin.from('matters').select('id, name, matter_number, relationship_status').eq('id', matterId).maybeSingle(),
+    admin.from('v_matter_pipeline').select('matter_name, client_name').eq('matter_id', matterId).maybeSingle(),
+  ])
+  const matter = (matterRes.data ?? null) as Record<string, unknown> | null
+  if (!matter) return null
+  const pipeline = (pipelineRes.data ?? {}) as Record<string, unknown>
+  const name = (matter.name as string | null) ?? (pipeline.matter_name as string | null) ?? (pipeline.client_name as string | null)
+  const number = matter.matter_number ? `#${String(matter.matter_number)}` : ''
+  return {
+    id,
+    type: matter.relationship_status === 'hired' ? 'matter' : 'lead',
+    label: [name, number].filter(Boolean).join(' · ') || matterId,
+    url: `/admin/matters/${matterId}`,
+  }
+}
+
+/**
  * The matter id behind whatever id the caller has.
  *
  * A lead is matter-owned but its own id is a `client_intake` row — that is what

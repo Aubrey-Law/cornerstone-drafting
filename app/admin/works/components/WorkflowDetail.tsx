@@ -218,7 +218,7 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {skill.skill_type === 'assistant' && (
+        {skill.skill_type === 'assistant' && skill.execution_mode === 'chat' && (
           <Button
             type="button"
             size="sm"

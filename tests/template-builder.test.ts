@@ -171,13 +171,15 @@ describe('template-builder skill and wiring', () => {
     expect(skill.parsed.metadata.execution_mode).toBe('chat')
   })
 
-  it('registers the tools and system note in the assistant messages route', () => {
+  it('registers the tools and system note for the assistant surface, where uploads arrive', () => {
+    const toolsetSource = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/toolset.ts'), 'utf8')
+    expect(toolsetSource).toContain("surface === 'assistant' ? templateBuilderToolExecutors(user.id)")
+    expect(toolsetSource).toContain("surface === 'assistant' ? templateBuilderSystemPromptNote()")
     const routeSource = fs.readFileSync(
       path.join(process.cwd(), 'app/api/admin/assistant/chats/[chatId]/messages/route.ts'),
       'utf8',
     )
-    expect(routeSource).toContain('templateBuilderToolExecutors(auth.userId)')
-    expect(routeSource).toContain('templateBuilderSystemPromptNote()')
+    expect(routeSource).toContain("surface: 'assistant'")
   })
 
   it('keeps register/stage behind explicit attorney confirmation in tool + skill instructions', () => {
