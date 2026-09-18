@@ -36,6 +36,7 @@ interface LeadsBoardProps {
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
+  onDelete: (lead: LeadListRow) => void
   onMarkLost: (lead: LeadListRow) => void
   onMarkDeclined: (lead: LeadListRow) => void
   onReopen: (lead: LeadListRow) => void
@@ -85,6 +86,7 @@ export function LeadsBoard({
   onSendEngagement,
   onHire,
   onArchive,
+  onDelete,
   onMarkLost,
   onMarkDeclined,
   onReopen,
@@ -172,6 +174,7 @@ export function LeadsBoard({
                     onSendEngagement={onSendEngagement}
                     onHire={onHire}
                     onArchive={onArchive}
+                    onDelete={onDelete}
                     onDragStart={() => setDraggingId(lead.id)}
                     onDragEnd={() => setDraggingId(null)}
                   />
@@ -196,6 +199,7 @@ function BoardCard({
   onSendEngagement,
   onHire,
   onArchive,
+  onDelete,
   onDragStart,
   onDragEnd,
 }: {
@@ -209,6 +213,7 @@ function BoardCard({
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
+  onDelete: (lead: LeadListRow) => void
   onDragStart: () => void
   onDragEnd: () => void
 }) {
@@ -270,6 +275,7 @@ function BoardCard({
             onSendEngagement={onSendEngagement}
             onHire={onHire}
             onArchive={onArchive}
+            onDelete={onDelete}
           />
         </div>
 

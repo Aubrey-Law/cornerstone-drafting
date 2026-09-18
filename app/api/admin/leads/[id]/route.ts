@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { deleteLead } from '@/lib/leads/deleteLead'
+import { archiveLead, deleteLeadPermanently } from '@/lib/leads/removeLead'
+import { MatterDeletionError } from '@/lib/matters/deleteMatter'
+import { requirePermanentDeletionRole } from '@/lib/apiAuth'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
 import { validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details'
 import type { ValidatedLeadDetails } from '@/lib/leads/details'
@@ -104,7 +106,8 @@ function spouseResponse(details: ValidatedLeadDetails['spouse']) {
 
 /**
  * PATCH /api/admin/leads/[id] — edit a lead (standalone client_intake row).
- * DELETE — archive a prospective matter while retaining its history.
+ * DELETE — archive a prospective matter while retaining its history, or, with
+ * `{ permanent: true }`, destroy the lead outright.
  */
 export async function PATCH(
   req: Request,
@@ -301,13 +304,45 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { err } = await requireAdmin(req)
+  const { err, userId, user } = await requireAdmin(req)
   if (err) return err
 
   const { id: intakeId } = await params
+  const body = (await req.json().catch(() => null)) as
+    | { permanent?: boolean; confirm?: boolean; reason?: string | null }
+    | null
   const admin = getAdminClient()
+
+  if (body?.permanent === true) {
+    const forbidden = await requirePermanentDeletionRole(userId)
+    if (forbidden) return forbidden
+    try {
+      const result = await deleteLeadPermanently(admin, intakeId, {
+        confirmProtected: body.confirm === true,
+        actorId: userId,
+        actorEmail: user?.email ?? null,
+        reason: typeof body.reason === 'string' ? body.reason : null,
+      })
+      return NextResponse.json({ ok: true, permanent: true, ...result })
+    } catch (e) {
+      if (e instanceof MatterDeletionError) {
+        return NextResponse.json(
+          {
+            error: e.message,
+            code: e.code,
+            protections: e.protections,
+            requiresConfirmation: e.code === 'confirmation_required',
+          },
+          { status: e.code === 'not_found' ? 404 : 409 },
+        )
+      }
+      const message = e instanceof Error ? e.message : 'Could not delete lead'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+
   try {
-    await deleteLead(admin, intakeId)
+    await archiveLead(admin, intakeId)
     return NextResponse.json({ ok: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Could not delete lead'

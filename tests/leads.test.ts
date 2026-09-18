@@ -99,23 +99,32 @@ describe('lead edit and delete source shape', () => {
     expect(source).toContain('export async function PATCH')
     expect(source).toContain('export async function DELETE')
     expect(source).toContain('409')
-    expect(source).toContain('deleteLead')
+    expect(source).toContain('archiveLead')
   })
 
-  it('bulk-delete route loops ids through deleteLead', () => {
+  it('delete route keeps archive as the default and destroys only on request', () => {
+    const source = read('app/api/admin/leads/[id]/route.ts')
+    expect(source).toContain('deleteLeadPermanently')
+    expect(source).toContain('permanent === true')
+    // Destroying a record is held to the administrator role; archiving is not.
+    expect(source).toContain('requirePermanentDeletionRole')
+    expect(source).toContain('requiresConfirmation')
+  })
+
+  it('bulk-delete route loops ids through archive or permanent delete', () => {
     const source = read('app/api/admin/leads/bulk-delete/route.ts')
     expect(source).toContain('requireAdmin')
-    expect(source).toContain('deleteLead')
+    expect(source).toContain('archiveLead')
+    expect(source).toContain('deleteLeadPermanently')
     expect(source).toContain('results')
   })
 
-  it('deleteLead rejects hired matters, cancels pending envelopes, and archives the opportunity', () => {
-    const source = read('lib/leads/deleteLead.ts')
+  it('archiveLead rejects hired matters, cancels pending envelopes, and archives the opportunity', () => {
+    const source = read('lib/leads/removeLead.ts')
     expect(source).toContain('Hired matters cannot be removed from Leads')
     expect(source).toContain('cancelEnvelope')
     expect(source).toContain("relationship_status: 'lost'")
     expect(source).toContain("status: 'archived'")
-    expect(source).not.toContain("from('client_intake').delete()")
   })
 
   it('leads client has selection, bulk delete, and a create-only lead dialog', () => {

@@ -93,6 +93,7 @@ interface LeadsTableProps {
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
+  onDelete: (lead: LeadListRow) => void
 }
 
 export function LeadsTable({
@@ -110,6 +111,7 @@ export function LeadsTable({
   onSendEngagement,
   onHire,
   onArchive,
+  onDelete,
 }: LeadsTableProps) {
   if (leads.length === 0) {
     return (
@@ -220,6 +222,7 @@ export function LeadsTable({
                     onSendEngagement={onSendEngagement}
                     onHire={onHire}
                     onArchive={onArchive}
+                    onDelete={onDelete}
                   />
                 </TableCell>
               </TableRow>
