@@ -519,3 +519,50 @@ describe('classifySender — matching through the thread', () => {
     expect(match.classification).toBe('automated')
   })
 })
+
+describe('isAutomatedSender — the first week in production', () => {
+  const check = (over: Partial<typeof BASE>) => isAutomatedSender({ ...BASE, ...over })
+
+  it('recognises a calendar response by its subject', () => {
+    // A lead accepting the consultation invite is not a message to answer;
+    // one was drafted a reply on 13 September.
+    expect(check({ subject: 'Accepted: Peace of Mind Planning Session - Jane Doe and Scott Aubrey' }))
+      .toMatchObject({ hard: true })
+    expect(check({ subject: 'Declined: Peace of Mind Planning Session' })).toMatchObject({ hard: true })
+    expect(check({ subject: 'Tentative: Peace of Mind Planning Session' })).toMatchObject({ hard: true })
+    expect(check({ subject: 'Invitation: Signing @ Tue 22 Sep 2026 10am' })).toMatchObject({ hard: true })
+    expect(check({ subject: 'Updated invitation: Signing @ Tue 22 Sep 2026 11am' }))
+      .toMatchObject({ hard: true })
+  })
+
+  it('does not read an ordinary subject that starts with the same word as a calendar response', () => {
+    expect(check({ subject: 'Accepted the offer on the house - what next?' }))
+      .toMatchObject({ automated: false })
+  })
+
+  it('applies a domain ignore rule to that domain’s subdomains', () => {
+    // fedex.com was on the list from day one and message.fedex.com still got
+    // through; squareup.com had to be entered twice.
+    const ignore: IgnoreRules = { domains: new Set(['fedex.com']), addresses: new Set() }
+    expect(check({ email: 'fedexrewards@message.fedex.com', name: 'FedEx Rewards', ignore }))
+      .toMatchObject({ hard: true, reason: 'fedex.com on the ignore list' })
+  })
+
+  it('does not stretch a domain ignore rule to a lookalike domain', () => {
+    const ignore: IgnoreRules = { domains: new Set(['fedex.com']), addresses: new Set() }
+    expect(check({ email: 'jane@notfedex.com', ignore })).toMatchObject({ automated: false })
+  })
+
+  it('recognises a noreply address whatever the sender bolts onto it', () => {
+    expect(check({ email: 'mssecurity-noreply@microsoft.com', name: 'Microsoft Security' }))
+      .toMatchObject({ hard: true })
+    expect(check({ email: 'noreply-billing@vendor.com', name: 'Vendor Billing' }))
+      .toMatchObject({ hard: true })
+    expect(check({ email: 'no_reply.alerts@vendor.com', name: 'Vendor' })).toMatchObject({ hard: true })
+  })
+
+  it('does not read a person’s name as a noreply address', () => {
+    expect(check({ email: 'anno.replyman@example.com', name: 'Anno Replyman' }))
+      .toMatchObject({ automated: false })
+  })
+})
