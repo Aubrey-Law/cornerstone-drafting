@@ -15,7 +15,10 @@ import {
   type IgnoreRules,
 } from './classifySender'
 import { generateTriageDraft } from './draft'
+import { describeError } from './describeError'
 import { evaluateNeedsReply } from './needsReply'
+
+export { describeError }
 
 /**
  * One pass over the mailbox: find what is waiting, file it against the firm's
@@ -40,6 +43,7 @@ const METADATA_CONCURRENCY = 5
  * killed mid-scan would otherwise block every later run forever.
  */
 const STALE_SCAN_MS = 3 * 60_000
+
 
 export interface TriageScanOptions {
   trigger: 'cron' | 'manual'
@@ -435,7 +439,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       deadline: startedAt + budgetMs,
     })
   } catch (err) {
-    failure = err instanceof Error ? err.message : String(err)
+    failure = describeError(err)
   }
 
   const { count: remaining } = await admin
@@ -552,7 +556,7 @@ async function draftPending(args: {
         .from('email_triage_threads')
         .update({
           status: 'failed',
-          draft_error: err instanceof Error ? err.message : String(err),
+          draft_error: describeError(err),
           updated_at: new Date().toISOString(),
         })
         .eq('id', row.id as string)

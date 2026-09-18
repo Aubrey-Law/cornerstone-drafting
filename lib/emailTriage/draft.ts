@@ -2,6 +2,7 @@ import { logAiUsage } from '@/lib/aiUsage'
 import { PROMPT_INJECTION_GUARDRAIL, getAnthropicClient } from '@/lib/anthropic'
 import { loadLeadContext, loadMatterContext } from '@/lib/adminChat/engine'
 import { resolveFirmModel } from '@/lib/firmModels'
+import { describeError } from './describeError'
 import type { SenderClassification } from './classifySender'
 import {
   TRIAGE_INSTRUCTIONS,
@@ -127,7 +128,7 @@ export async function generateTriageDraft(input: TriageDraftInput): Promise<Tria
       model: usageModel,
     }
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
+    const detail = describeError(error)
     void logAiUsage({
       route: input.route,
       contextType: input.classification === 'client' ? 'matter' : 'lead',
