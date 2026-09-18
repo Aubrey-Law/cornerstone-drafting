@@ -175,3 +175,21 @@ describe('a missing bundle never empties the library', () => {
     expect(state.rows.filter(row => row.is_active).length).toBe(before)
   })
 })
+
+describe('a function bundle without the tree does not raise at boot', () => {
+  it('skips quietly, without treating the missing bundle as an error', async () => {
+    const { ensureSystemWorkflowsSynced, resetBootSyncForTests } = await import('@/lib/works/systemSync')
+    resetBootSyncForTests()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const infos = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+    const result = await ensureSystemWorkflowsSynced({ root: '/definitely/not/here' })
+
+    expect(result).toBeNull()
+    expect(errors).not.toHaveBeenCalled()
+    expect(infos).toHaveBeenCalled()
+    expect(state.rows.filter(row => row.is_active).length).toBe(state.rows.length)
+    errors.mockRestore()
+    infos.mockRestore()
+  })
+})

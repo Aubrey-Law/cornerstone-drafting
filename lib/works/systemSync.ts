@@ -1,7 +1,9 @@
+import fs from 'node:fs'
 import { worksDb } from '@/lib/works/data'
 import {
   listBundledSystemSkills,
   clearSystemSkillBodyCache,
+  SYSTEM_WORKFLOWS_ROOT,
   type BundledSystemSkill,
 } from '@/lib/works/systemSkills'
 
@@ -135,10 +137,20 @@ let bootSync: Promise<SystemSyncResult | null> | null = null
  * behind every deploy until someone remembered to press it. Failure is logged
  * and swallowed: a sync problem must never keep the app from starting, and the
  * assistant reads bundled bodies directly anyway.
+ *
+ * On Vercel only the functions whose trace includes tools/workflows carry the
+ * tree (the chat routes and the sync route). Any other function skips quietly
+ * here; the sync happens on the first authenticated chat after a deploy.
  */
-export function ensureSystemWorkflowsSynced(): Promise<SystemSyncResult | null> {
+export function ensureSystemWorkflowsSynced(options: { root?: string } = {}): Promise<SystemSyncResult | null> {
   if (!bootSync) {
-    bootSync = syncSystemWorkflows()
+    const root = options.root ?? SYSTEM_WORKFLOWS_ROOT
+    if (!fs.existsSync(root)) {
+      console.info('[works] system workflow tree not in this bundle; boot sync skipped')
+      bootSync = Promise.resolve(null)
+      return bootSync
+    }
+    bootSync = syncSystemWorkflows(options.root ? { root } : {})
       .then(result => {
         const changed = result.created.length + result.updated.length + result.deactivated.length
         if (changed > 0) console.info('[works] system workflows synced at boot', result)
@@ -150,4 +162,9 @@ export function ensureSystemWorkflowsSynced(): Promise<SystemSyncResult | null> 
       })
   }
   return bootSync
+}
+
+/** Test hook — forgets the once-per-process result. */
+export function resetBootSyncForTests() {
+  bootSync = null
 }
