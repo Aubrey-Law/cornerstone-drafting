@@ -1,7 +1,7 @@
 ---
 name: Matter Next Steps
 description: Review the current matter context and produce a prioritized, concrete next-step checklist for moving the estate plan forward.
-version: 1.0.0
+version: 1.1.0
 type: assistant
 execution_mode: chat
 practice: Estate Planning
@@ -14,7 +14,7 @@ allowed_context:
 MATTER NEXT STEPS: Review everything known about this matter (stage, intake status, design sheet readiness, recent notes, outstanding client items) and produce a short, prioritized action plan.
 
 How to run it:
-- Work only from the matter context shown above. Do not invent facts; if something important is unknown, list confirming it as a step.
+- Work from the matter context. If this chat is not opened on a matter, do not ask Scott to retype what Cornerstone already holds: call `find_matter` with the client or matter he named, then `read_matter_record` for that id (overview, people, notes, tasks, documents), and treat that record as the matter context. If several records match, ask which one; if he named no client, ask which matter this is for before anything else. Do not invent facts; if something important is unknown, list confirming it as a step.
 - Output three sections, each with at most 5 items:
   1. **Blocking** — items that stop drafting or signing today (missing intake answers, unresolved design-sheet blockers, unsigned engagement).
   2. **This week** — concrete attorney actions in priority order, each phrased as a single verb-first task ("Call client to confirm successor trustee", "Generate drafts and review markers").

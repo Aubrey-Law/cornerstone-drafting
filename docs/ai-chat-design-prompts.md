@@ -18,6 +18,10 @@ Both run inside the admin AI Chat assistant. They are **not** separate endpoints
   `tools/workflows/system/assistant/<slug>/SKILL.md` and are synced into
   `work_skills`. **Edit the SKILL.md, not route code.**
 - Pre-fill source: `loadMatterContext()` / `draftPayloadFactSheet()` inject a normalized design-sheet fact block so Claude pre-fills known values and only asks for `[UNKNOWN]` items.
+- Source of truth: `loadSystemSkillBody` reads the bundled SKILL.md first and falls back to the `work_skills` row only when the slug is gone from the bundle. The rows are re-synced at production boot (`ensureSystemWorkflowsSynced`) so the Library list matches the deploy.
+- Attached workflows: the Assistant composer's "Workflows" button attaches a chat-mode workflow. The messages route loads its body (`loadAttachedWorkflow`) and appends it to the system prompt (`attachedWorkflowPromptNote`), emitting `workflow_applied` before the model speaks. A matter-scoped workflow in a general chat is told to call `find_matter` then `read_matter_record` first. Run-mode workflows (PMPS, MetLife) are hidden from the composer picker; they run from the Library's Dedicated run.
+- Chat context: the Assistant page header carries a matter/lead picker (`AssistantContextPicker`, `PATCH /api/admin/assistant/chats/[chatId]` with `context_type`/`context_id`); `/admin/assistant?matter=<id>` opens a new chat on that record.
+- History: each reply persists its tool rounds in `events` (`tool_round`) and `replayMessagesForModel` rebuilds them as `tool_use`/`tool_result` blocks on later turns, so what the assistant read is not forgotten.
 
 > **Distinct tool:** the **Design Sheet Import** tool (`lib/designSheetImport/server.ts`, `claude-sonnet-4-20250514`) parses pasted attorney notes into a JSON design sheet. It's a different feature from these two chat flows — see the end of this doc.
 

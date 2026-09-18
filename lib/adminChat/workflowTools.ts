@@ -37,7 +37,7 @@ const READ_WORKFLOW_TOOL: Anthropic.Tool = {
  * workflow body via tool and follows it.
  */
 export function workflowSystemPromptNote() {
-  return `\n\nWORKFLOWS: The firm keeps attorney-approved playbooks ("workflows") in a library. If the user message begins with \`[Workflow: <title> (id: <id>)]\`, immediately call \`${READ_WORKFLOW_TOOL_NAME}\` with that id and follow the workflow's instructions before doing anything else. Use \`${LIST_WORKFLOWS_TOOL_NAME}\` when the user asks what workflows exist or which one fits a task. Workflow output is always a draft for attorney review.`
+  return `\n\nWORKFLOWS: The firm keeps attorney-approved playbooks ("workflows") in a library. If the user message begins with \`[Workflow: <title> (id: <id>)]\` and that workflow's instructions are not already in this prompt under ATTACHED WORKFLOW, call \`${READ_WORKFLOW_TOOL_NAME}\` with that id and follow the workflow's instructions before doing anything else. Use \`${LIST_WORKFLOWS_TOOL_NAME}\` when the user asks what workflows exist or which one fits a task. Workflow output is always a draft for attorney review.`
 }
 
 export interface WorkflowToolUser {

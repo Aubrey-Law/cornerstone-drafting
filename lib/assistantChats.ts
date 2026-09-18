@@ -1,3 +1,4 @@
+import type Anthropic from '@anthropic-ai/sdk'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export type AssistantChatContextType = 'general' | 'matter' | 'lead'
@@ -40,6 +41,112 @@ export const ASSISTANT_MODEL_HISTORY_TURNS = 40
 
 /** Wider window for rendering a chat page — still bounded. */
 export const ASSISTANT_DISPLAY_HISTORY_TURNS = 200
+
+/**
+ * Longest tool result replayed to the model from history. A record read can
+ * run to tens of kilobytes; the turn that made it has already used it, and
+ * later turns need the gist, not the whole dossier on every send.
+ */
+export const TOOL_RESULT_REPLAY_CHARS = 4_000
+
+/** The placeholder older rows carry for a reply that was all tool activity. */
+const LEGACY_TOOL_ACTIVITY_PLACEHOLDER = '[Tool activity — see events]'
+
+interface StoredToolRound {
+  assistant_content: unknown[]
+  tool_results: unknown[]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function storedToolRounds(events: Record<string, unknown>[] | null | undefined): StoredToolRound[] {
+  const rounds: StoredToolRound[] = []
+  for (const event of events ?? []) {
+    const round = isRecord(event) ? event.tool_round : null
+    if (isRecord(round) && Array.isArray(round.assistant_content) && Array.isArray(round.tool_results)) {
+      rounds.push({ assistant_content: round.assistant_content, tool_results: round.tool_results })
+    }
+  }
+  return rounds
+}
+
+/** Only the block shapes the Messages API accepts back; anything else is dropped. */
+function replayAssistantBlocks(blocks: unknown[]): Anthropic.ContentBlockParam[] {
+  const out: Anthropic.ContentBlockParam[] = []
+  for (const block of blocks) {
+    if (!isRecord(block)) continue
+    if (block.type === 'text' && typeof block.text === 'string' && block.text) {
+      out.push({ type: 'text', text: block.text })
+    } else if (block.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
+      out.push({ type: 'tool_use', id: block.id, name: block.name, input: isRecord(block.input) ? block.input : {} })
+    }
+  }
+  return out
+}
+
+function truncateToolResult(content: unknown): string {
+  const text = typeof content === 'string' ? content : JSON.stringify(content ?? '')
+  if (text.length <= TOOL_RESULT_REPLAY_CHARS) return text
+  return `${text.slice(0, TOOL_RESULT_REPLAY_CHARS)}\n…[truncated ${text.length - TOOL_RESULT_REPLAY_CHARS} characters for replay]`
+}
+
+function replayToolResults(results: unknown[]): Anthropic.ToolResultBlockParam[] {
+  const out: Anthropic.ToolResultBlockParam[] = []
+  for (const result of results) {
+    if (!isRecord(result) || typeof result.tool_use_id !== 'string') continue
+    out.push({
+      type: 'tool_result',
+      tool_use_id: result.tool_use_id,
+      content: truncateToolResult(result.content),
+      ...(result.is_error ? { is_error: true } : {}),
+    })
+  }
+  return out
+}
+
+/**
+ * Turn persisted rows into the messages replayed to the model.
+ *
+ * History used to be text only, so by the next turn the model had forgotten
+ * every record it read. Stored tool rounds are rebuilt here as the assistant's
+ * tool_use blocks followed by the user-role tool_result blocks, exactly as the
+ * API saw them the first time. The window is also made to start on a user turn
+ * and to alternate, which the API requires.
+ */
+export function replayMessagesForModel(
+  rows: Array<Pick<AssistantChatMessageRow, 'role' | 'content' | 'events'>>,
+): Anthropic.MessageParam[] {
+  const messages: Anthropic.MessageParam[] = []
+  const firstUser = rows.findIndex(row => row.role === 'user')
+  if (firstUser === -1) return messages
+
+  for (const row of rows.slice(firstUser)) {
+    if (row.role === 'user') {
+      if (row.content.trim()) messages.push({ role: 'user', content: row.content })
+      continue
+    }
+
+    for (const round of storedToolRounds(row.events)) {
+      const assistantBlocks = replayAssistantBlocks(round.assistant_content)
+      const toolResults = replayToolResults(round.tool_results)
+      if (assistantBlocks.length === 0 || toolResults.length === 0) continue
+      messages.push({ role: 'assistant', content: assistantBlocks })
+      messages.push({ role: 'user', content: toolResults })
+    }
+
+    const text = row.content.trim()
+    if (text && text !== LEGACY_TOOL_ACTIVITY_PLACEHOLDER) {
+      messages.push({ role: 'assistant', content: text })
+    } else if (messages[messages.length - 1]?.role === 'user') {
+      // A tool-only reply: close the round so the thread still alternates.
+      messages.push({ role: 'assistant', content: '(Replied through tool activity only.)' })
+    }
+  }
+
+  return messages
+}
 
 export function chatTitleFromMessage(content: string) {
   const firstLine = content.replace(/^\[Workflow:[^\]]*\]\s*/i, '').split('\n').find(line => line.trim()) ?? ''
@@ -111,6 +218,28 @@ export async function renameAssistantChat(chatId: string, userId: string, title:
   const { error } = await assistantDb()
     .from('assistant_chats')
     .update({ title: title.slice(0, CHAT_TITLE_MAX), updated_at: new Date().toISOString() })
+    .eq('id', chatId)
+    .eq('user_id', userId)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Point a chat at a matter or lead, or back to general. The next turn builds
+ * its context from this, so a chat started as general can pick up a matter
+ * without the attorney starting over.
+ */
+export async function updateAssistantChatContext(
+  chatId: string,
+  userId: string,
+  context: { contextType: AssistantChatContextType; contextId: string | null },
+) {
+  const { error } = await assistantDb()
+    .from('assistant_chats')
+    .update({
+      context_type: context.contextType,
+      context_id: context.contextType === 'general' ? null : context.contextId,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', chatId)
     .eq('user_id', userId)
   if (error) throw new Error(error.message)

@@ -182,16 +182,16 @@ describe('assistant matter-knowledge tools', () => {
 })
 
 describe('matter-knowledge tools are wired into both chat surfaces', () => {
-  it('registers the tools and the prompt note on each route', async () => {
+  it('registers the tools and the prompt note in the shared toolset both routes build from', async () => {
     const { readFileSync } = await import('node:fs')
-    const routes = [
+    const toolset = readFileSync('lib/adminChat/toolset.ts', 'utf8')
+    expect(toolset).toContain('matterKnowledgeToolExecutors')
+    expect(toolset).toContain('matterKnowledgeSystemPromptNote()')
+    for (const route of [
       'app/api/admin/chat/route.ts',
       'app/api/admin/assistant/chats/[chatId]/messages/route.ts',
-    ]
-    for (const route of routes) {
-      const source = readFileSync(route, 'utf8')
-      expect(source).toContain('matterKnowledgeToolExecutors')
-      expect(source).toContain('matterKnowledgeSystemPromptNote()')
+    ]) {
+      expect(readFileSync(route, 'utf8'), route).toContain('adminChatToolset(')
     }
   })
 })

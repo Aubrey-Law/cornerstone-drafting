@@ -40,6 +40,8 @@ export interface ToolEvent {
     payload: Record<string, unknown>
   }>
   error?: string
+  /** The raw result the tool emitted, for cards that read fields no other chip knows. */
+  detail?: Record<string, unknown>
 }
 
 /** Renders any proposed write — calendar hold, reschedule, task, lead. */
@@ -276,6 +278,75 @@ function ExportToolEventCard({ event }: { event: ToolEvent }) {
   )
 }
 
+/** Verb and noun for each read-only tool, in the running and finished tenses. */
+const TOOL_ACTIVITY_LABELS: Record<string, { running: string; done: string }> = {
+  find_matter: { running: 'Searching records', done: 'Searched records' },
+  read_matter_record: { running: 'Reading matter record', done: 'Read matter record' },
+  read_document_text: { running: 'Reading document', done: 'Read document' },
+  read_design_sheet_status: { running: 'Checking design sheet', done: 'Checked design sheet' },
+  list_workflows: { running: 'Listing workflows', done: 'Listed workflows' },
+  read_workflow: { running: 'Reading workflow', done: 'Read workflow' },
+  list_calendar_range: { running: 'Reading calendar', done: 'Read calendar' },
+  find_open_slots: { running: 'Finding open slots', done: 'Found open slots' },
+  list_matter_dates: { running: 'Reading matter dates', done: 'Read matter dates' },
+  list_overdue_followups: { running: 'Reading overdue follow-ups', done: 'Read overdue follow-ups' },
+  week_review: { running: 'Reviewing the week', done: 'Reviewed the week' },
+  draft_reschedule_email: { running: 'Drafting reschedule email', done: 'Drafted reschedule email' },
+  analyze_template_upload: { running: 'Analyzing upload', done: 'Analyzed upload' },
+  list_template_fields: { running: 'Searching template fields', done: 'Searched template fields' },
+  apply_template_edits: { running: 'Applying template edits', done: 'Applied template edits' },
+  preview_template_render: { running: 'Rendering preview', done: 'Rendered preview' },
+  list_master_templates: { running: 'Listing document masters', done: 'Listed document masters' },
+  stage_master_template_version: { running: 'Staging master version', done: 'Staged master version' },
+}
+
+function humanizeToolName(tool: string) {
+  return tool.replace(/_/g, ' ').replace(/^\w/, letter => letter.toUpperCase())
+}
+
+/** What a read touched, from whichever result fields the tool emitted. */
+function toolActivityDetail(event: ToolEvent): string | null {
+  const detail = event.detail ?? {}
+  const parts: string[] = []
+  if (typeof detail.matter_label === 'string' && detail.matter_label) parts.push(detail.matter_label)
+  if (Array.isArray(detail.sections) && detail.sections.length) parts.push(detail.sections.join(', '))
+  if (typeof detail.match_count === 'number') {
+    const query = typeof detail.query === 'string' ? ` for “${detail.query}”` : ''
+    parts.push(`${detail.match_count} ${detail.match_count === 1 ? 'match' : 'matches'}${query}`)
+  }
+  if (typeof detail.name === 'string' && detail.name && event.tool === 'read_document_text') parts.push(detail.name)
+  if (detail.truncated === true) parts.push('truncated')
+  if (typeof detail.blocking_count === 'number') parts.push(`${detail.blocking_count} blocking`)
+  if (typeof detail.count === 'number' && !parts.length) parts.push(`${detail.count} found`)
+  return parts.length ? parts.join(' · ') : null
+}
+
+/**
+ * The chip for any tool without a card of its own — the read-only tools.
+ * Without it the attorney saw "Thinking…" and then an answer, with no sign the
+ * record had been pulled and no way to tell when it had not been.
+ */
+function ToolActivityCard({ event }: { event: ToolEvent }) {
+  const labels = TOOL_ACTIVITY_LABELS[event.tool] ?? { running: humanizeToolName(event.tool), done: humanizeToolName(event.tool) }
+  if (event.status === 'error') {
+    return (
+      <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+        {labels.done} failed: {event.error ?? 'Unknown error'}
+      </div>
+    )
+  }
+  const detail = event.status === 'done' ? toolActivityDetail(event) : null
+  return (
+    <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
+      <Eye className="h-3.5 w-3.5 shrink-0" />
+      <span>
+        {event.status === 'running' ? `${labels.running}…` : labels.done}
+        {detail ? <span className="text-foreground"> · {detail}</span> : null}
+      </span>
+    </div>
+  )
+}
+
 function ToolEventCard({
   event,
   onReviewDesignSheetImport,
@@ -302,7 +373,7 @@ function ToolEventCard({
     return <ProposalCard event={event} />
   }
 
-  if (event.tool !== 'create_metlife_claim_guide') return null
+  if (event.tool !== 'create_metlife_claim_guide') return <ToolActivityCard event={event} />
 
   if (event.status === 'running') {
     return (

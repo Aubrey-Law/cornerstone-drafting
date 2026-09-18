@@ -153,3 +153,25 @@ describe('two admins pressing sync at once', () => {
     for (const row of state.rows) expect(row.skill_md).not.toBe('written by the other admin')
   })
 })
+
+describe('syncing at boot', () => {
+  it('runs the sync once per process however many times it is asked', async () => {
+    const { ensureSystemWorkflowsSynced } = await import('@/lib/works/systemSync')
+    const [first, second] = await Promise.all([ensureSystemWorkflowsSynced(), ensureSystemWorkflowsSynced()])
+
+    expect(first).not.toBeNull()
+    expect(second).toBe(first)
+    expect(state.rows.length).toBe(listBundledSystemSkills().length)
+  })
+})
+
+describe('a missing bundle never empties the library', () => {
+  it('refuses to deactivate anything when the bundled tree cannot be found', async () => {
+    await syncSystemWorkflows()
+    const before = state.rows.filter(row => row.is_active).length
+
+    await expect(syncSystemWorkflows({ root: '/definitely/not/here' })).rejects.toThrow(/bundled/i)
+
+    expect(state.rows.filter(row => row.is_active).length).toBe(before)
+  })
+})

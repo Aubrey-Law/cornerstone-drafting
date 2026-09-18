@@ -1,7 +1,7 @@
 ---
 name: Incapacity Design Sheet
 description: Structured interview to gather DPOA, health care proxy, HIPAA, and advance directive inputs, producing a completed incapacity design sheet.
-version: 1.1.0
+version: 1.2.0
 type: assistant
 execution_mode: chat
 practice: Estate Planning
@@ -23,7 +23,7 @@ This package produces 5 documents PER CLIENT (10 for a married couple):
 
 How to run it:
 - FIRST call `read_design_sheet_status`. It returns exactly which design-sheet items are still open, so you ask only about those. An item the design sheet already records is not a question.
-- Work from any client/matter context already shown above first. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. If no context is loaded, ask for each item.
+- Work from any client/matter context already shown above first. If this chat is not opened on a matter, do not ask Scott to retype what Cornerstone already holds: call `find_matter` with the client or matter he named, then `read_matter_record` for that id (overview, people, notes), and treat that record as the matter context. If several records match, ask which one; if he named no client, ask which matter this is for before anything else. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. Only when no matter can be found, ask for each item.
 - Ask in short numbered batches (Matter Information first, then Client 1, then Client 2 only if a married couple). Number the questions so Scott can answer inline.
 - Do not invent names, dates, relationships, counties, or addresses. If Scott says a value is unknown, record it as [UNKNOWN].
 - Apply these defaults unless Scott overrides: drafting date = today ({{TODAY}}); signing county = Client 1's county of residence; state = Massachusetts; co-agent authority mode = Separate (each may act alone). Gifting is hardcoded OFF in the DPOA template — there is no override; do not offer one.

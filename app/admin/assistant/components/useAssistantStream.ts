@@ -10,6 +10,8 @@ export { toolEventFrom }
 export interface WorkflowRef {
   id: string
   title: string
+  /** Declared for a matter (allowed_context includes it) — a general chat should pick one first. */
+  matterScoped?: boolean
 }
 
 export interface AssistantMessage {

@@ -53,3 +53,19 @@ describe('bundled system workflow tree', () => {
     await expect(loadSystemSkillBody('does-not-exist')).rejects.toThrow('System skill not found')
   })
 })
+
+describe('matter-scoped assistant workflows can find their matter', () => {
+  it('tells the model to read the record when no matter is loaded, instead of assuming one', () => {
+    const matterScoped = listBundledSystemSkills().filter(skill =>
+      skill.type === 'assistant'
+      && skill.parsed.metadata.execution_mode === 'chat'
+      && skill.parsed.metadata.allowed_context.includes('matter'),
+    )
+    expect(matterScoped.length).toBeGreaterThanOrEqual(4)
+    for (const skill of matterScoped) {
+      expect(skill.parsed.body, skill.slug).toContain('find_matter')
+      expect(skill.parsed.body, skill.slug).toContain('read_matter_record')
+      expect(skill.parsed.body, skill.slug).not.toMatch(/work only from the matter context shown above/i)
+    }
+  })
+})

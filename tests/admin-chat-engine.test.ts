@@ -189,3 +189,44 @@ describe('a transient upstream failure is retried while nothing has been shown',
     expect(mocks.stream).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('events the route already knows are emitted ahead of the model', () => {
+  it('sends initial events before the first text delta and hands them to onEvent', async () => {
+    mocks.stream.mockReturnValue(fakeStream(['Hi'], { stop_reason: 'end_turn', content: [] }))
+    const seen: Record<string, unknown>[] = []
+
+    const body = await readAll(createAdminChatStream({
+      system: 's', messages: [{ role: 'user', content: 'hi' }], usage,
+      initialEvents: [{ workflow_applied: { workflow_id: 'wf', title: 'Matter Next Steps' } }],
+      onEvent: event => { seen.push(event) },
+    }))
+
+    expect(body.indexOf('"workflow_applied"')).toBeLessThan(body.indexOf('"text":"Hi"'))
+    expect(seen[0]).toEqual({ workflow_applied: { workflow_id: 'wf', title: 'Matter Next Steps' } })
+  })
+})
+
+describe('what the model read is handed back for persistence', () => {
+  it('reports each tool round: the assistant blocks and the results the tool returned', async () => {
+    const toolUse = { type: 'tool_use', id: 't1', name: 'read_matter_record', input: { sections: ['overview'] } }
+    mocks.stream
+      .mockReturnValueOnce(fakeStream([], { stop_reason: 'tool_use', content: [toolUse] }))
+      .mockReturnValueOnce(fakeStream(['Done'], { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done' }] }))
+    const tool: AdminChatToolExecutor = {
+      tool: { name: 'read_matter_record', input_schema: { type: 'object', properties: {} } },
+      execute: async () => ({ content: '{"ok":true,"matter_label":"Chen"}' }),
+    }
+    const rounds: Array<{ assistantContent: unknown[]; toolResults: unknown[] }> = []
+
+    await readAll(createAdminChatStream({
+      system: 's', messages: [{ role: 'user', content: 'hi' }], usage, tools: [tool],
+      onToolRound: round => { rounds.push(round) },
+    }))
+
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]!.assistantContent).toEqual([toolUse])
+    expect(rounds[0]!.toolResults).toEqual([
+      { type: 'tool_result', tool_use_id: 't1', content: '{"ok":true,"matter_label":"Chen"}' },
+    ])
+  })
+})

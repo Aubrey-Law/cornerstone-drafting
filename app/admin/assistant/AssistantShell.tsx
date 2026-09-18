@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { ChatHistorySidebar, type AssistantChatSummary } from './components/ChatHistorySidebar'
 import { AssistantComposer } from './components/AssistantComposer'
+import { AssistantContextPicker, type AssistantContext } from './components/AssistantContextPicker'
 import { AssistantThread } from './components/AssistantThread'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import {
@@ -32,6 +33,17 @@ interface PendingMessage {
   chatId: string
   content: string
   workflow: WorkflowRef | null
+}
+
+interface ChatContextPayload {
+  type: 'general' | 'matter' | 'lead'
+  id: string | null
+  label: string | null
+}
+
+function contextFromPayload(payload: ChatContextPayload | undefined): AssistantContext {
+  if (!payload || payload.type === 'general' || !payload.id) return { type: 'general' }
+  return { type: payload.type, id: payload.id, label: payload.label ?? (payload.type === 'lead' ? 'Lead' : 'Matter') }
 }
 
 async function authHeaders() {
@@ -60,6 +72,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   const [loadingChat, setLoadingChat] = useState(Boolean(chatId))
   const [input, setInput] = useState('')
   const [workflow, setWorkflow] = useState<WorkflowRef | null>(null)
+  const [context, setContext] = useState<AssistantContext>({ type: 'general' })
   const pendingHandledRef = useRef(false)
 
   const loadChats = useCallback(async () => {
@@ -82,6 +95,26 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     )
   }, [searchParams, chatId])
 
+  // Deep link from a record page: /admin/assistant?matter=<id> or ?lead=<id>
+  // opens the new chat pointed at that record.
+  useEffect(() => {
+    const matterId = searchParams.get('matter')
+    const leadId = searchParams.get('lead')
+    const recordId = matterId ?? leadId
+    if (!recordId || chatId) return
+    const type = matterId ? 'matter' as const : 'lead' as const
+    setContext({ type, id: recordId, label: type === 'lead' ? 'Lead' : 'Matter' })
+    let cancelled = false
+    void (async () => {
+      const response = await fetch(`/api/admin/assistant/records?id=${encodeURIComponent(recordId)}`, { headers: await authHeaders(), cache: 'no-store' })
+      const body = await response.json().catch(() => ({})) as { record?: { type: 'matter' | 'lead'; label: string }; error?: string }
+      if (cancelled) return
+      if (response.ok && body.record) setContext({ type: body.record.type, id: recordId, label: body.record.label })
+      else toast.error(body.error ?? 'That matter could not be found')
+    })()
+    return () => { cancelled = true }
+  }, [searchParams, chatId])
+
   // Deep link from the Library: /admin/assistant?workflow=<id> pre-attaches it.
   useEffect(() => {
     const workflowId = searchParams.get('workflow')
@@ -89,9 +122,15 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     let cancelled = false
     void (async () => {
       const response = await fetch(`/api/admin/works/${workflowId}`, { headers: await authHeaders(), cache: 'no-store' })
-      const body = await response.json().catch(() => ({})) as { skill?: { id: string; name: string }; error?: string }
+      const body = await response.json().catch(() => ({})) as { skill?: { id: string; name: string; allowed_context?: string[] }; error?: string }
       if (cancelled) return
-      if (response.ok && body.skill) setWorkflow({ id: body.skill.id, title: body.skill.name })
+      if (response.ok && body.skill) {
+        setWorkflow({
+          id: body.skill.id,
+          title: body.skill.name,
+          matterScoped: Array.isArray(body.skill.allowed_context) && body.skill.allowed_context.includes('matter'),
+        })
+      }
       else toast.error(body.error ?? 'Workflow not found')
     })()
     return () => { cancelled = true }
@@ -106,8 +145,12 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     })
     const body = await response.json().catch(() => ({})) as {
       messages?: Parameters<typeof messagesFromPersisted>[0]
+      context?: ChatContextPayload
     }
-    if (response.ok) setMessages(messagesFromPersisted(body.messages ?? []))
+    if (response.ok) {
+      setMessages(messagesFromPersisted(body.messages ?? []))
+      setContext(contextFromPayload(body.context))
+    }
   }, [])
 
   const streamInto = useCallback(async (targetChatId: string, content: string, attachedWorkflow: WorkflowRef | null) => {
@@ -177,6 +220,8 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     if (!chatId) {
       setMessages([])
       setLoadingChat(false)
+      // A fresh page starts general unless a deep link set the record.
+      if (!searchParams.get('matter') && !searchParams.get('lead')) setContext({ type: 'general' })
       return
     }
     let cancelled = false
@@ -185,6 +230,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
       const response = await fetch(`/api/admin/assistant/chats/${chatId}`, { headers: await authHeaders(), cache: 'no-store' })
       const body = await response.json().catch(() => ({})) as {
         messages?: Parameters<typeof messagesFromPersisted>[0]
+        context?: ChatContextPayload
         error?: string
       }
       if (cancelled) return
@@ -194,6 +240,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
         return
       }
       setMessages(messagesFromPersisted(body.messages ?? []))
+      setContext(contextFromPayload(body.context))
       setLoadingChat(false)
 
       if (!pendingHandledRef.current) {
@@ -217,6 +264,27 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, router])
 
+  /** Point this chat (or the one about to be created) at a record. */
+  async function handleContextChange(next: AssistantContext) {
+    const previous = context
+    setContext(next)
+    if (!chatId) return
+    const response = await fetch(`/api/admin/assistant/chats/${chatId}`, {
+      method: 'PATCH',
+      headers: await authHeaders(),
+      body: JSON.stringify(next.type === 'general'
+        ? { context_type: 'general' }
+        : { context_type: next.type, context_id: next.id }),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string }
+      toast.error(body.error ?? 'Unable to change what this chat is about')
+      setContext(previous)
+      return
+    }
+    void loadChats()
+  }
+
   async function handleSend(promptOverride?: string) {
     const content = (promptOverride ?? input).trim()
     if (!content || streaming) return
@@ -233,7 +301,9 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     const response = await fetch('/api/admin/assistant/chats', {
       method: 'POST',
       headers: await authHeaders(),
-      body: JSON.stringify({ context_type: 'general' }),
+      body: JSON.stringify(context.type === 'general'
+        ? { context_type: 'general' }
+        : { context_type: context.type, context_id: context.id }),
     })
     const body = await response.json().catch(() => ({})) as { chat?: { id: string }; error?: string }
     if (!response.ok || !body.chat) {
@@ -248,6 +318,15 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   }
 
   const emptyState = !chatId && messages.length === 0
+  const needsMatter = Boolean(workflow?.matterScoped) && context.type === 'general'
+  const contextPicker = (
+    <AssistantContextPicker context={context} onChange={next => void handleContextChange(next)} disabled={streaming} />
+  )
+  const matterHint = needsMatter ? (
+    <p role="note" className="mb-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+      “{workflow?.title}” works from a matter. Pick one above so the assistant reads the record instead of asking you for it; or name the client in your message and it will look the matter up.
+    </p>
+  ) : null
 
   return (
     <AdminPageShell className="gap-4 overflow-hidden">
@@ -255,7 +334,8 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
         eyebrow="AI assistant"
         icon={Sparkles}
         title="Assistant"
-        description="Chats are saved per attorney. Attach a workflow to run an attorney-approved playbook."
+        description="Chats are saved per attorney. Point a chat at a matter to work from its record; attach a workflow to run an attorney-approved playbook."
+        actions={contextPicker}
       />
       <div className="flex min-h-0 flex-1 gap-4">
         <div className="hidden md:flex">
@@ -272,6 +352,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
                 </p>
               </div>
               <div className="w-full max-w-2xl">
+                {matterHint}
                 <AssistantComposer
                   value={input}
                   onChange={setInput}
@@ -305,6 +386,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
               ) : (
                 <AssistantThread messages={messages} streaming={streaming} />
               )}
+              {matterHint}
               <AssistantComposer
                 value={input}
                 onChange={setInput}

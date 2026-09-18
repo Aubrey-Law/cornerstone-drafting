@@ -95,9 +95,6 @@ const definitions = {
     new_start: { type: 'string' },
     rationale: { type: 'string' },
   }, ['appointment_id', 'new_start', 'rationale']),
-  find_matter_or_lead: tool('find_matter_or_lead', 'Search matters and leads by client name, email, phone, or matter name. Returns matching matter_id and lead_id values for use with any other tool that requires a matter or lead id.', {
-    query: { type: 'string', description: 'Client name, email, phone, or matter name to search for.' },
-  }, ['query']),
   create_task: tool('create_task', 'Create a task for the current matter or lead. If calendarAddToCalendar is true, also create a calendar hold.', {
     title: { type: 'string' },
     description: { type: 'string' },
@@ -505,52 +502,6 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
     proposalExecutor('create_hold'),
     proposalExecutor('propose_reschedule'),
     {
-      tool: definitions.find_matter_or_lead,
-      execute: async input => {
-        const fields = (input ?? {}) as Record<string, unknown>
-        const query = typeof fields.query === 'string' ? fields.query.trim() : ''
-        if (!query) return { content: JSON.stringify({ ok: false, error: 'query is required' }), isError: true }
-
-        const admin = getAdminClient()
-        const pattern = `%${query.replace(/[%_,]/g, '')}%`
-
-        const [matterResult, leadResult] = await Promise.all([
-          admin
-            .from('v_matter_pipeline')
-            .select('matter_id, matter_name, client_name, client_email, client_phone')
-            .or(`client_name.ilike.${pattern},client_email.ilike.${pattern},client_phone.ilike.${pattern},matter_name.ilike.${pattern}`)
-            .limit(10),
-          admin
-            .from('client_intake')
-            .select('id, first_name, last_name, full_name, email, phone')
-            .is('matter_id', null)
-            .or(`first_name.ilike.${pattern},last_name.ilike.${pattern},full_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`)
-            .order('updated_at', { ascending: false })
-            .limit(10),
-        ])
-
-        const matters = matterResult.error ? [] : (matterResult.data ?? []).map(row => ({
-          matter_id: row.matter_id as string,
-          name: (row.client_name as string | null)?.trim() || (row.matter_name as string | null) || null,
-          email: (row.client_email as string | null) ?? null,
-          phone: (row.client_phone as string | null) ?? null,
-        }))
-        const leads = leadResult.error ? [] : (leadResult.data ?? []).map(row => ({
-          lead_id: row.id as string,
-          name: (row.full_name as string | null)?.trim()
-            || `${(row.first_name as string | null) ?? ''} ${(row.last_name as string | null) ?? ''}`.trim()
-            || null,
-          email: (row.email as string | null) ?? null,
-          phone: (row.phone as string | null) ?? null,
-        }))
-
-        if (matterResult.error && leadResult.error) {
-          return { content: JSON.stringify({ ok: false, error: 'Search failed' }), isError: true }
-        }
-        return { content: JSON.stringify({ ok: true, matters, leads }) }
-      },
-    },
-    {
       tool: definitions.create_task,
       execute: async (input, { toolUseId, emit }) => {
         try {
@@ -631,5 +582,5 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
 export function calendarPlanningSystemPromptNote() {
   return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to propose tasks for a matter or lead when needed. Task creation is a proposal like calendar writes: the task is created only when the attorney presses accept. Never say a task was created — say you have proposed it and it needs their acceptance. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
 
-RECORD LOOKUP: Whenever any tool needs a matter_id or lead_id — creating tasks, calendar holds, listing matter dates, rendering templates, or anything else — and the attorney has named a client or matter without an id in context, call find_matter_or_lead with the client name, email, phone, or matter name to resolve it yourself. Never ask the attorney to supply a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
+RECORD LOOKUP: Whenever any tool needs a matter_id or lead_id — creating tasks, calendar holds, listing matter dates, rendering templates, or anything else — and the attorney has named a client or matter without an id in context, call find_matter with the client name, email, or matter name to resolve it yourself. Never ask the attorney to supply a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
 }

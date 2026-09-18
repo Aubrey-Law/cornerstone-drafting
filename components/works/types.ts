@@ -11,6 +11,7 @@ export interface WorkSkill {
   execution_mode: 'chat' | 'run'
   practice: string | null
   jurisdictions: string[]
+  allowed_context?: string[]
   columns_config?: WorkTableColumn[] | null
   is_system: boolean
   is_active: boolean

@@ -1,7 +1,7 @@
 ---
 name: Trust Drafting Intake
 description: Structured two-pass interview to gather everything needed to draft a Massachusetts revocable living trust plus pour-over will package.
-version: 1.1.0
+version: 1.2.0
 type: assistant
 execution_mode: chat
 practice: Estate Planning
@@ -16,7 +16,7 @@ TRUST DRAFTING INTAKE: If Scott asks to gather trust details, collect trust draf
 
 How to run it:
 - FIRST call `read_design_sheet_status`. It returns exactly which design-sheet items are still open. Combine that with the matter context above to decide what to ask — an item the design sheet has already recorded is not a question.
-- Work from any client/matter context already shown above first. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. If no context is loaded, ask for each item.
+- Work from any client/matter context already shown above first. If this chat is not opened on a matter, do not ask Scott to retype what Cornerstone already holds: call `find_matter` with the client or matter he named, then `read_matter_record` for that id (overview, people, notes), and treat that record as the matter context. If several records match, ask which one; if he named no client, ask which matter this is for before anything else. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. Only when no matter can be found, ask for each item.
 - Ask in short batches (3-5 questions at a time), Pass 1 before Pass 2. Number the questions so Scott can answer inline.
 - Do not invent names, dates, relationships, or counties. If Scott says a value is unknown, record it as [UNKNOWN]. For an undecided execution date, record the blank date line exactly as: `___________________, 20___`.
 - When done, echo back a clean, labeled recap of all collected values (Pass 1 then Pass 2) for Scott to confirm.

@@ -52,8 +52,12 @@ function isDuplicateSlug(error: { code?: string; message?: string }): boolean {
  * Skills whose slug disappeared from the tree are deactivated, never deleted —
  * work_runs.skill_id is ON DELETE RESTRICT and runs must keep their history.
  */
-export async function syncSystemWorkflows(): Promise<SystemSyncResult> {
-  const bundled = listBundledSystemSkills()
+export async function syncSystemWorkflows(options: { root?: string } = {}): Promise<SystemSyncResult> {
+  const bundled = options.root ? listBundledSystemSkills(options.root) : listBundledSystemSkills()
+  // An empty tree is a deployment that did not trace tools/workflows into this
+  // bundle, not a firm that deleted every workflow. Syncing it would deactivate
+  // the whole library.
+  if (bundled.length === 0) throw new Error('bundled system workflow tree not found; nothing synced')
   const db = worksDb()
 
   const { data: existingRows, error } = await db
@@ -119,4 +123,31 @@ export async function syncSystemWorkflows(): Promise<SystemSyncResult> {
 
   clearSystemSkillBodyCache()
   return result
+}
+
+let bootSync: Promise<SystemSyncResult | null> | null = null
+
+/**
+ * Sync once per server process, at boot.
+ *
+ * The Library's Sync button was the only way the bundled tree reached
+ * `work_skills`, so the rows the picker and `read_workflow` served drifted
+ * behind every deploy until someone remembered to press it. Failure is logged
+ * and swallowed: a sync problem must never keep the app from starting, and the
+ * assistant reads bundled bodies directly anyway.
+ */
+export function ensureSystemWorkflowsSynced(): Promise<SystemSyncResult | null> {
+  if (!bootSync) {
+    bootSync = syncSystemWorkflows()
+      .then(result => {
+        const changed = result.created.length + result.updated.length + result.deactivated.length
+        if (changed > 0) console.info('[works] system workflows synced at boot', result)
+        return result
+      })
+      .catch(error => {
+        console.error('[works] system workflow sync at boot failed', error)
+        return null
+      })
+  }
+  return bootSync
 }

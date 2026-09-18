@@ -11,6 +11,12 @@ import { skillBody, type WorkSkill } from '@/components/works/types'
 interface WorkflowPickerContentProps {
   /** Restrict to one skill type (the assistant composer attaches assistant skills only). */
   typeFilter?: 'assistant' | 'tabular'
+  /**
+   * Restrict to one execution mode. The chat composer passes 'chat': a
+   * run-mode workflow needs the Library's dedicated run (matter snapshot,
+   * deterministic assembly) and cannot do its job from a message.
+   */
+  executionMode?: 'chat' | 'run'
   onPick: (skill: WorkSkill) => void
   pickLabel?: string
 }
@@ -19,7 +25,7 @@ interface WorkflowPickerContentProps {
  * Searchable two-pane workflow picker (list + Markdown preview), modeled on
  * Mike OSS's WorkflowPickerContent. Fetches the caller-visible skills itself.
  */
-export function WorkflowPickerContent({ typeFilter, onPick, pickLabel = 'Use workflow' }: WorkflowPickerContentProps) {
+export function WorkflowPickerContent({ typeFilter, executionMode, onPick, pickLabel = 'Use workflow' }: WorkflowPickerContentProps) {
   const [skills, setSkills] = useState<WorkSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,10 +54,11 @@ export function WorkflowPickerContent({ typeFilter, onPick, pickLabel = 'Use wor
     const normalized = query.trim().toLowerCase()
     return skills
       .filter(skill => skill.is_active)
+      .filter(skill => !executionMode || skill.execution_mode === executionMode)
       .filter(skill => source === 'all' ? true : source === 'system' ? skill.is_system : !skill.is_system)
       .filter(skill => !normalized ||
         `${skill.name} ${skill.description} ${skill.practice ?? ''}`.toLowerCase().includes(normalized))
-  }, [skills, query, source])
+  }, [skills, query, source, executionMode])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
