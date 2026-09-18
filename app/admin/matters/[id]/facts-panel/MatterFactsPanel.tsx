@@ -24,7 +24,6 @@ import {
 } from '@/lib/matter/referralSource'
 import { cn, formatDate } from '@/lib/utils'
 import type { MatterTab } from '@/lib/matterPageTabs'
-import { MARKETING_CONSENT_LABEL, type MarketingConsentStatus } from '@/lib/crm/consent'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -76,8 +75,6 @@ export interface MatterFactsPanelProps {
   designSheetPlanType: string | null
   /** Design-sheet-owned plan facts, resolved server-side and read-only here. */
   planMirror?: MatterPlanMirror
-  /** CRM marketing consent, shown read-only; the Communications tab edits it. */
-  marketingConsent?: MarketingConsentStatus
   /** max(communications.created_at) — the quiet chip is derived, never stored. */
   lastContactAt?: string | null
   estate: MatterEstateSnapshot
@@ -169,7 +166,6 @@ export function MatterFactsPanel({
   details,
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
-  marketingConsent = 'unknown',
   lastContactAt = null,
   estate,
   readinessItems,
@@ -565,10 +561,6 @@ export function MatterFactsPanel({
               onClick={() => onOpenTab('people')}
             >
               {minorChildrenLabel(children, client?.has_minor_children ?? matter.has_minor_children)}
-            </ReadOnlyRow>
-            {/* Consent belongs to the CRM profile; the Communications tab edits it. */}
-            <ReadOnlyRow label="Consent" onClick={() => onOpenTab('communications')}>
-              {MARKETING_CONSENT_LABEL[marketingConsent]}
             </ReadOnlyRow>
           </>
         )}

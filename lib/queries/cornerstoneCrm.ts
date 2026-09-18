@@ -41,7 +41,6 @@ type CrmPersonRow = {
   assigned_to_user_id: string | null
   next_follow_up_at: string | null
   last_engagement_at: string | null
-  campaign_opt_out: boolean | null
   stage_id: string | null
   stage_entered_at: string | null
   created_at: string
@@ -87,7 +86,6 @@ export interface CrmPeopleRow {
   assignedToUserId: string | null
   nextFollowUpAt: string | null
   lastEngagementAt: string | null
-  campaignOptOut: boolean | null
   stageId: string | null
   stageName: string | null
   stageSlug: string | null
@@ -316,7 +314,6 @@ export async function fetchCrmPeople(
         assignedToUserId: person.assigned_to_user_id,
         nextFollowUpAt: person.next_follow_up_at,
         lastEngagementAt: person.last_engagement_at,
-        campaignOptOut: person.campaign_opt_out,
         stageId: person.stage_id,
         stageName: stage?.name ?? null,
         stageSlug: stage?.slug ?? null,

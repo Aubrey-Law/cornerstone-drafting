@@ -23,7 +23,6 @@ import {
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterType } from '@/lib/matter/matterType'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
-import type { MarketingConsentStatus } from '@/lib/crm/consent'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -85,7 +84,6 @@ import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterStageHistoryCard } from './MatterStageHistoryCard'
 import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
-import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { useMatterNotes } from './useMatterNotes'
@@ -147,7 +145,6 @@ interface MatterDetailClientProps {
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
   planMirror?: MatterPlanMirror
-  marketingConsent?: MarketingConsentStatus
   initialEstateSnapshot: MatterEstateSnapshot
   initialNotes?: MatterNoteRow[]
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
@@ -200,7 +197,6 @@ function MatterDetailClientInner({
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
   planMirror = EMPTY_PLAN_MIRROR,
-  marketingConsent = 'unknown',
   initialEstateSnapshot,
   initialNotes = [],
   initialLeadNotes = [],
@@ -895,7 +891,6 @@ function MatterDetailClientInner({
             details={matterDetails}
             designSheetPlanType={designSheetPlanType}
             planMirror={planMirror}
-            marketingConsent={marketingConsent}
             lastContactAt={lastContactAt}
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
@@ -1197,8 +1192,6 @@ function MatterDetailClientInner({
                 onSendEmail={() => void sendEmail()}
                 onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
                 onBookForClient={() => setBookForClientOpen(true)}
-                marketingConsent={marketingConsent}
-                marketingCard={<MarketingProfileCard intakeId={liveIntakeId} />}
               />
 
               <MatterNotesTab

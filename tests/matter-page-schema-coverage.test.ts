@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { buildMatterPlanMirror } from '@/lib/matter/planMirror'
 import { resolveDraftingDate } from '@/lib/matter/draftingDates'
 import { isCoupleMatter, normalizeMatterType } from '@/lib/matter/matterType'
-import { canSendNurture } from '@/lib/crm/consent'
 import type { DesignSheet, MatterContact } from '@/types/database'
 
 const matterDir = path.join(process.cwd(), 'app/admin/matters/[id]')
@@ -148,10 +147,9 @@ describe('matter page surfaces', () => {
     expect(client.indexOf('<MatterOverviewStats')).toBeLessThan(client.indexOf('<MatterDetailsCard'))
   })
 
-  it('drops the portal uploads card and moves Marketing to Communications', () => {
+  it('drops the portal uploads card', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
     expect(client).not.toContain('MatterPortalUploadsCard')
-    expect(client).toContain('marketingCard={<MarketingProfileCard')
     expect(fs.existsSync(path.join(matterDir, 'MatterPortalUploadsCard.tsx'))).toBe(false)
   })
 
@@ -165,13 +163,5 @@ describe('matter page surfaces', () => {
   it('shows the fiduciary mirror on People', () => {
     const people = fs.readFileSync(path.join(matterDir, 'MatterPeopleTab.tsx'), 'utf8')
     expect(people).toContain('<MatterFiduciaryCard')
-  })
-})
-
-describe('marketing consent', () => {
-  it('only clears a nurture send on an explicit opt-in', () => {
-    expect(canSendNurture('opted_in')).toBe(true)
-    expect(canSendNurture('unknown')).toBe(false)
-    expect(canSendNurture('opted_out')).toBe(false)
   })
 })

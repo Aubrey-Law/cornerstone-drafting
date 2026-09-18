@@ -41,7 +41,6 @@ function person(overrides: Partial<CrmPeopleRow> & { id: string }): CrmPeopleRow
     assignedToUserId: null,
     nextFollowUpAt: null,
     lastEngagementAt: null,
-    campaignOptOut: null,
     stageId: 'stage-new',
     stageName: 'New Inquiry',
     stageSlug: 'new',

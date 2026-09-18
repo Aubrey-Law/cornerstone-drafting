@@ -9,7 +9,6 @@ import { RecordCommunicationsCard } from '@/components/comms/RecordCommunication
 import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { openExternalPhone } from '@/lib/clientPhone'
-import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { ContactCard } from '@/components/contacts/ContactCard'
 import {
   CONTACT_KIND_LABELS,
@@ -243,8 +242,6 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
         )}
 
         <ContactCard contact={contact} />
-
-        {intakeId && <MarketingProfileCard intakeId={intakeId} />}
 
         {record ? (
           <section>

@@ -17,7 +17,6 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }))
-vi.mock('@/components/crm/MarketingProfileCard', () => ({ MarketingProfileCard: () => null }))
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
 import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
