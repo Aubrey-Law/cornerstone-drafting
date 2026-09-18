@@ -109,7 +109,39 @@ describe('signing route security shape', () => {
     // argument now, so this is about the route handing it the right one: the
     // firm's own, the same zone the scheduler books against.
     expect(route).toContain('getSchedulingSettings')
-    expect(route).toMatch(/sealFieldsFor\([\s\S]*?\],\s*timezone\)/)
+    // The zone must be the second argument. Not the last one: sealFieldsFor now
+    // takes an optional marker namespace after it, so pinning `timezone)` would
+    // fail on a change that leaves this property untouched.
+    expect(route).toMatch(/sealFieldsFor\([\s\S]*?\],\s*timezone[,)]/)
+  })
+
+  it('reads its subject through the seam, not from the engagement tables', () => {
+    // The route used to query engagement_agreement_recipients directly, which
+    // made an engagement agreement the only thing in the app that could be
+    // signed. What it signs, who signs it and where the marks go now come from
+    // resolveSigningSubject — so a second kind of signable document is a branch
+    // in one module rather than a second copy of this route.
+    expect(route).toContain('resolveSigningSubject')
+    expect(route).not.toContain('engagement_agreement_recipients')
+    expect(route).toContain('subject.pdfKey')
+    expect(route).toContain('subject.markersFor')
+    expect(route).toContain('subject.sealedKey')
+  })
+
+  it('files audit events against whichever owner the session has', () => {
+    // esign_audit_events carries the same exactly-one-owner rule as the
+    // sessions table. Hardcoding agreement_id would make every audit write on a
+    // non-engagement signing fail the check constraint — at signing time, in
+    // front of a client.
+    expect(route).toContain('auditOwner')
+    expect(route).toContain('signature_request_id')
+  })
+
+  it('keeps engagement completion to engagements', () => {
+    // completeWorkspaceAgreement hires the matter, starts the SLA clock and
+    // flips matter_details.engagement_signed. Running it for an arbitrary
+    // signed PDF would promote a lead off the back of a HIPAA authorisation.
+    expect(route).toContain("subject.kind === 'engagement'")
   })
 
   it('refuses to sign rather than guess a signer position', () => {
