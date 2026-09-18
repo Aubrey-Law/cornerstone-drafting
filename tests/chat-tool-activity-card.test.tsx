@@ -24,7 +24,7 @@ describe('the attorney can see the assistant read the record', () => {
   it('names the matter and sections a record read covered', () => {
     render(<ChatMessage message={message(toolEventFrom({
       tool: 'read_matter_record', tool_use_id: 't1', status: 'done',
-      result: { matter_id: 'm1', matter_label: 'Chen Family Trust · #24-018', sections: ['overview', 'tasks'] },
+      result: { matter_id: 'm1', matter_label: 'Chen Family Trust · #00-000', sections: ['overview', 'tasks'] },
     }))} />)
     expect(screen.getByText(/Read matter record/)).toBeTruthy()
     expect(screen.getByText(/Chen Family Trust/)).toBeTruthy()

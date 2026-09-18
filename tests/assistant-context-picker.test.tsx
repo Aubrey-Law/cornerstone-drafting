@@ -24,7 +24,7 @@ describe('pointing a chat at a matter', () => {
   it('shows the current context and lets the attorney search for a record', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       records: [
-        { id: 'm1', type: 'matter', label: 'Chen Family Trust', matter_number: '24-018', client_name: 'Amy Chen', client_email: 'amy@example.com', url: '/admin/matters/m1' },
+        { id: 'm1', type: 'matter', label: 'Chen Family Trust', matter_number: '00-000', client_name: 'Amy Chen', client_email: 'amy@example.com', url: '/admin/matters/m1' },
         { id: 'l1', type: 'lead', label: 'Bob Lee', matter_number: null, client_name: 'Bob Lee', client_email: null, url: '/admin/matters/l1' },
       ],
     }), { headers: { 'Content-Type': 'application/json' } }))

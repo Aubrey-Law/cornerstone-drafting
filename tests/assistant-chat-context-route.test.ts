@@ -99,12 +99,12 @@ describe('loading a chat tells the page what it is pointed at', () => {
 
 describe('resolving a deep-linked record', () => {
   it('labels a record by id so ?matter= links can name it', async () => {
-    knowledge.describeRecord = vi.fn(async () => ({ id: 'm1', type: 'matter', label: 'Chen Family Trust · #24-018', url: '/admin/matters/m1' }))
+    knowledge.describeRecord = vi.fn(async () => ({ id: 'm1', type: 'matter', label: 'Chen Family Trust · #00-000', url: '/admin/matters/m1' }))
 
     const response = await searchRecords(new Request('http://localhost/api/admin/assistant/records?id=m1'))
     const body = await response.json() as { record?: { label: string } }
 
-    expect(body.record?.label).toBe('Chen Family Trust · #24-018')
+    expect(body.record?.label).toBe('Chen Family Trust · #00-000')
   })
 
   it('answers 404 for an id that is neither a matter nor a lead', async () => {
