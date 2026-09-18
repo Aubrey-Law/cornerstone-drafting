@@ -14,6 +14,30 @@ export type LeadTimelineMeeting = LeadTimelineNote & {
   granolaNoteId: string | null
 }
 
+/**
+ * The rows the lead-note RPCs hand back, in the database's own snake_case.
+ *
+ * They sit beside the camelCase types they map to because that pairing is the
+ * whole job of the `dto` helpers in the notes routes — which typed their
+ * argument `any`, so a renamed column would have produced `undefined` in the
+ * response rather than a type error.
+ */
+export type LeadNoteRow = {
+  id: string
+  body: string
+  actor_id: string
+  created_at: string
+  updated_at: string
+}
+
+export type LeadMeetingNoteRow = LeadNoteRow & {
+  title: string
+  meeting_date: string
+  attendees: string[]
+  source: string
+  granola_note_id: string | null
+}
+
 export type LeadTimelineActivity = {
   id: string
   event_type?: string | null

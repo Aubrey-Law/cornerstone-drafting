@@ -6,6 +6,38 @@ import { renderEngagementAgreement } from './render'
 import * as repository from './repository'
 import { createEngagementService } from './service'
 import { markEngagementSentStatus } from './status'
+import type { EngagementInput } from './types'
+
+/**
+ * What this adapter reads off a persisted agreement.
+ *
+ * `repository.getAgreement` widens its row to `Record<string, unknown>`, so the
+ * named columns are invisible to the compiler and the call used to be cast
+ * `as any`. That cast hid something real: `active_revision` is genuinely null
+ * when an agreement has no active revision, and every line below dereferenced
+ * it. The type names the nullability so the case has to be answered.
+ */
+type PersistedAgreement = {
+  id: string
+  status: string
+  external_request_id?: string | null
+  firma_request_id?: string | null
+  active_revision: {
+    id: string
+    input_snapshot: EngagementInput
+    render_snapshot?: { pdfBase64?: string } | null
+    render_sha256: string
+    master_version?: string
+  } | null
+  recipients?: Array<{
+    role: string
+    name: string
+    email: string
+    recipient_order: number
+    external_recipient_id?: string | null
+    firma_recipient_id?: string | null
+  }> | null
+}
 
 /**
  * Pick the signing provider for this send.
@@ -34,17 +66,20 @@ export async function engagementService() {
     repository: {
       createDraft: input => repository.createAgreementDraft(client, { ...input, renderSha256: 'unrendered', masterVersion: '0' }),
       getAgreement: async id => {
-        const row = await repository.getAgreement(client, id) as any
-        const snapshot = row.active_revision.input_snapshot
-        const render = row.active_revision.render_snapshot ?? {}
+        const row = await repository.getAgreement(client, id) as unknown as PersistedAgreement
+        const revision = row.active_revision
+        // The service's agreement always has one, so say which agreement is
+        // missing it rather than throwing a TypeError three lines later.
+        if (!revision) throw new Error(`Engagement agreement ${id} has no active revision`)
+        const render = revision.render_snapshot ?? {}
         return {
           id: row.id, status: row.status, externalRequestId: row.external_request_id ?? row.firma_request_id,
-          inputSnapshot: snapshot,
-          activeRevision: { id: row.active_revision.id, renderSha256: row.active_revision.render_sha256, pdf: Buffer.from(render.pdfBase64 ?? '', 'base64'), masterVersion: row.active_revision.master_version },
-          recipients: (row.recipients ?? []).map((r: any) => ({ key: r.role, name: r.name, email: r.email, order: r.recipient_order, externalId: r.external_recipient_id ?? r.firma_recipient_id })),
+          inputSnapshot: revision.input_snapshot,
+          activeRevision: { id: revision.id, renderSha256: revision.render_sha256, pdf: Buffer.from(render.pdfBase64 ?? '', 'base64'), masterVersion: revision.master_version },
+          recipients: (row.recipients ?? []).map(r => ({ key: r.role, name: r.name, email: r.email, order: r.recipient_order, externalId: r.external_recipient_id ?? r.firma_recipient_id })),
         }
       },
-      createRevision: (id, rendered) => repository.createAgreementRevision(client, id, rendered as any),
+      createRevision: (id, rendered) => repository.createAgreementRevision(client, id, rendered),
       markReady: input => repository.markAgreementReady(client, input),
       claimSend: input => repository.claimAgreementSend(client, input),
       claimResume: input => repository.claimAgreementResume(client, input),

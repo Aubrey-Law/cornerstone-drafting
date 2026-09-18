@@ -103,6 +103,40 @@ describe('building a selection', () => {
     })
   })
 
+  it('says which row is held, not only how many', async () => {
+    /*
+     * The row used to carry `aria-selected`, which a bare <li> silently drops:
+     * a listitem does not support it. So the fill was the entire signal, and a
+     * screen reader driving this same keyboard selection into a bulk assign
+     * heard nothing about what it had picked up.
+     *
+     * `role="option"` would be the textbook repair and the wrong one here —
+     * an option must not contain focusable widgets, and each row holds a
+     * checkbox, a snooze menu and an open action. So it is said in words.
+     */
+    const { container } = renderPage()
+    selectFirst()
+
+    await waitFor(() => {
+      const row = container.querySelector('[data-selected="true"]')
+      expect(row, 'a row should be held').not.toBeNull()
+      expect(row?.textContent).toContain('Selected')
+    })
+
+    // And the marker is on the held row alone.
+    expect(screen.getAllByText('Selected.')).toHaveLength(1)
+  })
+
+  it('takes the announcement back when the row is released', async () => {
+    renderPage()
+    selectFirst()
+    await screen.findByText('1 selected')
+
+    press(' ')
+
+    await waitFor(() => expect(screen.queryByText('Selected.')).toBeNull())
+  })
+
   it('lets space take a row back out', async () => {
     renderPage()
     selectFirst()

@@ -124,7 +124,7 @@ jobs:
       # post-remediation count and lower it as remaining warnings are fixed.
       - name: Lint
         if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
-        run: npm run lint -- --max-warnings=10
+        run: npm run lint -- --max-warnings=0
 
       - name: Typecheck
         if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}

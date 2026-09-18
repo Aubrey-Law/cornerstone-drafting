@@ -176,7 +176,6 @@ export function TaskListRow({
     <li
       id={`task-row-${task.id}`}
       data-selected={selected || undefined}
-      aria-selected={selected || undefined}
       className={cn(
         'transition-colors hover:bg-accent',
         focused && 'bg-muted shadow-[inset_3px_0_0] shadow-primary',
@@ -189,6 +188,19 @@ export function TaskListRow({
       )}
     >
       <div className="flex items-center gap-3 px-3 py-2">
+        {/*
+          Selection used to be announced with `aria-selected` on this <li>. A
+          bare <li> is a `listitem`, which does not support that attribute, so
+          it was dropped and a screen reader heard nothing — on a list whose
+          selection drives bulk assignment.
+
+          The obvious repair, `role="option"` inside a listbox, is the wrong
+          one: an option must not contain focusable widgets, and each row holds
+          a checkbox, a snooze menu and an open action. So the state is said in
+          words instead. The count is already announced by the selection bar's
+          `role="status"`; this is the per-row half of it.
+        */}
+        {selected && <span className="sr-only">Selected. </span>}
         <TaskCheckbox checked={done} disabled={pending} label={task.title} onToggle={onComplete} />
         <TaskPriorityDot priority={task.priority} />
         <span className="flex min-w-0 flex-1 flex-col">
