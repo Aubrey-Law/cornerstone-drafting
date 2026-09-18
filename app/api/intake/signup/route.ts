@@ -1,9 +1,41 @@
 import { NextResponse } from 'next/server'
+import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { MIN_CLIENT_PASSWORD_LENGTH } from '@/lib/auth/clientPassword'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
+import { consumeRateLimit } from '@/lib/rateLimit'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
+/**
+ * Two limits, because this route has two costs and they belong to different
+ * people.
+ *
+ * Anyone can POST here — it is in PUBLIC_AUTH_PATHS, so the proxy demands no
+ * session — and every request carrying a token spends two service-role reads
+ * before it can be rejected, the same pair /intake/auth pays. That is bounded
+ * per address.
+ *
+ * The expensive half is bounded per invite instead. Creating the account is
+ * once-only in the happy path: it sets client_user_id, and the next request
+ * 409s before reaching it. The loop that is not once-only is the duplicate
+ * branch — createUser reports the address is taken, and the route pages
+ * through the auth directory looking for it — and an address has no budget of
+ * its own to spend there. Keying that on the intake is what makes it
+ * meaningful: a token has to be *valid* to get this far, so unlike the signing
+ * route, where a script would present a different token every time, the key
+ * here is something an attacker cannot vary.
+ *
+ * Splitting them also keeps a household honest. Two spouses onboarding from
+ * one sofa share an address but not an invite, so neither can exhaust the
+ * other's attempts at the part that matters.
+ */
+const SIGNUP_ATTEMPTS_PER_INVITE = 5
+
 export async function POST(req: Request) {
+  // Before the body is even read: the cheapest request to send is the one
+  // worth bounding first.
+  const limited = await guardPublicSchedulingRoute(req, 'intake-signup', 20)
+  if (limited) return limited
+
   let body: { inviteToken?: string; email?: string; password?: string }
   try {
     body = await req.json()
@@ -48,6 +80,22 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: 'Use the email address that received this intake invitation.' },
       { status: 403 },
+    )
+  }
+
+  // Everything above is a read or a refusal; past here the route writes to the
+  // auth directory. So the budget is spent here and not a line earlier: a
+  // mismatched address is turned away for free, because refusing it costs
+  // nothing and the per-address limit already bounds how fast anyone can try.
+  // What this counts is attempts that reach the directory itself.
+  const attempt = await consumeRateLimit(
+    { bucket: 'intake-signup-account', limit: SIGNUP_ATTEMPTS_PER_INVITE, windowSeconds: 3600 },
+    intake.id,
+  )
+  if (!attempt.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts on this invitation. Please try again later or contact the firm.' },
+      { status: 429, headers: { 'Retry-After': String(attempt.retryAfterSeconds || 3600) } },
     )
   }
 
