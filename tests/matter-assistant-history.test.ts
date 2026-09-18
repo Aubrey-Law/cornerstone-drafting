@@ -13,9 +13,9 @@ describe('matter assistant history', () => {
     expect(source).toContain('.reverse()')
   })
 
-  it('logs usage and exposes a turn-append handler', () => {
+  it('runs the shared engine, which logs usage, and exposes a turn-append handler', () => {
     const source = read('app/api/admin/matters/[id]/assistant/route.ts')
-    expect(source).toContain('logAiUsage')
+    expect(source).toContain('createAdminChatStream')
     expect(source).toContain('export async function PATCH')
   })
 
