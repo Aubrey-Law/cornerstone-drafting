@@ -129,6 +129,13 @@ describe('unified CRM hub', () => {
     expect(migration).toContain('drop function if exists public.claim_crm_campaign_deliveries(uuid, integer)')
     expect(read('packages/db-types/src/supabase.generated.ts')).not.toContain('claim_crm_campaign_deliveries')
 
+    // ...and the function drops have to come AFTER the tables. While the table
+    // stands, its trigger is a dependency Postgres refuses to drop the function
+    // out from under (SQLSTATE 2BP01), which failed the first draft of this
+    // migration on its first statement.
+    expect(migration.indexOf('drop table if exists public.cornerstone_crm_campaign_recipients'))
+      .toBeLessThan(migration.indexOf('drop function if exists public.enforce_crm_recipient_snapshot_immutable'))
+
     // `emit_crm_outbox_event` still backs people and activities, and the outbox
     // itself still has readers — neither is this migration's to take.
     expect(migration).not.toMatch(/drop function[^\n]*emit_crm_outbox_event/i)
