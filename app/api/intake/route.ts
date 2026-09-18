@@ -634,9 +634,35 @@ export async function POST(req: Request) {
 
   let recordId: string
 
+  // Saves go through the service role, not `sb`.
+  //
+  // client_intake carries the submitted/approved lock, attorney_review_flags
+  // and the standing-link columns, and it is also the firm's lead table. The
+  // RLS policy that used to let a client write their own row placed no
+  // restriction on which columns — so the lock check above was advisory:
+  // anyone holding their own portal JWT could PATCH the row through PostgREST
+  // and reopen a questionnaire the attorney had already received. The policy
+  // is gone (20261209000000_client_intake_writes_service_role_only.sql), which
+  // means this route is now the only way in, and it has to hold the key.
+  //
+  // Ownership is not lost by doing so. It is proven twice: the reads above ran
+  // as the user under RLS, and every statement below still carries its own
+  // ownership predicate — `ownedOrClause` on the updates, and a `user_id` taken
+  // from the session rather than the request body on the insert.
+  let writer: ReturnType<typeof getAdminClient>
+  try {
+    writer = getAdminClient()
+  } catch (error) {
+    console.error('[intake POST] admin client unavailable for save:', error)
+    return NextResponse.json(
+      { error: 'Saving is temporarily unavailable. Please try again or contact the firm.' },
+      { status: 503 },
+    )
+  }
+
   if (existingId) {
     // UPDATE by known record ID
-    const { data: updated, error } = await sb
+    const { data: updated, error } = await writer
       .from('client_intake')
       .update(cleanPayload)
       .eq('id', existingId)
@@ -684,10 +710,11 @@ export async function POST(req: Request) {
 
     if (existing) {
       // UPDATE the found record
-      const { error } = await sb
+      const { error } = await writer
         .from('client_intake')
         .update(cleanPayload)
         .eq('id', existing.id)
+        .or(ownedOrClause)
       if (error) {
         console.error('[intake POST] update (fallback) error:', error)
         return NextResponse.json({ error: error.message, details: error.details, hint: error.hint }, { status: 500 })
@@ -704,7 +731,9 @@ export async function POST(req: Request) {
       }
     } else {
       // INSERT new record
-      const { data, error } = await sb
+      // cleanPayload.user_id is set from the session at the top of this
+      // handler, never from the request body, so this row belongs to the caller.
+      const { data, error } = await writer
         .from('client_intake')
         .insert(cleanPayload)
         .select('id')
