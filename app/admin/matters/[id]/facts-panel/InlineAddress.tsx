@@ -120,8 +120,28 @@ export function InlineAddress({
 
   const field = 'h-7 min-w-0 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:border-ring'
 
+  // Enter and Escape are the rail's contract for an editable row, and the
+  // whole block listens so all four fields answer to them. The street field is
+  // the autocomplete's: when its suggestion list is open it swallows Escape to
+  // shut the list, so the first press closes the list and the second leaves the
+  // editor. Buttons are excluded — Enter on Save already clicks it.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!(event.target instanceof HTMLInputElement)) return
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void commit()
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancel()
+    }
+  }
+
   return (
-    <div className="space-y-1.5 rounded-md bg-muted px-1.5 py-1.5">
+    <div
+      className="space-y-1.5 rounded-md bg-muted px-1.5 py-1.5"
+      onKeyDown={handleKeyDown}
+    >
       <span className={LABEL}>{label}</span>
       <AddressAutocomplete
         value={draft.address_line1}

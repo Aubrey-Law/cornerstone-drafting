@@ -504,6 +504,46 @@ describe('MatterFactsPanel', () => {
     expect(await screen.findByText('Newton Centre, MA 02459')).toBeTruthy()
   })
 
+  it('saves the address on Enter, from any of its fields', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('42 Larchmont Rd')
+    await user.click(screen.getByRole('button', { name: 'Edit Address' }))
+
+    const zip = screen.getByLabelText('Address ZIP')
+    await user.clear(zip)
+    await user.type(zip, '02458{Enter}')
+
+    await waitFor(() => expect(patchCalls().length).toBeGreaterThan(0))
+    const [, init] = patchCalls()[patchCalls().length - 1]
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      target: 'client',
+      patch: {
+        address_line1: '42 Larchmont Rd',
+        city: 'Newton',
+        state: 'MA',
+        zip: '02458',
+      },
+    })
+    expect(await screen.findByText('Newton, MA 02458')).toBeTruthy()
+  })
+
+  it('leaves the address editor on Escape without saving', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('42 Larchmont Rd')
+    await user.click(screen.getByRole('button', { name: 'Edit Address' }))
+
+    const city = screen.getByLabelText('Address city')
+    await user.clear(city)
+    await user.type(city, 'Nowhere{Escape}')
+
+    expect(patchCalls().length).toBe(0)
+    // Back to reading, with the stored address intact.
+    expect(await screen.findByRole('button', { name: 'Edit Address' })).toBeTruthy()
+    expect(screen.getByText('Newton, MA 02459')).toBeTruthy()
+  })
+
   it('leaves the address alone when the editor is cancelled', async () => {
     const user = userEvent.setup()
     renderPanel()
