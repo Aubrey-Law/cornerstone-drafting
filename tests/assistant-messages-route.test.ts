@@ -26,7 +26,7 @@ vi.mock('@/lib/adminChat/engine', async importOriginal => ({
 }))
 
 const chats = vi.hoisted(() => ({
-  chat: { id: 'c1', user_id: 'user-1', title: null, context_type: 'general', context_id: null },
+  chat: { id: 'c1', user_id: 'user-1', title: null as string | null, context_type: 'general' as 'general' | 'matter' | 'lead', context_id: null as string | null },
   history: [] as Array<{ role: string; content: string; events: unknown[] }>,
   appended: [] as Array<{ role: string; content: string; events?: unknown[] }>,
 }))
@@ -79,6 +79,10 @@ beforeEach(() => {
 })
 
 describe('an attached workflow is injected by the route, not fetched by the model', () => {
+  beforeEach(() => {
+    chats.chat = { id: 'c1', user_id: 'user-1', title: null, context_type: 'matter', context_id: 'm1' }
+  })
+
   it('puts the workflow body into the system prompt', async () => {
     await post({ content: 'Run it for the Chens', workflow: { id: 'wf', title: 'Matter Next Steps' } })
 
@@ -94,10 +98,10 @@ describe('an attached workflow is injected by the route, not fetched by the mode
     ])
   })
 
-  it('tells a general chat to resolve the matter first for a matter-scoped workflow', async () => {
+  it('does not ask a matter chat to look the matter up', async () => {
     await post({ content: 'go', workflow: { id: 'wf', title: 'Matter Next Steps' } })
 
-    expect(lastStreamOptions().system).toContain('find_matter')
+    expect(lastStreamOptions().system).not.toContain('This workflow needs a matter and none is loaded')
   })
 
   it('leaves the prompt alone when no workflow is attached', async () => {
@@ -163,5 +167,32 @@ describe('what the model read is saved with the reply', () => {
     const sent = lastStreamOptions().messages
     expect(sent.map(message => message.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user'])
     expect((sent[2]!.content as Array<{ content: string }>)[0]!.content).toBe('{"stage":"design"}')
+  })
+})
+
+describe('a matter-scoped workflow needs a matter', () => {
+  it('refuses to run it in a general chat, before saving the message', async () => {
+    const response = await post({ content: 'Run next steps', workflow: { id: 'wf', title: 'Matter Next Steps' } })
+    // The default attachment fixture is matter-scoped and the chat is general.
+    expect(response.status).toBe(400)
+    const body = await response.json() as { code?: string; error?: string }
+    expect(body.code).toBe('workflow_requires_matter')
+    expect(chats.appended).toEqual([])
+    expect(engine.createAdminChatStream).not.toHaveBeenCalled()
+  })
+
+  it('runs it once the chat is pointed at a matter', async () => {
+    chats.chat = { id: 'c1', user_id: 'user-1', title: null, context_type: 'matter', context_id: 'm1' }
+    const response = await post({ content: 'Run next steps', workflow: { id: 'wf', title: 'Matter Next Steps' } })
+    expect(response.status).toBe(200)
+    expect(lastStreamOptions().system).toContain('DO THE STEPS')
+  })
+
+  it('lets a workflow that is not matter-scoped run anywhere', async () => {
+    attachment.loadAttachedWorkflow.mockResolvedValueOnce({
+      id: 'wf-docs', title: 'Template Builder', body: 'BUILD IT', executionMode: 'chat', allowedContext: ['documents'],
+    })
+    const response = await post({ content: 'go', workflow: { id: 'wf-docs', title: 'Template Builder' } })
+    expect(response.status).toBe(200)
   })
 })

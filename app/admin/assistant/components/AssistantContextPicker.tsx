@@ -25,6 +25,9 @@ interface AssistantContextPickerProps {
   context: AssistantContext
   onChange: (context: AssistantContext) => void
   disabled?: boolean
+  /** Controlled open state, for a page that needs to open the picker itself. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -44,8 +47,13 @@ export function contextLabel(context: AssistantContext) {
  * workflows all sat unused there. The search is the assistant's own record
  * search, so the picker and the model resolve a name the same way.
  */
-export function AssistantContextPicker({ context, onChange, disabled }: AssistantContextPickerProps) {
-  const [open, setOpen] = useState(false)
+export function AssistantContextPicker({ context, onChange, disabled, open: controlledOpen, onOpenChange }: AssistantContextPickerProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<RecordMatch[]>([])
   const [searching, setSearching] = useState(false)

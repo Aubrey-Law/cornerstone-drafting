@@ -73,6 +73,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   const [input, setInput] = useState('')
   const [workflow, setWorkflow] = useState<WorkflowRef | null>(null)
   const [context, setContext] = useState<AssistantContext>({ type: 'general' })
+  const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const pendingHandledRef = useRef(false)
 
   const loadChats = useCallback(async () => {
@@ -125,11 +126,9 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
       const body = await response.json().catch(() => ({})) as { skill?: { id: string; name: string; allowed_context?: string[] }; error?: string }
       if (cancelled) return
       if (response.ok && body.skill) {
-        setWorkflow({
-          id: body.skill.id,
-          title: body.skill.name,
-          matterScoped: Array.isArray(body.skill.allowed_context) && body.skill.allowed_context.includes('matter'),
-        })
+        const matterScoped = Array.isArray(body.skill.allowed_context) && body.skill.allowed_context.includes('matter')
+        setWorkflow({ id: body.skill.id, title: body.skill.name, matterScoped })
+        if (matterScoped && !searchParams.get('matter') && !searchParams.get('lead')) setContextPickerOpen(true)
       }
       else toast.error(body.error ?? 'Workflow not found')
     })()
@@ -264,6 +263,12 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, router])
 
+  /** Attach a workflow; a matter-scoped one in a general chat opens the record picker at once. */
+  function handleWorkflowChange(next: WorkflowRef | null) {
+    setWorkflow(next)
+    if (next?.matterScoped && context.type === 'general') setContextPickerOpen(true)
+  }
+
   /** Point this chat (or the one about to be created) at a record. */
   async function handleContextChange(next: AssistantContext) {
     const previous = context
@@ -288,6 +293,10 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   async function handleSend(promptOverride?: string) {
     const content = (promptOverride ?? input).trim()
     if (!content || streaming) return
+    if (Boolean(workflow?.matterScoped) && context.type === 'general') {
+      setContextPickerOpen(true)
+      return
+    }
     setInput('')
     const attachedWorkflow = workflow
     setWorkflow(null)
@@ -318,15 +327,25 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   }
 
   const emptyState = !chatId && messages.length === 0
+  // A matter-scoped workflow cannot run in a general chat; the server refuses
+  // it. Hold the send here and open the picker so the fix is one click.
   const needsMatter = Boolean(workflow?.matterScoped) && context.type === 'general'
+  const sendBlocked = needsMatter
+    ? {
+        reason: `“${workflow?.title}” works from a matter. Pick the matter or lead this is about and the assistant reads its record.`,
+        actionLabel: 'Pick a matter',
+        onAction: () => setContextPickerOpen(true),
+      }
+    : null
   const contextPicker = (
-    <AssistantContextPicker context={context} onChange={next => void handleContextChange(next)} disabled={streaming} />
+    <AssistantContextPicker
+      context={context}
+      onChange={next => void handleContextChange(next)}
+      disabled={streaming}
+      open={contextPickerOpen}
+      onOpenChange={setContextPickerOpen}
+    />
   )
-  const matterHint = needsMatter ? (
-    <p role="note" className="mb-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-      “{workflow?.title}” works from a matter. Pick one above so the assistant reads the record instead of asking you for it; or name the client in your message and it will look the matter up.
-    </p>
-  ) : null
 
   return (
     <AdminPageShell className="gap-4 overflow-hidden">
@@ -352,7 +371,6 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
                 </p>
               </div>
               <div className="w-full max-w-2xl">
-                {matterHint}
                 <AssistantComposer
                   value={input}
                   onChange={setInput}
@@ -360,7 +378,8 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
                   onStop={stop}
                   streaming={streaming}
                   workflow={workflow}
-                  onWorkflowChange={setWorkflow}
+                  onWorkflowChange={handleWorkflowChange}
+                  sendBlocked={sendBlocked}
                   autoFocus
                 />
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -386,7 +405,6 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
               ) : (
                 <AssistantThread messages={messages} streaming={streaming} />
               )}
-              {matterHint}
               <AssistantComposer
                 value={input}
                 onChange={setInput}
@@ -394,7 +412,8 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
                 onStop={stop}
                 streaming={streaming}
                 workflow={workflow}
-                onWorkflowChange={setWorkflow}
+                onWorkflowChange={handleWorkflowChange}
+                sendBlocked={sendBlocked}
               />
             </>
           )}

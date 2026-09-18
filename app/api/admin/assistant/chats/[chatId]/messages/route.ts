@@ -53,6 +53,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     ? { id: body.workflow.id, title: body.workflow.title }
     : null
 
+  // Resolve the attached workflow first: a matter-scoped workflow in a general
+  // chat is refused before anything is saved, so a rejected send leaves no
+  // half-turn behind. The body goes into the system prompt here; leaving it to
+  // the model to fetch via read_workflow meant it sometimes did not.
+  let workflowNote = ''
+  let contextLoadNote = ''
+  const initialEvents: Record<string, unknown>[] = []
+  if (workflow) {
+    const attached = await loadAttachedWorkflow(workflow.id, { userId: auth.userId, email: auth.user?.email ?? null })
+    if (attached) {
+      if (attached.allowedContext.includes('matter') && chat.context_type === 'general') {
+        return NextResponse.json(
+          {
+            error: `“${attached.title}” works from a matter. Point this chat at a matter or lead first.`,
+            code: 'workflow_requires_matter',
+          },
+          { status: 400 },
+        )
+      }
+      workflowNote = attachedWorkflowPromptNote(attached, { contextType: chat.context_type })
+      initialEvents.push({ workflow_applied: { workflow_id: attached.id, title: attached.title } })
+    } else {
+      contextLoadNote += `Note: the attached workflow "${workflow.title}" is no longer available, so I am answering without it.\n\n`
+    }
+  }
+
   // Server-side history: prior turns come from the DB, not the client.
   const history = await listAssistantChatMessages(chatId)
 
@@ -63,7 +89,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
   })
   await setAssistantChatTitleIfEmpty(chatId, auth.userId, content)
 
-  let contextLoadNote = ''
   let context: MatterContext
   try {
     context = await buildContext(chat.context_type, chat.context_id ?? undefined)
@@ -71,22 +96,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     const detail = error instanceof Error ? error.message : String(error)
     console.error('[admin assistant] context fetch failed', { chatId, error: detail })
     context = { systemPrompt: await generalSystemPrompt(), matterLabel: null }
-    contextLoadNote = `Note: I wasn't able to load full ${chat.context_type} context (${detail}) - answering from general knowledge.\n\n`
-  }
-
-  // The workflow's text goes into the system prompt here. Leaving it to the
-  // model to fetch via read_workflow meant it sometimes did not, and then
-  // answered as if nothing had been attached.
-  let workflowNote = ''
-  const initialEvents: Record<string, unknown>[] = []
-  if (workflow) {
-    const attached = await loadAttachedWorkflow(workflow.id, { userId: auth.userId, email: auth.user?.email ?? null })
-    if (attached) {
-      workflowNote = attachedWorkflowPromptNote(attached, { contextType: chat.context_type })
-      initialEvents.push({ workflow_applied: { workflow_id: attached.id, title: attached.title } })
-    } else {
-      contextLoadNote += `Note: the attached workflow "${workflow.title}" is no longer available, so I am answering without it.\n\n`
-    }
+    contextLoadNote += `Note: I wasn't able to load full ${chat.context_type} context (${detail}) - answering from general knowledge.\n\n`
   }
 
   const contextMatterId = chat.context_type === 'matter' ? chat.context_id : null

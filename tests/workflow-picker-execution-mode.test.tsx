@@ -62,3 +62,16 @@ describe('the Library sends each workflow to the surface that can run it', () =>
     expect(screen.getByRole('button', { name: /dedicated run/i })).toBeTruthy()
   })
 })
+
+describe('the picker says which workflows need a matter', () => {
+  it('badges a matter-scoped workflow', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      skills: [skill({ id: 'wf', name: 'Matter Next Steps', allowed_context: ['matter'] } as Partial<WorkSkill>)],
+    }), { headers: { 'Content-Type': 'application/json' } }))
+
+    render(<WorkflowPickerContent typeFilter="assistant" onPick={() => {}} />)
+
+    await waitFor(() => expect(screen.getByText('Matter Next Steps')).toBeTruthy())
+    expect(screen.getByText(/needs a matter/i)).toBeTruthy()
+  })
+})
