@@ -230,3 +230,11 @@ describe('what the model read is handed back for persistence', () => {
     ])
   })
 })
+
+describe('a surface can raise the reply ceiling', () => {
+  it('passes maxTokens through to the model call', async () => {
+    mocks.stream.mockReturnValue(fakeStream(['ok'], { stop_reason: 'end_turn', content: [] }))
+    await readAll(createAdminChatStream({ system: 's', messages: [{ role: 'user', content: 'hi' }], usage, maxTokens: 8192 }))
+    expect(mocks.stream.mock.calls.at(-1)![0]).toMatchObject({ max_tokens: 8192 })
+  })
+})
