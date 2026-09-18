@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { AddressAutocomplete, type ParsedAddress } from '@/components/address-autocomplete'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatAssetCurrency } from '@/lib/assets/format'
 import { ageInYearsFromDob, formatDobWithAge, toDateInputValue } from '@/lib/dob'
@@ -32,6 +31,7 @@ import type { MatterDetailsRow } from '@/types/matter-details'
 import { parseContactChannels, type ContactChannel } from '@/lib/contacts/additionalChannels'
 import { ChannelListField } from '@/components/contacts/ChannelListField'
 import { MatterReadinessDial, type MatterReadinessItem } from '../MatterReadinessDial'
+import { InlineAddress, type AddressParts } from './InlineAddress'
 import { InlineDate, InlineSelect, InlineText, ReadOnlyRow } from './InlineField'
 import { PanelActivity } from './PanelActivity'
 import { PanelSection } from './PanelSection'
@@ -199,7 +199,6 @@ export function MatterFactsPanel({
   const [loadingContacts, setLoadingContacts] = useState(true)
   const [contactsRevision, setContactsRevision] = useState(0)
   useEffect(() => listenForMatterContacts(matterId, () => setContactsRevision(n => n + 1), 'facts'), [matterId])
-  const [addressDraft, setAddressDraft] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -315,8 +314,12 @@ export function MatterFactsPanel({
   const dob = client?.date_of_birth ?? matter.client_dob ?? null
   const age = ageInYearsFromDob(dob)
   const cityState = [client?.city, client?.state].filter(Boolean).join(', ')
-  const addressValue = addressDraft
-    ?? [client?.address_line1, client?.city, client?.state, client?.zip].filter(Boolean).join(', ')
+  const address: AddressParts = {
+    address_line1: client?.address_line1 ?? '',
+    city: client?.city ?? '',
+    state: client?.state ?? '',
+    zip: client?.zip ?? '',
+  }
 
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
   const spouseName = [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' ')
@@ -520,35 +523,24 @@ export function MatterFactsPanel({
               channels={parseContactChannels(client?.additional_phones)}
               onSave={next => saveClientChannels('additional_phones', next)}
             />
-            {(showEmpty || Boolean(addressValue)) && (
-            <div className="flex items-start justify-between gap-2.5 rounded-md px-1.5 py-1">
-              <span className="pt-1.5 text-micro text-muted-foreground">Address</span>
-              <div className="w-52">
-                <AddressAutocomplete
-                  value={addressValue}
-                  onChange={setAddressDraft}
-                  onPlaceSelected={(parsed: ParsedAddress) => {
-                    void patchContacts(
-                      {
-                        target: 'client',
-                        patch: {
-                          address_line1: parsed.address_line1,
-                          city: parsed.city,
-                          state: parsed.state,
-                          zip: parsed.zip,
-                        },
-                      },
-                      () => {
-                        setClient(current => (current ? { ...current, ...parsed } : current))
-                        setAddressDraft(null)
-                      },
-                    ).catch(() => {})
-                  }}
-                  className="h-7 text-xs"
-                />
-              </div>
-            </div>
-            )}
+            <InlineAddress
+              hideWhenEmpty={hideWhenEmpty}
+              value={address}
+              onSave={next =>
+                patchContacts(
+                  {
+                    target: 'client',
+                    patch: {
+                      address_line1: next.address_line1 || null,
+                      city: next.city || null,
+                      state: next.state || null,
+                      zip: next.zip || null,
+                    },
+                  },
+                  () => setClient(current => (current ? { ...current, ...next } : current)),
+                )
+              }
+            />
             <InlineDate
               label="Date of birth"
               hideWhenEmpty={hideWhenEmpty}
