@@ -63,7 +63,14 @@ export async function getOrCreateClientIntakeForUser(
   const linked = await linkInvitedIntakeByEmail(user)
   if (linked) return linked
 
-  const { data: created, error } = await supabase
+  // The service role, not `supabase`: clients have no INSERT policy on this
+  // table any more (see
+  // 20261209000000_client_intake_writes_service_role_only.sql — it is the
+  // firm's lead table as well as the questionnaire). `user_id` comes from the
+  // authenticated session, so the row it creates is still the caller's own,
+  // and the SELECT above — which did run under RLS — is what established that
+  // they have none yet.
+  const { data: created, error } = await getAdminClient()
     .from('client_intake')
     .insert({
       user_id: user.id,
