@@ -1,5 +1,15 @@
 'use client'
 
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, formatDate } from '@/lib/utils'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
@@ -32,6 +42,8 @@ export function MatterStageStrip({
   stageSaving,
   onStageChange,
 }: MatterStageStripProps) {
+  const [changeOpen, setChangeOpen] = useState(false)
+  const [selectedStage, setSelectedStage] = useState<MatterStage>(stage)
   const currentIndex = Math.max(0, STAGES.findIndex(s => s.key === stage))
   // Only a *completed* run may roll up, so an early-stage matter shows the full
   // strip (wrapping) rather than hiding stages it has not reached yet.
@@ -40,10 +52,23 @@ export function MatterStageStrip({
   const collapsed = STAGES.slice(0, collapseCount)
   const visible = STAGES.slice(collapseCount)
   const targetSigning = details?.scheduled_signing_date ?? null
+  const editableStages = STAGES.filter(entry => entry.key !== 'closed')
+
+  function setDialogOpen(open: boolean) {
+    setChangeOpen(open)
+    if (open) setSelectedStage(stage === 'closed' ? 'funding' : stage)
+  }
+
+  function confirmStageChange() {
+    if (selectedStage === stage || stageSaving) return
+    onStageChange(selectedStage)
+    setChangeOpen(false)
+  }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <ol className="flex flex-wrap items-center gap-1">
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <ol aria-label="Matter progress" className="flex flex-wrap items-center gap-1">
         {collapsed.length > 0 && (
           <li>
             <Tooltip>
@@ -68,14 +93,10 @@ export function MatterStageStrip({
 
           return (
             <li key={entry.key}>
-              <button
-                type="button"
+              <span
                 aria-current={isCurrent ? 'step' : undefined}
-                disabled={stageSaving}
-                onClick={() => onStageChange(entry.key)}
                 className={cn(
                   PILL_CLASS,
-                  !stageSaving && 'hover:opacity-80',
                   isComplete && 'bg-green-bg text-green',
                   !isComplete && !isCurrent && 'bg-muted text-muted-foreground',
                 )}
@@ -89,17 +110,68 @@ export function MatterStageStrip({
                   style={isCurrent ? { background: colors.dot } : undefined}
                 />
                 {entry.label}
-              </button>
+              </span>
             </li>
           )
         })}
-      </ol>
-      <p className="ml-auto text-micro text-muted-foreground">
-        {agingSummary
-          ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage`
-          : 'Stage age unavailable'}
-        {targetSigning && ` · target signing ${formatDate(targetSigning)}`}
-      </p>
-    </div>
+        </ol>
+        <div className="ml-auto flex items-center gap-3">
+          <p className="text-micro text-muted-foreground">
+            {agingSummary
+              ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage`
+              : 'Stage age unavailable'}
+            {targetSigning && ` · target signing ${formatDate(targetSigning)}`}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={stageSaving || stage === 'closed'}
+            onClick={() => setDialogOpen(true)}
+          >
+            {stageSaving ? 'Saving stage…' : 'Change stage'}
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={changeOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change matter stage</DialogTitle>
+            <DialogDescription>
+              Choose the stage that reflects the matter’s current work. This change is recorded in stage history.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label htmlFor="matter-stage-change" className="text-sm font-medium">New stage</label>
+            <select
+              id="matter-stage-change"
+              value={selectedStage}
+              onChange={event => setSelectedStage(event.target.value as MatterStage)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {editableStages.map(entry => (
+                <option key={entry.key} value={entry.key}>{entry.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Close this matter from Billing after completing the close-out checks.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={stageSaving || selectedStage === stage}
+              onClick={confirmStageChange}
+            >
+              Confirm stage change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

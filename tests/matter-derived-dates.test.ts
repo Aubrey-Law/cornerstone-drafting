@@ -60,7 +60,7 @@ describe('next action date', () => {
     expect(isOnWeeklyBoard(null, today)).toBe(false)
   })
 
-  it('drives the header pill and the weekly board, nothing else', () => {
+  it('drives the weekly board without duplicating a status pill in the matter header', () => {
     const header = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailHeader.tsx'),
       'utf8',
@@ -69,7 +69,7 @@ describe('next action date', () => {
       path.join(process.cwd(), 'app/admin/components/NextActionsCard.tsx'),
       'utf8',
     )
-    expect(header).toContain('presentNextAction')
+    expect(header).not.toContain('presentNextAction')
     expect(board).toContain('next_action_date')
   })
 })

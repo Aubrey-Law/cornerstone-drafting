@@ -25,17 +25,15 @@ function matter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
 
 function renderHeader(
   over: Partial<PipelineMatter>,
-  handlers: { onEmail: () => void; onText: () => void },
+  handlers: { onEmail: () => void },
 ) {
   return render(
     <MatterDetailHeader
       matter={matter(over)}
       matterNumber="2026-001"
-      agingSummary={null}
       intakeCompleted={false}
       intakeId={null}
       unlocking={false}
-      showHealthBadge={false}
       factsRailOpen={false}
       onToggleFactsRail={vi.fn()}
       onOpenIntake={vi.fn()}
@@ -43,7 +41,6 @@ function renderHeader(
       onUnlockIntake={vi.fn()}
       onDelete={vi.fn()}
       onEmail={handlers.onEmail}
-      onText={handlers.onText}
     />,
   )
 }
@@ -51,11 +48,18 @@ function renderHeader(
 afterEach(cleanup)
 
 describe('MatterDetailHeader communication actions', () => {
+  it('keeps lifecycle status out of the identity and action header', () => {
+    renderHeader({}, { onEmail: vi.fn() })
+
+    expect(screen.queryByLabelText('Matter stage')).toBeNull()
+    expect(screen.queryByText(/day \d+/i)).toBeNull()
+  })
+
   it('keeps email and removes text controls', async () => {
     const user = userEvent.setup()
     const onEmail = vi.fn()
     const onText = vi.fn()
-    renderHeader({}, { onEmail, onText })
+    renderHeader({}, { onEmail })
 
     await user.click(screen.getAllByRole('button', { name: 'Email' })[0])
     expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
@@ -67,7 +71,7 @@ describe('MatterDetailHeader communication actions', () => {
   it('disables Email without an address', () => {
     renderHeader(
       { client_email: '', client_phone: '' },
-      { onEmail: vi.fn(), onText: vi.fn() },
+      { onEmail: vi.fn() },
     )
 
     expect((screen.getAllByRole('button', { name: 'Email' })[0] as HTMLButtonElement).disabled).toBe(true)

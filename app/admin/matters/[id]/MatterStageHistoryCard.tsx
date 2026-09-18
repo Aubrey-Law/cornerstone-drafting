@@ -36,12 +36,25 @@ function duration(days: number, isCurrent: boolean): string {
 export function MatterStageHistoryCard({
   entries,
   className,
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
 }: {
   entries: MatterStageHistoryEntry[]
   className?: string
+  open?: boolean
+  defaultOpen?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(true)
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const [showAll, setShowAll] = useState(false)
+  const open = controlledOpen ?? internalOpen
+
+  function toggleOpen() {
+    const nextOpen = !open
+    if (controlledOpen === undefined) setInternalOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
 
   // Newest first for reading; the entries arrive oldest-first so durations could
   // be derived from the following transition.
@@ -56,7 +69,7 @@ export function MatterStageHistoryCard({
     >
       <button
         type="button"
-        onClick={() => setOpen(value => !value)}
+        onClick={toggleOpen}
         className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted px-4 py-3 text-left"
         aria-expanded={open}
       >

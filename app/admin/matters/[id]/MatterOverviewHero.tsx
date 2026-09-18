@@ -6,14 +6,10 @@ import { effectiveDueAt, type TaskRow } from '@/lib/tasks/types'
 import { formatDateDetail } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import type { MatterNextAction } from '@/lib/matterNextAction'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
 import type { PipelineMatter } from '@/types/database'
-import type { MatterDetailsRow } from '@/types/matter-details'
-import { isCoupleMatter } from '@/lib/matter/matterType'
-import type { MatterType } from '@/lib/matter/matterType'
 import {
   resolveIntakeReviewTarget,
   type IntakeReadinessFlag,
@@ -22,8 +18,6 @@ import {
 
 interface MatterOverviewHeroProps {
   matter: PipelineMatter
-  matterType?: MatterType | null
-  details?: MatterDetailsRow | null
   nextAction: MatterNextAction
   currentTask?: TaskRow | null
   unreadPortalCount: number
@@ -38,25 +32,8 @@ interface MatterOverviewHeroProps {
   onReviewUploads?: () => void
 }
 
-function ContactLine({ label, name, email, phone }: { label: string; name: string | null; email: string | null; phone: string | null }) {
-  return (
-    <p className="text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{name || `${label} —`}</span>
-      {email && <> · {email}</>}
-      {phone && (
-        <>
-          {' · '}
-          <CallPhoneLink phone={phone} />
-        </>
-      )}
-    </p>
-  )
-}
-
 export function MatterOverviewHero({
   matter,
-  matterType = null,
-  details: _details = null,
   nextAction,
   currentTask = null,
   unreadPortalCount,
@@ -74,7 +51,6 @@ export function MatterOverviewHero({
   const isEngagementAction = nextAction.kind === 'send-engagement' || nextAction.kind === 'waiting-engagement'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
-  const showSpouse = isCoupleMatter(matterType)
   const groupedFlags = reviewFlags.reduce<Record<IntakeReadinessResolutionKind, IntakeReadinessFlag[]>>(
     (groups, flag) => {
       const kind = flag.resolutionKind
@@ -168,22 +144,6 @@ export function MatterOverviewHero({
               ))}
             </div>
           )}
-          <div className="space-y-0.5">
-            <ContactLine
-              label="Client"
-              name={matter.client_name}
-              email={matter.client_email}
-              phone={matter.client_phone}
-            />
-            {showSpouse && (
-              <ContactLine
-                label="Spouse"
-                name={matter.spouse_name}
-                email={matter.spouse_email}
-                phone={matter.spouse_phone}
-              />
-            )}
-          </div>
           {lastPortalMessage && (
             <p className="text-xs text-muted-foreground">
               Latest portal message ({lastPortalMessage.sender_role}):{' '}
