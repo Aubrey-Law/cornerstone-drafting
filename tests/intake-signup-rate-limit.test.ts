@@ -22,12 +22,23 @@ const state = vi.hoisted(() => ({
   intake: null as Record<string, unknown> | null,
   createdUsers: 0,
   listedUsers: 0,
+  /** Pages requested, in order — how the directory walk is observed. */
+  pagesRequested: [] as number[],
+  /** The whole auth directory the fake pages over. */
+  directory: [] as Array<{ id: string; email: string; email_confirmed_at: string | null }>,
+  /** Set to make createUser report the address as taken. */
+  createUserDuplicate: false,
+  confirmed: [] as string[],
   reset() {
     this.allow = new Map()
     this.consumed = []
     this.intake = { id: 'intake-1', email: 'client@example.com', status: 'draft' }
     this.createdUsers = 0
     this.listedUsers = 0
+    this.pagesRequested = []
+    this.directory = []
+    this.createUserDuplicate = false
+    this.confirmed = []
   },
 }))
 
@@ -48,14 +59,25 @@ vi.mock('@/lib/supabaseAdmin', () => ({
     auth: {
       admin: {
         createUser: vi.fn(async () => {
+          if (state.createUserDuplicate) {
+            return { data: { user: null }, error: { message: 'A user with this email address has already been registered' } }
+          }
           state.createdUsers += 1
           return { data: { user: { id: 'user-1' } }, error: null }
         }),
-        listUsers: vi.fn(async () => {
+        // Pages the way GoTrue does: a slice plus nextPage, absent on the last.
+        listUsers: vi.fn(async ({ page, perPage }: { page: number; perPage: number }) => {
           state.listedUsers += 1
-          return { data: { users: [] }, error: null }
+          state.pagesRequested.push(page)
+          const start = (page - 1) * perPage
+          const users = state.directory.slice(start, start + perPage)
+          const hasMore = start + perPage < state.directory.length
+          return { data: { users, ...(hasMore ? { nextPage: page + 1 } : {}) }, error: null }
         }),
-        updateUserById: vi.fn(async () => ({ data: null, error: null })),
+        updateUserById: vi.fn(async (id: string) => {
+          state.confirmed.push(id)
+          return { data: null, error: null }
+        }),
       },
     },
     from: () => ({
@@ -181,5 +203,79 @@ describe('the happy path still works', () => {
     expect(response.status).toBe(200)
     expect(state.createdUsers).toBe(1)
     expect(state.consumed.map(c => c.bucket)).toEqual(['intake-signup', 'intake-signup-account'])
+  })
+})
+
+describe('finding an account the directory already holds', () => {
+  /** A directory with the wanted address buried past the first page. */
+  function directoryOf(size: number, at: number) {
+    state.directory = Array.from({ length: size }, (_, i) => ({
+      id: `user-${i}`,
+      email: i === at ? 'client@example.com' : `other-${i}@example.com`,
+      email_confirmed_at: null,
+    }))
+    state.createUserDuplicate = true
+  }
+
+  it('pages past the first slice to find it', async () => {
+    // The old code asked for one page of 1000 and treated a miss as "no such
+    // account", so an address at 1200 was invisible and the intake was never
+    // linked.
+    directoryOf(1205, 1200)
+    const { POST } = await import('@/app/api/intake/signup/route')
+
+    const response = await POST(signup(valid))
+
+    expect(response.status).toBe(200)
+    expect(state.pagesRequested.length).toBeGreaterThan(1)
+    // Found, and confirmed, which is what links the intake to the account.
+    expect(state.confirmed).toEqual(['user-1200'])
+  })
+
+  it('stops at the last page rather than asking forever', async () => {
+    directoryOf(450, 5)
+    const { POST } = await import('@/app/api/intake/signup/route')
+
+    await POST(signup(valid))
+
+    // Found on page 1; no reason to read page 2.
+    expect(state.pagesRequested).toEqual([1])
+  })
+
+  it('reads to the end before concluding the address is not there', async () => {
+    state.directory = Array.from({ length: 450 }, (_, i) => ({
+      id: `user-${i}`, email: `other-${i}@example.com`, email_confirmed_at: null,
+    }))
+    state.createUserDuplicate = true
+    const { POST } = await import('@/app/api/intake/signup/route')
+
+    const response = await POST(signup(valid))
+
+    // Every page, then the 409 — not a 409 because one page ran out.
+    expect(state.pagesRequested).toEqual([1, 2, 3])
+    expect(response.status).toBe(409)
+  })
+
+  it('surfaces a directory bigger than it will walk as an error, not a miss', async () => {
+    // The failure this replaces was silent. Running off the end must not look
+    // like "no such account" again.
+    state.directory = Array.from({ length: 200 * 60 }, (_, i) => ({
+      id: `user-${i}`, email: `other-${i}@example.com`, email_confirmed_at: null,
+    }))
+    state.createUserDuplicate = true
+    const { POST } = await import('@/app/api/intake/signup/route')
+
+    const response = await POST(signup(valid))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('look up') })
+  })
+
+  it('does not page the directory at all on the happy path', async () => {
+    const { POST } = await import('@/app/api/intake/signup/route')
+
+    await POST(signup(valid))
+
+    expect(state.listedUsers).toBe(0)
   })
 })
