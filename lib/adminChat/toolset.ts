@@ -7,6 +7,7 @@ import { exportMattersToolExecutor, matterExportSystemPromptNote } from '@/lib/a
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
 import { templateBuilderSystemPromptNote, templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
 import { matterKnowledgeSystemPromptNote, matterKnowledgeToolExecutors } from '@/lib/adminChat/matterKnowledgeTools'
+import { firmTodaySystemPromptNote, firmTodayToolExecutor } from '@/lib/adminChat/firmTodayTool'
 
 export interface AdminChatToolsetOptions {
   contextType: ChatContextType
@@ -54,6 +55,7 @@ export function adminChatToolset(options: AdminChatToolsetOptions): AdminChatToo
     ...workflowToolExecutors(workflowUser),
     ...calendarPlanningToolExecutors({ defaultMatterId: matterId, defaultLeadId: leadId, actor: user }),
     ...(surface === 'assistant' ? templateBuilderToolExecutors(user.id) : []),
+    firmTodayToolExecutor,
     // A lead is matter-owned, so its record reads by the same id.
     ...matterKnowledgeToolExecutors({ defaultRecordId: contextId }),
   ]
@@ -64,6 +66,7 @@ export function adminChatToolset(options: AdminChatToolsetOptions): AdminChatToo
     + matterExportSystemPromptNote()
     + calendarPlanningSystemPromptNote()
     + (surface === 'assistant' ? templateBuilderSystemPromptNote() : '')
+    + firmTodaySystemPromptNote()
     + matterKnowledgeSystemPromptNote()
 
   return { tools, promptNotes }

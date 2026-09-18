@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import {
   ClipboardList,
   CalendarDays,
@@ -24,6 +26,8 @@ type Props = {
   hasActiveAgreement: boolean
   snoozed: boolean
   matterId?: string | null
+  /** The lead's own id, for the Assistant deep link. */
+  leadId?: string | null
   onDraft: () => void
   onConvert: () => void
   onClearSnooze: () => void
@@ -47,6 +51,7 @@ export function LeadTopActions({
   hasActiveAgreement,
   snoozed,
   matterId,
+  leadId,
   onDraft,
   onConvert,
   onClearSnooze,
@@ -100,6 +105,11 @@ export function LeadTopActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onIntake}>Open intake</DropdownMenuItem>
+            {leadId && (
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/assistant?lead=${leadId}`}>Open in Assistant</Link>
+              </DropdownMenuItem>
+            )}
             {!canViewMatter && <DropdownMenuItem onClick={onDraft} disabled={!active}>{hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}</DropdownMenuItem>}
             <DropdownMenuItem onClick={onSendSchedulingLink}>
               Send scheduling link

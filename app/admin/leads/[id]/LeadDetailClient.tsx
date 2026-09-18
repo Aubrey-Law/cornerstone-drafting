@@ -818,6 +818,7 @@ export function LeadDetailClient({
             hasActiveAgreement={Boolean(activeAgreement)}
             snoozed={snoozed}
             matterId={lead.matter_id}
+            leadId={lead.id}
             onDraft={handleTopDraft}
             onConvert={handleTopConvert}
             onClearSnooze={() => void clearNextActionSnooze()}
