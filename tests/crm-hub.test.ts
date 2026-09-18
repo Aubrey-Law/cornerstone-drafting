@@ -87,16 +87,52 @@ describe('unified CRM hub', () => {
     expect(migration).toContain('grant select on public.v_cornerstone_crm_people')
   })
 
-  it('leaves the campaign recipients snapshot alone', () => {
-    // Enrollment-time snapshots on the (dead) campaign tables, named by
-    // `enforce_crm_recipient_snapshot_immutable`. A separate decision from the
-    // consent columns, and not one this migration made.
-    // Named in the header comment, which is the point — so this asserts no DDL
-    // touches it, rather than that the name never appears.
+  it('leaves the campaign tables to their own migration', () => {
+    // The consent migration deliberately stopped at the columns. Asserting no
+    // DDL there touches the recipients table, rather than that the name never
+    // appears — its header comment names it, which is the point.
     const migration = read('supabase/migrations/20261210000000_drop_crm_marketing_consent.sql')
     expect(migration).not.toMatch(/(alter|drop) table[^\n]*cornerstone_crm_campaign_recipients/i)
     expect(migration).not.toMatch(/drop column[^\n]*snapshot_marketing_status/i)
-    expect(read('packages/db-types/src/supabase.generated.ts')).toContain('snapshot_marketing_status')
+  })
+
+  it('drops the campaign tables in reverse dependency order, without CASCADE', () => {
+    const migration = read('supabase/migrations/20261211000000_drop_crm_campaign_tables.sql')
+    const types = read('packages/db-types/src/supabase.generated.ts')
+
+    // Every foreign key points leftwards in this list, so each table is gone
+    // before the one it references — which is what makes CASCADE unnecessary,
+    // and CASCADE is what would let this take something it never named.
+    const order = [
+      'cornerstone_crm_campaign_events',
+      'cornerstone_crm_campaign_deliveries',
+      'cornerstone_crm_campaign_dispatches',
+      'cornerstone_crm_campaign_recipients',
+      'cornerstone_crm_campaign_steps',
+      'cornerstone_crm_campaigns',
+    ]
+    const positions = order.map(table => {
+      const at = migration.indexOf(`drop table if exists public.${table};`)
+      expect(at).toBeGreaterThan(-1)
+      return at
+    })
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+    expect(migration).not.toMatch(/drop table[^\n]*cascade/i)
+    for (const table of order) expect(types).not.toContain(`      ${table}: {`)
+  })
+
+  it('takes the campaign-only functions but not the shared outbox one', () => {
+    const migration = read('supabase/migrations/20261211000000_drop_crm_campaign_tables.sql')
+
+    // A table's trigger goes with the table; the trigger function does not.
+    expect(migration).toContain('drop function if exists public.enforce_crm_recipient_snapshot_immutable()')
+    expect(migration).toContain('drop function if exists public.claim_crm_campaign_deliveries(uuid, integer)')
+    expect(read('packages/db-types/src/supabase.generated.ts')).not.toContain('claim_crm_campaign_deliveries')
+
+    // `emit_crm_outbox_event` still backs people and activities, and the outbox
+    // itself still has readers — neither is this migration's to take.
+    expect(migration).not.toMatch(/drop function[^\n]*emit_crm_outbox_event/i)
+    expect(migration).not.toMatch(/(drop|delete from)[^\n]*cornerstone_crm_sync_events/i)
   })
 
   it('preserves legacy lead and contact URLs with framework redirects', async () => {
