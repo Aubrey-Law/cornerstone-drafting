@@ -1,12 +1,20 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Copy, Loader2, Send, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { Loader2, Send, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
-import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import { useConfirm } from '@/components/useConfirm'
+import { ChatMessage, type FloatingChatMessage, type ToolEvent } from '@/app/admin/components/ChatMessage'
+import { forEachSseFrame, toolEventFrom } from '@/app/admin/components/chatStream'
+import type { DesignSheetImportPreviewRow, DesignSheetImportProposal } from '@/lib/designSheetImport/shared'
+
+const DesignSheetImportDialog = dynamic(
+  () => import('@/components/design-sheet/DesignSheetImportDialog').then(m => ({ default: m.DesignSheetImportDialog })),
+  { ssr: false },
+)
 
 interface MatterAssistantPanelProps {
   matterId: string
@@ -14,39 +22,44 @@ interface MatterAssistantPanelProps {
   onClose?: () => void
 }
 
-interface ChatTurn {
-  role: 'user' | 'assistant'
-  text: string
+interface PanelMessage extends FloatingChatMessage {
   streaming?: boolean
-  toolStatus?: string
   error?: string
 }
 
-function parseSseChunk(buffer: string): { events: Array<{ event: string; data: string }>; rest: string } {
-  const events: Array<{ event: string; data: string }> = []
-  const parts = buffer.split('\n\n')
-  const rest = parts.pop() ?? ''
-  for (const part of parts) {
-    if (!part.trim()) continue
-    let event = 'message'
-    let data = ''
-    for (const line of part.split('\n')) {
-      if (line.startsWith('event: ')) event = line.slice(7).trim()
-      if (line.startsWith('data: ')) data = line.slice(6)
-    }
-    if (data) events.push({ event, data })
-  }
-  return { events, rest }
+interface DesignSheetChatProposal {
+  matterId: string
+  preview: DesignSheetImportPreviewRow[]
+  proposed: DesignSheetImportProposal
 }
 
+function makeMessage(role: 'user' | 'assistant', content: string, matterId: string): PanelMessage {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    content,
+    timestamp: new Date().toISOString(),
+    contextSnapshot: { type: 'matter', id: matterId },
+  }
+}
+
+/**
+ * The Review step's assistant.
+ *
+ * It used to speak its own SSE dialect to its own chat lane and rendered tool
+ * use as a line of italic text. It now reads the shared stream and draws the
+ * shared cards, so a record read, a design-sheet proposal or a task proposal
+ * looks and behaves the same here as on the Assistant page and in the rail.
+ * The per-matter thread it shows is the one the rail shares.
+ */
 export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterAssistantPanelProps) {
   const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
-  const [turns, setTurns] = useState<ChatTurn[]>([])
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [messages, setMessages] = useState<PanelMessage[]>([])
+  const [designSheetProposal, setDesignSheetProposal] = useState<DesignSheetChatProposal | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -59,14 +72,15 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
       const res = await fetch(`/api/admin/matters/${matterId}/assistant`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const body = await res.json().catch(() => ({}))
+      const body = await res.json().catch(() => ({})) as { turns?: Array<{ role: string; content: string; createdAt?: string }> }
       if (!res.ok) return
-      setTurns(
-        (body.turns ?? []).map((t: { role: string; content: string }) => ({
-          role: t.role as 'user' | 'assistant',
-          text: t.content,
-        })),
-      )
+      setMessages((body.turns ?? []).map((turn, index) => ({
+        id: `srv-${index}`,
+        role: turn.role === 'user' ? 'user' : 'assistant',
+        content: turn.content,
+        timestamp: turn.createdAt ?? new Date().toISOString(),
+        contextSnapshot: { type: 'matter', id: matterId },
+      })))
     } finally {
       setLoadingHistory(false)
     }
@@ -78,13 +92,13 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
 
   useEffect(() => {
     const element = scrollRef.current
-    if (!element) return
+    if (!element || typeof element.scrollTo !== 'function') return
     // Only follow the newest message when the reader is already at the bottom;
     // scrolling back during a stream used to be undone on the next delta.
     const distance = element.scrollHeight - element.scrollTop - element.clientHeight
     if (distance > 160) return
     element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
-  }, [turns])
+  }, [messages])
 
   const clearHistory = async () => {
     if (!token || busy) return
@@ -101,7 +115,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error('Could not clear history')
-      setTurns([])
+      setMessages([])
       toast.success('Chat cleared')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not clear chat')
@@ -110,15 +124,17 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
     }
   }
 
+  const patchAssistant = (id: string, patch: (message: PanelMessage) => PanelMessage) =>
+    setMessages(prev => prev.map(message => (message.id === id ? patch(message) : message)))
+
   const send = async (textOverride?: string) => {
     const message = (textOverride ?? input).trim()
     if (!token || !message || busy) return
     if (textOverride === undefined) setInput('')
-    setTurns(prev => [
-      ...prev,
-      { role: 'user', text: message },
-      { role: 'assistant', text: '', streaming: true },
-    ])
+
+    const userMessage = makeMessage('user', message, matterId)
+    const assistantMessage = { ...makeMessage('assistant', '', matterId), streaming: true }
+    setMessages(prev => [...prev, userMessage, assistantMessage])
     setBusy(true)
     let streamedText = ''
     const controller = new AbortController()
@@ -132,162 +148,102 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
         },
-        body: JSON.stringify({ message, documentIds, stream: true }),
+        body: JSON.stringify({ message, documentIds: documentIds ?? [] }),
         signal: controller.signal,
       })
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
+      if (!res.ok || !res.body) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(body.error ?? 'Assistant failed')
       }
 
-      const contentType = res.headers.get('content-type') ?? ''
-      if (!contentType.includes('text/event-stream') || !res.body) {
-        const body = await res.json()
-        setTurns(prev => {
-          const next = [...prev]
-          next[next.length - 1] = { role: 'assistant', text: body.reply as string }
-          return next
-        })
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parsed = parseSseChunk(buffer)
-        buffer = parsed.rest
-
-        for (const evt of parsed.events) {
-          if (evt.event === 'delta') {
-            const payload = JSON.parse(evt.data) as { text?: string }
-            if (payload.text) {
-              streamedText += payload.text
-              setTurns(prev => {
-                const next = [...prev]
-                const last = next[next.length - 1]
-                if (last?.role === 'assistant') {
-                  next[next.length - 1] = {
-                    ...last,
-                    text: last.text + payload.text,
-                    streaming: true,
-                  }
-                }
-                return next
-              })
+      await forEachSseFrame(res.body, parsed => {
+        if (parsed.error && !parsed.tool) throw new Error(parsed.error)
+        if (parsed.tool && parsed.tool_use_id && parsed.status) {
+          const toolEvent = toolEventFrom({
+            tool: parsed.tool,
+            tool_use_id: parsed.tool_use_id,
+            status: parsed.status,
+            result: parsed.result,
+            error: parsed.status === 'error' ? parsed.error : undefined,
+          })
+          patchAssistant(assistantMessage.id, current => {
+            const existing = current.toolEvents ?? []
+            const index = existing.findIndex(candidate => candidate.toolUseId === toolEvent.toolUseId)
+            return {
+              ...current,
+              toolEvents: index >= 0
+                ? existing.map((candidate, i) => (i === index ? { ...candidate, ...toolEvent } : candidate))
+                : [...existing, toolEvent],
             }
-          } else if (evt.event === 'tool') {
-            const payload = JSON.parse(evt.data) as {
-              phase?: 'start' | 'result'
-              name?: string
-              connector?: string
-              ok?: boolean
-            }
-            setTurns(prev => {
-              const next = [...prev]
-              const last = next[next.length - 1]
-              if (last?.role !== 'assistant') return prev
-              let toolStatus = last.toolStatus ?? ''
-              if (payload.phase === 'start' && payload.name) {
-                toolStatus = `Calling ${payload.name}…`
-              } else if (payload.phase === 'result') {
-                toolStatus = payload.ok
-                  ? `Used ${payload.connector ?? payload.name ?? 'tool'}`
-                  : `Tool failed: ${payload.name ?? 'unknown'}`
-              }
-              next[next.length - 1] = { ...last, toolStatus }
-              return next
-            })
-          } else if (evt.event === 'error') {
-            const payload = JSON.parse(evt.data) as { message?: string }
-            throw new Error(payload.message ?? 'Stream error')
-          } else if (evt.event === 'done') {
-            const payload = JSON.parse(evt.data) as {
-              reply?: string
-              toolsUsed?: Array<{ connector: string; tool: string; ok: boolean }>
-            }
-            setTurns(prev => {
-              const next = [...prev]
-              const last = next[next.length - 1]
-              if (last?.role === 'assistant') {
-                next[next.length - 1] = {
-                  role: 'assistant',
-                  text: payload.reply ?? last.text,
-                  streaming: false,
-                }
-              }
-              return next
-            })
-            if (payload.toolsUsed && payload.toolsUsed.length > 0) {
-              const names = payload.toolsUsed.map(t => `${t.connector}/${t.tool}`).join(', ')
-              toast.message('MCP tools used', { description: names })
-            }
-          }
+          })
+          return
         }
-      }
-
-      setTurns(prev => {
-        const next = [...prev]
-        const last = next[next.length - 1]
-        if (last?.role === 'assistant' && last.streaming) {
-          next[next.length - 1] = { ...last, streaming: false }
+        if (parsed.text) {
+          streamedText += parsed.text
+          patchAssistant(assistantMessage.id, current => ({ ...current, content: current.content + parsed.text }))
         }
-        return next
       })
+
+      patchAssistant(assistantMessage.id, current => ({ ...current, streaming: false }))
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') {
-        // User stopped generation: keep any partial text, drop an empty bubble.
-        setTurns(prev => {
-          const next = [...prev]
-          const last = next[next.length - 1]
-          if (last?.role === 'assistant') {
-            if (!streamedText) return next.slice(0, -1)
-            next[next.length - 1] = { ...last, text: streamedText, streaming: false }
-          }
-          return next
-        })
+        // Stopped: keep any partial text, drop an empty bubble.
+        setMessages(prev => streamedText
+          ? prev.map(message => (message.id === assistantMessage.id ? { ...message, streaming: false } : message))
+          : prev.filter(message => message.id !== assistantMessage.id))
         return
       }
       const msg = e instanceof Error ? e.message : 'Assistant request failed'
-      // Keep the user's message visible and mark the assistant turn as failed so
-      // it can be retried, instead of silently dropping the pair.
-      setTurns(prev => {
-        const next = [...prev]
-        const last = next[next.length - 1]
-        if (last?.role === 'assistant') {
-          next[next.length - 1] = { role: 'assistant', text: streamedText, streaming: false, error: msg }
-        }
-        return next
-      })
+      // Keep the attorney's message visible and mark the reply as failed so it
+      // can be retried, instead of silently dropping the pair.
+      patchAssistant(assistantMessage.id, current => ({ ...current, streaming: false, error: msg }))
     } finally {
       abortRef.current = null
       setBusy(false)
     }
   }
 
-  const retry = (turnIndex: number) => {
-    const userTurn = turns[turnIndex - 1]
-    if (!userTurn || userTurn.role !== 'user' || busy) return
-    const message = userTurn.text
-    setTurns(prev => prev.filter((_, i) => i !== turnIndex && i !== turnIndex - 1))
-    void send(message)
+  const retry = (assistantId: string) => {
+    const index = messages.findIndex(message => message.id === assistantId)
+    const userTurn = messages[index - 1]
+    if (index < 1 || !userTurn || userTurn.role !== 'user' || busy) return
+    setMessages(prev => prev.filter(message => message.id !== assistantId && message.id !== userTurn.id))
+    void send(userTurn.content)
+  }
+
+  function handleReviewDesignSheetImport(event: ToolEvent) {
+    if (!event.matterId || !event.preview?.length || !event.proposed) {
+      toast.error('No design sheet proposal is available to review.')
+      return
+    }
+    setDesignSheetProposal({ matterId: event.matterId, preview: event.preview, proposed: event.proposed })
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       {confirmDialog}
+      {designSheetProposal && (
+        <DesignSheetImportDialog
+          open={Boolean(designSheetProposal)}
+          onOpenChange={nextOpen => { if (!nextOpen) setDesignSheetProposal(null) }}
+          matterId={designSheetProposal.matterId}
+          allowUpload={false}
+          initialPreview={designSheetProposal.preview}
+          initialProposed={designSheetProposal.proposed}
+          onAccepted={() => {
+            setDesignSheetProposal(null)
+            toast.success('Design sheet updates saved.')
+          }}
+        />
+      )}
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4" />
           Draft assistant
         </div>
         <div className="flex items-center gap-1">
-          {turns.length > 0 ? (
+          {messages.length > 0 ? (
             <Button
               size="icon"
               variant="ghost"
@@ -307,58 +263,27 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           ) : null}
         </div>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+      <div ref={scrollRef} role="log" aria-live="polite" aria-busy={busy} className="min-h-0 flex-1 overflow-y-auto p-3 text-sm">
         {loadingHistory ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
           </div>
-        ) : turns.length === 0 ? (
+        ) : messages.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Ask about fiduciaries, distribution ages, marker cleanup, or draft consistency. MCP connector
-            tools are used automatically when configured in Settings.
+            Ask about fiduciaries, distribution ages, marker cleanup, or draft consistency. The assistant has this
+            matter’s intake and design sheet, and can read the attached drafts and the rest of the matter record.
           </p>
         ) : (
-          turns.map((t, i) => (
-            <div
-              key={`${t.role}-${i}`}
-              className={`rounded-md px-2.5 py-2 text-xs ${
-                t.role === 'user' ? 'bg-secondary ml-6 whitespace-pre-wrap' : 'bg-muted mr-4'
-              }`}
-            >
-              {t.toolStatus ? (
-                <div className="mb-1 text-micro text-muted-foreground italic">{t.toolStatus}</div>
+          messages.map(message => (
+            <div key={message.id}>
+              <ChatMessage message={message} onReviewDesignSheetImport={handleReviewDesignSheetImport} />
+              {message.streaming && !message.content && !message.toolEvents?.length ? (
+                <p role="status" className="mb-3 px-2 text-xs text-muted-foreground">Thinking…</p>
               ) : null}
-              {t.role === 'assistant' ? <ChatMarkdown content={t.text} /> : t.text}
-              {t.streaming ? (
-                <span className="ml-0.5 inline-block animate-pulse text-muted-foreground">▍</span>
-              ) : null}
-              {t.role === 'assistant' && !t.streaming && t.text ? (
-                <button
-                  type="button"
-                  aria-label="Copy message"
-                  title="Copy message"
-                  className="mt-1 inline-flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(t.text).then(() => {
-                      setCopiedIndex(i)
-                      window.setTimeout(() => setCopiedIndex(current => (current === i ? null : current)), 1500)
-                    })
-                  }}
-                >
-                  {copiedIndex === i ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copiedIndex === i ? 'Copied' : 'Copy'}
-                </button>
-              ) : null}
-              {t.error ? (
-                <div className="mt-1 flex items-center gap-2 text-micro text-destructive">
-                  <span>{t.error}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-5 px-1.5 text-micro"
-                    disabled={busy}
-                    onClick={() => retry(i)}
-                  >
+              {message.error ? (
+                <div className="-mt-2 mb-3 flex items-center gap-2 px-2 text-xs text-destructive">
+                  <span>{message.error}</span>
+                  <Button size="sm" variant="ghost" className="h-5 px-1.5 text-xs" disabled={busy} onClick={() => retry(message.id)}>
                     Retry
                   </Button>
                 </div>
@@ -381,13 +306,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           }}
         />
         {busy ? (
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => abortRef.current?.abort()}
-            aria-label="Stop generating"
-            title="Stop generating"
-          >
+          <Button size="icon" variant="outline" onClick={() => abortRef.current?.abort()} aria-label="Stop generating" title="Stop generating">
             <Square className="h-4 w-4" />
           </Button>
         ) : (
