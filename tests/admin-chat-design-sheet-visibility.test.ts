@@ -51,11 +51,14 @@ describe('the assistant can see the provisions', () => {
 })
 
 describe('the assistant can ask what is still open', () => {
-  it('registers the status tool on a matter conversation', () => {
-    const route = source('app/api/admin/chat/route.ts')
-
-    expect(route).toContain('designSheetStatusExecutor')
-    expect(route).toContain('contextMatterId')
+  it('registers the status tool on a matter conversation, on both chat surfaces', () => {
+    // Both routes build their tools from the shared toolset, which registers
+    // the status tool whenever the chat is opened on a matter.
+    const toolset = source('lib/adminChat/toolset.ts')
+    expect(toolset).toContain('designSheetStatusExecutor(matterId)')
+    for (const route of ['app/api/admin/chat/route.ts', 'app/api/admin/assistant/chats/[chatId]/messages/route.ts']) {
+      expect(source(route), route).toContain('adminChatToolset(')
+    }
   })
 
   it('is read-only', () => {
