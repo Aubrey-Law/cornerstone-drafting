@@ -55,3 +55,10 @@ describe('pointing a chat at a matter', () => {
     expect(onChange).toHaveBeenCalledWith({ type: 'general' })
   })
 })
+
+describe('the picker can be opened by the page', () => {
+  it('shows the dialog when told to open', () => {
+    render(<AssistantContextPicker context={{ type: 'general' }} onChange={() => {}} open onOpenChange={() => {}} />)
+    expect(screen.getByPlaceholderText(/search clients/i)).toBeTruthy()
+  })
+})

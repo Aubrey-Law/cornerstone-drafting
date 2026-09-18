@@ -19,17 +19,24 @@ interface AssistantComposerProps {
   onWorkflowChange: (workflow: WorkflowRef | null) => void
   autoFocus?: boolean
   placeholder?: string
+  /**
+   * Why a send would be refused right now, with the fix. The server refuses a
+   * matter-scoped workflow in a general chat; holding the message here saves
+   * the round trip and says what to do.
+   */
+  sendBlocked?: { reason: string; actionLabel?: string; onAction?: () => void } | null
 }
 
 export function AssistantComposer({
-  value, onChange, onSend, onStop, streaming, workflow, onWorkflowChange, autoFocus, placeholder,
+  value, onChange, onSend, onStop, streaming, workflow, onWorkflowChange, autoFocus, placeholder, sendBlocked = null,
 }: AssistantComposerProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  const canSend = !streaming && Boolean(value.trim()) && !sendBlocked
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      if (!streaming && value.trim()) onSend()
+      if (canSend) onSend()
     }
   }
 
@@ -45,6 +52,16 @@ export function AssistantComposer({
             </button>
           </Badge>
           <span className="text-micro text-muted-foreground">will guide this message</span>
+        </div>
+      )}
+      {sendBlocked && (
+        <div role="note" className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <span>{sendBlocked.reason}</span>
+          {sendBlocked.onAction && (
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={sendBlocked.onAction}>
+              {sendBlocked.actionLabel ?? 'Fix'}
+            </Button>
+          )}
         </div>
       )}
       <ResizableTextarea
@@ -68,7 +85,7 @@ export function AssistantComposer({
             <Square className="h-3.5 w-3.5" /> Stop
           </Button>
         ) : (
-          <Button type="button" size="sm" disabled={!value.trim()} onClick={onSend}>
+          <Button type="button" size="sm" disabled={!canSend} onClick={onSend}>
             <Send className="h-3.5 w-3.5" /> Send
           </Button>
         )}
