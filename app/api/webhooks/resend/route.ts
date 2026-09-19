@@ -38,9 +38,9 @@ function failureReason(type: string, data: Record<string, unknown>): string | nu
 }
 
 export async function POST(req: Request) {
-  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim()
+  const secret = process.env.RESEND_WEBHOOK_SIGNING_SECRET?.trim()
   if (!secret) {
-    console.error('[resend webhook] missing RESEND_WEBHOOK_SECRET')
+    console.error('[resend webhook] missing RESEND_WEBHOOK_SIGNING_SECRET')
     return NextResponse.json({ error: 'webhook not configured' }, { status: 503 })
   }
 

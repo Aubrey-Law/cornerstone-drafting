@@ -155,7 +155,7 @@ billing page rather than an error.
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Transactional email sending |
-| `RESEND_WEBHOOK_SECRET` | Signing secret (`whsec_…`) for `/api/webhooks/resend`; without it the route 503s and bounces go unrecorded |
+| `RESEND_WEBHOOK_SIGNING_SECRET` | Signing secret (`whsec_…`) for `/api/webhooks/resend`; without it the route 503s and bounces go unrecorded |
 | `RESEND_FROM` | From address. Falls back to `"{attorneyShortName} <{firm.email}>"` |
 | `EMAILS_ENABLED` | Hard kill switch (`false` / `0` / `off` suppresses all sends) |
 | `EMAIL_ALLOWLIST` | Comma-separated recipients; anything else is suppressed and logged |

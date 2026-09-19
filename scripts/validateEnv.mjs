@@ -51,7 +51,7 @@ const PARTIAL_FEATURES = [
     // no bounce or spam complaint is ever recorded against the send. That is
     // the quiet way a sending domain's reputation decays — and this domain
     // carries engagement-agreement signing links.
-    requires: () => ['RESEND_WEBHOOK_SECRET'],
+    requires: () => ['RESEND_WEBHOOK_SIGNING_SECRET'],
     // The trigger is a credential, so its value must never reach the output.
     secret: true,
   },
