@@ -15,6 +15,7 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  PenLine,
   Search,
   Share2,
   SlidersHorizontal,
@@ -64,6 +65,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CombineWordDraftsDialog } from '@/components/drafting/CombineWordDraftsDialog'
+import { SendForSignatureDialog } from './SendForSignatureDialog'
 import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
 import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
 import {
@@ -92,6 +94,8 @@ import {
   setDocumentShared,
   uploadDocument,
 } from '@/lib/documents'
+import { SIGNATURE_REQUEST_LABELS } from '@/lib/esign/requestStatus'
+import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
@@ -114,6 +118,18 @@ const SORT_LABELS: Record<SortKey, string> = {
  */
 function isDocumentUnreviewed(doc: MatterDocument): boolean {
   return doc.source === 'client' && !doc.reviewed_at
+}
+
+/**
+ * How a signing badge reads. A completed request keeps its badge rather than
+ * disappearing: the executed copy arrives as a separate document, so without it
+ * the row an attorney sent from would look untouched.
+ */
+const SIGNATURE_BADGE_TONE: Record<string, string> = {
+  signed: 'border-green/30 bg-green-bg text-green',
+  failed: 'border-destructive/40 text-destructive',
+  declined: 'border-destructive/40 text-destructive',
+  expired: 'border-amber-border bg-amber-bg text-amber',
 }
 
 function auditLabel(event: DocumentAccessAudit) {
@@ -141,6 +157,12 @@ interface MatterDocumentsTabProps {
   initialScope?: Scope
   onScopeChange?: (scope: Scope) => void
   recordLabel?: 'matter' | 'lead'
+  /** firm_settings.esign_documents_enabled. Off hides the action entirely. */
+  esignDocumentsEnabled?: boolean
+  /** What this record already has out for signature, newest first. */
+  signatureRequests?: SignatureRequestSummary[]
+  /** Prefills the first signer row. The client, usually. */
+  defaultSigner?: { name: string; email: string } | null
 }
 
 export function MatterDocumentsTab({
@@ -158,6 +180,9 @@ export function MatterDocumentsTab({
   initialScope = 'all',
   onScopeChange,
   recordLabel = 'matter',
+  esignDocumentsEnabled = false,
+  signatureRequests = [],
+  defaultSigner = null,
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -184,6 +209,7 @@ export function MatterDocumentsTab({
   const [folderRenameTarget, setFolderRenameTarget] = useState<MatterDocumentFolder | null>(null)
   const [folderRenameValue, setFolderRenameValue] = useState('')
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<MatterDocumentFolder | null>(null)
+  const [signatureTarget, setSignatureTarget] = useState<MatterDocument | null>(null)
 
   useEffect(() => {
     if (!deepLinkedDocumentId) {
@@ -214,6 +240,21 @@ export function MatterDocumentsTab({
       window.clearTimeout(highlightTimer)
     }
   }, [deepLinkedDocumentId, documents])
+
+  /**
+   * The newest request per source document. A document can be sent more than
+   * once — nothing server-side prevents it — and the latest is the one whose
+   * links are live.
+   */
+  const requestByDocument = useMemo(() => {
+    const map = new Map<string, SignatureRequestSummary>()
+    for (const request of signatureRequests) {
+      if (request.sourceDocumentId && !map.has(request.sourceDocumentId)) {
+        map.set(request.sourceDocumentId, request)
+      }
+    }
+    return map
+  }, [signatureRequests])
 
   // Meeting notes have their own card on the matter page.
   const visibleDocuments = useMemo(
@@ -922,6 +963,7 @@ export function MatterDocumentsTab({
             {listedDocuments.map(doc => {
               const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
               const folderKey = documentFolderId(doc)
+              const signatureRequest = requestByDocument.get(doc.id) ?? null
               return (
                 <li
                   key={doc.id}
@@ -955,6 +997,20 @@ export function MatterDocumentsTab({
                         </span>
                       )}
                       <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
+                      {/* Rendered beside that list rather than through it: the
+                          row slices the computed badges to two, so a signing
+                          state added there would vanish on most documents. */}
+                      {signatureRequest && (
+                        <Badge
+                          variant="outline"
+                          className={cn('text-micro', SIGNATURE_BADGE_TONE[signatureRequest.state])}
+                          title={signatureRequest.error ?? undefined}
+                        >
+                          {SIGNATURE_REQUEST_LABELS[signatureRequest.state]}
+                          {signatureRequest.state === 'partially_signed'
+                            && ` ${signatureRequest.signedCount}/${signatureRequest.signerCount}`}
+                        </Badge>
+                      )}
                       {isDocumentUnreviewed(doc) && (
                         <Badge
                           variant="outline"
@@ -1017,6 +1073,11 @@ export function MatterDocumentsTab({
                         {isDocumentPdf(doc) && (
                           <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
                             <FileSearch className="mr-2 h-4 w-4" />Open original
+                          </DropdownMenuItem>
+                        )}
+                        {esignDocumentsEnabled && isDocumentPdf(doc) && (
+                          <DropdownMenuItem onSelect={() => setSignatureTarget(doc)}>
+                            <PenLine className="mr-2 h-4 w-4" />Send for signature
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
@@ -1216,6 +1277,15 @@ export function MatterDocumentsTab({
         onRevisionLoaded={(id, revision) => setViewedRevisions(prev => ({ ...prev, [id]: revision }))}
       />
 
+      <SendForSignatureDialog
+        matterId={matterId}
+        document={signatureTarget}
+        defaultSigner={defaultSigner}
+        existingRequest={signatureTarget ? requestByDocument.get(signatureTarget.id) ?? null : null}
+        onOpenChange={open => !open && setSignatureTarget(null)}
+        onSent={refresh}
+      />
+
       <CombineWordDraftsDialog
         open={combineOpen}
         onOpenChange={setCombineOpen}
@@ -1230,6 +1300,45 @@ export function MatterDocumentsTab({
             <SheetDescription>{auditTarget?.name ?? 'Recent document history'}</SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-3">
+            {/* Signing first: when a document is out for signature, who has and
+                has not signed is the thing being looked for. */}
+            {auditTarget && requestByDocument.get(auditTarget.id) && (() => {
+              const request = requestByDocument.get(auditTarget.id)!
+              return (
+                <div className="rounded-md border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium">
+                      {SIGNATURE_REQUEST_LABELS[request.state]}
+                      {request.signerCount > 0 && ` · ${request.signedCount} of ${request.signerCount} signed`}
+                    </p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {request.sentAt ? formatDateTime(request.sentAt) : '—'}
+                    </span>
+                  </div>
+                  {request.error && (
+                    <p className="mt-1 text-xs text-destructive">{request.error}</p>
+                  )}
+                  <ul className="mt-2 space-y-1">
+                    {request.signers.map(signer => (
+                      <li key={signer.email} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="min-w-0 truncate text-muted-foreground" title={signer.email}>
+                          {signer.name} · {signer.email}
+                        </span>
+                        <span className="shrink-0">
+                          {signer.declinedAt
+                            ? `Declined ${formatDateTime(signer.declinedAt)}`
+                            : signer.signedAt
+                              ? `Signed ${formatDateTime(signer.signedAt)}`
+                              : signer.viewedAt
+                                ? `Opened ${formatDateTime(signer.viewedAt)}`
+                                : 'Not opened yet'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
             {auditLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />

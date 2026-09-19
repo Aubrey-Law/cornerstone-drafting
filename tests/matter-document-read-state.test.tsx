@@ -4,15 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMatterDocuments } from '@/app/admin/matters/[id]/useMatterDocuments'
 import type { MatterDocument } from '@/types/database'
 
-const { listDocuments, listDocumentFolders } = vi.hoisted(() => ({
-  listDocuments: vi.fn(), listDocumentFolders: vi.fn(),
+const { listDocuments, listDocumentFolders, listSignatureRequests } = vi.hoisted(() => ({
+  listDocuments: vi.fn(), listDocumentFolders: vi.fn(), listSignatureRequests: vi.fn(),
 }))
-vi.mock('@/lib/documents', () => ({ listDocuments, listDocumentFolders }))
+vi.mock('@/lib/documents', () => ({ listDocuments, listDocumentFolders, listSignatureRequests }))
 const doc = { id: 'doc-a', matter_id: 'a', name: 'Existing document' } as unknown as MatterDocument
 
 beforeEach(() => {
   listDocuments.mockReset().mockResolvedValue([doc])
   listDocumentFolders.mockReset().mockResolvedValue([])
+  // Rides along with the documents read; a firm without the feature gets [].
+  listSignatureRequests.mockReset().mockResolvedValue([])
 })
 afterEach(cleanup)
 

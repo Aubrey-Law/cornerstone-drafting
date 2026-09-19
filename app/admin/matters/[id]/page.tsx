@@ -7,6 +7,7 @@ import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { isEsignConfigured } from '@/lib/esign/firma'
+import { esignDocumentsEnabled } from '@/lib/esign/documentSignature'
 import { isGoogleConfigured } from '@/lib/googleCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
@@ -250,6 +251,7 @@ export default async function MatterDetailPage({ params }: Params) {
     const [matter, contacts, agingSummary, matterRow,
       { data: detailsRow, error: detailsError }, notes, designSheet,
       intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
+      documentSignaturesEnabled,
     ] = await Promise.all([
       measure('core', () => fetchMatter(id)),
       measure('contacts', () => fetchMatterContacts(id)),
@@ -263,6 +265,7 @@ export default async function MatterDetailPage({ params }: Params) {
       measure('stage-history', () => fetchMatterStageHistory(id)),
       measure('task-counts', () => fetchRecordTaskCounts(id)),
       intakeContext,
+      measure('esign-documents', () => esignDocumentsEnabled()),
     ])
     if (!matter) notFound()
 
@@ -332,6 +335,7 @@ export default async function MatterDetailPage({ params }: Params) {
         resyncPreviewCount={resyncPreviewCount}
         smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
         esignEnabled={isEsignConfigured()}
+        esignDocumentsEnabled={documentSignaturesEnabled}
         emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
       />
     )

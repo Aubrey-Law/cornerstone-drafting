@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MatterDocumentsTab } from '@/app/admin/matters/[id]/MatterDocumentsTab'
-import { listDocumentFolders, listDocuments } from '@/lib/documents'
+import { listDocumentFolders, listDocuments, listSignatureRequests } from '@/lib/documents'
+import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 export function useLeadDocuments(matterId: string | null | undefined) {
   const [documents, setDocuments] = useState<MatterDocument[]>([])
   const [folders, setFolders] = useState<MatterDocumentFolder[]>([])
+  const [signatureRequests, setSignatureRequests] = useState<SignatureRequestSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(matterId))
 
@@ -19,17 +21,20 @@ export function useLeadDocuments(matterId: string | null | undefined) {
       setError(null)
       setDocuments([])
       setFolders([])
+      setSignatureRequests([])
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      const [nextDocuments, nextFolders] = await Promise.all([
+      const [nextDocuments, nextFolders, nextRequests] = await Promise.all([
         listDocuments(matterId),
         listDocumentFolders(matterId),
+        listSignatureRequests(matterId),
       ])
       setDocuments(nextDocuments)
       setFolders(nextFolders)
+      setSignatureRequests(nextRequests)
       setError(null)
     } catch {
       setError('Could not load documents. Please retry.')
@@ -42,7 +47,7 @@ export function useLeadDocuments(matterId: string | null | undefined) {
     void reload()
   }, [reload])
 
-  return { documents, folders, loading, error, reload }
+  return { documents, folders, signatureRequests, loading, error, reload }
 }
 
 type LeadDocumentsTabProps = {
@@ -55,6 +60,10 @@ type LeadDocumentsTabProps = {
   agreementId: string | null
   clientName?: string | null
   onDocumentsChanged: () => void | Promise<void>
+  /** A lead is a matter, so the same send works here. Off by default. */
+  esignDocumentsEnabled?: boolean
+  signatureRequests?: SignatureRequestSummary[]
+  defaultSigner?: { name: string; email: string } | null
 }
 
 export function LeadDocumentsTab({
@@ -67,6 +76,9 @@ export function LeadDocumentsTab({
   agreementStatus,
   clientName,
   onDocumentsChanged,
+  esignDocumentsEnabled = false,
+  signatureRequests = [],
+  defaultSigner = null,
 }: LeadDocumentsTabProps) {
   if (!matterId) {
     return (
@@ -104,6 +116,9 @@ export function LeadDocumentsTab({
         onDocumentsChanged={onDocumentsChanged}
         clientName={clientName}
         recordLabel="lead"
+        esignDocumentsEnabled={esignDocumentsEnabled}
+        signatureRequests={signatureRequests}
+        defaultSigner={defaultSigner}
       />}
     </div>
   )

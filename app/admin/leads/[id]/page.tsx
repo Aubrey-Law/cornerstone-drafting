@@ -6,6 +6,7 @@ import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
+import { esignDocumentsEnabled } from '@/lib/esign/documentSignature'
 import { newestTimestamp } from '@/lib/leads/timeline'
 import { clientContactTimestamps } from '@/lib/leads/contactEvents'
 import { leadScoreInputFromRow, scoringAppointmentAt } from '@/lib/leads/score'
@@ -250,6 +251,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         role: user ? await getCachedUserRole(user.id) ?? '' : '',
       }}
       smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
+      esignDocumentsEnabled={await esignDocumentsEnabled()}
     />
   )
 }

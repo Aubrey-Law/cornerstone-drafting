@@ -5,8 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useLeadDocuments, LeadDocumentsTab } from '@/components/leads/LeadDocumentsTab'
 import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 
-const mocks = vi.hoisted(() => ({ documents: vi.fn(), folders: vi.fn(), token: 'token' }))
-vi.mock('@/lib/documents', () => ({ listDocuments: mocks.documents, listDocumentFolders: mocks.folders }))
+const mocks = vi.hoisted(() => ({ documents: vi.fn(), folders: vi.fn(), signatureRequests: vi.fn(), token: 'token' }))
+vi.mock('@/lib/documents', () => ({ listDocuments: mocks.documents, listDocumentFolders: mocks.folders, listSignatureRequests: mocks.signatureRequests }))
 vi.mock('@/app/admin/matters/[id]/MatterDocumentsTab', () => ({ MatterDocumentsTab: ({ documents }: { documents: { id: string }[] }) => <div>{documents.length ? 'Loaded documents' : 'No documents'}</div> }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => mocks.token }))
 vi.mock('@/components/tasks/TaskDetailSheet', () => ({ TaskDetailSheet: () => null }))
@@ -17,6 +17,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 it('retains previously loaded documents after a failed refresh and recovers on retry', async () => {
   mocks.documents.mockResolvedValue([{ id: 'doc-1' }])
   mocks.folders.mockResolvedValue([])
+  mocks.signatureRequests.mockResolvedValue([])
   const { result } = renderHook(() => useLeadDocuments('matter-1'))
   await waitFor(() => expect(result.current.documents).toHaveLength(1))
   mocks.documents.mockRejectedValueOnce(new Error('Unavailable'))

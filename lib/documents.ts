@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
+import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 
 const WORD_CONTENT_TYPES = new Set([
   'application/msword',
@@ -375,4 +376,54 @@ export async function moveDocumentToFolder(
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body?.error ?? 'Could not move document')
   return body.document as MatterDocument
+}
+
+/**
+ * Send a PDF that is already in this matter's documents out for signature.
+ *
+ * Takes a document id rather than a file: the upload above is how the PDF gets
+ * there. The send does its work inline — presigned fetch, appended signature
+ * page, R2 write, anchor check, one email per signer — so it can take a while,
+ * and the route's own refusals are written to be shown to an attorney verbatim.
+ */
+export async function sendDocumentForSignature(
+  matterId: string,
+  request: {
+    documentId: string
+    name: string
+    signers: Array<{ name: string; email: string; role?: string }>
+    message: string
+    expirationHours: number
+    ceremonyAttested: boolean
+  },
+): Promise<{ requestId: string; recipients: Array<{ key: string; email: string }> }> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(`/api/admin/matters/${encodeURIComponent(matterId)}/signature-requests`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(request),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not send this document for signature')
+  return body as { requestId: string; recipients: Array<{ key: string; email: string }> }
+}
+
+/**
+ * What this matter has out for signature. Empty when the feature is off, so the
+ * caller does not need to know whether it is — and empty on a failure, like
+ * listDocuments, because a status badge is not worth blanking the tab over.
+ */
+export async function listSignatureRequests(matterId: string): Promise<SignatureRequestSummary[]> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(
+    `/api/admin/matters/${encodeURIComponent(matterId)}/signature-requests`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) return []
+  const { requests } = await res.json()
+  return (requests ?? []) as SignatureRequestSummary[]
 }

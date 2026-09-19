@@ -124,6 +124,8 @@ type LeadDetailClientProps = {
   initialIntakeUrl?: string | null
   initialIntakeLinkRevoked?: boolean
   smsEnabled?: boolean
+  /** firm_settings.esign_documents_enabled — sending a document for signature. */
+  esignDocumentsEnabled?: boolean
 }
 
 type LeadPatchResponse = {
@@ -197,6 +199,7 @@ export function LeadDetailClient({
   initialIntakeUrl = null,
   initialIntakeLinkRevoked = false,
   smsEnabled = true,
+  esignDocumentsEnabled = false,
 }: LeadDetailClientProps) {
   const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
@@ -247,6 +250,7 @@ export function LeadDetailClient({
   const {
     documents,
     folders: documentFolders,
+    signatureRequests,
     loading: documentsLoading,
     error: documentsError,
     reload: reloadDocuments,
@@ -1038,6 +1042,11 @@ export function LeadDetailClient({
                 agreementId={activeAgreement?.id ?? null}
                 clientName={clientName}
                 onDocumentsChanged={reloadDocuments}
+                esignDocumentsEnabled={esignDocumentsEnabled}
+                signatureRequests={signatureRequests}
+                defaultSigner={lead.email
+                  ? { name: clientName ?? '', email: lead.email }
+                  : null}
               />
             </TabsContent>
 
