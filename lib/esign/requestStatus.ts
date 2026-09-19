@@ -91,10 +91,27 @@ export const SIGNATURE_REQUEST_LABELS: Record<SignatureRequestState, string> = {
   failed: 'Send failed',
 }
 
+/**
+ * A request that still has links somebody could sign.
+ *
+ * The one definition of "live", shared by the send dialog's warning, the
+ * cancel action and the signer-level resend. Two of them drifting apart would
+ * mean offering to withdraw something already finished, or refusing to
+ * withdraw something still out.
+ */
+export function isRequestLive(request: { state: SignatureRequestState } | null | undefined): boolean {
+  if (!request) return false
+  return request.state === 'sent'
+    || request.state === 'viewed'
+    || request.state === 'partially_signed'
+}
+
 /** One signer's progress, as the list endpoint reports it. */
 export interface SignatureRequestSigner {
   name: string
   email: string
+  /** `signer_1`, `signer_2`… — what a resend is addressed to. */
+  recipientKey: string
   /** The session's own status, or `pending` if no session was ever minted. */
   state: string
   viewedAt: string | null

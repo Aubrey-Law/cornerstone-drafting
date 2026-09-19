@@ -121,6 +121,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         return {
           name: String(recipient.name),
           email: String(recipient.email),
+          recipientKey: String(recipient.recipient_key),
           // No session means the send threw before minting one, which is a
           // different thing from a link that was sent and ignored.
           state: session ? String(session.status) : 'pending',

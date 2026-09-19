@@ -427,3 +427,55 @@ export async function listSignatureRequests(matterId: string): Promise<Signature
   const { requests } = await res.json()
   return (requests ?? []) as SignatureRequestSummary[]
 }
+
+/**
+ * Withdraw a signature request.
+ *
+ * The reason is recorded on the audit trail and read back off the certificate,
+ * so it is required rather than optional. Not reversible: the links close and
+ * the tokens are gone, so getting the document signed after this means sending
+ * it again.
+ */
+export async function cancelSignatureRequest(
+  matterId: string,
+  requestId: string,
+  reason: string,
+): Promise<void> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(
+    `/api/admin/matters/${encodeURIComponent(matterId)}/signature-requests/${encodeURIComponent(requestId)}/cancel`,
+    { method: 'POST', headers: authHeaders(token), body: JSON.stringify({ reason }) },
+  )
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not withdraw this request')
+}
+
+/**
+ * Send one signer a fresh link.
+ *
+ * Supersedes whatever link they already hold — the raw token was never stored,
+ * so there is no old link to re-send.
+ */
+export async function resendSignatureRequest(
+  matterId: string,
+  requestId: string,
+  recipientKey: string,
+  expirationHours: number,
+): Promise<{ email: string }> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(
+    `/api/admin/matters/${encodeURIComponent(matterId)}/signature-requests/${encodeURIComponent(requestId)}/resend`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ recipientKey, expirationHours }),
+    },
+  )
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not send a new link')
+  return body as { email: string }
+}

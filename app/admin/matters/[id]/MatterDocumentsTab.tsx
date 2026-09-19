@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   Pencil,
   PenLine,
+  Send,
   Search,
   Share2,
   SlidersHorizontal,
@@ -93,8 +94,10 @@ import {
   setDocumentReviewed,
   setDocumentShared,
   uploadDocument,
+  cancelSignatureRequest,
+  resendSignatureRequest,
 } from '@/lib/documents'
-import { SIGNATURE_REQUEST_LABELS } from '@/lib/esign/requestStatus'
+import { isRequestLive, SIGNATURE_REQUEST_LABELS } from '@/lib/esign/requestStatus'
 import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
@@ -130,6 +133,7 @@ const SIGNATURE_BADGE_TONE: Record<string, string> = {
   failed: 'border-destructive/40 text-destructive',
   declined: 'border-destructive/40 text-destructive',
   expired: 'border-amber-border bg-amber-bg text-amber',
+  cancelled: 'text-muted-foreground',
 }
 
 function auditLabel(event: DocumentAccessAudit) {
@@ -210,6 +214,8 @@ export function MatterDocumentsTab({
   const [folderRenameValue, setFolderRenameValue] = useState('')
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<MatterDocumentFolder | null>(null)
   const [signatureTarget, setSignatureTarget] = useState<MatterDocument | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<SignatureRequestSummary | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
 
   useEffect(() => {
     if (!deepLinkedDocumentId) {
@@ -595,6 +601,36 @@ export function MatterDocumentsTab({
         toast.success(moved.length === 1 ? `Moved to ${destination}` : `Moved ${moved.length} documents to ${destination}`)
         await refresh()
       }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleCancelSignature = async () => {
+    const request = cancelTarget
+    const reason = cancelReason.trim()
+    if (!request || !reason) return
+    setBusy('cancel-signature')
+    try {
+      await cancelSignatureRequest(matterId, request.id, reason)
+      toast.success('Signature request withdrawn')
+      setCancelTarget(null)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not withdraw this request')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleResendSignature = async (request: SignatureRequestSummary, recipientKey: string) => {
+    setBusy(`resend:${recipientKey}`)
+    try {
+      const { email } = await resendSignatureRequest(matterId, request.id, recipientKey, 168)
+      toast.success(`New link sent to ${email}`)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not send a new link')
     } finally {
       setBusy(null)
     }
@@ -1080,6 +1116,13 @@ export function MatterDocumentsTab({
                             <PenLine className="mr-2 h-4 w-4" />Send for signature
                           </DropdownMenuItem>
                         )}
+                        {esignDocumentsEnabled && isRequestLive(signatureRequest) && (
+                          <DropdownMenuItem
+                            onSelect={() => { setCancelReason(''); setCancelTarget(signatureRequest) }}
+                          >
+                            <Undo2 className="mr-2 h-4 w-4" />Withdraw signature request
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
                           <Download className="mr-2 h-4 w-4" />Download
                         </DropdownMenuItem>
@@ -1277,6 +1320,49 @@ export function MatterDocumentsTab({
         onRevisionLoaded={(id, revision) => setViewedRevisions(prev => ({ ...prev, [id]: revision }))}
       />
 
+      <AlertDialog open={cancelTarget !== null} onOpenChange={open => !open && setCancelTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Withdraw this signature request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Every link already sent for &ldquo;{cancelTarget?.name ?? ''}&rdquo; stops working
+              immediately, and anyone who opens one is told the firm withdrew it. This cannot be
+              undone — getting the document signed afterwards means sending it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {/* A signature already given is not unmade by withdrawing the
+              request, and whoever is about to do this should know it happened. */}
+          {(cancelTarget?.signedCount ?? 0) > 0 && (
+            <p role="alert" className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
+              {cancelTarget?.signers.filter(signer => signer.signedAt).map(signer => signer.name).join(', ')}
+              {' '}already signed. That signature stays on the record; the document simply never completes.
+            </p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="withdraw-reason">Why is it being withdrawn?</Label>
+            <Input
+              id="withdraw-reason"
+              value={cancelReason}
+              placeholder="Wrong version sent"
+              onChange={event => setCancelReason(event.target.value)}
+            />
+            <p className="text-micro text-muted-foreground">
+              Recorded on the audit trail, and printed on the certificate of anything signed from
+              this request.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it open</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!cancelReason.trim() || busy === 'cancel-signature'}
+              onClick={event => { event.preventDefault(); void handleCancelSignature() }}
+            >
+              Withdraw request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <SendForSignatureDialog
         matterId={matterId}
         document={signatureTarget}
@@ -1319,22 +1405,46 @@ export function MatterDocumentsTab({
                     <p className="mt-1 text-xs text-destructive">{request.error}</p>
                   )}
                   <ul className="mt-2 space-y-1">
-                    {request.signers.map(signer => (
-                      <li key={signer.email} className="flex items-center justify-between gap-3 text-xs">
-                        <span className="min-w-0 truncate text-muted-foreground" title={signer.email}>
-                          {signer.name} · {signer.email}
-                        </span>
-                        <span className="shrink-0">
-                          {signer.declinedAt
-                            ? `Declined ${formatDateTime(signer.declinedAt)}`
-                            : signer.signedAt
-                              ? `Signed ${formatDateTime(signer.signedAt)}`
-                              : signer.viewedAt
-                                ? `Opened ${formatDateTime(signer.viewedAt)}`
-                                : 'Not opened yet'}
-                        </span>
-                      </li>
-                    ))}
+                    {request.signers.map(signer => {
+                      // Only someone who could still sign is worth chasing.
+                      const outstanding = isRequestLive(request)
+                        && !signer.signedAt
+                        && !signer.declinedAt
+                      return (
+                        <li key={signer.email} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="min-w-0 truncate text-muted-foreground" title={signer.email}>
+                            {signer.name} · {signer.email}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span>
+                              {signer.declinedAt
+                                ? `Declined ${formatDateTime(signer.declinedAt)}`
+                                : signer.signedAt
+                                  ? `Signed ${formatDateTime(signer.signedAt)}`
+                                  : signer.viewedAt
+                                    ? `Opened ${formatDateTime(signer.viewedAt)}`
+                                    : 'Not opened yet'}
+                            </span>
+                            {outstanding && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1 text-micro"
+                                disabled={busy === `resend:${signer.recipientKey}`}
+                                title="Sends a new link. The one they already have stops working."
+                                onClick={() => void handleResendSignature(request, signer.recipientKey)}
+                              >
+                                {busy === `resend:${signer.recipientKey}`
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <Send className="h-3 w-3" />}
+                                Resend
+                              </Button>
+                            )}
+                          </span>
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
               )

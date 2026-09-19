@@ -67,7 +67,7 @@ const OPEN_STATUSES = new Set(['sent', 'viewed'])
 
 export type SigningSessionGate =
   | { ok: true }
-  | { ok: false; reason: 'expired' | 'already_signed' | 'declined' | 'closed' }
+  | { ok: false; reason: 'expired' | 'already_signed' | 'declined' | 'cancelled' | 'closed' }
 
 /**
  * Whether a signing session may still be used, given its stored state.
@@ -77,6 +77,10 @@ export type SigningSessionGate =
  * comes back a month later should be told they already signed, not that their
  * link expired — the second is technically true and actively misleading. Only
  * a session with no outcome is judged on its expiry.
+ *
+ * A withdrawn session ranks with the outcomes for the same reason, and the
+ * reason is stronger: the client did nothing, and telling them the clock ran
+ * out would blame them for a decision the firm made.
  */
 export function signingSessionGate(
   session: { status: string; expires_at: string | null },
@@ -84,6 +88,7 @@ export function signingSessionGate(
 ): SigningSessionGate {
   if (session.status === 'signed') return { ok: false, reason: 'already_signed' }
   if (session.status === 'declined') return { ok: false, reason: 'declined' }
+  if (session.status === 'cancelled') return { ok: false, reason: 'cancelled' }
   if (isSigningTokenExpired(session.expires_at, now)) return { ok: false, reason: 'expired' }
   if (!OPEN_STATUSES.has(session.status)) return { ok: false, reason: 'closed' }
   return { ok: true }

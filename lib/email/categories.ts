@@ -157,14 +157,16 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
   },
   esign_signature_request: {
     category: 'esign_signature_request',
-    label: 'Engagement signature request',
-    description: 'Sent to a client with their one-time link to sign the engagement agreement.',
+    label: 'Signature request',
+    // Both categories cover engagement agreements and any other document sent
+    // for signature; the document path has shared them since it shipped.
+    description: 'Sent to a signer with their one-time link to sign a document.',
     recipient: 'client',
   },
   esign_signature_reminder: {
     category: 'esign_signature_reminder',
-    label: 'Engagement signature reminder',
-    description: 'Sent to a client who has not yet signed, with a fresh signing link.',
+    label: 'Signature reminder',
+    description: 'Sent to a signer who has not yet signed, with a fresh link that replaces the last one.',
     recipient: 'client',
   },
   manual: {

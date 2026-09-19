@@ -2,12 +2,12 @@ import 'server-only'
 
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { putFileToR2 } from '@/lib/documentUpload'
-import { sendEmail } from '@/lib/email/send'
 import { createSigningToken } from '@/lib/esign/nativeTokens'
 import { locateAnchors } from '@/lib/esign/nativeAnchors'
 import { appendSignaturePage } from '@/lib/esign/signaturePage'
 import { documentAnchorMarkers, signingPdfKey } from '@/lib/esign/subject'
 import { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
+import { DocumentSignatureError, emailSigningLink } from '@/lib/esign/documentLifecycle'
 
 /**
  * Sending a document the firm did not author out for signature.
@@ -25,16 +25,6 @@ import { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
  * one signing route, one token scheme, one audit trail, one sealing step.
  */
 
-/** Read out of firm_settings, failing closed like esignNativeEnabled does. */
-export async function esignDocumentsEnabled(): Promise<boolean> {
-  const { data, error } = await getAdminClient()
-    .from('firm_settings')
-    .select('esign_documents_enabled')
-    .eq('id', 1)
-    .maybeSingle()
-  return !error && data?.esign_documents_enabled === true
-}
-
 /**
  * The wording an attorney is shown and agrees to before a document is sent, and
  * the signer ceiling the signature page imposes.
@@ -44,6 +34,14 @@ export async function esignDocumentsEnabled(): Promise<boolean> {
  * accept. Re-exported here so every existing importer is unchanged.
  */
 export { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
+
+// Re-exported so every existing importer of this module is unchanged.
+export {
+  DocumentSignatureError,
+  cancelDocumentSignatureRequest,
+  esignDocumentsEnabled,
+  resendDocumentSignatureLink,
+} from '@/lib/esign/documentLifecycle'
 
 /** A signer on an uploaded document. Positional, like the anchor markers. */
 export interface DocumentSigner {
@@ -66,13 +64,6 @@ export interface CreateDocumentSignatureRequestInput {
   expirationHours: number
   /** The attorney who attested. Without this, nothing is sent. */
   attestedBy: string
-}
-
-export class DocumentSignatureError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'DocumentSignatureError'
-  }
 }
 
 export async function createDocumentSignatureRequest(
@@ -195,22 +186,15 @@ export async function createDocumentSignatureRequest(
     })
 
     for (const [index, session] of sessions.entries()) {
-      await sendEmail({
-        category: 'esign_signature_request',
+      await emailSigningLink({
+        requestId,
+        recipientKey: session.key,
         to: session.email,
-        subject: `${input.name} is ready for your signature`,
-        text: [
-          `${input.signers[index].name},`,
-          '',
-          input.message || `${input.name} is ready for your signature.`,
-          '',
-          `${appOrigin()}/sign/${session.token}`,
-        ].join('\n'),
-      })
-      await admin.from('esign_audit_events').insert({
-        signature_request_id: requestId,
-        event_type: 'emailed',
-        detail: { category: 'esign_signature_request', recipient_key: session.key },
+        signerName: input.signers[index].name,
+        documentName: input.name,
+        message: input.message,
+        token: session.token,
+        category: 'esign_signature_request',
       })
     }
 
@@ -231,19 +215,6 @@ export async function createDocumentSignatureRequest(
       .eq('id', requestId)
     throw error
   }
-}
-
-/** Mirrors signingUrl in lib/esign/native.ts, which is module-private there. */
-function appOrigin(): string {
-  const origin = process.env.NEXT_PUBLIC_APP_URL
-    ?? process.env.NEXT_PUBLIC_SITE_URL
-    ?? process.env.CORNERSTONE_ORIGIN
-  if (!origin) {
-    throw new DocumentSignatureError(
-      'NEXT_PUBLIC_APP_URL is not set, so a signing link cannot be built',
-    )
-  }
-  return origin.replace(/\/$/, '')
 }
 
 /**
@@ -275,6 +246,12 @@ export async function completeDocumentSignature(input: {
   if (error) return { ok: false, error: error.message }
   if (!request) return { ok: false, error: 'Signature request not found' }
   if (request.status === 'completed') return { ok: true }
+  // Cancelling closes the sessions, so a signer should never reach this with a
+  // withdrawn request. Defence in depth: the alternative is filing an executed
+  // copy of a document the firm took back.
+  if (request.status === 'cancelled') {
+    return { ok: false, error: 'This signature request was withdrawn' }
+  }
 
   const matterId = request.matter_id as string
   const safeName = String(request.name)

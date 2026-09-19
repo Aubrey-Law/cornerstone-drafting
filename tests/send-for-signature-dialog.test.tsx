@@ -256,8 +256,8 @@ describe('a document already out for signature', () => {
     completedAt: null,
     error: null,
     signers: [
-      { name: 'Walter White', email: 'walter@example.com', state: 'signed', viewedAt: null, signedAt: '2026-09-17T15:00:00.000Z', declinedAt: null },
-      { name: 'Skylar White', email: 'skylar@example.com', state: 'sent', viewedAt: null, signedAt: null, declinedAt: null },
+      { recipientKey: 'signer_1', name: 'Walter White', email: 'walter@example.com', state: 'signed', viewedAt: null, signedAt: '2026-09-17T15:00:00.000Z', declinedAt: null },
+      { recipientKey: 'signer_2', name: 'Skylar White', email: 'skylar@example.com', state: 'sent', viewedAt: null, signedAt: null, declinedAt: null },
     ],
   }
 

@@ -26,6 +26,15 @@ describe('signing route security shape', () => {
     expect(route).toContain('signingSessionGate')
   })
 
+  it('tells a signer a withdrawn request was withdrawn, not that it expired', () => {
+    // Every other refusal reason has its own branch; without one, `cancelled`
+    // falls through to the expiry message and a client who did nothing is told
+    // their clock ran out. The precedence itself is pinned in
+    // tests/esign-native-tokens.test.ts.
+    expect(route).toContain("gate.reason === 'cancelled'")
+    expect(route).toContain('withdrawn by the firm')
+  })
+
   it('does not reveal whether a link ever existed', () => {
     // A wrong token and a revoked one must look the same to the holder.
     expect(route).toContain('This signing link is not valid')
