@@ -72,7 +72,7 @@ vi.mock('@/lib/email/send', () => ({
   sendEmail: vi.fn(async (args: { category: string; to: string; subject: string; html: string }) => {
     state.emails.push(args)
     return state.emailResultOk
-      ? { ok: true, status: 'sent', resendId: 'r-1', logId: null }
+      ? { ok: true, status: 'sent', providerMessageId: 'r-1', logId: null }
       : { ok: false, status: 'error', error: 'boom', logId: null }
   }),
 }))

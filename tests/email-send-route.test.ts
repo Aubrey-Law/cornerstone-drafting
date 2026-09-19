@@ -37,7 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   requireAdmin.mockResolvedValue({ err: null, userId: 'u1', user: { email: 'scott@example.com' } })
   consumeRateLimit.mockResolvedValue({ ok: true })
-  sendEmail.mockResolvedValue({ ok: true, status: 'sent', resendId: 'r1', logId: 'l1' })
+  sendEmail.mockResolvedValue({ ok: true, status: 'sent', providerMessageId: 'r1', logId: 'l1' })
   loadMatterDocumentAttachments.mockResolvedValue([])
   insert.mockResolvedValue({ error: null })
 })

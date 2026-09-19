@@ -75,7 +75,7 @@ vi.mock('@/lib/supabaseAdmin', () => {
 vi.mock('@/lib/email/send', () => ({
   sendEmail: vi.fn(async (args: { category: string; to: string }) => {
     state.emails.push({ category: args.category, to: args.to })
-    return { ok: true, status: 'sent', resendId: null, logId: null }
+    return { ok: true, status: 'sent', providerMessageId: null, logId: null }
   }),
 }))
 
