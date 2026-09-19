@@ -45,6 +45,17 @@ const PARTIAL_FEATURES = [
     requires: (value) => (value === 'stripe' ? ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] : []),
   },
   {
+    name: 'Resend delivery tracking (bounces and complaints)',
+    trigger: 'RESEND_API_KEY',
+    // Without the signing secret /api/webhooks/resend 503s every delivery, so
+    // no bounce or spam complaint is ever recorded against the send. That is
+    // the quiet way a sending domain's reputation decays — and this domain
+    // carries engagement-agreement signing links.
+    requires: () => ['RESEND_WEBHOOK_SECRET'],
+    // The trigger is a credential, so its value must never reach the output.
+    secret: true,
+  },
+  {
     name: 'Mercury bank reconciliation',
     trigger: 'MERCURY_API_TOKEN',
     // Without the account allowlist every deposit reads as "wrong account",

@@ -45,8 +45,8 @@ export interface SendEmailArgs {
 }
 
 export type SendEmailResult =
-  | { ok: true; status: 'sent'; resendId: string | null; logId: string | null }
-  | { ok: true; status: 'redirected'; resendId: string | null; logId: string | null; actualTo: string }
+  | { ok: true; status: 'sent'; providerMessageId: string | null; logId: string | null }
+  | { ok: true; status: 'redirected'; providerMessageId: string | null; logId: string | null; actualTo: string }
   | { ok: true; status: 'suppressed'; logId: string | null; reason: 'env_hard_kill' | 'category_off' | 'allowlist' }
   | { ok: true; status: 'logged'; reason: 'no_api_key'; logId: string | null }
   | { ok: false; status: 'error'; error: string; logId: string | null }
@@ -114,7 +114,6 @@ interface ResendAttemptInput {
 }
 
 interface AttemptResult {
-  resendId: string | null
   /** The sending provider's own message id, when it returns one. */
   providerMessageId: string | null
   fromAddress: string | null
@@ -124,7 +123,7 @@ interface AttemptResult {
 async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    return { resendId: null, providerMessageId: null, fromAddress: input.from, error: 'RESEND_API_KEY not configured' }
+    return { providerMessageId: null, fromAddress: input.from, error: 'RESEND_API_KEY not configured' }
   }
   const resend = new Resend(apiKey)
   try {
@@ -147,12 +146,11 @@ async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> 
         : {}),
     })
     if (error) {
-      return { resendId: null, providerMessageId: null, fromAddress: input.from, error: error.message }
+      return { providerMessageId: null, fromAddress: input.from, error: error.message }
     }
-    return { resendId: data?.id ?? null, providerMessageId: null, fromAddress: input.from, error: null }
+    return { providerMessageId: data?.id ?? null, fromAddress: input.from, error: null }
   } catch (err) {
     return {
-      resendId: null,
       providerMessageId: null,
       fromAddress: input.from,
       error: err instanceof Error ? err.message : 'Unknown send error',
@@ -176,12 +174,12 @@ async function attemptGmail(
       userId,
       attachments: input.attachments,
     })
-    return { resendId: null, providerMessageId: messageId, fromAddress, error: null }
+    return { providerMessageId: messageId, fromAddress, error: null }
   } catch (err) {
     const msg = err instanceof GmailSendError
       ? `${err.kind}: ${err.message}`
       : err instanceof Error ? err.message : 'Unknown Gmail error'
-    return { resendId: null, providerMessageId: null, fromAddress: null, error: msg }
+    return { providerMessageId: null, fromAddress: null, error: msg }
   }
 }
 
@@ -384,7 +382,6 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     cc: ccList ? ccList.join(', ') : null,
     bcc: bccList ? bccList.join(', ') : null,
     html: finalBody,
-    resend_id: result.resendId,
     provider: providerUsed,
     provider_message_id: result.providerMessageId,
     status: result.error ? 'error' : isRedirect ? 'redirected' : 'sent',
@@ -393,7 +390,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   if (result.error) return { ok: false, status: 'error', error: result.error, logId }
   if (isRedirect) {
-    return { ok: true, status: 'redirected', resendId: result.resendId, logId, actualTo }
+    return { ok: true, status: 'redirected', providerMessageId: result.providerMessageId, logId, actualTo }
   }
-  return { ok: true, status: 'sent', resendId: result.resendId, logId }
+  return { ok: true, status: 'sent', providerMessageId: result.providerMessageId, logId }
 }

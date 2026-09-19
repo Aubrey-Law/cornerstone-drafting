@@ -203,14 +203,26 @@ a Read-and-Write token to read-only after 45 days with no *write*. Neither is
 recoverable; mint a new token. A dead token shows as "Reconnect Mercury" on the
 billing page rather than an error.
 
-## Optional — Resend (lite alerts)
+## Optional — Resend (transactional email)
 
 | Variable | Purpose |
 |----------|---------|
-| `RESEND_API_KEY` | Transactional email (message alerts, intake complete) |
+| `RESEND_API_KEY` | Transactional email sending |
+| `RESEND_WEBHOOK_SECRET` | Signing secret (`whsec_…`) for `/api/webhooks/resend`; without it the route 503s and bounces go unrecorded |
+| `RESEND_FROM` | From address. Falls back to `"{attorneyShortName} <{firm.email}>"` |
 | `EMAILS_ENABLED` | Hard kill switch (`false` / `0` / `off` suppresses all sends) |
+| `EMAIL_ALLOWLIST` | Comma-separated recipients; anything else is suppressed and logged |
+| `EMAIL_TEST_INBOX` | Recipient for categories in `redirect` mode (default `scott@aubreylegal.com`) |
 
-Categories used: `message_alert`, `portal_message_notice`, `intake_complete_alert`, `intake_invite`, `manual`. No full portal email-settings matrix.
+All 20 categories in `lib/email/categories.ts` route through `lib/email/send.ts`. Per-category
+`on` / `off` / `redirect` and the `resend` / `gmail` provider choice live in the `email_settings`
+table, editable at **/admin/settings** — not in env. Automated categories default to Resend;
+`manual` defaults to Gmail so an attorney letter threads in their own Sent Mail.
+
+Register the webhook at `https://{app}/api/webhooks/resend` and subscribe at minimum to
+`email.bounced`, `email.complained` and `email.failed`. Nothing consumes delivery events
+without it, which is how a sending reputation degrades unnoticed — and this is the same domain
+that carries engagement-agreement signing links.
 
 ## Optional — Twilio (SMS + softphone)
 
