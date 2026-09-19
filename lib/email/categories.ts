@@ -18,6 +18,7 @@ export const EMAIL_CATEGORIES = [
   'invoice_reminder',
   'esign_signature_request',
   'esign_signature_reminder',
+  'marketing_optin_confirm',
   'manual',
 ] as const
 
@@ -165,6 +166,15 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'esign_signature_reminder',
     label: 'Engagement signature reminder',
     description: 'Sent to a client who has not yet signed, with a fresh signing link.',
+    recipient: 'client',
+  },
+  marketing_optin_confirm: {
+    category: 'marketing_optin_confirm',
+    label: 'Marketing opt-in confirmation',
+    description:
+      'Confirms a newsletter or nurture subscription the person asked for. Transactional, '
+      + 'not marketing: it is the reply to a request they just made, it carries no promotional '
+      + 'content, and it is the only thing that may be sent to an address before consent exists.',
     recipient: 'client',
   },
   manual: {

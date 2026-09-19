@@ -39,6 +39,18 @@ const PUBLIC_ROUTE_SUFFIXES = [
   // is format-checked then looked up; an unknown token 404s. Requiring a
   // session here would break CAN-SPAM one-click unsubscribe.
   'unsubscribe/[token]/route.ts',
+  // Public double opt-in. Anonymous by design — it is how someone with no
+  // account asks to hear from the firm. It writes nothing: consent is recorded
+  // only when the emailed link is followed. Because it sends mail to an address
+  // the caller chooses, it is gated on Turnstile plus a per-IP and a
+  // per-address rate limit, and answers identically whatever the address is.
+  'marketing/subscribe/route.ts',
+  // The other half of the double opt-in. Authorization is possession of a
+  // token this app signed and emailed to the address being confirmed (same
+  // basis as scheduling/manage). POST rather than GET on purpose: mail clients
+  // prefetch links, and a scanner must not be able to record a consent no
+  // person gave.
+  'marketing/confirm/route.ts',
 ] as const
 
 function listRouteFiles(dir = API_ROOT, acc: string[] = []): string[] {
