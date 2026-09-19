@@ -22,13 +22,13 @@ export function formatWhen(iso: string, timezone = 'America/New_York'): string {
 export function locationLine(
   type: AppointmentType,
   officeAddress: string | null,
-  teamsUrl: string | null,
+  meetingUrl: string | null,
 ): string {
   switch (type.locationType) {
     case 'teams':
-      return teamsUrl
-        ? `Microsoft Teams — <a href="${teamsUrl}" style="color:#1a6b72">Join the meeting</a>`
-        : 'Microsoft Teams (join link is in your calendar invite)'
+      return meetingUrl
+        ? `Google Meet — <a href="${meetingUrl}" style="color:#1a6b72">Join the meeting</a>`
+        : 'Google Meet (join link is in your calendar invite)'
     case 'in_person':
       return officeAddress ? `In person at ${officeAddress}` : 'In person at our office'
     default:

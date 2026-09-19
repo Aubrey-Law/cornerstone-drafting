@@ -77,7 +77,7 @@ const tool = (
 })
 
 const definitions = {
-  list_calendar_range: tool('list_calendar_range', 'List appointments and Outlook events in a date range.', {
+  list_calendar_range: tool('list_calendar_range', 'List appointments and calendar events in a date range.', {
     from: { type: 'string', description: 'ISO range start.' },
     to: { type: 'string', description: 'ISO range end.' },
   }, ['from', 'to']),
@@ -461,12 +461,12 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
         const admin = getAdminClient()
         const { data } = await admin
           .from('appointments')
-          .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id, microsoft_event_id')
+          .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id')
           .gte('start_time', from.toISOString())
           .lt('start_time', to.toISOString())
         const exclude = new Set(
           (data ?? [])
-            .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+            .flatMap(row => [row.google_event_id])
             .filter((id): id is string => Boolean(id)),
         )
         let calendarEvents: unknown[] = []

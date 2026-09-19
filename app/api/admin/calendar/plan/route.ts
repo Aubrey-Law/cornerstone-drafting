@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult] = await Promise.all([
     admin
       .from('appointments')
-      .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, google_event_id, microsoft_event_id')
+      .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, google_event_id')
       .gte('start_time', rangeFrom.toISOString())
       .lte('start_time', rangeTo.toISOString()),
     // Two exact reads where one capped read used to stand in for both: the
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   try {
     const exclude = new Set(
       appointments
-        .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+        .flatMap(row => [row.google_event_id])
         .filter((id): id is string => Boolean(id)),
     )
     const view = await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString())

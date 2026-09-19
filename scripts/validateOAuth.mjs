@@ -1,4 +1,4 @@
-// Smoke-test Supabase OAuth provider wiring for Google and Azure.
+// Smoke-test Supabase OAuth provider wiring for Google.
 // Run: node scripts/validateOAuth.mjs [callback-origin]
 //
 // Example:
@@ -54,26 +54,13 @@ function diagnose(provider, location) {
     return `Expected accounts.google.com redirect, got: ${location}`
   }
 
-  if (provider === 'azure') {
-    if (location.includes('login.microsoftonline.com')) return null
-    if (location.includes('/auth/v1/callback/oauth2/v2.0/authorize')) {
-      return [
-        'Azure Tenant URL in Supabase is misconfigured.',
-        'Supabase Dashboard → Authentication → Providers → Azure',
-        'Set "Azure Tenant URL" to https://login.microsoftonline.com/common',
-        '(or your org tenant), NOT the Supabase /auth/v1/callback URL.',
-      ].join(' ')
-    }
-    return `Expected login.microsoftonline.com redirect, got: ${location}`
-  }
-
   return null
 }
 
 console.log(`Checking OAuth for callback: ${redirectTo}\n`)
 
 let failed = false
-for (const provider of ['google', 'azure']) {
+for (const provider of ['google']) {
   const { status, location } = await checkProvider(provider)
   const problem = diagnose(provider, location)
 

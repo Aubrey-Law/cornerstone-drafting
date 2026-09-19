@@ -6,7 +6,7 @@
 //   1. Honour standard X-Forwarded-Host / X-Forwarded-Proto headers.
 //   2. Fall back to the Host header.
 //   3. Last resort: derive from a known public env URL (the OAuth redirect
-//      URIs we register with Google / Microsoft are always public).
+//      URIs we register with Google are always public).
 //   4. Final fallback: whatever Next surfaced as the URL origin.
 
 import type { NextRequest } from 'next/server'

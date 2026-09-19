@@ -12,7 +12,6 @@ import { fetchAllBusy, AvailabilityUnavailableError } from './calendarBusy'
 import {
   cancelAppointmentEvent,
   createAppointmentEvent,
-  eventIdColumn,
   rescheduleAppointmentEvent,
 } from './calendarSync'
 import { runPostBookingAutomation } from './automation'
@@ -230,7 +229,7 @@ async function sendConfirmationEmails(input: {
   attendeeName: string
   attendeeEmail: string
   manageToken: string | null
-  teamsUrl: string | null
+  meetingUrl: string | null
   timezone: string
   action: 'Booked' | 'Rescheduled'
   /** Spouse/partner cc'd on the client-facing email. */
@@ -259,8 +258,8 @@ async function sendConfirmationEmails(input: {
         <h2 style="margin:0 0 12px">Your appointment is ${verb}</h2>
         <p><strong>${input.type.label}</strong></p>
         <p>${when}</p>
-        <p>${locationLine(input.type, office || null, input.teamsUrl)}</p>
-        <p>A calendar invitation from Outlook is on its way to your inbox.</p>
+        <p>${locationLine(input.type, office || null, input.meetingUrl)}</p>
+        <p>A calendar invitation is on its way to your inbox.</p>
         ${manageHtml}
       </div>`,
     })
@@ -333,8 +332,8 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   const startIso = new Date(start).toISOString()
   const endIso = new Date(start + input.type.durationMinutes * 60_000).toISOString()
 
-  // Re-verify against fresh Outlook + appointment busy data. Throws
-  // AvailabilityUnavailableError when Outlook can't be reached (fail closed).
+  // Re-verify against fresh calendar + appointment busy data. Throws
+  // AvailabilityUnavailableError when the calendar can't be reached (fail closed).
   const busy: Interval[] = await fetchAllBusy(
     new Date(start - DAY_MS),
     new Date(start + DAY_MS),
@@ -360,7 +359,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   }
 
   // The chosen meeting format, constrained to the type's allowed list; the
-  // rest of the flow (Outlook event, emails) sees it as the type's format.
+  // rest of the flow (calendar event, emails) sees it as the type's format.
   const locationType = resolveLocationType(input.locationType, input.type)
   const effectiveType: AppointmentType = { ...input.type, locationType }
 
@@ -438,7 +437,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
     .filter(Boolean)
     .join(', ')
-  let teamsUrl: string | null = null
+  let meetingUrl: string | null = null
   try {
     const event = await createAppointmentEvent({
       type: effectiveType,
@@ -453,14 +452,14 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
       officeAddress: office || null,
     })
     if (event) {
-      teamsUrl = event.onlineMeetingUrl
-      // The id goes in the column for the calendar that actually holds it, so a
-      // later cancel or reschedule can find its way back to the same place.
+      meetingUrl = event.onlineMeetingUrl
+      // The id is stored so a later cancel or reschedule can find its way back
+      // to the same event.
       await admin
         .from('appointments')
         .update({
-          [eventIdColumn(event.target)]: event.eventId,
-          online_meeting_url: teamsUrl,
+          google_event_id: event.eventId,
+          online_meeting_url: meetingUrl,
         })
         .eq('id', appointmentId)
     }
@@ -485,7 +484,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     attendeeEmail: input.attendeeEmail,
     ccEmail: input.secondAttendeeEmail?.trim().toLowerCase() || null,
     manageToken: manage.token,
-    teamsUrl,
+    meetingUrl,
     timezone: settings.timezone,
     action: 'Booked',
     skipInternalAlert: input.source === 'admin',
@@ -544,7 +543,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     const settings = await getSchedulingSettings()
     const when = formatWhen(appointment.start_time, settings.timezone)
     if (input.cancelledByStaff) {
-      // Outlook also emails an event cancellation; this adds the human note.
+      // Google also emails an event cancellation; this adds the human note.
       await sendEmail({
         category: 'appointment_confirmation',
         to: appointment.attendee_email,
@@ -582,7 +581,7 @@ export interface MarkNoShowInput {
 }
 
 /**
- * Mark a past appointment as a no-show. Leaves the Outlook event alone (it
+ * Mark a past appointment as a no-show. Leaves the calendar event alone (it
  * already happened) and optionally emails the client a rebook nudge.
  */
 export async function markNoShow(input: MarkNoShowInput): Promise<void> {
@@ -717,7 +716,7 @@ export async function rescheduleAppointment(
     ccEmail: appointment.second_attendee_email ?? null,
     // Manage link keeps working — token is unchanged on reschedule.
     manageToken: null,
-    teamsUrl: appointment.online_meeting_url,
+    meetingUrl: appointment.online_meeting_url,
     timezone: settings.timezone,
     action: 'Rescheduled',
   })

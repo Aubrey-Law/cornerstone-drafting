@@ -524,7 +524,7 @@ describe('bookAppointment', () => {
     await bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday })
     expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
 
-    // Same slot with an Outlook conflict is still rejected.
+    // Same slot with a calendar conflict is still rejected.
     state.reset()
     state.busy = [
       { start: Date.parse('2026-08-09T14:00:00Z'), end: Date.parse('2026-08-09T15:00:00Z') },
@@ -534,7 +534,7 @@ describe('bookAppointment', () => {
     ).rejects.toThrow(SlotTakenError)
   })
 
-  it('stores the chosen meeting format and uses it for the Outlook event', async () => {
+  it('stores the chosen meeting format and uses it for the calendar event', async () => {
     await bookAppointment({ ...bookingInput(), locationType: 'teams' })
     const insert = state.inserts.find(i => i.table === 'appointments')
     expect(insert?.values.location_type).toBe('teams')
@@ -694,7 +694,6 @@ describe('cancelAppointment', () => {
     linked_lead_id: 'lead-9',
     linked_matter_id: null,
     booked_by_user_id: null,
-    microsoft_event_id: null,
     google_event_id: 'google-event-1',
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',
@@ -802,7 +801,6 @@ describe('rescheduleAppointment', () => {
     linked_lead_id: 'lead-9',
     linked_matter_id: 'matter-7',
     booked_by_user_id: null,
-    microsoft_event_id: null,
     google_event_id: 'google-event-1',
     manage_token_hash: 'hash',
     manage_token_expires_at: '2026-10-01T00:00:00Z',

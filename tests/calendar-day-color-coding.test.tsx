@@ -6,7 +6,7 @@ import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DayAgenda } from '@/app/admin/calendar/DayAgenda'
-import { BLOCK_HATCH, CATEGORY_STYLE, categorize } from '@/app/admin/calendar/eventCategories'
+import { BLOCK_HATCH, CATEGORY_LABEL, CATEGORY_STYLE, categorize } from '@/app/admin/calendar/eventCategories'
 import type { CalendarAppointment, CalendarRailData, ExternalCalendarEvent } from '@/app/admin/calendar/types'
 
 afterEach(cleanup)
@@ -25,7 +25,7 @@ function appointment(overrides: Partial<CalendarAppointment> & Pick<CalendarAppo
   }
 }
 
-function outlookEvent(overrides: Partial<ExternalCalendarEvent> & Pick<ExternalCalendarEvent, 'id' | 'subject'>): ExternalCalendarEvent {
+function externalEvent(overrides: Partial<ExternalCalendarEvent> & Pick<ExternalCalendarEvent, 'id' | 'subject'>): ExternalCalendarEvent {
   return {
     startIso: '2026-07-30T18:00:00.000Z', endIso: '2026-07-30T19:00:00.000Z',
     isAllDay: false, showAs: 'busy',
@@ -76,20 +76,20 @@ describe('day calendar colour coding', () => {
     expect(card.style.borderLeft).toContain(CATEGORY_STYLE.draft.dot)
   })
 
-  it('colour codes Outlook events the same way', () => {
-    renderDay({ calendarEvents: [outlookEvent({ id: 'o1', subject: 'Estate plan sync' })] })
+  it('colour codes external calendar events the same way', () => {
+    renderDay({ calendarEvents: [externalEvent({ id: 'o1', subject: 'Estate plan sync' })] })
 
     expect(categorize('Estate plan sync')).toBe('meeting')
     const strip = screen.getByText('Client meeting').parentElement as HTMLElement
     expect(strip.style.background).toBe(CATEGORY_STYLE.meeting.bg)
   })
 
-  it('keeps Outlook blocks as hatched background, not coloured events', () => {
-    renderDay({ calendarEvents: [outlookEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
+  it('keeps external calendar blocks as hatched background, not coloured events', () => {
+    renderDay({ calendarEvents: [externalEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
 
     const block = screen.getByText('BLOCK admin time') as HTMLElement
     expect(block.style.backgroundImage).toBe(BLOCK_HATCH)
-    expect(screen.queryByText('Internal / Outlook')).toBeNull()
+    expect(screen.queryByText(CATEGORY_LABEL.internal)).toBeNull()
   })
 
   it('uses theme tokens rather than literal colours so both themes work', () => {

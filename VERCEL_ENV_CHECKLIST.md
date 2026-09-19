@@ -40,64 +40,11 @@ Supabase Dashboard → Authentication → URL Configuration must include every d
 - `https://cornerstone-drafting.vercel.app/auth/callback`
 - `http://localhost:3002/auth/callback` (local dev)
 
-Google Cloud and Azure Entra redirect URIs must point at **Supabase**, not this app:
+Google Cloud redirect URIs must point at **Supabase**, not this app:
 
 - `https://<project-ref>.supabase.co/auth/v1/callback`
 
 Run `node scripts/validateOAuth.mjs` after changing provider settings.
-
-### Microsoft login (staff sign-in only)
-
-The login page uses Supabase provider `azure` (“Continue with Microsoft”). No extra Vercel env vars are required beyond `NEXT_PUBLIC_APP_URL` and the Supabase keys.
-
-**1. Azure Entra app registration** (portal.azure.com → Microsoft Entra ID → App registrations → New registration)
-
-| Field | Value |
-|-------|-------|
-| Name | e.g. `Cornerstone Lite` |
-| Supported account types | **Single tenant** (Aubrey org only) recommended for staff |
-| Redirect URI (Web) | `https://<project-ref>.supabase.co/auth/v1/callback` |
-
-After create:
-
-1. **Certificates & secrets** → New client secret → copy the **Value** (not the Secret ID).
-2. Note **Application (client) ID** and **Directory (tenant) ID**.
-
-Optional Entra settings if sign-in fails with “Error getting user email”:
-
-- Ensure each user has a **mail** / **user principal name** with an email.
-- API permissions: `openid`, `profile`, `email` (Microsoft Graph delegated) — usually granted by default for sign-in.
-
-**2. Supabase** → Authentication → Providers → **Azure**
-
-| Field | Value |
-|-------|-------|
-| Enable Azure | On |
-| Client ID | Entra Application (client) ID |
-| Client Secret | Entra secret **Value** |
-| Azure Tenant URL | `https://login.microsoftonline.com/<tenant-id>` for org-only, or `https://login.microsoftonline.com/common` for multi-tenant |
-
-Common misconfiguration: putting the Supabase `/auth/v1/callback` URL in **Azure Tenant URL** — that field must be `https://login.microsoftonline.com/...`.
-
-**3. Supabase** → Authentication → URL Configuration → **Redirect URLs**
-
-Add every app host (see list above). Site URL should match your primary deployment.
-
-**4. Staff access rules (this app)**
-
-- OAuth auto-creates `public.users` on first sign-in.
-- Staff admin routes require `role` in (`attorney`, `admin`) **and** an `@aubreylegal.com` email (enforced in `/auth/callback`).
-- Non-firm Microsoft accounts become `client` and land on `/dashboard`.
-
-**5. Verify**
-
-```bash
-node scripts/validateOAuth.mjs https://<your-host>
-```
-
-Expect `✓ azure: redirects to provider login`. Then click **Continue with Microsoft** on `/auth/login`.
-
-> **Note:** this is sign-in only. Microsoft **Graph** (Outlook send and calendar) has been retired — see *Retired — Microsoft Graph* below.
 
 ## Optional — Granola (meeting notes import)
 
@@ -327,21 +274,22 @@ Where an older grant is still in place, remove Cornerstone at
 connect again. The callback refuses to store a connection without one rather
 than saving something that stops working within the hour.
 
-## Retired — Microsoft Graph (Outlook send and calendar)
+## Retired — Microsoft 365 (Outlook mail and calendar, Microsoft sign-in)
 
-`MICROSOFT_GRAPH_CLIENT_ID`, `MICROSOFT_GRAPH_CLIENT_SECRET`,
-`MICROSOFT_GRAPH_REDIRECT_URI` and `MICROSOFT_GRAPH_TENANT_ID` are no longer
-read for any new work. Nothing is written to Outlook and no mail is sent
-through Graph; there is no longer a way to connect an Outlook mailbox.
+The firm runs on Google. Nothing in the app reads or writes Outlook, and the
+"Continue with Microsoft" sign-in button is gone.
 
-Leave the variables in place while any appointment booked before the switchover
-is still in the future: those rows carry a `microsoft_event_id`, and cancelling
-or moving one has to happen in Outlook, which is the only calendar that holds
-it. Once none remain, remove the variables and disconnect under
-**Settings → Outlook (legacy)** — that tab disappears with the connection.
+These variables are no longer read by any code path and can be deleted from
+Vercel and from every local env file:
 
-Staff sign-in with Microsoft is a **separate** thing and is unaffected; see
-*Microsoft login* above.
+- `MICROSOFT_GRAPH_CLIENT_ID`
+- `MICROSOFT_GRAPH_CLIENT_SECRET`
+- `MICROSOFT_GRAPH_REDIRECT_URI`
+- `MICROSOFT_GRAPH_TENANT_ID`
+
+In Supabase, **Authentication → Providers → Azure** can be disabled. Confirm
+first that every account with an Azure identity also has a Google or
+email + password identity, so disabling it locks nobody out.
 
 ## Optional — Retell
 

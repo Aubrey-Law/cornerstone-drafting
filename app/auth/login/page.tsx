@@ -31,17 +31,6 @@ function GoogleIcon() {
   )
 }
 
-function MicrosoftIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path fill="#F25022" d="M0 0h8.55v8.55H0z" />
-      <path fill="#7FBA00" d="M9.45 0H18v8.55H9.45z" />
-      <path fill="#00A4EF" d="M0 9.45h8.55V18H0z" />
-      <path fill="#FFB900" d="M9.45 9.45H18V18H9.45z" />
-    </svg>
-  )
-}
-
 const oauthBtnCls =
   'flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent disabled:opacity-50'
 
@@ -74,7 +63,7 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
-  const [oauthPending, setOauthPending] = useState<'google' | 'azure' | null>(null)
+  const [oauthPending, setOauthPending] = useState<'google' | null>(null)
 
   useEffect(() => {
     if (error === 'firm_domain_required') {
@@ -86,7 +75,7 @@ function LoginForm() {
     }
   }, [error])
 
-  async function signInWithOAuth(provider: 'google' | 'azure') {
+  async function signInWithOAuth(provider: 'google') {
     setOauthPending(provider)
     const callbackUrl = new URL('/auth/callback', window.location.origin)
     const safeRedirect =
@@ -97,7 +86,7 @@ function LoginForm() {
       provider,
       options: {
         redirectTo: callbackUrl.toString(),
-        scopes: provider === 'azure' ? 'email openid profile' : 'email',
+        scopes: 'email',
       },
     })
     if (oauthError) {
@@ -153,15 +142,6 @@ function LoginForm() {
             >
               <GoogleIcon />
               {oauthPending === 'google' ? 'Redirecting…' : 'Continue with Google'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void signInWithOAuth('azure')}
-              disabled={oauthPending !== null}
-              className={oauthBtnCls}
-            >
-              <MicrosoftIcon />
-              {oauthPending === 'azure' ? 'Redirecting…' : 'Continue with Microsoft'}
             </button>
             <div className="flex items-center gap-3 pt-1">
               <span className="h-px flex-1 bg-border" />

@@ -34,7 +34,7 @@ export interface BookingWidgetProps {
 
 const LOCATION_HINT: Record<LocationType, string> = {
   phone: 'Phone call — we will call the number you provide.',
-  teams: 'Video call — a Microsoft Teams link will be in your calendar invite.',
+  teams: 'Video call — a Google Meet link will be in your calendar invite.',
   in_person: 'In person at our office.',
 }
 

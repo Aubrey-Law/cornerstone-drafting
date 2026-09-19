@@ -15,7 +15,7 @@ function localIso(day: number, hour: number, minute = 0): string {
 const DAY = new Date(2026, 7, 10)
 const DAY_KEY = '2026-08-10'
 
-function outlookEvent(overrides: Partial<ExternalCalendarEvent> = {}): ExternalCalendarEvent {
+function externalEvent(overrides: Partial<ExternalCalendarEvent> = {}): ExternalCalendarEvent {
   return {
     id: 'ev-1',
     subject: 'Court hearing',
@@ -53,33 +53,33 @@ function appointment(overrides: Partial<CalendarAppointment> = {}): CalendarAppo
   }
 }
 
-function bounds(options: { appointments?: CalendarAppointment[]; outlook?: ExternalCalendarEvent[] } = {}) {
+function bounds(options: { appointments?: CalendarAppointment[]; external?: ExternalCalendarEvent[] } = {}) {
   return timeGridBounds(
     [DAY],
     new Map(options.appointments ? [[DAY_KEY, options.appointments]] : []),
-    new Map(options.outlook ? [[DAY_KEY, options.outlook]] : []),
+    new Map(options.external ? [[DAY_KEY, options.external]] : []),
   )
 }
 
 describe('timeGridBounds', () => {
   it('keeps the business window when everything fits inside it', () => {
-    expect(bounds({ outlook: [outlookEvent()] })).toEqual({
+    expect(bounds({ external: [externalEvent()] })).toEqual({
       startMin: GRID_START_MIN,
       endMin: GRID_END_MIN,
     })
     expect(bounds()).toEqual({ startMin: GRID_START_MIN, endMin: GRID_END_MIN })
   })
 
-  it('widens to the hour for an Outlook event before the business day', () => {
+  it('widens to the hour for an external calendar event before the business day', () => {
     const early = bounds({
-      outlook: [outlookEvent({ startIso: localIso(10, 6, 15), endIso: localIso(10, 7) })],
+      external: [externalEvent({ startIso: localIso(10, 6, 15), endIso: localIso(10, 7) })],
     })
     expect(early).toEqual({ startMin: 6 * 60, endMin: GRID_END_MIN })
   })
 
-  it('widens to the hour for an Outlook event after the business day', () => {
+  it('widens to the hour for an external calendar event after the business day', () => {
     const late = bounds({
-      outlook: [outlookEvent({ startIso: localIso(10, 20), endIso: localIso(10, 21, 30) })],
+      external: [externalEvent({ startIso: localIso(10, 20), endIso: localIso(10, 21, 30) })],
     })
     expect(late).toEqual({ startMin: GRID_START_MIN, endMin: 22 * 60 })
   })
@@ -101,14 +101,14 @@ describe('timeGridBounds', () => {
   it('ignores all-day events, which render in their own header row', () => {
     expect(
       bounds({
-        outlook: [outlookEvent({ isAllDay: true, startIso: '2026-08-10', endIso: '2026-08-11' })],
+        external: [externalEvent({ isAllDay: true, startIso: '2026-08-10', endIso: '2026-08-11' })],
       }),
     ).toEqual({ startMin: GRID_START_MIN, endMin: GRID_END_MIN })
   })
 
   it('never runs past the end of the day for an event crossing midnight', () => {
     expect(
-      bounds({ outlook: [outlookEvent({ startIso: localIso(10, 23), endIso: localIso(11, 1) })] }),
+      bounds({ external: [externalEvent({ startIso: localIso(10, 23), endIso: localIso(11, 1) })] }),
     ).toEqual({ startMin: GRID_START_MIN, endMin: 24 * 60 })
   })
 })

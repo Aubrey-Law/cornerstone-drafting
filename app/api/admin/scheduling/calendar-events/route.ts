@@ -48,22 +48,17 @@ export async function GET(req: NextRequest) {
   const toIso = new Date(to).toISOString()
 
   // Cornerstone bookings in range: excluded from the overlay, and the rows the
-  // inbound sync reconciles against the calendar. Legacy Outlook bookings are
-  // excluded too — their event is not on this account, so leaving them in would
-  // show the same meeting twice.
+  // inbound sync reconciles against the calendar.
   const { data } = await getAdminClient()
     .from('appointments')
-    .select('id, start_time, end_time, status, google_event_id, microsoft_event_id')
+    .select('id, start_time, end_time, status, google_event_id')
     .gte('start_time', fromIso)
     .lt('start_time', toIso)
-    .or('google_event_id.not.is.null,microsoft_event_id.not.is.null')
-  const rows = (data ?? []) as Array<
-    ReconcilableAppointment & { microsoft_event_id: string | null }
-  >
-  const managed = rows.filter(row => row.google_event_id)
+    .not('google_event_id', 'is', null)
+  const managed = (data ?? []) as ReconcilableAppointment[]
   const exclude = new Set(
-    rows
-      .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+    managed
+      .map(row => row.google_event_id)
       .filter((id): id is string => Boolean(id)),
   )
 

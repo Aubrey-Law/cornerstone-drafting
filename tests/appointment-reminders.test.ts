@@ -143,7 +143,7 @@ function dueRow(overrides: Partial<Record<string, unknown>> = {}) {
     attendee_email: 'pat@example.com',
     attendee_phone: '(555) 123-4567',
     second_attendee_email: null,
-    online_meeting_url: 'https://teams.microsoft.com/l/meetup-join/abc',
+    online_meeting_url: 'https://meet.google.com/abc-defg-hij',
     location_type: 'teams',
     created_at: '2026-08-01T00:00:00.000Z', // booked well before the window
     ...overrides,
@@ -165,7 +165,7 @@ describe('sendDueReminders', () => {
     expect(state.emails[0].category).toBe('appointment_reminder')
     expect(state.emails[0].to).toBe('pat@example.com')
     expect(state.emails[0].subject).toContain('Reminder: Discovery Call')
-    expect(state.emails[0].html).toContain('teams.microsoft.com')
+    expect(state.emails[0].html).toContain('meet.google.com')
     // Claimed exactly once, never released.
     expect(state.updates).toHaveLength(1)
     expect(state.updates[0].values.reminder_sent_at).toBeTruthy()

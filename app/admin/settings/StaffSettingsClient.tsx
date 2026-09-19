@@ -34,7 +34,6 @@ type Tab =
   | 'models'
   | 'api-keys'
   | 'connectors'
-  | 'outlook'
   | 'google'
   | 'email'
   | 'scheduling'
@@ -93,10 +92,6 @@ export function StaffSettingsClient({
     authSecret: '',
   })
   const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null)
-  const [outlook, setOutlook] = useState<{
-    connected: boolean
-    email: string | null
-  } | null>(null)
   const [google, setGoogle] = useState<{
     envConfigured: boolean
     configIssue: string | null
@@ -112,7 +107,6 @@ export function StaffSettingsClient({
     const sp = new URLSearchParams(window.location.search)
     const t = sp.get('tab')
     if (
-      t === 'outlook' ||
       t === 'google' ||
       t === 'email' ||
       t === 'scheduling' ||
@@ -140,11 +134,10 @@ export function StaffSettingsClient({
   useEffect(() => {
     if (!token) return
     void (async () => {
-      const [pRes, kRes, cRes, oRes, gRes] = await Promise.all([
+      const [pRes, kRes, cRes, gRes] = await Promise.all([
         fetch('/api/admin/me/preferences', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/api-keys', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/connectors', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/microsoft/status', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/google/status', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       if (pRes.ok) {
@@ -158,10 +151,6 @@ export function StaffSettingsClient({
       if (cRes.ok) {
         const body = await cRes.json()
         setConnectors(body.connectors ?? [])
-      }
-      if (oRes.ok) {
-        const body = await oRes.json()
-        setOutlook({ connected: Boolean(body.connected), email: body.email ?? null })
       }
       if (gRes.ok) {
         const body = await gRes.json()
@@ -291,36 +280,27 @@ export function StaffSettingsClient({
   }
 
   /**
-   * Both mailbox disconnects, which were identical inline handlers on their
-   * buttons — the shape that made it easy for neither to ask. Reconnecting
-   * means going back out to the provider's consent screen, so this is not the
-   * one-click toggle the button looked like.
+   * Asks before disconnecting: reconnecting means going back out to Google's
+   * consent screen, so this is not the one-click toggle the button looks like.
    */
-  const disconnectMailbox = async (provider: 'google' | 'outlook') => {
+  const disconnectMailbox = async () => {
     if (!token) return
-    const label = provider === 'google' ? 'Google' : 'Outlook'
     const confirmed = await confirm({
-      title: `Disconnect ${label}?`,
-      body: `Mail and calendar sync stop, and reconnecting means signing in to ${label} again.`,
-      confirmLabel: `Disconnect ${label}`,
+      title: 'Disconnect Google?',
+      body: 'Mail and calendar sync stop, and reconnecting means signing in to Google again.',
+      confirmLabel: 'Disconnect Google',
       destructive: true,
     })
     if (!confirmed) return
     setSaving(true)
     try {
-      const endpoint = provider === 'google' ? '/api/admin/google/status' : '/api/admin/microsoft/status'
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/admin/google/status', {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error('Disconnect failed')
-      if (provider === 'google') {
-        setGoogle(g => (g ? { ...g, connected: false, email: null } : g))
-      } else {
-        setOutlook(o => (o ? { ...o, connected: false, email: null } : o))
-        setTab('google')
-      }
-      toast.success(`${label} disconnected`)
+      setGoogle(g => (g ? { ...g, connected: false, email: null } : g))
+      toast.success('Google disconnected')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Disconnect failed')
     } finally {
@@ -421,9 +401,6 @@ export function StaffSettingsClient({
             ['google', 'Google'],
             ['email', 'Email'],
             ['scheduling', 'Scheduling'],
-            // Only while a stored Microsoft connection is still holding events
-            // from before the firm left Microsoft 365.
-            ...(outlook?.connected ? [['outlook', 'Outlook (legacy)'] as const] : []),
             ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
@@ -730,7 +707,7 @@ export function StaffSettingsClient({
                   size="sm"
                   variant="outline"
                   disabled={saving}
-                  onClick={() => void disconnectMailbox('google')}
+                  onClick={() => void disconnectMailbox()}
                 >
                   Disconnect
                 </Button>
@@ -776,43 +753,6 @@ export function StaffSettingsClient({
             </span>
             .
           </p>
-        </section>
-      )}
-
-      {tab === 'outlook' && (
-        <section className="space-y-4 rounded-lg border border-border p-4">
-          <div>
-            <h2 className="text-sm font-semibold">Outlook (legacy)</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The firm no longer runs on Microsoft 365, and nothing new is written here.
-              This connection stays only so appointments booked before the switchover can
-              still be cancelled and moved in the calendar that actually holds them.
-              Disconnecting leaves those events in place — they would then have to be
-              cancelled in Outlook by hand.
-            </p>
-          </div>
-          {!outlook ? (
-            <p className="text-sm text-muted-foreground">Loading&hellip;</p>
-          ) : outlook.connected ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm">
-                Connected as <span className="font-medium">{outlook.email || 'Outlook'}</span>
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={saving}
-                onClick={() => void disconnectMailbox('outlook')}
-              >
-                Disconnect
-              </Button>
-            </div>
-          ) : (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-              No Outlook connection is stored. Cornerstone cannot reconnect one — the
-              firm&rsquo;s calendar and mailbox are Google.
-            </p>
-          )}
         </section>
       )}
 

@@ -76,7 +76,7 @@ describe('API route auth coverage', () => {
       }
 
       // Pure re-export aliases inherit the auth of the route they re-export
-      // (e.g. /api/microsoft/callback → /api/admin/microsoft/callback).
+      // (e.g. /api/google/callback → /api/admin/google/callback).
       if (/export \{ \w+ \} from '.*\/route'/.test(source)) {
         return
       }
