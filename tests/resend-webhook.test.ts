@@ -140,11 +140,11 @@ function request(body: string, signed = true) {
 describe('resend webhook route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.RESEND_WEBHOOK_SECRET = SECRET
+    process.env.RESEND_WEBHOOK_SIGNING_SECRET = SECRET
   })
 
   it('503s when the signing secret is not configured', async () => {
-    delete process.env.RESEND_WEBHOOK_SECRET
+    delete process.env.RESEND_WEBHOOK_SIGNING_SECRET
     const res = await webhook(request(JSON.stringify({ type: 'email.bounced' })))
     expect(res.status).toBe(503)
     expect(mocks.from).not.toHaveBeenCalled()
