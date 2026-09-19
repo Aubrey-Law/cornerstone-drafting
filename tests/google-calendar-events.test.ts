@@ -56,9 +56,9 @@ beforeEach(() => {
 
 describe('creating a Google event', () => {
   it('asks Google to email the attendee, which it does not do on its own', async () => {
-    // Outlook sends the invite unprompted. Google sends nothing without
-    // sendUpdates=all and reports success either way, so omitting it produces a
-    // calendar that looks right while the client is never told.
+    // Google sends nothing without sendUpdates=all and reports success either
+    // way, so omitting it produces a calendar that looks right while the client
+    // is never told.
     respond({ id: 'evt-1' })
 
     await createCalendarEvent(input())

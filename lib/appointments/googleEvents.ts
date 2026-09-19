@@ -32,11 +32,10 @@ function invalidateTodayCalendar() {
 /**
  * Google emails the attendee only when asked.
  *
- * Outlook sends the invite, the update and the cancellation on its own. Google
- * sends none of them unless `sendUpdates=all` rides on the request, and it
- * reports success either way — so omitting it produces a calendar that looks
- * correct to the attorney while the client is never told anything. Every write
- * below carries it.
+ * It sends no invite, update or cancellation unless `sendUpdates=all` rides on
+ * the request, and it reports success either way — so omitting it produces a
+ * calendar that looks correct to the attorney while the client is never told
+ * anything. Every write below carries it.
  */
 const SEND_UPDATES = 'sendUpdates=all'
 
@@ -98,9 +97,9 @@ function locationLine(input: CreateEventInput): string | undefined {
 export async function createCalendarEvent(input: CreateEventInput): Promise<CreatedEvent> {
   const token = await connectedToken()
 
-  // `teams` is the stored name for "this meeting happens online". On Google that
-  // is a Meet link; the appointment type is not re-pointed at a second vendor
-  // just to say so.
+  // `teams` is the stored token for "this meeting happens online", kept from
+  // the Microsoft 365 era. It means a Meet link here; the value is opaque to
+  // clients, who only ever see the type's "Virtual meeting" label.
   const wantsVideo = input.type.locationType === 'teams'
 
   const payload: Record<string, unknown> = {
@@ -271,7 +270,7 @@ interface RawGoogleEvent {
  * Google returns either a timed `dateTime` (with an offset) or an all-day
  * `date`. An all-day `date` is a calendar day in the calendar's own zone, and
  * anchoring it at UTC midnight is what the admin grid already expects from the
- * all-day lane, so it is parsed the same way the Outlook path did.
+ * all-day lane.
  */
 function googleTimeToIso(slot: { dateTime?: string; date?: string } | undefined): string | null {
   const raw = slot?.dateTime ?? (slot?.date ? `${slot.date}T00:00:00Z` : undefined)

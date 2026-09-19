@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, google_event_id, online_meeting_url, source, created_at, raw',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, google_event_id, online_meeting_url, source, created_at, raw',
     )
 
   if (hasRange) {
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
       // create — surfaced in the admin list as a warning. Either provider
       // counts: the warning is about the appointment not reaching a calendar,
       // not about which calendar it was.
-      calendarSynced: Boolean(row.microsoft_event_id || row.google_event_id),
+      calendarSynced: Boolean(row.google_event_id),
       onlineMeetingUrl: row.online_meeting_url ?? null,
     })),
   })
@@ -148,7 +148,7 @@ interface PostBody {
 /**
  * Staff books an appointment on a client's behalf from the admin calendar.
  * Bypasses client-facing rules (weekly hours, notice, horizon, buffer) but
- * still rejects hard conflicts with Outlook busy times and other bookings.
+ * still rejects hard conflicts with calendar busy times and other bookings.
  */
 export async function POST(req: NextRequest) {
   const { err, userId } = await requireAdmin(req)
@@ -221,13 +221,13 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof SlotTakenError) {
       return NextResponse.json(
-        { error: 'That time conflicts with the Outlook calendar or another appointment.' },
+        { error: 'That time conflicts with the calendar or another appointment.' },
         { status: 409 },
       )
     }
     if (e instanceof AvailabilityUnavailableError) {
       return NextResponse.json(
-        { error: 'Outlook is unreachable — cannot verify the time is free. Try again shortly.' },
+        { error: 'Google Calendar is unreachable — cannot verify the time is free. Try again shortly.' },
         { status: 503 },
       )
     }
@@ -317,13 +317,13 @@ export async function PATCH(req: NextRequest) {
   } catch (e) {
     if (e instanceof SlotTakenError) {
       return NextResponse.json(
-        { error: 'That time conflicts with the Outlook calendar or another appointment.' },
+        { error: 'That time conflicts with the calendar or another appointment.' },
         { status: 409 },
       )
     }
     if (e instanceof AvailabilityUnavailableError) {
       return NextResponse.json(
-        { error: 'Outlook is unreachable — cannot verify the time is free. Try again shortly.' },
+        { error: 'Google Calendar is unreachable — cannot verify the time is free. Try again shortly.' },
         { status: 503 },
       )
     }

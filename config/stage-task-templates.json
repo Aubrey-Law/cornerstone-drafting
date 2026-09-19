@@ -188,13 +188,13 @@
         "priority": "normal",
         "description": "Produce and deliver the post-signing package; close the matter.",
         "checklist": [
-          { "text": "Confirm executed documents stored to OneDrive" },
+          { "text": "Confirm executed documents stored to Google Drive" },
           { "text": "Send the closing letter", "produces_document": "closing_letter" },
           { "text": "Generate and send the estate plan summary", "produces_document": "estate_plan_summary" },
           { "text": "Record the work finished date" },
           { "text": "Submit the legal plan claim", "gate": "legal_plan" }
         ],
-        "links": ["matter", "onedrive_folder", "portal_closeout"],
+        "links": ["matter", "drive_folder", "portal_closeout"],
         "batch_tag": "closeout"
       }
     },

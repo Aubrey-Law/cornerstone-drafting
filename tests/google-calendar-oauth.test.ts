@@ -146,7 +146,7 @@ describe('getAccessToken', () => {
     await expect(getAccessToken('user-1')).rejects.toThrow(/reconnect/i)
   })
 
-  it('falls back to the firm-wide google connection, never a microsoft one', async () => {
+  it('falls back to the firm-wide google connection', async () => {
     mocks.getStored.mockResolvedValue(null)
     mocks.getAny.mockResolvedValue({ access_token: 'firm-wide', expires_at: future() })
 

@@ -34,7 +34,7 @@ export function endMinutesOfDay(startIso: string, endIso: string): number {
  * Time-grid bounds for the days on screen. Starts from the standard business
  * window and widens (to the hour) around anything earlier or later, so an
  * calendar event at 6am or 9pm renders on the grid instead of being clipped
- * away — every Microsoft event in range has to be reachable in the app.
+ * away — every calendar event in range has to be reachable in the app.
  */
 export function timeGridBounds(
   days: Date[],

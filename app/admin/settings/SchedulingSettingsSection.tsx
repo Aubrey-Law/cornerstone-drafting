@@ -76,7 +76,7 @@ export function SchedulingSettingsSection() {
   const [settings, setSettings] = useState<SettingsShape | null>(null)
   const [types, setTypes] = useState<TypeShape[]>([])
   const [appointments, setAppointments] = useState<AppointmentListItem[]>([])
-  const [outlookConnected, setOutlookConnected] = useState<boolean | null>(null)
+  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [newOverrideDate, setNewOverrideDate] = useState('')
@@ -92,10 +92,10 @@ export function SchedulingSettingsSection() {
     let cancelled = false
     async function load() {
       try {
-        const [settingsRes, apptRes, outlookRes] = await Promise.all([
+        const [settingsRes, apptRes, googleRes] = await Promise.all([
           fetch('/api/admin/scheduling/settings', { headers: authHeaders() }),
           fetch('/api/admin/scheduling/appointments', { headers: authHeaders() }),
-          fetch('/api/admin/microsoft/status', { headers: authHeaders() }),
+          fetch('/api/admin/google/status', { headers: authHeaders() }),
         ])
         if (cancelled) return
         if (settingsRes.ok) {
@@ -107,9 +107,12 @@ export function SchedulingSettingsSection() {
           const json = await apptRes.json()
           setAppointments(json.appointments ?? [])
         }
-        if (outlookRes.ok) {
-          const json = await outlookRes.json()
-          setOutlookConnected(Boolean(json.connected))
+        if (googleRes.ok) {
+          const json = await googleRes.json()
+          // Calendar scope, not just a connection: a Google account linked for
+          // mail alone cannot read busy times, and booking pages go dark the
+          // same way as if nothing were connected at all.
+          setCalendarConnected(Boolean(json.connected) && Boolean(json.hasCalendarScope))
         }
       } catch {
         if (!cancelled) toast.error('Failed to load scheduling settings')
@@ -191,12 +194,12 @@ export function SchedulingSettingsSection() {
 
   return (
     <div className="space-y-6">
-      {outlookConnected === false && (
+      {calendarConnected === false && (
         <div className="rounded-md border border-amber-border bg-amber-bg p-4 text-sm text-amber">
-          <strong>Outlook is not connected.</strong> Booking pages will show “scheduling
-          temporarily unavailable” until you connect Outlook in the{' '}
-          <Link href="/admin/settings?tab=outlook" className="underline">
-            Outlook tab
+          <strong>Google Calendar is not connected.</strong> Booking pages will show
+          “scheduling temporarily unavailable” until you connect it in the{' '}
+          <Link href="/admin/settings?tab=google" className="underline">
+            Google tab
           </Link>
           .
         </div>
@@ -407,7 +410,7 @@ export function SchedulingSettingsSection() {
       <section className="rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Weekly hours</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Bookable windows in {settings.timezone}. Outlook busy times are automatically excluded.
+          Bookable windows in {settings.timezone}. Google Calendar busy times are automatically excluded.
         </p>
         <div className="mt-4">
           <WeeklyHoursEditor
@@ -521,7 +524,7 @@ export function SchedulingSettingsSection() {
                   <div className="mt-3 rounded-md bg-muted p-3">
                     <p className="mb-2 text-xs text-muted-foreground">
                       {t.label} can only be booked in these windows ({settings.timezone}).
-                      General weekly hours are ignored for this type; Outlook busy times and
+                      General weekly hours are ignored for this type; Google Calendar busy times and
                       buffers still apply.
                     </p>
                     <WeeklyHoursEditor
@@ -563,7 +566,7 @@ export function SchedulingSettingsSection() {
                   <p className="text-xs text-muted-foreground">
                     {fmtWhen(a.startTime)} · {a.attendeeEmail}
                     {!a.calendarSynced && a.status === 'scheduled' && (
-                      <span className="ml-2 text-amber">⚠ not on Outlook calendar</span>
+                      <span className="ml-2 text-amber">⚠ not on Google Calendar</span>
                     )}
                   </p>
                 </div>

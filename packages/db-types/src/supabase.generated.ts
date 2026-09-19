@@ -167,7 +167,6 @@ export type Database = {
           location_type: string | null
           manage_token_expires_at: string | null
           manage_token_hash: string | null
-          microsoft_event_id: string | null
           notes: string | null
           online_meeting_url: string | null
           raw: Json
@@ -199,7 +198,6 @@ export type Database = {
           location_type?: string | null
           manage_token_expires_at?: string | null
           manage_token_hash?: string | null
-          microsoft_event_id?: string | null
           notes?: string | null
           online_meeting_url?: string | null
           raw?: Json
@@ -231,7 +229,6 @@ export type Database = {
           location_type?: string | null
           manage_token_expires_at?: string | null
           manage_token_hash?: string | null
-          microsoft_event_id?: string | null
           notes?: string | null
           online_meeting_url?: string | null
           raw?: Json

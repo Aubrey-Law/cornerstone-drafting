@@ -14,7 +14,7 @@ export interface ComputeSlotsInput {
   bufferMinutes: number
   minNoticeHours: number
   horizonDays: number
-  /** Busy intervals (Outlook + already-booked appointments), UTC ms. */
+  /** Busy intervals (calendar + already-booked appointments), UTC ms. */
   busy: Interval[]
   /** Current instant (injectable for tests). */
   now: Date

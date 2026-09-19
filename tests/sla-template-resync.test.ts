@@ -24,7 +24,7 @@ const ESTATE_TEMPLATE = 'template-estate'
 
 /** One task definition is enough — the scheduling itself is tested elsewhere. */
 const COLLEGE_TASKS = [
-  { phase: 'intake', name: 'Create matter folder in OneDrive', due_offset_days: 0 },
+  { phase: 'intake', name: 'Create matter folder in Google Drive', due_offset_days: 0 },
 ]
 
 function task(overrides: Record<string, unknown> = {}) {

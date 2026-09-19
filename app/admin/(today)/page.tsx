@@ -104,7 +104,7 @@ export default async function AdminTodayPage() {
         </div>
 
         <aside className="basis-[280px] grow space-y-3 lg:sticky lg:top-4 lg:max-w-[320px] lg:self-start">
-          <Suspense fallback={<TodayCalendarCard rows={today.appointmentsToday} status={today.appointmentsError ? 'Recorded appointments unavailable; loading Outlook…' : 'Loading Outlook calendar…'} />}>
+          <Suspense fallback={<TodayCalendarCard rows={today.appointmentsToday} status={today.appointmentsError ? 'Recorded appointments unavailable; loading calendar…' : 'Loading Google Calendar…'} />}>
             <TodayCalendar appointmentsError={today.appointmentsError} appointments={today.appointmentsToday} excludeIds={today.calendarEventIds ?? []} />
           </Suspense>
 

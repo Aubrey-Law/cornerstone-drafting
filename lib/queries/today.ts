@@ -166,7 +166,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
     fetchDueTasks(dueThrough),
     admin
       .from('appointments')
-      .select('id, start_time, status, attendee_name, linked_matter_id, google_event_id, microsoft_event_id, appointment_type_id')
+      .select('id, start_time, status, attendee_name, linked_matter_id, google_event_id, appointment_type_id')
       .gte('start_time', calendarFrom)
       .lt('start_time', calendarTo)
       .eq('status', 'scheduled')
@@ -217,7 +217,6 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
     attendee_name: string
     linked_matter_id: string | null
     google_event_id: string | null
-    microsoft_event_id: string | null
     appointment_type_id: string | null
   }>
   const appointmentTypeIds = Array.from(
@@ -270,7 +269,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
   if (options.includeCalendar !== false) try {
     const exclude = new Set(
       appointmentRows
-        .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+        .flatMap(row => [row.google_event_id])
         .filter((id): id is string => Boolean(id)),
     )
     const calendarEvents = mapCalendarView(
@@ -315,7 +314,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
     appointmentsToday,
     appointmentsError: Boolean(appointmentsRes.error),
     calendarEventIds: appointmentRows
-      .flatMap(row => [row.google_event_id, row.microsoft_event_id])
+      .flatMap(row => [row.google_event_id])
       .filter((id): id is string => Boolean(id)),
     overdueTasks,
     tasksDueToday,

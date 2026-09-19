@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-export type CalendarProvider = 'microsoft' | 'google'
+export type CalendarProvider = 'google'
 
 export interface CalendarConnection {
   id: string
@@ -27,7 +27,7 @@ export interface StoreCalendarConnectionInput {
 
 export async function getStoredCalendarConnection(
   userId: string,
-  provider: CalendarProvider = 'microsoft',
+  provider: CalendarProvider = 'google',
 ): Promise<CalendarConnection | null> {
   const { data } = await getAdminClient()
     .from('calendar_connections')
@@ -42,8 +42,7 @@ export async function getStoredCalendarConnection(
  * Firm-wide fallback: the most recently refreshed connection for a provider.
  *
  * The firm is a single practitioner, so "whose connection" is not a question
- * worth asking at every call site — but the provider is, now that there is more
- * than one.
+ * worth asking at every call site.
  */
 export async function getAnyConnectionForProvider(
   provider: CalendarProvider,
@@ -56,11 +55,6 @@ export async function getAnyConnectionForProvider(
     .limit(1)
     .maybeSingle()
   return data as CalendarConnection | null
-}
-
-/** Firm-wide fallback: first microsoft connection (solo-practice). */
-export async function getAnyMicrosoftConnection(): Promise<CalendarConnection | null> {
-  return getAnyConnectionForProvider('microsoft')
 }
 
 export async function storeCalendarConnection(
@@ -85,7 +79,7 @@ export async function storeCalendarConnection(
 
 export async function deleteCalendarConnection(
   userId: string,
-  provider: CalendarProvider = 'microsoft',
+  provider: CalendarProvider = 'google',
 ): Promise<void> {
   await getAdminClient()
     .from('calendar_connections')

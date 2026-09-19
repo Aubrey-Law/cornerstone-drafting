@@ -32,7 +32,7 @@ async function manageTokenAuthorizes(
 
 /**
  * Free slots for an appointment type in a date range. Returns only slot start
- * times — never busy-event details. Fails closed when Outlook is unreachable.
+ * times — never busy-event details. Fails closed when the calendar is unreachable.
  */
 export async function GET(req: Request) {
   const limited = await guardPublicSchedulingRoute(req, 'scheduling_availability', 60)
@@ -100,7 +100,7 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     if (err instanceof AvailabilityUnavailableError) {
-      // Fail closed — never offer slots we can't verify against Outlook.
+      // Fail closed — never offer slots we can't verify against the calendar.
       return NextResponse.json(
         { error: 'Scheduling is temporarily unavailable. Please try again later.' },
         { status: 503 },

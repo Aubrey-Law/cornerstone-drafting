@@ -1,13 +1,10 @@
 import type { AppointmentType } from './types'
 
 /**
- * The shapes the app reads and writes calendars in, independent of whose
- * calendar it is.
+ * The shapes the app reads and writes calendars in.
  *
- * Its own module, with no runtime imports, because both the Google client and
- * the legacy Outlook client speak these and the UI renders them. Keeping the
- * contract next to either implementation would make the other one's types read
- * as a dependency on a provider it has nothing to do with.
+ * Its own module, with no runtime imports, so the UI can render these without
+ * pulling in the Google client that produces them.
  */
 
 export interface CreateEventInput {
@@ -36,10 +33,7 @@ export interface CalendarEvent {
   startIso: string
   endIso: string
   isAllDay: boolean
-  /**
-   * Free/busy status, normalised to the Outlook vocabulary the UI already
-   * speaks: 'free' or 'busy'. Google only distinguishes those two.
-   */
+  /** Free/busy status: 'free' or 'busy'. */
   showAs: string
   /** Id of the calendar the event lives on. */
   calendarId?: string | null

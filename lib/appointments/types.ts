@@ -105,7 +105,6 @@ export interface AppointmentRow {
   linked_lead_id: string | null
   linked_matter_id: string | null
   booked_by_user_id: string | null
-  microsoft_event_id: string | null
   google_event_id: string | null
   manage_token_hash: string | null
   manage_token_expires_at: string | null

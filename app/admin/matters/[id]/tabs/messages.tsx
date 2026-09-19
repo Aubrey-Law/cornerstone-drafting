@@ -74,7 +74,7 @@ export function EmailMessagesSection({
   return (
     <section className="space-y-3">
       {!emailSendEnabled ? (
-        <SetupBanner feature="Email" detail="Connect Outlook in Settings or configure Resend to send from this tab." />
+        <SetupBanner feature="Email" detail="Connect Google in Settings or configure Resend to send from this tab." />
       ) : (
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="grid gap-2 sm:grid-cols-2">
