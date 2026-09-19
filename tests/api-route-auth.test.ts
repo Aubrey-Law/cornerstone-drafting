@@ -112,6 +112,10 @@ describe('API route auth coverage', () => {
           /verifyCalcomSignature\b/,
           /verifyCalendlySignature\b/,
           /verifyFirmaWebhookSignature\b/,
+          // Resend delivery events: Svix signing. The svix-id and timestamp are
+          // part of the signed content, so a captured body cannot be replayed
+          // under a new id, and the route 401s before it touches email_log.
+          /verifyResendWebhookSignature\b/,
           // Mailgun signs webhooks with an HMAC over timestamp+token rather
           // than a header, so the check is a local helper: HMAC-SHA256 with
           // timingSafeEqual and a 15-minute replay window, 401 on failure.
