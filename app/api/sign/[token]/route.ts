@@ -12,6 +12,7 @@ import { resolveSigningSubject } from '@/lib/esign/subject'
 import type { SealSigner } from '@/lib/esign/nativeSeal'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
+import { completeDocumentSignature } from '@/lib/esign/documentSignature'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 
@@ -405,7 +406,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     .eq(subject.ownerColumn, subject.ownerId)
     .neq('status', 'signed')
 
-  if (agreement?.matter_id && (remaining ?? []).length === 0) {
+  const everyoneHasSigned = (remaining ?? []).length === 0
+
+  // An uploaded document finishes here: the executed file lands in the matter's
+  // documents and the request is marked complete. Nothing else — the engagement
+  // completion below hires matters and starts SLA clocks, which a HIPAA
+  // authorisation has no business doing.
+  if (subject.kind === 'document' && everyoneHasSigned) {
+    const completed = await completeDocumentSignature({
+      requestId: subject.ownerId,
+      sealedPdf: sealed.pdf,
+      sha256: sealed.sha256,
+    })
+    if (!completed.ok) {
+      // The signature is recorded and the sealed file is stored; only the
+      // filing failed. Say so rather than telling the signer their signature
+      // did not take.
+      console.error('[esign sign] document completion failed', {
+        requestId: subject.ownerId,
+        error: completed.error,
+      })
+    }
+  }
+
+  if (agreement?.matter_id && everyoneHasSigned) {
     await admin.from('engagement_esign_artifacts').upsert({
       agreement_id: subject.ownerId,
       kind: 'combined_evidence',
