@@ -41,6 +41,12 @@ describe('billing foundation migration', () => {
     expect(sql).not.toContain('GRANT INSERT, UPDATE, DELETE ON public.billing_payments TO authenticated')
   })
 
+  /**
+   * Describes the seeder as this migration first wrote it. The live function
+   * has been replaced twice since — most recently by
+   * `_engagement_seed_respects_payor.sql`, which is where payor handling and
+   * the deletion guard are asserted (tests/engagement-seed-payor.test.ts).
+   */
   it('seeds an engagement item once when a signed matter has a positive fee', () => {
     const sql = billingMigration()
 
