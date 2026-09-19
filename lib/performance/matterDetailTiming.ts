@@ -3,6 +3,7 @@ import 'server-only'
 type Phase = 'identity' | 'matter-shell' | 'core' | 'contacts' | 'aging' | 'details'
   | 'notes' | 'design' | 'intake-snapshot' | 'activity' | 'stage-history' | 'task-counts'
   | 'estate' | 'client-intake' | 'lead-history' | 'consent' | 'upload-counts'
+  | 'esign-documents'
 type Outcome = 'pending' | 'success' | 'error'
 type Measurement = { phase: Phase; startMs: number; durationMs: number; outcome: Outcome }
 type Measure = <T>(phase: Phase, read: () => T | PromiseLike<T>) => Promise<T>

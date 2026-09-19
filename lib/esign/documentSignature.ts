@@ -7,6 +7,7 @@ import { createSigningToken } from '@/lib/esign/nativeTokens'
 import { locateAnchors } from '@/lib/esign/nativeAnchors'
 import { appendSignaturePage } from '@/lib/esign/signaturePage'
 import { documentAnchorMarkers, signingPdfKey } from '@/lib/esign/subject'
+import { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
 
 /**
  * Sending a document the firm did not author out for signature.
@@ -35,17 +36,14 @@ export async function esignDocumentsEnabled(): Promise<boolean> {
 }
 
 /**
- * The wording an attorney is shown and agrees to before a document is sent.
+ * The wording an attorney is shown and agrees to before a document is sent, and
+ * the signer ceiling the signature page imposes.
  *
- * Stored on the row rather than referenced, so revising this cannot change what
- * a past sender is recorded as having agreed to. Same discipline as
- * ESIGN_CONSENT_TEXT: never backfill it.
+ * Both live in a module the send dialog can import too — it has to show the same
+ * wording this stores, and offer the same number of signer rows the send will
+ * accept. Re-exported here so every existing importer is unchanged.
  */
-export const CEREMONY_ATTESTATION_TEXT = [
-  'I confirm this document does not require a witnessed or notarized signing',
-  'ceremony under Massachusetts law — it is not a will, trust, power of attorney,',
-  'health care proxy or advance directive (G.L. c. 190B).',
-].join(' ')
+export { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
 
 /** A signer on an uploaded document. Positional, like the anchor markers. */
 export interface DocumentSigner {
@@ -76,8 +74,6 @@ export class DocumentSignatureError extends Error {
     this.name = 'DocumentSignatureError'
   }
 }
-
-const MAX_SIGNERS = 8
 
 export async function createDocumentSignatureRequest(
   input: CreateDocumentSignatureRequestInput,

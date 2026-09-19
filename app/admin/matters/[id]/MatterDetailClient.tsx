@@ -157,6 +157,8 @@ interface MatterDetailClientProps {
   smsEnabled?: boolean
   emailSendEnabled?: boolean
   esignEnabled?: boolean
+  /** firm_settings.esign_documents_enabled — sending a document for signature. */
+  esignDocumentsEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
   initialTaskCounts?: RecordTaskCounts
 }
@@ -209,6 +211,7 @@ function MatterDetailClientInner({
   smsEnabled = false,
   emailSendEnabled = false,
   esignEnabled = false,
+  esignDocumentsEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   initialTaskCounts = { open: 0, overdue: 0 },
 }: MatterDetailClientProps) {
@@ -237,7 +240,7 @@ function MatterDetailClientInner({
   const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
-  const { documents, folders: documentFolders, loading: docsLoading, documentsError, foldersError, reload: loadDocuments } = useMatterDocuments(matter.matter_id, activeTab === 'documents')
+  const { documents, folders: documentFolders, signatureRequests, loading: docsLoading, documentsError, foldersError, reload: loadDocuments } = useMatterDocuments(matter.matter_id, activeTab === 'documents')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   // Set when the server refuses a first-click delete because the matter is
@@ -1150,6 +1153,11 @@ function MatterDetailClientInner({
                   unreviewedUploadCounts={unreviewedUploadCounts}
                   onReviewPortalUploads={handleMarkPortalUploadsReviewed}
                   onReviewIntakeUploads={openIntakeSheet}
+                  esignDocumentsEnabled={esignDocumentsEnabled}
+                  signatureRequests={signatureRequests}
+                  defaultSigner={matter.client_email
+                    ? { name: matter.client_name ?? '', email: matter.client_email }
+                    : null}
                 />
               </TabsContent>
 

@@ -29,6 +29,7 @@ on:
     # check that is slow everywhere gets ignored.
     paths:
       - 'lib/esign/**'
+      - 'app/api/admin/matters/[id]/signature-requests/**'
       - 'lib/engagement/**'
       - 'supabase/migrations/**'
       - 'tests/integration/schema/**'

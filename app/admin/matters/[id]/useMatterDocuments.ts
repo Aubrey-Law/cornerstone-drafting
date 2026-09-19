@@ -1,19 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listDocumentFolders, listDocuments } from '@/lib/documents'
+import { listDocumentFolders, listDocuments, listSignatureRequests } from '@/lib/documents'
+import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 type DocumentState = {
   matterId: string
   documents: MatterDocument[]
   folders: MatterDocumentFolder[]
+  signatureRequests: SignatureRequestSummary[]
   loading: boolean
   documentsError: string | null
   foldersError: string | null
 }
 const emptyState = (matterId: string): DocumentState => ({
-  matterId, documents: [], folders: [], loading: true,
+  matterId, documents: [], folders: [], signatureRequests: [], loading: true,
   documentsError: null, foldersError: null,
 })
 
@@ -29,14 +31,18 @@ export function useMatterDocuments(matterId: string, enabled = true) {
       ...(previous.matterId === matterId ? previous : emptyState(matterId)),
       loading: true,
     }))
-    const [documents, folders] = await Promise.allSettled([
-      listDocuments(matterId), listDocumentFolders(matterId),
+    // Signature requests ride along rather than fetching separately: the badge
+    // belongs to the same view of the list, and allSettled means an endpoint
+    // the firm has not enabled cannot blank the tab.
+    const [documents, folders, requests] = await Promise.allSettled([
+      listDocuments(matterId), listDocumentFolders(matterId), listSignatureRequests(matterId),
     ])
     if (request !== generation.current) return
     setState(previous => ({
       matterId,
       documents: documents.status === 'fulfilled' ? documents.value : previous.documents,
       folders: folders.status === 'fulfilled' ? folders.value : previous.folders,
+      signatureRequests: requests.status === 'fulfilled' ? requests.value : previous.signatureRequests,
       documentsError: documents.status === 'rejected' ? 'Documents could not be refreshed. Please retry.' : null,
       foldersError: folders.status === 'rejected' ? 'Folders could not be refreshed. Please retry.' : null,
       loading: false,
