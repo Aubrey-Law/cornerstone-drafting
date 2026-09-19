@@ -313,10 +313,16 @@ class NativeEsignProvider implements EsignProvider {
       .in('status', ['sent', 'viewed'])
     if (error) throw new Error(error.message)
 
+    // `cancelled`, not `declined`. This trail is read back and printed onto
+    // the audit certificate of everything later sealed for this agreement,
+    // where `declined` reads as the client having refused to sign — an act of
+    // the firm attributed to the person who did not do it, on the one artifact
+    // that exists to be evidence. Rows written before this keep their old
+    // value: the table is append-only, and it records what was written then.
     await admin.from('esign_audit_events').insert({
       agreement_id: requestId,
-      event_type: 'declined',
-      detail: { cancelled_by_firm: true, reason },
+      event_type: 'cancelled',
+      detail: { reason },
     })
   }
 

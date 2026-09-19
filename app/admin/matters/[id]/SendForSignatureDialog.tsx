@@ -25,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { sendDocumentForSignature } from '@/lib/documents'
 import { CEREMONY_ATTESTATION_TEXT, MAX_SIGNERS } from '@/lib/esign/ceremony'
+import { isRequestLive } from '@/lib/esign/requestStatus'
 import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import { formatDateTime } from '@/lib/utils'
 import type { MatterDocument } from '@/types/database'
@@ -54,12 +55,6 @@ const EXPIRY_CHOICES = [
   { value: '336', label: '14 days' },
   { value: '720', label: '30 days' },
 ]
-
-/** A request still capable of being signed — a second send would collide. */
-function isLive(request: SignatureRequestSummary | null | undefined): boolean {
-  if (!request) return false
-  return request.state === 'sent' || request.state === 'viewed' || request.state === 'partially_signed'
-}
 
 export function SendForSignatureDialog({
   matterId,
@@ -193,7 +188,7 @@ export function SendForSignatureDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isLive(existingRequest) && (
+        {isRequestLive(existingRequest) && (
           <div
             role="alert"
             className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber"
@@ -201,7 +196,9 @@ export function SendForSignatureDialog({
             This document is already out for signature
             {existingRequest?.sentAt ? `, sent ${formatDateTime(existingRequest.sentAt)}` : ''}
             {' '}to {existingRequest?.signers.map(signer => signer.email).join(', ')}.
-            Sending again creates a second request and a second set of links.
+            Sending again creates a second request and a second set of links, both live. To
+            replace it rather than duplicate it, close this and withdraw the first from the
+            document&rsquo;s menu.
           </div>
         )}
 

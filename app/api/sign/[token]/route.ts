@@ -93,7 +93,11 @@ async function resolveSession(token: string): Promise<
       ? 'This agreement has already been signed'
       : gate.reason === 'declined'
         ? 'This agreement was declined'
-        : 'This signing link has expired'
+        // The firm withdrew it. Saying it expired would blame the signer for a
+        // clock that never ran out, and leave them with nothing to do about it.
+        : gate.reason === 'cancelled'
+          ? 'This request was withdrawn by the firm. Please contact us if you think this is a mistake.'
+          : 'This signing link has expired'
     return { ok: false, status: 410, error: message }
   }
   return { ok: true, session: data as SessionRow }

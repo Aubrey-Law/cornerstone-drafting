@@ -118,6 +118,23 @@ describe('signingSessionGate', () => {
       .toEqual({ ok: false, reason: 'declined' })
   })
 
+  it('reports a withdrawn session as cancelled, not as expiry', () => {
+    // The firm took it back. Saying the link expired would be the same class of
+    // lie as telling someone who already signed that their link lapsed — and
+    // worse here, because the client did nothing and is being told the clock
+    // ran out on them.
+    expect(signingSessionGate({ status: 'cancelled', expires_at: live }, now))
+      .toEqual({ ok: false, reason: 'cancelled' })
+  })
+
+  it('still reports a withdrawn session as cancelled once its date has passed', () => {
+    // A cancelled request that also drifts past its expiry is withdrawn, not
+    // expired. This is the ordering, and the only way to get it wrong is to
+    // check expiry first.
+    expect(signingSessionGate({ status: 'cancelled', expires_at: past }, now))
+      .toEqual({ ok: false, reason: 'cancelled' })
+  })
+
   it('closes a session in any other state', () => {
     expect(signingSessionGate({ status: 'expired', expires_at: live }, now))
       .toEqual({ ok: false, reason: 'closed' })
