@@ -59,6 +59,14 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // Sending an uploaded PDF appends a signature page, which reads the
+    // upload's text layer to refuse a document that already carries these
+    // markers, and then locates the anchors before anyone is emailed. Both go
+    // through pdf.js.
+    '/api/admin/matters/[id]/signature-requests': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
     '/api/sign/[token]': [
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',

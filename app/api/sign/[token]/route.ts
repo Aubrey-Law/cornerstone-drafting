@@ -8,9 +8,11 @@ import { putFileToR2 } from '@/lib/documentUpload'
 import { hashSigningToken, signingSessionGate } from '@/lib/esign/nativeTokens'
 import { sealSignedAgreement } from '@/lib/esign/nativeSeal'
 import { sealFieldsFor, type SignedMark } from '@/lib/esign/sealFields'
+import { resolveSigningSubject } from '@/lib/esign/subject'
 import type { SealSigner } from '@/lib/esign/nativeSeal'
 import { ESIGN_CONSENT_TEXT, consentTextSha256 } from '@/lib/esign/consent'
 import { completeWorkspaceAgreement } from '@/lib/esign/completion'
+import { completeDocumentSignature } from '@/lib/esign/documentSignature'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 
@@ -39,7 +41,9 @@ function clientIp(req: Request): string | null {
 
 type SessionRow = {
   id: string
-  agreement_id: string
+  /** Exactly one of these is set; the database enforces it. */
+  agreement_id: string | null
+  signature_request_id: string | null
   recipient_key: string
   status: string
   expires_at: string
@@ -72,7 +76,7 @@ async function resolveSession(token: string): Promise<
   // find the row — and it means a database dump yields no usable links.
   const { data, error } = await admin
     .from('esign_signing_sessions')
-    .select('id, agreement_id, recipient_key, status, expires_at')
+    .select('id, agreement_id, signature_request_id, recipient_key, status, expires_at')
     .eq('token_hash', hashSigningToken(token))
     .maybeSingle()
   if (error) {
@@ -95,16 +99,31 @@ async function resolveSession(token: string): Promise<
   return { ok: true, session: data as SessionRow }
 }
 
+/**
+ * The owning column for a session, as an insert fragment.
+ *
+ * esign_audit_events carries the same exactly-one-owner rule as the sessions
+ * table, so an event is filed against whichever one the session has. Reading it
+ * off the session rather than the resolved subject keeps the audit writes that
+ * happen before the subject is needed — opened, consented, declined — from
+ * depending on it.
+ */
+function auditOwner(session: SessionRow): Record<string, string> {
+  if (session.agreement_id) return { agreement_id: session.agreement_id }
+  if (session.signature_request_id) return { signature_request_id: session.signature_request_id }
+  throw new Error('This signing session belongs to no document')
+}
+
 async function recordAudit(input: {
   sessionId: string
-  agreementId: string
+  session: SessionRow
   eventType: string
   req: Request
   detail?: Record<string, unknown>
 }): Promise<void> {
   const { error } = await getAdminClient().from('esign_audit_events').insert({
     session_id: input.sessionId,
-    agreement_id: input.agreementId,
+    ...auditOwner(input.session),
     event_type: input.eventType,
     ip: clientIp(input.req),
     user_agent: input.req.headers.get('user-agent'),
@@ -147,7 +166,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     // optional: a client should not have to justify themselves to proceed.
     await recordAudit({
       sessionId: session.id,
-      agreementId: session.agreement_id,
+      session,
       eventType: 'declined',
       req,
       detail: typeof body.declineReason === 'string' ? { reason: body.declineReason.trim() } : {},
@@ -187,14 +206,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   await recordAudit({
     sessionId: session.id,
-    agreementId: session.agreement_id,
+    session,
     eventType: 'consented',
     req,
     detail: { consent_text_sha256: consentTextSha256() },
   })
 
+  // What this session is a session *for*. Everything below reads the document,
+  // its signers and its marker namespace through this rather than assuming an
+  // engagement agreement — see lib/esign/subject.ts.
+  const subject = await resolveSigningSubject(session)
+
   // Load the approved PDF — the exact bytes the client reviewed.
-  const pdf = await downloadFromR2(`esign/${session.agreement_id}/agreement.pdf`)
+  const pdf = await downloadFromR2(subject.pdfKey)
   if (!pdf) {
     return NextResponse.json({ error: 'Could not load the agreement' }, { status: 502 })
   }
@@ -205,27 +229,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // read off the same ordered list. Asking only for this recipient's
   // `recipient_order` would work today but silently diverge the moment those
   // values are ever non-contiguous.
-  const { data: roster } = await admin
-    .from('engagement_agreement_recipients')
-    .select('name, email, role, recipient_order')
-    .eq('agreement_id', session.agreement_id)
-    .order('recipient_order', { ascending: true })
-
-  const orderedRecipients = roster ?? []
-  const position = orderedRecipients.findIndex(r => r.role === session.recipient_key) + 1
+  const orderedRecipients = subject.recipients
+  const position = orderedRecipients.findIndex(r => r.key === session.recipient_key) + 1
   if (position === 0) {
     // No guessing here. A default position would stamp this signature on some
     // other signer's line and produce an executed agreement that looks finished
     // and is wrong — far worse than refusing to sign.
     console.error('[esign sign] recipient not found on agreement', {
-      agreementId: session.agreement_id,
+      ownerId: subject.ownerId,
       recipientKey: session.recipient_key,
     })
     return NextResponse.json({ error: 'Could not sign this agreement' }, { status: 500 })
   }
   const recipient = orderedRecipients[position - 1]
 
-  await recordAudit({ sessionId: session.id, agreementId: session.agreement_id, eventType: 'signed', req })
+  await recordAudit({ sessionId: session.id, session, eventType: 'signed', req })
 
   // session_id comes back so each trail line can name its signer. Without it a
   // couple's ten events render as one list in which nothing says who opened,
@@ -234,7 +252,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const { data: trail } = await admin
     .from('esign_audit_events')
     .select('event_type, occurred_at, ip, user_agent, session_id')
-    .eq('agreement_id', session.agreement_id)
+    .eq(subject.ownerColumn, subject.ownerId)
     .order('occurred_at', { ascending: true })
 
   // Everyone who has signed, not just whoever just finished.
@@ -245,15 +263,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // agreement with `[[CLIENT_2_SIGNATURE]]` still printed on it: the spouse
   // sealed first, the primary reloaded the original, and the overwrite erased
   // her. Position comes from the same ordered roster the markers do.
-  const positionOf = new Map(orderedRecipients.map((r, index) => [r.role as string, index + 1]))
+  const positionOf = new Map(orderedRecipients.map((r, index) => [r.key, index + 1]))
   const { data: priorSessions } = await admin
     .from('esign_signing_sessions')
     .select('id, recipient_key, signed_at')
-    .eq('agreement_id', session.agreement_id)
+    .eq(subject.ownerColumn, subject.ownerId)
     .eq('status', 'signed')
     .neq('id', session.id)
 
-  const nameOf = new Map(orderedRecipients.map(r => [r.role as string, r.name as string]))
+  const nameOf = new Map(orderedRecipients.map(r => [r.key, r.name]))
   // session id -> signer name, for attributing the audit trail.
   const signerBySession = new Map<string, string>([[session.id, (recipient?.name as string) ?? typedName]])
 
@@ -265,7 +283,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       // Same refusal as above: a signature whose position cannot be resolved
       // must not be dropped from the document silently.
       console.error('[esign sign] prior signer not found on agreement', {
-        agreementId: session.agreement_id,
+        ownerId: subject.ownerId,
         recipientKey: prior.recipient_key,
       })
       return NextResponse.json({ error: 'Could not sign this agreement' }, { status: 500 })
@@ -312,7 +330,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         signedAt: new Date(now),
         ...(signaturePng ? { signaturePng } : { typedName }),
       },
-    ], timezone),
+    ], timezone, subject.markersFor),
     // Every signer, in agreement order, so a couple's certificate names both
     // rather than whoever happened to seal last.
     signers: [...priorSigners, {
@@ -321,7 +339,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       adoptionMethod: signaturePng ? ('drawn' as const) : ('typed' as const),
       signedAt: new Date(now),
     }].sort((a, b) => (a.signedAt?.getTime() ?? 0) - (b.signedAt?.getTime() ?? 0)),
-    agreementId: session.agreement_id,
+    agreementId: subject.ownerId,
     consentText: ESIGN_CONSENT_TEXT,
     auditTrail: (trail ?? []).map(entry => ({
       eventType: entry.event_type as string,
@@ -332,14 +350,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     })),
   })
 
-  const sealedKey = `esign/${session.agreement_id}/signed.pdf`
+  const sealedKey = subject.sealedKey
   await putFileToR2(sealedKey, sealed.pdf, 'application/pdf')
 
   const { error: artifactError } = await admin
     .from('esign_signature_artifacts')
     .upsert({
       session_id: session.id,
-      ...(signaturePng ? { signature_png_r2_key: `esign/${session.agreement_id}/${session.id}-signature.png` } : {}),
+      ...(signaturePng ? { signature_png_r2_key: `esign/${subject.ownerId}/${session.id}-signature.png` } : {}),
       typed_name: typedName || null,
       adoption_method: signaturePng ? 'drawn' : 'typed',
       consent_text_sha256: consentTextSha256(),
@@ -347,7 +365,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (artifactError) throw new Error(artifactError.message)
 
   if (signaturePng) {
-    await putFileToR2(`esign/${session.agreement_id}/${session.id}-signature.png`, signaturePng, 'image/png')
+    await putFileToR2(`esign/${subject.ownerId}/${session.id}-signature.png`, signaturePng, 'image/png')
   }
 
   const { error: sessionError } = await admin
@@ -358,7 +376,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   await recordAudit({
     sessionId: session.id,
-    agreementId: session.agreement_id,
+    session,
     eventType: 'sealed',
     req,
     detail: { sha256: sealed.sha256, source_sha256: sealed.sourceSha256 },
@@ -367,24 +385,56 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // Register the sealed document as this agreement's evidence, then let the
   // shared completion module finish exactly as the webhook path does — that is
   // the point of it being shared.
-  const { data: agreement } = await admin
-    .from('engagement_agreements')
-    .select('id, matter_id')
-    .eq('id', session.agreement_id)
-    .maybeSingle()
+  //
+  // Engagement-only, deliberately. completeWorkspaceAgreement hires the matter,
+  // starts the post-engagement SLA clock and flips
+  // matter_details.engagement_signed; none of that is right for an arbitrary
+  // signed document, which needs its own completion step. Until that exists a
+  // non-engagement subject stops here, with the signature recorded and the
+  // sealed file stored.
+  const { data: agreement } = subject.kind === 'engagement'
+    ? await admin
+      .from('engagement_agreements')
+      .select('id, matter_id')
+      .eq('id', subject.ownerId)
+      .maybeSingle()
+    : { data: null }
 
   const { data: remaining } = await admin
     .from('esign_signing_sessions')
     .select('id')
-    .eq('agreement_id', session.agreement_id)
+    .eq(subject.ownerColumn, subject.ownerId)
     .neq('status', 'signed')
 
-  if (agreement?.matter_id && (remaining ?? []).length === 0) {
+  const everyoneHasSigned = (remaining ?? []).length === 0
+
+  // An uploaded document finishes here: the executed file lands in the matter's
+  // documents and the request is marked complete. Nothing else — the engagement
+  // completion below hires matters and starts SLA clocks, which a HIPAA
+  // authorisation has no business doing.
+  if (subject.kind === 'document' && everyoneHasSigned) {
+    const completed = await completeDocumentSignature({
+      requestId: subject.ownerId,
+      sealedPdf: sealed.pdf,
+      sha256: sealed.sha256,
+    })
+    if (!completed.ok) {
+      // The signature is recorded and the sealed file is stored; only the
+      // filing failed. Say so rather than telling the signer their signature
+      // did not take.
+      console.error('[esign sign] document completion failed', {
+        requestId: subject.ownerId,
+        error: completed.error,
+      })
+    }
+  }
+
+  if (agreement?.matter_id && everyoneHasSigned) {
     await admin.from('engagement_esign_artifacts').upsert({
-      agreement_id: session.agreement_id,
+      agreement_id: subject.ownerId,
       kind: 'combined_evidence',
       provider: 'native',
-      external_request_id: session.agreement_id,
+      external_request_id: subject.ownerId,
       r2_key: sealedKey,
       sha256: sealed.sha256,
       byte_size: sealed.pdf.length,
@@ -393,7 +443,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     }, { onConflict: 'agreement_id,kind' })
 
     const completed = await completeWorkspaceAgreement(admin, {
-      agreementId: session.agreement_id,
+      agreementId: subject.ownerId,
       matterId: agreement.matter_id as string,
       state: {
         status: 'signed',
@@ -406,7 +456,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         recipients: [],
       },
       provider: 'native',
-      externalRequestId: session.agreement_id,
+      externalRequestId: subject.ownerId,
     })
     if (!completed.ok) {
       // The signature is recorded and the sealed document is stored; only the
@@ -455,21 +505,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       .from('esign_signing_sessions')
       .update({ status: 'viewed', viewed_at: new Date().toISOString() })
       .eq('id', session.id)
-    await recordAudit({ sessionId: session.id, agreementId: session.agreement_id, eventType: 'opened', req })
+    await recordAudit({ sessionId: session.id, session, eventType: 'opened', req })
   }
+
+  const subject = await resolveSigningSubject(session)
 
   const url = await getSignedUrl(
     getR2Client(),
-    new GetObjectCommand({ Bucket: r2Bucket(), Key: `esign/${session.agreement_id}/agreement.pdf` }),
+    new GetObjectCommand({ Bucket: r2Bucket(), Key: subject.pdfKey }),
     { expiresIn: 300 },
   )
 
-  const { data: recipient } = await admin
-    .from('engagement_agreement_recipients')
-    .select('name, email')
-    .eq('agreement_id', session.agreement_id)
-    .eq('role', session.recipient_key)
-    .maybeSingle()
+  const recipient = subject.recipients.find(r => r.key === session.recipient_key)
 
   return NextResponse.json({
     documentUrl: url,
