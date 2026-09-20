@@ -98,6 +98,12 @@ export function attachedWorkflowPromptNote(
     )
   }
 
+  if (workflow.allowedContext.includes('matter') && options.contextType === 'lead') {
+    lines.push(
+      `This chat is on a lead — a prospective client who has not hired the firm yet. Treat the lead record shown above as "the matter context": the same name, family, asset and intake facts apply. There is no design sheet on a lead, so skip any design-sheet step and say so; use \`${READ_MATTER_RECORD_TOOL_NAME}\` for notes, tasks and communications.`,
+    )
+  }
+
   lines.push(`Workflow instructions:\n${workflow.body}`)
   return lines.join('\n\n')
 }
