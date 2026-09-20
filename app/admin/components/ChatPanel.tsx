@@ -453,7 +453,7 @@ export function ChatPanel({
   }, [open, pendingAction])
 
   const hasContent = messages.some(message => message.content.trim().length > 0)
-  const canSaveNote = chatContext.type === 'matter' && hasContent && !savingNote
+  const canSaveNote = chatContext.type !== 'general' && hasContent && !savingNote
   const exportBaseName = `cornerstone-chat-${new Date().toISOString().slice(0, 10)}`
 
   function flashStatus(kind: 'success' | 'error', text: string) {
@@ -487,8 +487,8 @@ export function ChatPanel({
   }
 
   async function handleSaveNote() {
+    // canSaveNote already rules the general thread out, and narrows the context.
     if (!canSaveNote) return
-    if (chatContext.type !== 'matter') return
     const content = chatNoteText(messages)
     if (!content) return
 
@@ -496,8 +496,13 @@ export function ChatPanel({
     setActionStatus(null)
     setSavedNote(null)
     try {
-      await postRecordNote('matter', chatContext.id, content)
-      setSavedNote({ contextType: 'matter', contextId: chatContext.id, noteType: saveNoteType, scope: 'conversation' })
+      await postRecordNote(chatContext.type, chatContext.id, content)
+      setSavedNote({
+        contextType: chatContext.type,
+        contextId: chatContext.id,
+        ...(chatContext.type === 'matter' ? { noteType: saveNoteType } : {}),
+        scope: 'conversation',
+      })
     } catch (err) {
       flashStatus('error', (err as Error).message || 'Failed to save note.')
     } finally {
@@ -625,6 +630,7 @@ export function ChatPanel({
   }
 
   const contextWord = chatContext.type === 'matter' ? 'Matter' : chatContext.type === 'lead' ? 'Lead' : 'Firm'
+  const saveThreadLabel = chatContext.type === 'lead' ? 'Save to lead notes' : 'Save to matter notes'
   const saveAsNoteLabel = chatContext.type === 'lead'
     ? 'Save this response to the lead notes'
     : saveNoteType === 'client_comm'
@@ -691,39 +697,39 @@ export function ChatPanel({
       {hasContent && (
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border bg-background/40 px-3 py-2">
           {chatContext.type === 'matter' && (
-            <>
-              <div className="flex gap-1" role="group" aria-label="Note type when saving">
-                {([
-                  { key: 'internal' as const, label: 'Internal' },
-                  { key: 'client_comm' as const, label: 'Client comm.' },
-                ]).map(option => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => setSaveNoteType(option.key)}
-                    className={cn(
-                      'inline-flex h-6 items-center rounded-full px-2 text-micro font-semibold transition-colors',
-                      saveNoteType === option.key
-                        ? option.key === 'internal'
-                          ? 'bg-brand-navy text-white'
-                          : 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-accent',
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleSaveNote()}
-                disabled={!canSaveNote}
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <NotebookPen size={12} />
-                {savingNote ? 'Saving…' : 'Save to matter notes'}
-              </button>
-            </>
+            <div className="flex gap-1" role="group" aria-label="Note type when saving">
+              {([
+                { key: 'internal' as const, label: 'Internal' },
+                { key: 'client_comm' as const, label: 'Client comm.' },
+              ]).map(option => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setSaveNoteType(option.key)}
+                  className={cn(
+                    'inline-flex h-6 items-center rounded-full px-2 text-micro font-semibold transition-colors',
+                    saveNoteType === option.key
+                      ? option.key === 'internal'
+                        ? 'bg-brand-navy text-white'
+                        : 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {chatContext.type !== 'general' && (
+            <button
+              type="button"
+              onClick={() => void handleSaveNote()}
+              disabled={!canSaveNote}
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-micro font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <NotebookPen size={12} />
+              {savingNote ? 'Saving…' : saveThreadLabel}
+            </button>
           )}
           {lastAssistantMessage && (
             <button
