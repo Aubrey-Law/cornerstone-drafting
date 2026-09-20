@@ -11,8 +11,8 @@ vi.mock('@/lib/clientPhone', () => ({ openExternalPhone }))
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 
 const notes = [
-  { id: 'n2', body: 'Newest note', actorId: 'u1', createdAt: '2026-07-02T00:00:00Z', updatedAt: '2026-07-02T00:00:00Z' },
-  { id: 'n1', body: 'Older note', actorId: 'u2', createdAt: '2026-07-01T00:00:00Z', updatedAt: '2026-07-01T00:00:00Z' },
+  { id: 'n2', body: 'Newest note', noteType: 'internal' as const, actorId: 'u1', createdAt: '2026-07-02T00:00:00Z', updatedAt: '2026-07-02T00:00:00Z' },
+  { id: 'n1', body: 'Older note', noteType: 'internal' as const, actorId: 'u2', createdAt: '2026-07-01T00:00:00Z', updatedAt: '2026-07-01T00:00:00Z' },
 ]
 const meetings = [{ id: 'm1', title: 'Planning call', date: '2026-07-03T00:00:00Z', attendees: ['Jane', 'John'], body: 'Discussed the plan in detail.', source: 'manual', granolaNoteId: null, actorId: 'u1', createdAt: '2026-07-03T00:00:00Z', updatedAt: '2026-07-03T00:00:00Z' }]
 
@@ -128,6 +128,47 @@ describe('lead notes', () => {
 
   it('surfaces request errors, preserves input, and prevents duplicate submission', async () => {
     let release:(value:Response)=>void=()=>{};const fetchMock=vi.spyOn(globalThis,'fetch').mockImplementation(()=>new Promise(resolve=>{release=resolve}));const user=userEvent.setup();render(<LeadTimelineCard leadId="l1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{id:'u1',role:'attorney'}}/>);await user.type(screen.getByLabelText('New note'),'Keep me');const add=screen.getByRole('button',{name:'Add note'}) as HTMLButtonElement;await user.click(add);expect(add.disabled).toBe(true);await user.click(add);expect(fetchMock).toHaveBeenCalledTimes(1);release({ok:false,json:async()=>({error:'Audit failed'})} as Response);expect((await screen.findByRole('alert')).textContent).toContain('Audit failed');expect((screen.getByLabelText('New note') as HTMLInputElement).value).toBe('Keep me')
+  })
+
+  it('files a note under the type the picker names, and shows it in the timeline', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ note: { id: 'n3', body: 'Called the client', noteType: 'client_comm', actorId: 'u1', createdAt: '2026-07-05T00:00:00Z', updatedAt: '2026-07-05T00:00:00Z' } }),
+    } as Response)
+    const user = userEvent.setup()
+    render(<LeadTimelineCard leadId="l1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
+
+    await user.type(screen.getByLabelText('New note'), 'Called the client')
+    await user.click(within(screen.getByRole('group', { name: 'Note type' })).getByRole('button', { name: 'Client comm.' }))
+    await user.click(screen.getByRole('button', { name: 'Add note' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ body: 'Called the client', noteType: 'client_comm' })
+    expect(await screen.findByText('Client communication')).toBeTruthy()
+    // The picker returns to internal, so the next note is not swept along.
+    expect(within(screen.getByRole('group', { name: 'Note type' })).getByRole('button', { name: 'Internal' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('reclassifies a note from the edit row', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ note: { ...notes[0], noteType: 'client_comm' } }),
+    } as Response)
+    const user = userEvent.setup()
+    render(<LeadTimelineCard leadId="l1" initialNotes={[notes[0]]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit note' }))
+    const picker = screen.getByRole('group', { name: 'Note type when saving' })
+    // The picker opens on the note's own type, not on a default.
+    expect(within(picker).getByRole('button', { name: 'Internal' }).getAttribute('aria-pressed')).toBe('true')
+    await user.click(within(picker).getByRole('button', { name: 'Client comm.' }))
+    await user.click(screen.getByRole('button', { name: 'Save note' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/admin/leads/l1/notes/n2')
+    expect(JSON.parse(String(init?.body))).toEqual({ body: 'Newest note', noteType: 'client_comm' })
+    expect(await screen.findByText('Client communication')).toBeTruthy()
   })
 
   it('only shows delete to the author or an admin', () => {

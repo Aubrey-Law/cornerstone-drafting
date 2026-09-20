@@ -5,6 +5,7 @@ const notes = [
   {
     id: 'note-1',
     body: 'Discuss trust funding.',
+    noteType: 'internal' as const,
     actorId: 'user-1',
     createdAt: '2026-07-25T15:00:00.000Z',
     updatedAt: '2026-07-25T15:00:00.000Z',
@@ -102,6 +103,22 @@ describe('lead timeline normalization', () => {
     expect(filterLeadTimeline(items, 'all')).toHaveLength(3)
     expect(filterLeadTimeline(items, 'notes').map(item => item.kind)).toEqual(['meeting', 'note'])
     expect(filterLeadTimeline(items, 'system').map(item => item.kind)).toEqual(['system'])
+  })
+})
+
+describe('lead note types', () => {
+  it('titles a note by what it is for', () => {
+    const [internal, clientComm] = buildLeadTimeline({
+      notes: [
+        notes[0],
+        { ...notes[0], id: 'note-2', noteType: 'client_comm' as const, createdAt: '2026-07-25T14:00:00.000Z' },
+      ],
+      meetings: [],
+      activity: [],
+      actorNames: {},
+    })
+    expect(internal.title).toBe('Internal note')
+    expect(clientComm.title).toBe('Client communication')
   })
 })
 

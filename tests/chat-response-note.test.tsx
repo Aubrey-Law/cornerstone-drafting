@@ -172,7 +172,7 @@ describe('saving one response from the matter rail', () => {
 })
 
 describe('saving one response from a lead thread', () => {
-  it('files it on the lead, with no note type to choose', async () => {
+  it('files it on the lead, under the type the toggle names', async () => {
     pathname.current = '/admin/leads/lead-1'
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input).includes('/api/admin/chat/save-note')) {
@@ -184,22 +184,21 @@ describe('saving one response from a lead thread', () => {
 
     render(<ChatPanel open assistantModelLabel="Claude Opus 4.8" />)
     expect(await screen.findByText(ANSWER)).toBeTruthy()
-    // The Internal / Client comm. toggle belongs to the matter file.
-    expect(screen.queryByRole('button', { name: 'Client comm.' })).toBeNull()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save this response to the lead notes' }))
+    // A lead note has a type of its own now, so the rail offers the same choice.
+    await userEvent.click(screen.getByRole('button', { name: 'Client comm.' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save this response as a client communication note' }))
 
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(entry => String(entry[0]).includes('/api/admin/chat/save-note'))
       expect(call).toBeTruthy()
       const body = JSON.parse(String((call![1] as RequestInit).body))
-      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-1' })
-      expect(body).not.toHaveProperty('note_type')
+      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-1', note_type: 'client_comm' })
       expect(body.content).toContain(ANSWER)
       expect(body.content).not.toContain('Where does funding stand?')
     })
 
-    expect(await screen.findByText('Saved to lead notes')).toBeTruthy()
+    expect(await screen.findByText('Saved to lead notes · Client comm.')).toBeTruthy()
     expect(screen.getByText(/This response is now part of the lead/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'View' }).getAttribute('href')).toBe('/admin/leads/lead-1?tab=notes')
   })
@@ -233,7 +232,7 @@ describe('saving the whole conversation', () => {
     })
   }
 
-  it('files the thread on a lead, both turns and no note type', async () => {
+  it('files the thread on a lead, both turns, under the chosen type', async () => {
     pathname.current = '/admin/leads/lead-1'
     const fetchMock = saveNoteFetch()
     vi.stubGlobal('fetch', fetchMock)
@@ -247,15 +246,14 @@ describe('saving the whole conversation', () => {
       const call = fetchMock.mock.calls.find(entry => String(entry[0]).includes('/api/admin/chat/save-note'))
       expect(call).toBeTruthy()
       const body = JSON.parse(String((call![1] as RequestInit).body))
-      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-1' })
-      expect(body).not.toHaveProperty('note_type')
+      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-1', note_type: 'internal' })
       // The whole thread, question included — that is what distinguishes it
       // from the per-response save.
       expect(body.content).toContain('Where does funding stand?')
       expect(body.content).toContain(ANSWER)
     })
 
-    expect(await screen.findByText('Saved to lead notes')).toBeTruthy()
+    expect(await screen.findByText('Saved to lead notes · Internal')).toBeTruthy()
     expect(screen.getByText(/This conversation is now part of the lead/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'View' }).getAttribute('href')).toBe('/admin/leads/lead-1?tab=notes')
   })

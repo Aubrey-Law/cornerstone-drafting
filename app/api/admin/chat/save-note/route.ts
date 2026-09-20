@@ -6,7 +6,6 @@ interface SaveNoteBody {
   context_type?: 'matter' | 'lead'
   context_id?: string
   content?: string
-  /** Matter notes only — lead notes have no type. */
   note_type?: 'internal' | 'client_comm'
 }
 
@@ -37,6 +36,8 @@ export async function POST(req: NextRequest) {
 
   const admin = getAdminClient()
 
+  const noteType = body.note_type === 'client_comm' ? 'client_comm' : 'internal'
+
   if (contextType === 'lead') {
     // The same transaction the lead notes tab writes through: the note and its
     // activity row land together, and the note carries the attorney as author
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       p_lead_id: contextId,
       p_body: content,
       p_actor_id: userId,
+      p_note_type: noteType,
     })
     if (error) {
       const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500
@@ -67,8 +69,6 @@ export async function POST(req: NextRequest) {
   if (!matter) {
     return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
   }
-
-  const noteType = body.note_type === 'client_comm' ? 'client_comm' : 'internal'
 
   const { data, error } = await admin
     .from('matter_notes')

@@ -13,13 +13,14 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   buildLeadTimeline,
   filterLeadTimeline,
+  type LeadNoteType,
   type LeadTimelineActivity,
   type LeadTimelineFilter,
   type LeadTimelineItem,
   type LeadTimelineMeeting,
   type LeadTimelineNote,
 } from '@/lib/leads/timeline'
-import { formatDateDetail, formatDateTime } from '@/lib/utils'
+import { cn, formatDateDetail, formatDateTime } from '@/lib/utils'
 
 const AddMeetingNotesDialog = dynamic(
   () => import('@/components/meeting-notes/AddMeetingNotesDialog')
@@ -96,6 +97,48 @@ function mapMeetingNoteApiRow(row: LeadMeetingNoteApiRow): LeadTimelineMeeting {
   }
 }
 
+const NOTE_TYPE_OPTIONS: Array<{ value: LeadNoteType; label: string }> = [
+  { value: 'internal', label: 'Internal' },
+  { value: 'client_comm', label: 'Client comm.' },
+]
+
+/** What the note is for. Matches the matter file's picker, in both look and wording. */
+function NoteTypePicker({
+  value,
+  onChange,
+  label,
+  disabled,
+}: {
+  value: LeadNoteType
+  onChange: (next: LeadNoteType) => void
+  label: string
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex gap-1" role="group" aria-label={label}>
+      {NOTE_TYPE_OPTIONS.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          disabled={disabled}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'rounded-full px-3 py-1 text-micro font-medium transition-colors disabled:opacity-60',
+            value === option.value
+              ? option.value === 'internal'
+                ? 'bg-brand-navy text-white'
+                : 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-accent',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function markerIcon(kind: LeadTimelineItem['kind']) {
   if (kind === 'note') return MessageSquareText
   if (kind === 'meeting') return CalendarDays
@@ -127,8 +170,10 @@ export function LeadTimelineCard({
   const [filter, setFilter] = useState<LeadTimelineFilter>(lockedFilter ?? 'all')
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null)
   const [body, setBody] = useState('')
+  const [noteType, setNoteType] = useState<LeadNoteType>('internal')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editBody, setEditBody] = useState('')
+  const [editNoteType, setEditNoteType] = useState<LeadNoteType>('internal')
   const [meetingOpen, setMeetingOpen] = useState(false)
   const [granolaOpen, setGranolaOpen] = useState(false)
   const [meeting, setMeeting] = useState({ title: '', date: '', attendees: '', body: '' })
@@ -189,16 +234,17 @@ export function LeadTimelineCard({
 
   async function addNote() {
     await mutate(async () => {
-      const json = await call(`/api/admin/leads/${leadId}/notes`, 'POST', { body })
+      const json = await call(`/api/admin/leads/${leadId}/notes`, 'POST', { body, noteType })
       const added = json.note as LeadTimelineNote
       updateNotes(sortNotes([...notes, added]))
       setBody('')
+      setNoteType('internal')
     })
   }
 
   async function saveNote(id: string) {
     await mutate(async () => {
-      const json = await call(`/api/admin/leads/${leadId}/notes/${id}`, 'PATCH', { body: editBody })
+      const json = await call(`/api/admin/leads/${leadId}/notes/${id}`, 'PATCH', { body: editBody, noteType: editNoteType })
       updateNotes(sortNotes(notes.map(note => note.id === id ? json.note : note)))
       setEditingNoteId(null)
     })
@@ -284,12 +330,20 @@ export function LeadTimelineCard({
           ariaLabel="New note"
           value={body}
           onChange={setBody}
-          placeholder="Add an internal note"
+          placeholder={noteType === 'client_comm' ? 'Log a client communication' : 'Add an internal note'}
           />
         </div>
         <Button type="button" disabled={pending || !body.trim()} onClick={() => void addNote()}>
           Add note
         </Button>
+      </div>
+      <div className="mt-2">
+        <NoteTypePicker
+          value={noteType}
+          onChange={setNoteType}
+          label="Note type"
+          disabled={pending}
+        />
       </div>
       <p aria-live="polite" role={error ? 'alert' : undefined} className="mt-1 text-sm text-destructive">
         {error}
@@ -372,13 +426,21 @@ export function LeadTimelineCard({
                 </div>
 
                 {note && editingNoteId === note.id ? (
-                  <div className="mt-2 flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <FormattedNoteEditor ariaLabel="Edit note body" value={editBody} onChange={setEditBody} />
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <FormattedNoteEditor ariaLabel="Edit note body" value={editBody} onChange={setEditBody} />
+                      </div>
+                      <Button type="button" size="sm" disabled={pending || !editBody.trim()} onClick={() => void saveNote(note.id)}>
+                        Save note
+                      </Button>
                     </div>
-                    <Button type="button" size="sm" disabled={pending || !editBody.trim()} onClick={() => void saveNote(note.id)}>
-                      Save note
-                    </Button>
+                    <NoteTypePicker
+                      value={editNoteType}
+                      onChange={setEditNoteType}
+                      label="Note type when saving"
+                      disabled={pending}
+                    />
                   </div>
                 ) : renderBody(item)}
 
@@ -393,6 +455,7 @@ export function LeadTimelineCard({
                       onClick={() => {
                         setEditingNoteId(note.id)
                         setEditBody(note.body)
+                        setEditNoteType(note.noteType)
                       }}
                     >
                       Edit
