@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   TRIAGE_LISTING_CEILING,
   decideThreadAction,
+  humanDraftCutoff,
   describeError,
   type ExistingTriageRow,
 } from '@/lib/emailTriage/scan'
@@ -16,12 +17,12 @@ import {
  * has dealt with or answers a message that is no longer the last word.
  */
 
-const waiting = (id = 'inbound-1', humanDraftInProgress = false) => ({
+const waiting = (id = 'inbound-1', humanDraftAt: string | null = null) => ({
   needsReply: true as const,
   inboundMessageId: id,
   receivedAt: '2026-09-11T12:00:00.000Z',
   messageCount: 2,
-  humanDraftInProgress,
+  humanDraftAt,
 })
 
 const settled = (reason: string) => ({ needsReply: false as const, reason })
@@ -117,9 +118,10 @@ describe('decideThreadAction', () => {
     // the client is waiting on the send, not on the typing. Skipping it here
     // meant a thread with no row never got one, and once it left the listing
     // window nothing looked at it again.
-    expect(decideThreadAction(waiting('inbound-1', true), undefined))
+    const draftedAt = '2026-09-11T13:00:00.000Z'
+    expect(decideThreadAction(waiting('inbound-1', draftedAt), undefined))
       .toEqual({ kind: 'queue', reset: true })
-    expect(decideThreadAction(waiting('inbound-1', true), row()))
+    expect(decideThreadAction(waiting('inbound-1', draftedAt), row()))
       .toEqual({ kind: 'queue', reset: false })
   })
 })
@@ -147,6 +149,29 @@ describe('the listing ceiling', () => {
   it('spans more than the longest gap between two cron runs', () => {
     const hoursCovered = (TRIAGE_LISTING_CEILING / PESSIMISTIC_THREADS_PER_DAY) * 24
     expect(hoursCovered).toBeGreaterThan(WORST_CRON_GAP_HOURS)
+  })
+})
+
+describe('the stale-draft cutoff', () => {
+  /**
+   * An unsent reply suppresses the model draft, because nobody wants a second
+   * answer written over the one they are typing. That is true while they are
+   * typing. The first scan to read the whole window found seventeen unsent
+   * replies, some more than a week old — not people mid-sentence, people who
+   * started and forgot. Suppressing help on those is the page declining to do
+   * its job for precisely the threads most overdue.
+   */
+  const HOUR = 60 * 60 * 1000
+  const now = Date.parse('2026-09-20T12:00:00.000Z')
+
+  it('still defers to a reply someone is plausibly still writing', () => {
+    expect(new Date(now - 2 * HOUR).toISOString() >= humanDraftCutoff(now)).toBe(true)
+    expect(new Date(now - 47 * HOUR).toISOString() >= humanDraftCutoff(now)).toBe(true)
+  })
+
+  it('stops deferring once the reply has sat unsent for two days', () => {
+    expect(new Date(now - 49 * HOUR).toISOString() < humanDraftCutoff(now)).toBe(true)
+    expect(new Date(now - 7 * 24 * HOUR).toISOString() < humanDraftCutoff(now)).toBe(true)
   })
 })
 

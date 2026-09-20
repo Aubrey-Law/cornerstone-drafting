@@ -33,14 +33,20 @@ export type NeedsReplyVerdict =
       receivedAt: string
       messageCount: number
       /**
-       * The attorney has a reply to this thread half-written in Gmail.
+       * When the attorney's own unsent draft on this thread was last saved, or
+       * null if there is none. The newest, if there is more than one.
        *
        * A fact about the row, not a reason to stop tracking it. It suppresses
        * the model draft — nobody wants a second answer written over the one
        * they are typing — and shows on the page, but the thread stays in the
        * queue because the client is still waiting for the send.
+       *
+       * The draft's own timestamp rather than the time a scan noticed it:
+       * only the former distinguishes someone mid-sentence from someone who
+       * started a reply a week ago and forgot, and the two deserve opposite
+       * treatment. See `humanDraftCutoff` in the scan.
        */
-      humanDraftInProgress: boolean
+      humanDraftAt: string | null
     }
   | {
       needsReply: false
@@ -90,9 +96,12 @@ export function evaluateNeedsReply(input: NeedsReplyInput): NeedsReplyVerdict {
   // once it aged out of the scan window nothing ever looked at it again. It is
   // recorded and carried instead. Our own pushed draft does not count, or
   // every approved thread would look half-answered.
-  const humanDraftInProgress = messages.some(
-    m => m.labelIds.includes('DRAFT') && !ownDrafts.has(m.id),
-  )
+  const humanDraftAt = messages
+    .filter(m => m.labelIds.includes('DRAFT') && !ownDrafts.has(m.id))
+    .reduce<string | null>(
+      (latest, m) => (latest === null || m.receivedAt > latest ? m.receivedAt : latest),
+      null,
+    )
 
   // `parseThread` sorts oldest first; drafts are not part of the conversation's
   // running order, so they are excluded before the last message is read.
@@ -112,6 +121,6 @@ export function evaluateNeedsReply(input: NeedsReplyInput): NeedsReplyVerdict {
     inboundMessageId: last.id,
     receivedAt: last.receivedAt,
     messageCount: conversation.length,
-    humanDraftInProgress,
+    humanDraftAt,
   }
 }
