@@ -61,6 +61,30 @@ export const TRIAGE_LISTING_CEILING = 500
  */
 const DRAFTING_RESERVE_MS = 20_000
 
+/**
+ * How long an unsent reply of the attorney's own keeps the model out of a
+ * thread.
+ *
+ * Deferring to a half-written reply is right while it is being written —
+ * nobody wants a second answer appearing over the one they are typing. It
+ * stops being right some time later. The first scan to read the whole window
+ * found seventeen unsent replies, several of them more than a week old: not
+ * people mid-sentence, people who started and forgot. Those are the threads
+ * most overdue a reply, and suppressing help on exactly them is the page
+ * declining to do the one thing it is for.
+ *
+ * Two days is chosen to clear a weekend without clearing a lunch break.
+ */
+export const STALE_HUMAN_DRAFT_MS = 48 * 60 * 60 * 1000
+
+/**
+ * The timestamp a row's `human_draft_at` must be at or after to still suppress
+ * drafting. Older than this and the draft is treated as abandoned.
+ */
+export function humanDraftCutoff(now: number = Date.now()): string {
+  return new Date(now - STALE_HUMAN_DRAFT_MS).toISOString()
+}
+
 /** Gmail metadata reads, in parallel. Its per-user budget is far above this. */
 const METADATA_CONCURRENCY = 5
 
@@ -455,7 +479,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           contact_id: match.contactId,
           last_scanned_at: now,
           updated_at: now,
-          human_draft_at: verdict.humanDraftInProgress ? now : null,
+          human_draft_at: verdict.humanDraftAt,
           ...(action.reset
             ? {
                 status: 'needs_reply',
@@ -493,7 +517,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     .select('id', { count: 'exact', head: true })
     .eq('connection_email', identity.address)
     .eq('status', 'needs_reply')
-    .is('human_draft_at', null)
+    .or(`human_draft_at.is.null,human_draft_at.lt.${humanDraftCutoff()}`)
 
   await admin
     .from('email_triage_scans')
@@ -542,8 +566,9 @@ async function draftPending(args: {
     .select('id, gmail_thread_id, gmail_message_id, classification, client_intake_id, matter_id, sender_email, sender_name, subject, received_at')
     .eq('connection_email', args.connectionEmail)
     .eq('status', 'needs_reply')
-    // Nobody wants a second answer written over the one they are typing.
-    .is('human_draft_at', null)
+    // Nobody wants a second answer written over the one they are typing — but
+    // a reply abandoned two days ago is not being typed.
+    .or(`human_draft_at.is.null,human_draft_at.lt.${humanDraftCutoff()}`)
     .order('received_at', { ascending: false })
     .limit(args.maxDrafts)
   if (error) throw error

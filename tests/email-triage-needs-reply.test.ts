@@ -116,7 +116,24 @@ describe('evaluateNeedsReply', () => {
     expect(verdict).toMatchObject({
       needsReply: true,
       inboundMessageId: 'inbound',
-      humanDraftInProgress: true,
+      // The draft's own last-saved time, not the time the scan noticed it.
+      // Only the former can tell someone mid-sentence from someone who
+      // started a reply a week ago and forgot.
+      humanDraftAt: new Date(1_788_000_000_000 + 2 * 60_000).toISOString(),
+    })
+  })
+
+  it('reports the most recent draft when the attorney left more than one', () => {
+    const verdict = evaluateNeedsReply({
+      connectedAddress: ME,
+      thread: thread(
+        message('jane@example.com', { at: 1, id: 'inbound' }),
+        message(ME, { labels: ['DRAFT'], at: 2, id: 'older-draft' }),
+        message(ME, { labels: ['DRAFT'], at: 9, id: 'newer-draft' }),
+      ),
+    })
+    expect(verdict).toMatchObject({
+      humanDraftAt: new Date(1_788_000_000_000 + 9 * 60_000).toISOString(),
     })
   })
 
@@ -147,7 +164,7 @@ describe('evaluateNeedsReply', () => {
     expect(verdict).toMatchObject({
       needsReply: true,
       inboundMessageId: 'inbound',
-      humanDraftInProgress: false,
+      humanDraftAt: null,
     })
   })
 

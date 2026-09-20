@@ -375,7 +375,14 @@ function QueueRow({
         {row.status === 'drafted' && <Badge variant="outline">Draft ready</Badge>}
         {row.status === 'approved' && <Badge variant="outline">In Gmail</Badge>}
         {row.status === 'failed' && <Badge variant="destructive">Draft failed</Badge>}
-        {row.human_draft_at && <Badge variant="outline">Reply open in Gmail</Badge>}
+        {row.human_draft_at && (
+          // The age is the point, not decoration: it is the difference between
+          // a reply being written now, which the model should stay out of, and
+          // one abandoned days ago, which it should help with.
+          <Badge variant="outline">
+            Your draft open in Gmail · {waitingLabel(row.human_draft_at)}
+          </Badge>
+        )}
       </div>
     </button>
   )
