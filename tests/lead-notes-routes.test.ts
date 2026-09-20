@@ -17,7 +17,7 @@ beforeEach(()=>{vi.clearAllMocks();requireAdmin.mockResolvedValue({err:null,user
 describe('lead note handlers',()=>{
  it('defines each mutation and activity write inside one database RPC transaction',()=>{const sql=fs.readFileSync('supabase/migrations/20260713020923_atomic_lead_notes.sql','utf8');for(const fn of ['create_lead_note_with_activity','update_lead_note_with_activity','delete_lead_note_with_activity','create_lead_meeting_note_with_activity','import_lead_granola_note_with_activity'])expect(sql).toContain(`function public.${fn}`);expect(sql.match(/insert into public\.lead_activity/g)).toHaveLength(5);expect(sql).toContain("v.actor_id<>p_actor_id and v_role<>'admin'");expect(sql).not.toContain('update public.lead_notes set actor_id')})
  it('adds the note type as a real column, and leaves no untyped RPC behind',()=>{
-  const sql=fs.readFileSync('supabase/migrations/20261218000000_lead_note_type.sql','utf8')
+  const sql=fs.readFileSync('supabase/migrations/20261219000000_lead_note_type.sql','utf8')
   expect(sql).toContain('add column if not exists note_type text not null default \'internal\'')
   expect(sql).toContain("check (note_type in ('internal','client_comm'))")
   // The old three-argument create is dropped, so no caller can write a note
