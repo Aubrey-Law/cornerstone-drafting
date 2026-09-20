@@ -40,6 +40,17 @@ export function chatTranscriptText(messages: FloatingChatMessage[]): string {
   return header + body + '\n'
 }
 
+/**
+ * One assistant answer, saved on its own. The label and timestamp stay with it
+ * so a note read months later still says the assistant wrote it, and the body
+ * keeps its markdown — the notes timeline renders it.
+ */
+export function chatResponseNoteText(message: FloatingChatMessage): string {
+  const content = message.content.trim()
+  if (!content) return ''
+  return `**${roleLabel(message.role)}** · ${formatTimestamp(message.timestamp)}\n\n${content}`
+}
+
 export function chatNoteText(messages: FloatingChatMessage[]): string {
   return messages
     .filter(m => m.content.trim())

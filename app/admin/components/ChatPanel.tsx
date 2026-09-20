@@ -35,7 +35,7 @@ const DesignSheetImportDialog = dynamic(
 )
 import { ChatMessage, type FloatingChatMessage, type ToolEvent } from './ChatMessage'
 import { type ChatContextType, useChatContext } from './useChatContext'
-import { chatNoteText, downloadChatAsDocx, downloadChatAsText } from './chatExport'
+import { chatNoteText, chatResponseNoteText, downloadChatAsDocx, downloadChatAsText } from './chatExport'
 import {
   MATTER_CLIENT_COMM_ACTIVITY_NOTE_PROMPT,
   MATTER_INTERNAL_ACTIVITY_NOTE_PROMPT,
@@ -191,7 +191,7 @@ export function ChatPanel({
   const [error, setError] = useState<string | null>(null)
   const [actionStatus, setActionStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [savingNote, setSavingNote] = useState(false)
-  const [savedNote, setSavedNote] = useState<{ matterId: string; noteType: MatterNoteSaveType } | null>(null)
+  const [savedNote, setSavedNote] = useState<{ matterId: string; noteType: MatterNoteSaveType; scope: 'conversation' | 'response' } | null>(null)
   const [saveNoteType, setSaveNoteType] = useState<MatterNoteSaveType>('internal')
   const [designSheetProposal, setDesignSheetProposal] = useState<DesignSheetChatProposal | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
@@ -457,6 +457,27 @@ export function ChatPanel({
     }, 4000)
   }
 
+  async function postMatterNote(matterId: string, content: string) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const response = await fetch('/api/admin/chat/save-note', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        context_type: 'matter',
+        context_id: matterId,
+        content,
+        note_type: saveNoteType,
+      }),
+    })
+    if (!response.ok) {
+      const json = await response.json().catch(() => null) as { error?: string } | null
+      throw new Error(json?.error ?? 'Failed to save note')
+    }
+  }
+
   async function handleSaveNote() {
     if (!canSaveNote) return
     if (chatContext.type !== 'matter') return
@@ -467,29 +488,34 @@ export function ChatPanel({
     setActionStatus(null)
     setSavedNote(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch('/api/admin/chat/save-note', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          context_type: chatContext.type,
-          context_id: chatContext.id,
-          content,
-          ...(chatContext.type === 'matter' ? { note_type: saveNoteType } : {}),
-        }),
-      })
-      if (!response.ok) {
-        const json = await response.json().catch(() => null) as { error?: string } | null
-        throw new Error(json?.error ?? 'Failed to save note')
-      }
-      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType })
+      await postMatterNote(chatContext.id, content)
+      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType, scope: 'conversation' })
     } catch (err) {
       flashStatus('error', (err as Error).message || 'Failed to save note.')
     } finally {
       setSavingNote(false)
+    }
+  }
+
+  /**
+   * Files one assistant answer. The toolbar save writes the whole thread, so
+   * the single paragraph worth keeping used to arrive buried in every turn
+   * that produced it.
+   */
+  async function handleSaveResponseAsNote(message: FloatingChatMessage): Promise<boolean> {
+    if (chatContext.type !== 'matter') return false
+    const content = chatResponseNoteText(message)
+    if (!content) return false
+
+    setActionStatus(null)
+    setSavedNote(null)
+    try {
+      await postMatterNote(chatContext.id, content)
+      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType, scope: 'response' })
+      return true
+    } catch (err) {
+      flashStatus('error', (err as Error).message || 'Failed to save note.')
+      return false
     }
   }
 
@@ -585,6 +611,9 @@ export function ChatPanel({
   }
 
   const contextWord = chatContext.type === 'matter' ? 'Matter' : chatContext.type === 'lead' ? 'Lead' : 'Firm'
+  // The answer still arriving is half an answer; it gets its note action once
+  // the stream ends.
+  const streamingMessageId = loading ? messages.at(-1)?.id : undefined
   const savedNoteLabel = savedNote?.noteType === 'client_comm' ? 'Client comm.' : 'Internal'
 
   return (
@@ -766,6 +795,16 @@ export function ChatPanel({
               key={message.id}
               message={message}
               onReviewDesignSheetImport={handleReviewDesignSheetImport}
+              onSaveAsNote={
+                chatContext.type === 'matter' && message.id !== streamingMessageId
+                  ? handleSaveResponseAsNote
+                  : undefined
+              }
+              saveAsNoteLabel={
+                saveNoteType === 'client_comm'
+                  ? 'Save this response as a client communication note'
+                  : 'Save this response as an internal note'
+              }
             />
           ))
         )}
@@ -798,7 +837,9 @@ export function ChatPanel({
               Saved to matter notes · {savedNoteLabel}
             </div>
             <p className="mt-1 text-xs opacity-90">
-              This conversation is now part of the matter file and shows in the notes timeline.
+              {savedNote.scope === 'response'
+                ? 'This response is now part of the matter file and shows in the notes timeline.'
+                : 'This conversation is now part of the matter file and shows in the notes timeline.'}
             </p>
             <Link
               href={`/admin/matters/${savedNote.matterId}?tab=notes`}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, ClipboardList, Copy, Download, Eye, FilePenLine } from 'lucide-react'
+import { Check, ClipboardList, Copy, Download, Eye, FilePenLine, NotebookPen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { downloadCsvFromRoute } from '@/lib/browserDownload'
@@ -134,6 +134,13 @@ export interface FloatingChatMessage {
 interface ChatMessageProps {
   message: FloatingChatMessage
   onReviewDesignSheetImport?: (event: ToolEvent) => void
+  /**
+   * Matter context only — files this one answer in the matter notes. Resolves
+   * false when the save failed, so the row can drop back to its idle label.
+   */
+  onSaveAsNote?: (message: FloatingChatMessage) => Promise<boolean>
+  /** What the save writes, e.g. "Save as internal note". */
+  saveAsNoteLabel?: string
 }
 
 function DesignSheetImportToolEventCard({
@@ -502,6 +509,38 @@ function HandoffBlock({
   )
 }
 
+/**
+ * Files a single answer in the matter notes.
+ *
+ * The toolbar's "Save to matter notes" writes the whole conversation, which
+ * buries the one paragraph worth keeping under every turn that produced it.
+ */
+function SaveAsNoteButton({ label, onSave }: { label: string; onSave: () => Promise<boolean> }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  return (
+    <button
+      type="button"
+      disabled={state === 'saving'}
+      aria-label={label}
+      title={label}
+      className="mt-1 inline-flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+      onClick={() => {
+        setState('saving')
+        // A rejected save would otherwise leave the row stuck on "Saving…".
+        void onSave().catch(() => false).then(saved => {
+          setState(saved ? 'saved' : 'idle')
+          // Back to the idle label so a second, deliberate save stays possible
+          // — the note type can change between the two.
+          if (saved) window.setTimeout(() => setState('idle'), 4000)
+        })
+      }}
+    >
+      {state === 'saved' ? <Check className="h-3 w-3" /> : <NotebookPen className="h-3 w-3" />}
+      {state === 'saved' ? 'Saved to notes' : state === 'saving' ? 'Saving…' : 'Save as note'}
+    </button>
+  )
+}
+
 function CopyMessageButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -523,7 +562,12 @@ function CopyMessageButton({ content }: { content: string }) {
   )
 }
 
-export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  onReviewDesignSheetImport,
+  onSaveAsNote,
+  saveAsNoteLabel = 'Save this response to the matter notes',
+}: ChatMessageProps) {
   const isUser = message.role === 'user'
   const hasToolEvents = !isUser && (message.toolEvents?.length ?? 0) > 0
   const segments = isUser ? null : splitHandoffBlocks(message.content)
@@ -562,7 +606,14 @@ export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageP
           </div>
         )}
       </div>
-      {!isUser && message.content ? <CopyMessageButton content={message.content} /> : null}
+      {!isUser && message.content ? (
+        <div className="flex items-center gap-3">
+          <CopyMessageButton content={message.content} />
+          {onSaveAsNote ? (
+            <SaveAsNoteButton label={saveAsNoteLabel} onSave={() => onSaveAsNote(message)} />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
