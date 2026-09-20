@@ -36,6 +36,8 @@ export interface EmailTriageRow {
   draft_error: string | null
   gmail_draft_id: string | null
   gmail_draft_message_id: string | null
+  /** Set when the attorney already has a reply to this thread open in Gmail. */
+  human_draft_at: string | null
 }
 
 export interface TriageScanRow {
@@ -45,6 +47,8 @@ export interface TriageScanRow {
   finished_at: string | null
   threads_queued: number
   drafts_generated: number
+  /** Compared against TRIAGE_LISTING_CEILING to tell whether the window was cut short. */
+  threads_listed: number
   error: string | null
 }
 
@@ -52,7 +56,7 @@ const ROW_COLUMNS =
   'id, gmail_thread_id, gmail_message_id, sender_email, sender_name, subject, snippet, '
   + 'received_at, classification, classification_reason, client_intake_id, matter_id, '
   + 'contact_id, status, draft_subject, draft_body, draft_error, gmail_draft_id, '
-  + 'gmail_draft_message_id'
+  + 'gmail_draft_message_id, human_draft_at'
 
 /**
  * The queue, oldest inbound first.
@@ -89,7 +93,10 @@ export async function fetchEmailTriageRow(id: string): Promise<EmailTriageRow | 
 export async function fetchLastTriageScan(): Promise<TriageScanRow | null> {
   const { data, error } = await getAdminClient()
     .from('email_triage_scans')
-    .select('id, trigger, started_at, finished_at, threads_queued, drafts_generated, error')
+    .select(
+      'id, trigger, started_at, finished_at, threads_queued, drafts_generated, '
+      + 'threads_listed, error',
+    )
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle()

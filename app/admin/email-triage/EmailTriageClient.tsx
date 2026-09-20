@@ -31,6 +31,7 @@ import type {
 interface Props {
   initialRows: EmailTriageRow[]
   initialScan: TriageScanRow | null
+  listingTruncated?: boolean
   enabled: boolean
   connected: boolean
   mailbox: string | null
@@ -80,6 +81,7 @@ function gmailThreadUrl(threadId: string): string {
 export function EmailTriageClient({
   initialRows,
   initialScan,
+  listingTruncated = false,
   enabled,
   connected,
   mailbox,
@@ -244,6 +246,14 @@ export function EmailTriageClient({
         </p>
       )}
 
+      {listingTruncated && (
+        <p className="text-xs text-destructive">
+          The last scan reached its thread ceiling, so mail older than the
+          threads it read may not be listed here yet. Refresh to let it work
+          further back.
+        </p>
+      )}
+
       {rows.length === 0 ? (
         <EmptyState
           icon={MailCheck}
@@ -365,6 +375,7 @@ function QueueRow({
         {row.status === 'drafted' && <Badge variant="outline">Draft ready</Badge>}
         {row.status === 'approved' && <Badge variant="outline">In Gmail</Badge>}
         {row.status === 'failed' && <Badge variant="destructive">Draft failed</Badge>}
+        {row.human_draft_at && <Badge variant="outline">Reply open in Gmail</Badge>}
       </div>
     </button>
   )

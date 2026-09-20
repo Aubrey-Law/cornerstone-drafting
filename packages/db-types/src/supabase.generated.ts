@@ -3566,6 +3566,7 @@ export type Database = {
           gmail_draft_message_id: string | null
           gmail_message_id: string
           gmail_thread_id: string
+          human_draft_at: string | null
           id: string
           last_scanned_at: string
           matter_id: string | null
@@ -3603,6 +3604,7 @@ export type Database = {
           gmail_draft_message_id?: string | null
           gmail_message_id: string
           gmail_thread_id: string
+          human_draft_at?: string | null
           id?: string
           last_scanned_at?: string
           matter_id?: string | null
@@ -3640,6 +3642,7 @@ export type Database = {
           gmail_draft_message_id?: string | null
           gmail_message_id?: string
           gmail_thread_id?: string
+          human_draft_at?: string | null
           id?: string
           last_scanned_at?: string
           matter_id?: string | null

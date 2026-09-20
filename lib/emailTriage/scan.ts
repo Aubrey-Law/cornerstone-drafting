@@ -32,8 +32,34 @@ export { describeError }
 
 /** Vercel's ceiling is 60s. The rest is headroom for the response. */
 const DEFAULT_BUDGET_MS = 40_000
-const DEFAULT_MAX_THREADS = 40
 const DEFAULT_MAX_DRAFTS = 5
+
+/**
+ * A safety valve, not the scan window. The window is the `newer_than:` in the
+ * search query itself.
+ *
+ * This was 40, which read like a sensible page size and was in fact a second,
+ * much smaller window silently overriding the first. The query asks Gmail for
+ * fourteen days; in a mailbox taking ~27 threads a day — most of it CI
+ * notifications and DMARC reports — the newest 40 threads is about thirty-six
+ * hours. Everything older was listed by Gmail, discarded here, and never
+ * looked at again, because a thread that never reaches the queue leaves no row
+ * to come back to. Meanwhile the cron's own worst gap, Friday noon to Monday
+ * morning, is seventy-one hours. Two clients' mail was lost in the difference.
+ *
+ * Set high enough that reaching it means something is wrong with the mailbox
+ * rather than with the number. `threads_listed` hitting it is reported on the
+ * page instead of passing for a healthy count.
+ */
+export const TRIAGE_LISTING_CEILING = 500
+
+/**
+ * Drafting is the expensive half and must not be starved by a large listing.
+ * Metadata reads stop here; what they did not reach is still inside the
+ * query's window on the next run, which is the whole point of sizing the
+ * window in days rather than in threads.
+ */
+const DRAFTING_RESERVE_MS = 20_000
 
 /** Gmail metadata reads, in parallel. Its per-user budget is far above this. */
 const METADATA_CONCURRENCY = 5
@@ -65,6 +91,10 @@ export interface TriageScanResult {
   skippedAutomated: number
   skippedInternal: number
   draftsGenerated: number
+  /** Listed inside the window but not reached before the metadata budget ran out. */
+  threadsDeferred: number
+  /** The listing hit `TRIAGE_LISTING_CEILING` and may be incomplete. */
+  listingTruncated: boolean
   remainingNeedsDraft: number
   durationMs: number
 }
@@ -81,6 +111,8 @@ function emptyResult(reason: TriageScanResult['reason'], durationMs = 0): Triage
     skippedAutomated: 0,
     skippedInternal: 0,
     draftsGenerated: 0,
+    threadsDeferred: 0,
+    listingTruncated: false,
     remainingNeedsDraft: 0,
     durationMs,
   }
@@ -215,7 +247,7 @@ export function decideThreadAction(
 export async function runEmailTriageScan(opts: TriageScanOptions): Promise<TriageScanResult> {
   const startedAt = Date.now()
   const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS
-  const maxThreads = opts.maxThreads ?? DEFAULT_MAX_THREADS
+  const maxThreads = opts.maxThreads ?? TRIAGE_LISTING_CEILING
   const maxDrafts = opts.maxDrafts ?? DEFAULT_MAX_DRAFTS
   const admin = getAdminClient()
 
@@ -261,7 +293,9 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     skippedAutomated: 0,
     skippedInternal: 0,
     draftsGenerated: 0,
+    threadsDeferred: 0,
   }
+  let listingTruncated = false
   let failure: string | null = null
 
   try {
@@ -281,6 +315,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       maxResults: maxThreads,
     })
     counts.threadsListed = listed.length
+    listingTruncated = listed.length >= maxThreads
 
     // Open rows first: resolving one is cheap and is what keeps the queue
     // honest. Gmail's search drops a thread once it is archived, so a thread
@@ -295,7 +330,17 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     ]))
     const rowByThread = new Map(existingRows.map(row => [row.gmail_thread_id, row]))
 
+    // Open rows are read whatever the clock says: they are few, and they are
+    // the rows already on the attorney's screen. Only the listing defers.
+    const metadataDeadline = startedAt + Math.max(budgetMs - DRAFTING_RESERVE_MS, 5_000)
+    const openThreadIds = new Set(
+      existingRows.filter(row => OPEN_STATUSES.has(row.status)).map(row => row.gmail_thread_id),
+    )
     const threads = await mapWithConcurrency(threadIds, METADATA_CONCURRENCY, async id => {
+      if (Date.now() > metadataDeadline && !openThreadIds.has(id)) {
+        counts.threadsDeferred += 1
+        return null
+      }
       try {
         return await getThreadMetadata({ token: identity.token, threadId: id })
       } catch (err) {
@@ -410,6 +455,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           contact_id: match.contactId,
           last_scanned_at: now,
           updated_at: now,
+          human_draft_at: verdict.humanDraftInProgress ? now : null,
           ...(action.reset
             ? {
                 status: 'needs_reply',
@@ -447,6 +493,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     .select('id', { count: 'exact', head: true })
     .eq('connection_email', identity.address)
     .eq('status', 'needs_reply')
+    .is('human_draft_at', null)
 
   await admin
     .from('email_triage_scans')
@@ -467,6 +514,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     ok: failure === null,
     scanId,
     ...counts,
+    listingTruncated,
     remainingNeedsDraft: remaining ?? 0,
     durationMs: Date.now() - startedAt,
   }
@@ -494,6 +542,8 @@ async function draftPending(args: {
     .select('id, gmail_thread_id, gmail_message_id, classification, client_intake_id, matter_id, sender_email, sender_name, subject, received_at')
     .eq('connection_email', args.connectionEmail)
     .eq('status', 'needs_reply')
+    // Nobody wants a second answer written over the one they are typing.
+    .is('human_draft_at', null)
     .order('received_at', { ascending: false })
     .limit(args.maxDrafts)
   if (error) throw error

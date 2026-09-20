@@ -100,15 +100,38 @@ describe('evaluateNeedsReply', () => {
     expect(verdict).toEqual({ needsReply: false, reason: 'already_replied' })
   })
 
-  it('leaves a thread alone while a draft is sitting in it', () => {
+  it('still reports a waiting thread the attorney has started answering', () => {
+    // A half-written reply used to end the verdict here, which dropped the
+    // thread from the queue and — for a thread with no row yet — meant no row
+    // was ever created. It then aged out of the scan window and was lost.
+    // The client is still waiting; the draft is a fact about the row, not a
+    // reason to stop tracking it.
+    const verdict = evaluateNeedsReply({
+      connectedAddress: ME,
+      thread: thread(
+        message('jane@example.com', { at: 1, id: 'inbound' }),
+        message(ME, { labels: ['DRAFT'], at: 2, id: 'his-draft' }),
+      ),
+    })
+    expect(verdict).toMatchObject({
+      needsReply: true,
+      inboundMessageId: 'inbound',
+      humanDraftInProgress: true,
+    })
+  })
+
+  it('does not call a thread waiting when the draft sits after a real reply', () => {
+    // Drafts are not part of the running order: the last thing actually said
+    // is the attorney's reply, so the thread is answered.
     const verdict = evaluateNeedsReply({
       connectedAddress: ME,
       thread: thread(
         message('jane@example.com', { at: 1 }),
-        message(ME, { labels: ['DRAFT'], at: 2, id: 'his-draft' }),
+        message(ME, { labels: ['SENT'], at: 2 }),
+        message(ME, { labels: ['DRAFT'], at: 3, id: 'his-draft' }),
       ),
     })
-    expect(verdict).toEqual({ needsReply: false, reason: 'draft_in_progress' })
+    expect(verdict).toEqual({ needsReply: false, reason: 'already_replied' })
   })
 
   it('does not treat its own pushed draft as the attorney being mid-compose', () => {
@@ -121,7 +144,11 @@ describe('evaluateNeedsReply', () => {
         message(ME, { labels: ['DRAFT'], at: 2, id: 'ours' }),
       ),
     })
-    expect(verdict).toMatchObject({ needsReply: true, inboundMessageId: 'inbound' })
+    expect(verdict).toMatchObject({
+      needsReply: true,
+      inboundMessageId: 'inbound',
+      humanDraftInProgress: false,
+    })
   })
 
   it('counts only the conversation, not the draft sitting beside it', () => {
