@@ -3,14 +3,15 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 
 interface SaveNoteBody {
-  context_type?: 'matter'
+  context_type?: 'matter' | 'lead'
   context_id?: string
   content?: string
+  /** Matter notes only — lead notes have no type. */
   note_type?: 'internal' | 'client_comm'
 }
 
 export async function POST(req: NextRequest) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
 
   let body: SaveNoteBody
@@ -27,14 +28,33 @@ export async function POST(req: NextRequest) {
   if (!content) {
     return NextResponse.json({ error: 'content is required' }, { status: 400 })
   }
-  if (contextType !== 'matter') {
-    return NextResponse.json({ error: 'context_type must be matter' }, { status: 400 })
+  if (contextType !== 'matter' && contextType !== 'lead') {
+    return NextResponse.json({ error: 'context_type must be matter or lead' }, { status: 400 })
   }
   if (!contextId) {
     return NextResponse.json({ error: 'context_id is required' }, { status: 400 })
   }
 
   const admin = getAdminClient()
+
+  if (contextType === 'lead') {
+    // The same transaction the lead notes tab writes through: the note and its
+    // activity row land together, and the note carries the attorney as author
+    // rather than the service role.
+    const { data, error } = await admin.rpc('create_lead_note_with_activity', {
+      p_lead_id: contextId,
+      p_body: content,
+      p_actor_id: userId,
+    })
+    if (error) {
+      const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500
+      return NextResponse.json(
+        { error: status === 404 ? 'Lead not found' : error.message },
+        { status },
+      )
+    }
+    return NextResponse.json({ note: data }, { status: 201 })
+  }
 
   const { data: matter, error: matterError } = await admin
     .from('matters')
