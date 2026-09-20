@@ -32,10 +32,19 @@ export type NeedsReplyVerdict =
       inboundMessageId: string
       receivedAt: string
       messageCount: number
+      /**
+       * The attorney has a reply to this thread half-written in Gmail.
+       *
+       * A fact about the row, not a reason to stop tracking it. It suppresses
+       * the model draft — nobody wants a second answer written over the one
+       * they are typing — and shows on the page, but the thread stays in the
+       * queue because the client is still waiting for the send.
+       */
+      humanDraftInProgress: boolean
     }
   | {
       needsReply: false
-      reason: 'no_messages' | 'no_inbound' | 'already_replied' | 'draft_in_progress' | 'trashed'
+      reason: 'no_messages' | 'no_inbound' | 'already_replied' | 'trashed'
     }
 
 function normalise(email: string): string {
@@ -76,12 +85,14 @@ export function evaluateNeedsReply(input: NeedsReplyInput): NeedsReplyVerdict {
     return { needsReply: false, reason: 'trashed' }
   }
 
-  // Someone is mid-compose. Nagging about a reply that is already half written
-  // is the fastest way to have this page closed for good. Our own pushed draft
-  // does not count, or every approved thread would re-enter the queue.
-  if (messages.some(m => m.labelIds.includes('DRAFT') && !ownDrafts.has(m.id))) {
-    return { needsReply: false, reason: 'draft_in_progress' }
-  }
+  // Someone may be mid-compose. That used to end the verdict here, which was
+  // wrong in a way that lost mail: a thread with no row yet never got one, and
+  // once it aged out of the scan window nothing ever looked at it again. It is
+  // recorded and carried instead. Our own pushed draft does not count, or
+  // every approved thread would look half-answered.
+  const humanDraftInProgress = messages.some(
+    m => m.labelIds.includes('DRAFT') && !ownDrafts.has(m.id),
+  )
 
   // `parseThread` sorts oldest first; drafts are not part of the conversation's
   // running order, so they are excluded before the last message is read.
@@ -101,5 +112,6 @@ export function evaluateNeedsReply(input: NeedsReplyInput): NeedsReplyVerdict {
     inboundMessageId: last.id,
     receivedAt: last.receivedAt,
     messageCount: conversation.length,
+    humanDraftInProgress,
   }
 }

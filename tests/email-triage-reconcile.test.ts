@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { decideThreadAction, describeError, type ExistingTriageRow } from '@/lib/emailTriage/scan'
+import {
+  TRIAGE_LISTING_CEILING,
+  decideThreadAction,
+  describeError,
+  type ExistingTriageRow,
+} from '@/lib/emailTriage/scan'
 
 /**
  * What a rescan does to a thread it has seen before.
@@ -11,11 +16,12 @@ import { decideThreadAction, describeError, type ExistingTriageRow } from '@/lib
  * has dealt with or answers a message that is no longer the last word.
  */
 
-const waiting = (id = 'inbound-1') => ({
+const waiting = (id = 'inbound-1', humanDraftInProgress = false) => ({
   needsReply: true as const,
   inboundMessageId: id,
   receivedAt: '2026-09-11T12:00:00.000Z',
   messageCount: 2,
+  humanDraftInProgress,
 })
 
 const settled = (reason: string) => ({ needsReply: false as const, reason })
@@ -95,16 +101,52 @@ describe('decideThreadAction', () => {
   })
 
   it('ignores a thread that was never queued and needs nothing', () => {
-    for (const reason of ['no_inbound', 'trashed', 'draft_in_progress', 'no_messages']) {
+    for (const reason of ['no_inbound', 'trashed', 'no_messages']) {
       expect(decideThreadAction(settled(reason), undefined)).toEqual({ kind: 'skip' })
     }
   })
 
-  it('does not close a queued thread merely because a draft is being written', () => {
-    // Only an actual reply resolves a row. Anything else leaves it waiting.
-    for (const reason of ['draft_in_progress', 'trashed', 'no_inbound']) {
+  it('does not close a queued thread for anything short of an actual reply', () => {
+    for (const reason of ['trashed', 'no_inbound']) {
       expect(decideThreadAction(settled(reason), row())).toEqual({ kind: 'skip' })
     }
+  })
+
+  it('queues a thread the attorney has started answering by hand', () => {
+    // The half-written reply is why this row matters, not a reason to drop it:
+    // the client is waiting on the send, not on the typing. Skipping it here
+    // meant a thread with no row never got one, and once it left the listing
+    // window nothing looked at it again.
+    expect(decideThreadAction(waiting('inbound-1', true), undefined))
+      .toEqual({ kind: 'queue', reset: true })
+    expect(decideThreadAction(waiting('inbound-1', true), row()))
+      .toEqual({ kind: 'queue', reset: false })
+  })
+})
+
+describe('the listing ceiling', () => {
+  /**
+   * The ceiling is a safety valve. It is not the scan window — the window is
+   * the `newer_than:` in the search query — and the moment it becomes smaller
+   * than the mail arriving between two runs it silently becomes the window,
+   * which is the bug this guards.
+   *
+   * September 2026: the ceiling was 40. The mailbox took about 27 threads a
+   * day, so 40 threads was roughly 36 hours, while the cron's worst gap —
+   * Friday 12:15 UTC to Monday 11:30 UTC — is 71 hours. Mail landing in the
+   * difference was listed by Gmail, dropped here, and never looked at again,
+   * because a thread that never reaches the queue leaves no row to return to.
+   * A lead's reply and a client's spouse went unanswered for days.
+   *
+   * The numbers are deliberately pessimistic against today's mailbox: three
+   * times the observed rate, and the worst gap rather than the usual one.
+   */
+  const WORST_CRON_GAP_HOURS = 71
+  const PESSIMISTIC_THREADS_PER_DAY = 27 * 3
+
+  it('spans more than the longest gap between two cron runs', () => {
+    const hoursCovered = (TRIAGE_LISTING_CEILING / PESSIMISTIC_THREADS_PER_DAY) * 24
+    expect(hoursCovered).toBeGreaterThan(WORST_CRON_GAP_HOURS)
   })
 })
 
