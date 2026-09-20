@@ -191,7 +191,13 @@ export function ChatPanel({
   const [error, setError] = useState<string | null>(null)
   const [actionStatus, setActionStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [savingNote, setSavingNote] = useState(false)
-  const [savedNote, setSavedNote] = useState<{ matterId: string; noteType: MatterNoteSaveType; scope: 'conversation' | 'response' } | null>(null)
+  const [savedNote, setSavedNote] = useState<{
+    contextType: 'matter' | 'lead'
+    contextId: string
+    /** Matter notes only — lead notes have no type. */
+    noteType?: MatterNoteSaveType
+    scope: 'conversation' | 'response'
+  } | null>(null)
   const [saveNoteType, setSaveNoteType] = useState<MatterNoteSaveType>('internal')
   const [designSheetProposal, setDesignSheetProposal] = useState<DesignSheetChatProposal | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
@@ -457,7 +463,7 @@ export function ChatPanel({
     }, 4000)
   }
 
-  async function postMatterNote(matterId: string, content: string) {
+  async function postRecordNote(contextType: 'matter' | 'lead', contextId: string, content: string) {
     const { data: { session } } = await supabase.auth.getSession()
     const response = await fetch('/api/admin/chat/save-note', {
       method: 'POST',
@@ -466,10 +472,12 @@ export function ChatPanel({
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify({
-        context_type: 'matter',
-        context_id: matterId,
+        context_type: contextType,
+        context_id: contextId,
         content,
-        note_type: saveNoteType,
+        // Lead notes are untyped; only the matter file splits internal from
+        // client communication.
+        ...(contextType === 'matter' ? { note_type: saveNoteType } : {}),
       }),
     })
     if (!response.ok) {
@@ -488,8 +496,8 @@ export function ChatPanel({
     setActionStatus(null)
     setSavedNote(null)
     try {
-      await postMatterNote(chatContext.id, content)
-      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType, scope: 'conversation' })
+      await postRecordNote('matter', chatContext.id, content)
+      setSavedNote({ contextType: 'matter', contextId: chatContext.id, noteType: saveNoteType, scope: 'conversation' })
     } catch (err) {
       flashStatus('error', (err as Error).message || 'Failed to save note.')
     } finally {
@@ -498,20 +506,26 @@ export function ChatPanel({
   }
 
   /**
-   * Files one assistant answer. The toolbar save writes the whole thread, so
-   * the single paragraph worth keeping used to arrive buried in every turn
-   * that produced it.
+   * Files one assistant answer on the open record — the matter file, or the
+   * lead's notes timeline. The toolbar save writes the whole thread, so the
+   * single paragraph worth keeping used to arrive buried in every turn that
+   * produced it.
    */
   async function handleSaveResponseAsNote(message: FloatingChatMessage): Promise<boolean> {
-    if (chatContext.type !== 'matter') return false
+    if (chatContext.type === 'general') return false
     const content = chatResponseNoteText(message)
     if (!content) return false
 
     setActionStatus(null)
     setSavedNote(null)
     try {
-      await postMatterNote(chatContext.id, content)
-      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType, scope: 'response' })
+      await postRecordNote(chatContext.type, chatContext.id, content)
+      setSavedNote({
+        contextType: chatContext.type,
+        contextId: chatContext.id,
+        ...(chatContext.type === 'matter' ? { noteType: saveNoteType } : {}),
+        scope: 'response',
+      })
       return true
     } catch (err) {
       flashStatus('error', (err as Error).message || 'Failed to save note.')
@@ -611,10 +625,25 @@ export function ChatPanel({
   }
 
   const contextWord = chatContext.type === 'matter' ? 'Matter' : chatContext.type === 'lead' ? 'Lead' : 'Firm'
+  const saveAsNoteLabel = chatContext.type === 'lead'
+    ? 'Save this response to the lead notes'
+    : saveNoteType === 'client_comm'
+      ? 'Save this response as a client communication note'
+      : 'Save this response as an internal note'
   // The answer still arriving is half an answer; it gets its note action once
   // the stream ends.
   const streamingMessageId = loading ? messages.at(-1)?.id : undefined
-  const savedNoteLabel = savedNote?.noteType === 'client_comm' ? 'Client comm.' : 'Internal'
+  // "Saved to matter notes · Internal" for the matter file; a lead note has no
+  // type to name.
+  const savedNoteHeading = savedNote?.contextType === 'lead'
+    ? 'Saved to lead notes'
+    : `Saved to matter notes · ${savedNote?.noteType === 'client_comm' ? 'Client comm.' : 'Internal'}`
+  const savedNoteRecord = savedNote?.contextType === 'lead' ? 'lead' : 'matter file'
+  const savedNoteHref = savedNote
+    ? savedNote.contextType === 'lead'
+      ? `/admin/leads/${savedNote.contextId}?tab=notes`
+      : `/admin/matters/${savedNote.contextId}?tab=notes`
+    : ''
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
@@ -796,15 +825,11 @@ export function ChatPanel({
               message={message}
               onReviewDesignSheetImport={handleReviewDesignSheetImport}
               onSaveAsNote={
-                chatContext.type === 'matter' && message.id !== streamingMessageId
+                chatContext.type !== 'general' && message.id !== streamingMessageId
                   ? handleSaveResponseAsNote
                   : undefined
               }
-              saveAsNoteLabel={
-                saveNoteType === 'client_comm'
-                  ? 'Save this response as a client communication note'
-                  : 'Save this response as an internal note'
-              }
+              saveAsNoteLabel={saveAsNoteLabel}
             />
           ))
         )}
@@ -834,15 +859,15 @@ export function ChatPanel({
           >
             <div className="flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-              Saved to matter notes · {savedNoteLabel}
+              {savedNoteHeading}
             </div>
             <p className="mt-1 text-xs opacity-90">
               {savedNote.scope === 'response'
-                ? 'This response is now part of the matter file and shows in the notes timeline.'
-                : 'This conversation is now part of the matter file and shows in the notes timeline.'}
+                ? `This response is now part of the ${savedNoteRecord} and shows in the notes timeline.`
+                : `This conversation is now part of the ${savedNoteRecord} and shows in the notes timeline.`}
             </p>
             <Link
-              href={`/admin/matters/${savedNote.matterId}?tab=notes`}
+              href={savedNoteHref}
               className="mt-1.5 inline-block text-xs font-semibold underline underline-offset-2"
             >
               View
