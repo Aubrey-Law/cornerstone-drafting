@@ -109,7 +109,7 @@ export function WorkflowPickerContent({ typeFilter, executionMode, onPick, pickL
                     <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                       {skill.name}
                       {skill.is_system && <Badge variant="secondary" className="text-micro">System</Badge>}
-                      {skill.allowed_context?.includes('matter') && <Badge variant="outline" className="text-micro">Needs a matter</Badge>}
+                      {skill.allowed_context?.includes('matter') && <Badge variant="outline" className="text-micro">Needs a matter or lead</Badge>}
                     </span>
                     <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{skill.description}</span>
                   </span>

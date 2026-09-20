@@ -84,71 +84,140 @@ function fullName(row: Record<string, unknown>): string {
   return [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
 }
 
-/**
- * Matters and leads that match free text, so the assistant can answer "what is
- * going on with the Chens?" without being opened on that matter first.
- */
-export async function searchMatterRecords(
-  query: string,
-  limit = 10,
-): Promise<Array<{
+type RecordType = 'matter' | 'lead'
+
+export interface MatterRecordMatch {
+  /** The id the rest of the app routes on: the matter id for a hired matter, the client_intake id for a lead. */
   id: string
-  type: 'matter' | 'lead'
+  type: RecordType
   label: string
   matter_number: string | null
   stage: string | null
   status: string | null
+  lead_status: string | null
   client_name: string | null
   client_email: string | null
   url: string
-}>> {
+}
+
+interface IntakeRow {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  lead_status: string | null
+  matter_id: string | null
+}
+
+interface MatterRow {
+  id: string
+  name: string | null
+  matter_number: string | null
+  relationship_status: string | null
+  stage: string | null
+  status: string | null
+  client_intake_id: string | null
+}
+
+const INTAKE_COLUMNS = 'id, first_name, last_name, full_name, email, phone, lead_status, matter_id'
+const MATTER_COLUMNS = 'id, name, matter_number, relationship_status, stage, status, client_intake_id'
+
+function intakeName(intake: IntakeRow | null | undefined): string | null {
+  if (!intake) return null
+  const name = intake.full_name?.trim() || [intake.first_name, intake.last_name].filter(Boolean).join(' ').trim()
+  return name || null
+}
+
+/** One record from a matter row and/or its intake row. A lead routes on the intake id. */
+function recordFrom(matter: MatterRow | null, intake: IntakeRow | null): MatterRecordMatch | null {
+  if (!matter && !intake) return null
+  const hired = matter?.relationship_status === 'hired'
+  const type: RecordType = hired ? 'matter' : 'lead'
+  const leadId = intake?.id ?? matter?.client_intake_id ?? null
+  const id = type === 'matter' || !leadId ? matter!.id : leadId
+  const clientName = intakeName(intake)
+  return {
+    id,
+    type,
+    label: matter?.name?.trim() || clientName || intake?.email || id,
+    matter_number: matter?.matter_number ?? null,
+    stage: matter?.stage ?? null,
+    status: matter?.status ?? null,
+    lead_status: intake?.lead_status ?? null,
+    client_name: clientName,
+    client_email: intake?.email ?? null,
+    url: type === 'matter' ? `/admin/matters/${matter!.id}` : `/admin/crm/opportunities/${id}`,
+  }
+}
+
+/**
+ * Matters and leads that match free text, so the assistant can answer "what is
+ * going on with the Chens?" without being opened on that matter first.
+ *
+ * Reads `matters` and `client_intake` directly. It used to read the pipeline
+ * view, which carries hired matters only — every lead, lost matter and
+ * not-yet-converted intake was invisible to find_matter, to the chat's record
+ * picker and to the chat header.
+ */
+export async function searchMatterRecords(query: string, limit = 10): Promise<MatterRecordMatch[]> {
   const term = query.trim()
   if (!term) return []
   const admin = getAdminClient() as Client
   const like = `%${term.replace(/[%_]/g, match => `\\${match}`)}%`
+  const cap = clampLimit(limit)
+  // Over-fetch each side so the merge below still has `cap` distinct records to choose from.
+  const fetchCap = Math.min(MAX_LIMIT, cap * 3)
 
-  const { data, error } = await admin
-    .from('v_matter_pipeline')
-    .select('matter_id, matter_name, stage, status, client_name, client_email, client_status')
-    .or(`matter_name.ilike.${like},client_name.ilike.${like},client_email.ilike.${like}`)
-    .limit(clampLimit(limit))
-  if (error) throw new Error(`matter search failed: ${error.message}`)
-
-  const rows = (data ?? []) as Array<Record<string, unknown>>
-  const matterIds = rows.map(row => String(row.matter_id))
-
-  // The pipeline view has no matter number, and lead-vs-matter is the one thing
-  // the answer has to get right — a lead has no matter number and a different URL.
-  const numbers = new Map<string, { number: string | null; isLead: boolean }>()
-  if (matterIds.length > 0) {
-    const { data: matterRows } = await admin
+  const [intakeRes, matterRes] = await Promise.all([
+    admin
+      .from('client_intake')
+      .select(INTAKE_COLUMNS)
+      .or(`first_name.ilike.${like},last_name.ilike.${like},full_name.ilike.${like},email.ilike.${like},phone.ilike.${like}`)
+      .limit(fetchCap),
+    admin
       .from('matters')
-      .select('id, matter_number, relationship_status')
-      .in('id', matterIds)
-    for (const row of (matterRows ?? []) as Array<Record<string, unknown>>) {
-      numbers.set(String(row.id), {
-        number: (row.matter_number as string | null) ?? null,
-        isLead: row.relationship_status !== 'hired',
-      })
-    }
+      .select(MATTER_COLUMNS)
+      .or(`name.ilike.${like},matter_number.ilike.${like}`)
+      .limit(fetchCap),
+  ])
+  if (intakeRes.error) throw new Error(`record search failed: ${intakeRes.error.message}`)
+  if (matterRes.error) throw new Error(`record search failed: ${matterRes.error.message}`)
+
+  const intakes = new Map<string, IntakeRow>()
+  for (const row of (intakeRes.data ?? []) as IntakeRow[]) intakes.set(row.id, row)
+  const matters = new Map<string, MatterRow>()
+  for (const row of (matterRes.data ?? []) as MatterRow[]) matters.set(row.id, row)
+
+  // Complete each side: a matched intake's matter, a matched matter's intake.
+  const missingMatterIds = [...intakes.values()].map(row => row.matter_id).filter((id): id is string => Boolean(id) && !matters.has(id as string))
+  if (missingMatterIds.length > 0) {
+    const { data } = await admin.from('matters').select(MATTER_COLUMNS).in('id', missingMatterIds)
+    for (const row of (data ?? []) as MatterRow[]) matters.set(row.id, row)
+  }
+  const missingIntakeIds = [...matters.values()].map(row => row.client_intake_id).filter((id): id is string => Boolean(id) && !intakes.has(id as string))
+  if (missingIntakeIds.length > 0) {
+    const { data } = await admin.from('client_intake').select(INTAKE_COLUMNS).in('id', missingIntakeIds)
+    for (const row of (data ?? []) as IntakeRow[]) intakes.set(row.id, row)
   }
 
-  return rows.map(row => {
-    const matterId = String(row.matter_id)
-    const meta = numbers.get(matterId)
-    const isLead = meta?.isLead ?? false
-    return {
-      id: matterId,
-      type: isLead ? ('lead' as const) : ('matter' as const),
-      label: (row.matter_name as string | null) ?? (row.client_name as string | null) ?? matterId,
-      matter_number: meta?.number ?? null,
-      stage: (row.stage as string | null) ?? null,
-      status: (row.status as string | null) ?? null,
-      client_name: (row.client_name as string | null) ?? null,
-      client_email: (row.client_email as string | null) ?? null,
-      url: `/admin/matters/${matterId}`,
-    }
-  })
+  // One record per matter (or per matterless intake), whichever side matched.
+  const records = new Map<string, MatterRecordMatch>()
+  for (const matter of matters.values()) {
+    const intake = matter.client_intake_id ? intakes.get(matter.client_intake_id) ?? null : null
+    const record = recordFrom(matter, intake)
+    if (record) records.set(`matter:${matter.id}`, record)
+  }
+  for (const intake of intakes.values()) {
+    if (intake.matter_id && matters.has(intake.matter_id)) continue
+    const record = recordFrom(null, intake)
+    if (record) records.set(`intake:${intake.id}`, record)
+  }
+
+  return [...records.values()]
+    .sort((a, b) => (a.type === b.type ? a.label.localeCompare(b.label) : a.type === 'matter' ? -1 : 1))
+    .slice(0, cap)
 }
 
 /**
@@ -158,24 +227,36 @@ export async function searchMatterRecords(
  */
 export async function describeRecord(
   id: string,
-): Promise<{ id: string; type: 'matter' | 'lead'; label: string; url: string } | null> {
-  const matterId = await resolveRecordMatterId(id)
-  if (!matterId) return null
+): Promise<{ id: string; type: RecordType; label: string; url: string } | null> {
   const admin = getAdminClient() as Client
-  const [matterRes, pipelineRes] = await Promise.all([
-    admin.from('matters').select('id, name, matter_number, relationship_status').eq('id', matterId).maybeSingle(),
-    admin.from('v_matter_pipeline').select('matter_name, client_name').eq('matter_id', matterId).maybeSingle(),
-  ])
-  const matter = (matterRes.data ?? null) as Record<string, unknown> | null
-  if (!matter) return null
-  const pipeline = (pipelineRes.data ?? {}) as Record<string, unknown>
-  const name = (matter.name as string | null) ?? (pipeline.matter_name as string | null) ?? (pipeline.client_name as string | null)
-  const number = matter.matter_number ? `#${String(matter.matter_number)}` : ''
+  let matter: MatterRow | null = null
+  let intake: IntakeRow | null = null
+
+  const { data: matterRow } = await admin.from('matters').select(MATTER_COLUMNS).eq('id', id).maybeSingle()
+  if (matterRow) {
+    matter = matterRow as MatterRow
+    if (matter.client_intake_id) {
+      const { data } = await admin.from('client_intake').select(INTAKE_COLUMNS).eq('id', matter.client_intake_id).maybeSingle()
+      intake = (data as IntakeRow | null) ?? null
+    }
+  } else {
+    const { data } = await admin.from('client_intake').select(INTAKE_COLUMNS).eq('id', id).maybeSingle()
+    intake = (data as IntakeRow | null) ?? null
+    if (!intake) return null
+    if (intake.matter_id) {
+      const { data: owner } = await admin.from('matters').select(MATTER_COLUMNS).eq('id', intake.matter_id).maybeSingle()
+      matter = (owner as MatterRow | null) ?? null
+    }
+  }
+
+  const record = recordFrom(matter, intake)
+  if (!record) return null
+  const number = record.type === 'matter' && record.matter_number ? `#${record.matter_number}` : ''
   return {
     id,
-    type: matter.relationship_status === 'hired' ? 'matter' : 'lead',
-    label: [name, number].filter(Boolean).join(' · ') || matterId,
-    url: `/admin/matters/${matterId}`,
+    type: record.type,
+    label: [record.label, number].filter(Boolean).join(' · '),
+    url: record.type === 'matter' ? record.url : `/admin/crm/opportunities/${record.id}`,
   }
 }
 
@@ -229,6 +310,14 @@ async function loadOverview(admin: Client, matterId: string) {
   const pipeline = (pipelineRes.data ?? {}) as Record<string, unknown>
   const details = (detailsRes.data ?? {}) as Record<string, unknown>
 
+  // The pipeline view carries hired matters only. A lead's client fields come
+  // from its intake row instead, so a lead overview still names the client.
+  let intake: IntakeRow | null = null
+  if (!pipelineRes.data && typeof matter.client_intake_id === 'string') {
+    const { data } = await admin.from('client_intake').select(INTAKE_COLUMNS).eq('id', matter.client_intake_id).maybeSingle()
+    intake = (data as IntakeRow | null) ?? null
+  }
+
   return {
     matter_number: matter.matter_number ?? null,
     name: matter.name ?? pipeline.matter_name ?? null,
@@ -239,9 +328,10 @@ async function loadOverview(admin: Client, matterId: string) {
     plan_type: details.ep_plan_category ?? details.plan_type ?? pipeline.plan_type ?? null,
     legal_plan: details.legal_plan ?? null,
     legal_plan_member_id: details.legal_plan_id ?? null,
-    client_name: pipeline.client_name ?? null,
-    client_email: pipeline.client_email ?? null,
-    client_phone: pipeline.client_phone ?? null,
+    client_name: pipeline.client_name ?? intakeName(intake),
+    client_email: pipeline.client_email ?? intake?.email ?? null,
+    client_phone: pipeline.client_phone ?? intake?.phone ?? null,
+    lead_status: intake?.lead_status ?? null,
     marital_status: pipeline.marital_status ?? null,
     flags: pipeline.flags ?? null,
     fee_amount: pipeline.fee_amount ?? null,

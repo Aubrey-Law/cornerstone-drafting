@@ -105,3 +105,13 @@ describe('framing an attached workflow for the system prompt', () => {
     expect(note).toContain('Dedicated run')
   })
 })
+
+describe('a matter-scoped workflow on a lead', () => {
+  it('treats the lead record as the matter context and says the design sheet is not there yet', () => {
+    const note = attachedWorkflowPromptNote({
+      title: 'Matter Next Steps', body: 'DO THE STEPS', executionMode: 'chat', allowedContext: ['matter'],
+    }, { contextType: 'lead' })
+    expect(note).toContain('prospective client')
+    expect(note).not.toContain('find_matter')
+  })
+})
