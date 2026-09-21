@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { createAgreementDraft } from '@/lib/engagement/repository'
 import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { normalizePracticeArea } from '@/lib/practiceArea'
+import { engagementSeedDefinition } from '@/lib/engagement/seed'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { err, userId } = await requireAdmin(req)
@@ -31,22 +31,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('matter_id', matterId)
     .maybeSingle()
   if (!matter) return Response.json({ error: 'Hired matter not found' }, { status: 404 })
-  if (normalizePracticeArea(matter.practice_area) !== 'EP' || !matter.spouse_email) {
-    return Response.json({ error: 'The reviewed workspace currently supports estate-planning couples only; use the legacy engagement flow.' }, { status: 400 })
-  }
+
+  // The pipeline view carries no billing type, and an LP letter names the plan.
+  const { data: details } = await admin
+    .from('matter_details')
+    .select('billing_type')
+    .eq('client_id', matterId)
+    .maybeSingle()
+
+  const seed = engagementSeedDefinition({
+    practiceArea: matter.practice_area,
+    billingType: details?.billing_type,
+    spouseEmail: matter.spouse_email,
+  })
+  if (!seed.ok) return Response.json({ error: seed.error }, { status: 400 })
 
   const result = await createAgreementDraft(admin, {
     matterId,
     preparedBy: userId,
     inputSnapshot: {
-      practiceArea: 'EP',
-      clientMode: 'couple',
+      ...seed.definition,
       agreementDate: new Date().toISOString().slice(0, 10),
       primary: { name: matter.client_name || 'Client', email: matter.client_email || '' },
-      spouse: { name: matter.spouse_name || 'Spouse', email: matter.spouse_email },
-      legalPlan: null,
+      spouse: { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail },
       fee: { amount: Number(matter.fee_amount) || 0, paymentTerms: '' },
-      scopeKey: 'standard',
       optionalClauseKeys: [],
       emailMessage: 'Please review and sign the enclosed engagement agreement.',
       expirationHours: 168,

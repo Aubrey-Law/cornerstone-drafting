@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateEngagementInput } from '@/lib/engagement/schema'
+import { ENGAGEMENT_LEGAL_PLANS } from '@/lib/engagement/types'
 
 const base = {
   practiceArea: 'EP' as const,
@@ -29,7 +30,9 @@ describe('validateEngagementInput', () => {
     })).toMatchObject({ ok: true })
   })
 
-  it.each(['MetLife', 'LegalEase', 'ARAG'] as const)('accepts individual and couple EP-LP agreements for %s', legalPlan => {
+  // Plans are the firm's own billing types, so a plan the Billing tab accepts
+  // is a plan an engagement can name.
+  it.each(ENGAGEMENT_LEGAL_PLANS)('accepts individual and couple EP-LP agreements for %s', legalPlan => {
     expect(validateEngagementInput({ ...base, practiceArea: 'EP-LP', legalPlan })).toMatchObject({ ok: true })
     expect(validateEngagementInput({
       ...base,

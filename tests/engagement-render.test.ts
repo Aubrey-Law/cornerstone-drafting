@@ -29,7 +29,19 @@ const input = {
   primary: { name: 'Alex Client', email: 'alex@example.com' },
   spouse: { name: 'Jordan Client', email: 'jordan@example.com' }, legalPlan: null,
   fee: { amount: 7500, paymentTerms: 'Half now; half before signing.' }, scopeKey: 'standard',
-  optionalClauseKeys: [], emailMessage: '', expirationHours: 72,
+  optionalClauseKeys: [] as string[], emailMessage: '', expirationHours: 72,
+}
+
+/**
+ * A plan-funded couple. Its fee is whatever the plan's schedule pays, so the
+ * letter states none — which is why the firm's flat fee and payment terms are
+ * empty here and the render still succeeds.
+ */
+const lpInput = {
+  ...input,
+  practiceArea: 'EP-LP' as const,
+  legalPlan: 'metlife' as const,
+  fee: { amount: 0, paymentTerms: '' },
 }
 
 describe('renderEngagementAgreement', () => {
@@ -45,12 +57,52 @@ describe('renderEngagementAgreement', () => {
     expect(result.pdfSha256).toBe(createHash('sha256').update(converted).digest('hex'))
   })
 
+  it('renders the legal-plan letter, naming the plan and marking elected services', async () => {
+    const converted = pdf(anchors.join(' '))
+    const result = await renderEngagementAgreement(
+      { ...lpInput, optionalClauseKeys: ['credit_shelter_planning'] },
+      { convertDocx: async () => converted },
+    )
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    expect(xml).toContain('MetLife')
+    for (const value of ['2026-07-12', 'Alex Client', 'alex@example.com', 'Jordan Client', 'jordan@example.com']) expect(xml).toContain(value)
+    for (const anchor of anchors) expect(xml.split(anchor)).toHaveLength(2)
+    expect(xml).not.toMatch(/\{\{(?:signature:|autofill_date_signed)|\{[^{}]+\}/)
+    // Elected is ballot-box-with-X, unelected is empty — one of each here.
+    expect(xml.split('\u2612')).toHaveLength(2)
+    expect(xml.split('\u2610')).toHaveLength(2)
+    expect(result.masterKey).toBe('ep-lp-trust-couple')
+    expect(result.templateId).toBe('engagement-ep-lp-trust-couple')
+  })
+
+  it('leaves every optional service unmarked when none is elected', async () => {
+    const result = await renderEngagementAgreement(lpInput, { convertDocx: async () => pdf(anchors.join(' ')) })
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    expect(xml.split('\u2610')).toHaveLength(3)
+    expect(xml).not.toContain('\u2612')
+  })
+
   it.each([
     [{ ...input, practiceArea: 'Probate' as const }],
     [{ ...input, clientMode: 'individual' as const, spouse: null }],
-    [{ ...input, practiceArea: 'EP-LP' as const, legalPlan: 'MetLife' as const }],
   ])('rejects unavailable template combinations', async (candidate) => {
     await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/template.*unavailable/i)
+  })
+
+  it.each([
+    ['a plan on a flat-fee estate plan', { ...input, legalPlan: 'metlife' as const }],
+    ['no plan on a plan-funded estate plan', { ...lpInput, legalPlan: null }],
+    ['a plan the letter cannot name', { ...lpInput, legalPlan: 'other_legal_plan' }],
+    ['an optional service the definition does not offer', { ...lpInput, optionalClauseKeys: ['gift_tax_returns'] }],
+  ])('rejects %s', async (_case, candidate) => {
+    await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/Invalid engagement input/i)
+  })
+
+  it('still requires the firm fee and payment terms on an agreement that states them', async () => {
+    await expect(renderEngagementAgreement(
+      { ...input, fee: { amount: 0, paymentTerms: '' } },
+      { convertDocx: async () => pdf(anchors.join(' ')) },
+    )).rejects.toThrow(/fee\.amount.*fee\.paymentTerms|fee\.paymentTerms/)
   })
 
   it('rejects a non-Letter PDF', async () => {

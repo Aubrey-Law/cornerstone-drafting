@@ -1,4 +1,6 @@
 import { agreementDefinitionFor } from './definitions'
+import { engagementTemplateFor } from './templates'
+import { ENGAGEMENT_LEGAL_PLANS } from './types'
 import type {
   EngagementClientMode,
   EngagementInput,
@@ -14,7 +16,7 @@ export type EngagementValidationResult =
 
 const PRACTICE_AREAS: readonly EngagementPracticeArea[] = ['EP', 'EP-LP', 'Probate']
 const CLIENT_MODES: readonly EngagementClientMode[] = ['individual', 'couple']
-const LEGAL_PLANS: readonly EngagementLegalPlan[] = ['MetLife', 'LegalEase', 'ARAG']
+const LEGAL_PLANS: readonly EngagementLegalPlan[] = ENGAGEMENT_LEGAL_PLANS
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function record(value: unknown): Record<string, unknown> {
@@ -96,8 +98,12 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
     errors.push('legalPlan')
   }
 
-  if (!Number.isFinite(value.fee.amount) || value.fee.amount <= 0) errors.push('fee.amount')
-  if (!value.fee.paymentTerms) errors.push('fee.paymentTerms')
+  // A plan-funded agreement states no firm fee of its own, so it is not asked
+  // for one; every other agreement prints both and cannot go out without them.
+  const statesFirmFee = engagementTemplateFor(value)?.statesFirmFee ?? true
+  if (!Number.isFinite(value.fee.amount) || value.fee.amount < 0) errors.push('fee.amount')
+  else if (statesFirmFee && value.fee.amount <= 0) errors.push('fee.amount')
+  if (statesFirmFee && !value.fee.paymentTerms) errors.push('fee.paymentTerms')
   if (!Number.isFinite(value.expirationHours) || value.expirationHours < 1) errors.push('expirationHours')
 
   if (

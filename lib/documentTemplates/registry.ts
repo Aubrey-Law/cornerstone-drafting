@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEED_TEMPLATE_VARIANTS, DOCUMENT_TYPES } from '@/lib/realEstateTransfer/fields'
+import { ENGAGEMENT_TEMPLATES } from '@/lib/engagement/templates'
 import type { DocumentTemplateDefinition } from './types'
 
 const GENERATOR_ROOT = 'tools/aubreylaw-docgeneration'
@@ -71,14 +72,16 @@ export function getDocumentTemplateRegistry(cwd = process.cwd()): DocumentTempla
   return [
     ...estateDefinitions(cwd),
     ...realEstateDefinitions(),
-    {
-      id: 'engagement-ep-trust-couple',
-      label: 'Engagement Agreement — Estate Plan Trust Couple',
-      category: 'engagement',
-      renderer: 'engagement_docxtemplater',
-      bundledPath: 'assets/engagement-agreements/ep-trust-couple-v1.docx',
+    // Read from the renderer's own table, so an engagement master cannot be
+    // rendered from a file the registry never offers for override.
+    ...ENGAGEMENT_TEMPLATES.map(template => ({
+      id: template.templateId,
+      label: template.label,
+      category: 'engagement' as const,
+      renderer: 'engagement_docxtemplater' as const,
+      bundledPath: template.bundledPath,
       packageNames: ['engagement-agreement'],
-    },
+    })),
   ]
 }
 

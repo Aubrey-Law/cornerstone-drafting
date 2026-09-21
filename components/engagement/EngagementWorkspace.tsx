@@ -14,6 +14,9 @@ import { cn } from '@/lib/utils'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
 import { EngagementStatusPanel } from './EngagementStatusPanel'
+import { agreementDefinitionFor, OPTIONAL_CLAUSE_LABELS } from '@/lib/engagement/definitions'
+import { engagementTemplateFor, type EngagementTemplate } from '@/lib/engagement/templates'
+import { engagementLegalPlanLabel } from '@/lib/engagement/types'
 import type { EngagementWorkspaceAgreement as Agreement } from '@/lib/engagement/http'
 import type { EngagementInput } from '@/lib/engagement/types'
 
@@ -112,18 +115,22 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
 
   const revision = preview?.revision?.id ?? agreement.active_revision.id
   const sha = preview?.sha256 ?? agreement.active_revision.render_sha256
+  // The master decides what the agreement has to say, so it decides what has to
+  // be filled in: a plan-funded letter states no firm fee and asks for none.
+  const template = useMemo(() => engagementTemplateFor(input), [input])
   const blockers = useMemo(() => {
+    const statesFirmFee = template?.statesFirmFee ?? true
     const missing = [
       !input.primary?.name && 'Primary signer name',
       !input.primary?.email && 'Primary signer email',
       input.clientMode === 'couple' && !input.spouse?.name && 'Spouse name',
       input.clientMode === 'couple' && !input.spouse?.email && 'Spouse email',
       !input.agreementDate && 'Agreement date',
-      !(input.fee?.amount > 0) && 'Flat fee',
-      !input.fee?.paymentTerms && 'Payment terms',
+      statesFirmFee && !(input.fee?.amount > 0) && 'Flat fee',
+      statesFirmFee && !input.fee?.paymentTerms && 'Payment terms',
     ]
     return missing.filter(Boolean) as string[]
-  }, [input])
+  }, [input, template])
   const canSend = canSendReviewedRevision({ approvalToken, confirmExactRevision, revisionId: revision, pdfSha256: sha })
 
   useEffect(() => {
@@ -236,7 +243,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-lg font-bold text-foreground">Engagement agreement</h1>
-            <p className="text-xs text-muted-foreground">Estate Planning / Couple</p>
+            <p className="text-xs text-muted-foreground">{definitionSummary(input, template)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-micro">Engagement drafting workspace</Badge>
@@ -286,6 +293,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
           {step === 'design' && (
             <DesignStep
               input={input}
+              template={template}
               locked={locked}
               blockers={blockers}
               onPrimary={patchPrimary}
@@ -308,6 +316,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
             <ReviewStep
               agreement={agreement}
               input={input}
+              template={template}
               locked={locked}
               blockers={blockers}
               revision={revision}
@@ -342,6 +351,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
 
 function DesignStep({
   input,
+  template,
   locked,
   blockers,
   onPrimary,
@@ -350,6 +360,7 @@ function DesignStep({
   onNext,
 }: {
   input: EngagementInput
+  template: EngagementTemplate | null
   locked: boolean
   blockers: string[]
   onPrimary: (patch: Partial<EngagementInput['primary']>) => void
@@ -366,6 +377,7 @@ function DesignStep({
       <div className="grid gap-5 p-4 lg:grid-cols-[1fr_280px]">
         <EngagementFieldsEditor
           input={input}
+          template={template}
           locked={locked}
           onEdit={onEdit}
           onPrimary={onPrimary}
@@ -374,8 +386,10 @@ function DesignStep({
         <aside className="space-y-3">
           <div className="rounded-md border border-border bg-background p-3">
             <p className="text-micro font-medium uppercase text-muted-foreground">Supported definition</p>
-            <p className="mt-1 text-sm font-semibold">Estate Planning / Couple</p>
-            <p className="mt-1 text-xs text-muted-foreground">Standard trust estate plan engagement agreement.</p>
+            <p className="mt-1 text-sm font-semibold">{definitionSummary(input, template)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {template ? template.label : 'No engagement master covers this definition.'}
+            </p>
           </div>
           <div className="rounded-md border border-border bg-background p-3">
             <p className="text-micro font-medium uppercase text-muted-foreground">Readiness</p>
@@ -441,6 +455,7 @@ function GenerateStep({
 function ReviewStep({
   agreement,
   input,
+  template,
   locked,
   blockers,
   revision,
@@ -467,6 +482,7 @@ function ReviewStep({
 }: {
   agreement: Agreement
   input: EngagementInput
+  template: EngagementTemplate | null
   locked: boolean
   blockers: string[]
   revision: string
@@ -517,6 +533,7 @@ function ReviewStep({
         {isEditing && (
           <ReviewEditor
             input={input}
+            template={template}
             locked={locked}
             blockers={blockers}
             isGenerating={isGenerating}
@@ -551,6 +568,7 @@ function ReviewStep({
 
 function ReviewEditor({
   input,
+  template,
   locked,
   blockers,
   isGenerating,
@@ -560,6 +578,7 @@ function ReviewEditor({
   onSaveRevision,
 }: {
   input: EngagementInput
+  template: EngagementTemplate | null
   locked: boolean
   blockers: string[]
   isGenerating: boolean
@@ -590,6 +609,7 @@ function ReviewEditor({
       <div className="mt-4">
         <EngagementFieldsEditor
           input={input}
+          template={template}
           locked={locked}
           onEdit={onEdit}
           onPrimary={onPrimary}
@@ -620,24 +640,27 @@ function EngagementField({
 // step and the Review step's in-app editor so the two never drift apart.
 function EngagementFieldsEditor({
   input,
+  template,
   locked,
   onEdit,
   onPrimary,
   onSpouse,
 }: {
   input: EngagementInput
+  template: EngagementTemplate | null
   locked: boolean
   onEdit: (patch: Partial<EngagementInput>) => void
   onPrimary: (patch: Partial<EngagementInput['primary']>) => void
   onSpouse: (patch: Partial<NonNullable<EngagementInput['spouse']>>) => void
 }) {
+  const statesFirmFee = template?.statesFirmFee ?? true
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
         <EngagementField label="Agreement date">
           <Input disabled={locked} type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
         </EngagementField>
-        <EngagementField label="Flat fee">
+        <EngagementField label={statesFirmFee ? 'Flat fee' : 'Quoted fee (not stated in the letter)'}>
           <Input disabled={locked} type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
         </EngagementField>
         <EngagementField label="Expiration hours">
@@ -658,9 +681,18 @@ function EngagementFieldsEditor({
           <Input disabled={locked} type="email" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
         </EngagementField>
       </div>
-      <EngagementField label="Payment terms">
-        <Textarea disabled={locked} className="min-h-24" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
-      </EngagementField>
+      {statesFirmFee ? (
+        <EngagementField label="Payment terms">
+          <Textarea disabled={locked} className="min-h-24" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
+        </EngagementField>
+      ) : (
+        <p className="rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground">
+          The fee for the covered services is the amount the {input.legalPlan ? engagementLegalPlanLabel(input.legalPlan) : 'legal'} plan&apos;s
+          attorney fee schedule pays, claimed from the plan directly. The letter states no firm fee or payment terms.
+          Change the plan on the record&apos;s Billing tab, not here.
+        </p>
+      )}
+      <OptionalServicesEditor input={input} locked={locked} onEdit={onEdit} />
       <EngagementField label="Email message">
         <ResizableTextarea handleLabel="Resize the email message" disabled={locked} className="min-h-24" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
       </EngagementField>
@@ -668,4 +700,55 @@ function EngagementFieldsEditor({
       <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
     </div>
   )
+}
+
+/**
+ * The elected optional services. They are marked here rather than by the
+ * signer: the e-sign anchors are signature and date only, so the agreement goes
+ * out with the boxes already set and the signature adopts them.
+ */
+function OptionalServicesEditor({
+  input,
+  locked,
+  onEdit,
+}: {
+  input: EngagementInput
+  locked: boolean
+  onEdit: (patch: Partial<EngagementInput>) => void
+}) {
+  const keys = agreementDefinitionFor(input.practiceArea, input.legalPlan).optionalClauseKeys
+  if (keys.length === 0) return null
+  const elected = input.optionalClauseKeys ?? []
+  const toggle = (key: string, checked: boolean) => onEdit({
+    optionalClauseKeys: checked ? [...elected, key] : elected.filter(value => value !== key),
+  })
+  return (
+    <div className="rounded-md border border-border p-4">
+      <h3 className="font-medium">Optional services</h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Checked services are added to the scope in the agreement&apos;s Optional Services addendum, which states each fee.
+      </p>
+      <div className="mt-3 space-y-2">
+        {keys.map(key => (
+          <label key={key} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              disabled={locked}
+              checked={elected.includes(key)}
+              onCheckedChange={checked => toggle(key, checked === true)}
+            />
+            {OPTIONAL_CLAUSE_LABELS[key] ?? key}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** What this agreement is, in the words staff use for it. */
+function definitionSummary(input: EngagementInput, template: EngagementTemplate | null): string {
+  if (!template) return 'Unsupported definition'
+  const area = template.practiceArea === 'EP-LP' ? 'Estate Planning - LP' : 'Estate Planning'
+  const mode = template.clientMode === 'couple' ? 'Couple' : 'Individual'
+  const plan = input.legalPlan ? ` / ${engagementLegalPlanLabel(input.legalPlan)}` : ''
+  return `${area} / ${mode}${plan}`
 }
