@@ -33,7 +33,11 @@ const LETTER_HEIGHT = 792
 
 /**
  * One input per shipped master, because geometry is a property of the document
- * and the two masters lay their signature blocks out differently.
+ * and the masters lay their signature blocks out differently.
+ *
+ * Every field that varies is read off the master rather than written out, so a
+ * master added later is probed without editing this file — and so an input can
+ * never describe a client the master it targets could not represent.
  */
 const inputs = ENGAGEMENT_TEMPLATES.map(template => ({
   template,
@@ -42,7 +46,11 @@ const inputs = ENGAGEMENT_TEMPLATES.map(template => ({
     clientMode: template.clientMode,
     agreementDate: '2026-07-12',
     primary: { name: 'Alex Client', email: 'alex@example.com' },
-    spouse: { name: 'Jordan Client', email: 'jordan@example.com' },
+    // A solo agreement has no second party, and one supplied anyway is a
+    // validation error rather than a field the master quietly ignores.
+    spouse: template.clientMode === 'couple'
+      ? { name: 'Jordan Client', email: 'jordan@example.com' }
+      : null,
     legalPlan: template.legalPlans?.[0] ?? null,
     // A plan-funded letter states no firm fee, so it is not asked for one.
     fee: template.statesFirmFee
@@ -56,6 +64,8 @@ const inputs = ENGAGEMENT_TEMPLATES.map(template => ({
 }))
 
 const cases = inputs.map(entry => [entry.template.masterKey, entry] as const)
+/** Only a master with two signers can put one signer's anchor on another's line. */
+const multiSignerCases = cases.filter(([, entry]) => entry.template.recipientCount > 1)
 
 /**
  * Render through the real worker, translating its transport failures into
@@ -142,7 +152,7 @@ describe('signature anchors in a real LibreOffice render', () => {
     }
   })
 
-  it.each(cases)('gives each %s signer a distinct position', async (_key, { input }) => {
+  it.each(multiSignerCases)('gives each %s signer a distinct position', async (_key, { input }) => {
     // Both signers resolving is not enough: if CLIENT_1 and CLIENT_2 came back
     // at the same spot, one signature would land on the other's line — the same
     // class of defect as the SPOUSE/CLIENT_2 mismatch, arriving geometrically.
