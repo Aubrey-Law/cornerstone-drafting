@@ -6,11 +6,11 @@
  * path, which stamps them. If those two ever disagree the signer gets an
  * anchor-not-found error — or worse, signs on someone else's line.
  *
- * Recipients are numbered by position in the agreement, not by role:
- * `assets/engagement-agreements/ep-trust-couple-v1.docx` carries
- * `[[CLIENT_1_SIGNATURE]]` and `[[CLIENT_2_SIGNATURE]]`, with the spouse as
- * CLIENT_2. There is no `[[SPOUSE_*]]` marker in any template, and a role-named
- * prefix would resolve to nothing.
+ * Recipients are numbered by position in the agreement, not by role: every
+ * master in `lib/engagement/templates.ts` carries `[[CLIENT_1_SIGNATURE]]` and
+ * `[[CLIENT_2_SIGNATURE]]`, with the spouse as CLIENT_2. There is no
+ * `[[SPOUSE_*]]` marker in any template, and a role-named prefix would resolve
+ * to nothing.
  */
 
 export interface EngagementAnchorMarkers {

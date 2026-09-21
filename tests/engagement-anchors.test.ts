@@ -3,6 +3,7 @@ import path from 'node:path'
 import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import { allEngagementAnchorMarkers, engagementAnchorMarkers } from '@/lib/engagement/anchors'
+import { ENGAGEMENT_TEMPLATES } from '@/lib/engagement/templates'
 
 /**
  * The template is the contract.
@@ -19,16 +20,16 @@ import { allEngagementAnchorMarkers, engagementAnchorMarkers } from '@/lib/engag
  * LibreOffice, no database — just the bytes in the repository.
  */
 
-const TEMPLATE = 'assets/engagement-agreements/ep-trust-couple-v1.docx'
-
-/** Every `[[MARKER]]` in the template's body, deduplicated. */
-function markersInTemplate(): Set<string> {
+/** Every `[[MARKER]]` in a template's body, deduplicated. */
+function markersInTemplate(bundledPath: string): Set<string> {
   // Same loader the renderer uses (lib/engagement/render.ts), so this reads the
   // document exactly as production does rather than through a second mechanism.
-  const zip = new PizZip(fs.readFileSync(path.join(process.cwd(), TEMPLATE)))
+  const zip = new PizZip(fs.readFileSync(path.join(process.cwd(), bundledPath)))
   const xml = zip.file('word/document.xml')!.asText()
   return new Set(xml.match(/\[\[[A-Z0-9_]+\]\]/g) ?? [])
 }
+
+const templates = ENGAGEMENT_TEMPLATES.map(template => [template.masterKey, template] as const)
 
 describe('engagement anchor markers', () => {
   it('numbers recipients by position, never by role', () => {
@@ -42,22 +43,26 @@ describe('engagement anchor markers', () => {
     })
   })
 
-  it('derives exactly the markers the shipped template contains', () => {
+  it.each(templates)('derives exactly the markers %s ships with', (_key, template) => {
     // Equal as sets in both directions: this fails if the template drops a
     // marker *and* if the code starts expecting one the template never had.
-    const inTemplate = markersInTemplate()
-    const derived = new Set(allEngagementAnchorMarkers(2))
+    const inTemplate = markersInTemplate(template.bundledPath)
+    const derived = new Set(allEngagementAnchorMarkers(template.recipientCount))
     expect([...derived].sort()).toEqual([...inTemplate].sort())
   })
 
-  it('has no role-named marker for the spouse', () => {
+  it.each(templates)('gives %s no role-named marker for the spouse', (_key, template) => {
     // The spouse is CLIENT_2. A `[[SPOUSE_*]]` marker exists in no template, so
     // a role-based prefix resolves to nothing and the spouse cannot sign at all.
     // This is the exact regression that shipped and had to be fixed.
-    const inTemplate = markersInTemplate()
+    const inTemplate = markersInTemplate(template.bundledPath)
     expect([...inTemplate].filter(m => m.includes('SPOUSE'))).toEqual([])
     expect(inTemplate.has('[[CLIENT_2_SIGNATURE]]')).toBe(true)
     expect(inTemplate.has('[[CLIENT_2_DATE]]')).toBe(true)
+  })
+
+  it.each(templates)('ships %s with a master file the registry offers', (_key, template) => {
+    expect(fs.existsSync(path.join(process.cwd(), template.bundledPath))).toBe(true)
   })
 
   it('covers both signers of a couple agreement and nothing more', () => {

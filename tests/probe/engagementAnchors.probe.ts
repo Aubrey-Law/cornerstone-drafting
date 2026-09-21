@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderEngagementAgreement } from '@/lib/engagement/render'
 import { DocxPdfConvertError } from '@/lib/docxPdfConvert'
 import { allEngagementAnchorMarkers, engagementAnchorMarkers } from '@/lib/engagement/anchors'
+import { ENGAGEMENT_TEMPLATES } from '@/lib/engagement/templates'
 import { AnchorLocationError, locateAnchors, toPdfOrigin } from '@/lib/esign/nativeAnchors'
 
 /**
@@ -30,19 +31,31 @@ import { AnchorLocationError, locateAnchors, toPdfOrigin } from '@/lib/esign/nat
 const LETTER_WIDTH = 612
 const LETTER_HEIGHT = 792
 
-const input = {
-  practiceArea: 'EP' as const,
-  clientMode: 'couple' as const,
-  agreementDate: '2026-07-12',
-  primary: { name: 'Alex Client', email: 'alex@example.com' },
-  spouse: { name: 'Jordan Client', email: 'jordan@example.com' },
-  legalPlan: null,
-  fee: { amount: 7500, paymentTerms: 'Half now; half before signing.' },
-  scopeKey: 'standard',
-  optionalClauseKeys: [],
-  emailMessage: '',
-  expirationHours: 72,
-}
+/**
+ * One input per shipped master, because geometry is a property of the document
+ * and the two masters lay their signature blocks out differently.
+ */
+const inputs = ENGAGEMENT_TEMPLATES.map(template => ({
+  template,
+  input: {
+    practiceArea: template.practiceArea,
+    clientMode: template.clientMode,
+    agreementDate: '2026-07-12',
+    primary: { name: 'Alex Client', email: 'alex@example.com' },
+    spouse: { name: 'Jordan Client', email: 'jordan@example.com' },
+    legalPlan: template.legalPlans?.[0] ?? null,
+    // A plan-funded letter states no firm fee, so it is not asked for one.
+    fee: template.statesFirmFee
+      ? { amount: 7500, paymentTerms: 'Half now; half before signing.' }
+      : { amount: 0, paymentTerms: '' },
+    scopeKey: template.scopeKey,
+    optionalClauseKeys: [] as string[],
+    emailMessage: '',
+    expirationHours: 72,
+  },
+}))
+
+const cases = inputs.map(entry => [entry.template.masterKey, entry] as const)
 
 /**
  * Render through the real worker, translating its transport failures into
@@ -54,7 +67,7 @@ const input = {
  * someone is configuring those variables for the first time, so it is where the
  * mapping from status code to cause belongs.
  */
-async function renderThroughWorker() {
+async function renderThroughWorker(input: unknown) {
   try {
     return await renderEngagementAgreement(input)
   } catch (error) {
@@ -76,14 +89,14 @@ async function renderThroughWorker() {
 }
 
 describe('signature anchors in a real LibreOffice render', () => {
-  it('resolves every anchor to a usable box on the page', async () => {
+  it.each(cases)('resolves every %s anchor to a usable box on the page', async (_key, { template, input }) => {
     // No `convertDocx` override: this goes through the deployed worker, which is
     // the whole point. NODE_ENV is 'test' under vitest, so renderEngagementAgreement
     // uses the bundled template and needs no database.
-    const rendered = await renderThroughWorker()
+    const rendered = await renderThroughWorker(input)
     expect(rendered.pdfBytes.length).toBeGreaterThan(0)
 
-    const markers = allEngagementAnchorMarkers(2)
+    const markers = allEngagementAnchorMarkers(template.recipientCount)
 
     let located
     try {
@@ -129,7 +142,7 @@ describe('signature anchors in a real LibreOffice render', () => {
     }
   })
 
-  it('gives each signer a distinct position', async () => {
+  it.each(cases)('gives each %s signer a distinct position', async (_key, { input }) => {
     // Both signers resolving is not enough: if CLIENT_1 and CLIENT_2 came back
     // at the same spot, one signature would land on the other's line — the same
     // class of defect as the SPOUSE/CLIENT_2 mismatch, arriving geometrically.
@@ -139,7 +152,7 @@ describe('signature anchors in a real LibreOffice render', () => {
     // a `y` and differ only in `x` — and their dates do the same, one row down.
     // A run that reports both signers at the same `y` is therefore expected
     // here, and is not what this test is looking for.
-    const rendered = await renderThroughWorker()
+    const rendered = await renderThroughWorker(input)
     const first = engagementAnchorMarkers(1)
     const second = engagementAnchorMarkers(2)
     const [sig1, date1, sig2, date2] = await locateAnchors(rendered.pdfBytes, [

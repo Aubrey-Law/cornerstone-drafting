@@ -700,9 +700,14 @@ For a lot/plan deed, `boundary_calls` is an empty array and the complete descrip
 
 ## Engagement-agreement templates
 
-The current engagement master supports the Estate Planning trust-couple, standard-scope, non-legal-plan combination.
+Two masters exist, both standard-scope trust couples. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
 
-Scalar variables:
+| Master | Definition |
+| --- | --- |
+| `ep-trust-couple` | Estate Planning, couple, no legal plan. |
+| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. |
+
+Scalar variables shared by both:
 
 | Variable | Meaning |
 | --- | --- |
@@ -711,8 +716,23 @@ Scalar variables:
 | `{primary_email}` | Primary client's email. |
 | `{spouse_name}` | Spouse/client-two name. |
 | `{spouse_email}` | Spouse/client-two email. |
+
+`ep-trust-couple` only — the firm's own fee, which a plan-funded letter does not state:
+
+| Variable | Meaning |
+| --- | --- |
 | `{flat_fee}` | Fee formatted as U.S. currency. |
 | `{payment_terms}` | Payment terms. |
+
+`ep-lp-trust-couple` only:
+
+| Variable | Meaning |
+| --- | --- |
+| `{legal_plan}` | The plan's display name, e.g. `MetLife`. |
+| `{credit_shelter_checkbox}` | `☒` or `☐` for the Optional Services addendum row. |
+| `{deed_recording_checkbox}` | `☒` or `☐` for the Optional Services addendum row. |
+
+The addendum's boxes are set when the agreement is drafted, from the elected `optionalClauseKeys`, not by the signer: the e-signature pipeline places signature and date fields only, so there is no client-fillable checkbox. The client adopts the marked services by signing the agreement that contains them.
 
 Clause arrays:
 
@@ -738,7 +758,7 @@ source
 aiProvenance
 ```
 
-Only `title` and `text` are used by the bundled master.
+Only `title` and `text` are used by the bundled masters.
 
 ### Required signing anchors
 
