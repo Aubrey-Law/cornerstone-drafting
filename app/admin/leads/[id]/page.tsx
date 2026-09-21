@@ -7,7 +7,7 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { esignDocumentsEnabled } from '@/lib/esign/documentSignature'
-import { newestTimestamp } from '@/lib/leads/timeline'
+import { leadNoteType, newestTimestamp } from '@/lib/leads/timeline'
 import { clientContactTimestamps } from '@/lib/leads/contactEvents'
 import { leadScoreInputFromRow, scoringAppointmentAt } from '@/lib/leads/score'
 import { fetchRecordTaskCounts, isUuid } from '@/lib/queries/tasks'
@@ -21,6 +21,8 @@ export const dynamic = 'force-dynamic'
 type LeadNoteLoaderRow = {
   id: string
   body: string
+  /** Absent until the note-type migration reaches this database. */
+  note_type?: string | null
   actor_id: string
   created_at: string
   updated_at: string
@@ -53,6 +55,7 @@ function mapNote(note: LeadNoteLoaderRow) {
   return {
     id: note.id,
     body: note.body,
+    noteType: leadNoteType(note.note_type),
     actorId: note.actor_id,
     createdAt: note.created_at,
     updatedAt: note.updated_at,
@@ -60,8 +63,9 @@ function mapNote(note: LeadNoteLoaderRow) {
 }
 
 function mapMeeting(note: LeadMeetingNoteLoaderRow) {
+  const { noteType: _noteType, ...base } = mapNote(note)
   return {
-    ...mapNote(note),
+    ...base,
     title: note.title,
     date: note.meeting_date,
     attendees: note.attendees,

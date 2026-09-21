@@ -51,17 +51,20 @@ describe('saving an assistant answer from the chat rail', () => {
       p_lead_id: 'l1',
       p_body: NOTE,
       p_actor_id: 'u1',
+      p_note_type: 'internal',
     })
     // The note is the attorney's, not the service role's.
     expect(from).not.toHaveBeenCalled()
   })
 
-  it('ignores a note type on a lead note, which has none', async () => {
+  it('files a lead note under the type the rail chose, internal by default', async () => {
     rpc.mockResolvedValue({ data: { id: 'n1' }, error: null })
 
     await POST(req({ context_type: 'lead', context_id: 'l1', content: NOTE, note_type: 'client_comm' }))
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_note_type: 'client_comm' })
 
-    expect(rpc.mock.calls[0][1]).not.toHaveProperty('p_note_type')
+    await POST(req({ context_type: 'lead', context_id: 'l1', content: NOTE }))
+    expect(rpc.mock.calls[1][1]).toMatchObject({ p_note_type: 'internal' })
   })
 
   it('maps the lead transaction failures to their own statuses', async () => {

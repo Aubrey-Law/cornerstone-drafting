@@ -5665,6 +5665,7 @@ export type Database = {
           created_at: string
           id: string
           lead_id: string
+          note_type: string
           updated_at: string
         }
         Insert: {
@@ -5673,6 +5674,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id: string
+          note_type?: string
           updated_at?: string
         }
         Update: {
@@ -5681,6 +5683,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string
+          note_type?: string
           updated_at?: string
         }
         Relationships: [
@@ -10625,13 +10628,19 @@ export type Database = {
         }
       }
       create_lead_note_with_activity: {
-        Args: { p_actor_id: string; p_body: string; p_lead_id: string }
+        Args: {
+          p_actor_id: string
+          p_body: string
+          p_lead_id: string
+          p_note_type?: string
+        }
         Returns: {
           actor_id: string
           body: string
           created_at: string
           id: string
           lead_id: string
+          note_type: string
           updated_at: string
         }
         SetofOptions: {
@@ -11803,6 +11812,7 @@ export type Database = {
           p_body: string
           p_lead_id: string
           p_note_id: string
+          p_note_type?: string
         }
         Returns: {
           actor_id: string
@@ -11810,6 +11820,7 @@ export type Database = {
           created_at: string
           id: string
           lead_id: string
+          note_type: string
           updated_at: string
         }
         SetofOptions: {

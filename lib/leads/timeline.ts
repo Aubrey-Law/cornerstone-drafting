@@ -1,12 +1,35 @@
+/** What a lead note is for, mirroring the matter file's own two kinds. */
+export type LeadNoteType = 'internal' | 'client_comm'
+
+export const LEAD_NOTE_TYPE_LABELS: Record<LeadNoteType, string> = {
+  internal: 'Internal note',
+  client_comm: 'Client communication',
+}
+
+/** Anything unrecognised — including a row written before the column existed. */
+export function leadNoteType(value: unknown): LeadNoteType {
+  return value === 'client_comm' ? 'client_comm' : 'internal'
+}
+
+/**
+ * The type a request asked for: undefined when it named none, and null when it
+ * named one that does not exist — which is a 400, never a silent internal note.
+ */
+export function readLeadNoteType(value: unknown): LeadNoteType | null | undefined {
+  if (value === undefined || value === null) return undefined
+  return value === 'internal' || value === 'client_comm' ? value : null
+}
+
 export type LeadTimelineNote = {
   id: string
   body: string
+  noteType: LeadNoteType
   actorId: string
   createdAt: string
   updatedAt: string
 }
 
-export type LeadTimelineMeeting = LeadTimelineNote & {
+export type LeadTimelineMeeting = Omit<LeadTimelineNote, 'noteType'> & {
   title: string
   date: string
   attendees: string[]
@@ -25,6 +48,7 @@ export type LeadTimelineMeeting = LeadTimelineNote & {
 export type LeadNoteRow = {
   id: string
   body: string
+  note_type?: string | null
   actor_id: string
   created_at: string
   updated_at: string
@@ -122,7 +146,7 @@ export function buildLeadTimeline(sources: LeadTimelineSources): LeadTimelineIte
   const noteItems: LeadTimelineItem[] = sources.notes.map(note => ({
     id: `note:${note.id}`,
     kind: 'note',
-    title: 'Internal note',
+    title: LEAD_NOTE_TYPE_LABELS[note.noteType],
     body: note.body,
     actorId: note.actorId,
     actorName: actorName(note.actorId, sources.actorNames),
