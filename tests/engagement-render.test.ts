@@ -5,6 +5,7 @@ import { renderEngagementAgreement } from '@/lib/engagement/render'
 import { allEngagementAnchorMarkers } from '@/lib/engagement/anchors'
 
 const anchors = allEngagementAnchorMarkers(2)
+const soloAnchors = allEngagementAnchorMarkers(1)
 
 function pdf(text: string, width = 612, height = 792): Buffer {
   const escaped = text.replace(/([\\()])/g, '\\$1')
@@ -44,6 +45,9 @@ const lpInput = {
   fee: { amount: 0, paymentTerms: '' },
 }
 
+/** The same letter for a solo client: one signer, no spouse. */
+const lpSoloInput = { ...lpInput, clientMode: 'individual' as const, spouse: null }
+
 describe('renderEngagementAgreement', () => {
   it('renders all structured fields and stable metadata without legacy tags', async () => {
     const converted = pdf(anchors.join(' '))
@@ -80,6 +84,37 @@ describe('renderEngagementAgreement', () => {
     const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
     expect(xml.split('\u2610')).toHaveLength(3)
     expect(xml).not.toContain('\u2612')
+  })
+
+  it('renders the solo legal-plan letter with one signer and no spouse', async () => {
+    const converted = pdf(soloAnchors.join(' '))
+    const result = await renderEngagementAgreement(lpSoloInput, { convertDocx: async () => converted })
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    expect(xml).toContain('MetLife')
+    expect(xml).toContain('Alex Client')
+    for (const anchor of soloAnchors) expect(xml.split(anchor)).toHaveLength(2)
+    // Nothing addressed to a second signer, and no leftover spouse text.
+    expect(xml).not.toContain('CLIENT_2')
+    expect(xml).not.toContain('Jordan Client')
+    expect(result.masterKey).toBe('ep-lp-trust-individual')
+    expect(result.templateId).toBe('engagement-ep-lp-trust-individual')
+  })
+
+  it('offers the solo letter only the services its addendum prints', async () => {
+    // Credit shelter planning preserves both spouses' exemptions, so the solo
+    // addendum has no such row and electing it is rejected rather than ignored.
+    await expect(renderEngagementAgreement(
+      { ...lpSoloInput, optionalClauseKeys: ['credit_shelter_planning'] },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )).rejects.toThrow(/Invalid engagement input.*optionalClauseKeys/)
+
+    const result = await renderEngagementAgreement(
+      { ...lpSoloInput, optionalClauseKeys: ['deed_recording'] },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    expect(xml.split('\u2612')).toHaveLength(2)
+    expect(xml).not.toContain('\u2610')
   })
 
   it.each([
