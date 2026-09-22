@@ -498,3 +498,41 @@ Post-call alerts (`call_analyzed`): email via `RETELL_SUMMARY_TO`, SMS via `RETE
 - Token: `app/api/token/route.ts`
 - TwiML: `app/api/voice/route.ts`, `app/api/voice/inbound/route.ts`, `app/api/voice/inbound-fallback/route.ts`
 - Logging: `app/api/webhooks/twilio/voice-status/route.ts`, `app/api/webhooks/retell/route.ts`
+
+## Part 7 — Push to Lawmatics
+
+Staff can push a lead or client to Lawmatics from **Push to Lawmatics** in the
+lead's "More actions" menu or the matter's "More actions" menu
+(`POST /api/lawmatics/push`, `lib/integrations/lawmatics/push.ts`). The first
+push creates a Lawmatics prospect; later pushes update the same prospect. The
+link is shared with appointment sync and with legacy Lawmatics imports
+(`client_intake.lawmatics_matter_id`), so a push never creates a duplicate. If
+an earlier create's outcome is unknown, the push stops and asks for review
+instead of posting again. Blank Cornerstone values are left out, so a push never
+clears a value someone typed into Lawmatics.
+
+The push only needs Lawmatics connected; it does not depend on
+`lawmatics_appointment_sync_enabled`.
+
+**Standard fields** always go: first/last name, email, phone, birthdate,
+street, city, state, ZIP, marital status.
+
+**Everything else** (middle name, suffix, preferred name, address line 2,
+county, spouse details, children, lead/referral source, practice area, plan
+type, lead status, estate value, occupation, employer, planning objectives,
+special/qualification/internal notes, matter number) goes to Lawmatics custom
+fields. Create a matching custom field in Lawmatics, then paste its Lawmatics
+custom field ID next to the Cornerstone field in **Settings → Lawmatics**
+(`/admin/settings?tab=lawmatics`, which also shows the connection and a
+Connect/Reconnect button). The page saves `integration_settings.lawmatics_custom_field_id_map`,
+keyed by the Cornerstone keys in `LAWMATICS_PUSH_FIELDS`
+(`lib/integrations/lawmatics/pushFields.ts`). The equivalent SQL, if the page is unavailable:
+
+```sql
+update public.integration_settings
+set lawmatics_custom_field_id_map = '{"county": "12345", "spouse_first_name": "12346"}'::jsonb
+where id = 1;
+```
+
+Unmapped fields are skipped. The success toast lists the ones that had a value
+but no mapping.

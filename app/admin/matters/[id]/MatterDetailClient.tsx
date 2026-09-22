@@ -94,6 +94,7 @@ import { MatterBillingTab } from './tabs/billing'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
+import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
 import { MatterFactsPanel } from './facts-panel/MatterFactsPanel'
 import {
   isMobileDetailViewport,
@@ -514,6 +515,8 @@ function MatterDetailClientInner({
 
   const taskCounts = useRecordTaskCounts(matterId, initialTaskCounts)
 
+  const { push: pushToLawmatics, pushing: pushingToLawmatics } = usePushToLawmatics(liveIntakeId)
+
   const handleUnlockIntake = useCallback(() => {
     if (!liveIntakeId || unlocking) return
     setUnlockConfirmOpen(true)
@@ -858,6 +861,8 @@ function MatterDetailClientInner({
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
+        onPushToLawmatics={() => void pushToLawmatics()}
+        pushingToLawmatics={pushingToLawmatics}
         onDelete={() => setDeleteOpen(true)}
       />
 

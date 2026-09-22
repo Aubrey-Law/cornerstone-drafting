@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ChevronDown,
   ClipboardList,
+  CloudUpload,
   Loader as Loader2,
   Mail,
   MoreHorizontal,
@@ -37,6 +38,9 @@ interface MatterDetailHeaderProps {
   onOpenIntake: () => void
   onImportIntake: () => void
   onUnlockIntake: () => void
+  /** Creates or updates the client's Lawmatics prospect; hidden without an intake. */
+  onPushToLawmatics?: () => void
+  pushingToLawmatics?: boolean
   onDelete: () => void
 }
 
@@ -57,6 +61,8 @@ export function MatterDetailHeader({
   onOpenIntake,
   onImportIntake,
   onUnlockIntake,
+  onPushToLawmatics,
+  pushingToLawmatics = false,
   onDelete,
 }: MatterDetailHeaderProps) {
   const clientName = matter.client_name || matter.matter_name || 'Matter'
@@ -151,6 +157,12 @@ export function MatterDetailHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onPushToLawmatics && intakeId && (
+              <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+                <CloudUpload className="mr-2 size-3.5" />
+                {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
               <Trash2 className="mr-2 size-3.5" />
               Delete matter
@@ -214,6 +226,12 @@ export function MatterDetailHeader({
           <DropdownMenuItem asChild>
             <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
           </DropdownMenuItem>
+          {onPushToLawmatics && intakeId && (
+            <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+              <CloudUpload className="mr-2 size-3.5" />
+              {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onToggleFactsRail}>
             <PanelRight className="mr-2 size-3.5" />
             {factsRailOpen ? 'Hide facts' : 'Open facts'}

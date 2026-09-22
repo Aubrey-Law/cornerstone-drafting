@@ -123,6 +123,16 @@ export async function createLawmaticsProspect(input: LawmaticsProspectInput, sig
   return resource(data, 'prospect')
 }
 
+/** Creates a prospect from a fully built body (see buildLawmaticsProspectBody). */
+export async function createLawmaticsProspectFromBody(body: Record<string, unknown>, signal?: AbortSignal): Promise<LawmaticsResource<'prospect'>> {
+  return resource(await lawmaticsRequest<unknown>('/v1/prospects', { method: 'POST', body, signal }), 'prospect')
+}
+
+/** Overwrites the supplied fields on an existing prospect; omitted fields are left as they are. */
+export async function updateLawmaticsProspect(id: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
+  await lawmaticsRequest<unknown>(`/v1/prospects/${encodeURIComponent(id)}`, { method: 'PUT', body, signal })
+}
+
 function eventBody(input: LawmaticsEventInput): Record<string, unknown> {
   return {
     name: input.name,
