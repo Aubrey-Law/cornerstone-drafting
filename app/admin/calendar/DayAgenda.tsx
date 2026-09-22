@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 import type {
   AttentionItem,
   CalendarAppointment,
@@ -187,8 +188,8 @@ function AgendaRow({
                   {' '}
                   · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-micro`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
                 </span>
-                {appointment.source === 'calendly'
-                  ? ' · Calendly'
+                {externalSourceLabel(appointment.source)
+                  ? ` · ${externalSourceLabel(appointment.source)}`
                   : !appointment.calendarSynced && appointment.status === 'scheduled'
                     ? ' · ⚠ not on the calendar'
                     : ''}
@@ -228,7 +229,7 @@ function AgendaRow({
               <Button size="sm" variant="ghost" onClick={onOpen}>
                 <FileText className="mr-1 h-3 w-3" /> Prep pack
               </Button>
-              {!past && appointment.source !== 'calendly' && (
+              {!past && !isExternallyManagedSource(appointment.source) && (
                 <Button size="sm" variant="ghost" onClick={onReschedule}>
                   <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
                 </Button>

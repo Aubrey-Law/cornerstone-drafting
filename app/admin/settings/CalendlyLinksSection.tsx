@@ -75,8 +75,8 @@ export function CalendlyLinksSection() {
       <p className="mt-1 text-xs text-muted-foreground">
         Paste each event type&apos;s booking page URL from Calendly, Cal.com, Lawmatics, or
         any other scheduler (must start with https://). These power &ldquo;Send scheduling
-        link&rdquo; and &ldquo;Book for client&rdquo; on lead and matter pages. Only Calendly
-        bookings sync to the calendar automatically.
+        link&rdquo; and &ldquo;Book for client&rdquo; on lead and matter pages. Calendly and
+        Cal.com bookings sync to the calendar automatically once their webhook is set up.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {MEETING_TYPES.map(type => {

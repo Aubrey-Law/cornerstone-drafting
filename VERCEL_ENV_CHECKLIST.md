@@ -399,7 +399,9 @@ Worth running because migration history is not proof of application: a row in `s
 4. Secret: same value as `CALCOM_WEBHOOK_SECRET`
 5. Local dev: tunnel to `http://localhost:3002` (e.g. ngrok or cloudflared)
 
-Booking metadata from Cal.com embeds (`metadata.leadId`, `metadata.matterId`) improves linking; without it, matching falls back to attendee email and auto-creates leads for discovery/PMPS event types.
+Booking metadata (`metadata.leadId`, `metadata.matterId`) improves linking. Cal.com booking links configured in Settings → Scheduling carry it automatically (`metadata[leadId]` / `metadata[matterId]` query params on links sent from lead and matter pages); without it, matching falls back to attendee email and auto-creates leads for discovery/PMPS event types.
+
+Each booking also gets a read-only mirror row in `appointments` (`source = 'calcom'`), so it shows on the admin calendar like a Calendly booking; rescheduling and cancelling happen in Cal.com. On `BOOKING_RESCHEDULED`, the row for the original booking (`rescheduleUid`) is cancelled and the new booking gets its own row. Event types map to meeting types by slug (`discoverycall`, `pmps`, `draft-review`, `currentclient`, `signing-appointment`, see `lib/scheduling.ts`); any other slug appears on the calendar as a Client Call labelled with the Cal.com title.
 
 ## Calendly webhooks
 

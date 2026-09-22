@@ -75,6 +75,8 @@ export interface ParsedCalcomBooking {
   triggerEvent: CalcomTriggerEvent
   bookingUid: string
   bookingId: string | null
+  /** Original booking uid when this delivery is a reschedule. */
+  rescheduleUid: string | null
   attendeeEmail: string
   attendeeName: string
   eventKey: MeetingTypeKey | null
@@ -100,6 +102,7 @@ export function parseCalcomWebhook(body: CalcomWebhookBody): ParsedCalcomBooking
     triggerEvent: body.triggerEvent as CalcomTriggerEvent,
     bookingUid,
     bookingId: payload.bookingId != null ? String(payload.bookingId) : null,
+    rescheduleUid: body.triggerEvent === 'BOOKING_RESCHEDULED' ? stringValue(payload.rescheduleUid) : null,
     attendeeEmail: firstString(attendees[0]?.email, responseString(payload, ['email']))?.toLowerCase() ?? '',
     attendeeName: firstString(attendees[0]?.name, responseString(payload, ['name'])) ?? '',
     eventKey: meetingType?.key ?? null,

@@ -89,6 +89,7 @@ export async function POST(req: Request) {
       triggerEvent: parsed.triggerEvent,
       bookingUid: parsed.bookingUid,
       bookingId: parsed.bookingId,
+      rescheduleUid: parsed.rescheduleUid,
       attendeeEmail: parsed.attendeeEmail,
       attendeeName: parsed.attendeeName,
       eventKey: parsed.eventKey,

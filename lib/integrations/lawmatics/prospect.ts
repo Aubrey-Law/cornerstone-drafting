@@ -10,6 +10,7 @@ import {
   type ExternalRecord, type ExternalRecordRef,
 } from '@/lib/integrations/records'
 import { createLawmaticsProspect } from './client'
+import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 
 export function lawmaticsDatabase(): SupabaseClient<GeneratedDatabase> {
   return getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
@@ -29,7 +30,7 @@ export async function loadLawmaticsAppointment(appointmentId: string) {
     .eq('id', appointmentId).maybeSingle()
   if (error) throw lawmaticsFailure('source_unavailable', 'The appointment could not be read.', 'retryable')
   if (!data) throw lawmaticsFailure('appointment_not_found', 'The appointment could not be found.')
-  if (data.source === 'calendly') throw lawmaticsFailure('unsupported_source', 'Calendly appointments are not supported by Lawmatics synchronization.')
+  if (isExternallyManagedSource(data.source)) throw lawmaticsFailure('unsupported_source', `${externalSourceLabel(data.source)} appointments are not supported by Lawmatics synchronization.`)
   return data
 }
 

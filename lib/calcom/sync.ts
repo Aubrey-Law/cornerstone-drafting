@@ -17,6 +17,7 @@ export interface ProcessCalcomWebhookInput {
   triggerEvent: CalcomTriggerEvent
   bookingUid: string
   bookingId: string | null
+  rescheduleUid?: string | null
   attendeeEmail: string
   attendeeName: string
   eventKey: MeetingTypeKey | null
@@ -52,5 +53,6 @@ export async function processCalcomWebhook(input: ProcessCalcomWebhookInput): Pr
     metadataMatterId: input.metadataMatterId,
     rawBody: input.rawBody,
     status: input.status,
+    supersedesBookingUid: input.rescheduleUid ?? null,
   })
 }

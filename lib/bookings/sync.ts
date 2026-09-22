@@ -45,6 +45,13 @@ export interface ProcessBookingInput {
   metadataMatterId: string | null
   rawBody: unknown
   status: BookingStatus
+  /**
+   * Uid of the booking this one replaces. Cal.com reschedules issue a new uid
+   * (with the old one as `rescheduleUid`) instead of a paired cancel event, so
+   * the old mirror row is retired here. Calendly sends its own 'superseded'
+   * delivery and leaves this unset.
+   */
+  supersedesBookingUid?: string | null
 }
 
 function shouldCreateLead(
@@ -168,8 +175,16 @@ async function createLeadFromBooking(input: {
   return lead
 }
 
-async function syncCalendlyAppointment(input: {
+/**
+ * Keep one read-only public.appointments row per external booking so the
+ * calendar (which renders from appointments) shows it. Upserted on
+ * (source, external_booking_uid), so created/rescheduled/cancelled deliveries
+ * update the same calendar item.
+ */
+async function syncExternalAppointment(input: {
   admin: AdminClient
+  provider: BookingProvider
+  providerLabel: string
   action: BookingAction
   bookingUid: string
   attendeeEmail: string
@@ -184,6 +199,8 @@ async function syncCalendlyAppointment(input: {
 }): Promise<void> {
   const {
     admin,
+    provider,
+    providerLabel,
     action,
     bookingUid,
     attendeeEmail,
@@ -200,7 +217,7 @@ async function syncCalendlyAppointment(input: {
   const startMs = startTime ? Date.parse(startTime) : NaN
   const endMs = endTime ? Date.parse(endTime) : NaN
   if (!attendeeEmail || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-    throw new Error(`Calendly booking ${bookingUid} is missing attendee or calendar time data`)
+    throw new Error(`${providerLabel} booking ${bookingUid} is missing attendee or calendar time data`)
   }
 
   const requestedTypeKey = eventKey ?? 'client_call'
@@ -212,8 +229,8 @@ async function syncCalendlyAppointment(input: {
   if (typeResult.error) throw typeResult.error
   let appointmentType = typeResult.data
 
-  // An unmapped Calendly type still belongs on the calendar. Client Call is the
-  // neutral native type; raw.taskTypeLabel preserves Calendly's actual label.
+  // An unmapped external type still belongs on the calendar. Client Call is the
+  // neutral native type; raw.taskTypeLabel preserves the provider's actual label.
   if (!appointmentType && requestedTypeKey !== 'client_call') {
     const fallback = await admin
       .from('appointment_types')
@@ -237,21 +254,42 @@ async function syncCalendlyAppointment(input: {
     attendee_name: attendeeName || attendeeEmail,
     attendee_email: attendeeEmail,
     attendee_phone: formatPhoneForStorage(attendeePhone),
-    notes: 'Managed in Calendly.',
+    notes: `Managed in ${providerLabel}.`,
     location_type: appointmentType.location_type,
     linked_lead_id: leadId,
     linked_matter_id: matterId,
-    source: 'calendly',
+    source: provider,
     external_booking_uid: bookingUid,
     raw: {
       managedExternally: true,
-      provider: 'calendly',
+      provider,
       providerBookingUid: bookingUid,
-      taskTypeLabel: eventLabel || 'Calendly event',
+      taskTypeLabel: eventLabel || `${providerLabel} event`,
       calendarShowAsBusy: true,
     },
   }, { onConflict: 'source,external_booking_uid' })
   if (error) throw error
+}
+
+async function retireSupersededBooking(
+  admin: AdminClient,
+  provider: BookingProvider,
+  oldBookingUid: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const { error: appointmentError } = await admin
+    .from('appointments')
+    .update({ status: 'cancelled' })
+    .eq('source', provider)
+    .eq('external_booking_uid', oldBookingUid)
+  if (appointmentError) throw appointmentError
+
+  const { error: bookingError } = await admin
+    .from('external_bookings')
+    .update({ status: 'superseded', updated_at: now })
+    .eq('provider', provider)
+    .eq('booking_uid', oldBookingUid)
+  if (bookingError) throw bookingError
 }
 
 async function syncLeadBooking(input: {
@@ -349,6 +387,7 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
     metadataMatterId,
     rawBody,
     status,
+    supersedesBookingUid,
   } = input
 
   let lead: LeadLookupRow | null = null
@@ -419,21 +458,25 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
   }, { onConflict: 'provider,booking_uid' })
   if (bookingError) throw bookingError
 
-  if (provider === 'calendly') {
-    await syncCalendlyAppointment({
-      admin,
-      action,
-      bookingUid,
-      attendeeEmail,
-      attendeeName,
-      attendeePhone,
-      eventKey,
-      eventLabel,
-      startTime,
-      endTime,
-      leadId: lead?.id ?? null,
-      matterId,
-    })
+  await syncExternalAppointment({
+    admin,
+    provider,
+    providerLabel,
+    action,
+    bookingUid,
+    attendeeEmail,
+    attendeeName,
+    attendeePhone,
+    eventKey,
+    eventLabel,
+    startTime,
+    endTime,
+    leadId: lead?.id ?? null,
+    matterId,
+  })
+
+  if (supersedesBookingUid && supersedesBookingUid !== bookingUid) {
+    await retireSupersededBooking(admin, provider, supersedesBookingUid)
   }
 
   // A superseded booking was replaced by a reschedule; the paired 'created'

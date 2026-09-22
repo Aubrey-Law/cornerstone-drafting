@@ -8,7 +8,7 @@ const routeMocks = vi.hoisted(() => {
     matterMatches: Array<{ id: string }>
     upserts: Array<{ table: string; values: Record<string, unknown>; options?: unknown }>
     inserts: Array<{ table: string; values: Record<string, unknown> }>
-    updates: Array<{ table: string; values: Record<string, unknown> }>
+    updates: Array<{ table: string; values: Record<string, unknown>; filters: Record<string, unknown> }>
   } = {
     leads: {},
     intakeMatches: [],
@@ -85,6 +85,9 @@ const routeMocks = vi.hoisted(() => {
         const id = filters.id as string | undefined
         return { data: id ? { id } : null, error: null }
       }
+      if (table === 'appointment_types') {
+        return { data: { id: `type-${String(filters.key)}`, location_type: 'teams' }, error: null }
+      }
       return { data: null, error: null }
     })
     builder.upsert = vi.fn((values: Record<string, unknown>, options?: unknown) => {
@@ -104,14 +107,24 @@ const routeMocks = vi.hoisted(() => {
       }
     })
     builder.update = vi.fn((values: Record<string, unknown>) => {
-      state.updates.push({ table, values })
-      return {
-        eq: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(async () => ({ data: values, error: null })),
-          })),
+      const updateFilters: Record<string, unknown> = {}
+      state.updates.push({ table, values, filters: updateFilters })
+      const chain: Record<string, unknown> = {
+        eq: vi.fn((column: string, value: unknown) => {
+          updateFilters[column] = value
+          return chain
+        }),
+        select: vi.fn(() => ({
+          single: vi.fn(async () => ({ data: values, error: null })),
         })),
+        then(
+          onFulfilled?: (value: { data: null; error: null }) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) {
+          return Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected)
+        },
       }
+      return chain
     })
 
     return builder
@@ -350,6 +363,97 @@ describe('Cal.com webhook sync', () => {
     }))
     expect(routeMocks.state.inserts.some(item => item.table === 'client_intake')).toBe(false)
     expect(routeMocks.state.inserts.some(item => item.table === 'lead_activity')).toBe(false)
+  })
+
+  it('mirrors the booking onto the calendar as a read-only Cal.com appointment', async () => {
+    await postWebhook({
+      triggerEvent: 'BOOKING_CREATED',
+      payload: {
+        uid: 'booking-5',
+        type: 'discoverycall',
+        title: 'Discovery Call',
+        startTime: '2026-06-15T16:00:00.000Z',
+        endTime: '2026-06-15T16:30:00.000Z',
+        metadata: { leadId: 'lead-1' },
+        attendees: [{ email: 'avery@example.com', name: 'Avery Stone' }],
+      },
+    })
+
+    expect(routeMocks.state.upserts).toContainEqual({
+      table: 'appointments',
+      values: expect.objectContaining({
+        appointment_type_id: 'type-discovery_call',
+        start_time: '2026-06-15T16:00:00.000Z',
+        end_time: '2026-06-15T16:30:00.000Z',
+        status: 'scheduled',
+        attendee_email: 'avery@example.com',
+        linked_lead_id: 'lead-1',
+        source: 'calcom',
+        external_booking_uid: 'booking-5',
+        notes: 'Managed in Cal.com.',
+        raw: expect.objectContaining({ managedExternally: true, provider: 'calcom' }),
+      }),
+      options: { onConflict: 'source,external_booking_uid' },
+    })
+  })
+
+  it('cancels the original booking\'s calendar row when Cal.com reschedules to a new uid', async () => {
+    await postWebhook({
+      triggerEvent: 'BOOKING_RESCHEDULED',
+      payload: {
+        uid: 'booking-6-new',
+        rescheduleUid: 'booking-6-old',
+        type: 'discoverycall',
+        title: 'Discovery Call',
+        startTime: '2026-06-16T16:00:00.000Z',
+        endTime: '2026-06-16T16:30:00.000Z',
+        metadata: { leadId: 'lead-1' },
+        attendees: [{ email: 'avery@example.com', name: 'Avery Stone' }],
+      },
+    })
+
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        source: 'calcom',
+        external_booking_uid: 'booking-6-new',
+        status: 'scheduled',
+      }),
+    }))
+    expect(routeMocks.state.updates).toContainEqual({
+      table: 'appointments',
+      values: { status: 'cancelled' },
+      filters: { source: 'calcom', external_booking_uid: 'booking-6-old' },
+    })
+    expect(routeMocks.state.updates).toContainEqual({
+      table: 'external_bookings',
+      values: expect.objectContaining({ status: 'superseded' }),
+      filters: { provider: 'calcom', booking_uid: 'booking-6-old' },
+    })
+  })
+
+  it('marks the calendar row cancelled on BOOKING_CANCELLED', async () => {
+    await postWebhook({
+      triggerEvent: 'BOOKING_CANCELLED',
+      payload: {
+        uid: 'booking-7',
+        type: 'pmps',
+        startTime: '2026-06-17T16:00:00.000Z',
+        endTime: '2026-06-17T17:00:00.000Z',
+        metadata: { leadId: 'lead-1' },
+        attendees: [{ email: 'avery@example.com', name: 'Avery Stone' }],
+      },
+    })
+
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        source: 'calcom',
+        external_booking_uid: 'booking-7',
+        status: 'cancelled',
+      }),
+    }))
+    expect(routeMocks.state.updates.some(item => item.table === 'appointments')).toBe(false)
   })
 })
 

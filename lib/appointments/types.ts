@@ -16,7 +16,25 @@ export function isAppointmentLocationType(value: unknown): value is AppointmentL
   return value === 'phone' || value === 'teams' || value === 'in_person'
 }
 export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
-export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly'
+export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly' | 'calcom'
+
+/**
+ * Sources whose appointments are read-only mirrors of a booking owned by an
+ * external scheduler: rescheduling, cancelling, and outbound sync happen in
+ * that scheduler, and its webhook updates the mirror.
+ */
+const EXTERNAL_SOURCE_LABELS: Partial<Record<string, string>> = {
+  calendly: 'Calendly',
+  calcom: 'Cal.com',
+}
+
+export function externalSourceLabel(source: string | null | undefined): string | null {
+  return (source && EXTERNAL_SOURCE_LABELS[source]) || null
+}
+
+export function isExternallyManagedSource(source: string | null | undefined): boolean {
+  return externalSourceLabel(source) !== null
+}
 
 export interface SchedulingSettings {
   timezone: string

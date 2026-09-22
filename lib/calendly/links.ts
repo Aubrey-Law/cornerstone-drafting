@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { meetingTypeForKey, type MeetingTypeKey } from '@/lib/scheduling'
-import { isBookingUrl } from '@/lib/bookings/provider'
+import { bookingProviderForUrl, isBookingUrl } from '@/lib/bookings/provider'
 
 export type CalendlyLinkChannel = 'email' | 'sms' | 'portal' | 'staff'
 
@@ -37,6 +37,12 @@ export function buildCalendlyLink(
   // (lib/bookings/sync.ts) so the booking links to the matter.
   if (opts.matterId) url.searchParams.set('utm_content', `matterId:${opts.matterId}`)
   else if (opts.leadId) url.searchParams.set('utm_content', `leadId:${opts.leadId}`)
+  // Cal.com copies metadata[...] query params onto the booking, where its
+  // webhook (lib/calcom/normalize.ts) reads metadata.leadId / metadata.matterId.
+  if (bookingProviderForUrl(baseUrl) === 'calcom') {
+    if (opts.matterId) url.searchParams.set('metadata[matterId]', opts.matterId)
+    else if (opts.leadId) url.searchParams.set('metadata[leadId]', opts.leadId)
+  }
   return url.toString()
 }
 

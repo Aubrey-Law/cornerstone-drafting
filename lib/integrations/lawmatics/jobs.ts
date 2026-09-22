@@ -6,6 +6,7 @@ import { getExternalRecord, type ExternalRecord, type ExternalRecordRef } from '
 import { IntegrationError } from '@/lib/integrations/errors'
 import { lawmaticsDatabase, lawmaticsFailure, requireLawmaticsActive, requireSafeCreate, sourceHash } from './prospect'
 import { syncLawmaticsAppointment } from './appointments'
+import { isExternallyManagedSource } from '@/lib/appointments/types'
 
 export async function enqueueLawmaticsAppointmentSync(appointmentId: string, actorId?: string | null,
   options: { reopenTerminal?: boolean; sourceVersion?: string } = {}) {
@@ -14,7 +15,7 @@ export async function enqueueLawmaticsAppointmentSync(appointmentId: string, act
     .select('id, source, status, appointment_type_id, start_time, end_time, location_type, linked_lead_id, linked_matter_id, updated_at')
     .eq('id', appointmentId).maybeSingle()
   if (error || !data) throw new Error('Unable to read appointment for synchronization.')
-  if (data.source === 'calendly') return
+  if (isExternallyManagedSource(data.source)) return
   const sourceVersion = options.sourceVersion ?? sourceHash(data)
   const dedupeKey = `lawmatics:appointment:event:${appointmentId}:${sourceVersion}`
   const job = await enqueueWorkflowJob({ type: 'lawmatics_sync_appointment', dedupeKey,
