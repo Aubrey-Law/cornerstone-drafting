@@ -25,7 +25,8 @@ const INTAKE_FIELDS = [
   'id', 'first_name', 'middle_name', 'last_name', 'suffix', 'preferred_name', 'email', 'phone',
   'date_of_birth', 'marital_status', 'address_line1', 'address_line2', 'city', 'county', 'state', 'zip',
   'lead_source', 'referral_source', 'practice_area', 'plan_type', 'lead_status', 'estate_value',
-  'occupation', 'employer', 'planning_objectives', 'special_notes', 'qualification_notes', 'notes',
+  'occupation', 'employer', 'citizenship', 'preferred_pronoun', 'date_of_marriage', 'marriage_date',
+  'legal_plan_member_id', 'planning_objectives', 'special_notes', 'qualification_notes', 'notes',
   'lawmatics_matter_id',
 ].join(', ')
 

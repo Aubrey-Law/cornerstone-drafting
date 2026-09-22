@@ -1,8 +1,9 @@
 /**
  * Field mapping for a manual Cornerstone → Lawmatics prospect push.
  *
- * Standard fields use the prospect attribute names the Lawmatics import already
- * reads back (lib/lawmatics.ts). Every other field is a Lawmatics custom field
+ * Standard fields use Lawmatics' own contact attribute names, as its document
+ * merge-field reference lists them (first_name, name_suffix, informal_name,
+ * street2, zipcode, …). Every other field is a Lawmatics custom field
  * the firm defines, so it is sent only when integration_settings maps its key
  * to a Lawmatics custom field ID; unmapped values are reported, never dropped
  * silently and never guessed.
@@ -14,32 +15,40 @@ export type LawmaticsPushFieldKey =
   | 'middle_name' | 'suffix' | 'preferred_name' | 'address_line2' | 'county'
   | 'spouse_first_name' | 'spouse_last_name' | 'spouse_email' | 'spouse_phone' | 'spouse_date_of_birth'
   | 'children' | 'lead_source' | 'referral_source' | 'practice_area' | 'plan_type' | 'lead_status'
-  | 'estate_value' | 'occupation' | 'employer' | 'planning_objectives' | 'special_notes'
+  | 'estate_value' | 'occupation' | 'employer' | 'citizenship' | 'planning_objectives' | 'special_notes'
   | 'qualification_notes' | 'notes' | 'matter_number'
+  | 'preferred_pronoun' | 'date_of_marriage' | 'legal_plan_member_id'
 
 export interface LawmaticsPushField {
   key: LawmaticsPushFieldKey
   label: string
   /** Standard prospect attribute; custom fields go through the configured ID map. */
   standard: boolean
+  /** Lawmatics attribute name for a standard field, when it differs from the key. */
+  attribute?: string
 }
 
 export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'first_name', label: 'First name', standard: true },
+  { key: 'middle_name', label: 'Middle name', standard: true },
   { key: 'last_name', label: 'Last name', standard: true },
+  { key: 'suffix', label: 'Suffix', standard: true, attribute: 'name_suffix' },
+  { key: 'preferred_name', label: 'Preferred name', standard: true, attribute: 'informal_name' },
   { key: 'email', label: 'Email', standard: true },
   { key: 'phone', label: 'Phone', standard: true },
   { key: 'birthdate', label: 'Date of birth', standard: true },
   { key: 'street', label: 'Street address', standard: true },
+  { key: 'address_line2', label: 'Address line 2', standard: true, attribute: 'street2' },
   { key: 'city', label: 'City', standard: true },
   { key: 'state', label: 'State', standard: true },
   { key: 'zipcode', label: 'ZIP', standard: true },
   { key: 'marital_status', label: 'Marital status', standard: true },
-  { key: 'middle_name', label: 'Middle name', standard: false },
-  { key: 'suffix', label: 'Suffix', standard: false },
-  { key: 'preferred_name', label: 'Preferred name', standard: false },
-  { key: 'address_line2', label: 'Address line 2', standard: false },
+  { key: 'occupation', label: 'Occupation', standard: true },
+  { key: 'employer', label: 'Employer', standard: true },
+  { key: 'citizenship', label: 'Citizenship', standard: true },
   { key: 'county', label: 'County', standard: false },
+  { key: 'preferred_pronoun', label: 'Preferred pronouns', standard: false },
+  { key: 'date_of_marriage', label: 'Date of marriage', standard: false },
   { key: 'spouse_first_name', label: 'Spouse first name', standard: false },
   { key: 'spouse_last_name', label: 'Spouse last name', standard: false },
   { key: 'spouse_email', label: 'Spouse email', standard: false },
@@ -52,8 +61,7 @@ export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'plan_type', label: 'Plan type', standard: false },
   { key: 'lead_status', label: 'Lead status', standard: false },
   { key: 'estate_value', label: 'Estate value', standard: false },
-  { key: 'occupation', label: 'Occupation', standard: false },
-  { key: 'employer', label: 'Employer', standard: false },
+  { key: 'legal_plan_member_id', label: 'Legal plan member ID', standard: false },
   { key: 'planning_objectives', label: 'Planning objectives', standard: false },
   { key: 'special_notes', label: 'Special notes', standard: false },
   { key: 'qualification_notes', label: 'Qualification notes', standard: false },
@@ -143,6 +151,10 @@ export function lawmaticsPushValues(source: LawmaticsPushSource): Partial<Record
     estate_value: text(intake.estate_value),
     occupation: text(intake.occupation),
     employer: text(intake.employer),
+    citizenship: text(intake.citizenship),
+    preferred_pronoun: text(intake.preferred_pronoun),
+    date_of_marriage: calendarDate(intake.date_of_marriage) ?? calendarDate(intake.marriage_date),
+    legal_plan_member_id: text(intake.legal_plan_member_id),
     planning_objectives: text(intake.planning_objectives),
     special_notes: text(intake.special_notes),
     qualification_notes: text(intake.qualification_notes),
@@ -169,7 +181,7 @@ export function buildLawmaticsProspectBody(
     const value = values[field.key]
     if (value === undefined) continue
     if (field.standard) {
-      body[field.key] = value
+      body[field.attribute ?? field.key] = value
       sentKeys.push(field.key)
       continue
     }
