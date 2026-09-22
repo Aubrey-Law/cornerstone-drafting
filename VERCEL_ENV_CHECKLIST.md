@@ -403,6 +403,20 @@ Booking metadata (`metadata.leadId`, `metadata.matterId`) improves linking. Cal.
 
 Each booking also gets a read-only mirror row in `appointments` (`source = 'calcom'`), so it shows on the admin calendar like a Calendly booking; rescheduling and cancelling happen in Cal.com. On `BOOKING_RESCHEDULED`, the row for the original booking (`rescheduleUid`) is cancelled and the new booking gets its own row. Event types map to meeting types by slug (`discoverycall`, `pmps`, `draft-review`, `currentclient`, `signing-appointment`, see `lib/scheduling.ts`); any other slug appears on the calendar as a Client Call labelled with the Cal.com title.
 
+## Lawmatics calendar import
+
+Lawmatics' outbound webhooks have no appointment events, so bookings made in Lawmatics (booking forms, staff scheduling) are pulled from the Lawmatics API by `lib/integrations/lawmatics/inbound.ts` and mirrored onto the admin calendar as read-only `source = 'lawmatics'` appointments. It uses the existing Lawmatics OAuth connection.
+
+| Variable | Purpose |
+|----------|---------|
+| `LAWMATICS_CALENDAR_SYNC_ENABLED` | `true` turns the import on. Unset or anything else leaves it off (both the cron and the webhook no-op). |
+| `LAWMATICS_WEBHOOK_SECRET` | The full `whsec_…` signing secret Lawmatics shows for the webhook; verifies `X-Lawmatics-Signature` on `/api/webhooks/lawmatics` |
+
+- **Scheduled sync:** `/api/cron/lawmatics-calendar` (every 10 minutes, `CRON_SECRET`) scans events ending no earlier than 24 hours ago and starting within 180 days. It records new, moved, and cancelled bookings. Lawmatics deletes cancelled events, so an upcoming mirrored booking missing from the scan is checked by id and cancelled on a 404. This run is what picks up reschedules and cancellations.
+- **Webhook (optional, faster):** in Lawmatics go to Settings → Webhooks → Add New Webhook. Set the URL to `https://<production-host>/api/webhooks/lawmatics` and the event type to form submitted. Put the signing secret in `LAWMATICS_WEBHOOK_SECRET`. A booking form's submission then triggers the import right away; other event types are acknowledged and ignored.
+- **What is imported:** only events attached to a prospect or contact that has an email. All-day and staff-only events are skipped. So are events Cornerstone itself pushed to Lawmatics (appointment sync), which are recognized by their `integration_external_records` link or the "Cornerstone appointment reference" description, so the two directions never duplicate a meeting.
+- **Linking and types:** the prospect links to its lead through the Push to Lawmatics / import record (or `client_intake.lawmatics_matter_id`), falling back to email. Event types map back to meeting types through the same Lawmatics event type ID map the outbound sync uses; unmapped types appear as a Client Call labelled with the Lawmatics event name.
+
 ## Calendly webhooks
 
 Runs alongside the Cal.com path during the migration; both providers mirror into `external_bookings` with a `provider` column.

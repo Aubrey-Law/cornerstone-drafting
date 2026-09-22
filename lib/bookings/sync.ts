@@ -16,7 +16,7 @@ import { redactIdentifier } from '@/lib/log/redact'
 
 type AdminClient = ReturnType<typeof getAdminClient>
 
-export type BookingProvider = 'calcom' | 'calendly'
+export type BookingProvider = 'calcom' | 'calendly' | 'lawmatics'
 
 export type BookingAction = 'created' | 'rescheduled' | 'cancelled' | 'superseded'
 
