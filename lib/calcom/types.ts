@@ -22,6 +22,8 @@ export interface CalcomWebhookPayload {
   uid?: string
   bookingUid?: string
   bookingId?: string | number
+  /** On BOOKING_RESCHEDULED: uid of the original booking (`uid` is the new one). */
+  rescheduleUid?: string
   type?: string
   title?: string
   startTime?: string

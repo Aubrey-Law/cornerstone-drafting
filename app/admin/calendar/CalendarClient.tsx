@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 import { CalendarVisibilityPopover } from './CalendarVisibilityPopover'
 import { DayAgenda } from './DayAgenda'
 import { EventPrepDrawer } from './EventPrepDrawer'
@@ -615,10 +616,10 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                           >
                             {availabilityLabel(a)}
                           </span>
-                          {a.source === 'calendly' && (
-                            <span className="ml-2 text-primary">Calendly</span>
+                          {isExternallyManagedSource(a.source) && (
+                            <span className="ml-2 text-primary">{externalSourceLabel(a.source)}</span>
                           )}
-                          {a.source !== 'calendly' && !a.calendarSynced && a.status === 'scheduled' && (
+                          {!isExternallyManagedSource(a.source) && !a.calendarSynced && a.status === 'scheduled' && (
                             <span className="ml-2 text-amber">⚠ not on the calendar</span>
                           )}
                         </p>
@@ -634,7 +635,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                         </Link>
                       ) : null}
                     </div>
-                    {a.status === 'scheduled' && a.source !== 'calendly' && (
+                    {a.status === 'scheduled' && !isExternallyManagedSource(a.source) && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {confirmingId === a.id ? (
                           <>

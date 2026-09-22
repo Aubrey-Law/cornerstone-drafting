@@ -70,5 +70,24 @@ describe('buildCalendlyLink', () => {
     expect(url.searchParams.get('utm_content')).toBe('matterId:223e4567-e89b-12d3-a456-426614174000')
     expect(url.searchParams.has('name')).toBe(false)
     expect(url.searchParams.has('email')).toBe(false)
+    expect([...url.searchParams.keys()].some(key => key.startsWith('metadata['))).toBe(false)
+  })
+
+  it('adds Cal.com booking metadata so the webhook links the booking', () => {
+    const lead = new URL(buildCalendlyLink('https://cal.com/aubreylaw/discoverycall', {
+      name: 'Avery Stone',
+      leadId: '123e4567-e89b-12d3-a456-426614174000',
+      channel: 'email',
+    }))
+    expect(lead.searchParams.get('metadata[leadId]')).toBe('123e4567-e89b-12d3-a456-426614174000')
+    expect(lead.searchParams.get('name')).toBe('Avery Stone')
+
+    const matter = new URL(buildCalendlyLink('https://cal.com/aubreylaw/signing-appointment', {
+      leadId: '123e4567-e89b-12d3-a456-426614174000',
+      matterId: '223e4567-e89b-12d3-a456-426614174000',
+      channel: 'sms',
+    }))
+    expect(matter.searchParams.get('metadata[matterId]')).toBe('223e4567-e89b-12d3-a456-426614174000')
+    expect(matter.searchParams.has('metadata[leadId]')).toBe(false)
   })
 })

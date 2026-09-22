@@ -9,7 +9,7 @@ import {
   SlotTakenError,
 } from '@/lib/appointments/book'
 import { listAppointmentTypes } from '@/lib/appointments/settings'
-import { BookingNameValidationError, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
+import { BookingNameValidationError, externalSourceLabel, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
 
@@ -269,9 +269,10 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const appointment = data as AppointmentRow | null
   if (!appointment) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
-  if (appointment.source === 'calendly') {
+  const externalLabel = externalSourceLabel(appointment.source)
+  if (externalLabel) {
     return NextResponse.json(
-      { error: 'This appointment is managed in Calendly. Reschedule or cancel it there.' },
+      { error: `This appointment is managed in ${externalLabel}. Reschedule or cancel it there.` },
       { status: 409 },
     )
   }

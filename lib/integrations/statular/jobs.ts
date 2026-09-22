@@ -5,6 +5,7 @@ import { enqueueWorkflowJob } from '@/lib/workflowJobs'
 import { IntegrationError } from '@/lib/integrations/errors'
 import { getExternalRecord, type ExternalRecord, type ExternalRecordRef } from '@/lib/integrations/records'
 import { getIntegrationSettings } from '@/lib/integrations/settings'
+import { isExternallyManagedSource } from '@/lib/appointments/types'
 import { syncStatularClient } from './clients'
 import { getStatularConfig } from './config'
 
@@ -66,7 +67,7 @@ export async function enqueueStatularClientForAppointment(appointmentId: string)
       .select('id, source, linked_lead_id, linked_matter_id')
       .eq('id', appointmentId).maybeSingle()
     if (error || !appointment) throw enqueueFailure()
-    if (appointment.source === 'calendly') return
+    if (isExternallyManagedSource(appointment.source)) return
 
     const leadId = appointment.linked_lead_id
     let matterClientIntakeId: string | null = null

@@ -6,6 +6,7 @@ import { CalendarPlus, Check, Circle, ExternalLink, FileText, Mail, NotebookPen 
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { CalendarAppointment } from './types'
+import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 
 interface EventDetail {
   appointment: Record<string, unknown>
@@ -84,9 +85,9 @@ export function EventPrepDrawer({
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
                 {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />Join</a></Button>}
-                {appointment.source === 'calendly' ? (
+                {isExternallyManagedSource(appointment.source) ? (
                   <span className="rounded-full bg-card/80 px-2 py-1 text-micro font-medium text-foreground">
-                    Managed in Calendly
+                    Managed in {externalSourceLabel(appointment.source)}
                   </span>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => onReschedule(appointment)}>Reschedule</Button>
