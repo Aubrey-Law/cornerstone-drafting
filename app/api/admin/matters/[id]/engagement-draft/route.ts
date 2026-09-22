@@ -32,10 +32,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .maybeSingle()
   if (!matter) return Response.json({ error: 'Hired matter not found' }, { status: 404 })
 
-  // The pipeline view carries no billing type, and an LP letter names the plan.
+  // The pipeline view carries neither: an LP letter names the plan, and a
+  // probate agreement is addressed to the estate of the decedent.
   const { data: details } = await admin
     .from('matter_details')
-    .select('billing_type')
+    .select('billing_type, pb_decedent_name')
     .eq('client_id', matterId)
     .maybeSingle()
 
@@ -43,6 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     practiceArea: matter.practice_area,
     billingType: details?.billing_type,
     spouseEmail: matter.spouse_email,
+    decedentName: details?.pb_decedent_name,
   })
   if (!seed.ok) return Response.json({ error: seed.error }, { status: 400 })
 
@@ -54,6 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       agreementDate: new Date().toISOString().slice(0, 10),
       primary: { name: matter.client_name || 'Client', email: matter.client_email || '' },
       spouse: seed.spouseEmail ? { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail } : null,
+      decedentName: seed.decedentName,
       fee: { amount: Number(matter.fee_amount) || 0, paymentTerms: '' },
       optionalClauseKeys: [],
       emailMessage: 'Please review and sign the enclosed engagement agreement.',

@@ -38,14 +38,39 @@ export interface EngagementTemplate {
    */
   optionalServiceKeys: readonly string[]
   /**
-   * Whether the master states the firm's own fee and payment terms.
+   * What the master prints of the firm's own fee, and therefore requires.
    *
-   * A plan-funded letter does not: its Schedule A says the fee is whatever the
-   * plan's attorney fee schedule pays, so a flat fee and payment terms are not
-   * fields of that agreement and are not required to draft one.
+   * - `none`: a plan-funded letter, whose Schedule A says the fee is whatever
+   *   the plan's attorney fee schedule pays. Neither field is asked for.
+   * - `amount`: the agreement states a fee and prints its own schedule for
+   *   paying it, so there is nowhere for free-text terms to render.
+   * - `amount_and_terms`: the agreement prints both.
    */
-  statesFirmFee: boolean
+  firmFee: 'none' | 'amount' | 'amount_and_terms'
+  /**
+   * Whether the master divides its fee into the firm's probate phases, which
+   * the renderer computes from the total rather than asking for three more
+   * numbers that have to add up — see `PROBATE_PHASE_SHARES`.
+   */
+  phasesFee?: boolean
+  /** Whether the master names a decedent, which only a probate matter has. */
+  namesDecedent?: boolean
+  /**
+   * Whether the master prints the Schedule A clause loop. A master that does
+   * not has nowhere to render those clauses, so electing them is rejected
+   * rather than silently dropped — the same rule as its optional services.
+   */
+  printsScheduleAClauses: boolean
 }
+
+/**
+ * How a probate flat fee divides across the phases the agreement bills in.
+ *
+ * The firm's executed agreements split it exactly this way, and the master
+ * prints all four amounts, so the split lives here rather than in three fields
+ * staff would have to keep adding up to the total.
+ */
+export const PROBATE_PHASE_SHARES = { opening: 0.5, inventory: 0.25, final_account: 0.25 } as const
 
 export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
   {
@@ -60,7 +85,8 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     legalPlans: null,
     recipientCount: 2,
     optionalServiceKeys: [],
-    statesFirmFee: true,
+    firmFee: 'amount_and_terms',
+    printsScheduleAClauses: true,
   },
   {
     templateId: 'engagement-ep-trust-individual',
@@ -74,7 +100,8 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     legalPlans: null,
     recipientCount: 1,
     optionalServiceKeys: [],
-    statesFirmFee: true,
+    firmFee: 'amount_and_terms',
+    printsScheduleAClauses: true,
   },
   {
     templateId: 'engagement-ep-lp-trust-couple',
@@ -88,7 +115,8 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     legalPlans: ENGAGEMENT_LEGAL_PLANS,
     recipientCount: 2,
     optionalServiceKeys: ['credit_shelter_planning', 'deed_recording'],
-    statesFirmFee: false,
+    firmFee: 'none',
+    printsScheduleAClauses: true,
   },
   {
     templateId: 'engagement-ep-lp-trust-individual',
@@ -104,7 +132,30 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     // Credit shelter planning preserves both spouses' Massachusetts
     // exemptions, so the solo letter's addendum does not print that row.
     optionalServiceKeys: ['deed_recording'],
-    statesFirmFee: false,
+    firmFee: 'none',
+    printsScheduleAClauses: true,
+  },
+  {
+    templateId: 'engagement-probate-individual',
+    masterKey: 'probate-individual',
+    masterVersion: '1',
+    label: 'Engagement Agreement — Probate Administration',
+    bundledPath: 'assets/engagement-agreements/probate-individual-v1.docx',
+    practiceArea: 'Probate',
+    // The personal representative engages the firm and signs alone; the
+    // agreement has one signature block, whoever else may inherit.
+    clientMode: 'individual',
+    scopeKey: 'standard',
+    legalPlans: null,
+    recipientCount: 1,
+    optionalServiceKeys: [],
+    // It states a flat fee and prints the phase schedule for paying it.
+    firmFee: 'amount',
+    phasesFee: true,
+    namesDecedent: true,
+    // Its terms are the agreement's own numbered sections; there is no
+    // Schedule A to append clauses to.
+    printsScheduleAClauses: false,
   },
 ]
 

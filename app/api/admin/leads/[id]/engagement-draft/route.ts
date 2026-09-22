@@ -97,6 +97,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       spouse: seed.spouseEmail
         ? { name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' '), email: seed.spouseEmail }
         : null,
+      // A lead record carries no decedent; a probate agreement seeded from one
+      // is refused above rather than drafted with the estate unnamed.
+      decedentName: seed.decedentName,
       fee: { amount: Number(lead.engagement_fee_quoted) || 0, paymentTerms: '' },
       optionalClauseKeys: [],
       emailMessage: 'Please review and sign the enclosed engagement agreement.',

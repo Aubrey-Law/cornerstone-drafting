@@ -53,6 +53,13 @@ export interface EngagementInput {
   agreementDate: string
   primary: EngagementRecipientInput
   spouse: EngagementRecipientInput | null
+  /**
+   * The estate this engagement administers, for a master that names one.
+   * Null on every agreement whose master does not — an estate-planning client
+   * has no decedent, and printing an empty "Estate of:" line would be worse
+   * than refusing to draft it.
+   */
+  decedentName: string | null
   legalPlan: EngagementLegalPlan | null
   fee: {
     amount: number

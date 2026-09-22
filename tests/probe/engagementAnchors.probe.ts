@@ -52,8 +52,10 @@ const inputs = ENGAGEMENT_TEMPLATES.map(template => ({
       ? { name: 'Jordan Client', email: 'jordan@example.com' }
       : null,
     legalPlan: template.legalPlans?.[0] ?? null,
+    // Only a master that prints an "Estate of" line is given one.
+    decedentName: template.namesDecedent ? 'Rosemary Decedent' : null,
     // A plan-funded letter states no firm fee, so it is not asked for one.
-    fee: template.statesFirmFee
+    fee: template.firmFee !== 'none'
       ? { amount: 7500, paymentTerms: 'Half now; half before signing.' }
       : { amount: 0, paymentTerms: '' },
     scopeKey: template.scopeKey,

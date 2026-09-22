@@ -700,22 +700,32 @@ For a lot/plan deed, `boundary_calls` is an empty array and the complete descrip
 
 ## Engagement-agreement templates
 
-Four masters exist, all standard scope. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
+Five masters exist, all standard scope. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
 
-| Master | Definition | Signers | States the firm's fee |
+| Master | Definition | Signers | `firmFee` |
 | --- | --- | --- | --- |
-| `ep-trust-couple` | Estate Planning, couple, no legal plan. | 2 | yes |
-| `ep-trust-individual` | Estate Planning, solo client, no legal plan. | 1 | yes |
-| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. | 2 | no |
-| `ep-lp-trust-individual` | Estate Planning - LP, solo client, on a named legal plan. | 1 | no |
+| `ep-trust-couple` | Estate Planning, couple, no legal plan. | 2 | `amount_and_terms` |
+| `ep-trust-individual` | Estate Planning, solo client, no legal plan. | 1 | `amount_and_terms` |
+| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. | 2 | `none` |
+| `ep-lp-trust-individual` | Estate Planning - LP, solo client, on a named legal plan. | 1 | `none` |
+| `probate-individual` | Probate administration, personal representative. | 1 | `amount` |
 
-A solo master is the couple master with the joint-representation terms and the
-second signer taken out, so the prose the two share stays one document. Both
-pairs are derived that way; keep it that way when either changes.
+`firmFee` is what the master prints of the firm's own fee, and therefore what
+the workspace requires: `none` for a plan-funded letter, whose fee is whatever
+the plan's schedule pays; `amount` for an agreement that prints its own payment
+schedule, so free-text terms have nowhere to render; `amount_and_terms` for one
+that prints both.
+
+The estate-planning solo masters are the couple masters with the
+joint-representation terms and the second signer taken out, so the prose each
+pair shares stays one document. Keep it that way when either changes. The
+probate agreement shares none of that prose — it is the firm's own document,
+transcribed from the executed March 2026 version, and only the shell around it
+(letterhead, page setup, signature block, clause loop) comes from a master.
 
 A master's `recipientCount` is what decides which anchors it must carry: a one-signer master has `[[CLIENT_1_*]]` only, and a `[[CLIENT_2_*]]` left in it would be a line nobody can sign.
 
-Scalar variables shared by all four (`{spouse_*}` render empty on a solo master, which prints neither):
+Scalar variables shared by the estate-planning masters (`{spouse_*}` render empty on a solo master, which prints neither):
 
 | Variable | Meaning |
 | --- | --- |
@@ -725,12 +735,31 @@ Scalar variables shared by all four (`{spouse_*}` render empty on a solo master,
 | `{spouse_name}` | Spouse/client-two name. |
 | `{spouse_email}` | Spouse/client-two email. |
 
-The flat-fee masters only (`statesFirmFee`) — the firm's own fee, which a plan-funded letter does not state, and which the workspace therefore requires before the agreement can be drafted:
+The flat-fee estate-planning masters only — the firm's own fee, which a plan-funded letter does not state, and which the workspace therefore requires before the agreement can be drafted:
 
 | Variable | Meaning |
 | --- | --- |
 | `{flat_fee}` | Fee formatted as U.S. currency. |
 | `{payment_terms}` | Payment terms. |
+
+`probate-individual` only:
+
+| Variable | Meaning |
+| --- | --- |
+| `{decedent_name}` | The estate being administered; the agreement is addressed "Estate of —" and defines its scope by it. Required by the validator on this master, and refused on every other. |
+| `{flat_fee}` | The total fee, formatted as U.S. currency. |
+| `{opening_fee}` | Half the total: the Opening phase, charged on execution. |
+| `{inventory_fee}` | A quarter of the total: the Inventory phase. |
+| `{final_account_fee}` | A quarter of the total: the Final Account phase. |
+
+The three phase amounts are computed from the total (`PROBATE_PHASE_SHARES` in
+`lib/engagement/templates.ts`), not entered: the agreement prints all four, and
+three fields that have to add up to a fourth is a subtraction error in a fee a
+client is signing. A different split is a code change and a test, not a typo.
+
+This master prints no Schedule A. Clauses cannot be added to one it does not
+print — the validator rejects them rather than dropping them silently, the same
+rule as an optional service a master does not offer (`printsScheduleAClauses`).
 
 The legal-plan masters only:
 
