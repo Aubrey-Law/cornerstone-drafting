@@ -15,12 +15,26 @@ describe('sanitizeCalendlyUrls', () => {
     })
   })
 
-  it('drops unknown keys, non-calendly origins, and non-string values', () => {
+  it('keeps Cal.com, Lawmatics, and other https booking pages, trimmed', () => {
+    expect(sanitizeCalendlyUrls({
+      discovery_call: ' https://cal.com/aubreylaw/discovery ',
+      pmps: 'https://app.lawmatics.com/booking/abc',
+      draft_review: 'https://book.aubreylegal.com/review',
+    })).toEqual({
+      discovery_call: 'https://cal.com/aubreylaw/discovery',
+      pmps: 'https://app.lawmatics.com/booking/abc',
+      draft_review: 'https://book.aubreylegal.com/review',
+    })
+  })
+
+  it('drops unknown keys, non-https URLs, credentials, and non-string values', () => {
     expect(sanitizeCalendlyUrls({
       not_a_type: 'https://calendly.com/x',
-      discovery_call: 'https://evil.example.com/x',
+      discovery_call: 'javascript:alert(1)',
       pmps: 42,
       signing_appointment: 'http://calendly.com/insecure',
+      draft_review: 'https://user:pass@cal.com/x',
+      client_call: 'calendly.com/no-scheme',
     })).toEqual({})
   })
 
