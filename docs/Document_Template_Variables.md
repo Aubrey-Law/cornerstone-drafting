@@ -700,12 +700,15 @@ For a lot/plan deed, `boundary_calls` is an empty array and the complete descrip
 
 ## Engagement-agreement templates
 
-Two masters exist, both standard-scope trust couples. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
+Three masters exist, all standard scope. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
 
-| Master | Definition |
-| --- | --- |
-| `ep-trust-couple` | Estate Planning, couple, no legal plan. |
-| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. |
+| Master | Definition | Signers |
+| --- | --- | --- |
+| `ep-trust-couple` | Estate Planning, couple, no legal plan. | 2 |
+| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. | 2 |
+| `ep-lp-trust-individual` | Estate Planning - LP, solo client, on a named legal plan. | 1 |
+
+A master's `recipientCount` is what decides which anchors it must carry: a one-signer master has `[[CLIENT_1_*]]` only, and a `[[CLIENT_2_*]]` left in it would be a line nobody can sign.
 
 Scalar variables shared by both:
 
@@ -724,13 +727,15 @@ Scalar variables shared by both:
 | `{flat_fee}` | Fee formatted as U.S. currency. |
 | `{payment_terms}` | Payment terms. |
 
-`ep-lp-trust-couple` only:
+The legal-plan masters only:
 
-| Variable | Meaning |
-| --- | --- |
-| `{legal_plan}` | The plan's display name, e.g. `MetLife`. |
-| `{credit_shelter_checkbox}` | `☒` or `☐` for the Optional Services addendum row. |
-| `{deed_recording_checkbox}` | `☒` or `☐` for the Optional Services addendum row. |
+| Variable | Meaning | Masters |
+| --- | --- | --- |
+| `{legal_plan}` | The plan's display name, e.g. `MetLife`. | both |
+| `{credit_shelter_checkbox}` | `☒` or `☐` for the Optional Services addendum row. | couple |
+| `{deed_recording_checkbox}` | `☒` or `☐` for the Optional Services addendum row. | both |
+
+Each master declares the services its addendum prints (`optionalServiceKeys`), and `OPTIONAL_SERVICES` in `lib/engagement/definitions.ts` names the merge field for each. A master is offered only the services it prints, so electing one it does not list is a validation error rather than a silently ignored key — the solo master has no credit-shelter row, because that planning preserves both spouses' Massachusetts exemptions.
 
 The addendum's boxes are set when the agreement is drafted, from the elected `optionalClauseKeys`, not by the signer: the e-signature pipeline places signature and date fields only, so there is no client-fillable checkbox. The client adopts the marked services by signing the agreement that contains them.
 
@@ -762,7 +767,7 @@ Only `title` and `text` are used by the bundled masters.
 
 ### Required signing anchors
 
-The following literal anchors must each appear exactly once in the rendered engagement PDF:
+One signature and one date anchor per signer, each appearing exactly once in the rendered engagement PDF. A two-signer master therefore carries all four:
 
 ```text
 [[CLIENT_1_SIGNATURE]]
@@ -771,7 +776,11 @@ The following literal anchors must each appear exactly once in the rendered enga
 [[CLIENT_2_DATE]]
 ```
 
+and a one-signer master carries the `CLIENT_1` pair alone. Signers are numbered by position, never by role — there is no `[[SPOUSE_*]]` anchor.
+
 Do not place braces around these anchors. Publication validation also requires a valid US-Letter PDF conversion.
+
+Keep the signature block on one page: give every row of its table `w:cantSplit` and every paragraph above the last row `w:keepNext`. Word will otherwise break the table between rows, leaving the signature line at the foot of one page and the date at the head of the next.
 
 ## Authoring and validation rules
 

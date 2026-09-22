@@ -94,10 +94,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         name: lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' '),
         email: lead.email || '',
       },
-      spouse: {
-        name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' '),
-        email: seed.spouseEmail,
-      },
+      spouse: seed.spouseEmail
+        ? { name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' '), email: seed.spouseEmail }
+        : null,
       fee: { amount: Number(lead.engagement_fee_quoted) || 0, paymentTerms: '' },
       optionalClauseKeys: [],
       emailMessage: 'Please review and sign the enclosed engagement agreement.',

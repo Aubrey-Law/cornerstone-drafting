@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
 import { EngagementStatusPanel } from './EngagementStatusPanel'
-import { agreementDefinitionFor, OPTIONAL_CLAUSE_LABELS } from '@/lib/engagement/definitions'
+import { OPTIONAL_SERVICES } from '@/lib/engagement/definitions'
 import { engagementTemplateFor, type EngagementTemplate } from '@/lib/engagement/templates'
 import { engagementLegalPlanLabel } from '@/lib/engagement/types'
 import type { EngagementWorkspaceAgreement as Agreement } from '@/lib/engagement/http'
@@ -674,12 +674,18 @@ function EngagementFieldsEditor({
         <EngagementField label="Primary email">
           <Input disabled={locked} type="email" value={input.primary.email} onChange={event => onPrimary({ email: event.target.value })} />
         </EngagementField>
-        <EngagementField label="Spouse name">
-          <Input disabled={locked} value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
-        </EngagementField>
-        <EngagementField label="Spouse email">
-          <Input disabled={locked} type="email" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
-        </EngagementField>
+        {/* A solo agreement has one signature line, so a spouse typed here
+            would have nowhere to sign and nothing to be named in. */}
+        {input.clientMode === 'couple' && (
+          <>
+            <EngagementField label="Spouse name">
+              <Input disabled={locked} value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
+            </EngagementField>
+            <EngagementField label="Spouse email">
+              <Input disabled={locked} type="email" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
+            </EngagementField>
+          </>
+        )}
       </div>
       {statesFirmFee ? (
         <EngagementField label="Payment terms">
@@ -692,7 +698,7 @@ function EngagementFieldsEditor({
           Change the plan on the record&apos;s Billing tab, not here.
         </p>
       )}
-      <OptionalServicesEditor input={input} locked={locked} onEdit={onEdit} />
+      <OptionalServicesEditor input={input} template={template} locked={locked} onEdit={onEdit} />
       <EngagementField label="Email message">
         <ResizableTextarea handleLabel="Resize the email message" disabled={locked} className="min-h-24" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
       </EngagementField>
@@ -709,14 +715,17 @@ function EngagementFieldsEditor({
  */
 function OptionalServicesEditor({
   input,
+  template,
   locked,
   onEdit,
 }: {
   input: EngagementInput
+  template: EngagementTemplate | null
   locked: boolean
   onEdit: (patch: Partial<EngagementInput>) => void
 }) {
-  const keys = agreementDefinitionFor(input.practiceArea, input.legalPlan).optionalClauseKeys
+  // The master prints the addendum, so it decides which services exist to elect.
+  const keys = template?.optionalServiceKeys ?? []
   if (keys.length === 0) return null
   const elected = input.optionalClauseKeys ?? []
   const toggle = (key: string, checked: boolean) => onEdit({
@@ -736,7 +745,7 @@ function OptionalServicesEditor({
               checked={elected.includes(key)}
               onCheckedChange={checked => toggle(key, checked === true)}
             />
-            {OPTIONAL_CLAUSE_LABELS[key] ?? key}
+            {OPTIONAL_SERVICES[key]?.label ?? key}
           </label>
         ))}
       </div>

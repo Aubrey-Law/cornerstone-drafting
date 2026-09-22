@@ -74,6 +74,7 @@ function isIsoDate(value: string): boolean {
 export function validateEngagementInput(input: unknown): EngagementValidationResult {
   const candidate = record(input)
   const value = normalizeEngagementInput(input)
+  const template = engagementTemplateFor(value)
   const errors: string[] = []
 
   if (!PRACTICE_AREAS.includes(value.practiceArea)) errors.push('practiceArea')
@@ -100,7 +101,7 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
 
   // A plan-funded agreement states no firm fee of its own, so it is not asked
   // for one; every other agreement prints both and cannot go out without them.
-  const statesFirmFee = engagementTemplateFor(value)?.statesFirmFee ?? true
+  const statesFirmFee = template?.statesFirmFee ?? true
   if (!Number.isFinite(value.fee.amount) || value.fee.amount < 0) errors.push('fee.amount')
   else if (statesFirmFee && value.fee.amount <= 0) errors.push('fee.amount')
   if (statesFirmFee && !value.fee.paymentTerms) errors.push('fee.paymentTerms')
@@ -117,7 +118,11 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
   if (PRACTICE_AREAS.includes(value.practiceArea)) {
     const definition = agreementDefinitionFor(value.practiceArea, value.legalPlan)
     if (!definition.scopeKeys.includes(value.scopeKey)) errors.push('scopeKey')
-    if (value.optionalClauseKeys.some(key => !definition.optionalClauseKeys.includes(key))) {
+    // Only the master that prints the addendum can say which services it
+    // offers, so an election it does not list is rejected here rather than
+    // silently dropped at render.
+    const offered = template?.optionalServiceKeys ?? []
+    if (value.optionalClauseKeys.some(key => !offered.includes(key))) {
       errors.push('optionalClauseKeys')
     }
   }

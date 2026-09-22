@@ -57,8 +57,11 @@ describe('engagement anchor markers', () => {
     // This is the exact regression that shipped and had to be fixed.
     const inTemplate = markersInTemplate(template.bundledPath)
     expect([...inTemplate].filter(m => m.includes('SPOUSE'))).toEqual([])
-    expect(inTemplate.has('[[CLIENT_2_SIGNATURE]]')).toBe(true)
-    expect(inTemplate.has('[[CLIENT_2_DATE]]')).toBe(true)
+    // Where there is a second signer at all, they are CLIENT_2 — and where
+    // there is not, no CLIENT_2 marker is left behind for nobody to sign.
+    const hasSecondSigner = template.recipientCount > 1
+    expect(inTemplate.has('[[CLIENT_2_SIGNATURE]]')).toBe(hasSecondSigner)
+    expect(inTemplate.has('[[CLIENT_2_DATE]]')).toBe(hasSecondSigner)
   })
 
   it.each(templates)('ships %s with a master file the registry offers', (_key, template) => {

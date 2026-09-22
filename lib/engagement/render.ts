@@ -7,7 +7,7 @@ import PizZip from 'pizzip'
 import { convertDocxToPdf } from '@/lib/docxPdfConvert'
 import { validateEngagementInput } from './schema'
 import { allEngagementAnchorMarkers } from './anchors'
-import { LP_OPTIONAL_SERVICE_KEYS, type LpOptionalServiceKey } from './definitions'
+import { OPTIONAL_SERVICES } from './definitions'
 import { engagementTemplateFor, type EngagementTemplate } from './templates'
 import { engagementLegalPlanLabel, type EngagementInput } from './types'
 import { resolveDocumentTemplate } from '@/lib/documentTemplates/resolver'
@@ -79,17 +79,19 @@ function templateData(template: EngagementTemplate, value: EngagementInput): Rec
     additional_clauses: value.additionalClauses ?? [],
     schedule_a_clauses: value.scheduleAClauses ?? [],
   }
-  if (template.masterKey !== 'ep-lp-trust-couple') {
+  if (template.legalPlans === null) {
     return { ...shared, flat_fee: formatFee(value.fee.amount), payment_terms: value.fee.paymentTerms }
   }
   const elected = new Set(value.optionalClauseKeys)
-  const box = (key: LpOptionalServiceKey) => (elected.has(key) ? CHECKED : UNCHECKED)
+  const boxes = Object.fromEntries(template.optionalServiceKeys.map(key => [
+    OPTIONAL_SERVICES[key].checkboxTag,
+    elected.has(key) ? CHECKED : UNCHECKED,
+  ]))
   return {
     ...shared,
-    // Non-null: only a definition carrying a plan resolves to this master.
+    // Non-null: only a definition carrying a plan resolves to a plan master.
     legal_plan: engagementLegalPlanLabel(value.legalPlan!),
-    credit_shelter_checkbox: box(LP_OPTIONAL_SERVICE_KEYS[0]),
-    deed_recording_checkbox: box(LP_OPTIONAL_SERVICE_KEYS[1]),
+    ...boxes,
   }
 }
 

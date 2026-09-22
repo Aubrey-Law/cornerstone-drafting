@@ -32,6 +32,12 @@ export interface EngagementTemplate {
   /** Signers in agreement order, which fixes the anchors the master carries. */
   recipientCount: number
   /**
+   * Optional services this master's addendum prints, keyed into
+   * `OPTIONAL_SERVICES`. A service missing here cannot be elected on this
+   * agreement, because the row the client would read is not in the document.
+   */
+  optionalServiceKeys: readonly string[]
+  /**
    * Whether the master states the firm's own fee and payment terms.
    *
    * A plan-funded letter does not: its Schedule A says the fee is whatever the
@@ -53,6 +59,7 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     scopeKey: 'standard',
     legalPlans: null,
     recipientCount: 2,
+    optionalServiceKeys: [],
     statesFirmFee: true,
   },
   {
@@ -66,6 +73,23 @@ export const ENGAGEMENT_TEMPLATES: readonly EngagementTemplate[] = [
     scopeKey: 'standard',
     legalPlans: ENGAGEMENT_LEGAL_PLANS,
     recipientCount: 2,
+    optionalServiceKeys: ['credit_shelter_planning', 'deed_recording'],
+    statesFirmFee: false,
+  },
+  {
+    templateId: 'engagement-ep-lp-trust-individual',
+    masterKey: 'ep-lp-trust-individual',
+    masterVersion: '1',
+    label: 'Engagement Letter — Estate Plan Trust Individual (Legal Plan)',
+    bundledPath: 'assets/engagement-agreements/ep-lp-trust-individual-v1.docx',
+    practiceArea: 'EP-LP',
+    clientMode: 'individual',
+    scopeKey: 'standard',
+    legalPlans: ENGAGEMENT_LEGAL_PLANS,
+    recipientCount: 1,
+    // Credit shelter planning preserves both spouses' Massachusetts
+    // exemptions, so the solo letter's addendum does not print that row.
+    optionalServiceKeys: ['deed_recording'],
     statesFirmFee: false,
   },
 ]

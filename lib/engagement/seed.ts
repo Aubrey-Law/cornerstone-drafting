@@ -1,7 +1,7 @@
 import { normalizeMatterBillingType } from '@/lib/billing/billingType'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { engagementTemplateFor } from './templates'
-import { ENGAGEMENT_LEGAL_PLANS, type EngagementLegalPlan, type EngagementPracticeArea } from './types'
+import { ENGAGEMENT_LEGAL_PLANS, type EngagementClientMode, type EngagementLegalPlan, type EngagementPracticeArea } from './types'
 
 /**
  * The plan an LP engagement names, or null when the record names none.
@@ -27,14 +27,17 @@ export interface EngagementSeedRecord {
 
 export interface EngagementSeedDefinition {
   practiceArea: EngagementPracticeArea
-  clientMode: 'couple'
+  clientMode: EngagementClientMode
   scopeKey: 'standard'
   legalPlan: EngagementLegalPlan | null
 }
 
 export type EngagementSeedResult =
-  /** `spouseEmail` is the checked one, so the caller does not re-check it. */
-  | { ok: true; definition: EngagementSeedDefinition; spouseEmail: string }
+  /**
+   * `spouseEmail` is the checked one, so the caller does not re-check it. It is
+   * null for a solo client, whose agreement has no second signer.
+   */
+  | { ok: true; definition: EngagementSeedDefinition; spouseEmail: string | null }
   | { ok: false; error: string }
 
 /**
@@ -46,11 +49,8 @@ export type EngagementSeedResult =
  */
 export function engagementSeedDefinition(record: EngagementSeedRecord): EngagementSeedResult {
   const practiceArea = parsePracticeArea(record.practiceArea)
-  if (!record.spouseEmail) {
-    return { ok: false, error: 'The reviewed workspace currently supports couples only; use the legacy engagement flow.' }
-  }
   if (practiceArea !== 'EP' && practiceArea !== 'EP-LP') {
-    return { ok: false, error: 'The reviewed workspace currently supports estate-planning couples only; use the legacy engagement flow.' }
+    return { ok: false, error: 'The reviewed workspace currently supports estate-planning matters only; use the legacy engagement flow.' }
   }
   const legalPlan = practiceArea === 'EP-LP' ? engagementLegalPlanFrom(record.billingType) : null
   if (practiceArea === 'EP-LP' && !legalPlan) {
@@ -61,9 +61,19 @@ export function engagementSeedDefinition(record: EngagementSeedRecord): Engageme
       error: 'Set the legal plan on this record before drafting an Estate Planning - LP engagement letter.',
     }
   }
-  const definition = { practiceArea, clientMode: 'couple' as const, scopeKey: 'standard' as const, legalPlan }
+  // A spouse on the record is what makes this a couple. Whether that has a
+  // master is the table's answer, not a second rule here: an estate-planning
+  // record with no spouse is a solo client, which only the plan letter covers.
+  const spouseEmail = record.spouseEmail || null
+  const clientMode: EngagementClientMode = spouseEmail ? 'couple' : 'individual'
+  const definition = { practiceArea, clientMode, scopeKey: 'standard' as const, legalPlan }
   if (!engagementTemplateFor(definition)) {
-    return { ok: false, error: 'No engagement master covers this combination; use the legacy engagement flow.' }
+    return {
+      ok: false,
+      error: clientMode === 'individual'
+        ? 'No engagement master covers a solo client on this practice area; use the legacy engagement flow.'
+        : 'No engagement master covers this combination; use the legacy engagement flow.',
+    }
   }
-  return { ok: true, definition, spouseEmail: record.spouseEmail }
+  return { ok: true, definition, spouseEmail }
 }

@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ...seed.definition,
       agreementDate: new Date().toISOString().slice(0, 10),
       primary: { name: matter.client_name || 'Client', email: matter.client_email || '' },
-      spouse: { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail },
+      spouse: seed.spouseEmail ? { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail } : null,
       fee: { amount: Number(matter.fee_amount) || 0, paymentTerms: '' },
       optionalClauseKeys: [],
       emailMessage: 'Please review and sign the enclosed engagement agreement.',
