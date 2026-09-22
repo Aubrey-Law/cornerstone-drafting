@@ -51,6 +51,17 @@ const lpSoloInput = { ...lpInput, clientMode: 'individual' as const, spouse: nul
 /** The flat-fee agreement for a solo client, which still states the firm's fee. */
 const soloInput = { ...input, clientMode: 'individual' as const, spouse: null }
 
+/**
+ * A probate administration: one signer, an estate it is addressed to, and a
+ * fee the agreement itself divides into phases.
+ */
+const probateInput = {
+  ...soloInput,
+  practiceArea: 'Probate' as const,
+  decedentName: 'Rosemary Decedent',
+  fee: { amount: 4500, paymentTerms: '' },
+}
+
 describe('renderEngagementAgreement', () => {
   it('renders all structured fields and stable metadata without legacy tags', async () => {
     const converted = pdf(anchors.join(' '))
@@ -76,6 +87,39 @@ describe('renderEngagementAgreement', () => {
     expect(xml).not.toContain('Jordan Client')
     expect(result.masterKey).toBe('ep-trust-individual')
     expect(result.templateId).toBe('engagement-ep-trust-individual')
+  })
+
+  it('renders the probate agreement, naming the estate and dividing the fee into phases', async () => {
+    const converted = pdf(soloAnchors.join(' '))
+    const result = await renderEngagementAgreement(probateInput, { convertDocx: async () => converted })
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    expect(xml).toContain('Rosemary Decedent')
+    // Half on execution, then a quarter at inventory and a quarter at the
+    // final account — the phases the agreement prints, from the one total.
+    for (const value of ['$4,500.00', '$2,250.00', '$1,125.00']) expect(xml).toContain(value)
+    expect(xml.split('$1,125.00')).toHaveLength(3)
+    for (const anchor of soloAnchors) expect(xml.split(anchor)).toHaveLength(2)
+    expect(xml).not.toMatch(/\{\{(?:signature:|autofill_date_signed)|\{[^{}]+\}/)
+    expect(result.masterKey).toBe('probate-individual')
+    expect(result.templateId).toBe('engagement-probate-individual')
+  })
+
+  it('will not draft a probate agreement without the estate, or print one anywhere else', async () => {
+    await expect(renderEngagementAgreement(
+      { ...probateInput, decedentName: null },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )).rejects.toThrow(/Invalid engagement input.*decedentName/)
+    await expect(renderEngagementAgreement(
+      { ...soloInput, decedentName: 'Rosemary Decedent' },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )).rejects.toThrow(/Invalid engagement input.*decedentName/)
+  })
+
+  it('refuses Schedule A clauses on an agreement with no Schedule A to print them', async () => {
+    await expect(renderEngagementAgreement(
+      { ...probateInput, scheduleAClauses: [{ title: 'Extra scope', text: 'Body.', source: 'manual' }] },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )).rejects.toThrow(/Invalid engagement input.*scheduleAClauses/)
   })
 
   it('renders the legal-plan letter, naming the plan and marking elected services', async () => {
@@ -135,8 +179,8 @@ describe('renderEngagementAgreement', () => {
   })
 
   it.each([
+    // Probate is the personal representative alone; there is no couple master.
     [{ ...input, practiceArea: 'Probate' as const }],
-    [{ ...input, practiceArea: 'Probate' as const, clientMode: 'individual' as const, spouse: null }],
   ])('rejects unavailable template combinations', async (candidate) => {
     await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/template.*unavailable/i)
   })
@@ -151,6 +195,16 @@ describe('renderEngagementAgreement', () => {
     ['a couple with no spouse named', { ...input, spouse: null }],
   ])('rejects %s', async (_case, candidate) => {
     await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/Invalid engagement input/i)
+  })
+
+  it('asks a probate agreement for its fee but never for payment terms', async () => {
+    await expect(renderEngagementAgreement(
+      { ...probateInput, fee: { amount: 0, paymentTerms: '' } },
+      { convertDocx: async () => pdf(soloAnchors.join(' ')) },
+    )).rejects.toThrow(/fee\.amount/)
+    // No payment terms, and it renders: the phase schedule is its own.
+    const result = await renderEngagementAgreement(probateInput, { convertDocx: async () => pdf(soloAnchors.join(' ')) })
+    expect(result.masterKey).toBe('probate-individual')
   })
 
   it.each([

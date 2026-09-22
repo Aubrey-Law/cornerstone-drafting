@@ -10,7 +10,7 @@ const replace = vi.fn()
 let step = 'design'
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }), useSearchParams: () => new URLSearchParams({ step }) }))
 
-const snapshot: EngagementInput={practiceArea:'EP',clientMode:'couple',agreementDate:'2026-07-12',primary:{name:'Primary',email:'p@example.com'},spouse:{name:'Spouse',email:'s@example.com'},legalPlan:null,fee:{amount:5000,paymentTerms:'Due now'},scopeKey:'standard',optionalClauseKeys:[],emailMessage:'',expirationHours:72}
+const snapshot: EngagementInput={practiceArea:'EP',clientMode:'couple',agreementDate:'2026-07-12',primary:{name:'Primary',email:'p@example.com'},spouse:{name:'Spouse',email:'s@example.com'},decedentName:null,legalPlan:null,fee:{amount:5000,paymentTerms:'Due now'},scopeKey:'standard',optionalClauseKeys:[],emailMessage:'',expirationHours:72}
 const agreement: React.ComponentProps<typeof EngagementWorkspace>['agreement']={id:'a1',status:'draft',matter_id:'m1',active_revision:{id:'r1',render_sha256:'hash1',input_snapshot:snapshot},recipients:[]}
 
 describe('EngagementWorkspace interactions',()=>{

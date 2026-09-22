@@ -8,7 +8,7 @@ import { convertDocxToPdf } from '@/lib/docxPdfConvert'
 import { validateEngagementInput } from './schema'
 import { allEngagementAnchorMarkers } from './anchors'
 import { OPTIONAL_SERVICES } from './definitions'
-import { engagementTemplateFor, type EngagementTemplate } from './templates'
+import { engagementTemplateFor, PROBATE_PHASE_SHARES, type EngagementTemplate } from './templates'
 import { engagementLegalPlanLabel, type EngagementInput } from './types'
 import { resolveDocumentTemplate } from '@/lib/documentTemplates/resolver'
 import type { ResolvedDocumentTemplate } from '@/lib/documentTemplates/types'
@@ -78,6 +78,21 @@ function templateData(template: EngagementTemplate, value: EngagementInput): Rec
     spouse_email: value.spouse?.email ?? '',
     additional_clauses: value.additionalClauses ?? [],
     schedule_a_clauses: value.scheduleAClauses ?? [],
+  }
+  if (template.phasesFee) {
+    // The agreement prints the total and each phase, so the phases are computed
+    // from the one number staff enter rather than asked for separately — three
+    // fields that have to add up to a fourth is a subtraction error in a fee
+    // the client is signing. Non-null: only a master that names a decedent is
+    // reached with one, and the validator has required it.
+    return {
+      ...shared,
+      decedent_name: value.decedentName!,
+      flat_fee: formatFee(value.fee.amount),
+      opening_fee: formatFee(value.fee.amount * PROBATE_PHASE_SHARES.opening),
+      inventory_fee: formatFee(value.fee.amount * PROBATE_PHASE_SHARES.inventory),
+      final_account_fee: formatFee(value.fee.amount * PROBATE_PHASE_SHARES.final_account),
+    }
   }
   if (template.legalPlans === null) {
     return { ...shared, flat_fee: formatFee(value.fee.amount), payment_terms: value.fee.paymentTerms }

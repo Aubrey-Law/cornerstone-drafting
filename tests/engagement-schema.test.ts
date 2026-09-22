@@ -17,8 +17,22 @@ const base = {
 }
 
 describe('validateEngagementInput', () => {
-  it.each(['EP', 'Probate'] as const)('accepts an individual %s agreement', practiceArea => {
-    expect(validateEngagementInput({ ...base, practiceArea })).toMatchObject({ ok: true })
+  it('accepts an individual EP agreement', () => {
+    expect(validateEngagementInput(base)).toMatchObject({ ok: true })
+  })
+
+  it('accepts a probate agreement, which names the estate it administers', () => {
+    expect(validateEngagementInput({ ...base, practiceArea: 'Probate', decedentName: 'Rosemary Decedent' }))
+      .toMatchObject({ ok: true })
+  })
+
+  it.each([
+    ['a probate agreement with no estate named', { practiceArea: 'Probate' as const }],
+    // Only the probate master prints an "Estate of" line; anywhere else the
+    // name would be carried in the snapshot and rendered nowhere.
+    ['an estate on an agreement that prints none', { decedentName: 'Rosemary Decedent' }],
+  ])('rejects %s', (_case, patch) => {
+    expect(validateEngagementInput({ ...base, ...patch })).toMatchObject({ ok: false, errors: ['decedentName'] })
   })
 
   it.each(['EP', 'Probate'] as const)('accepts a couple %s agreement', practiceArea => {
@@ -58,6 +72,7 @@ describe('validateEngagementInput', () => {
         ...base,
         additionalClauses: [],
         scheduleAClauses: [],
+        decedentName: null,
         primary: { name: 'Alex Client', email: 'alex@example.com' },
       },
     })

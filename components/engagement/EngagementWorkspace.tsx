@@ -119,15 +119,16 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   // be filled in: a plan-funded letter states no firm fee and asks for none.
   const template = useMemo(() => engagementTemplateFor(input), [input])
   const blockers = useMemo(() => {
-    const statesFirmFee = template?.statesFirmFee ?? true
+    const firmFee = template?.firmFee ?? 'amount_and_terms'
     const missing = [
       !input.primary?.name && 'Primary signer name',
       !input.primary?.email && 'Primary signer email',
       input.clientMode === 'couple' && !input.spouse?.name && 'Spouse name',
       input.clientMode === 'couple' && !input.spouse?.email && 'Spouse email',
+      template?.namesDecedent && !input.decedentName && 'Decedent name',
       !input.agreementDate && 'Agreement date',
-      statesFirmFee && !(input.fee?.amount > 0) && 'Flat fee',
-      statesFirmFee && !input.fee?.paymentTerms && 'Payment terms',
+      firmFee !== 'none' && !(input.fee?.amount > 0) && 'Flat fee',
+      firmFee === 'amount_and_terms' && !input.fee?.paymentTerms && 'Payment terms',
     ]
     return missing.filter(Boolean) as string[]
   }, [input, template])
@@ -653,14 +654,14 @@ function EngagementFieldsEditor({
   onPrimary: (patch: Partial<EngagementInput['primary']>) => void
   onSpouse: (patch: Partial<NonNullable<EngagementInput['spouse']>>) => void
 }) {
-  const statesFirmFee = template?.statesFirmFee ?? true
+  const firmFee = template?.firmFee ?? 'amount_and_terms'
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
         <EngagementField label="Agreement date">
           <Input disabled={locked} type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
         </EngagementField>
-        <EngagementField label={statesFirmFee ? 'Flat fee' : 'Quoted fee (not stated in the letter)'}>
+        <EngagementField label={firmFee === 'none' ? 'Quoted fee (not stated in the letter)' : 'Flat fee'}>
           <Input disabled={locked} type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
         </EngagementField>
         <EngagementField label="Expiration hours">
@@ -686,11 +687,24 @@ function EngagementFieldsEditor({
             </EngagementField>
           </>
         )}
+        {/* The estate the agreement administers: it is addressed "Estate of —"
+            and defines the scope of representation by it. */}
+        {template?.namesDecedent && (
+          <EngagementField label="Decedent name">
+            <Input disabled={locked} value={input.decedentName ?? ''} onChange={event => onEdit({ decedentName: event.target.value })} />
+          </EngagementField>
+        )}
       </div>
-      {statesFirmFee ? (
+      {firmFee === 'amount_and_terms' ? (
         <EngagementField label="Payment terms">
           <Textarea disabled={locked} className="min-h-24" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
         </EngagementField>
+      ) : firmFee === 'amount' ? (
+        <p className="rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground">
+          The agreement prints its own payment schedule: the flat fee above, charged in phases — half on execution,
+          then a quarter at the inventory phase and a quarter at the final account. There are no separate payment
+          terms to write.
+        </p>
       ) : (
         <p className="rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground">
           The fee for the covered services is the amount the {input.legalPlan ? engagementLegalPlanLabel(input.legalPlan) : 'legal'} plan&apos;s
@@ -703,7 +717,11 @@ function EngagementFieldsEditor({
         <ResizableTextarea handleLabel="Resize the email message" disabled={locked} className="min-h-24" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
       </EngagementField>
       <EngagementClauseEditor label="Additional Clauses" category="additional_clause" value={input.additionalClauses ?? []} disabled={locked} onChange={additionalClauses => onEdit({ additionalClauses })} />
-      <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
+      {/* A master without a Schedule A has nowhere to print these, so they are
+          not offered rather than typed and then refused at Generate. */}
+      {(template?.printsScheduleAClauses ?? true) && (
+        <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
+      )}
     </div>
   )
 }

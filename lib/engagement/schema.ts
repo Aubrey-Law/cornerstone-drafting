@@ -49,6 +49,7 @@ export function normalizeEngagementInput(input: unknown): EngagementInput {
     agreementDate: text(candidate.agreementDate),
     primary: recipient(candidate.primary),
     spouse: candidate.spouse === null || candidate.spouse === undefined ? null : recipient(candidate.spouse),
+    decedentName: text(candidate.decedentName) || null,
     legalPlan: candidate.legalPlan === null || candidate.legalPlan === undefined
       ? null
       : candidate.legalPlan as EngagementLegalPlan,
@@ -93,6 +94,15 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
     errors.push('spouse')
   }
 
+  // Only a master that prints an "Estate of" line has anywhere to put a
+  // decedent, so one supplied to any other master is rejected rather than
+  // carried in a snapshot nothing renders.
+  if (template?.namesDecedent) {
+    if (!value.decedentName) errors.push('decedentName')
+  } else if (value.decedentName !== null) {
+    errors.push('decedentName')
+  }
+
   if (value.practiceArea === 'EP-LP') {
     if (!value.legalPlan || !LEGAL_PLANS.includes(value.legalPlan)) errors.push('legalPlan')
   } else if (value.legalPlan !== null) {
@@ -100,11 +110,12 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
   }
 
   // A plan-funded agreement states no firm fee of its own, so it is not asked
-  // for one; every other agreement prints both and cannot go out without them.
-  const statesFirmFee = template?.statesFirmFee ?? true
+  // for one. An agreement that prints its own payment schedule asks for the
+  // amount alone: free-text terms have nowhere to render in it.
+  const firmFee = template?.firmFee ?? 'amount_and_terms'
   if (!Number.isFinite(value.fee.amount) || value.fee.amount < 0) errors.push('fee.amount')
-  else if (statesFirmFee && value.fee.amount <= 0) errors.push('fee.amount')
-  if (statesFirmFee && !value.fee.paymentTerms) errors.push('fee.paymentTerms')
+  else if (firmFee !== 'none' && value.fee.amount <= 0) errors.push('fee.amount')
+  if (firmFee === 'amount_and_terms' && !value.fee.paymentTerms) errors.push('fee.paymentTerms')
   if (!Number.isFinite(value.expirationHours) || value.expirationHours < 1) errors.push('expirationHours')
 
   if (
@@ -124,6 +135,11 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
     const offered = template?.optionalServiceKeys ?? []
     if (value.optionalClauseKeys.some(key => !offered.includes(key))) {
       errors.push('optionalClauseKeys')
+    }
+    // Same rule for Schedule A: a master that does not print the loop would
+    // drop these clauses silently, so they are refused instead.
+    if (template && !template.printsScheduleAClauses && (value.scheduleAClauses ?? []).length > 0) {
+      errors.push('scheduleAClauses')
     }
   }
 

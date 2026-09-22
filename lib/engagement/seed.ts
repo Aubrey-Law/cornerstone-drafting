@@ -23,6 +23,8 @@ export interface EngagementSeedRecord {
   practiceArea: unknown
   billingType: unknown
   spouseEmail: string | null | undefined
+  /** The estate's decedent, for a probate record. */
+  decedentName?: string | null
 }
 
 export interface EngagementSeedDefinition {
@@ -36,8 +38,11 @@ export type EngagementSeedResult =
   /**
    * `spouseEmail` is the checked one, so the caller does not re-check it. It is
    * null for a solo client, whose agreement has no second signer.
+   *
+   * `decedentName` is null unless the chosen master names one, so a caller can
+   * put it straight into the draft without asking which practice area this is.
    */
-  | { ok: true; definition: EngagementSeedDefinition; spouseEmail: string | null }
+  | { ok: true; definition: EngagementSeedDefinition; spouseEmail: string | null; decedentName: string | null }
   | { ok: false; error: string }
 
 /**
@@ -49,8 +54,8 @@ export type EngagementSeedResult =
  */
 export function engagementSeedDefinition(record: EngagementSeedRecord): EngagementSeedResult {
   const practiceArea = parsePracticeArea(record.practiceArea)
-  if (practiceArea !== 'EP' && practiceArea !== 'EP-LP') {
-    return { ok: false, error: 'The reviewed workspace currently supports estate-planning matters only; use the legacy engagement flow.' }
+  if (practiceArea !== 'EP' && practiceArea !== 'EP-LP' && practiceArea !== 'Probate') {
+    return { ok: false, error: 'The reviewed workspace does not cover this practice area; use the legacy engagement flow.' }
   }
   const legalPlan = practiceArea === 'EP-LP' ? engagementLegalPlanFrom(record.billingType) : null
   if (practiceArea === 'EP-LP' && !legalPlan) {
@@ -62,14 +67,27 @@ export function engagementSeedDefinition(record: EngagementSeedRecord): Engageme
     }
   }
   // A spouse on the record is what makes this a couple. Whether that has a
-  // master is the table's answer, not a second rule here.
-  const spouseEmail = record.spouseEmail || null
+  // master is the table's answer, not a second rule here — and probate is
+  // always the personal representative alone, which is why the spouse on a
+  // probate record (a surviving spouse is common) does not make it a couple.
+  const spouseEmail = practiceArea === 'Probate' ? null : record.spouseEmail || null
   const clientMode: EngagementClientMode = spouseEmail ? 'couple' : 'individual'
   const definition = { practiceArea, clientMode, scopeKey: 'standard' as const, legalPlan }
-  // Every estate-planning combination has a master today, so this guard is
-  // what keeps `ok: true` meaning "a master exists" if one is ever withdrawn.
-  if (!engagementTemplateFor(definition)) {
+  // Every combination the practice areas above allow has a master today, so
+  // this guard is what keeps `ok: true` meaning "a master exists" if one is
+  // ever withdrawn.
+  const template = engagementTemplateFor(definition)
+  if (!template) {
     return { ok: false, error: 'No engagement master covers this combination; use the legacy engagement flow.' }
   }
-  return { ok: true, definition, spouseEmail }
+  const decedentName = template.namesDecedent ? (record.decedentName || '').trim() : ''
+  if (template.namesDecedent && !decedentName) {
+    return {
+      ok: false,
+      // The agreement is addressed "Estate of —" and describes the scope of the
+      // administration by it, so it cannot be drafted before the estate is named.
+      error: 'Set the decedent name on this matter before drafting a probate engagement agreement.',
+    }
+  }
+  return { ok: true, definition, spouseEmail, decedentName: decedentName || null }
 }
