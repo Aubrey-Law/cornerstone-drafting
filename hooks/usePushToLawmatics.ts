@@ -27,7 +27,7 @@ export function usePushToLawmatics(intakeId: string | null | undefined, onPushed
       const verb = result.operation === 'created' ? 'Created in Lawmatics' : 'Updated in Lawmatics'
       const count = `${result.sent.length} field${result.sent.length === 1 ? '' : 's'} sent`
       toast.success(`${verb} — ${count}`, result.unmapped.length ? {
-        description: `Not sent until mapped to a Lawmatics custom field: ${result.unmapped.join(', ')}`,
+        description: `Not sent until mapped in Settings → Lawmatics: ${result.unmapped.join(', ')}`,
         duration: 10_000,
       } : undefined)
       onPushed?.()

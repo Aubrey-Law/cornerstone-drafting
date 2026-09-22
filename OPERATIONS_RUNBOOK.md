@@ -521,9 +521,12 @@ street, city, state, ZIP, marital status.
 county, spouse details, children, lead/referral source, practice area, plan
 type, lead status, estate value, occupation, employer, planning objectives,
 special/qualification/internal notes, matter number) goes to Lawmatics custom
-fields. Create a matching custom field in Lawmatics, then map the Cornerstone key
-(see `LAWMATICS_PUSH_FIELDS` in `lib/integrations/lawmatics/pushFields.ts`) to
-its Lawmatics custom field ID:
+fields. Create a matching custom field in Lawmatics, then paste its Lawmatics
+custom field ID next to the Cornerstone field in **Settings → Lawmatics**
+(`/admin/settings?tab=lawmatics`, which also shows the connection and a
+Connect/Reconnect button). The page saves `integration_settings.lawmatics_custom_field_id_map`,
+keyed by the Cornerstone keys in `LAWMATICS_PUSH_FIELDS`
+(`lib/integrations/lawmatics/pushFields.ts`). The equivalent SQL, if the page is unavailable:
 
 ```sql
 update public.integration_settings
