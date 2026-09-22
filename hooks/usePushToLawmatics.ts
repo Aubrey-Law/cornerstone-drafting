@@ -11,6 +11,7 @@ type PushResult = {
   unmapped: string[]
   rejected: string[]
   rejectedDetails: string[]
+  invalidMapping: string[]
 }
 
 /** Manual "Push to Lawmatics" for a lead or client's intake record. */
@@ -32,11 +33,14 @@ export function usePushToLawmatics(intakeId: string | null | undefined, onPushed
         result.rejected.length
           ? `Lawmatics refused ${result.rejected.join(', ')}, so they were left out${result.rejectedDetails.length ? ` (${result.rejectedDetails.join(' ')})` : ''}.`
           : null,
+        result.invalidMapping.length
+          ? `Skipped, because the ID saved in Settings → Lawmatics is not a Lawmatics custom field number: ${result.invalidMapping.join(', ')}.`
+          : null,
         result.unmapped.length ? `Not sent until mapped in Settings → Lawmatics: ${result.unmapped.join(', ')}` : null,
       ].filter(Boolean)
       const message = `${verb} — ${count}`
       const options = notes.length ? { description: notes.join(' '), duration: 15_000 } : undefined
-      if (result.rejected.length) toast.warning(message, options)
+      if (result.rejected.length || result.invalidMapping.length) toast.warning(message, options)
       else toast.success(message, options)
       onPushed?.()
     } catch (caught) {

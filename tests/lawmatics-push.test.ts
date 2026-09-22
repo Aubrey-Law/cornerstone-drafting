@@ -57,7 +57,7 @@ const INTAKE_ID = '11111111-1111-4111-8111-111111111111'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  customFieldMap = { county: 'cf-county', spouse_first_name: 'cf-spouse-first', children: 'cf-children' }
+  customFieldMap = { county: '621072', spouse_first_name: '700001', children: '244367' }
   db = {
     client_intake: [{
       id: INTAKE_ID, first_name: ' Ada ', middle_name: 'King', last_name: 'Lovelace', email: 'ada@example.test',
@@ -90,11 +90,11 @@ describe('buildLawmaticsProspectBody', () => {
       matterNumber: '2026-014',
       spouse: null,
       children: [],
-    }, { county: 'cf-county', notes: 'cf-unused' })
+    }, { county: '621072', notes: '700002' })
 
     expect(body).toEqual({
       first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', marital_status: 'Married', case_number: '2026-014',
-      custom_fields: [{ id: 'cf-county', value: 'Suffolk' }],
+      custom_fields: [{ id: '621072', value: 'Suffolk' }],
     })
     expect(sentKeys).toEqual(['first_name', 'middle_name', 'last_name', 'marital_status', 'matter_number', 'county'])
     // An invalid calendar date is not sent; an unmapped value is reported.
@@ -114,9 +114,9 @@ describe('pushLeadToLawmatics', () => {
       birthdate: '1815-12-10', street: '12 St James Sq', street2: 'Apt 2', city: 'Boston', state: 'MA', zipcode: '02108',
       marital_status: 'Domestic Partner', occupation: 'Mathematician',
       custom_fields: [
-        { id: 'cf-county', value: 'Suffolk' },
-        { id: 'cf-spouse-first', value: 'William' },
-        { id: 'cf-children', value: 'Byron King' },
+        { id: '621072', value: 'Suffolk' },
+        { id: '700001', value: 'William' },
+        { id: '244367', value: 'Byron King' },
       ],
     })
     expect(first.unmapped).toEqual(['Spouse last name', 'Lead source', 'Legal plan member ID', 'Internal notes'])
@@ -157,8 +157,8 @@ describe('pushLeadToLawmatics', () => {
     // A hired client's matter number goes to the Lawmatics Case Number.
     expect(mocks.create.mock.calls[0][0].case_number).toBe('2026-014')
     expect(mocks.create.mock.calls[0][0].custom_fields).toEqual([
-      { id: 'cf-county', value: 'Suffolk' },
-      { id: 'cf-spouse-first', value: 'William' },
+      { id: '621072', value: 'Suffolk' },
+      { id: '700001', value: 'William' },
     ])
   })
 
@@ -200,10 +200,11 @@ describe('Lawmatics 422 handling', () => {
     ] })).toEqual({
       fields: ['marital_status', 'custom_fields'],
       details: ['marital_status: is not included in the list', 'custom_fields: Invalid'],
+      customFieldIds: [],
     })
     expect(parseLawmaticsValidation({ errors: { birthdate: ['is invalid'] } }))
-      .toEqual({ fields: ['birthdate'], details: ['birthdate: is invalid'] })
-    expect(parseLawmaticsValidation({ message: 'Bad request' })).toEqual({ fields: [], details: ['Bad request'] })
+      .toEqual({ fields: ['birthdate'], details: ['birthdate: is invalid'], customFieldIds: [] })
+    expect(parseLawmaticsValidation({ message: 'Bad request' })).toEqual({ fields: [], details: ['Bad request'], customFieldIds: [] })
   })
 
   async function validationError(fields: string[], details: string[] = []) {
@@ -257,5 +258,52 @@ describe('Lawmatics 422 handling', () => {
     expect(mocks.create).toHaveBeenCalledTimes(2)
     // A refused create wrote nothing, so the next push may create again.
     expect(prospectRecord()).toMatchObject({ external_id: null, status: 'attention', last_error_code: 'validation_failed' })
+  })
+})
+
+describe('Lawmatics custom field IDs', () => {
+  it('accepts only numeric IDs, including a pasted merge field', async () => {
+    const { normalizeLawmaticsCustomFieldId } = await import('@/lib/integrations/lawmatics/pushFields')
+    expect(normalizeLawmaticsCustomFieldId('930886')).toBe('930886')
+    expect(normalizeLawmaticsCustomFieldId(' custom_field_930886 ')).toBe('930886')
+    expect(normalizeLawmaticsCustomFieldId('{{custom_field_930886}}')).toBe('930886')
+    expect(normalizeLawmaticsCustomFieldId('practice_area')).toBeNull()
+    expect(normalizeLawmaticsCustomFieldId('{{practice_area}}')).toBeNull()
+    expect(normalizeLawmaticsCustomFieldId('custom_field_621073_w')).toBeNull()
+  })
+
+  it('skips and reports a mapping that is not a custom field ID instead of sending it', async () => {
+    customFieldMap = { county: '{{custom_field_621072}}', lead_source: 'practice_area' }
+
+    const result = await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.create.mock.calls[0][0].custom_fields).toEqual([{ id: '621072', value: 'Suffolk' }])
+    expect(result.invalidMapping).toEqual(['Lead source'])
+    expect(result.sent).toContain('County')
+    expect(result.sent).not.toContain('Lead source')
+  })
+
+  it('reads a missing custom field ID from the Lawmatics message', () => {
+    expect(parseLawmaticsValidation({ errors: [{ detail: "Custom Field with id 'practice_area' not found" }] })).toEqual({
+      fields: ['custom_fields'],
+      details: ["Custom Field with id 'practice_area' not found"],
+      customFieldIds: ['practice_area'],
+    })
+  })
+
+  it('drops only the custom field Lawmatics could not find, and keeps the rest', async () => {
+    mocks.create.mockRejectedValueOnce(new LawmaticsValidationError(['custom_fields'],
+      ["Custom Field with id '621072' not found"], ['621072']))
+
+    const result = await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+    expect(mocks.create.mock.calls[1][0].custom_fields).toEqual([
+      { id: '700001', value: 'William' },
+      { id: '244367', value: 'Byron King' },
+    ])
+    expect(mocks.create.mock.calls[1][0]).toMatchObject({ marital_status: 'Domestic Partner' })
+    expect(result.rejected).toEqual(['County'])
+    expect(result.sent).toEqual(expect.arrayContaining(['Spouse first name', 'Children']))
   })
 })

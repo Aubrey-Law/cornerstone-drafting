@@ -7,9 +7,11 @@ import { IntegrationError } from '@/lib/integrations/errors'
  */
 export class LawmaticsValidationError extends IntegrationError {
   readonly fields: string[]
+  /** Custom field IDs Lawmatics reported as not found. */
+  readonly customFieldIds: string[]
   declare readonly details: string[]
 
-  constructor(fields: string[], details: string[]) {
+  constructor(fields: string[], details: string[], customFieldIds: string[] = []) {
     super({
       provider: 'lawmatics', kind: 'attention', code: 'validation_failed', retryAfterMs: null,
       safeMessage: fields.length
@@ -17,6 +19,7 @@ export class LawmaticsValidationError extends IntegrationError {
         : 'Lawmatics rejected the supplied record fields.',
     })
     this.fields = fields
+    this.customFieldIds = customFieldIds
     // Non-enumerable, so an accidental log or JSON.stringify of the error
     // never carries Lawmatics' wording (which may echo client data).
     Object.defineProperty(this, 'details', { value: details, enumerable: false })
@@ -43,7 +46,9 @@ function clip(value: unknown): string | null {
 }
 
 /** Reads the field names and messages out of JSON:API or Rails-style 422 bodies. */
-export function parseLawmaticsValidation(body: unknown): { fields: string[]; details: string[] } {
+const MISSING_CUSTOM_FIELD = /custom field with id ['"]?([^'"\s]+)['"]? not found/gi
+
+export function parseLawmaticsValidation(body: unknown): { fields: string[]; details: string[]; customFieldIds: string[] } {
   const fields = new Set<string>()
   const details: string[] = []
   const addDetail = (value: unknown, field?: string | null) => {
@@ -72,5 +77,10 @@ export function parseLawmaticsValidation(body: unknown): { fields: string[]; det
     const record = body as Record<string, unknown>
     addDetail(record.message ?? record.error)
   }
-  return { fields: [...fields], details }
+  const customFieldIds = new Set<string>()
+  for (const detail of details) {
+    for (const match of detail.matchAll(MISSING_CUSTOM_FIELD)) customFieldIds.add(match[1])
+  }
+  if (customFieldIds.size) fields.add('custom_fields')
+  return { fields: [...fields], details, customFieldIds: [...customFieldIds] }
 }

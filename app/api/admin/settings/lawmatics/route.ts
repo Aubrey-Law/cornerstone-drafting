@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getIntegrationSettings, updateIntegrationSettings } from '@/lib/integrations/settings'
-import { LAWMATICS_PUSH_FIELDS } from '@/lib/integrations/lawmatics/pushFields'
+import { LAWMATICS_PUSH_FIELDS, normalizeLawmaticsCustomFieldId } from '@/lib/integrations/lawmatics/pushFields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -44,10 +44,13 @@ export async function PUT(req: Request) {
     if (typeof value !== 'string') {
       return NextResponse.json({ error: 'Lawmatics custom field IDs must be text' }, { status: 400 })
     }
-    const id = value.trim()
-    if (!id) continue
-    if (id.length > MAX_ID_LENGTH || /\s/.test(id)) {
-      return NextResponse.json({ error: `The Lawmatics custom field ID for ${key} is not valid` }, { status: 400 })
+    if (!value.trim()) continue
+    const id = value.length <= MAX_ID_LENGTH ? normalizeLawmaticsCustomFieldId(value) : null
+    if (!id) {
+      const label = LAWMATICS_PUSH_FIELDS.find(field => field.key === key)?.label ?? key
+      return NextResponse.json({
+        error: `${label}: "${value.trim().slice(0, 40)}" is not a Lawmatics custom field ID. Use the number from its merge field, e.g. 930886 from {{custom_field_930886}}.`,
+      }, { status: 400 })
     }
     map[key] = id
   }

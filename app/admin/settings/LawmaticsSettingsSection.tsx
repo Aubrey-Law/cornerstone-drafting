@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { LAWMATICS_PUSH_FIELDS } from '@/lib/integrations/lawmatics/pushFields'
+import { LAWMATICS_PUSH_FIELDS, normalizeLawmaticsCustomFieldId } from '@/lib/integrations/lawmatics/pushFields'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,7 +62,10 @@ export function LawmaticsSettingsSection() {
   }, [load])
 
   const dirty = useMemo(() => !sameMap(saved, drafts), [saved, drafts])
-  const mappedCount = CUSTOM_FIELDS.filter(field => saved[field.key]?.trim()).length
+  const mappedCount = CUSTOM_FIELDS.filter(field => normalizeLawmaticsCustomFieldId(saved[field.key] ?? '')).length
+  const invalidKeys = new Set(CUSTOM_FIELDS
+    .filter(field => (drafts[field.key] ?? '').trim() && !normalizeLawmaticsCustomFieldId(drafts[field.key]))
+    .map(field => field.key))
 
   async function save() {
     if (!token) return
@@ -149,6 +152,7 @@ export function LawmaticsSettingsSection() {
           <TableBody>
             {CUSTOM_FIELDS.map(field => {
               const inputId = `lawmatics-field-${field.key}`
+              const invalid = invalidKeys.has(field.key)
               return (
                 <TableRow key={field.key}>
                   <TableCell>
@@ -164,7 +168,17 @@ export function LawmaticsSettingsSection() {
                       placeholder="Not mapped"
                       autoComplete="off"
                       spellCheck={false}
+                      aria-invalid={invalid || undefined}
+                      aria-describedby={invalid ? `${inputId}-error` : undefined}
                     />
+                    {invalid && (
+                      <p id={`${inputId}-error`} className="mt-1 text-xs text-destructive">
+                        Not a custom field ID. Use the number from its merge field, e.g.{' '}
+                        <span className="font-mono">930886</span> from{' '}
+                        <span className="font-mono">{'{{custom_field_930886}}'}</span>. Built-in fields like{' '}
+                        <span className="font-mono">{'{{practice_area}}'}</span> can&apos;t be mapped here.
+                      </p>
+                    )}
                   </TableCell>
                 </TableRow>
               )
@@ -176,7 +190,7 @@ export function LawmaticsSettingsSection() {
           <Button type="button" size="sm" variant="ghost" disabled={!dirty || saving} onClick={() => setDrafts(saved)}>
             Discard changes
           </Button>
-          <Button type="button" size="sm" disabled={!dirty || saving} onClick={() => void save()}>
+          <Button type="button" size="sm" disabled={!dirty || saving || invalidKeys.size > 0} onClick={() => void save()}>
             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
             Save mapping
           </Button>

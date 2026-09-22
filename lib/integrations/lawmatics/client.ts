@@ -44,7 +44,7 @@ async function validationFailure(response: Response): Promise<LawmaticsValidatio
   try {
     const text = (await response.text()).slice(0, MAX_ERROR_BODY)
     const parsed = parseLawmaticsValidation(JSON.parse(text))
-    return new LawmaticsValidationError(parsed.fields, parsed.details)
+    return new LawmaticsValidationError(parsed.fields, parsed.details, parsed.customFieldIds)
   } catch {
     return new LawmaticsValidationError([], [])
   }
