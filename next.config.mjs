@@ -27,8 +27,17 @@ const nextConfig = {
   },
   transpilePackages: ['@aubrey-law/drafting-engine', '@aubrey-law/estate-fields'],
   outputFileTracingRoot: path.resolve(process.cwd()),
-  // The engagement-agreement Word template and document-generation assets are
-  // read at runtime via fs; keep them in the traced serverless function bundles.
+  // Word masters and document-generation assets are read at runtime via fs;
+  // keep them in the traced serverless function bundles.
+  //
+  // The engagement masters used to be traced without being listed here: the
+  // renderer read one literal `path.join(process.cwd(), 'assets/…docx')`, which
+  // nft evaluates. Choosing the master from a table replaced that literal with
+  // a variable, and the trace silently lost every master — including the one
+  // that had always worked. Production failed on the first render with
+  // `ENOENT … /var/task/assets/engagement-agreements/…docx`. Anything reached
+  // by a computed path has to be listed; `engagement-master-bundling.test.ts`
+  // derives the routes that need these from the import graph.
   outputFileTracingIncludes: {
     '/api/admin/matters/[id]/draft': ['./tools/aubreylaw-docgeneration/**'],
     // Bundled system-workflow SKILL.md tree: synced into work_skills on demand
@@ -37,10 +46,12 @@ const nextConfig = {
     '/api/admin/chat': ['./tools/workflows/**'],
     '/api/admin/assistant/chats/[chatId]/messages': ['./tools/workflows/**'],
     '/api/admin/engagement-agreements/[id]': [
+      './assets/engagement-agreements/**',
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
     '/api/admin/engagement-agreements/[id]/preview': [
+      './assets/engagement-agreements/**',
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
@@ -52,10 +63,12 @@ const nextConfig = {
     // failure there is a client's failure, on a public route, with no
     // attorney watching.
     '/api/admin/engagement-agreements/[id]/approve': [
+      './assets/engagement-agreements/**',
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
     '/api/admin/engagement-agreements/[id]/send': [
+      './assets/engagement-agreements/**',
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
@@ -76,6 +89,17 @@ const nextConfig = {
       // holds only while the string stays literal, and this is the one route
       // where losing it silently downgrades a client's signature.
       './assets/fonts/NothingYouCouldDo-Regular.ttf',
+    ],
+    // Settings serves and preview-validates a registered template's *bundled*
+    // master by path — `definition.bundledPath` for anything in the registry,
+    // which is both the engagement masters and the generator's templates.
+    '/api/admin/settings/document-templates/[templateId]/versions/[versionId]/download': [
+      './assets/engagement-agreements/**',
+      './tools/aubreylaw-docgeneration/**',
+    ],
+    '/api/admin/settings/document-templates/[templateId]/versions/[versionId]/validate': [
+      './assets/engagement-agreements/**',
+      './tools/aubreylaw-docgeneration/**',
     ],
   },
   // Keep the production build as a type-safety gate by default. If a constrained

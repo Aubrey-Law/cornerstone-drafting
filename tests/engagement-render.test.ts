@@ -48,6 +48,9 @@ const lpInput = {
 /** The same letter for a solo client: one signer, no spouse. */
 const lpSoloInput = { ...lpInput, clientMode: 'individual' as const, spouse: null }
 
+/** The flat-fee agreement for a solo client, which still states the firm's fee. */
+const soloInput = { ...input, clientMode: 'individual' as const, spouse: null }
+
 describe('renderEngagementAgreement', () => {
   it('renders all structured fields and stable metadata without legacy tags', async () => {
     const converted = pdf(anchors.join(' '))
@@ -59,6 +62,20 @@ describe('renderEngagementAgreement', () => {
     expect(result.masterKey).toBe('ep-trust-couple')
     expect(result.masterVersion).toBe('1')
     expect(result.pdfSha256).toBe(createHash('sha256').update(converted).digest('hex'))
+  })
+
+  it('renders the solo flat-fee agreement with one signer and the firm fee', async () => {
+    const converted = pdf(soloAnchors.join(' '))
+    const result = await renderEngagementAgreement(soloInput, { convertDocx: async () => converted })
+    const xml = new PizZip(result.docxBytes).file('word/document.xml')!.asText()
+    for (const value of ['Alex Client', 'alex@example.com', '$7,500.00', 'Half now; half before signing.']) expect(xml).toContain(value)
+    for (const anchor of soloAnchors) expect(xml.split(anchor)).toHaveLength(2)
+    expect(xml).not.toMatch(/\{\{(?:signature:|autofill_date_signed)|\{[^{}]+\}/)
+    // Nothing addressed to a second signer, and no leftover spouse text.
+    expect(xml).not.toContain('CLIENT_2')
+    expect(xml).not.toContain('Jordan Client')
+    expect(result.masterKey).toBe('ep-trust-individual')
+    expect(result.templateId).toBe('engagement-ep-trust-individual')
   })
 
   it('renders the legal-plan letter, naming the plan and marking elected services', async () => {
@@ -119,7 +136,7 @@ describe('renderEngagementAgreement', () => {
 
   it.each([
     [{ ...input, practiceArea: 'Probate' as const }],
-    [{ ...input, clientMode: 'individual' as const, spouse: null }],
+    [{ ...input, practiceArea: 'Probate' as const, clientMode: 'individual' as const, spouse: null }],
   ])('rejects unavailable template combinations', async (candidate) => {
     await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/template.*unavailable/i)
   })
@@ -129,14 +146,20 @@ describe('renderEngagementAgreement', () => {
     ['no plan on a plan-funded estate plan', { ...lpInput, legalPlan: null }],
     ['a plan the letter cannot name', { ...lpInput, legalPlan: 'other_legal_plan' }],
     ['an optional service the definition does not offer', { ...lpInput, optionalClauseKeys: ['gift_tax_returns'] }],
+    // A couple's agreement prints a signature line for a spouse; the schema
+    // will not let one be drafted without naming them.
+    ['a couple with no spouse named', { ...input, spouse: null }],
   ])('rejects %s', async (_case, candidate) => {
     await expect(renderEngagementAgreement(candidate, { convertDocx: async () => pdf('') })).rejects.toThrow(/Invalid engagement input/i)
   })
 
-  it('still requires the firm fee and payment terms on an agreement that states them', async () => {
+  it.each([
+    ['a couple', input, anchors],
+    ['a solo client', soloInput, soloAnchors],
+  ])('still requires the firm fee and payment terms on %s whose agreement states them', async (_case, candidate, markers) => {
     await expect(renderEngagementAgreement(
-      { ...input, fee: { amount: 0, paymentTerms: '' } },
-      { convertDocx: async () => pdf(anchors.join(' ')) },
+      { ...candidate, fee: { amount: 0, paymentTerms: '' } },
+      { convertDocx: async () => pdf(markers.join(' ')) },
     )).rejects.toThrow(/fee\.amount.*fee\.paymentTerms|fee\.paymentTerms/)
   })
 

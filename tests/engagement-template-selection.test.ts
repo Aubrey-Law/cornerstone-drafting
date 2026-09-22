@@ -24,6 +24,14 @@ describe('engagement template selection', () => {
     expect(template?.statesFirmFee).toBe(true)
   })
 
+  it('sends a solo flat-fee client to the solo flat-fee master', () => {
+    const template = engagementTemplateFor({ practiceArea: 'EP', clientMode: 'individual', scopeKey: 'standard', legalPlan: null })
+    expect(template?.masterKey).toBe('ep-trust-individual')
+    // No plan pays this one, so the agreement states the firm's own fee.
+    expect(template?.statesFirmFee).toBe(true)
+    expect(template?.recipientCount).toBe(1)
+  })
+
   it.each(ENGAGEMENT_LEGAL_PLANS)('sends an EP-LP couple on %s to the legal-plan master', plan => {
     const template = engagementTemplateFor({ practiceArea: 'EP-LP', clientMode: 'couple', scopeKey: 'standard', legalPlan: plan })
     expect(template?.masterKey).toBe('ep-lp-trust-couple')
@@ -61,7 +69,6 @@ describe('engagement template selection', () => {
     ['a plan on a flat-fee estate plan', { practiceArea: 'EP', legalPlan: 'metlife' }],
     ['no plan on a plan-funded estate plan', { practiceArea: 'EP-LP', legalPlan: null }],
     ['a plan with no name to print', { practiceArea: 'EP-LP', legalPlan: 'other_legal_plan' }],
-    ['a solo flat-fee estate plan', { practiceArea: 'EP', clientMode: 'individual', legalPlan: null }],
     ['probate', { practiceArea: 'Probate', legalPlan: null }],
     ['a solo probate', { practiceArea: 'Probate', clientMode: 'individual', legalPlan: null }],
   ])('covers no master for %s', (_case, selector) => {
@@ -72,7 +79,7 @@ describe('engagement template selection', () => {
     expect(isSupportedWorkspaceDefinition({ ...couple, practiceArea: 'EP', legalPlan: null })).toBe(true)
     expect(isSupportedWorkspaceDefinition({ ...couple, practiceArea: 'EP-LP', legalPlan: 'metlife' })).toBe(true)
     expect(isSupportedWorkspaceDefinition({ ...solo, practiceArea: 'EP-LP', legalPlan: 'metlife' })).toBe(true)
-    expect(isSupportedWorkspaceDefinition({ ...solo, practiceArea: 'EP', legalPlan: null })).toBe(false)
+    expect(isSupportedWorkspaceDefinition({ ...solo, practiceArea: 'EP', legalPlan: null })).toBe(true)
     expect(isSupportedWorkspaceDefinition({ ...couple, practiceArea: 'EP-LP', legalPlan: null })).toBe(false)
     // No owning record is still no workspace, whatever the definition says.
     expect(isSupportedWorkspaceDefinition({ practiceArea: 'EP', clientMode: 'couple', scopeKey: 'standard', legalPlan: null })).toBe(false)
@@ -140,10 +147,16 @@ describe('engagement draft seeding', () => {
     expect(seed).toMatchObject({ ok: true, definition: { clientMode: 'individual' }, spouseEmail: null })
   })
 
-  it.each([
-    ['a solo flat-fee client, whose letter has no solo master', { practiceArea: 'EP', billingType: 'flat_fee', spouseEmail: null }],
-    ['a practice area with no master', { practiceArea: 'Probate', billingType: 'flat_fee', ...spouse }],
-  ])('refuses %s', (_case, record) => {
-    expect(engagementSeedDefinition(record).ok).toBe(false)
+  it('seeds a solo flat-fee client from a record with no spouse', () => {
+    const seed = engagementSeedDefinition({ practiceArea: 'EP', billingType: 'flat_fee', spouseEmail: null })
+    expect(seed).toEqual({
+      ok: true,
+      definition: { practiceArea: 'EP', clientMode: 'individual', scopeKey: 'standard', legalPlan: null },
+      spouseEmail: null,
+    })
+  })
+
+  it('refuses a practice area with no master', () => {
+    expect(engagementSeedDefinition({ practiceArea: 'Probate', billingType: 'flat_fee', ...spouse }).ok).toBe(false)
   })
 })
