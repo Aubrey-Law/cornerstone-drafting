@@ -2,6 +2,7 @@ import 'server-only'
 import { getLawmaticsAccessToken } from '@/lib/lawmatics'
 import { IntegrationError } from '@/lib/integrations/errors'
 import type { IntegrationFailureKind } from '@/lib/integrations/types'
+import { LawmaticsValidationError, parseLawmaticsValidation } from './validation'
 import type { LawmaticsEventInput, LawmaticsProspectInput, LawmaticsRequestInit, LawmaticsResource } from './types'
 
 const API_BASE = 'https://api.lawmatics.com'
@@ -34,6 +35,18 @@ function responseFailure(response: Response): IntegrationError {
     case 404: return failure('attention', 'not_found', 'The Lawmatics record could not be found.')
     case 422: return failure('attention', 'validation_failed', 'Lawmatics rejected the supplied record fields.')
     default: return failure('attention', 'request_rejected', 'Lawmatics rejected the request.')
+  }
+}
+
+const MAX_ERROR_BODY = 8_192
+
+async function validationFailure(response: Response): Promise<LawmaticsValidationError> {
+  try {
+    const text = (await response.text()).slice(0, MAX_ERROR_BODY)
+    const parsed = parseLawmaticsValidation(JSON.parse(text))
+    return new LawmaticsValidationError(parsed.fields, parsed.details)
+  } catch {
+    return new LawmaticsValidationError([], [])
   }
 }
 
@@ -80,7 +93,9 @@ export async function lawmaticsRequest<T>(path: string, init: LawmaticsRequestIn
       redirect: 'error',
     })
     if (controller.signal.aborted) throw cancelled()
-    // Never read/log provider error bodies or attach unsafe transport causes.
+    // Never log provider error bodies or attach unsafe transport causes. A 422
+    // body is parsed only for the attribute names and messages it reports.
+    if (response.status === 422) throw await validationFailure(response)
     if (!response.ok) throw responseFailure(response)
     if (response.status === 204) return undefined as T
 

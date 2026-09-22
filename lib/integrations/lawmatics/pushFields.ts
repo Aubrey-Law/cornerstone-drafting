@@ -46,6 +46,7 @@ export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'occupation', label: 'Occupation', standard: true },
   { key: 'employer', label: 'Employer', standard: true },
   { key: 'citizenship', label: 'Citizenship', standard: true },
+  { key: 'matter_number', label: 'Matter number', standard: true, attribute: 'case_number' },
   { key: 'county', label: 'County', standard: false },
   { key: 'preferred_pronoun', label: 'Preferred pronouns', standard: false },
   { key: 'date_of_marriage', label: 'Date of marriage', standard: false },
@@ -66,7 +67,6 @@ export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'special_notes', label: 'Special notes', standard: false },
   { key: 'qualification_notes', label: 'Qualification notes', standard: false },
   { key: 'notes', label: 'Internal notes', standard: false },
-  { key: 'matter_number', label: 'Matter number', standard: false },
 ]
 
 type PersonRow = {

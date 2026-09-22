@@ -6,6 +6,7 @@ import {
 } from '@/lib/integrations/records'
 import { IntegrationError } from '@/lib/integrations/errors'
 import { createLawmaticsProspectFromBody, updateLawmaticsProspect } from './client'
+import { LawmaticsValidationError } from './validation'
 import { createAndRecordLawmatics, lawmaticsDatabase, lawmaticsFailure, requireSafeCreate, sourceHash } from './prospect'
 import {
   buildLawmaticsProspectBody, LAWMATICS_PUSH_FIELDS,
@@ -19,6 +20,52 @@ export interface LawmaticsPushResult {
   sent: string[]
   /** Labels of fields with a value that have no Lawmatics custom field mapped yet. */
   unmapped: string[]
+  /** Labels of fields Lawmatics refused; the push was retried once without them. */
+  rejected: string[]
+  /** Lawmatics' own explanation for the refused fields, for staff only. */
+  rejectedDetails: string[]
+}
+
+/** Never stripped on a retry: Lawmatics cannot create a prospect without them. */
+const REQUIRED_ATTRIBUTES = new Set(['first_name', 'last_name'])
+
+interface FieldFallback {
+  rejectedAttributes: string[]
+  details: string[]
+}
+
+/**
+ * Sends the body; when Lawmatics refuses named attributes with a 422, sends it
+ * once more without them. A 422 means nothing was written, so the retry can
+ * never duplicate a record. Any other failure, or a second refusal, propagates.
+ */
+async function sendWithFieldFallback<T>(
+  body: LawmaticsProspectBody,
+  send: (body: LawmaticsProspectBody) => Promise<T>,
+  fallback: FieldFallback,
+): Promise<T> {
+  try {
+    return await send(body)
+  } catch (error) {
+    if (!(error instanceof LawmaticsValidationError)) throw error
+    const strip = error.fields.filter(field => Object.hasOwn(body, field) && !REQUIRED_ATTRIBUTES.has(field))
+    if (!strip.length) throw error
+    const retry: LawmaticsProspectBody = { ...body }
+    for (const field of strip) delete retry[field]
+    const result = await send(retry)
+    fallback.rejectedAttributes = strip
+    fallback.details = error.details
+    return result
+  }
+}
+
+/** Maps a refused Lawmatics attribute back to the push field keys it carried. */
+function keysForAttribute(attribute: string, sentKeys: string[]): string[] {
+  if (attribute === 'custom_fields') {
+    return sentKeys.filter(key => LAWMATICS_PUSH_FIELDS.some(field => field.key === key && !field.standard))
+  }
+  return LAWMATICS_PUSH_FIELDS.filter(field => field.standard && (field.attribute ?? field.key) === attribute)
+    .map(field => field.key)
 }
 
 const INTAKE_FIELDS = [
@@ -122,19 +169,29 @@ export async function pushLeadToLawmatics(intakeId: string): Promise<LawmaticsPu
     ...ref, sourceVersion: version, idempotencyKey: `lawmatics:prospect-push:${intakeId}:${version}`,
     requestHash: version, requestSnapshot: { intakeId, operation: linkedId ? 'update' : 'create', fields: built.sentKeys },
   })
-  const result = { sent: labels(built.sentKeys), unmapped: labels(built.unmappedKeys) }
+  const fallback: FieldFallback = { rejectedAttributes: [], details: [] }
+  const outcome = () => {
+    const rejectedKeys = new Set(fallback.rejectedAttributes.flatMap(attribute => keysForAttribute(attribute, built.sentKeys)))
+    return {
+      sent: labels(built.sentKeys.filter(key => !rejectedKeys.has(key))),
+      unmapped: labels(built.unmappedKeys),
+      rejected: labels([...rejectedKeys]),
+      rejectedDetails: fallback.details,
+    }
+  }
 
   const prospectId = claimed.external_id ?? linkedId
   if (!prospectId) {
-    const created = await createAndRecordLawmatics(ref, claimed, () => createLawmaticsProspectFromBody(body), existing)
-    return { prospectId: created, operation: 'created', ...result }
+    const created = await createAndRecordLawmatics(ref, claimed,
+      () => sendWithFieldFallback(body, next => createLawmaticsProspectFromBody(next), fallback), existing)
+    return { prospectId: created, operation: 'created', ...outcome() }
   }
 
   const fenced = await beginIntegrationAttempt({ ...ref, idempotencyKey: claimed.idempotency_key,
     expectedLastAttemptAt: claimed.last_attempt_at })
   const attempt = { ...ref, idempotencyKey: claimed.idempotency_key, attemptAt: fenced.last_attempt_at! }
   try {
-    await updateLawmaticsProspect(prospectId, body)
+    await sendWithFieldFallback(body, next => updateLawmaticsProspect(prospectId, next), fallback)
   } catch (error) {
     const safe = error instanceof IntegrationError
       ? error : lawmaticsFailure('request_rejected', 'Lawmatics rejected the update.')
@@ -142,5 +199,5 @@ export async function pushLeadToLawmatics(intakeId: string): Promise<LawmaticsPu
     throw safe
   }
   await recordIntegrationSuccess({ ...attempt, externalId: prospectId })
-  return { prospectId, operation: 'updated', ...result }
+  return { prospectId, operation: 'updated', ...outcome() }
 }
