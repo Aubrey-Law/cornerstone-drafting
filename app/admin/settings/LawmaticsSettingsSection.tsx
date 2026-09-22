@@ -71,7 +71,10 @@ export function LawmaticsSettingsSection() {
       const res = await fetch('/api/admin/settings/lawmatics', {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customFieldIdMap: drafts }),
+        // Only current custom keys: a field that later became standard is not mappable.
+        body: JSON.stringify({
+          customFieldIdMap: Object.fromEntries(CUSTOM_FIELDS.map(field => [field.key, drafts[field.key] ?? ''])),
+        }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Save failed')
@@ -128,9 +131,11 @@ export function LawmaticsSettingsSection() {
             These fields are always sent to the matching Lawmatics field: {STANDARD_FIELDS.map(field => field.label).join(', ')}.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Lawmatics only stores the fields below in custom fields your firm creates. Create each custom field in
-            Lawmatics, then paste its Lawmatics custom field ID here. Fields left blank are skipped on push, and the
-            push confirmation lists them. {mappedCount} of {CUSTOM_FIELDS.length} mapped.
+            Lawmatics only stores the fields below in custom fields your firm creates. Paste each field&apos;s Lawmatics
+            custom field ID here: the number in its merge field on Lawmatics&apos; document reference page, so{' '}
+            <span className="font-mono">{'{{custom_field_930886}}'}</span> is <span className="font-mono">930886</span>.
+            Fields left blank are skipped on push, and the push confirmation lists them.{' '}
+            {mappedCount} of {CUSTOM_FIELDS.length} mapped.
           </p>
         </div>
 

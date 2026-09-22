@@ -514,15 +514,18 @@ clears a value someone typed into Lawmatics.
 The push only needs Lawmatics connected; it does not depend on
 `lawmatics_appointment_sync_enabled`.
 
-**Standard fields** always go: first/last name, email, phone, birthdate,
-street, city, state, ZIP, marital status.
+**Standard fields** always go, under Lawmatics' own contact attribute names (as
+its document merge-field reference lists them): first, middle and last name,
+suffix (`name_suffix`), preferred name (`informal_name`), email, phone,
+birthdate, street, address line 2 (`street2`), city, state, ZIP (`zipcode`),
+marital status, occupation, employer, citizenship.
 
-**Everything else** (middle name, suffix, preferred name, address line 2,
-county, spouse details, children, lead/referral source, practice area, plan
-type, lead status, estate value, occupation, employer, planning objectives,
-special/qualification/internal notes, matter number) goes to Lawmatics custom
-fields. Create a matching custom field in Lawmatics, then paste its Lawmatics
-custom field ID next to the Cornerstone field in **Settings → Lawmatics**
+**Everything else** (county, preferred pronouns, date of marriage, spouse
+details, children, lead/referral source, practice area, plan type, lead status,
+estate value, legal plan member ID, planning objectives, special/qualification/
+internal notes, matter number) goes to Lawmatics custom
+fields. A custom field's ID is the number in its merge field on Lawmatics'
+document reference page (`{{custom_field_930886}}` → `930886`). Paste it next to the Cornerstone field in **Settings → Lawmatics**
 (`/admin/settings?tab=lawmatics`, which also shows the connection and a
 Connect/Reconnect button). The page saves `integration_settings.lawmatics_custom_field_id_map`,
 keyed by the Cornerstone keys in `LAWMATICS_PUSH_FIELDS`

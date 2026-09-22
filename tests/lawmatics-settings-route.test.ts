@@ -34,7 +34,7 @@ describe('/api/admin/settings/lawmatics', () => {
   })
 
   it('saves trimmed IDs and drops blank ones', async () => {
-    const res = await put({ customFieldIdMap: { county: ' 123 ', middle_name: '', children: null } })
+    const res = await put({ customFieldIdMap: { county: ' 123 ', spouse_email: '', children: null } })
 
     expect(res.status).toBe(200)
     expect(mocks.update).toHaveBeenCalledWith({ lawmaticsCustomFieldIdMap: { county: '123' } }, 'staff-1')
@@ -43,6 +43,7 @@ describe('/api/admin/settings/lawmatics', () => {
 
   it.each([
     [{ first_name: '1' }, 'standard fields are not mappable'],
+    [{ middle_name: '1' }, 'fields Lawmatics has built in are not mappable'],
     [{ __proto__x: '1' }, 'unknown keys'],
     [{ county: 5 }, 'non-text IDs'],
     [{ county: 'has space' }, 'IDs with whitespace'],

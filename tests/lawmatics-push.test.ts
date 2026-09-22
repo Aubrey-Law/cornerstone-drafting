@@ -63,6 +63,7 @@ beforeEach(() => {
       phone: '5551234567', date_of_birth: '1815-12-10', marital_status: 'domestic_partner',
       address_line1: '12 St James Sq', address_line2: 'Apt 2', city: 'Boston', county: 'Suffolk', state: 'MA', zip: '02108',
       lead_source: 'referral', plan_type: '', notes: 'Internal only', lawmatics_matter_id: null,
+      suffix: 'Jr.', preferred_name: 'Countess', occupation: 'Mathematician', legal_plan_member_id: 'LP-1',
     }],
     matters: [],
     contacts: [
@@ -84,19 +85,19 @@ describe('buildLawmaticsProspectBody', () => {
   it('sends standard fields directly and only mapped custom fields, omitting blanks', () => {
     const { body, sentKeys, unmappedKeys } = buildLawmaticsProspectBody({
       intake: { first_name: 'Ada', last_name: 'Lovelace', marital_status: 'married', date_of_birth: '1815-02-30',
-        county: 'Suffolk', middle_name: 'King', city: '  ', email: null },
+        county: 'Suffolk', middle_name: 'King', city: '  ', email: null, preferred_pronoun: 'she/her' },
       matterNumber: '2026-014',
       spouse: null,
       children: [],
     }, { county: 'cf-county', matter_number: 'cf-matter', notes: 'cf-unused' })
 
     expect(body).toEqual({
-      first_name: 'Ada', last_name: 'Lovelace', marital_status: 'Married',
+      first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', marital_status: 'Married',
       custom_fields: [{ id: 'cf-county', value: 'Suffolk' }, { id: 'cf-matter', value: '2026-014' }],
     })
-    expect(sentKeys).toEqual(['first_name', 'last_name', 'marital_status', 'county', 'matter_number'])
+    expect(sentKeys).toEqual(['first_name', 'middle_name', 'last_name', 'marital_status', 'county', 'matter_number'])
     // An invalid calendar date is not sent; an unmapped value is reported.
-    expect(unmappedKeys).toEqual(['middle_name'])
+    expect(unmappedKeys).toEqual(['preferred_pronoun'])
   })
 })
 
@@ -107,16 +108,17 @@ describe('pushLeadToLawmatics', () => {
     expect(first).toMatchObject({ prospectId: 'prospect-1', operation: 'created' })
     expect(mocks.create).toHaveBeenCalledTimes(1)
     expect(mocks.create.mock.calls[0][0]).toEqual({
-      first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5551234567',
-      birthdate: '1815-12-10', street: '12 St James Sq', city: 'Boston', state: 'MA', zipcode: '02108',
-      marital_status: 'Domestic Partner',
+      first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', name_suffix: 'Jr.', informal_name: 'Countess',
+      email: 'ada@example.test', phone: '5551234567',
+      birthdate: '1815-12-10', street: '12 St James Sq', street2: 'Apt 2', city: 'Boston', state: 'MA', zipcode: '02108',
+      marital_status: 'Domestic Partner', occupation: 'Mathematician',
       custom_fields: [
         { id: 'cf-county', value: 'Suffolk' },
         { id: 'cf-spouse-first', value: 'William' },
         { id: 'cf-children', value: 'Byron King' },
       ],
     })
-    expect(first.unmapped).toEqual(['Middle name', 'Address line 2', 'Spouse last name', 'Lead source', 'Internal notes'])
+    expect(first.unmapped).toEqual(['Spouse last name', 'Lead source', 'Legal plan member ID', 'Internal notes'])
     expect(prospectRecord()).toMatchObject({ external_id: 'prospect-1', status: 'synced' })
 
     db.client_intake[0].city = 'Cambridge'
