@@ -39,6 +39,9 @@ type Props = {
   onText: () => void
   onIntake: () => void
   onAddNote?: () => void
+  /** Creates or updates this lead's Lawmatics prospect. */
+  onPushToLawmatics?: () => void
+  pushingToLawmatics?: boolean
   onToggleRail: () => void
   railOpen: boolean
   hasEmail: boolean
@@ -62,6 +65,8 @@ export function LeadTopActions({
   onEmail,
   onIntake,
   onAddNote,
+  onPushToLawmatics,
+  pushingToLawmatics = false,
   onToggleRail,
   railOpen,
   hasEmail,
@@ -114,6 +119,11 @@ export function LeadTopActions({
             <DropdownMenuItem onClick={onSendSchedulingLink}>
               Send scheduling link
             </DropdownMenuItem>
+            {onPushToLawmatics && (
+              <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+                {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={onBookForClient}>
               Book for client…
             </DropdownMenuItem>
@@ -194,6 +204,11 @@ export function LeadTopActions({
           <DropdownMenuItem onClick={onSendSchedulingLink}>
             Send scheduling link
           </DropdownMenuItem>
+          {onPushToLawmatics && (
+            <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+              {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onBookForClient}>
             Book for client…
           </DropdownMenuItem>

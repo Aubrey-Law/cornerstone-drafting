@@ -5165,6 +5165,7 @@ export type Database = {
           created_at: string
           id: number
           lawmatics_appointment_sync_enabled: boolean
+          lawmatics_custom_field_id_map: Json
           lawmatics_event_type_id_map: Json
           lawmatics_last_check_error: string | null
           lawmatics_last_checked_at: string | null
@@ -5180,6 +5181,7 @@ export type Database = {
           created_at?: string
           id?: number
           lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_custom_field_id_map?: Json
           lawmatics_event_type_id_map?: Json
           lawmatics_last_check_error?: string | null
           lawmatics_last_checked_at?: string | null
@@ -5195,6 +5197,7 @@ export type Database = {
           created_at?: string
           id?: number
           lawmatics_appointment_sync_enabled?: boolean
+          lawmatics_custom_field_id_map?: Json
           lawmatics_event_type_id_map?: Json
           lawmatics_last_check_error?: string | null
           lawmatics_last_checked_at?: string | null
