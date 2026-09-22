@@ -10,7 +10,7 @@ describe('engagement scoped production loader',()=>{
   it.each([
     {matter_id:null,lead_id:null,active_revision:{input_snapshot:{practiceArea:'EP',clientMode:'couple',scopeKey:'standard',legalPlan:null}}},
     {matter_id:'m1',active_revision:{input_snapshot:{practiceArea:'Probate',clientMode:'couple',scopeKey:'standard',legalPlan:null}}},
-    {matter_id:'m1',active_revision:{input_snapshot:{practiceArea:'EP',clientMode:'individual',scopeKey:'standard',legalPlan:null}}},
+    {matter_id:'m1',active_revision:{input_snapshot:{practiceArea:'EP-LP',clientMode:'individual',scopeKey:'standard',legalPlan:null}}},
   ])('rejects ownerless and unsupported definitions',async data=>{
     getAgreement.mockResolvedValue(data)
     const {getScopedAgreement}=await import('@/lib/engagement/http')

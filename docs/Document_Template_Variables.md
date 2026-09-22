@@ -700,17 +700,22 @@ For a lot/plan deed, `boundary_calls` is an empty array and the complete descrip
 
 ## Engagement-agreement templates
 
-Three masters exist, all standard scope. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
+Four masters exist, all standard scope. `lib/engagement/templates.ts` maps a definition to its master, and a definition with no master cannot be drafted at all.
 
-| Master | Definition | Signers |
-| --- | --- | --- |
-| `ep-trust-couple` | Estate Planning, couple, no legal plan. | 2 |
-| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. | 2 |
-| `ep-lp-trust-individual` | Estate Planning - LP, solo client, on a named legal plan. | 1 |
+| Master | Definition | Signers | States the firm's fee |
+| --- | --- | --- | --- |
+| `ep-trust-couple` | Estate Planning, couple, no legal plan. | 2 | yes |
+| `ep-trust-individual` | Estate Planning, solo client, no legal plan. | 1 | yes |
+| `ep-lp-trust-couple` | Estate Planning - LP, couple, on a named legal plan. | 2 | no |
+| `ep-lp-trust-individual` | Estate Planning - LP, solo client, on a named legal plan. | 1 | no |
+
+A solo master is the couple master with the joint-representation terms and the
+second signer taken out, so the prose the two share stays one document. Both
+pairs are derived that way; keep it that way when either changes.
 
 A master's `recipientCount` is what decides which anchors it must carry: a one-signer master has `[[CLIENT_1_*]]` only, and a `[[CLIENT_2_*]]` left in it would be a line nobody can sign.
 
-Scalar variables shared by both:
+Scalar variables shared by all four (`{spouse_*}` render empty on a solo master, which prints neither):
 
 | Variable | Meaning |
 | --- | --- |
@@ -720,7 +725,7 @@ Scalar variables shared by both:
 | `{spouse_name}` | Spouse/client-two name. |
 | `{spouse_email}` | Spouse/client-two email. |
 
-`ep-trust-couple` only — the firm's own fee, which a plan-funded letter does not state:
+The flat-fee masters only (`statesFirmFee`) — the firm's own fee, which a plan-funded letter does not state, and which the workspace therefore requires before the agreement can be drafted:
 
 | Variable | Meaning |
 | --- | --- |
@@ -780,7 +785,7 @@ and a one-signer master carries the `CLIENT_1` pair alone. Signers are numbered 
 
 Do not place braces around these anchors. Publication validation also requires a valid US-Letter PDF conversion.
 
-Keep the signature block on one page: give every row of its table `w:cantSplit` and every paragraph above the last row `w:keepNext`. Word will otherwise break the table between rows, leaving the signature line at the foot of one page and the date at the head of the next.
+Keep the signature block on one page: give every row of its table `w:cantSplit` and every paragraph above the last row `w:keepNext`. Word will otherwise break the table between rows, leaving the signature line at the foot of one page and the date at the head of the next. All four masters carry this; an uploaded override has to carry it too, because nothing else holds the block together and whether it breaks depends on how much clause text happens to precede it.
 
 ## Authoring and validation rules
 

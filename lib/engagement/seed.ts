@@ -62,18 +62,14 @@ export function engagementSeedDefinition(record: EngagementSeedRecord): Engageme
     }
   }
   // A spouse on the record is what makes this a couple. Whether that has a
-  // master is the table's answer, not a second rule here: an estate-planning
-  // record with no spouse is a solo client, which only the plan letter covers.
+  // master is the table's answer, not a second rule here.
   const spouseEmail = record.spouseEmail || null
   const clientMode: EngagementClientMode = spouseEmail ? 'couple' : 'individual'
   const definition = { practiceArea, clientMode, scopeKey: 'standard' as const, legalPlan }
+  // Every estate-planning combination has a master today, so this guard is
+  // what keeps `ok: true` meaning "a master exists" if one is ever withdrawn.
   if (!engagementTemplateFor(definition)) {
-    return {
-      ok: false,
-      error: clientMode === 'individual'
-        ? 'No engagement master covers a solo client on this practice area; use the legacy engagement flow.'
-        : 'No engagement master covers this combination; use the legacy engagement flow.',
-    }
+    return { ok: false, error: 'No engagement master covers this combination; use the legacy engagement flow.' }
   }
   return { ok: true, definition, spouseEmail }
 }
