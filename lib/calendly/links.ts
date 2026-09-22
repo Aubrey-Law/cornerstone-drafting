@@ -1,25 +1,19 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { meetingTypeForKey, type MeetingTypeKey } from '@/lib/scheduling'
+import { isBookingUrl } from '@/lib/bookings/provider'
 
 export type CalendlyLinkChannel = 'email' | 'sms' | 'portal' | 'staff'
 
+// Despite the name, values may be any https booking page (Calendly, Cal.com,
+// Lawmatics, …) — see lib/bookings/provider.ts.
 export type CalendlyUrlMap = Partial<Record<MeetingTypeKey, string>>
-
-function isCalendlyUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false
-  try {
-    return new URL(value).origin === 'https://calendly.com'
-  } catch {
-    return false
-  }
-}
 
 export function sanitizeCalendlyUrls(value: unknown): CalendlyUrlMap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const map: CalendlyUrlMap = {}
   for (const [key, url] of Object.entries(value as Record<string, unknown>)) {
     const meetingType = meetingTypeForKey(key)
-    if (meetingType && isCalendlyUrl(url)) map[meetingType.key] = url
+    if (meetingType && isBookingUrl(url)) map[meetingType.key] = url.trim()
   }
   return map
 }

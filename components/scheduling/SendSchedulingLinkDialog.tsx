@@ -195,7 +195,7 @@ export function SendSchedulingLinkDialog({
               </div>
               {!data.types.some(t => t.configured) && (
                 <p className="text-xs text-destructive">
-                  No Calendly links configured yet — add them in Settings → Scheduling.
+                  No booking links configured yet — add them in Settings → Scheduling.
                 </p>
               )}
             </div>
@@ -235,7 +235,7 @@ export function SendSchedulingLinkDialog({
             )}
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor="scheduling-link-message">Message</Label>
-              {/* break-words: the prefilled Calendly URL is one long unbroken
+              {/* break-words: the prefilled booking URL is one long unbroken
                   token and would otherwise scroll sideways inside the field. */}
               <ResizableTextarea
                 id="scheduling-link-message"

@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
   const baseUrl = urls[meetingType.key as MeetingTypeKey]
   if (!baseUrl) {
     return NextResponse.json(
-      { error: `No Calendly link configured for ${meetingType.label}. Add it in Settings → Scheduling.` },
+      { error: `No booking link configured for ${meetingType.label}. Add it in Settings → Scheduling.` },
       { status: 400 },
     )
   }
