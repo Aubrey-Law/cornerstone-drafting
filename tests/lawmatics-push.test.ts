@@ -11,6 +11,7 @@ vi.mock('@/lib/integrations/lawmatics/client', () => ({
 import { buildLawmaticsProspectBody } from '@/lib/integrations/lawmatics/pushFields'
 import { pushLeadToLawmatics } from '@/lib/integrations/lawmatics/push'
 import { resolveLawmaticsProspect } from '@/lib/integrations/lawmatics/prospect'
+import { LawmaticsValidationError, parseLawmaticsValidation } from '@/lib/integrations/lawmatics/validation'
 
 type Row = Record<string, unknown>
 let db: Record<string, Row[]>
@@ -188,5 +189,73 @@ describe('pushLeadToLawmatics', () => {
     await expect(pushLeadToLawmatics(INTAKE_ID)).rejects.toMatchObject({ code: 'validation_failed' })
     expect(prospectRecord()).toMatchObject({ external_id: 'prospect-1', status: 'attention', last_error_code: 'validation_failed' })
     expect(mocks.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Lawmatics 422 handling', () => {
+  it('reads refused attributes from JSON:API and Rails-style bodies', async () => {
+    expect(parseLawmaticsValidation({ errors: [
+      { detail: 'is not included in the list', source: { pointer: '/data/attributes/marital_status' } },
+      { title: 'Invalid', source: { pointer: '/data/attributes/custom_fields/0/value' } },
+    ] })).toEqual({
+      fields: ['marital_status', 'custom_fields'],
+      details: ['marital_status: is not included in the list', 'custom_fields: Invalid'],
+    })
+    expect(parseLawmaticsValidation({ errors: { birthdate: ['is invalid'] } }))
+      .toEqual({ fields: ['birthdate'], details: ['birthdate: is invalid'] })
+    expect(parseLawmaticsValidation({ message: 'Bad request' })).toEqual({ fields: [], details: ['Bad request'] })
+  })
+
+  async function validationError(fields: string[], details: string[] = []) {
+    return new LawmaticsValidationError(fields, details)
+  }
+
+  it('retries a create once without the refused fields and reports them', async () => {
+    mocks.create.mockRejectedValueOnce(await validationError(['marital_status', 'custom_fields'], ['marital_status: is not included in the list']))
+
+    const result = await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+    const retried = mocks.create.mock.calls[1][0]
+    expect(retried).not.toHaveProperty('marital_status')
+    expect(retried).not.toHaveProperty('custom_fields')
+    expect(retried).toMatchObject({ first_name: 'Ada', last_name: 'Lovelace', city: 'Boston' })
+    expect(result.rejected).toEqual(['Marital status', 'County', 'Spouse first name', 'Children'])
+    expect(result.rejectedDetails).toEqual(['marital_status: is not included in the list'])
+    expect(result.sent).not.toContain('Marital status')
+    expect(prospectRecord()).toMatchObject({ external_id: 'prospect-1', status: 'synced' })
+  })
+
+  it('retries an update once without the refused fields', async () => {
+    await pushLeadToLawmatics(INTAKE_ID)
+    db.client_intake[0].city = 'Cambridge'
+    mocks.update.mockRejectedValueOnce(await validationError(['name_suffix']))
+
+    const result = await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.update).toHaveBeenCalledTimes(2)
+    expect(mocks.update.mock.calls[1][1]).not.toHaveProperty('name_suffix')
+    expect(result).toMatchObject({ operation: 'updated', rejected: ['Suffix'] })
+  })
+
+  it('surfaces a refusal it cannot narrow to a field, or one naming a required field, without retrying', async () => {
+    mocks.create.mockRejectedValueOnce(await validationError([], ['Something went wrong']))
+    await expect(pushLeadToLawmatics(INTAKE_ID)).rejects.toMatchObject({ code: 'validation_failed', details: ['Something went wrong'] })
+    expect(mocks.create).toHaveBeenCalledTimes(1)
+
+    mocks.create.mockRejectedValueOnce(await validationError(['last_name']))
+    await expect(pushLeadToLawmatics(INTAKE_ID)).rejects.toMatchObject({ code: 'validation_failed' })
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a second time when the retry is refused too', async () => {
+    mocks.create
+      .mockRejectedValueOnce(await validationError(['marital_status']))
+      .mockRejectedValueOnce(await validationError(['birthdate']))
+
+    await expect(pushLeadToLawmatics(INTAKE_ID)).rejects.toMatchObject({ code: 'validation_failed', fields: ['birthdate'] })
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+    // A refused create wrote nothing, so the next push may create again.
+    expect(prospectRecord()).toMatchObject({ external_id: null, status: 'attention', last_error_code: 'validation_failed' })
   })
 })

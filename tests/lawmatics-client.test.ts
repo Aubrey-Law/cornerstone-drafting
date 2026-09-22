@@ -3,6 +3,7 @@ import { inspect } from 'node:util'
 import { cancelLawmaticsEvent, createLawmaticsEvent, createLawmaticsProspect, lawmaticsRequest, updateLawmaticsEvent } from '@/lib/integrations/lawmatics/client'
 import type { LawmaticsEventInput } from '@/lib/integrations/lawmatics/types'
 import { IntegrationError } from '@/lib/integrations/errors'
+import { LawmaticsValidationError } from '@/lib/integrations/lawmatics/validation'
 import { getLawmaticsAccessToken } from '@/lib/lawmatics'
 
 vi.mock('@/lib/lawmatics', () => ({ getLawmaticsAccessToken: vi.fn() }))
@@ -180,6 +181,18 @@ describe('Lawmatics transport', () => {
     vi.mocked(fetch).mockResolvedValue(new Response(providerBody, { status }))
     const error = await lawmaticsRequest('/v1/events', { method: 'POST', body: {} }).catch(e => e)
     expect(error).toMatchObject({ provider: 'lawmatics', kind, code, retryAfterMs: null })
+    expectSafe(error)
+  })
+
+  it('reports the fields a 422 names, keeping Lawmatics wording out of logs and serialization', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ errors: [
+      { detail: `${email} is not a valid email`, source: { pointer: '/data/attributes/email' } },
+    ] }), { status: 422 }))
+    const error = await lawmaticsRequest('/v1/prospects', { method: 'POST', body: {} }).catch(e => e) as LawmaticsValidationError
+    expect(error).toBeInstanceOf(LawmaticsValidationError)
+    expect(error).toMatchObject({ kind: 'attention', code: 'validation_failed', fields: ['email'] })
+    expect(error.safeMessage).toBe('Lawmatics rejected these fields: email.')
+    expect(error.details).toEqual([`${email} is not a valid email`])
     expectSafe(error)
   })
 

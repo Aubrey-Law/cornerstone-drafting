@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { IntegrationError } from '@/lib/integrations/errors'
+import { LawmaticsValidationError } from '@/lib/integrations/lawmatics/validation'
 import { pushLeadToLawmatics } from '@/lib/integrations/lawmatics/push'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -35,12 +36,19 @@ export async function POST(req: Request) {
       lead_id: intakeId,
       event_type: 'lawmatics_pushed',
       title: result.operation === 'created' ? 'Created in Lawmatics' : 'Updated in Lawmatics',
-      detail: `${result.sent.length} field${result.sent.length === 1 ? '' : 's'} sent`,
+      detail: `${result.sent.length} field${result.sent.length === 1 ? '' : 's'} sent`
+        + (result.rejected.length ? `; refused by Lawmatics: ${result.rejected.join(', ')}` : ''),
       actor_id: userId,
     })
     if (activityError) console.error('[lawmatics/push] activity log failed', activityError.message)
     return NextResponse.json(result)
   } catch (error) {
+    if (error instanceof LawmaticsValidationError) {
+      // Lawmatics' wording goes back to the staff member who pushed; it is not logged or stored.
+      const reason = error.details.length ? ` ${error.details.join(' ')}` : ''
+      return NextResponse.json({ error: `${error.safeMessage}${reason}`, code: error.code, fields: error.fields,
+        details: error.details }, { status: 422 })
+    }
     if (error instanceof IntegrationError) {
       return NextResponse.json({ error: error.safeMessage, code: error.code }, { status: errorStatus(error) })
     }
