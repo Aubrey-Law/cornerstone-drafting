@@ -518,12 +518,13 @@ The push only needs Lawmatics connected; it does not depend on
 its document merge-field reference lists them): first, middle and last name,
 suffix (`name_suffix`), preferred name (`informal_name`), email, phone,
 birthdate, street, address line 2 (`street2`), city, state, ZIP (`zipcode`),
-marital status, occupation, employer, citizenship.
+marital status, occupation, employer, citizenship, and, for a hired client, the
+matter number (`case_number`, Lawmatics' Case Number).
 
 **Everything else** (county, preferred pronouns, date of marriage, spouse
 details, children, lead/referral source, practice area, plan type, lead status,
 estate value, legal plan member ID, planning objectives, special/qualification/
-internal notes, matter number) goes to Lawmatics custom
+internal notes) goes to Lawmatics custom
 fields. A custom field's ID is the number in its merge field on Lawmatics'
 document reference page (`{{custom_field_930886}}` → `930886`). Paste it next to the Cornerstone field in **Settings → Lawmatics**
 (`/admin/settings?tab=lawmatics`, which also shows the connection and a

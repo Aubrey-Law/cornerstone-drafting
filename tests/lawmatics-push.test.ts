@@ -89,13 +89,13 @@ describe('buildLawmaticsProspectBody', () => {
       matterNumber: '2026-014',
       spouse: null,
       children: [],
-    }, { county: 'cf-county', matter_number: 'cf-matter', notes: 'cf-unused' })
+    }, { county: 'cf-county', notes: 'cf-unused' })
 
     expect(body).toEqual({
-      first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', marital_status: 'Married',
-      custom_fields: [{ id: 'cf-county', value: 'Suffolk' }, { id: 'cf-matter', value: '2026-014' }],
+      first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', marital_status: 'Married', case_number: '2026-014',
+      custom_fields: [{ id: 'cf-county', value: 'Suffolk' }],
     })
-    expect(sentKeys).toEqual(['first_name', 'middle_name', 'last_name', 'marital_status', 'county', 'matter_number'])
+    expect(sentKeys).toEqual(['first_name', 'middle_name', 'last_name', 'marital_status', 'matter_number', 'county'])
     // An invalid calendar date is not sent; an unmapped value is reported.
     expect(unmappedKeys).toEqual(['preferred_pronoun'])
   })
@@ -151,13 +151,13 @@ describe('pushLeadToLawmatics', () => {
     db.matters = [{ id: 'matter-1', client_intake_id: INTAKE_ID, matter_number: '2026-014' }]
     db.contacts[0].relationship_type = null
     db.matter_contacts = [{ matter_id: 'matter-1', contact_id: 'c-spouse', relationship_type: 'spouse' }]
-    customFieldMap.matter_number = 'cf-matter'
 
     await pushLeadToLawmatics(INTAKE_ID)
+    // A hired client's matter number goes to the Lawmatics Case Number.
+    expect(mocks.create.mock.calls[0][0].case_number).toBe('2026-014')
     expect(mocks.create.mock.calls[0][0].custom_fields).toEqual([
       { id: 'cf-county', value: 'Suffolk' },
       { id: 'cf-spouse-first', value: 'William' },
-      { id: 'cf-matter', value: '2026-014' },
     ])
   })
 
