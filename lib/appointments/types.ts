@@ -16,7 +16,7 @@ export function isAppointmentLocationType(value: unknown): value is AppointmentL
   return value === 'phone' || value === 'teams' || value === 'in_person'
 }
 export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
-export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly' | 'calcom'
+export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly' | 'calcom' | 'lawmatics'
 
 /**
  * Sources whose appointments are read-only mirrors of a booking owned by an
@@ -26,6 +26,7 @@ export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly' | 'ca
 const EXTERNAL_SOURCE_LABELS: Partial<Record<string, string>> = {
   calendly: 'Calendly',
   calcom: 'Cal.com',
+  lawmatics: 'Lawmatics',
 }
 
 export function externalSourceLabel(source: string | null | undefined): string | null {

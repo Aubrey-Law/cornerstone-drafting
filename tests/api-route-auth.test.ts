@@ -111,6 +111,9 @@ describe('API route auth coverage', () => {
           /verifyRetellSignature\b/,
           /verifyCalcomSignature\b/,
           /verifyCalendlySignature\b/,
+          // Lawmatics: "sha256=" HMAC over `${timestamp}.${body}` with a
+          // 5-minute replay window (lib/integrations/lawmatics/webhook.ts).
+          /verifyLawmaticsSignature\b/,
           /verifyFirmaWebhookSignature\b/,
           // Resend delivery events: Svix signing. The svix-id and timestamp are
           // part of the signed content, so a captured body cannot be replayed
