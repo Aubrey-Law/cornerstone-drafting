@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Link2, Loader2, MessageSquarePlus, MessageSquareText, Send, Trash2, UserPlus } from 'lucide-react'
+import { Archive, ArchiveRestore, Link2, Loader2, MessageSquarePlus, MessageSquareText, Send, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { EmptyState } from '@/components/EmptyState'
@@ -66,6 +66,7 @@ const FILTERS: Array<{ key: SmsThreadFilter; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'unknown', label: 'Unknown' },
+  { key: 'archived', label: 'Archived' },
 ]
 
 const POLL_MS = 30_000
@@ -271,6 +272,39 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
     }
   }
 
+  /** Leave the current conversation for the next one in the list. */
+  function moveOffSelected() {
+    const next = threads.find(row => row.phone !== selected)?.phone ?? null
+    setThreads(rows => rows.filter(row => row.phone !== selected))
+    setPendingRecipient(null)
+    setSelected(next)
+    router.replace(next ? `/admin/texts?phone=${next}` : '/admin/texts', { scroll: false })
+  }
+
+  async function setArchived(archived: boolean) {
+    if (!headers || !selected) return
+    try {
+      await apiRequest(`/api/admin/texts/threads/${selected}/archive`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived }),
+      }, archived ? 'Could not archive conversation' : 'Could not restore conversation')
+      if (archived) {
+        toast.success(thread?.href ? 'Archived. The texts stay on the record.' : 'Archived')
+        if (filter !== 'archived') moveOffSelected()
+        else await loadThread(selected, { quiet: true })
+      } else {
+        toast.success('Moved back to Texts')
+        if (filter === 'archived') moveOffSelected()
+        else await loadThread(selected, { quiet: true })
+      }
+      invalidateSidebarCountsClient()
+      void loadThreads()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update conversation')
+    }
+  }
+
   async function confirmDelete() {
     if (!headers || !selected || !pendingDelete) return
     const target = pendingDelete
@@ -284,11 +318,7 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
       } else {
         await apiRequest(`/api/admin/texts/threads/${selected}`, { method: 'DELETE', headers }, 'Could not delete conversation')
         toast.success('Conversation deleted')
-        const next = threads.find(row => row.phone !== selected)?.phone ?? null
-        setThreads(rows => rows.filter(row => row.phone !== selected))
-        setPendingRecipient(null)
-        setSelected(next)
-        router.replace(next ? `/admin/texts?phone=${next}` : '/admin/texts', { scroll: false })
+        moveOffSelected()
         void loadThreads()
       }
       invalidateSidebarCountsClient()
@@ -331,7 +361,7 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
           {threads.length === 0 ? (
             <EmptyState
               icon={MessageSquareText}
-              title={filter === 'all' ? 'No texts yet' : filter === 'unread' ? 'Nothing unread' : 'No unknown senders'}
+              title={filter === 'all' ? 'No texts yet' : filter === 'unread' ? 'Nothing unread' : filter === 'unknown' ? 'No unknown senders' : 'Nothing archived'}
             />
           ) : (
             <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto rounded-md border border-border">
@@ -381,6 +411,7 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
                   <h2 className="truncate text-base font-semibold">{title}</h2>
                   <p className="text-xs text-muted-foreground">
                     {title === formatPhone(selected) ? KIND_LABEL[kind] : `${formatPhone(selected)} · ${KIND_LABEL[kind]}`}
+                    {summary?.archived ? ' · Archived' : ''}
                   </p>
                 </div>
                 <div className="ml-auto flex flex-wrap gap-2">
@@ -400,6 +431,13 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
                       </Button>
                     </>
                   ) : null}
+                  {thread && (
+                    <Button size="sm" variant="ghost" onClick={() => void setArchived(!thread.archived)}>
+                      {thread.archived
+                        ? <><ArchiveRestore className="h-3.5 w-3.5" />Unarchive</>
+                        : <><Archive className="h-3.5 w-3.5" />Archive</>}
+                    </Button>
+                  )}
                   {thread && (
                     <Button
                       size="sm"

@@ -2,15 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Rows each table/view returns for this test; `in()` filters are ignored, the
 // fixtures only hold the rows the query would ask for.
-const tables = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]> }))
+const tables = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]>, eqCalls: [] as Array<[string, unknown]> }))
 
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
     from: (table: string) => {
       const result = { data: tables.rows[table] ?? [], error: null }
       const chain: Record<string, unknown> = {}
-      for (const method of ['select', 'order', 'limit', 'gt', 'is', 'lt', 'in', 'eq']) {
+      for (const method of ['select', 'order', 'limit', 'gt', 'is', 'lt', 'in']) {
         chain[method] = () => chain
+      }
+      chain.eq = (column: string, value: unknown) => {
+        if (table === 'v_sms_threads') tables.eqCalls.push([column, value])
+        return chain
       }
       chain.then = (resolve: (value: typeof result) => void) => resolve(result)
       return chain
@@ -26,6 +30,7 @@ const base = {
 }
 
 beforeEach(() => {
+  tables.eqCalls = []
   tables.rows = {
     v_sms_threads: [
       { ...base, phone: '5555550001', phone_e164: '+15555550001', lead_id: 'lead-1', matter_id: 'opp-1', contact_id: null },
@@ -64,5 +69,15 @@ describe('threadMessagesFilter', () => {
     const filter = threadMessagesFilter('5555550123')
     expect(filter).toContain('and(direction.eq.inbound,from_number.in.("+15555550123","15555550123","5555550123"))')
     expect(filter).toContain('and(direction.eq.outbound,to_number.in.("+15555550123","15555550123","5555550123"))')
+  })
+})
+
+describe('archived conversations', () => {
+  it('keeps them out of the normal list and shows only them under the Archived filter', async () => {
+    await listSmsThreads()
+    expect(tables.eqCalls).toContainEqual(['archived', false])
+    tables.eqCalls = []
+    await listSmsThreads({ filter: 'archived' })
+    expect(tables.eqCalls).toContainEqual(['archived', true])
   })
 })
