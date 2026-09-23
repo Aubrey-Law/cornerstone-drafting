@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       'id, direction, recipient_role, recipient_name, body, status, from_number, to_number, created_at, sent_at, actor_name, read_by_staff_at',
     )
     .eq('matter_id', matterId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
   if (error) {

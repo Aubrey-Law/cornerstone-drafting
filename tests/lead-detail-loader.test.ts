@@ -71,6 +71,7 @@ const harness = vi.hoisted(() => {
         eq: () => chain,
         gte: () => chain,
         neq: () => chain,
+        is: () => chain,
         order: () => chain,
         limit: () => chain,
         in: (column: string, values: string[]) => {

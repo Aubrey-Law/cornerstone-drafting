@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       'id, direction, recipient_role, recipient_name, body, status, from_number, to_number, created_at, sent_at, actor_name, read_by_staff_at',
     )
     .eq('contact_id', contactId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

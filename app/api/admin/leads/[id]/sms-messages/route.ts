@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     .select(
       'id, direction, recipient_role, recipient_name, body, status, from_number, to_number, created_at, sent_at, actor_name, read_by_staff_at',
     )
+    .is('deleted_at', null)
   query = lead?.matter_id
     ? query.or(`lead_id.eq.${leadId},matter_id.eq.${lead.matter_id}`)
     : query.eq('lead_id', leadId)

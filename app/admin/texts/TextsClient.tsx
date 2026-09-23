@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Link2, Loader2, MessageSquarePlus, MessageSquareText, Send, UserPlus } from 'lucide-react'
+import { Link2, Loader2, MessageSquarePlus, MessageSquareText, Send, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { EmptyState } from '@/components/EmptyState'
@@ -14,6 +14,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -118,6 +128,9 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
   const [newTextOpen, setNewTextOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [createLeadOpen, setCreateLeadOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'message'; message: SmsThreadMessage } | { kind: 'thread' } | null
+  >(null)
   const logRef = useRef<HTMLOListElement>(null)
   // Lets async loads drop a response for a conversation no longer on screen.
   // Updated in an effect declared before the loading effects, so it is
@@ -258,6 +271,32 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
     }
   }
 
+  async function confirmDelete() {
+    if (!headers || !selected || !pendingDelete) return
+    const target = pendingDelete
+    setPendingDelete(null)
+    try {
+      if (target.kind === 'message') {
+        await apiRequest(`/api/admin/texts/messages/${target.message.id}`, { method: 'DELETE', headers }, 'Could not delete text')
+        setMessages(rows => rows.filter(row => row.id !== target.message.id))
+        toast.success('Text deleted')
+        await Promise.all([loadThread(selected, { quiet: true }), loadThreads()])
+      } else {
+        await apiRequest(`/api/admin/texts/threads/${selected}`, { method: 'DELETE', headers }, 'Could not delete conversation')
+        toast.success('Conversation deleted')
+        const next = threads.find(row => row.phone !== selected)?.phone ?? null
+        setThreads(rows => rows.filter(row => row.phone !== selected))
+        setPendingRecipient(null)
+        setSelected(next)
+        router.replace(next ? `/admin/texts?phone=${next}` : '/admin/texts', { scroll: false })
+        void loadThreads()
+      }
+      invalidateSidebarCountsClient()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete')
+    }
+  }
+
   const composerNote = !sendingEnabled
     ? 'Texting is turned off. Conversations are read-only.'
     : optedOut
@@ -361,6 +400,17 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
                       </Button>
                     </>
                   ) : null}
+                  {thread && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setPendingDelete({ kind: 'thread' })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete conversation
+                    </Button>
+                  )}
                 </div>
               </header>
 
@@ -395,11 +445,19 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
                       >
                         {linkifyText(message.body)}
                       </p>
-                      <span className="text-micro text-muted-foreground">
+                      <span className="flex items-center gap-1 text-micro text-muted-foreground">
                         {FULL.format(new Date(message.createdAt))}
                         {message.direction === 'outbound' && message.actorName ? ` · ${message.actorName}` : ''}
                         {deliveryLabel(message) ? ` · ${deliveryLabel(message)}` : ''}
                         {message.status === 'opt_out' ? ' · Opted out' : ''}
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete({ kind: 'message', message })}
+                          className="ml-1 rounded p-1 hover:bg-accent hover:text-destructive"
+                          aria-label={`Delete text from ${FULL.format(new Date(message.createdAt))}`}
+                        >
+                          <Trash2 className="size-3" aria-hidden />
+                        </button>
                       </span>
                     </li>
                   ))
@@ -487,6 +545,32 @@ export function TextsClient({ initialThreads, initialPhone, sendingEnabled, load
           }
         }}
       />
+
+      <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDelete?.kind === 'thread' ? `Delete the conversation with ${title}?` : 'Delete this text?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.kind === 'thread'
+                ? 'Every text with this number disappears from Texts and from the record. '
+                : 'It disappears from Texts and from the record. '}
+              It is not unsent: the other person keeps their copy. The firm keeps a record of what was deleted and by whom.
+              {pendingDelete?.kind === 'thread' && optedOut ? ' This number stays opted out.' : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => void confirmDelete()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selected && (
         <CreateLeadDialog

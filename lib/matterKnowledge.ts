@@ -558,6 +558,7 @@ async function loadCommunications(admin: Client, matterId: string, limit: number
       .from('sms_messages')
       .select('created_at, direction, body, status, recipient_name, recipient_role')
       .eq('matter_id', matterId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit),
     admin

@@ -88,6 +88,7 @@ async function loadContactSystemPrompt(contactId: string): Promise<string | null
     .from('sms_messages')
     .select('direction, body, created_at')
     .eq('contact_id', contactId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(10)
 

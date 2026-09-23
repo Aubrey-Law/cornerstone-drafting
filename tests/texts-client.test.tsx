@@ -49,6 +49,7 @@ beforeEach(() => {
     calls.push({ url, method: init?.method ?? 'GET' })
     const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
     if (url.startsWith('/api/admin/texts/threads?')) return json({ threads: all })
+    if (init?.method === 'DELETE') return json({ success: true })
     const read = url.match(/threads\/(\d+)\/read$/)
     if (read) return json({ marked: 2 })
     const one = url.match(/threads\/(\d+)$/)
@@ -101,5 +102,30 @@ describe('TextsClient', () => {
     await userEvent.type(box, 'See you then')
     await userEvent.click(screen.getByRole('button', { name: /^Send$/ }))
     await waitFor(() => expect(calls.some(c => c.url.endsWith('/5555550002/send') && c.method === 'POST')).toBe(true))
+  })
+
+  it('deletes one text after confirming, and says the recipient keeps their copy', async () => {
+    render(<TextsClient initialThreads={all} initialPhone="5555550002" sendingEnabled loadError={null} />)
+    await screen.findByText('Hi Lee')
+    const [first] = screen.getAllByRole('button', { name: /^Delete text from/ })
+    await userEvent.click(first!)
+    expect(await screen.findByText(/the other person keeps their copy/)).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(calls.some(c => c.url === '/api/admin/texts/messages/m2' && c.method === 'DELETE')).toBe(true))
+  })
+
+  it('deletes a whole conversation and moves to the next one', async () => {
+    render(<TextsClient initialThreads={all} initialPhone="5555550002" sendingEnabled loadError={null} />)
+    await userEvent.click(await screen.findByRole('button', { name: /Delete conversation/ }))
+    expect(await screen.findByText('Delete the conversation with Lee Lead?')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(calls.some(c => c.url === '/api/admin/texts/threads/5555550002' && c.method === 'DELETE')).toBe(true))
+  })
+
+  it('does nothing when the delete is cancelled', async () => {
+    render(<TextsClient initialThreads={all} initialPhone="5555550002" sendingEnabled loadError={null} />)
+    await userEvent.click(await screen.findByRole('button', { name: /Delete conversation/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
   })
 })
