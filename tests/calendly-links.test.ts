@@ -73,6 +73,19 @@ describe('buildCalendlyLink', () => {
     expect([...url.searchParams.keys()].some(key => key.startsWith('metadata['))).toBe(false)
   })
 
+  it('prefills first and last name on Lawmatics booking forms', () => {
+    const url = new URL(buildCalendlyLink('https://app.lawmatics.com/forms/booking/abc', {
+      name: 'Avery Jo Stone',
+      email: 'avery@example.com',
+      leadId: '123e4567-e89b-12d3-a456-426614174000',
+      channel: 'email',
+    }))
+    expect(url.searchParams.get('first_name')).toBe('Avery')
+    expect(url.searchParams.get('last_name')).toBe('Jo Stone')
+    expect(url.searchParams.get('email')).toBe('avery@example.com')
+    expect([...url.searchParams.keys()].some(key => key.startsWith('metadata['))).toBe(false)
+  })
+
   it('adds Cal.com booking metadata so the webhook links the booking', () => {
     const lead = new URL(buildCalendlyLink('https://cal.com/aubreylaw/discoverycall', {
       name: 'Avery Stone',

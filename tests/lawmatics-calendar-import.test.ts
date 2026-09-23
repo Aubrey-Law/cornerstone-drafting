@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     people: {} as Record<string, unknown>,
     outboundIds: [] as string[],
     prospectLeads: {} as Record<string, string>,
+    leadMatters: {} as Record<string, string>,
     stored: [] as Array<Record<string, unknown>>,
     claimed: new Set<string>(),
     claimCalls: [] as string[],
@@ -21,6 +22,10 @@ const mocks = vi.hoisted(() => {
       return lead ? [{ internal_entity_id: lead }] : []
     }
     if (table === 'client_intake') return []
+    if (table === 'matters') {
+      const matter = state.leadMatters[String(filters.client_intake_id)]
+      return matter ? [{ id: matter }] : []
+    }
     if (table === 'external_bookings') {
       const ids = filters.booking_uid as string[] | undefined
       const statuses = filters.status as string[] | undefined
@@ -138,7 +143,7 @@ const calls = () => mocks.processBookingEvent.mock.calls.map(call => (call as un
 beforeEach(() => {
   process.env.LAWMATICS_CALENDAR_SYNC_ENABLED = 'true'
   Object.assign(mocks.state, {
-    events: [], eventById: {}, outboundIds: [], prospectLeads: { 'p-1': 'lead-1' }, stored: [],
+    events: [], eventById: {}, outboundIds: [], prospectLeads: { 'p-1': 'lead-1' }, leadMatters: {}, stored: [],
     claimed: new Set<string>(), claimCalls: [],
     people: { '/v1/prospects/p-1': { id: 'p-1', type: 'prospect', attributes: { first_name: 'Avery', last_name: 'Stone', email: 'Avery@Example.com', phone: '6175550100' } } },
   })
@@ -240,7 +245,15 @@ describe('syncLawmaticsCalendar', () => {
       startTime: '2026-10-05T14:00:00.000Z',
       endTime: '2026-10-05T14:30:00.000Z',
       metadataLeadId: 'lead-1',
+      metadataMatterId: null,
     })])
+  })
+
+  it('links a booking on a pushed prospect to the lead\'s matter too', async () => {
+    mocks.state.leadMatters = { 'lead-1': 'matter-1' }
+    mocks.state.events = [lmEvent('e-1')]
+    await syncLawmaticsCalendar({ now: NOW })
+    expect(calls()).toEqual([expect.objectContaining({ metadataLeadId: 'lead-1', metadataMatterId: 'matter-1' })])
   })
 
   it('skips events Cornerstone pushed, internal/all-day events, and events outside the window', async () => {

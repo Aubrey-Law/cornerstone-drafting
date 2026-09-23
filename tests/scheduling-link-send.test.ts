@@ -4,6 +4,13 @@ const inserts: Array<{ table: string; values: Record<string, unknown> }> = []
 const sendEmail = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'sent', logId: 'log-1' }))
 const sendOutboundSms = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'queued', providerMessageId: 'SM1', smsMessage: {}, activity: null }))
 const notifyClientOfFirmMessage = vi.fn(async (..._args: unknown[]) => undefined)
+const prepareLawmaticsBooking = vi.fn(async (..._args: unknown[]) => ({
+  intakeId: 'lead-1', prospectId: 'p-1', operation: 'updated', warning: null as string | null,
+}))
+
+vi.mock('@/lib/integrations/lawmatics/bookingLink', () => ({
+  prepareLawmaticsBooking: (...a: unknown[]) => prepareLawmaticsBooking(...a),
+}))
 
 vi.mock('@/lib/apiAuth', () => ({
   requireAdmin: vi.fn(async () => ({
@@ -37,6 +44,7 @@ vi.mock('@/lib/calendly/links', async importOriginal => ({
   getCalendlyUrls: vi.fn(async () => ({
     discovery_call: 'https://calendly.com/aubreylaw/discovery',
     signing_appointment: 'https://calendly.com/aubreylaw/signing',
+    draft_review: 'https://app.lawmatics.com/forms/booking/draft-review',
   })),
 }))
 
@@ -78,6 +86,7 @@ beforeEach(() => {
   sendEmail.mockClear()
   sendOutboundSms.mockClear()
   notifyClientOfFirmMessage.mockClear()
+  prepareLawmaticsBooking.mockClear()
   vi.resetModules()
 })
 
@@ -172,5 +181,39 @@ describe('POST /api/admin/scheduling-links/send', () => {
   it('rejects when neither or both target ids are given', async () => {
     expect((await post({ target: {}, meetingTypeKey: 'discovery_call', channel: 'email' })).res.status).toBe(400)
     expect((await post({ target: { leadId: 'a', matterId: 'b' }, meetingTypeKey: 'discovery_call', channel: 'email' })).res.status).toBe(400)
+  })
+})
+
+describe('Lawmatics booking links', () => {
+  it('does not touch Lawmatics for other schedulers', async () => {
+    await post({ target: { leadId: 'lead-1' }, meetingTypeKey: 'discovery_call', channel: 'email' })
+    expect(prepareLawmaticsBooking).not.toHaveBeenCalled()
+  })
+
+  it('pushes the lead to Lawmatics before sending, and prefills the name parts', async () => {
+    const { res, json } = await post({ target: { leadId: 'lead-1' }, meetingTypeKey: 'draft_review', channel: 'email' })
+
+    expect(res.status).toBe(200)
+    expect(json.warning).toBeUndefined()
+    expect(prepareLawmaticsBooking).toHaveBeenCalledWith({ leadId: 'lead-1', matterId: null }, 'user-1')
+    expect(prepareLawmaticsBooking.mock.invocationCallOrder[0]).toBeLessThan(sendEmail.mock.invocationCallOrder[0])
+    const text = String((sendEmail.mock.calls[0]?.[0] as { text?: unknown }).text)
+    const link = new URL(text.match(/https:\/\/app\.lawmatics\.com\S+/)![0])
+    expect(link.searchParams.get('first_name')).toBe('Avery')
+    expect(link.searchParams.get('last_name')).toBe('Stone')
+    expect(link.searchParams.get('email')).toBe('avery@example.com')
+  })
+
+  it('still sends when the push fails, and returns the warning for staff', async () => {
+    prepareLawmaticsBooking.mockResolvedValueOnce({
+      intakeId: 'lead-1', prospectId: null, operation: null,
+      warning: 'Reconnect Lawmatics to continue synchronization. The booking will be matched to this client by email instead.',
+    } as never)
+    const { res, json } = await post({ target: { matterId: 'matter-1' }, meetingTypeKey: 'draft_review', channel: 'portal' })
+
+    expect(res.status).toBe(200)
+    expect(prepareLawmaticsBooking).toHaveBeenCalledWith({ leadId: null, matterId: 'matter-1' }, 'user-1')
+    expect(json.warning).toContain('matched to this client by email')
+    expect(inserts.some(item => item.table === 'messages')).toBe(true)
   })
 })

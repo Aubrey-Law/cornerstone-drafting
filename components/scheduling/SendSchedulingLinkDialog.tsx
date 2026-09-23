@@ -112,6 +112,8 @@ export function SendSchedulingLinkDialog({
       toast.success(
         channel === 'portal' ? 'Posted to the client portal' : `Scheduling link ${json.status}`,
       )
+      // Lawmatics links: the lead could not be linked in Lawmatics first.
+      if (typeof json.warning === 'string') toast.warning(json.warning)
       onOpenChange(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Send failed')
