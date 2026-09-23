@@ -7,7 +7,7 @@ import { optOutPhoneKey } from '@/lib/sms/optOut'
  */
 
 export type SmsThreadKind = 'lead' | 'client' | 'contact' | 'unknown'
-export type SmsThreadFilter = 'all' | 'unread' | 'unknown'
+export type SmsThreadFilter = 'all' | 'unread' | 'unknown' | 'archived'
 
 export interface SmsThread {
   /** 10-digit key, as in `normalize_us_phone()`. Used in URLs. */
@@ -25,6 +25,8 @@ export interface SmsThread {
   lastMessageAt: string
   unreadCount: number
   optedOut: boolean
+  /** Hidden from the Texts list until the next incoming text; still on the record. */
+  archived: boolean
 }
 
 export interface SmsThreadMessage {
@@ -50,10 +52,11 @@ interface ThreadRow {
   contact_id: string | null
   recipient_name: string | null
   opted_out: boolean
+  archived: boolean
 }
 
 const THREAD_COLUMNS =
-  'phone, phone_e164, last_body, last_direction, last_status, last_message_at, unread_count, lead_id, matter_id, contact_id, recipient_name, opted_out'
+  'phone, phone_e164, last_body, last_direction, last_status, last_message_at, unread_count, lead_id, matter_id, contact_id, recipient_name, opted_out, archived'
 
 function fullName(first: string | null | undefined, last: string | null | undefined): string | null {
   return [first?.trim(), last?.trim()].filter(Boolean).join(' ').trim() || null
@@ -129,6 +132,7 @@ async function enrichThreads(rows: ThreadRow[]): Promise<SmsThread[]> {
       lastMessageAt: row.last_message_at,
       unreadCount: Number(row.unread_count) || 0,
       optedOut: Boolean(row.opted_out),
+      archived: Boolean(row.archived),
     }
   })
 }
@@ -150,6 +154,8 @@ export async function listSmsThreads({
     .select(THREAD_COLUMNS)
     .order('last_message_at', { ascending: false })
     .limit(limit)
+  // Archived conversations only appear under their own filter.
+  query = query.eq('archived', filter === 'archived')
   if (filter === 'unread') query = query.gt('unread_count', 0)
   if (filter === 'unknown') query = query.is('lead_id', null).is('matter_id', null).is('contact_id', null)
   if (cursor) query = query.lt('last_message_at', cursor)
@@ -266,6 +272,7 @@ export async function countUnreadSmsThreads(): Promise<number> {
     .from('v_sms_threads')
     .select('phone', { count: 'exact', head: true })
     .gt('unread_count', 0)
+    .eq('archived', false)
   if (error) throw new Error(error.message)
   return count ?? 0
 }
@@ -301,4 +308,24 @@ export async function softDeleteSmsThread(phone: string, userId: string): Promis
     .select('id')
   if (error) throw new Error(error.message)
   return data?.length ?? 0
+}
+
+/**
+ * Archive or restore a conversation. Archiving hides it from the Texts list
+ * and badge until the next incoming text; its messages stay on the linked
+ * record. Archiving also marks it read, so restoring it later doesn't bring
+ * back a stale unread count.
+ */
+export async function setSmsThreadArchived(phone: string, archived: boolean, userId: string): Promise<void> {
+  const key = optOutPhoneKey(phone)
+  if (!key) throw new Error('Invalid phone number')
+  const now = new Date().toISOString()
+  const { error } = await getAdminClient()
+    .from('sms_thread_state')
+    .upsert(
+      { phone: key, archived_at: archived ? now : null, archived_by: archived ? userId : null, updated_at: now },
+      { onConflict: 'phone' },
+    )
+  if (error) throw new Error(error.message)
+  if (archived) await markSmsThreadRead(key)
 }

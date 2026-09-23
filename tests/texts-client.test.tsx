@@ -19,7 +19,7 @@ function thread(overrides: Partial<SmsThread>): SmsThread {
   return {
     phone: '5555550001', phoneE164: '+15555550001', name: null, kind: 'unknown', href: null,
     leadId: null, matterId: null, contactId: null, lastBody: 'Hello?', lastDirection: 'inbound',
-    lastStatus: 'received', lastMessageAt: '2026-09-20T15:00:00Z', unreadCount: 0, optedOut: false,
+    lastStatus: 'received', lastMessageAt: '2026-09-20T15:00:00Z', unreadCount: 0, optedOut: false, archived: false,
     ...overrides,
   }
 }
@@ -48,7 +48,9 @@ beforeEach(() => {
     const url = String(input)
     calls.push({ url, method: init?.method ?? 'GET' })
     const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+    if (url.startsWith('/api/admin/texts/threads?filter=archived')) return json({ threads: [thread({ phone: '5555550009', name: 'Old Chat', kind: 'lead', href: '/admin/leads/old', archived: true })] })
     if (url.startsWith('/api/admin/texts/threads?')) return json({ threads: all })
+    if (url.endsWith('/archive')) return json({ success: true })
     if (init?.method === 'DELETE') return json({ success: true })
     const read = url.match(/threads\/(\d+)\/read$/)
     if (read) return json({ marked: 2 })
@@ -127,5 +129,21 @@ describe('TextsClient', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Delete conversation/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+  })
+
+  it('archives a conversation off the list, telling staff the texts stay on the record', async () => {
+    const { toast } = await import('sonner')
+    render(<TextsClient initialThreads={all} initialPhone="5555550002" sendingEnabled loadError={null} />)
+    await userEvent.click(await screen.findByRole('button', { name: /^Archive$/ }))
+    await waitFor(() => expect(calls.some(c => c.url === '/api/admin/texts/threads/5555550002/archive' && c.method === 'POST')).toBe(true))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Archived. The texts stay on the record.'))
+  })
+
+  it('lists archived conversations under their own filter', async () => {
+    render(<TextsClient initialThreads={all} initialPhone={null} sendingEnabled loadError={null} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    const list = screen.getByRole('region', { name: 'Conversations' })
+    await waitFor(() => expect(list.textContent).toContain('Old Chat'))
+    expect(list.textContent).not.toContain('Lee Lead')
   })
 })

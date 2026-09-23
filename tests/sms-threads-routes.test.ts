@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   markSmsThreadRead: vi.fn(),
   softDeleteSmsMessage: vi.fn(),
   softDeleteSmsThread: vi.fn(),
+  setSmsThreadArchived: vi.fn(),
   sendOutboundSms: vi.fn(),
   createLead: vi.fn(),
   revalidateSidebarCounts: vi.fn(),
@@ -30,11 +31,13 @@ vi.mock('@/lib/queries/smsThreads', () => ({
   markSmsThreadRead: mocks.markSmsThreadRead,
   softDeleteSmsMessage: mocks.softDeleteSmsMessage,
   softDeleteSmsThread: mocks.softDeleteSmsThread,
+  setSmsThreadArchived: mocks.setSmsThreadArchived,
 }))
 
 import { GET as listRoute } from '@/app/api/admin/texts/threads/route'
 import { GET as threadRoute, DELETE as deleteThreadRoute } from '@/app/api/admin/texts/threads/[phone]/route'
 import { DELETE as deleteMessageRoute } from '@/app/api/admin/texts/messages/[id]/route'
+import { POST as archiveRoute } from '@/app/api/admin/texts/threads/[phone]/archive/route'
 import { POST as readRoute } from '@/app/api/admin/texts/threads/[phone]/read/route'
 import { POST as sendRoute } from '@/app/api/admin/texts/threads/[phone]/send/route'
 import { POST as linkRoute } from '@/app/api/admin/texts/threads/[phone]/link/route'
@@ -50,7 +53,7 @@ function thread(overrides: Partial<SmsThread> = {}): SmsThread {
     phone: '5555550123', phoneE164: '+15555550123', name: 'Avery Stone', kind: 'lead',
     href: `/admin/leads/${LEAD_ID}`, leadId: LEAD_ID, matterId: 'matter-1', contactId: null,
     lastBody: 'Hi', lastDirection: 'inbound', lastStatus: 'received',
-    lastMessageAt: '2026-09-20T00:00:00Z', unreadCount: 1, optedOut: false,
+    lastMessageAt: '2026-09-20T00:00:00Z', unreadCount: 1, optedOut: false, archived: false,
     ...overrides,
   }
 }
@@ -85,6 +88,8 @@ describe('GET threads', () => {
     mocks.listSmsThreads.mockResolvedValue([])
     await listRoute(new NextRequest('http://localhost/x?filter=unknown'))
     expect(mocks.listSmsThreads).toHaveBeenLastCalledWith({ filter: 'unknown', cursor: null })
+    await listRoute(new NextRequest('http://localhost/x?filter=archived'))
+    expect(mocks.listSmsThreads).toHaveBeenLastCalledWith({ filter: 'archived', cursor: null })
     await listRoute(new NextRequest('http://localhost/x?filter=drop-table'))
     expect(mocks.listSmsThreads).toHaveBeenLastCalledWith({ filter: 'all', cursor: null })
   })
@@ -236,5 +241,34 @@ describe('DELETE message and conversation', () => {
     expect(mocks.softDeleteSmsThread).toHaveBeenCalledWith('5555550123', 'user-1')
     mocks.softDeleteSmsThread.mockResolvedValue(0)
     expect((await deleteThreadRoute(del(), params('5555550123'))).status).toBe(404)
+  })
+})
+
+describe('POST archive', () => {
+  it('requires authorization', async () => {
+    mocks.requireAdmin.mockResolvedValue({ err: new Response(null, { status: 401 }) })
+    expect((await archiveRoute(post({ archived: true }), params('5555550123'))).status).toBe(401)
+    expect(mocks.setSmsThreadArchived).not.toHaveBeenCalled()
+  })
+
+  it('needs an explicit true or false', async () => {
+    expect((await archiveRoute(post({ archived: 'yes' }), params('5555550123'))).status).toBe(400)
+    expect((await archiveRoute(post({}), params('5555550123'))).status).toBe(400)
+    expect(mocks.setSmsThreadArchived).not.toHaveBeenCalled()
+  })
+
+  it('reports a conversation that does not exist', async () => {
+    mocks.getSmsThreadSummary.mockResolvedValue(null)
+    expect((await archiveRoute(post({ archived: true }), params('5555550123'))).status).toBe(404)
+    expect(mocks.setSmsThreadArchived).not.toHaveBeenCalled()
+  })
+
+  it('archives and restores as the signed-in user, refreshing the badge', async () => {
+    mocks.getSmsThreadSummary.mockResolvedValue(thread())
+    expect((await archiveRoute(post({ archived: true }), params('+1 555 555 0123'))).status).toBe(200)
+    expect(mocks.setSmsThreadArchived).toHaveBeenLastCalledWith('5555550123', true, 'user-1')
+    expect((await archiveRoute(post({ archived: false }), params('5555550123'))).status).toBe(200)
+    expect(mocks.setSmsThreadArchived).toHaveBeenLastCalledWith('5555550123', false, 'user-1')
+    expect(mocks.revalidateSidebarCounts).toHaveBeenCalledTimes(2)
   })
 })

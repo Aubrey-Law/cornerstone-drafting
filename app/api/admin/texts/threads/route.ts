@@ -5,9 +5,9 @@ import { listSmsThreads, type SmsThreadFilter } from '@/lib/queries/smsThreads'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const FILTERS = new Set<SmsThreadFilter>(['all', 'unread', 'unknown'])
+const FILTERS = new Set<SmsThreadFilter>(['all', 'unread', 'unknown', 'archived'])
 
-/** GET /api/admin/texts/threads?filter=all|unread|unknown&cursor=<iso> */
+/** GET /api/admin/texts/threads?filter=all|unread|unknown|archived&cursor=<iso> */
 export async function GET(req: NextRequest) {
   const { err } = await requireAdmin(req)
   if (err) return err
