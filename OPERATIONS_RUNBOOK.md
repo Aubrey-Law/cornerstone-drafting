@@ -423,10 +423,13 @@ Operational rules:
 
 ## Part 6 — Twilio softphone (browser Voice + call logging)
 
-### Telnyx replacement and rollback
+### Telnyx texting and voice
 
-Cornerstone can select SMS and voice providers independently with `SMS_PROVIDER`
-and `VOICE_PROVIDER`. Use `telnyx` for the new number; use `twilio` for rollback.
+Staff texting is Telnyx only and is off unless `SMS_PROVIDER=telnyx` and
+`MANUAL_COMMUNICATIONS_ENABLED=true` are both set; there is no Twilio SMS
+rollback. `VOICE_PROVIDER` still selects `telnyx` or `twilio` for voice. See
+`docs/operations/communications-retirement.md` (2026-09-22 section) for the
+texting cutover.
 
 For Telnyx, create a Messaging Profile and Credential Connection, assign the new
 number to both, complete 10DLC or toll-free verification, and create one

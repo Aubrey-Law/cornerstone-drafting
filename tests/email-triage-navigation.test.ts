@@ -61,9 +61,9 @@ describe('email triage navigation', () => {
       .toBeNull()
   })
 
-  it('leaves the retired inbox stub alone', () => {
-    // app/admin/inbox belongs to the retired calling and SMS work, not to
-    // email. Repurposing it would break the redirect that still serves it.
-    expect(source('app/admin/inbox/page.tsx')).toContain("redirect('/admin')")
+  it('leaves the old inbox stub as a redirect', () => {
+    // app/admin/inbox belongs to the calling and SMS work, not to email. Old
+    // links land on the Texts page that replaced it.
+    expect(source('app/admin/inbox/page.tsx')).toContain("redirect('/admin/texts')")
   })
 })

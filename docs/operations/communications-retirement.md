@@ -27,3 +27,20 @@ Do not delete webhook verification secrets, revoke provider credentials, cancel 
 No table, communications row, opt-out record, or number is deleted. No real email, SMS, or portal message was sent during local verification. Rollback must preserve the retirement boundary; reverting UI code must not silently reenable application sending.
 
 Live acceptance remains open: authenticated staff/client portal walkthrough, incoming callback verification, and separate confirmation of external phone routing. Use synthetic accounts for send/reply verification.
+
+## 2026-09-22 — manual staff texting restored (Telnyx only)
+
+The owner reversed part of the retirement above: staff can again text leads, clients and contacts from the app, and read and answer incoming texts in one place. Everything else in the table stays retired — the softphone, the rail Text pane, automated and reminder SMS, Retell SMS alerts, scheduling-link SMS, and Twilio SMS.
+
+| Capability | Now |
+| --- | --- |
+| `/admin/texts` | New Texts page: one conversation per outside phone number, including numbers that match no record. Unknown senders can be linked to a record or turned into a lead. |
+| Lead, matter and contact `send-sms` APIs | Working again; Telnyx only |
+| Record pages | Text composer back on the communications card and matter Messages tab, plus an "Open in Texts" link |
+| `/admin/inbox` | Redirects to `/admin/texts` |
+| Opt-outs | New `sms_opt_outs` table, fed by inbound STOP/START. Every send checks it and refuses opted-out numbers (409). If the list can't be read, the send is refused (503) rather than risk texting someone who said STOP. |
+| Sidebar | "Texts" item with a count of conversations holding unread texts |
+
+The retirement's rule that sending must never come back silently still holds. Texting needs **both** `SMS_PROVIDER=telnyx` and `MANUAL_COMMUNICATIONS_ENABLED=true`, plus the Telnyx credentials. `SMS_PROVIDER` now defaults to `none`, and `twilio` never sends. Without those settings every send route answers 503 and the Texts page is read-only.
+
+Cutover: set the variables above in production, then point the Telnyx Messaging Profile's inbound webhook at `https://<host>/api/webhooks/telnyx/messaging` and stop routing that number's texts to the outside service. Telnyx's messaging profile still sends the carrier STOP confirmation; the app sends none.

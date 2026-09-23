@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getFirmConfig } from '@/lib/firmConfig'
 import type { CommunicationsProvider } from '@/lib/communications/providers'
+import { isSmsOptInMessage, recordSmsOptIn, recordSmsOptOut } from '@/lib/sms/optOut'
 
 const SMS_OPT_OUT_PATTERN = /^\s*(stop|stopall|unsubscribe|cancel|end|quit)\s*$/i
 
@@ -93,6 +94,8 @@ export async function recordInboundSms(
     .maybeSingle()
 
   if (existing) {
+    // A retry after the opt-out write failed: finish recording it.
+    if (optedOut) await recordSmsOptOut(input.fromNumber, existing.id)
     return {
       ok: true,
       smsMessageId: existing.id,
@@ -123,7 +126,12 @@ export async function recordInboundSms(
     return { ok: false, error: insertError?.message ?? 'insert failed' }
   }
 
-  if (!optedOut) {
+  // Throws on failure so the webhook releases its claim and Telnyx retries;
+  // a lost STOP would let staff text someone who asked us not to.
+  if (optedOut) {
+    await recordSmsOptOut(input.fromNumber, inserted.id)
+  } else {
+    if (isSmsOptInMessage(body)) await recordSmsOptIn(input.fromNumber)
     await logInboundActivity(inserted)
   }
 

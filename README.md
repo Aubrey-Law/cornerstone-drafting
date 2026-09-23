@@ -11,7 +11,7 @@ Drafting (design sheet → generate → review) lives in this repo and is the so
 - Supabase Postgres/Auth (greenfield baseline + lite migrations)
 - Cloudflare R2 private document storage
 - Node estate document generator (data in `tools/aubreylaw-docgeneration`)
-- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Google (Calendar + Gmail send/triage), Retell (AI receptionist)
+- Optional: Resend (alerts), Telnyx (staff texting; Telnyx or Twilio voice callbacks), Google (Calendar + Gmail send/triage), Retell (AI receptionist)
 
 ## Local setup
 
@@ -43,7 +43,7 @@ sideloading, and troubleshooting are in
 | Route | Purpose |
 |-------|---------|
 | `/admin` | Today exception queue and daily command center |
-| `/admin/inbox` | The only staff communications inbox (email, SMS, portal messages, and call triage) |
+| `/admin/texts` | Text conversations with leads, clients, contacts and unknown numbers (Telnyx) |
 | `/admin/crm` | Leads, contacts, households, and follow-up |
 | `/admin/matters` | Create and manage matters |
 | `/admin/matters/[id]` | Overview, documents, contacts, tasks, and billing |

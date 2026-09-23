@@ -1,10 +1,14 @@
-import { voiceProvider } from '@/lib/communications/providers'
-import { isTelnyxVoiceConfigured } from '@/lib/telnyx/config'
+import { manualCommunicationsEnabled, voiceProvider } from '@/lib/communications/providers'
+import { isTelnyxSmsConfigured, isTelnyxVoiceConfigured } from '@/lib/telnyx/config'
 import { isTwilioVoiceConfigured } from '@/lib/twilio/config'
 
-/** SMS delivery has been retired; historical provider settings are retained. */
+/**
+ * Staff texting is Telnyx-only and needs two deliberate settings:
+ * SMS_PROVIDER=telnyx and MANUAL_COMMUNICATIONS_ENABLED=true. Leftover
+ * provider credentials alone never turn sending back on.
+ */
 export function isSmsConfigured(): boolean {
-  return false
+  return manualCommunicationsEnabled() && isTelnyxSmsConfigured()
 }
 export function isVoiceConfigured(): boolean {
   if (voiceProvider() === 'none') return false

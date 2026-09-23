@@ -39,6 +39,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
   const [portalSending, setPortalSending] = useState(false)
   const [portalDraft, setPortalDraft] = useState('')
   const [smsRecipient, setSmsRecipient] = useState<'client' | 'spouse'>('client')
+  const [smsSending, setSmsSending] = useState(false)
   const [emailTo, setEmailTo] = useState(initialEmailTo)
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
@@ -115,19 +116,28 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
   }, [enabled, history, matterId, token, loadSummary])
 
   const sendOnChannel = useCallback(async (channel: 'portal' | 'sms', body: string): Promise<boolean> => {
-    if (channel !== 'portal' || !token || !body.trim()) return false
-    setPortalSending(true)
+    if (!token || !body.trim()) return false
+    const setSending = channel === 'sms' ? setSmsSending : setPortalSending
+    setSending(true)
     try {
-      await apiRequest('/api/messages', {
-        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matter_id: matterId, body: body.trim() }),
-      }, 'Send failed')
-      toast.success('Message sent')
+      if (channel === 'sms') {
+        await apiRequest(`/api/admin/matters/${matterId}/send-sms`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient: smsRecipient, body: body.trim() }),
+        }, 'Text failed')
+        toast.success('Text sent')
+      } else {
+        await apiRequest('/api/messages', {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matter_id: matterId, body: body.trim() }),
+        }, 'Send failed')
+        toast.success('Message sent')
+      }
       await Promise.all([loadHistory(), loadSummary()])
       return true
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not send'); return false }
-    finally { setPortalSending(false) }
-  }, [token, matterId, loadHistory, loadSummary])
+    finally { setSending(false) }
+  }, [token, matterId, smsRecipient, loadHistory, loadSummary])
   const sendPortalMessage = async () => { if (await sendOnChannel('portal', portalDraft)) setPortalDraft('') }
   async function sendEmail() {
     if (!token || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return
@@ -177,7 +187,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
 
   return {
     items, sendOnChannel, portalMessages, portalLoading, portalDraft, portalSending,
-    smsMessages, smsLoading, smsRecipient, smsSending: false,
+    smsMessages, smsLoading, smsRecipient, smsSending,
     emailTo, emailSubject, emailBody, emailSending,
     setPortalDraft, setSmsRecipient, setEmailTo, setEmailSubject, setEmailBody,
     sendPortalMessage, sendEmail, readError,

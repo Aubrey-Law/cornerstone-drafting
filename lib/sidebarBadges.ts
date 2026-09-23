@@ -11,6 +11,8 @@ export interface SidebarCounts {
   tasksOverdueCount: number
   /** Issued invoices past their due date with a balance outstanding. */
   overdueInvoiceCount: number
+  /** Text conversations with an inbound message nobody has opened yet. */
+  smsUnreadThreadCount: number
 }
 
 export type SidebarBadgeTone = 'destructive' | 'accent'
@@ -39,6 +41,7 @@ const COUNTS_BY_SECTION: Record<string, (keyof SidebarCounts)[]> = {
   inboxNeedsReplyCount: ['inboxNeedsReplyCount'],
   emailTriageNeedsReplyCount: ['emailTriageNeedsReplyCount'],
   overdueInvoiceCount: ['overdueInvoiceCount'],
+  smsUnreadThreadCount: ['smsUnreadThreadCount'],
 }
 
 /** The counts invalidated by this response's failed sections. */
@@ -61,6 +64,7 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   agingAmberCount: 0,
   tasksOverdueCount: 0,
   overdueInvoiceCount: 0,
+  smsUnreadThreadCount: 0,
 }
 
 /**
@@ -98,6 +102,10 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   // being owed or a missed deadline.
   if (href === '/admin/email-triage' && counts.emailTriageNeedsReplyCount > 0) {
     return badge('emailTriageNeedsReplyCount', 'accent')
+  }
+  // Accent, like email: a text waiting to be read is work, not a deadline.
+  if (href === '/admin/texts' && counts.smsUnreadThreadCount > 0) {
+    return badge('smsUnreadThreadCount', 'accent')
   }
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
     return badge('tasksOverdueCount', 'destructive')
@@ -138,5 +146,6 @@ export function mergeSidebarCounts(
     agingAmberCount: take('agingAmberCount'),
     tasksOverdueCount: take('tasksOverdueCount'),
     overdueInvoiceCount: take('overdueInvoiceCount'),
+    smsUnreadThreadCount: take('smsUnreadThreadCount'),
   }
 }

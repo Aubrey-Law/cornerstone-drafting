@@ -111,11 +111,12 @@ describe('contact communications routes', () => {
     }
   })
 
-  it('retires the contact SMS route behind authorization', () => {
+  it('sends contact texts only behind authorization and the texting gate', () => {
     const route = source('app/api/admin/contacts/[id]/send-sms/route.ts')
     expect(route).toContain('requireAdmin')
-    expect(route).toContain('410')
-    expect(route).not.toContain('sendOutboundSms')
+    expect(route).toContain('isSmsConfigured()')
+    expect(route).toContain('resolveContactSmsTarget')
+    expect(route).toContain('sendOutboundSms')
   })
 
   it('scopes contact reads to the contact, never to its household', () => {

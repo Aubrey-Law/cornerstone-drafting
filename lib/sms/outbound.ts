@@ -2,6 +2,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { normalizeSmsRecipient, sendProviderSmsMessage } from '@/lib/sms/provider'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import { smsProvider } from '@/lib/communications/providers'
+import { isSmsConfigured } from '@/lib/communications/config'
+import { isPhoneOptedOut } from '@/lib/sms/optOut'
 import { telnyxPhoneNumber } from '@/lib/telnyx/config'
 
 export { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
@@ -220,7 +222,17 @@ export async function sendOutboundSms(
     }
   }
 
-  if (smsProvider() === 'none') return { ok: false, error: 'SMS delivery is disabled.', status: 409 }
+  if (!isSmsConfigured()) return { ok: false, error: 'SMS delivery is disabled.', status: 503 }
+  let optedOut: boolean
+  try {
+    optedOut = await isPhoneOptedOut(to)
+  } catch (error) {
+    console.error('sendOutboundSms: opt-out check failed', error)
+    return { ok: false, error: 'Could not check the opt-out list; text not sent.', status: 503 }
+  }
+  if (optedOut) {
+    return { ok: false, error: 'This number has opted out of texts.', status: 409 }
+  }
   const admin = getAdminClient()
   const baseRow = {
     matter_id: target.matterId,

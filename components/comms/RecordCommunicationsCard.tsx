@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Phone } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { MessageSquareText, Phone } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { FilterChip } from '@/components/FilterChip'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
 import { openExternalPhone } from '@/lib/clientPhone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
+import { MAX_LEAD_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { normalizeSmsRecipient } from '@/lib/sms/transport'
 import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
 import { CommunicationThread, type ThreadChannelFilter } from './CommunicationThread'
 
@@ -62,6 +66,7 @@ function RecordCommunicationsContent({
   recipientEmail,
   recipientPhone,
   smsEnabled,
+  smsRecipientRole = 'client',
   smsSendable = true,
   smsDisabledReason,
   defaultChannel,
@@ -75,6 +80,7 @@ function RecordCommunicationsContent({
   const [emails, setEmails] = useState<CommunicationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [readError, setReadError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
 
   const recordBase = `/api/admin/${record.type === 'matter' ? 'matters' : record.type === 'lead' ? 'leads' : 'contacts'}/${record.id}`
 
@@ -118,9 +124,39 @@ function RecordCommunicationsContent({
     emails,
   ), [messages, emails, recipientName])
 
+  const sendSms = useCallback(async (_channel: 'portal' | 'sms', body: string): Promise<boolean> => {
+    if (!token || !body.trim()) return false
+    if (record.type !== 'matter' && body.length > MAX_LEAD_SMS_BODY_LENGTH) {
+      toast.error(`Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer`)
+      return false
+    }
+    setSending(true)
+    try {
+      const payload = record.type === 'matter'
+        ? { recipient: smsRecipientRole, body: body.trim() }
+        : { body: body.trim() }
+      await apiRequest(`${recordBase}/send-sms`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, 'Could not send text')
+      toast.success('Text sent')
+      await loadMessages()
+      await onClientContact?.()
+      return true
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not send text')
+      return false
+    } finally {
+      setSending(false)
+    }
+  }, [token, record.type, smsRecipientRole, recordBase, loadMessages, onClientContact])
+
+  const textsPhone = normalizeSmsRecipient(recipientPhone)
+
   const chips: Array<{ key: ThreadChannelFilter; label: string }> = [
     { key: 'all', label: 'All' },
-    { key: 'sms', label: 'SMS history' },
+    { key: 'sms', label: 'Text' },
     { key: 'email', label: 'Email' },
   ]
 
@@ -134,6 +170,16 @@ function RecordCommunicationsContent({
             </FilterChip>
           ))}
         </div>
+        <div className="flex items-center gap-2">
+        {textsPhone && (
+          <Link
+            href={`/admin/texts?phone=${encodeURIComponent(textsPhone.slice(2))}`}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'no-underline')}
+          >
+            <MessageSquareText className="h-3.5 w-3.5" />
+            Open in Texts
+          </Link>
+        )}
         {recipientPhone && (
           <Button
             type="button"
@@ -145,9 +191,10 @@ function RecordCommunicationsContent({
             Call {recipientName.split(' ')[0] || 'contact'}
           </Button>
         )}
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">Client messages: SMS history and recorded outbound email. Inbound email is not included. Internal notes are in Notes.</p>
+      <p className="text-xs text-muted-foreground">Client messages: texts and recorded outbound email. Inbound email is not included. Internal notes are in Notes.</p>
       {readError && <p role="alert">{readError} <Button variant="link" onClick={() => void loadMessages()}>Retry history</Button></p>}
       <CommunicationThread
         items={items}
@@ -160,7 +207,8 @@ function RecordCommunicationsContent({
         smsDisabledReason={smsSendable ? null : smsDisabledReason ?? 'Texting is not available for this contact.'}
         portalAvailable={false}
         channelFilter={channel}
-        onSend={async () => false}
+        sending={sending}
+        onSend={sendSms}
         emailComposer={recipientEmail ? (
           <div className="rounded-md border border-border">
             {/* A seed so the recipient shows at once — the composer fetches the

@@ -4,6 +4,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterAgingTiles } from '@/lib/queries/pipelineAging'
 import { fetchTaskCounts } from '@/lib/queries/tasks'
 import { type SidebarCounts } from '@/lib/sidebarBadges'
+import { isSmsConfigured } from '@/lib/communications/config'
+import { countUnreadSmsThreads } from '@/lib/queries/smsThreads'
 
 export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   const admin = getAdminClient()
@@ -16,7 +18,7 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   async function section<T>(key: string, read: () => Promise<T>, fallback: T): Promise<T> {
     try { return await read() } catch { errors.push(key); return fallback }
   }
-  const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount] = await Promise.all([
+  const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, smsUnreadThreadCount] = await Promise.all([
     section('intakeReviewCount', () => count(admin.from('v_matter_pipeline').select('matter_id', { count: 'exact', head: true }).eq('stage', 'intake_review')), 0),
     section('draftingNeedsDesignCount', async () => {
       const open = await admin.from('v_matter_pipeline').select('matter_id').neq('stage', 'closed')
@@ -38,9 +40,11 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
       .select('id', { count: 'exact', head: true })
       .in('status', ['needs_reply', 'drafting', 'drafted', 'failed'])), 0),
     section('overdueInvoiceCount', fetchOverdueInvoiceCount, 0),
+    // Zero, not a query, while texting is switched off: no Texts nav item shows.
+    section('smsUnreadThreadCount', async () => (isSmsConfigured() ? countUnreadSmsThreads() : 0), 0),
   ])
   return { intakeReviewCount, draftingNeedsDesignCount, agingRedCount: aging.red, agingAmberCount: aging.amber,
-    tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, errors }
+    tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, smsUnreadThreadCount, errors }
 }
 
 /**
