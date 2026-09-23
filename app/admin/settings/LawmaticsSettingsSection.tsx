@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { LAWMATICS_PUSH_FIELDS, normalizeLawmaticsCustomFieldId } from '@/lib/integrations/lawmatics/pushFields'
+import {
+  LAWMATICS_PUSH_FIELDS, normalizeLawmaticsCustomFieldId, type LawmaticsOptionIdMap,
+} from '@/lib/integrations/lawmatics/pushFields'
+import { LawmaticsPicklistMapping, type LeadSourceRow } from './LawmaticsPicklistMapping'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +20,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-const STANDARD_FIELDS = LAWMATICS_PUSH_FIELDS.filter(field => field.standard)
+// Picklist fields (practice area, source, campaign) are sent only once matched below.
+const STANDARD_FIELDS = LAWMATICS_PUSH_FIELDS.filter(field => field.standard && !field.option)
+const EMPTY_OPTION_MAP: LawmaticsOptionIdMap = { practice_area: {}, source: {}, campaign: {} }
 const CUSTOM_FIELDS = LAWMATICS_PUSH_FIELDS.filter(field => !field.standard)
 
 type ConnectionStatus = { connected: boolean; updatedAt: string | null; error?: string }
@@ -34,6 +39,8 @@ export function LawmaticsSettingsSection() {
   const [connection, setConnection] = useState<ConnectionStatus | null>(null)
   const [saved, setSaved] = useState<Record<string, string>>({})
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [optionIdMap, setOptionIdMap] = useState<LawmaticsOptionIdMap>(EMPTY_OPTION_MAP)
+  const [leadSources, setLeadSources] = useState<LeadSourceRow[]>([])
 
   const load = useCallback(async () => {
     if (!token) return
@@ -49,6 +56,8 @@ export function LawmaticsSettingsSection() {
       const map = (settings.customFieldIdMap ?? {}) as Record<string, string>
       setSaved(map)
       setDrafts(map)
+      setOptionIdMap((settings.optionIdMap ?? EMPTY_OPTION_MAP) as LawmaticsOptionIdMap)
+      setLeadSources(Array.isArray(settings.leadSources) ? settings.leadSources as LeadSourceRow[] : [])
       setConnection(statusRes.ok ? await statusRes.json() : null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load Lawmatics settings')
@@ -196,6 +205,15 @@ export function LawmaticsSettingsSection() {
           </Button>
         </div>
       </section>
+
+      {token && (
+        <LawmaticsPicklistMapping
+          token={token}
+          saved={optionIdMap}
+          leadSources={leadSources}
+          onSaved={setOptionIdMap}
+        />
+      )}
     </div>
   )
 }

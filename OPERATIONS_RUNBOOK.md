@@ -540,3 +540,15 @@ where id = 1;
 
 Unmapped fields are skipped. The success toast lists the ones that had a value
 but no mapping.
+
+**Practice area, Source, Campaign and Actual value** are built-in Lawmatics matter
+fields. Actual value is sent as a number: the hired matter's flat fee, else the
+lead's quoted fee. The other three are Lawmatics dropdowns, set by option ID
+(`practice_area_id`, `source_id`, `campaign_id`). Match them in **Settings →
+Lawmatics → practice area, source and campaign**. Each of Cornerstone's four
+practice areas maps to a Lawmatics practice area, and each lead source in use
+maps to a Lawmatics Source and Campaign. The page loads the options from
+Lawmatics (`/v1/practice_areas`, `/v1/sources`, `/v1/campaigns`). If a list
+won't load, enter the numeric option IDs by hand. The mapping is saved in
+`integration_settings.lawmatics_option_id_map`, and unmatched values are not
+sent.

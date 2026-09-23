@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), get: vi.fn(), update: vi.fn() }))
+const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), get: vi.fn(), update: vi.fn(), leadSources: [] as unknown[] }))
 vi.mock('server-only', () => ({}))
+vi.mock('@/lib/supabaseAdmin', () => ({
+  getAdminClient: () => ({
+    from: () => {
+      const q = { select: () => q, not: () => q, limit: async () => ({ data: mocks.leadSources, error: null }) }
+      return q
+    },
+  }),
+}))
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: mocks.requireAdmin }))
 vi.mock('@/lib/integrations/settings', () => ({
   getIntegrationSettings: mocks.get, updateIntegrationSettings: mocks.update,
@@ -17,14 +25,19 @@ function put(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireAdmin.mockResolvedValue({ err: null, userId: 'staff-1' })
-  mocks.get.mockResolvedValue({ lawmaticsCustomFieldIdMap: { county: 'cf-1' } })
-  mocks.update.mockResolvedValue(undefined)
+  let stored = {
+    lawmaticsCustomFieldIdMap: { county: '621072' } as Record<string, string>,
+    lawmaticsOptionIdMap: { practice_area: {}, source: {}, campaign: {} } as Record<string, Record<string, string>>,
+  }
+  mocks.leadSources = []
+  mocks.get.mockImplementation(async () => stored)
+  mocks.update.mockImplementation(async (patch: Partial<typeof stored>) => { stored = { ...stored, ...patch } })
 })
 
 describe('/api/admin/settings/lawmatics', () => {
   it('returns the saved mapping', async () => {
     const res = await GET(new Request('http://localhost/api/admin/settings/lawmatics'))
-    await expect(res.json()).resolves.toEqual({ customFieldIdMap: { county: 'cf-1' } })
+    await expect(res.json()).resolves.toMatchObject({ customFieldIdMap: { county: '621072' } })
   })
 
   it('rejects unauthenticated requests', async () => {
@@ -38,7 +51,7 @@ describe('/api/admin/settings/lawmatics', () => {
 
     expect(res.status).toBe(200)
     expect(mocks.update).toHaveBeenCalledWith({ lawmaticsCustomFieldIdMap: { county: '123' } }, 'staff-1')
-    await expect(res.json()).resolves.toEqual({ customFieldIdMap: { county: '123' } })
+    await expect(res.json()).resolves.toMatchObject({ customFieldIdMap: { county: '123' } })
   })
 
   it('stores the number from a pasted merge field', async () => {
@@ -62,5 +75,44 @@ describe('/api/admin/settings/lawmatics', () => {
 
   it('rejects a body without a mapping object', async () => {
     expect((await put({ customFieldIdMap: ['county'] })).status).toBe(400)
+  })
+})
+
+describe('/api/admin/settings/lawmatics picklists', () => {
+  it('lists distinct lead sources, keyed the way the push looks them up', async () => {
+    mocks.leadSources = [
+      { lead_source: 'Google Ads' }, { lead_source: ' google  ads ' }, { lead_source: 'google ads' },
+      { lead_source: 'Referral' }, { lead_source: '   ' },
+    ]
+    const res = await GET(new Request('http://localhost/api/admin/settings/lawmatics'))
+    const body = await res.json()
+    expect(body.leadSources).toEqual([
+      { key: 'google ads', label: 'google ads', count: 3 },
+      { key: 'referral', label: 'Referral', count: 1 },
+    ])
+    expect(body.optionIdMap).toEqual({ practice_area: {}, source: {}, campaign: {} })
+  })
+
+  it('saves the option map without touching the custom field map', async () => {
+    const res = await put({ optionIdMap: {
+      practice_area: { EP: ' 11 ', CP: '' },
+      source: { 'Google Ads': '21' },
+      campaign: { referral: '31' },
+    } })
+
+    expect(res.status).toBe(200)
+    expect(mocks.update).toHaveBeenCalledWith({ lawmaticsOptionIdMap: {
+      practice_area: { EP: '11' }, source: { 'google ads': '21' }, campaign: { referral: '31' },
+    } }, 'staff-1')
+    await expect(res.json()).resolves.toMatchObject({ customFieldIdMap: { county: '621072' } })
+  })
+
+  it.each([
+    [{ practice_area: { XX: '1' } }, 'an unknown practice area'],
+    [{ stage: { EP: '1' } }, 'an unknown picklist'],
+    [{ source: { Google: 'abc' } }, 'a non-numeric ID'],
+  ] as Array<[Record<string, unknown>, string]>)('rejects %j (%s)', async (map) => {
+    expect((await put({ optionIdMap: map })).status).toBe(400)
+    expect(mocks.update).not.toHaveBeenCalled()
   })
 })

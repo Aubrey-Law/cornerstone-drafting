@@ -89,7 +89,7 @@ const INTAKE_FIELDS = [
   'lead_source', 'referral_source', 'practice_area', 'plan_type', 'lead_status', 'estate_value',
   'occupation', 'employer', 'citizenship', 'preferred_pronoun', 'date_of_marriage', 'marriage_date',
   'legal_plan_member_id', 'planning_objectives', 'special_notes', 'qualification_notes', 'notes',
-  'lawmatics_matter_id',
+  'lawmatics_matter_id', 'engagement_fee_quoted',
 ].join(', ')
 
 const HOUSEHOLD_FIELDS = 'id, relationship_type, first_name, last_name, email, phone, date_of_birth, created_at'
@@ -132,11 +132,22 @@ export async function loadLawmaticsPushSource(intakeId: string): Promise<Lawmati
   const { data: intake, error } = await db.from('client_intake').select(INTAKE_FIELDS).eq('id', intakeId).maybeSingle()
   if (error) throw lawmaticsFailure('source_unavailable', 'The client record could not be read.', 'retryable')
   if (!intake) throw lawmaticsFailure('identity_required', 'The client record could not be found.')
-  const row = intake as unknown as Record<string, string | null>
+  const { engagement_fee_quoted: quotedFee, ...textFields } = intake as unknown as Record<string, unknown>
+  const row = textFields as Record<string, string | null>
 
   const { data: matter, error: matterError } = await db.from('matters').select('id, matter_number')
     .eq('client_intake_id', intakeId).maybeSingle()
   if (matterError) throw lawmaticsFailure('source_unavailable', 'The linked matter could not be read.', 'retryable')
+
+  let matterPracticeArea: string | null = null
+  let flatFee: number | null = null
+  if (matter?.id) {
+    const { data: details, error: detailsError } = await db.from('matter_details')
+      .select('practice_area, flat_fee_amount').eq('client_id', matter.id).maybeSingle()
+    if (detailsError) throw lawmaticsFailure('source_unavailable', 'The matter details could not be read.', 'retryable')
+    matterPracticeArea = details?.practice_area ?? null
+    flatFee = typeof details?.flat_fee_amount === 'number' ? details.flat_fee_amount : null
+  }
 
   const household = await householdContacts(intakeId, matter?.id ?? null)
   const spouse = household.find(contact => contact.relationship_type === 'spouse') ?? null
@@ -145,6 +156,8 @@ export async function loadLawmaticsPushSource(intakeId: string): Promise<Lawmati
   return {
     intake: row,
     matterNumber: matter?.matter_number ?? null,
+    matterPracticeArea,
+    fee: flatFee ?? (typeof quotedFee === 'number' ? quotedFee : null),
     spouse,
     children,
     legacyProspectId: row.lawmatics_matter_id?.trim() || null,
@@ -164,7 +177,7 @@ function labels(keys: string[]): string[] {
 export async function pushLeadToLawmatics(intakeId: string): Promise<LawmaticsPushResult> {
   const settings = await getIntegrationSettings()
   const source = await loadLawmaticsPushSource(intakeId)
-  const built = buildLawmaticsProspectBody(source, settings.lawmaticsCustomFieldIdMap)
+  const built = buildLawmaticsProspectBody(source, settings.lawmaticsCustomFieldIdMap, settings.lawmaticsOptionIdMap)
   const body: LawmaticsProspectBody = built.body
 
   const ref: ExternalRecordRef = { provider: 'lawmatics', internalEntityType: 'lead', internalEntityId: intakeId, externalRecordType: 'prospect' }
