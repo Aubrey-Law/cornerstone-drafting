@@ -24,6 +24,8 @@ export interface LawmaticsPushResult {
   rejected: string[]
   /** Lawmatics' own explanation for the refused fields, for staff only. */
   rejectedDetails: string[]
+  /** Labels of fields mapped to something that is not a Lawmatics custom field ID; skipped. */
+  invalidMapping: string[]
 }
 
 /** Never stripped on a retry: Lawmatics cannot create a prospect without them. */
@@ -31,6 +33,8 @@ const REQUIRED_ATTRIBUTES = new Set(['first_name', 'last_name'])
 
 interface FieldFallback {
   rejectedAttributes: string[]
+  /** Custom field IDs Lawmatics could not find; only those entries were dropped. */
+  rejectedCustomFieldIds: string[]
   details: string[]
 }
 
@@ -48,12 +52,23 @@ async function sendWithFieldFallback<T>(
     return await send(body)
   } catch (error) {
     if (!(error instanceof LawmaticsValidationError)) throw error
-    const strip = error.fields.filter(field => Object.hasOwn(body, field) && !REQUIRED_ATTRIBUTES.has(field))
-    if (!strip.length) throw error
     const retry: LawmaticsProspectBody = { ...body }
+    const missing = new Set(error.customFieldIds)
+    const presentCustom = body.custom_fields ?? []
+    const droppedCustom = presentCustom.filter(entry => missing.has(entry.id)).map(entry => entry.id)
+    if (droppedCustom.length) {
+      // Drop only the custom fields Lawmatics could not find, not every mapping.
+      const kept = presentCustom.filter(entry => !missing.has(entry.id))
+      if (kept.length) retry.custom_fields = kept
+      else delete retry.custom_fields
+    }
+    const strip = error.fields.filter(field => Object.hasOwn(body, field) && !REQUIRED_ATTRIBUTES.has(field)
+      && !(field === 'custom_fields' && droppedCustom.length))
+    if (!strip.length && !droppedCustom.length) throw error
     for (const field of strip) delete retry[field]
     const result = await send(retry)
     fallback.rejectedAttributes = strip
+    fallback.rejectedCustomFieldIds = droppedCustom
     fallback.details = error.details
     return result
   }
@@ -169,14 +184,18 @@ export async function pushLeadToLawmatics(intakeId: string): Promise<LawmaticsPu
     ...ref, sourceVersion: version, idempotencyKey: `lawmatics:prospect-push:${intakeId}:${version}`,
     requestHash: version, requestSnapshot: { intakeId, operation: linkedId ? 'update' : 'create', fields: built.sentKeys },
   })
-  const fallback: FieldFallback = { rejectedAttributes: [], details: [] }
+  const fallback: FieldFallback = { rejectedAttributes: [], rejectedCustomFieldIds: [], details: [] }
   const outcome = () => {
-    const rejectedKeys = new Set(fallback.rejectedAttributes.flatMap(attribute => keysForAttribute(attribute, built.sentKeys)))
+    const rejectedKeys = new Set<string>([
+      ...fallback.rejectedAttributes.flatMap(attribute => keysForAttribute(attribute, built.sentKeys)),
+      ...fallback.rejectedCustomFieldIds.map(id => built.customFieldKeys[id]).filter(Boolean),
+    ])
     return {
       sent: labels(built.sentKeys.filter(key => !rejectedKeys.has(key))),
       unmapped: labels(built.unmappedKeys),
       rejected: labels([...rejectedKeys]),
       rejectedDetails: fallback.details,
+      invalidMapping: labels(built.invalidMappingKeys),
     }
   }
 

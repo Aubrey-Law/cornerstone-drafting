@@ -90,6 +90,18 @@ export type LawmaticsProspectBody = Record<string, unknown> & {
   custom_fields?: { id: string; value: string }[]
 }
 
+/**
+ * Lawmatics custom field IDs are numbers. Accepts the bare number or the merge
+ * field copied from Lawmatics' document reference ("custom_field_930886" or
+ * "{{custom_field_930886}}"); anything else, such as a built-in merge field
+ * name like "practice_area", is not a custom field ID.
+ */
+export function normalizeLawmaticsCustomFieldId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = /^\s*(?:\{\{\s*)?(?:custom_field_)?(\d{1,12})(?:\s*\}\})?\s*$/i.exec(value)
+  return match ? match[1] : null
+}
+
 function text(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
@@ -171,12 +183,22 @@ export function lawmaticsPushValues(source: LawmaticsPushSource): Partial<Record
 export function buildLawmaticsProspectBody(
   source: LawmaticsPushSource,
   customFieldIdMap: Record<string, string>,
-): { body: LawmaticsProspectBody; sentKeys: LawmaticsPushFieldKey[]; unmappedKeys: LawmaticsPushFieldKey[] } {
+): {
+  body: LawmaticsProspectBody
+  sentKeys: LawmaticsPushFieldKey[]
+  unmappedKeys: LawmaticsPushFieldKey[]
+  /** Mapped to something that is not a Lawmatics custom field ID; skipped. */
+  invalidMappingKeys: LawmaticsPushFieldKey[]
+  /** Lawmatics custom field ID → the push field it carries. */
+  customFieldKeys: Record<string, LawmaticsPushFieldKey>
+} {
   const values = lawmaticsPushValues(source)
   const body: LawmaticsProspectBody = {}
   const customFields: { id: string; value: string }[] = []
   const sentKeys: LawmaticsPushFieldKey[] = []
   const unmappedKeys: LawmaticsPushFieldKey[] = []
+  const invalidMappingKeys: LawmaticsPushFieldKey[] = []
+  const customFieldKeys: Record<string, LawmaticsPushFieldKey> = {}
   for (const field of LAWMATICS_PUSH_FIELDS) {
     const value = values[field.key]
     if (value === undefined) continue
@@ -185,14 +207,20 @@ export function buildLawmaticsProspectBody(
       sentKeys.push(field.key)
       continue
     }
-    const id = Object.hasOwn(customFieldIdMap, field.key) ? text(customFieldIdMap[field.key]) : undefined
-    if (!id) {
+    const mapped = Object.hasOwn(customFieldIdMap, field.key) ? text(customFieldIdMap[field.key]) : undefined
+    if (!mapped) {
       unmappedKeys.push(field.key)
       continue
     }
+    const id = normalizeLawmaticsCustomFieldId(mapped)
+    if (!id) {
+      invalidMappingKeys.push(field.key)
+      continue
+    }
     customFields.push({ id, value })
+    customFieldKeys[id] = field.key
     sentKeys.push(field.key)
   }
   if (customFields.length) body.custom_fields = customFields
-  return { body, sentKeys, unmappedKeys }
+  return { body, sentKeys, unmappedKeys, invalidMappingKeys, customFieldKeys }
 }

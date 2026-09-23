@@ -41,6 +41,12 @@ describe('/api/admin/settings/lawmatics', () => {
     await expect(res.json()).resolves.toEqual({ customFieldIdMap: { county: '123' } })
   })
 
+  it('stores the number from a pasted merge field', async () => {
+    const res = await put({ customFieldIdMap: { county: '{{custom_field_621072}}', children: 'custom_field_244367' } })
+    expect(res.status).toBe(200)
+    expect(mocks.update).toHaveBeenCalledWith({ lawmaticsCustomFieldIdMap: { county: '621072', children: '244367' } }, 'staff-1')
+  })
+
   it.each([
     [{ first_name: '1' }, 'standard fields are not mappable'],
     [{ middle_name: '1' }, 'fields Lawmatics has built in are not mappable'],
@@ -48,6 +54,7 @@ describe('/api/admin/settings/lawmatics', () => {
     [{ __proto__x: '1' }, 'unknown keys'],
     [{ county: 5 }, 'non-text IDs'],
     [{ county: 'has space' }, 'IDs with whitespace'],
+    [{ practice_area: 'practice_area' }, 'a built-in merge field name instead of an ID'],
   ] as Array<[Record<string, unknown>, string]>)('rejects %j (%s)', async (map) => {
     expect((await put({ customFieldIdMap: map })).status).toBe(400)
     expect(mocks.update).not.toHaveBeenCalled()
