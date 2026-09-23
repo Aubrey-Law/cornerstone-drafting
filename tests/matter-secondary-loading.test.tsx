@@ -38,8 +38,11 @@ it('keeps failed history distinct from an empty conversation and supports retry'
   await act(() => result.current.retry())
   expect(result.current.readError).toBeNull()
 })
-it('never sends through the retired SMS channel', async () => {
+it('sends texts through the matter send-sms route to the chosen recipient', async () => {
+  apiRequest.mockResolvedValue([])
   const { result } = renderHook(() => useMatterCommunications({ matterId: 'matter-1', token: 'synthetic', initialEmailTo: '', enabled: false }))
-  await act(async () => { expect(await result.current.sendOnChannel('sms', 'Old draft')).toBe(false) })
-  expect(apiRequest.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  await act(async () => { expect(await result.current.sendOnChannel('sms', 'Running late')).toBe(true) })
+  const post = apiRequest.mock.calls.find(([, options]) => options?.method === 'POST')
+  expect(post?.[0]).toBe('/api/admin/matters/matter-1/send-sms')
+  expect(JSON.parse(String(post?.[1]?.body))).toEqual({ recipient: 'client', body: 'Running late' })
 })

@@ -171,10 +171,10 @@ Register the webhook at `https://{app}/api/webhooks/resend` and subscribe at min
 without it, which is how a sending reputation degrades unnoticed — and this is the same domain
 that carries engagement-agreement signing links.
 
-## Optional — Twilio (SMS + softphone)
+## Optional — Twilio (voice)
 
-Twilio remains available as a rollback provider. Select providers independently with
-`SMS_PROVIDER=twilio` and `VOICE_PROVIDER=twilio`.
+Twilio SMS is retired: `SMS_PROVIDER=twilio` never sends. Staff texting is Telnyx only
+(see below). `VOICE_PROVIDER=twilio` remains for existing voice callbacks.
 
 | Variable | Purpose |
 |----------|---------|
@@ -192,9 +192,13 @@ Twilio remains available as a rollback provider. Select providers independently 
 
 Point Twilio Voice / Messaging webhooks at this app’s host (`/api/webhooks/twilio/*`, `/api/voice/*`). Softphone FAB hides when Voice env is incomplete.
 
-## Optional — Telnyx (SMS + softphone)
+## Optional — Telnyx (staff texting + voice)
 
-Set `SMS_PROVIDER=telnyx` and/or `VOICE_PROVIDER=telnyx` to activate Telnyx.
+Staff texting (the Texts page and record Text composers) needs **both**
+`SMS_PROVIDER=telnyx` and `MANUAL_COMMUNICATIONS_ENABLED=true`, plus
+`TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_PHONE_NUMBER` and
+`TELNYX_MESSAGING_PROFILE_ID`. `SMS_PROVIDER` defaults to `none`; leftover
+credentials alone never turn sending on. `VOICE_PROVIDER=telnyx` selects Telnyx voice.
 
 | Variable | Purpose |
 |---|---|

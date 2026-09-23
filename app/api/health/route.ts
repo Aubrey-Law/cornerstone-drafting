@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getR2Client, r2Bucket } from '@/lib/r2'
 import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
 import { isEngagementApprovalConfigured } from '@/lib/engagement/approvalConfig'
-import { smsProvider, voiceProvider } from '@/lib/communications/providers'
+import { manualCommunicationsEnabled, smsProvider, voiceProvider } from '@/lib/communications/providers'
 
 // Default GET returns liveness only (200 {ok:true}) for Vercel uptime checks
 // and any external synthetic monitor.
@@ -54,7 +54,7 @@ async function checkR2(): Promise<Check> {
 }
 
 function checkCommunications(): Check {
-  const smsSelected = false // SMS delivery is retired.
+  const smsSelected = smsProvider() === 'telnyx' && manualCommunicationsEnabled()
   const voiceSelected = Boolean(process.env.VOICE_PROVIDER?.trim()) && voiceProvider() !== 'none'
   if (!smsSelected && !voiceSelected) return { status: 'skip' }
   const missing = [

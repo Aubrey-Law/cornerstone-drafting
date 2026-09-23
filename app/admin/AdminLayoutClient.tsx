@@ -20,6 +20,7 @@ import {
   Settings,
   Sparkles,
   MailSearch,
+  MessageSquareText,
   Sun,
 } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -82,6 +83,7 @@ export const adminNavItems: {
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, group: 'Daily', exact: true },
   { href: '/admin/email-triage', label: 'Email triage', icon: MailSearch, group: 'Daily' },
+  { href: '/admin/texts', label: 'Texts', icon: MessageSquareText, group: 'Daily' },
   { href: '/admin/crm/opportunities', label: 'Leads', icon: Send, group: 'Clients' },
   { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },

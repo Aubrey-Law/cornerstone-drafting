@@ -37,8 +37,10 @@ vi.mock('@/lib/sms/provider', () => ({
   })),
 }))
 
-vi.mock('@/lib/communications/providers', () => ({ smsProvider: () => 'twilio' }))
-vi.mock('@/lib/telnyx/config', () => ({ telnyxPhoneNumber: () => null }))
+vi.mock('@/lib/communications/providers', () => ({ smsProvider: () => 'telnyx' }))
+vi.mock('@/lib/communications/config', () => ({ isSmsConfigured: () => true }))
+vi.mock('@/lib/sms/optOut', () => ({ isPhoneOptedOut: vi.fn(async () => false) }))
+vi.mock('@/lib/telnyx/config', () => ({ telnyxPhoneNumber: () => '+15555550100' }))
 
 import { resolveContactSmsTarget, sendOutboundSms } from '@/lib/sms/outbound'
 

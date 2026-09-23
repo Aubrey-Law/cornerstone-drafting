@@ -93,8 +93,9 @@ describe('Telnyx communications migration', () => {
       .rejects.toThrow('Missing Telnyx webhook signature headers')
   })
 
-  it('selects SMS and voice independently and defaults safely to Twilio', () => {
-    expect(smsProvider()).toBe('twilio')
+  it('selects SMS and voice independently; SMS defaults to off, voice to Twilio', () => {
+    // Texting only runs when someone chose Telnyx on purpose.
+    expect(smsProvider()).toBe('none')
     expect(voiceProvider()).toBe('twilio')
     vi.stubEnv('SMS_PROVIDER', 'telnyx')
     expect(smsProvider()).toBe('telnyx')

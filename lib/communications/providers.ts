@@ -1,16 +1,20 @@
 export type CommunicationsProvider = 'twilio' | 'telnyx' | 'none'
 
-function provider(value: string | undefined, key: string): CommunicationsProvider {
-  const selected = value?.trim().toLowerCase() || 'twilio'
+function provider(
+  value: string | undefined,
+  key: string,
+  fallback: CommunicationsProvider,
+): CommunicationsProvider {
+  const selected = value?.trim().toLowerCase() || fallback
   if (selected === 'twilio' || selected === 'telnyx' || selected === 'none') return selected
   throw new Error(`${key} must be twilio, telnyx, or none`)
 }
 export function smsProvider(): CommunicationsProvider {
-  return provider(process.env.SMS_PROVIDER, 'SMS_PROVIDER')
+  return provider(process.env.SMS_PROVIDER, 'SMS_PROVIDER', 'none')
 }
 
 export function voiceProvider(): CommunicationsProvider {
-  return provider(process.env.VOICE_PROVIDER, 'VOICE_PROVIDER')
+  return provider(process.env.VOICE_PROVIDER, 'VOICE_PROVIDER', 'twilio')
 }
 
 /** Manual controls are independent of automated reminders and callbacks. */

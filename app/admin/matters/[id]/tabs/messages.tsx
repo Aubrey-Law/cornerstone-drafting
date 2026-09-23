@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ResizableTextarea } from '@/components/ui/drag-resize'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { TabsContent } from '@/components/ui/tabs'
 import { FilterChip } from '@/components/FilterChip'
 import { SetupBanner } from '@/components/SetupBanner'
@@ -116,7 +123,7 @@ export function EmailMessagesSection({
 const CHANNEL_CHIPS: Array<{ key: CommunicationChannel; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'portal', label: 'Portal' },
-  { key: 'sms', label: 'SMS history' },
+  { key: 'sms', label: 'Text' },
   { key: 'email', label: 'Email' },
 ]
 
@@ -151,6 +158,8 @@ export function MatterCommunicationsTab({
     portalSending,
     smsSending,
     smsEnabled,
+    smsRecipient,
+    setSmsRecipient,
   } = messageProps
 
   return (
@@ -184,7 +193,20 @@ export function MatterCommunicationsTab({
             </FilterChip>
           ))}
         </div>
-
+        {smsEnabled && (channel === 'sms' || channel === 'all') && (
+          <div className="flex items-center gap-1.5">
+            <Label className="text-micro text-muted-foreground">Text to</Label>
+            <Select value={smsRecipient} onValueChange={v => setSmsRecipient(v as 'client' | 'spouse')}>
+              <SelectTrigger className="h-8 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client">Client</SelectItem>
+                <SelectItem value="spouse">Spouse</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <CommunicationThread
