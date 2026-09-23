@@ -5,6 +5,8 @@ import { sendEmail } from '@/lib/email/send'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { notifyClientOfFirmMessage } from '@/lib/portalNotifications'
 import { buildCalendlyLink, getCalendlyUrls } from '@/lib/calendly/links'
+import { bookingProviderForUrl } from '@/lib/bookings/provider'
+import { prepareLawmaticsBooking } from '@/lib/integrations/lawmatics/bookingLink'
 import { MEETING_TYPE_KEYS, meetingTypeForKey, type MeetingTypeKey } from '@/lib/scheduling'
 
 export const runtime = 'nodejs'
@@ -180,6 +182,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: recipientError ?? 'Not found' }, { status: 404 })
   }
 
+  // Lawmatics events carry no metadata: link the lead to its Lawmatics
+  // prospect first, so the booking it creates resolves back to this record.
+  const lawmatics = channel !== 'sms' && bookingProviderForUrl(baseUrl) === 'lawmatics'
+    ? await prepareLawmaticsBooking({ leadId, matterId }, userId)
+    : null
+  const warning = lawmatics?.warning ? { warning: lawmatics.warning } : {}
+
   const link = buildCalendlyLink(baseUrl, {
     name: recipient.name,
     email: recipient.email,
@@ -247,7 +256,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single()
     }
-    return NextResponse.json({ success: true, channel, status: result.status })
+    return NextResponse.json({ success: true, channel, status: result.status, ...warning })
   }
 
   if (channel === 'sms') return NextResponse.json({ error: 'Texting has been retired.' }, { status: 410 })
@@ -267,5 +276,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: messageError.message }, { status: 500 })
   }
   await notifyClientOfFirmMessage(matterId!)
-  return NextResponse.json({ success: true, channel, status: 'posted' })
+  return NextResponse.json({ success: true, channel, status: 'posted', ...warning })
 }

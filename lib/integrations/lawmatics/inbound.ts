@@ -143,6 +143,7 @@ interface StoredBooking {
   attendee_email: string | null
   attendee_name: string | null
   linked_lead_id: string | null
+  linked_matter_id: string | null
   updated_at: string | null
 }
 
@@ -203,6 +204,13 @@ async function leadIdForProspect(admin: AdminClient, prospectId: string): Promis
   return (legacy as Array<{ id: string }> | null)?.[0]?.id ?? null
 }
 
+/** A lead's hired matter, so a booking on its prospect also lands on the matter. */
+async function matterIdForLead(admin: AdminClient, leadId: string): Promise<string | null> {
+  const { data, error } = await admin.from('matters').select('id').eq('client_intake_id', leadId).limit(1)
+  if (error) throw error
+  return (data as Array<{ id: string }> | null)?.[0]?.id ?? null
+}
+
 async function outboundEventIds(admin: AdminClient): Promise<Set<string>> {
   const { data, error } = await admin.from('integration_external_records')
     .select('external_id')
@@ -216,7 +224,7 @@ async function storedBookings(admin: AdminClient, ids: string[]): Promise<Map<st
   const map = new Map<string, StoredBooking>()
   for (let i = 0; i < ids.length; i += 100) {
     const { data, error } = await admin.from('external_bookings')
-      .select('booking_uid, status, start_time, end_time, event_key, event_label, attendee_email, attendee_name, linked_lead_id, updated_at')
+      .select('booking_uid, status, start_time, end_time, event_key, event_label, attendee_email, attendee_name, linked_lead_id, linked_matter_id, updated_at')
       .eq('provider', 'lawmatics').in('booking_uid', ids.slice(i, i + 100))
     if (error) throw error
     for (const row of (data ?? []) as StoredBooking[]) map.set(row.booking_uid, row)
@@ -256,6 +264,7 @@ async function recordChange(admin: AdminClient, input: {
   eventLabel: string
   person: Person
   leadId: string | null
+  matterId: string | null
 }): Promise<boolean> {
   const claimKey = `event:${input.eventId}:${input.storedVersion ?? 'new'}:${input.action}:${input.start}:${input.end}`
   const { data: claimed, error: claimError } = await admin.rpc('claim_webhook_event', {
@@ -286,7 +295,7 @@ async function recordChange(admin: AdminClient, input: {
       startTime: input.start,
       endTime: input.end,
       metadataLeadId: input.leadId,
-      metadataMatterId: null,
+      metadataMatterId: input.matterId,
       // Identifiers only; the contact's details live on the lead and appointment.
       rawBody: { eventId: input.eventId, eventTypeId: input.eventTypeId, start: input.start, end: input.end },
       status: STATUS_FOR_ACTION[input.action],
@@ -314,6 +323,7 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
   const outbound = await outboundEventIds(admin)
   const people = new Map<string, Person | null>()
   const leads = new Map<string, string | null>()
+  const matters = new Map<string, string | null>()
 
   const inWindow = (event: ParsedLawmaticsEvent) =>
     Date.parse(event.end) >= nowMs - LOOKBACK_MS && Date.parse(event.start) <= nowMs + HORIZON_MS
@@ -356,6 +366,11 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
     if (!leads.has(ref.id)) leads.set(ref.id, await leadIdForProspect(admin, ref.id))
     return leads.get(ref.id) ?? null
   }
+  const matterFor = async (leadId: string | null): Promise<string | null> => {
+    if (!leadId) return null
+    if (!matters.has(leadId)) matters.set(leadId, await matterIdForLead(admin, leadId))
+    return matters.get(leadId) ?? null
+  }
 
   // 2. Record new, moved, and cancelled events.
   for (const event of events) {
@@ -370,6 +385,7 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
         continue
       }
       const eventKey = event.eventTypeId ? keyForEventType.get(event.eventTypeId) ?? null : null
+      const leadId = await leadFor(event.eventable!)
       const processed = await recordChange(admin, {
         action,
         storedVersion: previous?.updated_at ?? null,
@@ -380,7 +396,8 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
         eventTypeId: event.eventTypeId,
         eventLabel: (eventKey ? meetingTypeForKey(eventKey)?.label : null) ?? event.name,
         person,
-        leadId: await leadFor(event.eventable!),
+        leadId,
+        matterId: await matterFor(leadId),
       })
       if (processed) {
         if (action === 'cancelled') result.cancelled++
@@ -395,7 +412,7 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
   // 3. Lawmatics deletes cancelled events outright, so an upcoming mirrored
   //    booking that no longer appears in the scan is checked directly.
   const { data: upcoming, error: upcomingError } = await admin.from('external_bookings')
-    .select('booking_uid, status, start_time, end_time, event_key, event_label, attendee_email, attendee_name, linked_lead_id, updated_at')
+    .select('booking_uid, status, start_time, end_time, event_key, event_label, attendee_email, attendee_name, linked_lead_id, linked_matter_id, updated_at')
     .eq('provider', 'lawmatics').in('status', ['scheduled', 'rescheduled'])
     .gte('end_time', new Date(nowMs - LOOKBACK_MS).toISOString())
     .order('start_time', { ascending: true })
@@ -419,6 +436,7 @@ export async function syncLawmaticsCalendar(options: { now?: Date } = {}): Promi
         eventLabel: row.event_label ?? 'Lawmatics event',
         person: { name: row.attendee_name ?? '', email: row.attendee_email, phone: null },
         leadId: row.linked_lead_id,
+        matterId: row.linked_matter_id,
       })
       if (processed) result.cancelled++
     } catch (error) {

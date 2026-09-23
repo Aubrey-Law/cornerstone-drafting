@@ -29,12 +29,16 @@ export function BookCalendlyDialog({
   const [types, setTypes] = useState<TypeOption[]>([])
   const [typeKey, setTypeKey] = useState('')
   const [booked, setBooked] = useState(false)
+  // Lawmatics pages: the lead is pushed to Lawmatics once per opening, before
+  // the page loads, so the booking lands on its linked prospect.
+  const [lawmaticsPrep, setLawmaticsPrep] = useState<'idle' | 'preparing' | 'ready'>('idle')
 
   const query = target.kind === 'lead' ? `leadId=${target.id}` : `matterId=${target.id}`
 
   useEffect(() => {
     if (!open || !token) return
     setBooked(false)
+    setLawmaticsPrep('idle')
     fetch(`/api/admin/scheduling-links/send?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -66,6 +70,24 @@ export function BookCalendlyDialog({
   const selected = types.find(t => t.key === typeKey)
   const provider = selected?.embedUrl ? bookingProviderForUrl(selected.embedUrl) : null
   const providerLabel = provider ? BOOKING_PROVIDER_LABELS[provider] : 'booking page'
+
+  useEffect(() => {
+    if (!open || !token || provider !== 'lawmatics' || lawmaticsPrep !== 'idle') return
+    setLawmaticsPrep('preparing')
+    fetch('/api/admin/scheduling-links/lawmatics-prepare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ target: target.kind === 'lead' ? { leadId: target.id } : { matterId: target.id } }),
+    })
+      .then(res => res.json())
+      .then((json: { warning?: unknown }) => {
+        if (typeof json.warning === 'string') toast.warning(json.warning)
+      })
+      .catch(() => toast.warning('Could not link this client in Lawmatics; the booking will be matched by email.'))
+      .finally(() => setLawmaticsPrep('ready'))
+  }, [open, token, provider, lawmaticsPrep, target])
+
+  const lawmaticsPending = provider === 'lawmatics' && lawmaticsPrep !== 'ready'
   const iframeSrc = useMemo(() => {
     if (!selected?.embedUrl) return null
     const url = new URL(selected.embedUrl)
@@ -108,6 +130,8 @@ export function BookCalendlyDialog({
               Booked — the appointment will appear on the timeline as soon as {providerLabel}{' '}
               confirms it.
             </div>
+          ) : lawmaticsPending ? (
+            <p className="text-sm text-muted-foreground">Linking this client in Lawmatics…</p>
           ) : iframeSrc ? (
             <iframe
               key={iframeSrc}
@@ -120,13 +144,13 @@ export function BookCalendlyDialog({
               No booking links configured — add them in Settings → Scheduling.
             </p>
           )}
-          {iframeSrc && !booked && provider !== 'calendly' ? (
+          {iframeSrc && !booked && !lawmaticsPending && provider !== 'calendly' ? (
             <p className="text-xs text-muted-foreground">
               If the booking page doesn&apos;t load here, use &ldquo;Open in new tab&rdquo;.
             </p>
           ) : null}
           <div className="flex items-center justify-between">
-            {iframeSrc && !booked ? (
+            {iframeSrc && !booked && !lawmaticsPending ? (
               <a
                 href={iframeSrc}
                 target="_blank"

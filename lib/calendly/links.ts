@@ -39,6 +39,13 @@ export function buildCalendlyLink(
   else if (opts.leadId) url.searchParams.set('utm_content', `leadId:${opts.leadId}`)
   // Cal.com copies metadata[...] query params onto the booking, where its
   // webhook (lib/calcom/normalize.ts) reads metadata.leadId / metadata.matterId.
+  // Lawmatics booking forms: prefill the name parts too, so the booking lands on
+  // the prospect Push to Lawmatics linked (lib/integrations/lawmatics/bookingLink.ts).
+  if (bookingProviderForUrl(baseUrl) === 'lawmatics' && opts.name) {
+    const [first, ...rest] = opts.name.trim().split(/\s+/)
+    if (first) url.searchParams.set('first_name', first)
+    if (rest.length) url.searchParams.set('last_name', rest.join(' '))
+  }
   if (bookingProviderForUrl(baseUrl) === 'calcom') {
     if (opts.matterId) url.searchParams.set('metadata[matterId]', opts.matterId)
     else if (opts.leadId) url.searchParams.set('metadata[leadId]', opts.leadId)
