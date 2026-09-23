@@ -3,6 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { GeneratedDatabase } from '@/types/supabase'
+import { readLawmaticsOptionIdMap, type LawmaticsOptionIdMap } from '@/lib/integrations/lawmatics/pushFields'
 
 type SettingsRow = GeneratedDatabase['public']['Tables']['integration_settings']['Row']
 type SettingsInsert = GeneratedDatabase['public']['Tables']['integration_settings']['Insert']
@@ -103,6 +104,8 @@ export interface IntegrationSettings {
   lawmaticsUserIds: string[]
   /** Cornerstone field key → Lawmatics custom field ID, for manual prospect pushes. */
   lawmaticsCustomFieldIdMap: Record<string, string>
+  /** Cornerstone value → Lawmatics option ID, per picklist, for manual prospect pushes. */
+  lawmaticsOptionIdMap: LawmaticsOptionIdMap
   lawmaticsLastCheckedAt: string | null
   lawmaticsLastCheckError: string | null
   statularSyncEnabled: boolean
@@ -117,6 +120,7 @@ function fromRow(row: SettingsRow | null): IntegrationSettings {
     lawmaticsLocationIdMap: sanitizeProviderIdMap(row?.lawmatics_location_id_map ?? {}),
     lawmaticsUserIds: sanitizeProviderIds(row?.lawmatics_user_ids ?? []),
     lawmaticsCustomFieldIdMap: sanitizeProviderIdMap(row?.lawmatics_custom_field_id_map ?? {}),
+    lawmaticsOptionIdMap: readLawmaticsOptionIdMap(row?.lawmatics_option_id_map ?? {}),
     lawmaticsLastCheckedAt: row?.lawmatics_last_checked_at ?? null,
     lawmaticsLastCheckError: row?.lawmatics_last_check_error ? 'Lawmatics connection check failed.' : null,
     statularSyncEnabled: row?.statular_sync_enabled === true,
@@ -135,7 +139,7 @@ export async function updateIntegrationSettings(input: unknown, actorId: string 
   const fields = requireObject(input)
   const allowed = new Set([
     'lawmaticsAppointmentSyncEnabled', 'lawmaticsEventTypeIdMap', 'lawmaticsLocationIdMap',
-    'lawmaticsUserIds', 'lawmaticsCustomFieldIdMap', 'statularSyncEnabled', 'statularDocIdMap', 'statularDrafterId',
+    'lawmaticsUserIds', 'lawmaticsCustomFieldIdMap', 'lawmaticsOptionIdMap', 'statularSyncEnabled', 'statularDocIdMap', 'statularDrafterId',
   ])
   if (Object.keys(fields).some(key => !allowed.has(key))) throw new Error('Unknown integration setting.')
   const patch: SettingsInsert = { id: 1, updated_by: actorId, updated_at: new Date().toISOString() }
@@ -152,6 +156,7 @@ export async function updateIntegrationSettings(input: unknown, actorId: string 
   if ('lawmaticsLocationIdMap' in fields) patch.lawmatics_location_id_map = sanitizeProviderIdMap(fields.lawmaticsLocationIdMap)
   if ('lawmaticsUserIds' in fields) patch.lawmatics_user_ids = sanitizeProviderIds(fields.lawmaticsUserIds)
   if ('lawmaticsCustomFieldIdMap' in fields) patch.lawmatics_custom_field_id_map = sanitizeProviderIdMap(fields.lawmaticsCustomFieldIdMap)
+  if ('lawmaticsOptionIdMap' in fields) patch.lawmatics_option_id_map = readLawmaticsOptionIdMap(fields.lawmaticsOptionIdMap)
   if ('statularDocIdMap' in fields) patch.statular_doc_id_map = sanitizeDocIdMap(fields.statularDocIdMap)
   if ('statularDrafterId' in fields) patch.statular_drafter_id = fields.statularDrafterId === null ? null : providerId(fields.statularDrafterId)
 

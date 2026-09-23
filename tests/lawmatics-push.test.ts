@@ -119,7 +119,7 @@ describe('pushLeadToLawmatics', () => {
         { id: '244367', value: 'Byron King' },
       ],
     })
-    expect(first.unmapped).toEqual(['Spouse last name', 'Lead source', 'Legal plan member ID', 'Internal notes'])
+    expect(first.unmapped).toEqual(['Source', 'Campaign', 'Spouse last name', 'Lead source', 'Legal plan member ID', 'Internal notes'])
     expect(prospectRecord()).toMatchObject({ external_id: 'prospect-1', status: 'synced' })
 
     db.client_intake[0].city = 'Cambridge'
@@ -305,5 +305,41 @@ describe('Lawmatics custom field IDs', () => {
     expect(mocks.create.mock.calls[1][0]).toMatchObject({ marital_status: 'Domestic Partner' })
     expect(result.rejected).toEqual(['County'])
     expect(result.sent).toEqual(expect.arrayContaining(['Spouse first name', 'Children']))
+  })
+})
+
+describe('Lawmatics picklists and actual value', () => {
+  it('sends the matched practice area, source and campaign option IDs', () => {
+    const { body, sentKeys, unmappedKeys } = buildLawmaticsProspectBody({
+      intake: { first_name: 'Ada', last_name: 'Lovelace', practice_area: 'Estate Planning - LP', lead_source: ' Google  Ads ' },
+      matterNumber: null, spouse: null, children: [], fee: 3500,
+    }, {}, { practice_area: { 'EP-LP': '11' }, source: { 'google ads': '21' }, campaign: {} })
+
+    expect(body).toEqual({
+      first_name: 'Ada', last_name: 'Lovelace', practice_area_id: 11, source_id: 21, actual_value: 3500,
+    })
+    expect(sentKeys).toEqual(['first_name', 'last_name', 'practice_area', 'lawmatics_source', 'actual_value'])
+    expect(unmappedKeys).toContain('lawmatics_campaign')
+  })
+
+  it('uses a hired matter\'s practice area and flat fee over the lead\'s', async () => {
+    db.client_intake[0].practice_area = 'EP'
+    db.client_intake[0].engagement_fee_quoted = 2000 as unknown as string
+    db.matters = [{ id: 'matter-1', client_intake_id: INTAKE_ID, matter_number: '2026-014' }]
+    db.matter_details = [{ client_id: 'matter-1', practice_area: 'Probate', flat_fee_amount: 4500 }]
+    mocks.settings.mockImplementation(async () => ({ lawmaticsCustomFieldIdMap: {},
+      lawmaticsOptionIdMap: { practice_area: { EP: '11', Probate: '14' }, source: {}, campaign: {} } }))
+
+    await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ practice_area_id: 14, actual_value: 4500, case_number: '2026-014' })
+  })
+
+  it('sends a lead\'s quoted fee as the actual value', async () => {
+    db.client_intake[0].engagement_fee_quoted = 2000 as unknown as string
+
+    await pushLeadToLawmatics(INTAKE_ID)
+
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ actual_value: 2000 })
   })
 })

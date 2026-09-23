@@ -6,8 +6,41 @@
  * street2, zipcode, …). Every other field is a Lawmatics custom field
  * the firm defines, so it is sent only when integration_settings maps its key
  * to a Lawmatics custom field ID; unmapped values are reported, never dropped
- * silently and never guessed.
+ * silently and never guessed. Lawmatics' Practice Area, Source and Campaign
+ * are built-in picklists set by option ID, so those go through a second map
+ * from Cornerstone values to Lawmatics option IDs.
  */
+
+import { normalizePracticeArea } from '@/lib/practiceArea'
+
+/** Lawmatics picklists the push sets by option ID (Settings → Lawmatics). */
+export const LAWMATICS_OPTION_KINDS = ['practice_area', 'source', 'campaign'] as const
+export type LawmaticsOptionKind = typeof LAWMATICS_OPTION_KINDS[number]
+export type LawmaticsOptionIdMap = Record<LawmaticsOptionKind, Record<string, string>>
+
+/** Tolerant read: a malformed entry is dropped rather than failing every push. */
+export function readLawmaticsOptionIdMap(value: unknown): LawmaticsOptionIdMap {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  const result = { practice_area: {}, source: {}, campaign: {} } as LawmaticsOptionIdMap
+  for (const kind of LAWMATICS_OPTION_KINDS) {
+    const entries = source[kind]
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) continue
+    for (const [key, id] of Object.entries(entries as Record<string, unknown>)) {
+      if (!key || ['__proto__', 'constructor', 'prototype'].includes(key)) continue
+      if (typeof id === 'string' && /^\d{1,12}$/.test(id.trim())) result[kind][key] = id.trim()
+    }
+  }
+  return result
+}
+
+
+/** Lead sources are free text; the option map keys them case- and space-insensitively. */
+export function leadSourceKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const key = value.trim().replace(/\s+/g, ' ').toLowerCase()
+  return key && key.length <= 200 ? key : null
+}
+
 
 export type LawmaticsPushFieldKey =
   | 'first_name' | 'last_name' | 'email' | 'phone' | 'birthdate'
@@ -18,6 +51,7 @@ export type LawmaticsPushFieldKey =
   | 'estate_value' | 'occupation' | 'employer' | 'citizenship' | 'planning_objectives' | 'special_notes'
   | 'qualification_notes' | 'notes' | 'matter_number'
   | 'preferred_pronoun' | 'date_of_marriage' | 'legal_plan_member_id'
+  | 'lawmatics_source' | 'lawmatics_campaign' | 'actual_value'
 
 export interface LawmaticsPushField {
   key: LawmaticsPushFieldKey
@@ -26,6 +60,10 @@ export interface LawmaticsPushField {
   standard: boolean
   /** Lawmatics attribute name for a standard field, when it differs from the key. */
   attribute?: string
+  /** A Lawmatics picklist: the value is looked up in the option map and its ID is sent. */
+  option?: LawmaticsOptionKind
+  /** Sent as a number rather than text. */
+  numeric?: boolean
 }
 
 export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
@@ -47,6 +85,10 @@ export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'employer', label: 'Employer', standard: true },
   { key: 'citizenship', label: 'Citizenship', standard: true },
   { key: 'matter_number', label: 'Matter number', standard: true, attribute: 'case_number' },
+  { key: 'practice_area', label: 'Practice area', standard: true, attribute: 'practice_area_id', option: 'practice_area', numeric: true },
+  { key: 'lawmatics_source', label: 'Source', standard: true, attribute: 'source_id', option: 'source', numeric: true },
+  { key: 'lawmatics_campaign', label: 'Campaign', standard: true, attribute: 'campaign_id', option: 'campaign', numeric: true },
+  { key: 'actual_value', label: 'Actual value', standard: true, numeric: true },
   { key: 'county', label: 'County', standard: false },
   { key: 'preferred_pronoun', label: 'Preferred pronouns', standard: false },
   { key: 'date_of_marriage', label: 'Date of marriage', standard: false },
@@ -58,7 +100,6 @@ export const LAWMATICS_PUSH_FIELDS: readonly LawmaticsPushField[] = [
   { key: 'children', label: 'Children', standard: false },
   { key: 'lead_source', label: 'Lead source', standard: false },
   { key: 'referral_source', label: 'Referral source', standard: false },
-  { key: 'practice_area', label: 'Practice area', standard: false },
   { key: 'plan_type', label: 'Plan type', standard: false },
   { key: 'lead_status', label: 'Lead status', standard: false },
   { key: 'estate_value', label: 'Estate value', standard: false },
@@ -80,6 +121,10 @@ type PersonRow = {
 export interface LawmaticsPushSource {
   intake: Record<string, string | null>
   matterNumber: string | null
+  /** The hired matter's practice area, which wins over the intake's. */
+  matterPracticeArea?: string | null
+  /** The matter's flat fee, else the lead's quoted fee. */
+  fee?: number | null
   spouse: PersonRow | null
   children: PersonRow[]
 }
@@ -157,7 +202,12 @@ export function lawmaticsPushValues(source: LawmaticsPushSource): Partial<Record
     children: children.length ? children.join(', ') : undefined,
     lead_source: titleCase(intake.lead_source),
     referral_source: text(intake.referral_source),
-    practice_area: text(intake.practice_area),
+    practice_area: text(source.matterPracticeArea) || text(intake.practice_area)
+      ? normalizePracticeArea(text(source.matterPracticeArea) ?? intake.practice_area) : undefined,
+    lawmatics_source: leadSourceKey(intake.lead_source) ?? undefined,
+    lawmatics_campaign: leadSourceKey(intake.lead_source) ?? undefined,
+    actual_value: typeof source.fee === 'number' && Number.isFinite(source.fee) && source.fee >= 0
+      ? String(source.fee) : undefined,
     plan_type: titleCase(intake.plan_type),
     lead_status: titleCase(intake.lead_status),
     estate_value: text(intake.estate_value),
@@ -183,6 +233,7 @@ export function lawmaticsPushValues(source: LawmaticsPushSource): Partial<Record
 export function buildLawmaticsProspectBody(
   source: LawmaticsPushSource,
   customFieldIdMap: Record<string, string>,
+  optionIdMap: LawmaticsOptionIdMap = { practice_area: {}, source: {}, campaign: {} },
 ): {
   body: LawmaticsProspectBody
   sentKeys: LawmaticsPushFieldKey[]
@@ -203,7 +254,16 @@ export function buildLawmaticsProspectBody(
     const value = values[field.key]
     if (value === undefined) continue
     if (field.standard) {
-      body[field.attribute ?? field.key] = value
+      let sent: string = value
+      if (field.option) {
+        const optionId = Object.hasOwn(optionIdMap[field.option], value) ? optionIdMap[field.option][value] : undefined
+        if (!optionId) {
+          unmappedKeys.push(field.key)
+          continue
+        }
+        sent = optionId
+      }
+      body[field.attribute ?? field.key] = field.numeric ? Number(sent) : sent
       sentKeys.push(field.key)
       continue
     }

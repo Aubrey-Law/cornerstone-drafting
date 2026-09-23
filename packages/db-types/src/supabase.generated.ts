@@ -5170,6 +5170,7 @@ export type Database = {
           lawmatics_last_check_error: string | null
           lawmatics_last_checked_at: string | null
           lawmatics_location_id_map: Json
+          lawmatics_option_id_map: Json
           lawmatics_user_ids: Json
           statular_doc_id_map: Json
           statular_drafter_id: string | null
@@ -5186,6 +5187,7 @@ export type Database = {
           lawmatics_last_check_error?: string | null
           lawmatics_last_checked_at?: string | null
           lawmatics_location_id_map?: Json
+          lawmatics_option_id_map?: Json
           lawmatics_user_ids?: Json
           statular_doc_id_map?: Json
           statular_drafter_id?: string | null
@@ -5202,6 +5204,7 @@ export type Database = {
           lawmatics_last_check_error?: string | null
           lawmatics_last_checked_at?: string | null
           lawmatics_location_id_map?: Json
+          lawmatics_option_id_map?: Json
           lawmatics_user_ids?: Json
           statular_doc_id_map?: Json
           statular_drafter_id?: string | null
