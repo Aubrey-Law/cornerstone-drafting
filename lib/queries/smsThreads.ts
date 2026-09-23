@@ -194,6 +194,7 @@ export async function getSmsThreadMessages(phone: string): Promise<SmsThreadMess
     .from('sms_messages')
     .select('id, direction, body, status, error, actor_name, created_at')
     .or(threadMessagesFilter(key))
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(500)
   if (error) throw new Error(error.message)
@@ -267,4 +268,37 @@ export async function countUnreadSmsThreads(): Promise<number> {
     .gt('unread_count', 0)
   if (error) throw new Error(error.message)
   return count ?? 0
+}
+
+/**
+ * Hide one message from every view. Soft: the row keeps its content plus who
+ * deleted it and when, so the firm's record of the exchange survives.
+ * Returns false when there is no such (undeleted) message.
+ */
+export async function softDeleteSmsMessage(id: string, userId: string): Promise<boolean> {
+  const { data, error } = await getAdminClient()
+    .from('sms_messages')
+    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .eq('id', id)
+    .is('deleted_at', null)
+    .select('id')
+  if (error) throw new Error(error.message)
+  return (data?.length ?? 0) > 0
+}
+
+/**
+ * Hide a whole conversation. Opt-outs are untouched: they live in
+ * `sms_opt_outs`, so deleting a STOP never makes the number textable again.
+ */
+export async function softDeleteSmsThread(phone: string, userId: string): Promise<number> {
+  const key = optOutPhoneKey(phone)
+  if (!key) throw new Error('Invalid phone number')
+  const { data, error } = await getAdminClient()
+    .from('sms_messages')
+    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .or(threadMessagesFilter(key))
+    .is('deleted_at', null)
+    .select('id')
+  if (error) throw new Error(error.message)
+  return data?.length ?? 0
 }

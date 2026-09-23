@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   listSmsThreads: vi.fn(),
   linkSmsThread: vi.fn(),
   markSmsThreadRead: vi.fn(),
+  softDeleteSmsMessage: vi.fn(),
+  softDeleteSmsThread: vi.fn(),
   sendOutboundSms: vi.fn(),
   createLead: vi.fn(),
   revalidateSidebarCounts: vi.fn(),
@@ -26,10 +28,13 @@ vi.mock('@/lib/queries/smsThreads', () => ({
   listSmsThreads: mocks.listSmsThreads,
   linkSmsThread: mocks.linkSmsThread,
   markSmsThreadRead: mocks.markSmsThreadRead,
+  softDeleteSmsMessage: mocks.softDeleteSmsMessage,
+  softDeleteSmsThread: mocks.softDeleteSmsThread,
 }))
 
 import { GET as listRoute } from '@/app/api/admin/texts/threads/route'
-import { GET as threadRoute } from '@/app/api/admin/texts/threads/[phone]/route'
+import { GET as threadRoute, DELETE as deleteThreadRoute } from '@/app/api/admin/texts/threads/[phone]/route'
+import { DELETE as deleteMessageRoute } from '@/app/api/admin/texts/messages/[id]/route'
 import { POST as readRoute } from '@/app/api/admin/texts/threads/[phone]/read/route'
 import { POST as sendRoute } from '@/app/api/admin/texts/threads/[phone]/send/route'
 import { POST as linkRoute } from '@/app/api/admin/texts/threads/[phone]/link/route'
@@ -194,5 +199,42 @@ describe('POST read', () => {
     mocks.markSmsThreadRead.mockResolvedValueOnce(2)
     await readRoute(post({}), params('5555550123'))
     expect(mocks.revalidateSidebarCounts).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('DELETE message and conversation', () => {
+  const del = () => new NextRequest('http://localhost/x', { method: 'DELETE' })
+  const MESSAGE_ID = '22222222-2222-4222-8222-222222222222'
+
+  it('requires authorization', async () => {
+    mocks.requireAdmin.mockResolvedValue({ err: new Response(null, { status: 401 }) })
+    expect((await deleteMessageRoute(del(), { params: Promise.resolve({ id: MESSAGE_ID }) })).status).toBe(401)
+    expect((await deleteThreadRoute(del(), params('5555550123'))).status).toBe(401)
+    expect(mocks.softDeleteSmsMessage).not.toHaveBeenCalled()
+    expect(mocks.softDeleteSmsThread).not.toHaveBeenCalled()
+  })
+
+  it('soft-deletes one message as the signed-in user and refreshes the badge', async () => {
+    mocks.softDeleteSmsMessage.mockResolvedValue(true)
+    const response = await deleteMessageRoute(del(), { params: Promise.resolve({ id: MESSAGE_ID }) })
+    expect(response.status).toBe(200)
+    expect(mocks.softDeleteSmsMessage).toHaveBeenCalledWith(MESSAGE_ID, 'user-1')
+    expect(mocks.revalidateSidebarCounts).toHaveBeenCalled()
+  })
+
+  it('rejects a malformed id and reports a missing or already-deleted message', async () => {
+    expect((await deleteMessageRoute(del(), { params: Promise.resolve({ id: 'nope' }) })).status).toBe(400)
+    mocks.softDeleteSmsMessage.mockResolvedValue(false)
+    expect((await deleteMessageRoute(del(), { params: Promise.resolve({ id: MESSAGE_ID }) })).status).toBe(404)
+  })
+
+  it('soft-deletes a whole conversation by its number', async () => {
+    mocks.softDeleteSmsThread.mockResolvedValue(3)
+    const response = await deleteThreadRoute(del(), params('+1 (555) 555-0123'))
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ deleted: 3 })
+    expect(mocks.softDeleteSmsThread).toHaveBeenCalledWith('5555550123', 'user-1')
+    mocks.softDeleteSmsThread.mockResolvedValue(0)
+    expect((await deleteThreadRoute(del(), params('5555550123'))).status).toBe(404)
   })
 })
