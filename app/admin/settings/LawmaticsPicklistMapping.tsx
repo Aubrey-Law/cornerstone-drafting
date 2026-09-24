@@ -38,9 +38,13 @@ function sameMap(a: LawmaticsOptionIdMap, b: LawmaticsOptionIdMap): boolean {
   })
 }
 
+const MANUAL = '__manual__'
+
 /**
  * Picks a Lawmatics option for one Cornerstone value: a dropdown of the firm's
  * options when Lawmatics returned them, otherwise a box for the numeric ID.
+ * The dropdown can switch to the ID box for options Lawmatics doesn't list
+ * (archived or inactive ones, for example).
  */
 function OptionPicker({ list, value, onChange, label }: {
   list: OptionList | undefined
@@ -48,31 +52,43 @@ function OptionPicker({ list, value, onChange, label }: {
   onChange: (value: string) => void
   label: string
 }) {
-  if (list?.ok) {
+  const [manual, setManual] = useState(false)
+  if (list?.ok && !manual) {
     const known = list.options.some(option => option.id === value)
     return (
       <select
         className="h-8 w-full max-w-xs rounded-md border border-input bg-background px-2 text-xs"
         value={value}
-        onChange={event => onChange(event.target.value)}
+        onChange={event => {
+          if (event.target.value === MANUAL) setManual(true)
+          else onChange(event.target.value)
+        }}
         aria-label={label}
       >
         <option value="">Not matched</option>
         {!known && value && <option value={value}>ID {value} (not in Lawmatics list)</option>}
         {list.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+        <option value={MANUAL}>Not listed — enter ID…</option>
       </select>
     )
   }
   return (
-    <Input
-      className="h-8 max-w-xs font-mono text-xs"
-      value={value}
-      onChange={event => onChange(event.target.value.replace(/[^\d]/g, ''))}
-      placeholder={list ? 'Lawmatics ID' : 'Loading…'}
-      inputMode="numeric"
-      aria-label={label}
-      autoComplete="off"
-    />
+    <div className="flex items-center gap-2">
+      <Input
+        className="h-8 max-w-xs font-mono text-xs"
+        value={value}
+        onChange={event => onChange(event.target.value.replace(/[^\d]/g, ''))}
+        placeholder={list ? 'Lawmatics ID' : 'Loading…'}
+        inputMode="numeric"
+        aria-label={label}
+        autoComplete="off"
+      />
+      {list?.ok && (
+        <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setManual(false)}>
+          Pick from list
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -186,6 +202,7 @@ export function LawmaticsPicklistMapping({ token, saved, leadSources, onSaved }:
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead source</h3>
         <p className="text-xs text-muted-foreground">
           Each lead source used in Cornerstone can set both the Lawmatics Source and the Lawmatics Campaign.
+          If a Lawmatics option is missing from a list, pick &ldquo;Not listed — enter ID…&rdquo; and type its ID.
         </p>
         {leadSources.length === 0 ? (
           <p className="text-xs text-muted-foreground">No leads have a lead source yet.</p>

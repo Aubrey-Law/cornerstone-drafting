@@ -19,7 +19,10 @@ const PATHS: Record<LawmaticsOptionKind, string> = {
 }
 
 const PER_PAGE = 100
-const MAX_PAGES = 10
+// Lawmatics can cap per_page below what we ask for (older endpoints return 25),
+// so a page shorter than PER_PAGE is not the end: keep going until a page is
+// empty or brings nothing new.
+const MAX_PAGES = 50
 
 function option(row: unknown): LawmaticsOption | null {
   if (!row || typeof row !== 'object') return null
@@ -30,17 +33,18 @@ function option(row: unknown): LawmaticsOption | null {
   return id && /^\d{1,12}$/.test(id) ? { id, name: typeof name === 'string' ? name.trim() : `#${id}` } : null
 }
 
-/** Reads one Lawmatics picklist, page by page until a short page. */
+/** Reads one Lawmatics picklist, page by page until a page is empty or repeats. */
 export async function listLawmaticsOptions(kind: LawmaticsOptionKind): Promise<LawmaticsOption[]> {
   const found = new Map<string, LawmaticsOption>()
   for (let page = 1; page <= MAX_PAGES; page++) {
     const data = await lawmaticsRequest<unknown>(`${PATHS[kind]}?page=${page}&per_page=${PER_PAGE}`, { method: 'GET' })
     const rows = Array.isArray(data) ? data : []
+    const before = found.size
     for (const row of rows) {
       const parsed = option(row)
       if (parsed) found.set(parsed.id, parsed)
     }
-    if (rows.length < PER_PAGE) break
+    if (rows.length === 0 || found.size === before) break
   }
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
