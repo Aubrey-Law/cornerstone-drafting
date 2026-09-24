@@ -25,12 +25,30 @@ describe('Lawmatics picklist options', () => {
     expect(mocks.request).toHaveBeenCalledWith('/v1/practice_areas?page=1&per_page=100', { method: 'GET' })
   })
 
-  it('reads every page until a short one', async () => {
-    const page = (start: number, count: number) => Array.from({ length: count }, (_, i) => ({ id: String(start + i), attributes: { name: `S${start + i}` } }))
-    mocks.request.mockResolvedValueOnce(page(1, 100)).mockResolvedValueOnce(page(101, 3))
+  const page = (start: number, count: number) => Array.from({ length: count }, (_, i) => ({ id: String(start + i), attributes: { name: `S${start + i}` } }))
+
+  it('reads every page until an empty one', async () => {
+    mocks.request.mockResolvedValueOnce(page(1, 100)).mockResolvedValueOnce(page(101, 3)).mockResolvedValueOnce([])
 
     await expect(listLawmaticsOptions('source')).resolves.toHaveLength(103)
-    expect(mocks.request).toHaveBeenLastCalledWith('/v1/sources?page=2&per_page=100', { method: 'GET' })
+    expect(mocks.request).toHaveBeenLastCalledWith('/v1/sources?page=3&per_page=100', { method: 'GET' })
+  })
+
+  it('keeps paging when Lawmatics caps the page size below the request', async () => {
+    mocks.request
+      .mockResolvedValueOnce(page(1, 25)).mockResolvedValueOnce(page(26, 25))
+      .mockResolvedValueOnce([{ id: '51', attributes: { name: 'MetLife' } }]).mockResolvedValueOnce([])
+
+    const options = await listLawmaticsOptions('campaign')
+    expect(options).toHaveLength(51)
+    expect(options).toContainEqual({ id: '51', name: 'MetLife' })
+  })
+
+  it('stops when a page repeats rows it already returned (page parameter ignored)', async () => {
+    mocks.request.mockResolvedValue(page(1, 25))
+
+    await expect(listLawmaticsOptions('campaign')).resolves.toHaveLength(25)
+    expect(mocks.request).toHaveBeenCalledTimes(2)
   })
 
   it('loads each list independently so one failure leaves the others usable', async () => {
