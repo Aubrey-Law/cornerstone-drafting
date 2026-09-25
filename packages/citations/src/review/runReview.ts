@@ -4,6 +4,7 @@ import type { TextLayer } from '../textLayer/types'
 import type { ModelCaller, ModelRequest } from './model'
 import { reviewRender, type ReviewRender } from './render'
 import type { ReviewFinding, ReviewPlaybook, ReviewResult, ReviewRule } from './types'
+import { evaluateConditions, type MatterFacts } from './conditions'
 
 export {
   CURRENT_REVIEW_RENDER_VERSION,
@@ -29,6 +30,11 @@ export interface RunReviewDependencies {
   userId?: string | null
   /** Forwarded straight through to `runPrompt` — see its own doc comment. */
   onUnitSettled?: RunPromptDependencies['onUnitSettled']
+  /**
+   * The matter's facts, as pinned on the run. With none — an uploaded draft,
+   * or a matter with no design sheet — every rule runs, conditions or not.
+   */
+  matterFacts?: MatterFacts | null
 }
 
 /**
@@ -124,9 +130,36 @@ export async function runReviewPlaybook(
   const model = deps.model ?? 'claude-sonnet-5'
   const document = render.document(layer)
 
+  // Rules the matter's facts rule out are answered here, without a model
+  // call, as `not_applicable` with the reason on the finding — recorded, never
+  // silently dropped, so a reader can see a rule was skipped and why.
+  const skipped = new Map<string, ReviewFinding>()
+  for (const rule of playbook.rules) {
+    const evaluation = evaluateConditions(rule.conditions, deps.matterFacts ?? null)
+    if (evaluation.status !== 'not_met') continue
+    skipped.set(rule.number, {
+      ruleNumber: rule.number,
+      outcome: 'not_applicable',
+      severity: null,
+      rationale: evaluation.reason,
+      proposedLanguage: null,
+      citation: null,
+      citationRefusal: null,
+      attemptedQuote: null,
+    })
+  }
+  for (const ruleNumber of skipped.keys()) {
+    if (!deps.onUnitSettled) break
+    try {
+      await deps.onUnitSettled(ruleNumber, { ok: true })
+    } catch {
+      // As in runPrompt: the step row is the record of the work, not the work.
+    }
+  }
+
   const run = await runPrompt<ReviewRule, ReviewFinding>(
     {
-      units: playbook.rules,
+      units: playbook.rules.filter(rule => !skipped.has(rule.number)),
       toolName: render.tool.name,
       idFor: rule => rule.number,
       requestFor: rule =>
@@ -156,10 +189,17 @@ export async function runReviewPlaybook(
     },
   )
 
+  // Playbook order, skipped rules in their own places.
+  const byRule = new Map(run.findings.map(finding => [finding.ruleNumber, finding]))
+  const findings = playbook.rules.flatMap(rule => {
+    const finding = skipped.get(rule.number) ?? byRule.get(rule.number)
+    return finding ? [finding] : []
+  })
+
   return {
     playbookSlug: playbook.slug,
     playbookVersion: playbook.version,
-    findings: run.findings,
+    findings,
     failures: run.failures.map(failure => ({ ruleNumber: failure.unitId, reason: failure.reason })),
   }
 }

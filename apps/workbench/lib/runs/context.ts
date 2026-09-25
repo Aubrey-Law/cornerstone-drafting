@@ -5,6 +5,7 @@ import type { FieldAuditBody, FieldAuditCheck, PromptBody } from '@aubrey-law/ci
 import type { ReviewRule } from '@aubrey-law/citations/review/types'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 import { toLayer } from '@/lib/review/history'
+import { parseMatterFacts, type MatterFacts } from '@aubrey-law/citations/review/conditions'
 
 /**
  * What a run was asked to do, rebuilt from what it actually pinned.
@@ -37,7 +38,15 @@ export interface RunRow {
 
 export type RunContextResult =
   | { ok: true; kind: 'field_audit'; run: RunRow; prompt: PublishedPrompt; values: Record<string, unknown> }
-  | { ok: true; kind: 'review'; run: RunRow; prompt: PublishedPrompt; layer: TextLayer }
+  | {
+      ok: true
+      kind: 'review'
+      run: RunRow
+      prompt: PublishedPrompt
+      layer: TextLayer
+      /** Pinned at `openRun`; null for an older run or a matter with no sheet — every rule runs. */
+      matterFacts: MatterFacts | null
+    }
   | { ok: false; message: string }
 
 /**
@@ -98,7 +107,7 @@ export async function loadRunContext(
     if (layerError) return { ok: false, message: `Could not load the stored text layer: ${layerError.message}` }
     const layer = toLayer(layerRow)
     if (!layer) return { ok: false, message: `Text layer ${runRow.text_layer_id} no longer exists.` }
-    return { ok: true, kind: 'review', run: runRow, prompt, layer }
+    return { ok: true, kind: 'review', run: runRow, prompt, layer, matterFacts: parseMatterFacts(runRow.resolved_inputs) }
   }
 
   return { ok: false, message: `Unknown run kind "${String(runRow.kind)}".` }

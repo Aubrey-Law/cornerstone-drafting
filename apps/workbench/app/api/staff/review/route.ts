@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth/requireStaff'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
+import { loadMatterFacts } from '@/lib/review/matterFacts'
 import { saveTextLayer } from '@/lib/review/persist'
 import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
@@ -42,6 +43,9 @@ export async function POST(request: Request) {
 
   const form = await request.formData()
   const documentVersionId = String(form.get('documentVersionId') ?? '').trim()
+  // Which playbook to run; the firm trust playbook when none is named. Only a
+  // published review prompt is accepted — checked below, before any model call.
+  const playbookSlug = String(form.get('playbookSlug') ?? '').trim() || REVIEW_PLAYBOOK_SLUG
 
   let bytes: Buffer
   let filename: string
@@ -93,12 +97,12 @@ export async function POST(request: Request) {
   // Loaded here rather than through `loadReviewPlaybook`, which returns only
   // the shape the runner needs: the persisted run below needs the version's
   // id too, to record exactly which wording produced these findings.
-  const prompt = await loadPublishedPrompt(getAdminClient(), REVIEW_PLAYBOOK_SLUG)
+  const prompt = await loadPublishedPrompt(getAdminClient(), playbookSlug)
   if (!prompt || prompt.body.kind !== 'review') {
     // 503, matching the missing-Anthropic-key case above: the app is fine,
     // this feature has nothing published to run.
     return NextResponse.json(
-      { error: `No published review prompt named "${REVIEW_PLAYBOOK_SLUG}".` },
+      { error: `No published review prompt named "${playbookSlug}".` },
       { status: 503 },
     )
   }
@@ -137,6 +141,9 @@ export async function POST(request: Request) {
         })
         if (savedLayer.ok) {
           textLayerId = savedLayer.layerId
+          // Pinned with the run, so rule conditions are tested against the
+          // sheet as it stood when the review opened — including on retry.
+          const matterFacts = await loadMatterFacts(admin, anchor.matterId)
           runId = await openRun(admin, {
             matterId: anchor.matterId,
             kind: 'review',
@@ -144,7 +151,7 @@ export async function POST(request: Request) {
             model: null,
             unitTotal: playbook.rules.length,
             userId: auth.user.id,
-            resolvedInputs: null,
+            resolvedInputs: matterFacts ? { matterFacts: { ...matterFacts } } : null,
             documentVersionId: anchor.documentVersionId,
             textLayerId,
           })
