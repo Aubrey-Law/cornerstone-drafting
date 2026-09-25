@@ -10,6 +10,7 @@
     "./fieldAudit/*": "./src/fieldAudit/*.ts",
     "./textLayer/*": "./src/textLayer/*.ts",
     "./review/*": "./src/review/*.ts",
+    "./playbookBuilder/*": "./src/playbookBuilder/*.ts",
     "./react/*": "./src/react/*.tsx"
   },
   "dependencies": {

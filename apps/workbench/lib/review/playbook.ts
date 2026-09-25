@@ -44,7 +44,9 @@ import { loadPublishedPrompt } from '@/lib/prompts/repository'
 export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-firm-qa'
 
 /**
- * Loads the published review playbook, validated and ready to run.
+ * Loads a published review playbook, validated and ready to run — the firm
+ * trust playbook unless another slug is named. Playbooks built in
+ * `/playbooks` are chosen by slug on the review screen.
  *
  * Throws when nothing is published under `REVIEW_PLAYBOOK_SLUG` — there is
  * no reasonable fallback for "review the document against nothing" — and
@@ -54,16 +56,17 @@ export const REVIEW_PLAYBOOK_SLUG = 'ma-trust-firm-qa'
  */
 export async function loadReviewPlaybook(
   client: SupabaseClient<WorkbenchDatabase>,
+  slug: string = REVIEW_PLAYBOOK_SLUG,
 ): Promise<ReviewPlaybook> {
-  const prompt = await loadPublishedPrompt(client, REVIEW_PLAYBOOK_SLUG)
+  const prompt = await loadPublishedPrompt(client, slug)
   if (!prompt) {
     throw new Error(
-      `No published prompt named "${REVIEW_PLAYBOOK_SLUG}". Publish a review prompt with that slug before running a review.`,
+      `No published prompt named "${slug}". Publish a review prompt with that slug before running a review.`,
     )
   }
   if (prompt.body.kind !== 'review') {
     throw new Error(
-      `Prompt "${REVIEW_PLAYBOOK_SLUG}" is published as a "${prompt.body.kind}" prompt, not a review playbook.`,
+      `Prompt "${slug}" is published as a "${prompt.body.kind}" prompt, not a review playbook.`,
     )
   }
 

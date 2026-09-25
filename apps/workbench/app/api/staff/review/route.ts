@@ -42,6 +42,9 @@ export async function POST(request: Request) {
 
   const form = await request.formData()
   const documentVersionId = String(form.get('documentVersionId') ?? '').trim()
+  // Which playbook to run; the firm trust playbook when none is named. Only a
+  // published review prompt is accepted — checked below, before any model call.
+  const playbookSlug = String(form.get('playbookSlug') ?? '').trim() || REVIEW_PLAYBOOK_SLUG
 
   let bytes: Buffer
   let filename: string
@@ -93,12 +96,12 @@ export async function POST(request: Request) {
   // Loaded here rather than through `loadReviewPlaybook`, which returns only
   // the shape the runner needs: the persisted run below needs the version's
   // id too, to record exactly which wording produced these findings.
-  const prompt = await loadPublishedPrompt(getAdminClient(), REVIEW_PLAYBOOK_SLUG)
+  const prompt = await loadPublishedPrompt(getAdminClient(), playbookSlug)
   if (!prompt || prompt.body.kind !== 'review') {
     // 503, matching the missing-Anthropic-key case above: the app is fine,
     // this feature has nothing published to run.
     return NextResponse.json(
-      { error: `No published review prompt named "${REVIEW_PLAYBOOK_SLUG}".` },
+      { error: `No published review prompt named "${playbookSlug}".` },
       { status: 503 },
     )
   }

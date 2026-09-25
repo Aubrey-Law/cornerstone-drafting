@@ -32,6 +32,9 @@ export default async function TodayPage() {
           <Link href="/review">Review a draft</Link>
         </Button>
         <Button asChild variant="outline">
+          <Link href="/playbooks">Build a playbook</Link>
+        </Button>
+        <Button asChild variant="outline">
           <Link href="/funding">Funding</Link>
         </Button>
         <Button asChild variant="outline">

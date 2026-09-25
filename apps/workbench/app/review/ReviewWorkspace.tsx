@@ -34,6 +34,8 @@ export interface MatterChoice {
 }
 
 interface PlaybookSummary {
+  /** Sent with the review so the route runs this playbook. Absent means the firm default. */
+  slug?: string
   title: string
   version: number
   rules: Array<{ number: string; risk: string; statement: string }>
@@ -62,10 +64,13 @@ interface ReviewResponse {
 
 export function ReviewWorkspace({
   playbook,
+  playbooks = [],
   matters,
   runs = [],
 }: {
   playbook: PlaybookSummary
+  /** Every published review playbook, for the picker. One or none hides it. */
+  playbooks?: Array<{ slug: string; title: string }>
   matters: MatterChoice[]
   runs?: RunSummaryChoice[]
 }) {
@@ -106,6 +111,7 @@ export function ReviewWorkspace({
     const body = new FormData()
     if (file) body.set('document', file)
     else body.set('documentVersionId', chosen as string)
+    if (playbook.slug) body.set('playbookSlug', playbook.slug)
 
     try {
       const response = await fetch('/api/staff/review', { method: 'POST', body })
@@ -129,7 +135,7 @@ export function ReviewWorkspace({
     } finally {
       setPending(false)
     }
-  }, [router, versionId])
+  }, [router, versionId, playbook.slug])
 
   const citation: Citation | null = useMemo(() => {
     if (!review?.result || selected === null) return null
@@ -157,6 +163,20 @@ export function ReviewWorkspace({
           <h1 className="text-lg font-semibold tracking-tight">Review a draft</h1>
         </div>
         <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+          {playbooks.length > 1 ? (
+            <select
+              aria-label="Playbook"
+              value={playbook.slug ?? ''}
+              onChange={(event) => router.push(`/review?playbook=${encodeURIComponent(event.target.value)}`)}
+              className="h-9 max-w-64 rounded-md border border-input bg-transparent px-2 text-sm"
+            >
+              {playbooks.map((choice) => (
+                <option key={choice.slug} value={choice.slug}>
+                  {choice.title}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {matters.length > 0 ? (
             <>
               <select
@@ -229,6 +249,12 @@ export function ReviewWorkspace({
               </li>
             ))}
           </ol>
+          <p className="text-xs text-muted-foreground">
+            <Link href="/playbooks" className="underline underline-offset-4">
+              Build or extend a playbook
+            </Link>{' '}
+            from a precedent the firm has approved.
+          </p>
           <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
             A review of a document filed on a matter is recorded and can be returned to. An uploaded
             draft is not, because there is no filed version for its citations to point at.
