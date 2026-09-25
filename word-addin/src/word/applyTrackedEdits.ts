@@ -195,7 +195,12 @@ async function locate(
   return matches
 }
 
-async function authorRevision(
+/**
+ * Exported for the Review tab, which places its own range (a verified
+ * citation) and then needs exactly the revision this file authors — the
+ * insert-after-then-delete form every host records as a reviewable pair.
+ */
+export async function authorRevision(
   context: Word.RequestContext,
   target: Word.Range,
   edit: ProposedEdit,
@@ -265,7 +270,7 @@ function applyFormats(range: Word.Range, formats: string[]): void {
  * Word's own bookmark list, and the name stays inside Word's 40-character
  * alphanumeric limit.
  */
-async function anchor(context: Word.RequestContext, range: Word.Range): Promise<string | undefined> {
+export async function anchor(context: Word.RequestContext, range: Word.Range): Promise<string | undefined> {
   try {
     const name = `_csEdit${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`
     range.insertBookmark(name)

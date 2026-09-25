@@ -1,4 +1,5 @@
 import { clearSession, loadSession, signIn } from '../auth/session'
+import { parseReviewFrame, type ReviewEvent } from '../review/model'
 
 /**
  * Every call is same-origin: the dev server proxies `/api` through to
@@ -41,6 +42,8 @@ const STYLE_SWEEP_TIMEOUT_MS = 60_000
 const PROPOSE_TIMEOUT_MS = 120_000
 /** A whole-document upload to R2; slower than a JSON round trip, bounded by the body limit. */
 const VERSION_SAVE_TIMEOUT_MS = 120_000
+/** Matches `maxDuration` on /api/addin/review: a playbook is many model calls. */
+const REVIEW_TIMEOUT_MS = 300_000
 
 function authHeaders(): Record<string, string> {
   const session = loadSession()
@@ -452,5 +455,75 @@ export async function postStyleSweep(fileBase64: string): Promise<StyleSweepResp
     }
     if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
     return (await res.json()) as StyleSweepResponse
+  }, true)
+}
+
+/** One published review playbook. Mirrors `GET /api/addin/playbooks`. */
+export interface PlaybookSummary {
+  slug: string
+  title: string
+  version: number
+  ruleCount: number
+}
+
+export function listPlaybooks(): Promise<{ playbooks: PlaybookSummary[] }> {
+  return apiGet('/api/addin/playbooks')
+}
+
+export interface StreamReviewArgs {
+  paragraphs: string[]
+  playbookSlug: string
+  matterId: string | null
+  signal?: AbortSignal
+  onEvent: (event: ReviewEvent) => void
+}
+
+/**
+ * Run a playbook against the open document, reporting each rule as it settles.
+ *
+ * Resolves once the server's terminal frame arrives; a stream that ends
+ * without one is reported as dropped, so a half-finished review is never shown
+ * as a complete one.
+ */
+export async function streamReview(args: StreamReviewArgs): Promise<void> {
+  return withAuthRetry(async () => {
+    let res: Response
+    try {
+      res = await fetch('/api/addin/review', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paragraphs: args.paragraphs,
+          playbookSlug: args.playbookSlug,
+          matterId: args.matterId,
+        }),
+        signal: deadline(REVIEW_TIMEOUT_MS, args.signal),
+      })
+    } catch (err) {
+      describeAbort(err, REVIEW_TIMEOUT_MS / 1000)
+    }
+    if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
+    if (!res.body) throw new ApiError('The server returned an empty stream.', 502)
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let sawDone = false
+
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const event = parseReviewFrame(frame)
+        if (!event) continue
+        if ('done' in event || 'error' in event) sawDone = true
+        args.onEvent(event)
+      }
+    }
+
+    if (!sawDone) throw new ApiError('The connection dropped before the review finished.', 502)
   }, true)
 }

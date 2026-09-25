@@ -9,6 +9,7 @@ import {
 } from './auth/session'
 import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
+import ReviewPanel from './components/ReviewPanel'
 import MatterBar from './components/MatterBar'
 import WriteBackPanel from './components/WriteBackPanel'
 import VersionPanel from './components/VersionPanel'
@@ -34,7 +35,7 @@ interface SessionInfo {
   role: string | null
 }
 
-type Tab = 'chat' | 'sheet' | 'versions' | 'format'
+type Tab = 'chat' | 'review' | 'sheet' | 'versions' | 'format'
 
 export default function App() {
   const [session, setSession] = useState<StoredSession | null>(() => loadSession())
@@ -151,6 +152,9 @@ export default function App() {
           <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
             Draft
           </TabButton>
+          <TabButton active={tab === 'review'} onClick={() => setTab('review')}>
+            Review
+          </TabButton>
           <TabButton active={tab === 'sheet'} onClick={() => setTab('sheet')}>
             Sheet
           </TabButton>
@@ -188,6 +192,9 @@ export default function App() {
       */}
       <div className="min-h-0 flex-1" hidden={tab !== 'chat'}>
         <ChatPanel matterId={matter?.id ?? null} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'review'}>
+        <ReviewPanel matterId={matter?.id ?? null} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'sheet'}>
         <WriteBackPanel matterId={matter?.id ?? null} />

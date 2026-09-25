@@ -1,9 +1,10 @@
 # Cornerstone Word Add-in
 
 A Word task pane for drafting: chat about the open document and apply the model's
-revisions as native tracked changes, drafting from the matter's design sheet and
-writing decisions back to it, saving versions into Cornerstone, plus the firm
-formatting pass.
+revisions as native tracked changes, run a firm review playbook against it and work
+the findings in place (show, comment, apply the suggestion as a tracked change),
+drafting from the matter's design sheet and writing decisions back to it, saving
+versions into Cornerstone, plus the firm formatting pass.
 
 Prototype status — sideloaded, firm-internal. Not published to AppSource.
 
