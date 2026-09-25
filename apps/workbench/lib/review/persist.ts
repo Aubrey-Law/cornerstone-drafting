@@ -257,6 +257,9 @@ export interface StoredRun {
   reviewUploadId: string | null
   /** A name to show for the reviewed document: the filed document's, or the upload's label. */
   documentLabel: string | null
+  /** The matter an upload was linked to after the fact, and its name. Null when unlinked or not an upload. */
+  uploadMatterId?: string | null
+  uploadMatterTitle?: string | null
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null

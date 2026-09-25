@@ -7,6 +7,7 @@ import { retryFailedSteps } from '@/lib/runs/retry'
 import { saveDisposition, type Disposition } from '@/lib/review/persist'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { linkReviewUpload } from '@/lib/review/uploads'
 
 const DISPOSITIONS: Disposition[] = ['open', 'accepted', 'rejected', 'deferred']
 
@@ -76,4 +77,30 @@ export async function retryRun(_previous: RetryState, form: FormData): Promise<R
 
   revalidatePath(`/review/${runId}`)
   return { message: null }
+}
+
+export interface LinkUploadState {
+  message: string | null
+  ok: boolean | null
+}
+
+/**
+ * Links the upload a review was of to a matter, or unlinks it (empty
+ * `matterId`). Checks the session itself, like the actions above.
+ */
+export async function linkUpload(_previous: LinkUploadState, form: FormData): Promise<LinkUploadState> {
+  const user = await getSessionUser()
+  if (!user || !isStaffRole(user.role)) return { ok: false, message: 'You are not signed in as staff.' }
+
+  const reviewUploadId = String(form.get('reviewUploadId') ?? '').trim()
+  const matterId = String(form.get('matterId') ?? '').trim() || null
+  const runId = String(form.get('runId') ?? '').trim()
+  if (!reviewUploadId) return { ok: false, message: 'That form was missing its upload.' }
+
+  const result = await linkReviewUpload(getAdminClient(), { reviewUploadId, matterId, userId: user.id })
+  if (!result.ok) return { ok: false, message: result.message }
+
+  revalidatePath(`/review/${runId}`)
+  revalidatePath('/review')
+  return { ok: true, message: matterId ? 'Linked.' : 'Unlinked.' }
 }
