@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { CandidateRule } from '@aubrey-law/citations/playbookBuilder/extractRules'
 
@@ -16,6 +16,7 @@ const candidate = (over: Partial<CandidateRule>): CandidateRule => ({
   citation: null,
   citationRefusal: 'not_found',
   attemptedQuote: 'The trustee is bonded.',
+  conditions: [],
   ...over,
 })
 
@@ -54,8 +55,13 @@ describe('PlaybookBuilder', () => {
             title: 'Massachusetts revocable trust — firm quality review',
             version: 1,
             rules: [
-              { statement: 'Rule one.', risk: 'high', preferredLanguage: null },
-              { statement: 'Rule two.', risk: 'blocker', preferredLanguage: 'wording' },
+              { statement: 'Rule one.', risk: 'high', preferredLanguage: null, conditions: [] },
+              {
+                statement: 'Rule two.',
+                risk: 'blocker',
+                preferredLanguage: 'wording',
+                conditions: [{ fact: 'has_minor_children', test: 'is', value: true }],
+              },
             ],
           },
         ]}
@@ -66,5 +72,12 @@ describe('PlaybookBuilder', () => {
     expect(screen.getByLabelText('Playbook id')).toBeDisabled()
     expect(screen.getByText(/Publishing creates version 2/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Publish 2 rules' })).toBeEnabled()
+    // The published rule's condition loads as a chip, and a new one can be added.
+    const [first, second] = screen.getAllByTestId('rule-conditions')
+    expect(first).toHaveTextContent('to every matter')
+    expect(second).toHaveTextContent('has minor children')
+    fireEvent.change(within(first).getByLabelText('Add a condition'), { target: { value: 'married' } })
+    expect(first).toHaveTextContent('only when')
+    expect(first).toHaveTextContent('client is married')
   })
 })

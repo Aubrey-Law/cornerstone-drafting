@@ -5,6 +5,7 @@ import { isStaffRole } from '@/lib/auth/gate'
 import { publishReviewPlaybook, type DraftRule, type PublishResult } from '@/lib/playbooks/publish'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getSessionUser } from '@/lib/supabase/server'
+import { ruleConditionSchema } from '@aubrey-law/citations/review/conditions'
 
 const RISKS: DraftRule['risk'][] = ['blocker', 'high', 'medium', 'low']
 
@@ -37,10 +38,15 @@ export async function publishPlaybook(input: PublishPlaybookInput): Promise<Publ
     if (!statement.trim() || !RISKS.includes(risk)) {
       return { ok: false, message: `Rule ${rules.length + 1} needs a statement and a risk level.` }
     }
+    const conditions = ruleConditionSchema.array().safeParse(rule.conditions ?? [])
+    if (!conditions.success) {
+      return { ok: false, message: `Rule ${rules.length + 1} has a condition the review cannot test.` }
+    }
     rules.push({
       statement,
       risk,
       preferredLanguage: typeof rule.preferredLanguage === 'string' ? rule.preferredLanguage : null,
+      conditions: conditions.data,
     })
   }
 

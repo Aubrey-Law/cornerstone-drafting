@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Citation } from '../textLayer/types'
 import type { VerifyReason } from '../textLayer/match'
+import { ruleConditionSchema } from './conditions'
 
 /**
  * A review playbook: firm positions, each stated as one rule, checked one at a
@@ -18,6 +19,13 @@ export const reviewRuleSchema = z.object({
   risk: z.enum(['blocker', 'high', 'medium', 'low']),
   /** The firm's language, when it has settled wording for this point. */
   preferredLanguage: z.string().optional(),
+  /**
+   * When the rule applies, in matter facts — all must hold. Absent means
+   * always. See ./conditions for why only a definite "no" skips a rule.
+   * Optional so every body published before conditions existed still parses
+   * (and still hashes) exactly as it did.
+   */
+  conditions: z.array(ruleConditionSchema).optional(),
 })
 
 export const reviewPlaybookSchema = z.object({

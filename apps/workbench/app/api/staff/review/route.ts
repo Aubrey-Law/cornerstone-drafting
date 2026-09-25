@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth/requireStaff'
 import { loadPublishedPrompt } from '@/lib/prompts/repository'
 import { REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadReviewableByMatter, resolveReviewableDocument } from '@/lib/review/matterDocuments'
+import { loadMatterFacts } from '@/lib/review/matterFacts'
 import { saveTextLayer } from '@/lib/review/persist'
 import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
@@ -140,6 +141,9 @@ export async function POST(request: Request) {
         })
         if (savedLayer.ok) {
           textLayerId = savedLayer.layerId
+          // Pinned with the run, so rule conditions are tested against the
+          // sheet as it stood when the review opened — including on retry.
+          const matterFacts = await loadMatterFacts(admin, anchor.matterId)
           runId = await openRun(admin, {
             matterId: anchor.matterId,
             kind: 'review',
@@ -147,7 +151,7 @@ export async function POST(request: Request) {
             model: null,
             unitTotal: playbook.rules.length,
             userId: auth.user.id,
-            resolvedInputs: null,
+            resolvedInputs: matterFacts ? { matterFacts: { ...matterFacts } } : null,
             documentVersionId: anchor.documentVersionId,
             textLayerId,
           })

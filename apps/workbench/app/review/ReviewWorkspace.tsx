@@ -38,7 +38,7 @@ interface PlaybookSummary {
   slug?: string
   title: string
   version: number
-  rules: Array<{ number: string; risk: string; statement: string }>
+  rules: Array<{ number: string; risk: string; statement: string; appliesWhen?: string[] }>
 }
 
 interface ReviewResponse {
@@ -246,6 +246,12 @@ export function ReviewWorkspace({
                 <span className="font-medium">Rule {rule.number}</span>{' '}
                 <span className="text-muted-foreground">({rule.risk})</span>
                 <p className="text-muted-foreground">{rule.statement}</p>
+                {rule.appliesWhen && rule.appliesWhen.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Only when {rule.appliesWhen.join(' and ')} — skipped on a filed matter whose design sheet
+                    says otherwise.
+                  </p>
+                ) : null}
               </li>
             ))}
           </ol>

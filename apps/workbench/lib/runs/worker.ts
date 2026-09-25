@@ -118,7 +118,7 @@ export async function workRun(
       findings.push(...result.findings)
       failures.push(...result.failures)
     } else {
-      const { prompt, layer, run } = context
+      const { prompt, layer, run, matterFacts } = context
       const rules = unitsFor(prompt.body as ReviewBody, [step.unitId])
       const result = await runReviewPlaybook(
         layer,
@@ -130,6 +130,7 @@ export async function workRun(
           // The run's own pinned render, not the deployed constant.
           renderVersion: run.render_version,
           onUnitSettled,
+          matterFacts,
         },
       )
       findings.push(...result.findings)

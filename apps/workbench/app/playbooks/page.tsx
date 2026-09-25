@@ -31,6 +31,7 @@ export default async function PlaybooksPage() {
               statement: rule.statement,
               risk: rule.risk,
               preferredLanguage: rule.preferredLanguage ?? null,
+              conditions: rule.conditions ?? [],
             })),
           },
         ]

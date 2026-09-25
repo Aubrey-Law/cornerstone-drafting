@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { LOGIN_PATH } from '@/lib/auth/gate'
 import { loadReviewPlaybook, REVIEW_PLAYBOOK_SLUG } from '@/lib/review/playbook'
 import { loadPublishedPrompts } from '@/lib/prompts/repository'
+import { describeCondition } from '@aubrey-law/citations/review/conditions'
 import { loadRunSummaries } from '@/lib/review/history'
 import { loadReviewableByMatter } from '@/lib/review/matterDocuments'
 import { getAdminClient } from '@/lib/supabase/admin'
@@ -62,6 +63,7 @@ export default async function ReviewPage({
           number: rule.number,
           risk: rule.risk,
           statement: rule.statement,
+          appliesWhen: (rule.conditions ?? []).map(describeCondition),
         })),
       }}
     />

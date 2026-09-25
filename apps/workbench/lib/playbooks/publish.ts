@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WorkbenchDatabase } from '@/lib/supabase/database'
 import { reviewBodySchema } from '@aubrey-law/citations/prompt/body'
 import type { ReviewRule } from '@aubrey-law/citations/review/types'
+import type { RuleCondition } from '@aubrey-law/citations/review/conditions'
 import { SLUG_PATTERN } from './slug'
 
 /**
@@ -24,6 +25,8 @@ export interface DraftRule {
   statement: string
   risk: ReviewRule['risk']
   preferredLanguage?: string | null
+  /** When the rule applies. Empty or absent means always, and is not stored. */
+  conditions?: RuleCondition[]
 }
 
 /**
@@ -32,9 +35,11 @@ export interface DraftRule {
  * number is only meaningful within its own version, which is how runs already
  * read it.
  *
- * Key order is fixed (`kind`, `inputs`, `rules`; `number`, `risk`,
- * `statement`, `preferredLanguage`) because the content hash is taken over
- * `JSON.stringify` of exactly this object, as the seeded version's was.
+ * The returned object is zod's parse of the body, so its key order is the
+ * schema's — deterministic, which is what matters, because the content hash
+ * is taken over `JSON.stringify` of exactly this object, as the seeded
+ * version's was. A rule with no conditions carries no `conditions` key, so a
+ * condition-free playbook hashes as it would have before conditions existed.
  */
 export function buildReviewBody(rules: DraftRule[]) {
   const body = {
@@ -47,6 +52,7 @@ export function buildReviewBody(rules: DraftRule[]) {
         risk: rule.risk,
         statement: rule.statement.trim(),
         ...(preferred ? { preferredLanguage: preferred } : {}),
+        ...(rule.conditions && rule.conditions.length > 0 ? { conditions: rule.conditions } : {}),
       }
     }),
   }
@@ -87,7 +93,7 @@ export async function publishReviewPlaybook(
   try {
     body = buildReviewBody(input.rules)
   } catch {
-    return { ok: false, message: 'Every rule needs a statement and a risk level.' }
+    return { ok: false, message: 'Every rule needs a statement, a risk level, and conditions that name a known matter fact.' }
   }
 
   const { data: existing, error: existingError } = await client

@@ -181,3 +181,18 @@ describe('extractCandidateRules', () => {
     expect(String(seen!.messages[0].content)).toContain("firm's revocable trust")
   })
 })
+
+describe('suggested conditions', () => {
+  it('maps the closed vocabulary to conditions and ignores anything else', () => {
+    const [candidate] = candidatesFromInput(
+      { rules: [{ ...spendthrift, applies_when: ['has_minor_children', 'estate_over_ma_exemption', 'has_minor_children', 'rich'] }] },
+      layer,
+      0,
+      WHOLE,
+    )
+    expect(candidate.conditions).toEqual([
+      { fact: 'has_minor_children', test: 'is', value: true },
+      { fact: 'estimated_estate_value', test: 'at_least', value: 2_000_000 },
+    ])
+  })
+})

@@ -4,6 +4,12 @@ import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Button } from '@aubrey-law/ui/button'
 import type { CandidateRule, ExtractRulesResult } from '@aubrey-law/citations/playbookBuilder/extractRules'
+import {
+  APPLIES_WHEN,
+  APPLIES_WHEN_LABELS,
+  describeCondition,
+  type RuleCondition,
+} from '@aubrey-law/citations/review/conditions'
 import { slugFromTitle } from '@/lib/playbooks/slug'
 import { publishPlaybook } from './actions'
 
@@ -14,7 +20,7 @@ export interface PublishedPlaybookChoice {
   slug: string
   title: string
   version: number
-  rules: Array<{ statement: string; risk: Risk; preferredLanguage: string | null }>
+  rules: Array<{ statement: string; risk: Risk; preferredLanguage: string | null; conditions: RuleCondition[] }>
 }
 
 export interface BuilderRule {
@@ -25,6 +31,8 @@ export interface BuilderRule {
   included: boolean
   origin: 'published' | 'extracted' | 'manual'
   topic: string | null
+  /** All must hold for the rule to run on a matter. Empty: always. */
+  conditions: RuleCondition[]
   source: {
     blockIndex: number | null
     quote: string
@@ -49,6 +57,7 @@ export function rowsFromPublished(playbook: PublishedPlaybookChoice): BuilderRul
     included: true,
     origin: 'published',
     topic: null,
+    conditions: rule.conditions,
     source: null,
   }))
 }
@@ -67,6 +76,7 @@ export function rowsFromCandidates(candidates: CandidateRule[]): BuilderRule[] {
     included: candidate.citation !== null,
     origin: 'extracted',
     topic: candidate.topic,
+    conditions: candidate.conditions,
     source: candidate.citation
       ? { blockIndex: candidate.citation.blockIndex, quote: candidate.citation.quote, verified: true }
       : candidate.attemptedQuote
@@ -137,6 +147,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
         included: true,
         origin: 'manual',
         topic: null,
+        conditions: [],
         source: null,
       },
     ])
@@ -196,6 +207,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
           statement: rule.statement,
           risk: rule.risk,
           preferredLanguage: rule.preferredLanguage,
+          conditions: rule.conditions,
         })),
       })
       if (result.ok) setPublished(result)
@@ -461,6 +473,7 @@ function RuleRow({
         placeholder="Preferred language (optional)"
         className="w-full rounded-md border border-input bg-transparent p-2 font-serif text-sm"
       />
+      <ConditionsEditor conditions={rule.conditions} onChange={(conditions) => onChange({ conditions })} />
       {rule.source ? (
         <details className="text-xs">
           <summary className={rule.source.verified ? 'text-muted-foreground' : 'text-destructive'}>
@@ -483,5 +496,82 @@ function RuleRow({
         </details>
       ) : null}
     </li>
+  )
+}
+
+const sameCondition = (a: RuleCondition, b: RuleCondition) => JSON.stringify(a) === JSON.stringify(b)
+
+/**
+ * When a rule applies, as chips. Added from a fixed list — the same words the
+ * precedent reader suggests — so every condition names a fact the review can
+ * test. The one number, the estate threshold, stays editable.
+ */
+export function ConditionsEditor({
+  conditions,
+  onChange,
+}: {
+  conditions: RuleCondition[]
+  onChange: (conditions: RuleCondition[]) => void
+}) {
+  const available = Object.entries(APPLIES_WHEN).filter(
+    ([, condition]) => !conditions.some((existing) => sameCondition(existing, condition)),
+  )
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="rule-conditions">
+      <span className="text-muted-foreground">Applies</span>
+      {conditions.length === 0 ? <span>to every matter</span> : <span>only when</span>}
+      {conditions.map((condition, index) => (
+        <span key={index} className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
+          {condition.test === 'at_least' ? (
+            <>
+              estate is at least $
+              <input
+                type="number"
+                min={0}
+                step={100000}
+                aria-label="Estate threshold"
+                value={condition.value}
+                onChange={(event) =>
+                  onChange(
+                    conditions.map((c, i) =>
+                      i === index && c.test === 'at_least' ? { ...c, value: Math.max(0, Number(event.target.value) || 0) } : c,
+                    ),
+                  )
+                }
+                className="w-28 bg-transparent"
+              />
+            </>
+          ) : (
+            describeCondition(condition)
+          )}
+          <button
+            type="button"
+            aria-label={`Remove condition: ${describeCondition(condition)}`}
+            onClick={() => onChange(conditions.filter((_, i) => i !== index))}
+            className="text-muted-foreground"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {available.length > 0 ? (
+        <select
+          aria-label="Add a condition"
+          value=""
+          onChange={(event) => {
+            const condition = APPLIES_WHEN[event.target.value]
+            if (condition) onChange([...conditions, condition])
+          }}
+          className="h-7 rounded-md border border-input bg-transparent px-1 text-xs"
+        >
+          <option value="">+ condition</option>
+          {available.map(([word]) => (
+            <option key={word} value={word}>
+              {APPLIES_WHEN_LABELS[word] ?? word}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </div>
   )
 }

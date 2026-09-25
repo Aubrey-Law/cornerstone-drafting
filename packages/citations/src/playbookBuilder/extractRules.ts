@@ -4,6 +4,7 @@ import { verifyQuote, type VerifyReason } from '../textLayer/match'
 import type { Citation, TextBlock, TextLayer } from '../textLayer/types'
 import type { ModelCaller, ModelRequest, ModelResponse } from '../review/model'
 import type { ReviewRule } from '../review/types'
+import { APPLIES_WHEN, type RuleCondition } from '../review/conditions'
 
 /**
  * Drafting a review playbook from a precedent the firm already trusts.
@@ -50,6 +51,11 @@ export interface CandidateRule {
   citationRefusal: Exclude<VerifyReason, 'ok'> | null
   /** What the model tried to quote, kept only when it could not be verified. */
   attemptedQuote: string | null
+  /**
+   * When the model judged the position to apply only to some matters. A
+   * suggestion for the attorney to keep or clear, like everything else here.
+   */
+  conditions: RuleCondition[]
 }
 
 export interface ExtractionWindow {
@@ -119,13 +125,19 @@ const EXTRACT_TOOL: Anthropic.Tool = {
               type: 'integer',
               description: 'The ¶ number shown beside the quoted text.',
             },
+            applies_when: {
+              type: 'array',
+              items: { type: 'string', enum: Object.keys(APPLIES_WHEN) },
+              description:
+                'Only when the position applies to some clients and not others: the circumstances it depends on, all of which must hold. Empty for a position every draft of this kind should take.',
+            },
             use_as_preferred_language: {
               type: 'boolean',
               description:
                 'True when the quoted clause is settled wording the firm would want in every draft of this kind. False when it names this client’s people, property, amounts or dates.',
             },
           },
-          required: ['topic', 'statement', 'risk', 'quote', 'block_index', 'use_as_preferred_language'],
+          required: ['topic', 'statement', 'risk', 'quote', 'block_index', 'applies_when', 'use_as_preferred_language'],
           additionalProperties: false,
         },
       },
@@ -162,6 +174,11 @@ Quoting:
 - Quote from a single paragraph and give that paragraph's ¶ number.
 - Quote only from your assigned paragraphs. The rest of the document is there so
   you can read definitions and cross-references, not to propose rules from.
+
+When a position only makes sense for some clients — guardian appointments
+for clients with minor children, marital-deduction planning for married
+clients, estate-tax planning above the Massachusetts exemption — say so in
+applies_when. Leave it empty for anything every draft of this kind should do.
 
 Propose nothing rather than something weak. An assigned range that is all
 boilerplate should return an empty list.
@@ -275,10 +292,21 @@ export function candidatesFromInput(
       citation,
       citationRefusal,
       attemptedQuote,
+      conditions: conditionsFrom(item.applies_when),
     })
   })
 
   return candidates
+}
+
+function conditionsFrom(value: unknown): RuleCondition[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  return value.flatMap(word => {
+    if (typeof word !== 'string' || !(word in APPLIES_WHEN) || seen.has(word)) return []
+    seen.add(word)
+    return [APPLIES_WHEN[word]]
+  })
 }
 
 /**

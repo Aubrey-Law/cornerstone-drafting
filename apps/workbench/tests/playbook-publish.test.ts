@@ -116,3 +116,14 @@ describe('publishReviewPlaybook', () => {
     expect(fake.tableRows('prompts')).toHaveLength(0)
   })
 })
+
+describe('conditions in a published body', () => {
+  it('stores conditions only on rules that have them', () => {
+    const body = buildReviewBody([
+      { statement: 'Guardians are named.', risk: 'high', conditions: [{ fact: 'has_minor_children', test: 'is', value: true }] },
+      { statement: 'Bond is waived.', risk: 'low', conditions: [] },
+    ])
+    expect(body.rules[0].conditions).toEqual([{ fact: 'has_minor_children', test: 'is', value: true }])
+    expect('conditions' in body.rules[1]).toBe(false)
+  })
+})
