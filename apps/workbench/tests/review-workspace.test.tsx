@@ -264,13 +264,15 @@ describe('ReviewWorkspace, whether the review was recorded', () => {
    * nothing. Saying so is what stops the attorney assuming a review exists
    * somewhere it does not.
    */
-  it('says an upload was not recorded, and why', async () => {
+  it('says a review came back unrecorded', async () => {
+    // Uploads are now kept and recorded; this is a response with neither a run
+    // nor a reason, which the screen must still not describe as saved.
     respondWith({ anchor: null, runId: null })
     render(<ReviewWorkspace playbook={PLAYBOOK} matters={[]} />)
     await upload()
     const state = await screen.findByTestId('save-state')
     expect(state).toHaveTextContent(/not recorded/i)
-    expect(state).toHaveTextContent(/no filed version/i)
+    expect(state).not.toHaveTextContent(/^recorded/i)
   })
 
   it('reports a failed save rather than swallowing it', async () => {

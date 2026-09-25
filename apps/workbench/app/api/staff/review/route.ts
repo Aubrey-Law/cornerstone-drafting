@@ -8,6 +8,7 @@ import { loadMatterFacts } from '@/lib/review/matterFacts'
 import { saveTextLayer } from '@/lib/review/persist'
 import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
+import { storeReviewUpload } from '@/lib/review/uploads'
 import { readObject } from '@/lib/storage/r2'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { openRun, openSteps } from '@/lib/runs/record'
@@ -29,11 +30,13 @@ import { pokeTick } from '@/lib/runs/enqueue'
  * saved and the run is opened, `openSteps` writes one `pending` step per
  * rule and `pokeTick` nudges the tick route, and this request returns without
  * calling the model at all — see `apps/workbench/app/api/cron/tick/route.ts`,
- * which now does that work. `workflow_runs` requires a `document_version_id`
- * and `text_layer_id` for any `review`-kind row (the migration's own check
- * constraint), so an ad-hoc upload with nothing filed to anchor to can never
- * become a queued run in the first place — that path still runs the playbook
- * inline and shows the result without recording it, exactly as it always has.
+ * which now does that work.
+ *
+ * An uploaded file — a document not filed on any matter, such as a plan
+ * another attorney drafted — is now kept (`lib/review/uploads.ts`) and its
+ * review queued and recorded the same way, anchored to the upload instead of
+ * a document version. Only when keeping it fails does the playbook run inline
+ * and the result come back unrecorded, with the reason in `saveError`.
  */
 export const maxDuration = 300
 
@@ -122,16 +125,63 @@ export async function POST(request: Request) {
 
     const admin = getAdminClient()
 
-    // Recorded only for a filed document, and only for a document with an
-    // actual text layer — a scan throws from `reviewLayer` below, in the
-    // unrecorded fallback path, before any rule ever runs, and a run opened
-    // ahead of that would sit `queued` forever with nothing for a tick to
-    // work. Everything else about a failure to store is reported rather than
-    // swallowed: a review the attorney believes was saved and was not is
-    // worse than one they know was not.
+    // Recorded only for a document with an actual text layer — a scan throws
+    // from `reviewLayer` below, in the unrecorded fallback path, before any
+    // rule ever runs, and a run opened ahead of that would sit `queued`
+    // forever with nothing for a tick to work. Everything else about a failure
+    // to store is reported rather than swallowed: a review the attorney
+    // believes was saved and was not is worse than one they know was not.
     let runId: string | null = null
     let textLayerId: string | null = null
     let saveError: string | null = null
+    let reviewUploadId: string | null = null
+
+    if (!anchor && layer.status !== 'no_text') {
+      /*
+       * An upload with no matter: kept (`review_uploads`, 20261227090000) so
+       * its review is recorded like a filed document's — findings, citations
+       * and dispositions all anchored to it — rather than shown once and lost.
+       * It belongs to no matter, so no design sheet applies and every rule
+       * runs. Any failure here, including this code reaching production
+       * before its migration, falls back to the inline review below and says
+       * why.
+       */
+      try {
+        const stored = await storeReviewUpload(admin, {
+          bytes,
+          filename,
+          kind,
+          label: String(form.get('label') ?? ''),
+          userId: auth.user.id,
+        })
+        if (!stored.ok) {
+          saveError = stored.message
+        } else {
+          reviewUploadId = stored.reviewUploadId
+          const savedLayer = await saveTextLayer(admin, { reviewUploadId, layer })
+          if (!savedLayer.ok) {
+            saveError = savedLayer.message
+          } else {
+            textLayerId = savedLayer.layerId
+            runId = await openRun(admin, {
+              matterId: null,
+              kind: 'review',
+              promptVersionId: prompt.versionId,
+              model: null,
+              unitTotal: playbook.rules.length,
+              userId: auth.user.id,
+              resolvedInputs: null,
+              documentVersionId: null,
+              reviewUploadId,
+              textLayerId,
+            })
+          }
+        }
+      } catch (error) {
+        runId = null
+        saveError = error instanceof Error ? error.message : 'Could not record the upload.'
+      }
+    }
 
     if (anchor && layer.status !== 'no_text') {
       try {
@@ -182,6 +232,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         filename,
         anchor,
+        reviewUploadId,
         runId,
         saveError,
         playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },

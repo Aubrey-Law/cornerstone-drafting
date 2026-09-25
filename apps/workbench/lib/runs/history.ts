@@ -38,7 +38,8 @@ export interface AnyRunDocument {
 
 export interface AnyRun {
   runId: string
-  matterId: string
+  /** Null for a review of an unfiled upload. */
+  matterId: string | null
   matterTitle: string
   kind: string
   status: string
@@ -95,8 +96,12 @@ export function toAnyRun(
 
   return {
     runId: String(runRow.id),
-    matterId: String(runRow.matter_id),
-    matterTitle: matterRow ? (str(matterRow.name) ?? 'Untitled matter') : 'Untitled matter',
+    matterId: str(runRow.matter_id),
+    matterTitle: !str(runRow.matter_id)
+      ? 'Not filed on a matter'
+      : matterRow
+        ? (str(matterRow.name) ?? 'Untitled matter')
+        : 'Untitled matter',
     kind: String(runRow.kind ?? 'review'),
     status: String(runRow.status ?? ''),
     ruleTotal: Number(runRow.rule_total ?? 0),
@@ -129,11 +134,9 @@ export async function loadAnyRun(client: SupabaseClient<WorkbenchDatabase>, runI
     .eq('run_id', runId)
   if (stepsError) throw new Error(`Could not load the run's steps: ${stepsError.message}`)
 
-  const { data: matters } = await client
-    .from('matters')
-    .select('id, name')
-    .eq('id', String(runRow.matter_id))
-    .limit(1)
+  const { data: matters } = runRow.matter_id
+    ? await client.from('matters').select('id, name').eq('id', String(runRow.matter_id)).limit(1)
+    : { data: [] as Row[] }
 
   // Two more plain lookups rather than one embedded select, for the same
   // reason lib/review/history.ts's loadRun keeps its own separate: only a

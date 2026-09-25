@@ -27,12 +27,15 @@ export interface RunRow {
   id: string
   kind: string
   prompt_version_id: string | null
-  matter_id: string
+  /** Null for a review of an unfiled upload; a field audit always has one. */
+  matter_id: string | null
   resolved_inputs: unknown
   /** Null for a run made before the render was versioned. */
   render_version: number | null
   text_layer_id: string | null
   document_version_id: string | null
+  /** Set in place of `document_version_id` when the review is of an unfiled upload. */
+  review_upload_id?: string | null
   model: string | null
 }
 
@@ -59,7 +62,7 @@ export async function loadRunContext(
 ): Promise<RunContextResult> {
   const { data: runRow, error: runError } = await client
     .from('workflow_runs')
-    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, model, render_version')
+    .select('id, kind, prompt_version_id, matter_id, resolved_inputs, text_layer_id, document_version_id, review_upload_id, model, render_version')
     .eq('id', runId)
     .maybeSingle()
   if (runError) return { ok: false, message: `Could not load the run: ${runError.message}` }
@@ -90,7 +93,7 @@ export async function loadRunContext(
     if (prompt.body.kind !== 'review') {
       return { ok: false, message: `Prompt version ${prompt.versionId} is not a review, but run ${runId} is.` }
     }
-    if (!runRow.text_layer_id || !runRow.document_version_id) {
+    if (!runRow.text_layer_id || (!runRow.document_version_id && !runRow.review_upload_id)) {
       return { ok: false, message: `Run ${runId} has no stored text layer to replay against.` }
     }
 

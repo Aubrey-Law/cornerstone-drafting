@@ -1,4 +1,4 @@
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 /**
  * Reading client documents out of R2.
@@ -55,4 +55,20 @@ export async function readObject(key: string): Promise<Buffer> {
   )
   if (!response.Body) throw new Error(`Storage returned no body for ${key}`)
   return Buffer.from(await response.Body.transformToByteArray())
+}
+
+/**
+ * Stores bytes under `key`. The workbench writes one kind of object — an
+ * unfiled upload kept so its review can be recorded (`lib/review/uploads.ts`);
+ * filed documents are written by the root app, never from here.
+ */
+export async function writeObject(key: string, bytes: Buffer, contentType: string): Promise<void> {
+  await getR2Client().send(
+    new PutObjectCommand({ Bucket: r2Bucket(), Key: key, Body: bytes, ContentType: contentType }),
+  )
+}
+
+/** Removes an object the workbench wrote — used only to undo an upload whose row could not be recorded. */
+export async function deleteObject(key: string): Promise<void> {
+  await getR2Client().send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: key }))
 }

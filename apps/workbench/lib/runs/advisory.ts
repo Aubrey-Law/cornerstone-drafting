@@ -252,7 +252,15 @@ export async function loadUnresolvedBlockers(client: SupabaseClient<WorkbenchDat
     .in('id', everBlockerRunIds)
   if (everBlockerRunsError) throw new Error(`Could not load runs: ${everBlockerRunsError.message}`)
 
-  const candidateMatterIds = [...new Set((everBlockerRuns ?? []).map((run) => String(run.matter_id)))]
+  // A review of an unfiled upload has no matter and so no advisory to raise;
+  // left in, `String(null)` would send the word "null" as a uuid.
+  const candidateMatterIds = [
+    ...new Set(
+      (everBlockerRuns ?? [])
+        .map((run) => run.matter_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ]
   if (candidateMatterIds.length === 0) return []
 
   // Every run against a candidate matter — not only the ones with a blocker

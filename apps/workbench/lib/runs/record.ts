@@ -23,7 +23,8 @@ import { CURRENT_REVIEW_RENDER_VERSION } from '@aubrey-law/citations/review/runR
 const asJson = (value: unknown): Json => value as Json
 
 export interface OpenRunInput {
-  matterId: string
+  /** Null only for a review of an unfiled upload, which belongs to no matter. */
+  matterId: string | null
   kind: string
   promptVersionId: string
   model: string | null
@@ -37,6 +38,11 @@ export interface OpenRunInput {
    */
   resolvedInputs: Json | null
   documentVersionId: string | null
+  /**
+   * The unfiled upload a review is of, in place of `documentVersionId`.
+   * Exactly one of the two for a review (`workflow_runs_review_needs_document`).
+   */
+  reviewUploadId?: string | null
   textLayerId: string | null
 }
 
@@ -52,6 +58,7 @@ export function openRunRowFor(input: OpenRunInput) {
   return {
     matter_id: input.matterId,
     document_version_id: input.documentVersionId,
+    review_upload_id: input.reviewUploadId ?? null,
     text_layer_id: input.textLayerId,
     prompt_version_id: input.promptVersionId,
     kind: input.kind,
@@ -103,6 +110,7 @@ export async function openRun(client: SupabaseClient<WorkbenchDatabase>, input: 
     .insert({
       matter_id: input.matterId,
       document_version_id: input.documentVersionId,
+      review_upload_id: input.reviewUploadId ?? null,
       text_layer_id: input.textLayerId,
       prompt_version_id: input.promptVersionId,
       kind: input.kind,

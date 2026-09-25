@@ -35,6 +35,12 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
         <h1 className="text-lg font-semibold tracking-tight">
           {run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : `${run.kind} run`}
         </h1>
+        {run.reviewUploadId ? (
+          <p className="text-sm" data-testid="unfiled-document">
+            {run.documentLabel ?? 'Uploaded document'}{' '}
+            <span className="text-xs text-muted-foreground">· not filed on a matter</span>
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {run.findings.length} findings · {cited} cited · {refused} citations rejected
           {run.failedCount > 0 ? ` · ${run.failedCount} rules failed` : ''}
