@@ -165,9 +165,14 @@ export async function workRun(
         findings: findings as ReviewFinding[],
         failures: failures as ReviewResult['failures'],
       }
+      // The run is of a filed version or an unfiled upload, never both —
+      // `workflow_runs_review_needs_document` — and its citations go with it.
+      const source = run.review_upload_id
+        ? { reviewUploadId: String(run.review_upload_id) }
+        : { documentVersionId: String(run.document_version_id) }
       const saved = await saveReviewFindings(client, {
+        ...source,
         runId,
-        documentVersionId: String(run.document_version_id),
         textLayerId: String(run.text_layer_id),
         result,
       })

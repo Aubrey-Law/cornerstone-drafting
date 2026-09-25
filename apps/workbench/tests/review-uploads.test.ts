@@ -1,0 +1,232 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorkbenchDatabase } from '@/lib/supabase/database'
+import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
+import { makeFakeClient } from './helpers/fakeSupabase'
+
+const fake = vi.hoisted(() => ({ client: null as unknown, written: [] as string[], removed: [] as string[] }))
+
+vi.mock('@/lib/storage/r2', () => ({
+  writeObject: vi.fn(async (key: string) => {
+    fake.written.push(key)
+  }),
+  deleteObject: vi.fn(async (key: string) => {
+    fake.removed.push(key)
+  }),
+  readObject: vi.fn(async () => Buffer.from('filed')),
+}))
+vi.mock('@/lib/supabase/admin', () => ({ getAdminClient: () => fake.client }))
+vi.mock('@/lib/auth/requireStaff', () => ({
+  requireStaff: vi.fn(async () => ({ error: null, user: { id: 'user-1', email: 'a@aubreylegal.com', role: 'attorney' } })),
+}))
+vi.mock('@/lib/anthropic', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/anthropic')>()),
+  anthropicModelCaller: vi.fn(() => async () => ({ content: [] })),
+}))
+vi.mock('@/lib/runs/enqueue', () => ({ pokeTick: vi.fn(async () => undefined) }))
+
+const TEXT = 'The Trustee shall serve without bond.'
+const LAYER: TextLayer = {
+  sourceKind: 'docx',
+  status: 'ok',
+  extractor: 'test',
+  extractorVersion: '1',
+  sourceSha256: 'a'.repeat(64),
+  pageCount: null,
+  text: TEXT,
+  blocks: [{ index: 0, charStart: 0, charEnd: TEXT.length, text: TEXT, page: null, bbox: null }],
+  spans: [],
+}
+vi.mock('@/lib/review/run', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/review/run')>()),
+  buildLayer: vi.fn(async () => LAYER),
+}))
+
+import { safeFilename, storeReviewUpload, uploadLabel } from '@/lib/review/uploads'
+import { saveFindings, saveTextLayer } from '@/lib/review/persist'
+import { loadRunSummaries, loadRun, UNFILED_UPLOAD_TITLE } from '@/lib/review/history'
+import { loadRunContext } from '@/lib/runs/context'
+import { POST } from '@/app/api/staff/review/route'
+
+const asClient = (client: ReturnType<typeof makeFakeClient>) => client as unknown as SupabaseClient<WorkbenchDatabase>
+
+const PROMPT_SEED = {
+  prompts: [{ id: 'p1', slug: 'ma-trust-firm-qa', title: 'Trust review', kind: 'review' }],
+  prompt_publications: [{ prompt_id: 'p1', version_id: 'v1' }],
+  prompt_versions: [
+    {
+      id: 'v1',
+      prompt_id: 'p1',
+      version_number: 1,
+      body: { kind: 'review', inputs: [], rules: [{ number: '1', risk: 'medium', statement: 'Bond is waived.' }] },
+    },
+  ],
+}
+
+beforeEach(() => {
+  fake.written = []
+  fake.removed = []
+})
+
+describe('uploadLabel and safeFilename', () => {
+  it('uses the attorney’s name when given, else the filename without its extension', () => {
+    expect(uploadLabel('  Smith —  prior will ', 'x.docx')).toBe('Smith — prior will')
+    expect(uploadLabel('', 'Jones Trust 2019.pdf')).toBe('Jones Trust 2019')
+  })
+
+  it('keeps a key free of paths and odd characters', () => {
+    expect(safeFilename('../../Smith Will (final).docx')).toBe('.._.._Smith_Will_final_.docx')
+    expect(safeFilename('???')).toBe('document')
+  })
+})
+
+describe('storeReviewUpload', () => {
+  const input = { bytes: Buffer.from('bytes'), filename: 'Prior Will.docx', kind: 'docx' as const, label: '', userId: 'u1' }
+
+  it('stores the bytes under their own prefix and records the upload', async () => {
+    const client = makeFakeClient()
+    const storage = { write: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) }
+    const result = await storeReviewUpload(asClient(client), input, storage)
+    expect(result.ok).toBe(true)
+    const [row] = client.tableRows('review_uploads')
+    expect(row).toMatchObject({ label: 'Prior Will', filename: 'Prior Will.docx', file_kind: 'docx', size_bytes: 5 })
+    expect(String(row.r2_key)).toMatch(/^review-uploads\/[0-9a-f-]{36}\/Prior_Will\.docx$/)
+    expect(row.sha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('removes the stored bytes when the row cannot be recorded', async () => {
+    const client = makeFakeClient()
+    client.failTable('review_uploads', 'relation "review_uploads" does not exist')
+    const storage = { write: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) }
+    const result = await storeReviewUpload(asClient(client), input, storage)
+    expect(result).toMatchObject({ ok: false })
+    expect(storage.remove).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('persisting a review of an upload', () => {
+  it('anchors the text layer and citations to the upload, never to a version', async () => {
+    const client = makeFakeClient()
+    const layer = await saveTextLayer(asClient(client), { reviewUploadId: 'up1', layer: LAYER })
+    expect(layer.ok).toBe(true)
+    expect(client.tableRows('document_text_layers')[0]).toMatchObject({ review_upload_id: 'up1', document_version_id: null })
+
+    await saveFindings(asClient(client), {
+      reviewUploadId: 'up1',
+      runId: 'run-1',
+      textLayerId: 'layer-1',
+      result: {
+        playbookSlug: 's',
+        playbookVersion: 1,
+        failures: [],
+        findings: [
+          {
+            ruleNumber: '1',
+            outcome: 'deviation',
+            severity: 'medium',
+            rationale: 'r',
+            proposedLanguage: null,
+            citation: { blockIndex: 0, charStart: 0, charEnd: 5, page: null, bbox: null, quote: 'The T', verification: 'verified' },
+            citationRefusal: null,
+            attemptedQuote: null,
+          },
+        ],
+      },
+    })
+    expect(client.tableRows('workflow_citations')[0]).toMatchObject({ review_upload_id: 'up1', document_version_id: null })
+  })
+})
+
+describe('reading back a review of an upload', () => {
+  const seed = () =>
+    makeFakeClient({
+      ...PROMPT_SEED,
+      review_uploads: [{ id: 'up1', label: 'Smith — prior will', filename: 'smith.docx' }],
+      workflow_runs: [
+        {
+          id: 'run-up',
+          kind: 'review',
+          matter_id: null,
+          document_version_id: null,
+          review_upload_id: 'up1',
+          text_layer_id: 'layer-1',
+          prompt_version_id: 'v1',
+          status: 'completed',
+          rule_total: 1,
+          finding_count: 0,
+          failed_count: 0,
+          failures: [],
+          started_at: '2026-09-25T20:00:00Z',
+          finished_at: '2026-09-25T20:01:00Z',
+          model: null,
+          render_version: 1,
+          resolved_inputs: null,
+        },
+      ],
+      document_text_layers: [
+        {
+          id: 'layer-1',
+          review_upload_id: 'up1',
+          document_version_id: null,
+          source_kind: 'docx',
+          status: 'ok',
+          extractor: 'test',
+          extractor_version: '1',
+          source_sha256: 'a'.repeat(64),
+          page_count: null,
+          text: TEXT,
+          blocks: LAYER.blocks,
+          spans: [],
+        },
+      ],
+    })
+
+  it('lists it by its label, as not filed on a matter', async () => {
+    const [summary] = await loadRunSummaries(asClient(seed()))
+    expect(summary).toMatchObject({ documentName: 'Smith — prior will', matterTitle: UNFILED_UPLOAD_TITLE, unfiled: true })
+  })
+
+  it('loads it with no matter rather than a matter named "null"', async () => {
+    const run = await loadRun(asClient(seed()), 'run-up')
+    expect(run).toMatchObject({ matterId: null, reviewUploadId: 'up1', documentLabel: 'Smith — prior will', documentVersionId: null })
+  })
+
+  it('gives the tick a context it can work', async () => {
+    const context = await loadRunContext(asClient(seed()), 'run-up')
+    expect(context.ok && context.kind === 'review' && context.run.review_upload_id).toBe('up1')
+  })
+})
+
+describe('POST /api/staff/review with an upload', () => {
+  const upload = (label?: string) => {
+    const form = new FormData()
+    form.set('document', new File([Buffer.from('docx bytes')], 'Prior Will.docx'))
+    if (label) form.set('label', label)
+    return new Request('http://localhost/api/staff/review', { method: 'POST', body: form })
+  }
+
+  it('keeps the upload and queues a recorded run with no matter', async () => {
+    const client = makeFakeClient(PROMPT_SEED)
+    fake.client = client
+    const response = await POST(upload('Smith — prior will'))
+    const body = await response.json()
+
+    expect(body).toMatchObject({ queued: true, anchor: null, saveError: null })
+    expect(fake.written).toHaveLength(1)
+    const [run] = client.tableRows('workflow_runs')
+    expect(run).toMatchObject({ matter_id: null, document_version_id: null, review_upload_id: body.reviewUploadId, kind: 'review' })
+    expect(client.tableRows('review_uploads')[0]).toMatchObject({ label: 'Smith — prior will' })
+    expect(client.tableRows('workflow_run_steps').map((s) => s.unit_id)).toEqual(['1'])
+  })
+
+  it('falls back to an unrecorded review, saying why, when the upload cannot be kept', async () => {
+    const client = makeFakeClient(PROMPT_SEED)
+    client.failTable('review_uploads', 'relation "review_uploads" does not exist')
+    fake.client = client
+    const body = await (await POST(upload())).json()
+    expect(body.runId).toBeNull()
+    expect(body.saveError).toMatch(/review_uploads/)
+    expect(body.result).toBeDefined()
+    expect(fake.removed).toHaveLength(1)
+  })
+})

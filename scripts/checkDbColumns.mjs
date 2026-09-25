@@ -12,11 +12,20 @@
 // types have not caught up with yet, which is exactly where the invented column
 // hid.
 //
+// One distinction matters, the same one checkDbRpcs.mjs draws for functions: a
+// column the database lacks is drift only if nothing in the repo creates it.
+// When a migration in this branch creates it, it is just not deployed yet —
+// migrations reach the shared database on merge to main — so a pull request
+// that adds a column and reads it could otherwise never pass. Such a column
+// fails everywhere except on a pull request; one no migration creates (the
+// `matters.title` case) fails on every event.
+//
 // Run: npm run check:db-columns
 // Exits 1 when the workbench reads a column the database does not have.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { collectQueryReferences, WORKBENCH_ROOTS } from './lib/queryReferences.mjs'
+import { classifyMissingReferences, migrationDefinedSchema } from './lib/migrationSchema.mjs'
 
 // Standalone node scripts do not get Next.js env loading; read the same files
 // Next would, without overriding anything already in the environment.
@@ -85,12 +94,35 @@ try {
   process.exit(1)
 }
 
-const missingTables = []
-const missingColumns = []
+const absentTables = []
+const absentColumns = []
 for (const reference of references) {
   const columns = tables.get(reference.table)
-  if (!columns) missingTables.push(reference)
-  else if (!columns.has(reference.column)) missingColumns.push(reference)
+  if (!columns) absentTables.push(reference)
+  else if (!columns.has(reference.column)) absentColumns.push(reference)
+}
+
+// A pull request is the one place an undeployed migration is expected. Every
+// other event — main, the scheduled run, a manual dispatch — is looking at a
+// database that should already have everything the repo describes.
+const onPullRequest = process.env.GITHUB_EVENT_NAME === 'pull_request'
+const defined = migrationDefinedSchema()
+const tablesSplit = classifyMissingReferences(absentTables.map((r) => ({ ...r, column: undefined, original: r })), defined)
+const columnsSplit = classifyMissingReferences(absentColumns, defined)
+
+const missingTables = onPullRequest ? tablesSplit.undefined.map((r) => r.original) : absentTables
+const missingColumns = onPullRequest ? columnsSplit.undefined : absentColumns
+const pending = onPullRequest
+  ? [...tablesSplit.pendingDeploy.map((r) => r.original), ...columnsSplit.pendingDeploy]
+  : []
+
+if (pending.length > 0) {
+  const names = [...new Set(pending.map((r) => `${r.table}${absentTables.includes(r) ? '' : `.${r.column}`}`))].sort()
+  console.log(
+    `⏳ ${names.length} table or column read${names.length === 1 ? '' : 's'} created by a migration in this ` +
+      'branch and not deployed yet (allowed on a pull request; checked again on main):',
+  )
+  for (const name of names) console.log(`   • ${name}`)
 }
 
 const describe = (r) => `   • ${r.table}.${r.column}\n     ${r.file}:${r.line}`
@@ -115,6 +147,7 @@ if (missingColumns.length > 0) {
 }
 
 if (missingTables.length > 0 || missingColumns.length > 0) process.exit(1)
+if (pending.length > 0) process.exit(0)
 
 const tableCount = new Set(references.map((r) => r.table)).size
 console.log(

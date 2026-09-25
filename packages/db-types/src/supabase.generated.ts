@@ -2981,11 +2981,12 @@ export type Database = {
           aligned_to_layer_id: string | null
           blocks: Json
           created_at: string
-          document_version_id: string
+          document_version_id: string | null
           extractor: string
           extractor_version: string
           id: string
           page_count: number | null
+          review_upload_id: string | null
           source_kind: string
           source_sha256: string
           spans: Json
@@ -2996,11 +2997,12 @@ export type Database = {
           aligned_to_layer_id?: string | null
           blocks?: Json
           created_at?: string
-          document_version_id: string
+          document_version_id?: string | null
           extractor: string
           extractor_version: string
           id?: string
           page_count?: number | null
+          review_upload_id?: string | null
           source_kind: string
           source_sha256: string
           spans?: Json
@@ -3011,11 +3013,12 @@ export type Database = {
           aligned_to_layer_id?: string | null
           blocks?: Json
           created_at?: string
-          document_version_id?: string
+          document_version_id?: string | null
           extractor?: string
           extractor_version?: string
           id?: string
           page_count?: number | null
+          review_upload_id?: string | null
           source_kind?: string
           source_sha256?: string
           spans?: Json
@@ -3035,6 +3038,13 @@ export type Database = {
             columns: ["document_version_id"]
             isOneToOne: false
             referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_text_layers_review_upload_id_fkey"
+            columns: ["review_upload_id"]
+            isOneToOne: false
+            referencedRelation: "review_uploads"
             referencedColumns: ["id"]
           },
         ]
@@ -7633,6 +7643,50 @@ export type Database = {
         }
         Relationships: []
       }
+      review_uploads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          file_kind: string
+          filename: string
+          id: string
+          label: string
+          r2_key: string
+          sha256: string
+          size_bytes: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          file_kind: string
+          filename: string
+          id?: string
+          label: string
+          r2_key: string
+          sha256: string
+          size_bytes: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          file_kind?: string
+          filename?: string
+          id?: string
+          label?: string
+          r2_key?: string
+          sha256?: string
+          size_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_uploads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_emails: {
         Row: {
           attempts: number
@@ -9132,11 +9186,12 @@ export type Database = {
           char_end: number
           char_start: number
           created_at: string
-          document_version_id: string
+          document_version_id: string | null
           finding_id: string | null
           id: string
           page: number | null
           quote: string
+          review_upload_id: string | null
           text_layer_id: string
           verification: string
         }
@@ -9146,11 +9201,12 @@ export type Database = {
           char_end: number
           char_start: number
           created_at?: string
-          document_version_id: string
+          document_version_id?: string | null
           finding_id?: string | null
           id?: string
           page?: number | null
           quote: string
+          review_upload_id?: string | null
           text_layer_id: string
           verification?: string
         }
@@ -9160,11 +9216,12 @@ export type Database = {
           char_end?: number
           char_start?: number
           created_at?: string
-          document_version_id?: string
+          document_version_id?: string | null
           finding_id?: string | null
           id?: string
           page?: number | null
           quote?: string
+          review_upload_id?: string | null
           text_layer_id?: string
           verification?: string
         }
@@ -9181,6 +9238,13 @@ export type Database = {
             columns: ["finding_id"]
             isOneToOne: false
             referencedRelation: "workflow_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_citations_review_upload_id_fkey"
+            columns: ["review_upload_id"]
+            isOneToOne: false
+            referencedRelation: "review_uploads"
             referencedColumns: ["id"]
           },
           {
@@ -9450,12 +9514,13 @@ export type Database = {
           kind: string
           last_tick_at: string | null
           locked_by: string | null
-          matter_id: string
+          matter_id: string | null
           model: string | null
           prompt_version_id: string | null
           reclaims: number
           render_version: number | null
           resolved_inputs: Json | null
+          review_upload_id: string | null
           rule_total: number
           started_at: string
           status: string
@@ -9472,12 +9537,13 @@ export type Database = {
           kind?: string
           last_tick_at?: string | null
           locked_by?: string | null
-          matter_id: string
+          matter_id?: string | null
           model?: string | null
           prompt_version_id?: string | null
           reclaims?: number
           render_version?: number | null
           resolved_inputs?: Json | null
+          review_upload_id?: string | null
           rule_total?: number
           started_at?: string
           status: string
@@ -9494,12 +9560,13 @@ export type Database = {
           kind?: string
           last_tick_at?: string | null
           locked_by?: string | null
-          matter_id?: string
+          matter_id?: string | null
           model?: string | null
           prompt_version_id?: string | null
           reclaims?: number
           render_version?: number | null
           resolved_inputs?: Json | null
+          review_upload_id?: string | null
           rule_total?: number
           started_at?: string
           status?: string
@@ -9546,6 +9613,13 @@ export type Database = {
             columns: ["prompt_version_id"]
             isOneToOne: false
             referencedRelation: "prompt_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_review_upload_id_fkey"
+            columns: ["review_upload_id"]
+            isOneToOne: false
+            referencedRelation: "review_uploads"
             referencedColumns: ["id"]
           },
           {

@@ -76,6 +76,7 @@ export function ReviewWorkspace({
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
+  const labelRef = useRef<HTMLInputElement>(null)
   const [matterId, setMatterId] = useState(matters[0]?.matterId ?? '')
   const [versionId, setVersionId] = useState(matters[0]?.documents[0]?.versionId ?? '')
   const [pending, setPending] = useState(false)
@@ -109,7 +110,11 @@ export function ReviewWorkspace({
     setPdfBytes(file && file.name.toLowerCase().endsWith('.pdf') ? await file.arrayBuffer() : null)
 
     const body = new FormData()
-    if (file) body.set('document', file)
+    if (file) {
+      body.set('document', file)
+      const label = labelRef.current?.value.trim()
+      if (label) body.set('label', label)
+    }
     else body.set('documentVersionId', chosen as string)
     if (playbook.slug) body.set('playbookSlug', playbook.slug)
 
@@ -218,6 +223,14 @@ export function ReviewWorkspace({
             aria-label="Document to review"
             className="text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm"
           />
+          <input
+            ref={labelRef}
+            type="text"
+            aria-label="Name for an uploaded document"
+            placeholder="Name it (e.g. Smith — prior will)"
+            maxLength={200}
+            className="h-9 w-56 rounded-md border border-input bg-transparent px-2 text-sm"
+          />
           <Button type="submit" disabled={pending}>
             {pending ? 'Reviewing…' : 'Run review'}
           </Button>
@@ -262,8 +275,9 @@ export function ReviewWorkspace({
             from a precedent the firm has approved.
           </p>
           <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-            A review of a document filed on a matter is recorded and can be returned to. An uploaded
-            draft is not, because there is no filed version for its citations to point at.
+            Every review is recorded and can be returned to. Choose a document filed on a matter, or
+            upload one that is not on any matter — a plan another attorney drafted, say — and it is kept
+            with its review. An upload belongs to no matter, so every rule in the playbook runs.
           </p>
 
           {runs.length > 0 ? (
@@ -321,8 +335,7 @@ export function ReviewWorkspace({
                   </span>
                 ) : (
                   <span className="text-muted-foreground">
-                    Not recorded — an uploaded draft has no filed version to anchor citations to.
-                    Choose the document from its matter to keep the review.
+                    Not recorded.
                   </span>
                 )}
               </p>

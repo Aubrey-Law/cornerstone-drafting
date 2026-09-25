@@ -50,6 +50,7 @@ export const WORKFLOW_RUN_COLUMNS = [
   'id',
   'matter_id',
   'document_version_id',
+  'review_upload_id',
   'text_layer_id',
   'prompt_version_id',
   'kind',
@@ -81,10 +82,20 @@ export const WORKFLOW_FINDING_COLUMNS = [
   'created_at',
 ] as const
 
-export interface SaveTextLayerInput {
-  documentVersionId: string
-  layer: TextLayer
+/**
+ * What a recorded review is of: a filed document version, or an unfiled
+ * upload (`review_uploads`). Exactly one — the `*_one_source` constraints in
+ * 20261227090000_review_uploads.sql hold every row to that.
+ */
+export type ReviewSource = { documentVersionId: string } | { reviewUploadId: string }
+
+function sourceColumns(source: ReviewSource) {
+  return 'reviewUploadId' in source
+    ? { document_version_id: null, review_upload_id: source.reviewUploadId }
+    : { document_version_id: source.documentVersionId, review_upload_id: null }
 }
+
+export type SaveTextLayerInput = ReviewSource & { layer: TextLayer }
 
 /**
  * Persists the layer a review is about to run against.
@@ -98,11 +109,13 @@ export async function saveTextLayer(
   client: SupabaseClient<WorkbenchDatabase>,
   input: SaveTextLayerInput,
 ): Promise<{ ok: true; layerId: string } | { ok: false; message: string }> {
+  const source = sourceColumns(input)
   const { data, error } = await client
     .from('document_text_layers')
     .upsert(
       {
-        document_version_id: input.documentVersionId,
+        document_version_id: source.document_version_id,
+        review_upload_id: source.review_upload_id,
         source_kind: input.layer.sourceKind,
         status: input.layer.status,
         extractor: input.layer.extractor,
@@ -113,7 +126,9 @@ export async function saveTextLayer(
         blocks: asJson(input.layer.blocks),
         spans: asJson(input.layer.spans),
       },
-      { onConflict: 'document_version_id,source_kind' },
+      // Each source has its own uniqueness: a version's layer is keyed by the
+      // version, an upload's by the upload.
+      { onConflict: 'reviewUploadId' in input ? 'review_upload_id,source_kind' : 'document_version_id,source_kind' },
     )
     .select('id')
     .single()
@@ -121,9 +136,8 @@ export async function saveTextLayer(
   return { ok: true, layerId: String(data.id) }
 }
 
-export interface SaveFindingsInput {
+export type SaveFindingsInput = ReviewSource & {
   runId: string
-  documentVersionId: string
   textLayerId: string
   result: ReviewResult
 }
@@ -144,6 +158,7 @@ export async function saveFindings(
   input: SaveFindingsInput,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const sb = client
+  const source = sourceColumns(input)
 
   for (const finding of input.result.findings) {
     const { data: findingRow, error: findingError } = await sb
@@ -169,7 +184,8 @@ export async function saveFindings(
       const { error: citationError } = await sb.from('workflow_citations').insert({
         finding_id: findingRow.id,
         text_layer_id: input.textLayerId,
-        document_version_id: input.documentVersionId,
+        document_version_id: source.document_version_id,
+        review_upload_id: source.review_upload_id,
         block_index: finding.citation.blockIndex,
         char_start: finding.citation.charStart,
         char_end: finding.citation.charEnd,
@@ -233,9 +249,14 @@ export interface StoredFinding extends ReviewFinding {
 
 export interface StoredRun {
   runId: string
-  matterId: string
-  /** Null only for a run recorded before this column existed — a review always has a document. */
+  /** Null for a review of an unfiled upload. */
+  matterId: string | null
+  /** Null for a review of an unfiled upload, or a run recorded before this column existed. */
   documentVersionId: string | null
+  /** The unfiled upload reviewed, when the run is of one. */
+  reviewUploadId: string | null
+  /** A name to show for the reviewed document: the filed document's, or the upload's label. */
+  documentLabel: string | null
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null

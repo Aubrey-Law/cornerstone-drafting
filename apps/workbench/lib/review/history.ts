@@ -83,6 +83,7 @@ export function toStoredRun(
   promptVersionRow: Row | null = null,
   promptRow: Row | null = null,
   stepRows: readonly Row[] = [],
+  uploadRow: Row | null = null,
 ): StoredRun {
   const citationByFinding = new Map<string, Row>()
   for (const row of citationRows) {
@@ -116,8 +117,12 @@ export function toStoredRun(
 
   return {
     runId: String(runRow.id),
-    matterId: String(runRow.matter_id),
-    // A review is always run against a filed document, but `document_version_id`
+    // Null for a review of an unfiled upload — never `String(null)`, which
+    // would read as a matter whose id is the word "null".
+    matterId: runRow.matter_id === null || runRow.matter_id === undefined ? null : String(runRow.matter_id),
+    reviewUploadId: str(runRow.review_upload_id),
+    documentLabel: uploadRow ? (str(uploadRow.label) ?? str(uploadRow.filename)) : null,
+    // A review is run against a filed document or an upload, but `document_version_id`
     // is nullable on the column, and a run recorded before it existed — or of
     // a different kind entirely — genuinely has none. `String(null)` would
     // silently produce the literal string "null" here; this run has no
@@ -141,9 +146,14 @@ export function toStoredRun(
   }
 }
 
+/** What a run's matter column reads as when the review is of an unfiled upload. */
+export const UNFILED_UPLOAD_TITLE = 'Not filed on a matter'
+
 export interface RunSummary {
   runId: string
   matterTitle: string
+  /** True when the review is of an unfiled upload rather than a filed document. */
+  unfiled?: boolean
   documentName: string
   status: string
   ruleTotal: number
@@ -169,19 +179,29 @@ export async function loadRunSummaries(
   const sb = client
   const { data: runs, error } = await sb
     .from('workflow_runs')
-    .select('id, matter_id, document_version_id, status, rule_total, finding_count, failed_count, finished_at')
+    .select('id, matter_id, document_version_id, review_upload_id, status, rule_total, finding_count, failed_count, finished_at')
     .eq('kind', 'review')
     .order('started_at', { ascending: false })
     .limit(limit)
   if (error) throw new Error(`Could not load runs: ${error.message}`)
   if (!runs || runs.length === 0) return []
 
-  const [{ data: matters }, { data: versions }] = await Promise.all([
-    sb.from('matters').select('id, name').in('id', [...new Set(runs.map((r) => String(r.matter_id)))]),
-    sb
-      .from('document_versions')
-      .select('id, document_id, filename')
-      .in('id', [...new Set(runs.map((r) => String(r.document_version_id)))]),
+  // Only the ids a run actually has: an upload's review has no matter and no
+  // version, and `String(null)` would put the word "null" into an `in` list.
+  const idsOf = (column: 'matter_id' | 'document_version_id' | 'review_upload_id') => [
+    ...new Set(runs.map((r) => r[column]).filter((id): id is string => typeof id === 'string' && id.length > 0)),
+  ]
+  const matterIds = idsOf('matter_id')
+  const versionIds = idsOf('document_version_id')
+  const uploadIds = idsOf('review_upload_id')
+  const [{ data: matters }, { data: versions }, { data: uploads }] = await Promise.all([
+    matterIds.length ? sb.from('matters').select('id, name').in('id', matterIds) : Promise.resolve({ data: [] as Row[] }),
+    versionIds.length
+      ? sb.from('document_versions').select('id, document_id, filename').in('id', versionIds)
+      : Promise.resolve({ data: [] as Row[] }),
+    uploadIds.length
+      ? sb.from('review_uploads').select('id, label, filename').in('id', uploadIds)
+      : Promise.resolve({ data: [] as Row[] }),
   ])
 
   const documentIds = [...new Set((versions ?? []).map((v) => String(v.document_id)))]
@@ -198,10 +218,22 @@ export async function loadRunSummaries(
     ]),
   )
 
+  const labelByUpload = new Map(
+    (uploads ?? []).map((u) => [String(u.id), str(u.label) ?? str(u.filename) ?? 'Upload']),
+  )
+
   return runs.map((run) => ({
     runId: String(run.id),
-    matterTitle: titleById.get(String(run.matter_id)) ?? 'Untitled matter',
-    documentName: nameByVersion.get(String(run.document_version_id)) ?? 'Document',
+    ...(run.review_upload_id
+      ? {
+          matterTitle: run.matter_id ? (titleById.get(String(run.matter_id)) ?? UNFILED_UPLOAD_TITLE) : UNFILED_UPLOAD_TITLE,
+          unfiled: true,
+          documentName: labelByUpload.get(String(run.review_upload_id)) ?? 'Upload',
+        }
+      : {
+          matterTitle: titleById.get(String(run.matter_id)) ?? 'Untitled matter',
+          documentName: nameByVersion.get(String(run.document_version_id)) ?? 'Document',
+        }),
     status: String(run.status ?? ''),
     ruleTotal: Number(run.rule_total ?? 0),
     findingCount: Number(run.finding_count ?? 0),
@@ -227,6 +259,16 @@ export async function loadRun(
       : Promise.resolve({ data: [] as Row[] }),
     sb.from('workflow_run_steps').select('*').eq('run_id', runId),
   ])
+
+  let uploadRow: Row | null = null
+  if (runRow.review_upload_id) {
+    const { data: uploads } = await sb
+      .from('review_uploads')
+      .select('id, label, filename')
+      .eq('id', String(runRow.review_upload_id))
+      .limit(1)
+    uploadRow = uploads?.[0] ?? null
+  }
 
   const findingIds = (findings ?? []).map((f) => String(f.id))
   const { data: citations } = findingIds.length
@@ -264,5 +306,6 @@ export async function loadRun(
     promptVersionRow,
     promptRow,
     stepRows ?? [],
+    uploadRow,
   )
 }

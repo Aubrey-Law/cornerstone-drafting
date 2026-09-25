@@ -22,6 +22,15 @@ const PROMPT_OBJECTS_MIGRATION = fs.readFileSync(
   'utf8',
 )
 
+/**
+ * And again in 20261227090000_review_uploads.sql, which adds
+ * `review_upload_id` so a review can be of an unfiled upload.
+ */
+const REVIEW_UPLOADS_MIGRATION = fs.readFileSync(
+  path.resolve(__dirname, '../../../supabase/migrations/20261227090000_review_uploads.sql'),
+  'utf8',
+)
+
 const step = (unitId: string, status: RunStep['status']): RunStep => ({
   unitId,
   status,
@@ -81,11 +90,9 @@ describe('the run tables and the shapes the app declares', () => {
     const base = [...block.matchAll(/^\s{2}([a-z_]+) (?:uuid|text|integer|jsonb|timestamptz)/gm)].map((m) => m[1])
     if (table !== 'workflow_runs') return base
 
-    const added = [
-      ...PROMPT_OBJECTS_MIGRATION.matchAll(
-        /alter table public\.workflow_runs\s+add column if not exists ([a-z_]+)/g,
-      ),
-    ].map((m) => m[1])
+    const added = [PROMPT_OBJECTS_MIGRATION, REVIEW_UPLOADS_MIGRATION].flatMap((sql) =>
+      [...sql.matchAll(/alter table public\.workflow_runs\s+add column if not exists ([a-z_]+)/g)].map((m) => m[1]),
+    )
     const dropped = new Set(
       [
         ...PROMPT_OBJECTS_MIGRATION.matchAll(
@@ -105,13 +112,26 @@ describe('the run tables and the shapes the app declares', () => {
   })
 
   /**
-   * A run may only be recorded against a filed document. An upload has no
-   * durable identity, so a saved run about one would carry citations anchored
-   * to nothing — which is the bug the citation model exists to avoid.
+   * A run may only be recorded against something with a durable identity: a
+   * saved run about a bare upload would carry citations anchored to nothing,
+   * which is the bug the citation model exists to avoid. The run tables began
+   * by requiring a filed document version and its matter. An unfiled upload
+   * now gets its own identity (`review_uploads`), and a review must anchor to
+   * exactly one of the two — never neither — with the text layer its
+   * citations index. A matter is still required for everything but an upload.
    */
-  it('requires both a matter and a document version', () => {
+  it('requires a review to anchor to exactly one durable source', () => {
     expect(MIGRATION).toMatch(/matter_id uuid not null/)
     expect(MIGRATION).toMatch(/document_version_id uuid not null/)
+    expect(REVIEW_UPLOADS_MIGRATION).toMatch(
+      /kind <> 'review'\s+or \(text_layer_id is not null and num_nonnulls\(document_version_id, review_upload_id\) = 1\)/,
+    )
+    expect(REVIEW_UPLOADS_MIGRATION).toMatch(/check \(matter_id is not null or review_upload_id is not null\)/)
+    for (const table of ['document_text_layers', 'workflow_citations']) {
+      expect(REVIEW_UPLOADS_MIGRATION).toMatch(
+        new RegExp(`${table}_one_source\\s+check \\(num_nonnulls\\(document_version_id, review_upload_id\\) = 1\\)`),
+      )
+    }
   })
 
   it('ties a citation to the finding it supports', () => {
