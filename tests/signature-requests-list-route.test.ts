@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * What the documents tab is allowed to learn about a signature request.
@@ -76,6 +76,16 @@ async function get(matterId = MATTER) {
   )
   return { status: response.status, body: await response.json() }
 }
+
+// The fixtures describe a request sent 2026-09-18 whose signing links expire
+// 2026-09-25. Pin the clock inside that week so the test doesn't expire with them.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-19T12:00:00Z'))
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   state.admin = true
