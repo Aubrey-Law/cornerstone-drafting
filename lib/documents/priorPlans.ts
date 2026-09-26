@@ -42,7 +42,7 @@ export const PRIOR_PLAN_CONTENT_TYPES: Record<PriorPlan['fileKind'], string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
-const PRIOR_PLAN_COLUMNS = 'id, label, filename, file_kind, size_bytes, created_at, linked_at, filed_document_id, matter_id, r2_key'
+const PRIOR_PLAN_COLUMNS = 'id, label, filename, file_kind, size_bytes, created_at, linked_at, filed_document_id, matter_id, r2_key, origin'
 
 type PriorPlanRow = {
   id: string
@@ -55,6 +55,8 @@ type PriorPlanRow = {
   filed_document_id: string | null
   matter_id: string | null
   r2_key: string
+  /** 'workbench' for an uploaded prior plan; 'word' for a snapshot the add-in kept of the firm's own draft. */
+  origin?: string | null
 }
 
 function toPriorPlan(row: PriorPlanRow): PriorPlan {
@@ -70,12 +72,19 @@ function toPriorPlan(row: PriorPlanRow): PriorPlan {
   }
 }
 
-/** Uploads linked to this matter, newest link first, filed or not. */
+/**
+ * Uploads linked to this matter, newest link first, filed or not.
+ *
+ * Only workbench uploads: a snapshot the Word add-in kept when reviewing the
+ * firm's own draft is linked to the matter too, but it is not a prior plan and
+ * never something to file (20261230090000_review_upload_origin.sql).
+ */
 export async function listPriorPlans(admin: SupabaseClient, matterId: string): Promise<PriorPlan[]> {
   const { data, error } = await admin
     .from('review_uploads')
     .select(PRIOR_PLAN_COLUMNS)
     .eq('matter_id', matterId)
+    .eq('origin', 'workbench')
     .order('linked_at', { ascending: false })
   if (error) throw new Error(error.message)
   return ((data ?? []) as PriorPlanRow[]).map(toPriorPlan)
@@ -136,6 +145,14 @@ export async function filePriorPlan(
   if (loadError) return { ok: false, status: 500, code: 'load_failed', message: loadError.message }
   const upload = row as PriorPlanRow | null
   if (!upload) return { ok: false, status: 404, code: 'not_found', message: 'That upload no longer exists.' }
+  if (upload.origin === 'word') {
+    return {
+      ok: false,
+      status: 409,
+      code: 'not_a_prior_plan',
+      message: 'That is a copy the Word add-in kept of a review, not a prior plan. Save the document from Word instead.',
+    }
+  }
 
   // Filing follows the link, never a matter the caller names on its own: the
   // link is the attorney's decision about whose plan this is.

@@ -46,6 +46,10 @@ describe('UploadPanel', () => {
 
     rerender(<UploadPanel {...props} filed linkedMatterId="m1" linkedMatterTitle="Smith Estate Plan" />)
     expect(screen.getByTestId('upload-filed-state')).toHaveTextContent("In the matter's documents.")
+
+    // A Word snapshot is the firm's draft, never a prior plan to file.
+    rerender(<UploadPanel {...props} fromWord linkedMatterId="m1" linkedMatterTitle="Smith Estate Plan" />)
+    expect(screen.getByTestId('upload-filed-state')).toHaveTextContent('The copy Word had open when this review ran.')
   })
 
   it('queues another review of the upload with the chosen playbook and opens it', async () => {

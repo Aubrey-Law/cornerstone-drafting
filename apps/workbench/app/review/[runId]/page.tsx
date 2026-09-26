@@ -64,6 +64,7 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
             linkedMatterId={run.uploadMatterId ?? null}
             linkedMatterTitle={run.uploadMatterTitle ?? null}
             filed={run.uploadFiled ?? false}
+            fromWord={run.uploadFromWord ?? false}
             matters={uploadOptions.matters}
             playbooks={uploadOptions.playbooks}
           />

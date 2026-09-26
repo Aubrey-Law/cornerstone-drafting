@@ -18,6 +18,7 @@ export function UploadPanel({
   linkedMatterId,
   linkedMatterTitle,
   filed,
+  fromWord = false,
   matters,
   playbooks,
 }: {
@@ -27,6 +28,8 @@ export function UploadPanel({
   linkedMatterTitle: string | null
   /** Filed as one of the linked matter's documents, from that matter's Documents tab. */
   filed: boolean
+  /** A copy the Word add-in kept of the draft it reviewed: never a prior plan to file. */
+  fromWord?: boolean
   matters: Array<{ matterId: string; title: string }>
   playbooks: Array<{ slug: string; title: string }>
 }) {
@@ -65,7 +68,11 @@ export function UploadPanel({
         <span className="text-muted-foreground" data-testid="upload-link-state">
           {linkedMatterId ? `Linked to ${linkedMatterTitle ?? 'a matter'}` : 'Not linked to a matter'}
         </span>
-        {linkedMatterId ? (
+        {fromWord ? (
+          <span className="text-muted-foreground" data-testid="upload-filed-state">
+            The copy Word had open when this review ran.
+          </span>
+        ) : linkedMatterId ? (
           <span className="text-muted-foreground" data-testid="upload-filed-state">
             {filed
               ? "In the matter's documents."

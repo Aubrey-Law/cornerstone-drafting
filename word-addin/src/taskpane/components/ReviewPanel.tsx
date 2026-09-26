@@ -20,6 +20,7 @@ import {
   revealCitation,
 } from '../../word/reviewActions'
 import { resolveTrackedEdit, revealTrackedEdit } from '../../word/trackedChanges'
+import { currentDocumentName, MAX_UPLOAD_BASE64_CHARS, readDocumentBytes } from '../../word/readDocumentBytes'
 
 /**
  * Run a firm playbook against the open document and work its findings in place.
@@ -32,10 +33,21 @@ import { resolveTrackedEdit, revealTrackedEdit } from '../../word/trackedChanges
  * With a matter linked, the matter's design sheet decides which conditional
  * rules apply; the pane says whether that happened rather than assuming it.
  *
- * Nothing is saved: a review from Word is a check on a draft being edited. The
- * workbench records reviews of filed documents.
+ * Saved to review history: the pane sends a copy of the document with the
+ * review, and the server keeps it as the review's snapshot — what Word had
+ * open at that moment, saved or not — so the findings, their citations and the
+ * attorney's decisions on them can be come back to. A document too large to
+ * send, or one Word will not hand over, is still reviewed; the pane says it is
+ * not saved.
  */
-export default function ReviewPanel({ matterId }: { matterId: string | null }) {
+export default function ReviewPanel({
+  matterId,
+  linkedDocumentId = null,
+}: {
+  matterId: string | null
+  /** The Cornerstone document this file was opened from, when one is linked. */
+  linkedDocumentId?: string | null
+}) {
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[] | null>(null)
   const [slug, setSlug] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -74,16 +86,25 @@ export default function ReviewPanel({ matterId }: { matterId: string | null }) {
     setReview(EMPTY_REVIEW)
     try {
       const paragraphs = await readParagraphTexts()
+      const fileBase64 = await readSnapshot(paragraphs)
       await streamReview({
         paragraphs,
         playbookSlug: slug,
         matterId,
+        fileBase64,
+        documentName: currentDocumentName(),
+        documentId: linkedDocumentId,
         signal: controller.signal,
         onEvent: (event) => setReview((state) => applyReviewEvent(state, event)),
       })
     } catch (err) {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'The review failed.')
     } finally {
+      // Stopped by the attorney: no done frame will arrive, so say so here —
+      // unless a newer review has already replaced this one.
+      if (controller.signal.aborted && abortRef.current === controller) {
+        setReview((state) => (state.done ? state : { ...state, done: true, aborted: true }))
+      }
       setRunning(false)
     }
   }
@@ -153,6 +174,7 @@ export default function ReviewPanel({ matterId }: { matterId: string | null }) {
             {review.failures.length > 0 ? ` · ${review.failures.length} did not run` : ''}
           </p>
           <MatterNote context={review.matterContext} linked={Boolean(matterId)} />
+          <RecordingNote review={review} />
           {review.error && <p className="text-red-600">{review.error}</p>}
         </div>
       )}
@@ -211,6 +233,39 @@ export default function ReviewPanel({ matterId }: { matterId: string | null }) {
       )}
     </div>
   )
+}
+
+/**
+ * The document's bytes to keep with the review, or null when they cannot be
+ * sent: Word refused, or the file plus its text would exceed what the server
+ * accepts. Never throws — an unsaved review is still a review.
+ */
+async function readSnapshot(paragraphs: string[]): Promise<string | null> {
+  try {
+    const fileBase64 = await readDocumentBytes()
+    const textLength = paragraphs.reduce((total, paragraph) => total + paragraph.length, 0)
+    return fileBase64.length + textLength > MAX_UPLOAD_BASE64_CHARS ? null : fileBase64
+  } catch {
+    return null
+  }
+}
+
+export function RecordingNote({ review }: { review: ReviewState }) {
+  const recording = review.recording
+  if (!recording) return null
+  if (!recording.saved) return <p data-testid="review-recording">Not saved to review history: {recording.reason}</p>
+  if (review.recordingProblem) {
+    return (
+      <p className="text-red-600" data-testid="review-recording">
+        Saving stopped part-way ({review.recordingProblem}). The rules not saved will be finished in the background.
+      </p>
+    )
+  }
+  if (!review.done) return <p data-testid="review-recording">Saving to review history as it runs.</p>
+  if (review.aborted) {
+    return <p data-testid="review-recording">Saved to review history. The rules not yet checked will finish in the background.</p>
+  }
+  return <p data-testid="review-recording">Saved to review history.</p>
 }
 
 function MatterNote({ context, linked }: { context: ReviewState['matterContext']; linked: boolean }) {

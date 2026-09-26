@@ -7655,9 +7655,11 @@ export type Database = {
           linked_at: string | null
           linked_by: string | null
           matter_id: string | null
+          origin: string
           r2_key: string
           sha256: string
           size_bytes: number
+          source_document_id: string | null
         }
         Insert: {
           created_at?: string
@@ -7670,9 +7672,11 @@ export type Database = {
           linked_at?: string | null
           linked_by?: string | null
           matter_id?: string | null
+          origin?: string
           r2_key: string
           sha256: string
           size_bytes: number
+          source_document_id?: string | null
         }
         Update: {
           created_at?: string
@@ -7685,9 +7689,11 @@ export type Database = {
           linked_at?: string | null
           linked_by?: string | null
           matter_id?: string | null
+          origin?: string
           r2_key?: string
           sha256?: string
           size_bytes?: number
+          source_document_id?: string | null
         }
         Relationships: [
           {
@@ -7716,6 +7722,13 @@ export type Database = {
             columns: ["matter_id"]
             isOneToOne: false
             referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_uploads_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
             referencedColumns: ["id"]
           },
         ]

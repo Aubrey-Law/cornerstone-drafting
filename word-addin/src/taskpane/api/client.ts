@@ -474,6 +474,11 @@ export interface StreamReviewArgs {
   paragraphs: string[]
   playbookSlug: string
   matterId: string | null
+  /** The open .docx, base64, kept as the saved review's snapshot. Omitted: the review runs unsaved. */
+  fileBase64?: string | null
+  documentName?: string | null
+  /** The Cornerstone document this file is linked to, if any. */
+  documentId?: string | null
   signal?: AbortSignal
   onEvent: (event: ReviewEvent) => void
 }
@@ -496,6 +501,9 @@ export async function streamReview(args: StreamReviewArgs): Promise<void> {
           paragraphs: args.paragraphs,
           playbookSlug: args.playbookSlug,
           matterId: args.matterId,
+          fileBase64: args.fileBase64 ?? undefined,
+          documentName: args.documentName ?? undefined,
+          documentId: args.documentId ?? undefined,
         }),
         signal: deadline(REVIEW_TIMEOUT_MS, args.signal),
       })
