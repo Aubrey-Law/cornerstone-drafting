@@ -284,7 +284,7 @@ export async function loadRun(
   if (runRow.review_upload_id) {
     const { data: uploads } = await sb
       .from('review_uploads')
-      .select('id, label, filename, matter_id')
+      .select('id, label, filename, matter_id, filed_document_id')
       .eq('id', String(runRow.review_upload_id))
       .limit(1)
     uploadRow = uploads?.[0] ?? null
@@ -336,5 +336,6 @@ export async function loadRun(
     ),
     uploadMatterId: uploadRow ? str(uploadRow.matter_id) : null,
     uploadMatterTitle,
+    uploadFiled: Boolean(uploadRow?.filed_document_id),
   }
 }

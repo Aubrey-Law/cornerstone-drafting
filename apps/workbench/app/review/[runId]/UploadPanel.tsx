@@ -17,6 +17,7 @@ export function UploadPanel({
   reviewUploadId,
   linkedMatterId,
   linkedMatterTitle,
+  filed,
   matters,
   playbooks,
 }: {
@@ -24,6 +25,8 @@ export function UploadPanel({
   reviewUploadId: string
   linkedMatterId: string | null
   linkedMatterTitle: string | null
+  /** Filed as one of the linked matter's documents, from that matter's Documents tab. */
+  filed: boolean
   matters: Array<{ matterId: string; title: string }>
   playbooks: Array<{ slug: string; title: string }>
 }) {
@@ -62,6 +65,13 @@ export function UploadPanel({
         <span className="text-muted-foreground" data-testid="upload-link-state">
           {linkedMatterId ? `Linked to ${linkedMatterTitle ?? 'a matter'}` : 'Not linked to a matter'}
         </span>
+        {linkedMatterId ? (
+          <span className="text-muted-foreground" data-testid="upload-filed-state">
+            {filed
+              ? "In the matter's documents."
+              : "To add it to the matter's documents, use Add to documents on the matter's Documents tab."}
+          </span>
+        ) : null}
         {/* Keyed on the saved link so the picker resets to it when the page
             refreshes after saving, rather than keeping a stale choice. */}
         <select

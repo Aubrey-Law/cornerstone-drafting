@@ -325,7 +325,10 @@ describe('linking an upload to a matter later', () => {
     const [summary] = await loadRunSummaries(asClient(client))
     expect(summary.matterTitle).toBe('Smith Estate Plan · upload')
     const run = await loadRun(asClient(client), 'run-up')
-    expect(run).toMatchObject({ matterId: null, uploadMatterId: 'm1', uploadMatterTitle: 'Smith Estate Plan' })
+    expect(run).toMatchObject({ matterId: null, uploadMatterId: 'm1', uploadMatterTitle: 'Smith Estate Plan', uploadFiled: false })
+
+    client.tableRows('review_uploads')[0].filed_document_id = 'doc-1'
+    expect(await loadRun(asClient(client), 'run-up')).toMatchObject({ uploadFiled: true })
   })
 
   it('keeps the link stamp honest in the database, including when the matter is deleted', () => {

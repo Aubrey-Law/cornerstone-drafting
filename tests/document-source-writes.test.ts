@@ -15,6 +15,8 @@ const WRITERS: Array<{ file: string; source: string }> = [
   { file: 'lib/drafting/persistGeneratedDocument.ts', source: "source: 'firm'" },
   { file: 'lib/intake/promoteIntakeDocuments.ts', source: "source: 'client'" },
   { file: 'lib/works/artifacts.ts', source: "source: 'client'" },
+  // A prior plan the client brought in, filed from its workbench review.
+  { file: 'lib/documents/priorPlans.ts', source: "source: 'client'" },
 ]
 
 describe('every matter_documents writer sets source', () => {

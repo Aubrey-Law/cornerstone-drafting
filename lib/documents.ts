@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
 import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
+import type { PriorPlan } from '@/lib/documents/priorPlans'
 
 const WORD_CONTENT_TYPES = new Set([
   'application/msword',
@@ -478,4 +479,30 @@ export async function resendSignatureRequest(
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body?.error ?? 'Could not send a new link')
   return body as { email: string }
+}
+
+/** Prior plans reviewed in the workbench and linked to this matter, filed or not. */
+export async function listPriorPlans(matterId: string): Promise<PriorPlan[]> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+  const res = await fetch(`/api/documents/prior-plans?matterId=${encodeURIComponent(matterId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Could not load prior plans (${res.status})`)
+  const { priorPlans } = await res.json()
+  return priorPlans ?? []
+}
+
+/** Files a linked prior plan as a matter document (unshared). Returns the document. */
+export async function filePriorPlan(matterId: string, reviewUploadId: string): Promise<MatterDocument> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+  const res = await fetch('/api/documents/prior-plans', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ matterId, reviewUploadId }),
+  })
+  const body = (await res.json().catch(() => ({}))) as { document?: MatterDocument; error?: string }
+  if (!res.ok || !body.document) throw new Error(body.error ?? `Could not add it to the documents (${res.status})`)
+  return body.document
 }

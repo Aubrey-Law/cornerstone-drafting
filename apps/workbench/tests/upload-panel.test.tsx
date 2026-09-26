@@ -11,6 +11,7 @@ import { UploadPanel } from '@/app/review/[runId]/UploadPanel'
 const props = {
   runId: 'run-1',
   reviewUploadId: 'up1',
+  filed: false,
   matters: [{ matterId: 'm1', title: 'Smith Estate Plan' }],
   playbooks: [
     { slug: 'ma-trust-firm-qa', title: 'Trust review' },
@@ -34,6 +35,17 @@ describe('UploadPanel', () => {
     expect(screen.getByTestId('upload-link-state')).toHaveTextContent('Linked to Smith Estate Plan')
     expect(screen.getByText(/linked matter's design sheet/)).toBeInTheDocument()
     expect(screen.getByLabelText('Link to matter')).toHaveValue('m1')
+  })
+
+  it("says where to file a linked upload, and when it is already in the matter's documents", () => {
+    const { rerender } = render(<UploadPanel {...props} linkedMatterId={null} linkedMatterTitle={null} />)
+    expect(screen.queryByTestId('upload-filed-state')).toBeNull()
+
+    rerender(<UploadPanel {...props} linkedMatterId="m1" linkedMatterTitle="Smith Estate Plan" />)
+    expect(screen.getByTestId('upload-filed-state')).toHaveTextContent("use Add to documents on the matter's Documents tab")
+
+    rerender(<UploadPanel {...props} filed linkedMatterId="m1" linkedMatterTitle="Smith Estate Plan" />)
+    expect(screen.getByTestId('upload-filed-state')).toHaveTextContent("In the matter's documents.")
   })
 
   it('queues another review of the upload with the chosen playbook and opens it', async () => {
