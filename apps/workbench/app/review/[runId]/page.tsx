@@ -9,6 +9,9 @@ import { getSessionUser } from '@/lib/supabase/server'
 import { statusFromSteps } from '@/lib/runs/steps'
 import { RunProgressRefresh } from '@/app/runs/RunProgressRefresh'
 import { StoredFindings } from './StoredFindings'
+import { UploadPanel } from './UploadPanel'
+import { loadLinkableMatters } from '@/lib/review/uploads'
+import { loadPublishedPrompts } from '@/lib/prompts/repository'
 
 export const metadata = { title: 'Review · Aubrey Law Workbench' }
 
@@ -21,6 +24,17 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
   // A field-audit run has its own home at /prompts/[runId] — it has no
   // document or text layer for this page to show it against.
   if (!run || run.kind !== 'review') notFound()
+
+  // Only a review of an unfiled upload offers linking and reviewing again;
+  // a filed document is reviewed again from its matter on /review.
+  const uploadOptions = run.reviewUploadId
+    ? {
+        matters: await loadLinkableMatters(getAdminClient()),
+        playbooks: (await loadPublishedPrompts(getAdminClient()))
+          .filter((prompt) => prompt.body.kind === 'review')
+          .map((prompt) => ({ slug: prompt.slug, title: prompt.title })),
+      }
+    : null
 
   const cited = run.findings.filter(isCitable).length
   const refused = run.findings.filter((f) => f.citationRefusal !== null).length
@@ -38,8 +52,20 @@ export default async function StoredRunPage({ params }: { params: Promise<{ runI
         {run.reviewUploadId ? (
           <p className="text-sm" data-testid="unfiled-document">
             {run.documentLabel ?? 'Uploaded document'}{' '}
-            <span className="text-xs text-muted-foreground">· not filed on a matter</span>
+            <span className="text-xs text-muted-foreground">
+              · {run.uploadMatterTitle ? `upload linked to ${run.uploadMatterTitle}` : 'not filed on a matter'}
+            </span>
           </p>
+        ) : null}
+        {run.reviewUploadId && uploadOptions ? (
+          <UploadPanel
+            runId={run.runId}
+            reviewUploadId={run.reviewUploadId}
+            linkedMatterId={run.uploadMatterId ?? null}
+            linkedMatterTitle={run.uploadMatterTitle ?? null}
+            matters={uploadOptions.matters}
+            playbooks={uploadOptions.playbooks}
+          />
         ) : null}
         <p className="text-xs text-muted-foreground">
           {run.findings.length} findings · {cited} cited · {refused} citations rejected

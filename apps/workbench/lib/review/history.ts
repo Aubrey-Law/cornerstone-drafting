@@ -200,16 +200,30 @@ export async function loadRunSummaries(
       ? sb.from('document_versions').select('id, document_id, filename').in('id', versionIds)
       : Promise.resolve({ data: [] as Row[] }),
     uploadIds.length
-      ? sb.from('review_uploads').select('id, label, filename').in('id', uploadIds)
+      ? sb.from('review_uploads').select('id, label, filename, matter_id').in('id', uploadIds)
       : Promise.resolve({ data: [] as Row[] }),
   ])
+
+  // Matters that uploads were later linked to, when not already loaded.
+  const linkedMatterIds = [
+    ...new Set(
+      (uploads ?? [])
+        .map((u) => u.matter_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0 && !matterIds.includes(id)),
+    ),
+  ]
+  const { data: linkedMatters } = linkedMatterIds.length
+    ? await sb.from('matters').select('id, name').in('id', linkedMatterIds)
+    : { data: [] as Row[] }
 
   const documentIds = [...new Set((versions ?? []).map((v) => String(v.document_id)))]
   const { data: documents } = documentIds.length
     ? await sb.from('matter_documents').select('id, name').in('id', documentIds)
     : { data: [] }
 
-  const titleById = new Map((matters ?? []).map((m) => [String(m.id), String(m.name ?? 'Untitled matter')]))
+  const titleById = new Map(
+    [...(matters ?? []), ...(linkedMatters ?? [])].map((m) => [String(m.id), String(m.name ?? 'Untitled matter')]),
+  )
   const nameByDocument = new Map((documents ?? []).map((d) => [String(d.id), String(d.name)]))
   const nameByVersion = new Map(
     (versions ?? []).map((v) => [
@@ -221,12 +235,18 @@ export async function loadRunSummaries(
   const labelByUpload = new Map(
     (uploads ?? []).map((u) => [String(u.id), str(u.label) ?? str(u.filename) ?? 'Upload']),
   )
+  const linkedMatterByUpload = new Map((uploads ?? []).map((u) => [String(u.id), str(u.matter_id)]))
 
   return runs.map((run) => ({
     runId: String(run.id),
     ...(run.review_upload_id
       ? {
-          matterTitle: run.matter_id ? (titleById.get(String(run.matter_id)) ?? UNFILED_UPLOAD_TITLE) : UNFILED_UPLOAD_TITLE,
+          // An upload's own reviews carry no matter; the matter it was linked
+          // to later is read from the upload (20261228090000).
+          matterTitle: (() => {
+            const linked = linkedMatterByUpload.get(String(run.review_upload_id))
+            return linked ? `${titleById.get(linked) ?? 'Untitled matter'} · upload` : UNFILED_UPLOAD_TITLE
+          })(),
           unfiled: true,
           documentName: labelByUpload.get(String(run.review_upload_id)) ?? 'Upload',
         }
@@ -264,10 +284,15 @@ export async function loadRun(
   if (runRow.review_upload_id) {
     const { data: uploads } = await sb
       .from('review_uploads')
-      .select('id, label, filename')
+      .select('id, label, filename, matter_id')
       .eq('id', String(runRow.review_upload_id))
       .limit(1)
     uploadRow = uploads?.[0] ?? null
+  }
+  let uploadMatterTitle: string | null = null
+  if (uploadRow?.matter_id) {
+    const { data: linked } = await sb.from('matters').select('id, name').eq('id', String(uploadRow.matter_id)).limit(1)
+    uploadMatterTitle = linked?.[0] ? (str(linked[0].name) ?? 'Untitled matter') : null
   }
 
   const findingIds = (findings ?? []).map((f) => String(f.id))
@@ -298,14 +323,18 @@ export async function loadRun(
     }
   }
 
-  return toStoredRun(
-    runRow,
-    findings ?? [],
-    citations ?? [],
-    layers?.[0] ?? null,
-    promptVersionRow,
-    promptRow,
-    stepRows ?? [],
-    uploadRow,
-  )
+  return {
+    ...toStoredRun(
+      runRow,
+      findings ?? [],
+      citations ?? [],
+      layers?.[0] ?? null,
+      promptVersionRow,
+      promptRow,
+      stepRows ?? [],
+      uploadRow,
+    ),
+    uploadMatterId: uploadRow ? str(uploadRow.matter_id) : null,
+    uploadMatterTitle,
+  }
 }

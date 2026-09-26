@@ -7651,6 +7651,9 @@ export type Database = {
           filename: string
           id: string
           label: string
+          linked_at: string | null
+          linked_by: string | null
+          matter_id: string | null
           r2_key: string
           sha256: string
           size_bytes: number
@@ -7662,6 +7665,9 @@ export type Database = {
           filename: string
           id?: string
           label: string
+          linked_at?: string | null
+          linked_by?: string | null
+          matter_id?: string | null
           r2_key: string
           sha256: string
           size_bytes: number
@@ -7673,6 +7679,9 @@ export type Database = {
           filename?: string
           id?: string
           label?: string
+          linked_at?: string | null
+          linked_by?: string | null
+          matter_id?: string | null
           r2_key?: string
           sha256?: string
           size_bytes?: number
@@ -7683,6 +7692,20 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_uploads_linked_by_fkey"
+            columns: ["linked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_uploads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
             referencedColumns: ["id"]
           },
         ]

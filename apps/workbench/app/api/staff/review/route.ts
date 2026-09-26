@@ -9,6 +9,7 @@ import { saveTextLayer } from '@/lib/review/persist'
 import { buildLayer, extractorFor, reviewLayer } from '@/lib/review/run'
 import { readReviewUpload } from '@/lib/review/upload'
 import { storeReviewUpload } from '@/lib/review/uploads'
+import { queueStoredUploadReview } from '@/lib/review/uploadReview'
 import { readObject } from '@/lib/storage/r2'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { openRun, openSteps } from '@/lib/runs/record'
@@ -49,6 +50,10 @@ export async function POST(request: Request) {
   // Which playbook to run; the firm trust playbook when none is named. Only a
   // published review prompt is accepted — checked below, before any model call.
   const playbookSlug = String(form.get('playbookSlug') ?? '').trim() || REVIEW_PLAYBOOK_SLUG
+  // A third way in: review an upload already stored, by id — never by storage
+  // key, for the reason given above.
+  const reviewUploadId = String(form.get('reviewUploadId') ?? '').trim()
+  if (reviewUploadId) return reviewStoredUpload(reviewUploadId, playbookSlug, auth.user.id)
 
   let bytes: Buffer
   let filename: string
@@ -264,6 +269,51 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'The review could not be run.' },
       { status: 422 },
+    )
+  }
+}
+
+/**
+ * Queues another review of a stored upload (`lib/review/uploadReview.ts`),
+ * with the linked matter's design sheet applied when there is one. Always
+ * recorded: the upload already has the identity an ad-hoc upload lacks.
+ */
+async function reviewStoredUpload(reviewUploadId: string, playbookSlug: string, userId: string) {
+  try {
+    anthropicModelCaller()
+  } catch (error) {
+    if (error instanceof AnthropicKeyMissingError) {
+      return NextResponse.json({ error: error.message }, { status: 503 })
+    }
+    throw error
+  }
+
+  const admin = getAdminClient()
+  const prompt = await loadPublishedPrompt(admin, playbookSlug)
+  if (!prompt || prompt.body.kind !== 'review') {
+    return NextResponse.json({ error: `No published review prompt named "${playbookSlug}".` }, { status: 503 })
+  }
+
+  try {
+    const queued = await queueStoredUploadReview(admin, {
+      reviewUploadId,
+      promptVersionId: prompt.versionId,
+      ruleNumbers: prompt.body.rules.map((rule) => rule.number),
+      userId,
+    })
+    if (!queued.ok) return NextResponse.json({ error: queued.message }, { status: queued.status })
+    await pokeTick()
+    return NextResponse.json({
+      reviewUploadId,
+      runId: queued.runId,
+      matterFactsApplied: queued.matterFactsApplied,
+      playbook: { slug: prompt.slug, title: prompt.title, version: prompt.versionNumber },
+      queued: true,
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'The review could not be queued.' },
+      { status: 500 },
     )
   }
 }

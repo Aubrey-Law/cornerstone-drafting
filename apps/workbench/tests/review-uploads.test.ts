@@ -42,7 +42,10 @@ vi.mock('@/lib/review/run', async (importOriginal) => ({
   buildLayer: vi.fn(async () => LAYER),
 }))
 
-import { safeFilename, storeReviewUpload, uploadLabel } from '@/lib/review/uploads'
+import { linkReviewUpload, safeFilename, storeReviewUpload, uploadLabel } from '@/lib/review/uploads'
+import { queueStoredUploadReview } from '@/lib/review/uploadReview'
+import fs from 'node:fs'
+import path from 'node:path'
 import { saveFindings, saveTextLayer } from '@/lib/review/persist'
 import { loadRunSummaries, loadRun, UNFILED_UPLOAD_TITLE } from '@/lib/review/history'
 import { loadRunContext } from '@/lib/runs/context'
@@ -228,5 +231,110 @@ describe('POST /api/staff/review with an upload', () => {
     expect(body.saveError).toMatch(/review_uploads/)
     expect(body.result).toBeDefined()
     expect(fake.removed).toHaveLength(1)
+  })
+})
+
+
+describe('linking an upload to a matter later', () => {
+  const seed = (extra: Record<string, Array<Record<string, unknown>>> = {}) =>
+    makeFakeClient({
+      ...PROMPT_SEED,
+      matters: [{ id: 'm1', name: 'Smith Estate Plan' }],
+      review_uploads: [{ id: 'up1', label: 'Smith — prior will', filename: 'smith.docx', file_kind: 'docx', r2_key: 'k', matter_id: null, linked_at: null }],
+      document_text_layers: [
+        {
+          id: 'layer-1',
+          review_upload_id: 'up1',
+          document_version_id: null,
+          source_kind: 'docx',
+          status: 'ok',
+          extractor: 'test',
+          extractor_version: '1',
+          source_sha256: 'a'.repeat(64),
+          page_count: null,
+          text: TEXT,
+          blocks: LAYER.blocks,
+          spans: [],
+        },
+      ],
+      ...extra,
+    })
+
+  it('links with a stamp, and unlinks clearing it', async () => {
+    const client = seed()
+    expect(await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: 'm1', userId: 'u1' })).toEqual({ ok: true })
+    expect(client.tableRows('review_uploads')[0]).toMatchObject({ matter_id: 'm1', linked_by: 'u1' })
+    expect(client.tableRows('review_uploads')[0].linked_at).toEqual(expect.any(String))
+
+    await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: null, userId: 'u1' })
+    expect(client.tableRows('review_uploads')[0]).toMatchObject({ matter_id: null, linked_at: null, linked_by: null })
+  })
+
+  it('refuses a matter or an upload that does not exist', async () => {
+    const client = seed()
+    expect((await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: 'nope', userId: 'u1' })).ok).toBe(false)
+    expect((await linkReviewUpload(asClient(client), { reviewUploadId: 'missing', matterId: 'm1', userId: 'u1' })).ok).toBe(false)
+    expect(client.tableRows('review_uploads')[0].matter_id).toBeNull()
+  })
+
+  it('reviews a linked upload again from its stored layer, with the matter’s facts pinned and no matter on the run', async () => {
+    const client = seed({
+      design_sheets: [{ matter_id: 'm1', version: 1, marital_status: 'married', is_joint: false, children: [], plan_type: null, assets: [] }],
+    })
+    await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: 'm1', userId: 'u1' })
+    const result = await queueStoredUploadReview(asClient(client), {
+      reviewUploadId: 'up1',
+      promptVersionId: 'v1',
+      ruleNumbers: ['1'],
+      userId: 'u1',
+    })
+    expect(result).toMatchObject({ ok: true, matterFactsApplied: true })
+    const [run] = client.tableRows('workflow_runs')
+    expect(run).toMatchObject({ matter_id: null, review_upload_id: 'up1', text_layer_id: 'layer-1', kind: 'review' })
+    expect((run.resolved_inputs as { matterFacts: { married: boolean } }).matterFacts.married).toBe(true)
+    expect(client.tableRows('workflow_run_steps').map((s) => s.unit_id)).toEqual(['1'])
+  })
+
+  it('reviews an unlinked upload again with every rule, and refuses one with no stored text', async () => {
+    const client = seed()
+    const result = await queueStoredUploadReview(asClient(client), { reviewUploadId: 'up1', promptVersionId: 'v1', ruleNumbers: ['1'], userId: 'u1' })
+    expect(result).toMatchObject({ ok: true, matterFactsApplied: false })
+    expect(client.tableRows('workflow_runs')[0].resolved_inputs).toBeNull()
+
+    const empty = seed({ document_text_layers: [] })
+    expect(await queueStoredUploadReview(asClient(empty), { reviewUploadId: 'up1', promptVersionId: 'v1', ruleNumbers: ['1'], userId: 'u1' })).toMatchObject({ ok: false, status: 409 })
+  })
+
+  it('queues it through the route by upload id', async () => {
+    const client = seed()
+    fake.client = client
+    const form = new FormData()
+    form.set('reviewUploadId', 'up1')
+    const response = await POST(new Request('http://localhost/api/staff/review', { method: 'POST', body: form }))
+    expect(await response.json()).toMatchObject({ queued: true, reviewUploadId: 'up1', matterFactsApplied: false })
+    expect(fake.written).toHaveLength(0)
+  })
+
+  it('lists a linked upload’s reviews under its matter, marked as an upload', async () => {
+    const client = seed({
+      workflow_runs: [
+        { id: 'run-up', kind: 'review', matter_id: null, document_version_id: null, review_upload_id: 'up1', text_layer_id: 'layer-1', prompt_version_id: 'v1', status: 'completed', rule_total: 1, finding_count: 0, failed_count: 0, failures: [], started_at: '2026-09-25T20:00:00Z', finished_at: null },
+      ],
+    })
+    await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: 'm1', userId: 'u1' })
+    const [summary] = await loadRunSummaries(asClient(client))
+    expect(summary.matterTitle).toBe('Smith Estate Plan · upload')
+    const run = await loadRun(asClient(client), 'run-up')
+    expect(run).toMatchObject({ matterId: null, uploadMatterId: 'm1', uploadMatterTitle: 'Smith Estate Plan' })
+  })
+
+  it('keeps the link stamp honest in the database, including when the matter is deleted', () => {
+    const sql = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/migrations/20261228090000_review_upload_matter_link.sql'),
+      'utf8',
+    )
+    expect(sql).toMatch(/references public\.matters\(id\) on delete set null/)
+    expect(sql).toMatch(/check \(\(matter_id is null\) = \(linked_at is null\)\)/)
+    expect(sql).toMatch(/before update of matter_id on public\.review_uploads/)
   })
 })
