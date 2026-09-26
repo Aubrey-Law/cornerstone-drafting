@@ -7648,6 +7648,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           file_kind: string
+          filed_document_id: string | null
           filename: string
           id: string
           label: string
@@ -7662,6 +7663,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           file_kind: string
+          filed_document_id?: string | null
           filename: string
           id?: string
           label: string
@@ -7676,6 +7678,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           file_kind?: string
+          filed_document_id?: string | null
           filename?: string
           id?: string
           label?: string
@@ -7692,6 +7695,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_uploads_filed_document_id_fkey"
+            columns: ["filed_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
             referencedColumns: ["id"]
           },
           {

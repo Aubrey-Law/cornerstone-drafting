@@ -260,6 +260,8 @@ export interface StoredRun {
   /** The matter an upload was linked to after the fact, and its name. Null when unlinked or not an upload. */
   uploadMatterId?: string | null
   uploadMatterTitle?: string | null
+  /** Whether the upload has been filed as one of its matter's documents (20261229090000_review_upload_filed_document.sql). */
+  uploadFiled?: boolean
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null
