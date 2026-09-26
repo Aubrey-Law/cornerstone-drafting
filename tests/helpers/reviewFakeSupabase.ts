@@ -16,6 +16,7 @@
  *
  * Copied from `apps/workbench/tests/helpers/fakeSupabase.ts` for the review
  * code ported into Cornerstone (`lib/review`, `lib/runs`, `lib/prompts`), with
+ * `.is()` (a null-safe equality, for `column is null`) and
  * `.or()` added for `loadRunSummaries`' matter scope: comma-separated
  * `column.eq.value` and `column.in.(a,b)` clauses, any of which may match.
  *
@@ -59,6 +60,7 @@ class FakeQueryBuilder {
   private filters: Array<[string, unknown]> = []
   private inFilters: Array<[string, unknown[]]> = []
   private orFilters: Array<Array<[string, unknown[]]>> = []
+  private isFilters: Array<[string, unknown]> = []
   private orderSpec: { column: string; ascending: boolean } | null = null
   private limitN: number | null = null
   private pendingOp: PendingOp | null = null
@@ -71,6 +73,11 @@ class FakeQueryBuilder {
 
   eq(column: string, value: unknown) {
     this.filters.push([column, value])
+    return this
+  }
+
+  is(column: string, value: unknown) {
+    this.isFilters.push([column, value])
     return this
   }
 
@@ -125,6 +132,7 @@ class FakeQueryBuilder {
   private matches(row: Row): boolean {
     for (const [column, value] of this.filters) if (row[column] !== value) return false
     for (const [column, values] of this.inFilters) if (!values.includes(row[column])) return false
+    for (const [column, value] of this.isFilters) if ((row[column] ?? null) !== value) return false
     for (const clauses of this.orFilters) {
       if (!clauses.some(([column, values]) => values.includes(row[column]))) return false
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { RunSummary } from '@/lib/review/history'
 import { RunHistoryList } from '@/app/admin/review/components/RunHistoryList'
@@ -33,11 +34,19 @@ export function MatterReviewsTab({ matterId }: { matterId: string }) {
 
   return (
     <section className="rounded-lg border border-border bg-card" data-testid="matter-reviews">
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold">Reviews</h3>
-        <p className="text-xs text-muted-foreground">
-          Playbook reviews of this matter&apos;s documents, its prior plans, and drafts reviewed from Word.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+        <div>
+          <h3 className="text-sm font-semibold">Reviews</h3>
+          <p className="text-xs text-muted-foreground">
+            Playbook reviews of this matter&apos;s documents, its prior plans, and drafts reviewed from Word.
+          </p>
+        </div>
+        <Link
+          href={`/admin/review/new?matter=${encodeURIComponent(matterId)}`}
+          className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+        >
+          Review a document
+        </Link>
       </div>
       <div className="px-4 py-2">
         {error ? (
@@ -46,7 +55,8 @@ export function MatterReviewsTab({ matterId }: { matterId: string }) {
           <p className="py-3 text-sm text-muted-foreground">Loading reviews…</p>
         ) : runs.length === 0 ? (
           <p className="py-3 text-sm text-muted-foreground">
-            No reviews yet. Run one from the Review tab in Word with this matter linked.
+            No reviews yet. Review one of this matter&apos;s documents, or run one from the Review tab in Word with
+            this matter linked.
           </p>
         ) : (
           <RunHistoryList runs={runs} showMatter={false} />

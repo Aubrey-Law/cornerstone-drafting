@@ -13,6 +13,7 @@ vi.mock('@/app/admin/review/[runId]/actions', () => actions)
 
 import { UploadPanel } from '@/app/admin/review/[runId]/UploadPanel'
 import { MatterReviewsTab } from '@/app/admin/matters/[id]/MatterReviewsTab'
+import { NewReviewForm } from '@/app/admin/review/new/NewReviewForm'
 
 const props = {
   runId: 'run-1',
@@ -89,5 +90,66 @@ describe('MatterReviewsTab', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 })))
     render(<MatterReviewsTab matterId="m1" />)
     expect(await screen.findByText('boom')).toBeTruthy()
+  })
+})
+
+describe('NewReviewForm', () => {
+  const formProps = {
+    playbooks: [
+      { slug: 'ma-trust-firm-qa', title: 'Trust review', rules: [{ number: '1', risk: 'medium', statement: 'Bond is waived.', appliesWhen: [] }] },
+      { slug: 'ma-will-firm-qa', title: 'Will review', rules: [] },
+    ],
+    defaultSlug: 'ma-trust-firm-qa',
+    matters: [
+      { matterId: 'm1', title: 'Jones Estate Plan', documents: [{ versionId: 'dv9', name: 'Jones Will.docx' }] },
+      { matterId: 'm2', title: 'Smith Estate Plan', documents: [{ versionId: 'dv1', name: 'Smith Trust.docx' }, { versionId: 'dv2', name: 'Smith Will.docx' }] },
+    ],
+  }
+
+  it('starts a review of the chosen matter document with the chosen playbook, then opens it', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ runId: 'run-7' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<NewReviewForm {...formProps} initialMatterId="m2" />)
+
+    expect((screen.getByLabelText('Matter') as HTMLSelectElement).value).toBe('m2')
+    fireEvent.change(screen.getByLabelText('Document'), { target: { value: 'dv2' } })
+    fireEvent.change(screen.getByLabelText('Playbook'), { target: { value: 'ma-will-firm-qa' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/review/run-7'))
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/admin/review')
+    const body = init.body as FormData
+    expect(body.get('documentVersionId')).toBe('dv2')
+    expect(body.get('playbookSlug')).toBe('ma-will-firm-qa')
+    expect(body.get('document')).toBeNull()
+  })
+
+  it('switching matter picks that matter’s first document', () => {
+    render(<NewReviewForm {...formProps} initialMatterId="m2" />)
+    fireEvent.change(screen.getByLabelText('Matter'), { target: { value: 'm1' } })
+    expect((screen.getByLabelText('Document') as HTMLSelectElement).value).toBe('dv9')
+  })
+
+  it('uploads a file with its name, and says why a review could not be started', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'This document has no text layer.' }), { status: 422 }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<NewReviewForm {...formProps} initialMatterId={null} />)
+
+    fireEvent.click(screen.getByLabelText(/Upload a file/))
+    const button = screen.getByRole('button', { name: 'Start review' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+
+    const file = new File(['bytes'], 'Prior Will.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('File to review'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('Name for this document'), { target: { value: 'Jones — 2019 will' } })
+    fireEvent.click(button)
+
+    expect(await screen.findByText('This document has no text layer.')).toBeTruthy()
+    const body = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData
+    expect((body.get('document') as File).name).toBe('Prior Will.pdf')
+    expect(body.get('label')).toBe('Jones — 2019 will')
+    expect(body.get('documentVersionId')).toBeNull()
+    expect(push).not.toHaveBeenCalled()
   })
 })
