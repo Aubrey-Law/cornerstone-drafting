@@ -10,6 +10,7 @@ export const MATTER_TABS = [
   'billing',
   'communications',
   'notes',
+  'reviews',
   'activity',
 ] as const
 
