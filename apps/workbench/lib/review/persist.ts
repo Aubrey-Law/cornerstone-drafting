@@ -262,6 +262,8 @@ export interface StoredRun {
   uploadMatterTitle?: string | null
   /** Whether the upload has been filed as one of its matter's documents (20261229090000_review_upload_filed_document.sql). */
   uploadFiled?: boolean
+  /** A snapshot the Word add-in kept of the draft it reviewed, not an uploaded prior plan (20261230090000). */
+  uploadFromWord?: boolean
   kind: string
   /** The version the run was checked against. Null for a run recorded before this column existed. */
   promptVersionId: string | null

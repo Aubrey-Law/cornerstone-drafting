@@ -49,6 +49,21 @@ function toBase64(chunks: number[][]): string {
 }
 
 /**
+ * The open document's file name without its extension, or null when Word has
+ * not saved it anywhere yet (or there is no Office host, as in a test).
+ */
+export function currentDocumentName(): string | null {
+  try {
+    const url = Office.context.document.url ?? ''
+    const last = url.split(/[\\/]/).pop() ?? ''
+    const name = decodeURIComponent(last).replace(/\.docx?$/i, '').trim()
+    return name || null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Base64 inflates by 4/3, and the server sits behind Vercel's request body
  * limit. Checked before the upload so an oversized document is named as such
  * rather than arriving as a generic 413 after a long wait.

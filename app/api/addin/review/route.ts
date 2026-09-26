@@ -5,6 +5,7 @@ import { consumeRateLimit } from '@/lib/rateLimit'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { loadMatterFacts, loadReviewPlaybook } from '@/lib/addinReview/playbooks'
 import { runRulesStreaming } from '@/lib/addinReview/runRules'
+import { startReviewRecording, type ReviewRecorder } from '@/lib/addinReview/record'
 import { buildPlainTextLayer } from '@aubrey-law/citations/textLayer/plain'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
 import type { MatterFacts } from '@aubrey-law/citations/review/conditions'
@@ -24,6 +25,12 @@ interface ReviewBody {
   paragraphs?: unknown
   playbookSlug?: unknown
   matterId?: unknown
+  /** The open .docx, base64 — kept as the review's snapshot. Without it the review runs unrecorded. */
+  fileBase64?: unknown
+  /** What the pane calls the document, for the snapshot's label. */
+  documentName?: unknown
+  /** The Cornerstone document the Word file was opened from, when the pane has one linked. */
+  documentId?: unknown
 }
 
 function sse(data: Record<string, unknown>) {
@@ -42,9 +49,11 @@ function json(status: number, body: Record<string, unknown>, headers: Record<str
  * citation's block index is a paragraph index Word can go straight back to —
  * see `buildPlainTextLayer`. Quotes are verified against exactly that text.
  *
- * Not recorded: nothing here writes a run or findings. Recording needs a
- * filed document version to anchor citations to, which is the workbench's
- * path; this is the attorney checking a draft they are editing.
+ * Recorded, when the pane sends the document's bytes: a snapshot of the file
+ * and a review run in the workbench's own shape, so the review appears in
+ * review history with its findings and citations. See
+ * `lib/addinReview/record.ts`. Recording never fails the review — the pane is
+ * told whether it was saved.
  *
  * With a linked matter, the design sheet's facts are applied, so rules whose
  * conditions the matter rules out are reported as not applicable without a
@@ -75,6 +84,9 @@ export async function POST(req: Request) {
   const slug = typeof body.playbookSlug === 'string' ? body.playbookSlug.trim() : ''
   if (!slug) return json(400, { error: 'Choose a playbook to run.' })
   const matterId = typeof body.matterId === 'string' && body.matterId ? body.matterId : null
+  const fileBase64 = typeof body.fileBase64 === 'string' ? body.fileBase64 : ''
+  const documentName = typeof body.documentName === 'string' ? body.documentName : null
+  const documentId = typeof body.documentId === 'string' && body.documentId ? body.documentId : null
 
   const layer = buildPlainTextLayer(paragraphs)
   if (layer.status === 'no_text') return json(422, { error: 'The document has no text to review.' })
@@ -117,8 +129,42 @@ export async function POST(req: Request) {
         }
       }
       try {
+        /*
+         * Before the first rule, so each rule can be recorded as it settles.
+         * A document the pane could not read, or a write that fails, leaves
+         * the review running unrecorded rather than not running at all.
+         */
+        let recorder: ReviewRecorder | null = null
+        let recording: { saved: true; runId: string } | { saved: false; reason: string } = {
+          saved: false,
+          reason: 'The pane did not send the document, so this review is not saved.',
+        }
+        if (fileBase64) {
+          const started = await startReviewRecording(admin, {
+            fileBase64,
+            documentName,
+            layer,
+            playbook: { versionId: playbook.versionId, rules: playbook.rules },
+            model: model ?? null,
+            matterId,
+            matterFacts,
+            sourceDocumentId: documentId,
+            userId,
+          }).catch((error: unknown): { ok: false; reason: string } => ({
+            ok: false,
+            reason: error instanceof Error ? error.message : 'Could not record the review.',
+          }))
+          if (started.ok) {
+            recorder = started.recorder
+            recording = { saved: true, runId: recorder.runId }
+          } else {
+            recording = { saved: false, reason: started.reason }
+          }
+        }
+
         send({
           start: true,
+          recording,
           playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },
           rules: playbook.rules.map(rule => ({
             number: rule.number,
@@ -140,9 +186,20 @@ export async function POST(req: Request) {
             signal: req.signal,
             onFinding: finding => send({ finding }),
             onFailure: failure => send({ failure }),
+            onRuleSettled: recorder
+              ? (rule, index, outcome) => recorder.recordRule(rule, index, outcome)
+              : undefined,
           },
         )
-        send({ done: true, completed: result.completed, aborted: result.aborted })
+        if (recorder) await recorder.finish(result.aborted)
+        const problem = recorder?.problem() ?? null
+        send({
+          done: true,
+          completed: result.completed,
+          aborted: result.aborted,
+          saved: recorder !== null && problem === null,
+          ...(problem ? { recordingProblem: problem } : {}),
+        })
       } catch (error) {
         console.error('[addin/review]', error)
         send({ error: error instanceof Error ? error.message : 'The review failed.' })

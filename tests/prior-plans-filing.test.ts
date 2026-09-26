@@ -80,6 +80,7 @@ function upload(overrides: Row = {}): Row {
     linked_at: '2026-09-25T12:00:00.000Z',
     filed_document_id: null,
     matter_id: MATTER,
+    origin: 'workbench',
     r2_key: `review-uploads/${UPLOAD}/Smith_Will_final.docx`,
     ...overrides,
   }
@@ -209,6 +210,13 @@ describe('filePriorPlan', () => {
     expect(admin.inserts).toEqual([])
   })
 
+  it("refuses a snapshot the Word add-in kept: it is the firm's draft, not a prior plan", async () => {
+    const admin = fakeAdmin({ review_uploads: [upload({ origin: 'word' })], matters: [{ id: MATTER, status: 'open' }] })
+    const result = await filePriorPlan(admin.client, { reviewUploadId: UPLOAD, matterId: MATTER, userId: 'staff-1' }, store)
+    expect(result).toMatchObject({ ok: false, status: 409, code: 'not_a_prior_plan' })
+    expect(store.read).not.toHaveBeenCalled()
+  })
+
   it('says so when the upload is gone', async () => {
     const admin = fakeAdmin({ review_uploads: [] })
     const result = await filePriorPlan(admin.client, { reviewUploadId: UPLOAD, matterId: MATTER, userId: 'staff-1' }, store)
@@ -223,6 +231,7 @@ describe('listPriorPlans', () => {
         upload(),
         upload({ id: 'filed', filed_document_id: 'doc-1', file_kind: 'pdf' }),
         upload({ id: 'elsewhere', matter_id: OTHER_MATTER }),
+        upload({ id: 'word-snapshot', origin: 'word' }),
       ],
     })
     const plans = await listPriorPlans(admin.client, MATTER)

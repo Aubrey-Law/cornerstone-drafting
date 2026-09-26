@@ -305,6 +305,25 @@ describe('linking an upload to a matter later', () => {
     expect(await queueStoredUploadReview(asClient(empty), { reviewUploadId: 'up1', promptVersionId: 'v1', ruleNumbers: ['1'], userId: 'u1' })).toMatchObject({ ok: false, status: 409 })
   })
 
+  it('reviews a Word snapshot again from the paragraph text its citations index', async () => {
+    const client = seed()
+    client.tableRows('review_uploads')[0].origin = 'word'
+    client.tableRows('document_text_layers')[0].source_kind = 'plain'
+    const result = await queueStoredUploadReview(asClient(client), { reviewUploadId: 'up1', promptVersionId: 'v1', ruleNumbers: ['1'], userId: 'u1' })
+    expect(result).toMatchObject({ ok: true })
+    expect(client.tableRows('workflow_runs')[0]).toMatchObject({ review_upload_id: 'up1', text_layer_id: 'layer-1' })
+  })
+
+  it('labels a Word snapshot’s reviews as from Word, under its matter or on their own', async () => {
+    const run = { id: 'run-w', kind: 'review', matter_id: null, document_version_id: null, review_upload_id: 'up1', text_layer_id: 'layer-1', prompt_version_id: 'v1', status: 'completed', rule_total: 1, finding_count: 0, failed_count: 0, failures: [], started_at: '2026-09-26T10:00:00Z', finished_at: null }
+    const client = seed({ workflow_runs: [run] })
+    client.tableRows('review_uploads')[0].origin = 'word'
+    expect((await loadRunSummaries(asClient(client)))[0].matterTitle).toBe(`${UNFILED_UPLOAD_TITLE} · from Word`)
+    await linkReviewUpload(asClient(client), { reviewUploadId: 'up1', matterId: 'm1', userId: 'u1' })
+    expect((await loadRunSummaries(asClient(client)))[0].matterTitle).toBe('Smith Estate Plan · from Word')
+    expect(await loadRun(asClient(client), 'run-w')).toMatchObject({ uploadFromWord: true })
+  })
+
   it('queues it through the route by upload id', async () => {
     const client = seed()
     fake.client = client

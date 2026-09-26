@@ -194,7 +194,7 @@ export default function App() {
         <ChatPanel matterId={matter?.id ?? null} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'review'}>
-        <ReviewPanel matterId={matter?.id ?? null} />
+        <ReviewPanel matterId={matter?.id ?? null} linkedDocumentId={linkedDocument?.id ?? null} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" hidden={tab !== 'sheet'}>
         <WriteBackPanel matterId={matter?.id ?? null} />

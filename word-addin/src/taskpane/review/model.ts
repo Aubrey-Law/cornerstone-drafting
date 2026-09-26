@@ -42,22 +42,30 @@ export type ReviewMatterContext =
   | { state: 'no_sheet' }
   | { state: 'unavailable'; reason: string }
 
+export type ReviewRecording = { saved: true; runId: string } | { saved: false; reason: string }
+
 export type ReviewEvent =
   | {
       start: true
       playbook: { slug: string; title: string; version: number }
       rules: ReviewRuleInfo[]
       matterContext: ReviewMatterContext
+      /** Whether this review is being saved to review history, and why not when it is not. */
+      recording?: ReviewRecording
     }
   | { finding: ReviewFindingEvent }
   | { failure: { ruleNumber: string; reason: string } }
-  | { done: true; completed: number; aborted: boolean }
+  | { done: true; completed: number; aborted: boolean; saved?: boolean; recordingProblem?: string }
   | { error: string }
 
 export interface ReviewState {
   playbook: { slug: string; title: string; version: number } | null
   rules: ReviewRuleInfo[]
   matterContext: ReviewMatterContext
+  /** Null before the review starts, or from a server that predates recording. */
+  recording: ReviewRecording | null
+  /** Set when recording started but a later write failed. */
+  recordingProblem: string | null
   findings: ReviewFindingEvent[]
   failures: Array<{ ruleNumber: string; reason: string }>
   done: boolean
@@ -69,6 +77,8 @@ export const EMPTY_REVIEW: ReviewState = {
   playbook: null,
   rules: [],
   matterContext: { state: 'none' },
+  recording: null,
+  recordingProblem: null,
   findings: [],
   failures: [],
   done: false,
@@ -78,11 +88,19 @@ export const EMPTY_REVIEW: ReviewState = {
 
 export function applyReviewEvent(state: ReviewState, event: ReviewEvent): ReviewState {
   if ('start' in event) {
-    return { ...EMPTY_REVIEW, playbook: event.playbook, rules: event.rules, matterContext: event.matterContext }
+    return {
+      ...EMPTY_REVIEW,
+      playbook: event.playbook,
+      rules: event.rules,
+      matterContext: event.matterContext,
+      recording: event.recording ?? null,
+    }
   }
   if ('finding' in event) return { ...state, findings: [...state.findings, event.finding] }
   if ('failure' in event) return { ...state, failures: [...state.failures, event.failure] }
-  if ('done' in event) return { ...state, done: true, aborted: event.aborted }
+  if ('done' in event) {
+    return { ...state, done: true, aborted: event.aborted, recordingProblem: event.recordingProblem ?? null }
+  }
   return { ...state, error: event.error, done: true }
 }
 

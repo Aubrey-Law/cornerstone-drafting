@@ -200,7 +200,7 @@ export async function loadRunSummaries(
       ? sb.from('document_versions').select('id, document_id, filename').in('id', versionIds)
       : Promise.resolve({ data: [] as Row[] }),
     uploadIds.length
-      ? sb.from('review_uploads').select('id, label, filename, matter_id').in('id', uploadIds)
+      ? sb.from('review_uploads').select('id, label, filename, matter_id, origin').in('id', uploadIds)
       : Promise.resolve({ data: [] as Row[] }),
   ])
 
@@ -236,6 +236,7 @@ export async function loadRunSummaries(
     (uploads ?? []).map((u) => [String(u.id), str(u.label) ?? str(u.filename) ?? 'Upload']),
   )
   const linkedMatterByUpload = new Map((uploads ?? []).map((u) => [String(u.id), str(u.matter_id)]))
+  const fromWord = new Set((uploads ?? []).filter((u) => u.origin === 'word').map((u) => String(u.id)))
 
   return runs.map((run) => ({
     runId: String(run.id),
@@ -244,8 +245,13 @@ export async function loadRunSummaries(
           // An upload's own reviews carry no matter; the matter it was linked
           // to later is read from the upload (20261228090000).
           matterTitle: (() => {
-            const linked = linkedMatterByUpload.get(String(run.review_upload_id))
-            return linked ? `${titleById.get(linked) ?? 'Untitled matter'} · upload` : UNFILED_UPLOAD_TITLE
+            const uploadId = String(run.review_upload_id)
+            const linked = linkedMatterByUpload.get(uploadId)
+            // A snapshot the Word add-in kept (20261230090000) says so: it is
+            // the firm's draft as it stood in Word, not a document uploaded.
+            const kind = fromWord.has(uploadId) ? 'from Word' : 'upload'
+            if (linked) return `${titleById.get(linked) ?? 'Untitled matter'} · ${kind}`
+            return fromWord.has(uploadId) ? `${UNFILED_UPLOAD_TITLE} · from Word` : UNFILED_UPLOAD_TITLE
           })(),
           unfiled: true,
           documentName: labelByUpload.get(String(run.review_upload_id)) ?? 'Upload',
@@ -284,7 +290,7 @@ export async function loadRun(
   if (runRow.review_upload_id) {
     const { data: uploads } = await sb
       .from('review_uploads')
-      .select('id, label, filename, matter_id, filed_document_id')
+      .select('id, label, filename, matter_id, filed_document_id, origin')
       .eq('id', String(runRow.review_upload_id))
       .limit(1)
     uploadRow = uploads?.[0] ?? null
@@ -337,5 +343,6 @@ export async function loadRun(
     uploadMatterId: uploadRow ? str(uploadRow.matter_id) : null,
     uploadMatterTitle,
     uploadFiled: Boolean(uploadRow?.filed_document_id),
+    uploadFromWord: uploadRow?.origin === 'word',
   }
 }

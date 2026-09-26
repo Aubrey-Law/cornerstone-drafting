@@ -47,6 +47,38 @@ describe('applyReviewEvent', () => {
     expect(state.done).toBe(true)
   })
 
+  it('carries whether the review is being saved, and a save that stopped part-way', () => {
+    let state = applyReviewEvent(EMPTY_REVIEW, {
+      start: true,
+      playbook: { slug: 's', title: 'T', version: 2 },
+      rules: RULES,
+      matterContext: { state: 'none' },
+      recording: { saved: true, runId: 'run-1' },
+    })
+    expect(state.recording).toEqual({ saved: true, runId: 'run-1' })
+    state = applyReviewEvent(state, { done: true, completed: 3, aborted: false, saved: false, recordingProblem: 'db down' })
+    expect(state).toMatchObject({ done: true, recordingProblem: 'db down' })
+
+    const unsaved = applyReviewEvent(EMPTY_REVIEW, {
+      start: true,
+      playbook: { slug: 's', title: 'T', version: 2 },
+      rules: RULES,
+      matterContext: { state: 'none' },
+      recording: { saved: false, reason: 'too large' },
+    })
+    expect(unsaved.recording).toEqual({ saved: false, reason: 'too large' })
+  })
+
+  it('reads a start frame from a server that predates recording as not reporting it', () => {
+    const state = applyReviewEvent(EMPTY_REVIEW, {
+      start: true,
+      playbook: { slug: 's', title: 'T', version: 2 },
+      rules: RULES,
+      matterContext: { state: 'none' },
+    })
+    expect(state.recording).toBeNull()
+  })
+
   it('treats a stream error as the end of the run', () => {
     const state = applyReviewEvent(EMPTY_REVIEW, { error: 'boom' })
     expect(state).toMatchObject({ done: true, error: 'boom' })

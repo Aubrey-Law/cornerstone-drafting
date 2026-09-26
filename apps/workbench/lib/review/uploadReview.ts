@@ -34,7 +34,12 @@ export async function queueStoredUploadReview(
     .from('document_text_layers')
     .select('id, source_kind, status, extractor, extractor_version, source_sha256, page_count, text, blocks, spans')
     .eq('review_upload_id', upload.id)
-    .eq('source_kind', upload.fileKind)
+    // A workbench upload's layer is extracted from its file (docx/pdf); a Word
+    // snapshot's is the paragraph text the pane sent ('plain'), which is what
+    // its citations index. An upload only ever has one of the two.
+    .in('source_kind', [upload.fileKind, 'plain'])
+    .order('source_kind')
+    .limit(1)
     .maybeSingle()
   if (layerError) return { ok: false, status: 500, message: `Could not load the upload's text: ${layerError.message}` }
   const layer = toLayer(layerRow)

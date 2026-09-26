@@ -1,7 +1,7 @@
 import { runReviewPlaybook } from '@aubrey-law/citations/review/runReview'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
 import type { MatterFacts } from '@aubrey-law/citations/review/conditions'
-import type { ReviewFinding, ReviewPlaybook } from '@aubrey-law/citations/review/types'
+import type { ReviewFinding, ReviewPlaybook, ReviewRule } from '@aubrey-law/citations/review/types'
 import type { TextLayer } from '@aubrey-law/citations/textLayer/types'
 
 /**
@@ -34,6 +34,16 @@ export interface RunRulesOptions {
   signal?: AbortSignal
   onFinding: (finding: ReviewFinding) => void
   onFailure: (failure: { ruleNumber: string; reason: string }) => void
+  /**
+   * Called once per rule after its finding or failure has been reported, with
+   * the rule's place in the playbook — how the route records each rule as it
+   * settles. Awaited; it must not throw.
+   */
+  onRuleSettled?: (
+    rule: ReviewRule,
+    index: number,
+    outcome: { findings: ReviewFinding[]; failures: Array<{ ruleNumber: string; reason: string }> },
+  ) => Promise<void>
 }
 
 export const DEFAULT_REVIEW_CONCURRENCY = 5
@@ -47,6 +57,7 @@ export async function runRulesStreaming(
 
   const runOne = async (index: number): Promise<void> => {
     const rule = playbook.rules[index]
+    let outcome: { findings: ReviewFinding[]; failures: Array<{ ruleNumber: string; reason: string }> }
     try {
       const result = await runReviewPlaybook(
         layer,
@@ -59,17 +70,19 @@ export async function runRulesStreaming(
           matterFacts: options.matterFacts,
         },
       )
-      for (const finding of result.findings) options.onFinding(finding)
-      for (const failure of result.failures) options.onFailure(failure)
+      outcome = { findings: result.findings, failures: result.failures }
       if (result.findings.length === 0 && result.failures.length === 0) {
-        options.onFailure({ ruleNumber: rule.number, reason: 'The rule produced no answer.' })
+        outcome.failures = [{ ruleNumber: rule.number, reason: 'The rule produced no answer.' }]
       }
     } catch (error) {
-      options.onFailure({
-        ruleNumber: rule.number,
-        reason: error instanceof Error ? error.message : 'The rule could not be run.',
-      })
+      outcome = {
+        findings: [],
+        failures: [{ ruleNumber: rule.number, reason: error instanceof Error ? error.message : 'The rule could not be run.' }],
+      }
     }
+    for (const finding of outcome.findings) options.onFinding(finding)
+    for (const failure of outcome.failures) options.onFailure(failure)
+    await options.onRuleSettled?.(rule, index, outcome)
     completed += 1
   }
 
