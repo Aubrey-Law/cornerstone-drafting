@@ -78,6 +78,7 @@ import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
+import { MatterReviewsTab } from './MatterReviewsTab'
 import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
@@ -119,6 +120,7 @@ const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'billing', label: 'Billing' },
   { value: 'communications', label: 'Portal messages' },
   { value: 'notes', label: 'Notes' },
+  { value: 'reviews', label: 'Reviews' },
   { value: 'activity', label: 'Activity' },
 ]
 
@@ -986,6 +988,7 @@ function MatterDetailClientInner({
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="notes">Notes</TabsTrigger>
+                <TabsTrigger value="reviews">Reviews</TabsTrigger>
                 <TabsTrigger value="activity">Activity</TabsTrigger>
               </TabsList>
 
@@ -1229,6 +1232,10 @@ function MatterDetailClientInner({
                 startEditingNote={startEditingNote}
                 meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
               />
+
+              <TabsContent value="reviews">
+                {activeTab === 'reviews' ? <MatterReviewsTab matterId={matterId} /> : null}
+              </TabsContent>
 
               <TabsContent value="activity">
                 <MatterActivityTab activity={activity} loading={activityLoading} />
