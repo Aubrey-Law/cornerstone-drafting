@@ -118,7 +118,7 @@ export function toAnyRun(
 
 /**
  * Loads one run, kind-aware. Used directly by the field-audit run view
- * (`app/prompts/[runId]/page.tsx`); the review view keeps its own `loadRun`
+ * (`app/admin/field-audits/[runId]/page.tsx`); the review view keeps its own `loadRun`
  * for the citations and text layer only a review needs, but reads its steps
  * and prompt label through the same conversions this module exports.
  */

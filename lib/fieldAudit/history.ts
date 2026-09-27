@@ -111,7 +111,7 @@ export interface FieldAuditRunSummary {
 }
 
 /**
- * Recent field-audit runs, newest first — the list `/prompts` shows so a run
+ * Recent field-audit runs, newest first — the list `/admin/field-audits` shows so a run
  * recorded there has somewhere to be seen. The review analogue of this,
  * `loadRunSummaries` in `lib/review/history.ts`, joins to a document; a field
  * audit has none, so this joins to the matter and the prompt it ran instead.

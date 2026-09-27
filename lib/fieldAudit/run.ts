@@ -34,7 +34,7 @@ export type RunMatterAuditResult =
 /**
  * The whole path from "a prompt and a matter" to "a run is queued and on its
  * way" — whether the prompt and matter were an attorney's choice on
- * `/prompts`, or a stage entry the trigger fired (`userId: null`, `poke:
+ * `/admin/field-audits`, or a stage entry the trigger fired (`userId: null`, `poke:
  * false` — see those fields' comments on `RunMatterAuditOptions`).
  *
  * Used to run the engine itself, in the same request, and report what it

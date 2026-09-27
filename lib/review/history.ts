@@ -170,7 +170,7 @@ export interface RunSummary {
  * runs, which have no document at all. Joining one of those to a document
  * name the way this always has would produce a summary row for a run this
  * page has no way to open (a review run's page assumes a document and a text
- * layer) — a field audit gets its own list, on `/prompts`.
+ * layer) — a field audit gets its own list, on `/admin/field-audits`.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

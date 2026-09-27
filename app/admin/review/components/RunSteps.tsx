@@ -7,7 +7,7 @@ import type { RunStatus, RunStep } from '@/lib/runs/steps'
  * What each unit of a run did, and what retrying it would cost.
  *
  * Shared between the review view (`app/review/[runId]/StoredFindings.tsx`)
- * and the field-audit view (`app/prompts/[runId]/FieldAuditRunView.tsx`): a
+ * and the field-audit view (`app/admin/field-audits/[runId]/FieldAuditRunView.tsx`): a
  * step is a rule against a document or a check against a matter, and neither
  * kind needs anything different shown about it.
  *
