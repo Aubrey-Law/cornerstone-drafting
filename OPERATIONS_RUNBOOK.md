@@ -416,6 +416,7 @@ Operational rules:
 
 - Stripe is the only supported online processor. `PAYMENTS_PROVIDER=lawpay` is rejected until LawPay checkout, webhooks, refunds, and funds-handling policy are complete.
 - The workflow cron runs every five minutes and requires `CRON_SECRET`. Failed jobs stop after their configured retry count and require the authenticated manual retry endpoint.
+- The run queue cron (`/api/cron/run-queue`) runs every minute and requires `CRON_SECRET` and `ANTHROPIC_API_KEY`. It works queued reviews (Cornerstone, the Word add-in), field audits and stage-triggered runs, and carries the fiduciary and name-agreement task sweeps. A run whose worker died is handed back after 10 minutes, at most 3 times. It moved here from the review workbench's `/api/cron/tick`; the workbench no longer declares a cron.
 - Overdue reminders are drafts only. A staff user must approve each reminder; no cron path sends them.
 - Matter close-out is rejected server-side while direct-pay balances, ready milestones, open legal-plan claims, or payment exceptions remain. A financial exception requires an attorney-authored reason.
 - Cost items represent incurred costs only. The operating-account workflow does not accept advance cost deposits or trust funds.

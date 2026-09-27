@@ -31,6 +31,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/run-queue",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/workflow-jobs",
       "schedule": "*/5 * * * *"
     },

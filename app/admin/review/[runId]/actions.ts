@@ -17,8 +17,8 @@ import { retryFailedSteps } from '@/lib/runs/retry'
  * gated proves nothing about the request.
  *
  * Ported from the workbench's `app/review/[runId]/actions.ts`. Queued work —
- * a retry, another review of an upload — is picked up by the workbench's tick,
- * which reads the same tables (see `lib/runs/enqueue.ts`).
+ * a retry, another review of an upload — is picked up by the run queue's
+ * cron within the minute (`app/api/cron/run-queue/route.ts`).
  */
 
 const DISPOSITIONS: Disposition[] = ['open', 'accepted', 'rejected', 'deferred']

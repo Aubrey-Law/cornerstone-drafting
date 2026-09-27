@@ -40,29 +40,21 @@ describe('workbench dependency parity with the root app', () => {
     expect(allDeps(workbench)[name]).toBe(allDeps(root)[name])
   })
 
-  it('never declares a cron path the root app already owns', () => {
+  it('declares no crons: the run queue moved to the root app', () => {
     // Both apps deploy from the same repo against the same database, so a
-    // cron path declared in *both* vercel.json files fires twice against the
-    // same data — /api/cron/scheduled-emails in the root app runs every
-    // minute and is not idempotent. That used to mean "the workbench
-    // declares no crons at all," because it had none of its own. It has one
-    // now: /api/cron/tick drives the workbench's own run queue
-    // (workflow_runs / workflow_run_steps), tables the root app never
-    // touches, so it is not a duplicate of anything the root app already
-    // runs. The guard that actually matters — no path claimed by both — is
-    // this one, not a blanket ban on the workbench ever having a cron.
+    // cron declared in both fires twice against the same data. The workbench
+    // had one — /api/cron/tick, which worked the run queue — until the queue
+    // moved to the root app as /api/cron/run-queue. Two workers claiming runs
+    // is safe (`claim_workflow_run` hands a run to one of them), but the
+    // fiduciary and name sweeps each tick carries are not built to race
+    // another copy of themselves, so the queue has exactly one home.
     const workbenchVercel = JSON.parse(fs.readFileSync(path.resolve(here, 'vercel.json'), 'utf8')) as {
       crons?: Array<{ path: string }>
     }
     const rootVercel = JSON.parse(fs.readFileSync(path.resolve(here, '../../vercel.json'), 'utf8')) as {
       crons?: Array<{ path: string }>
     }
-    const rootPaths = new Set((rootVercel.crons ?? []).map((cron) => cron.path))
-    const workbenchPaths = (workbenchVercel.crons ?? []).map((cron) => cron.path)
-
-    expect(workbenchPaths.length).toBeGreaterThan(0)
-    for (const p of workbenchPaths) {
-      expect(rootPaths.has(p)).toBe(false)
-    }
+    expect(workbenchVercel.crons ?? []).toEqual([])
+    expect((rootVercel.crons ?? []).map((cron) => cron.path)).toContain('/api/cron/run-queue')
   })
 })
