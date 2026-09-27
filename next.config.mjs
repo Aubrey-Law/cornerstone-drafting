@@ -86,6 +86,11 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // The playbook builder reads an uploaded precedent's text layer the same way.
+    '/api/admin/playbooks/extract': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
     '/api/sign/[token]': [
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
