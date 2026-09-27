@@ -13,6 +13,7 @@ import {
 import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
 import { MatterFiduciaryCard } from './MatterFiduciaryCard'
+import { MatterFiduciaryMatrixCard } from './MatterFiduciaryMatrixCard'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 
@@ -68,7 +69,10 @@ export function MatterPeopleTabContent({
       </div>
 
       {recordLabel === 'matter' && (
-        <MatterFiduciaryCard matterId={matterId} planMirror={planMirror} />
+        <>
+          <MatterFiduciaryCard matterId={matterId} planMirror={planMirror} />
+          <MatterFiduciaryMatrixCard matterId={matterId} />
+        </>
       )}
 
       <div id="household" className="scroll-mt-24">

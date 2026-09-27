@@ -35,6 +35,7 @@ const SECTIONS: { prefix: string; label: string; href?: string; record: string }
   { prefix: '/admin/matters', label: 'Matters', href: '/admin/matters/list', record: 'Matter' },
   { prefix: '/admin/drafting', label: 'Drafting', href: '/admin/drafting', record: 'Matter' },
   { prefix: '/admin/review', label: 'Reviews', href: '/admin/review', record: 'Review' },
+  { prefix: '/admin/fiduciaries', label: 'Fiduciaries', href: '/admin/fiduciaries', record: 'Matter' },
   { prefix: '/admin/billing', label: 'Billing', href: '/admin/billing', record: 'Invoice' },
   { prefix: '/admin/leads', label: 'Leads', href: '/admin/crm/opportunities', record: 'Lead' },
   { prefix: '/admin/settings', label: 'Settings', href: '/admin/settings', record: 'Record' },

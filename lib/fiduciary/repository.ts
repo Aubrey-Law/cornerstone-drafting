@@ -52,14 +52,15 @@ export const fullName = (contact: Record<string, unknown>): string =>
  */
 export async function loadFiduciaries(
   client: SupabaseClient<GeneratedDatabase>,
-  options: { matterId?: string } = {},
+  options: { matterId?: string; hiredOnly?: boolean } = {},
 ): Promise<MatterFiduciaries[]> {
   const sb = client
 
-  let matterQuery = sb
-    .from('matters')
-    .select('id, name, client_intake_id')
-    .eq('relationship_status', 'hired')
+  let matterQuery = sb.from('matters').select('id, name, client_intake_id')
+  // Hired matters by default: the sweep turns gaps into tasks, and a lead's
+  // plan is not the firm's to chase yet. One matter's own page asks for it
+  // whatever its status, so a closed matter still shows what it recorded.
+  if (options.hiredOnly !== false) matterQuery = matterQuery.eq('relationship_status', 'hired')
   if (options.matterId) matterQuery = matterQuery.eq('id', options.matterId)
 
   const { data: matters, error: matterError } = await matterQuery
