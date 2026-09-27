@@ -18,12 +18,17 @@ export default async function ReviewHistoryPage() {
       <header className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-lg font-semibold tracking-tight">Reviews</h1>
-          <Link
-            href="/admin/review/new"
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Start a review
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/admin/playbooks" className="text-sm underline underline-offset-4">
+              Build a playbook
+            </Link>
+            <Link
+              href="/admin/review/new"
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Start a review
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           Playbook reviews and their findings. Reviews run from the Review tab in Word are saved here, with a copy of

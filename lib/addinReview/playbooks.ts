@@ -7,14 +7,14 @@ import type { Database } from '@/types/supabase'
 
 /**
  * The review playbooks the Word add-in can run, read from the same
- * `prompts` / `prompt_versions` / `prompt_publications` rows the workbench
- * publishes to (`apps/workbench/lib/playbooks/publish.ts`).
+ * `prompts` / `prompt_versions` / `prompt_publications` rows the playbook
+ * builder publishes to (`lib/playbooks/publish.ts`).
  *
- * A second reader rather than an import from the workbench: the two apps do
- * not import each other. What keeps them honest is that both validate every
- * body with the one `promptBodySchema` from `@aubrey-law/citations` on every
- * read — a row that drifted out of shape fails loudly here too, rather than
- * running with a rule silently missing.
+ * A reader of its own, beside `lib/prompts/repository.ts`, written before the
+ * builder moved into Cornerstone. What keeps the two honest is that both
+ * validate every body with the one `promptBodySchema` from
+ * `@aubrey-law/citations` on every read — a row that drifted out of shape
+ * fails loudly here too, rather than running with a rule silently missing.
  */
 
 type Client = SupabaseClient<Database>
