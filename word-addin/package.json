@@ -15,6 +15,8 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "manifest": "node scripts/manifest.mjs",
+    "manifest:check": "node scripts/manifest.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest"
   },
