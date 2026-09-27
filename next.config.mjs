@@ -80,6 +80,12 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // Starting a review extracts the document's text layer, which for a PDF
+    // is pdf.js (packages/citations/src/textLayer/pdf.ts).
+    '/api/admin/review': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
     '/api/sign/[token]': [
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
