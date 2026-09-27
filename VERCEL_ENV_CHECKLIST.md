@@ -74,7 +74,7 @@ existing Statular records. Existing Markdown export and drafting are unchanged.
 
 | Variable | Purpose |
 |----------|---------|
-| `ANTHROPIC_API_KEY` | Design-sheet DOCX import and AI drafting fallback |
+| `ANTHROPIC_API_KEY` | Design-sheet DOCX import, AI drafting fallback, and the review/field-audit run queue (`/api/cron/run-queue` answers 503 and leaves runs queued without it) |
 | `USER_API_KEYS_ENCRYPTION_SECRET` | Encrypts staff BYOK API keys + MCP auth blobs at rest (required for Settings → API Keys / Connectors) |
 | `DOCX_PDF_CONVERT_URL` | Base URL of the LibreOffice convert worker (e.g. `https://cornerstone-docx-pdf.fly.dev`) |
 | `DOCX_PDF_CONVERT_SECRET` | Shared bearer secret sent to the convert worker (`CONVERT_WORKER_SECRET` on the worker) |

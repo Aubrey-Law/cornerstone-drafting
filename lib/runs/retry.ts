@@ -16,7 +16,7 @@ import { loadRunContext } from './context'
  * request. It no longer does: a retry queues its run the same way a first
  * run does, and a tick works it — one code path, not two behaviours, so a
  * retry of twenty units is no more obligated to finish in one request than a
- * first run of twenty is. See `apps/workbench/app/api/cron/tick/route.ts`,
+ * first run of twenty is. See `app/api/cron/run-queue/route.ts`,
  * which claims the run, works its `pending` steps (this call's whole point
  * is to leave some), and — once nothing is left `pending` — finalises the
  * run and, for a field audit, emits its tasks. A retried run's tasks are

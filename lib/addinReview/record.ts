@@ -28,7 +28,7 @@ import { deleteR2Key } from '@/lib/r2Delete'
  * Recording never fails the review: the attorney is watching findings arrive
  * and they are worth having unrecorded. A failure stops further writes and is
  * reported to the pane instead. A run left `running` by a request that died
- * has its heartbeat go stale, and the workbench's reaper hands it back to the
+ * has its heartbeat go stale, and the run queue's reaper hands it back to the
  * queue; a run the attorney stopped part-way is queued at once. Either way the
  * tick works only the steps still `pending`, against this same stored layer.
  */
