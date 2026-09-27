@@ -10,7 +10,12 @@ describe('matter draft generation route', () => {
     const routeSource = fs.readFileSync(routePath, 'utf8')
 
     expect(authSource).toContain('const token = getBearerToken(_req)')
-    expect(authSource).toContain('const user = await userFromBearer(token)')
+    // Renamed from `userFromBearer` when the bearer branch began bootstrapping a
+    // missing profile: it now needs the token-scoped client as well as the user,
+    // because `ensure_user_profile` is SECURITY DEFINER over `auth.uid()`. The
+    // guarantee being pinned is unchanged — the bearer path resolves its user
+    // from the token, not from a cookie session.
+    expect(authSource).toContain('const { sb, user } = await clientFromBearer(token)')
     expect(routeSource).toContain("import { getBearerToken, requireAdmin } from '@/lib/apiAuth'")
     expect(routeSource).toContain('const token = getBearerToken(req)')
   })
