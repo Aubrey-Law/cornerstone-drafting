@@ -94,16 +94,21 @@ describe('word-addin production hosting', () => {
     // and pinning that above is worth nothing if the build quietly relies on
     // hoisted dependencies instead.
     //
-    // Runs from the project directory rather than with `npm --prefix`. That
-    // prefix form produced a 3-package tree in GitHub Actions where a clean
-    // checkout gets 135, and the only symptom was tsc failing to find the
-    // `office-js` type definitions — which reads as a tsconfig fault. It could
-    // not be reproduced on macOS with npm 10 or 11, from a clean clone, or
-    // after a root `npm ci`.
     expect(scripts['build:addin']).toContain('cd word-addin')
     expect(scripts['build:addin']).toContain('npm ci')
-    expect(scripts['build:addin']).not.toContain('--prefix')
     expect(scripts['build:addin']).not.toContain('-w ')
+  })
+
+  it('installs devDependencies even under NODE_ENV=production', () => {
+    // The one that actually bit. scripts/ciBuild.mjs sets NODE_ENV=production,
+    // and Vercel sets it too, so `npm ci` omits devDependencies — which here is
+    // everything that builds the pane: vite, typescript, @types/office-js. The
+    // install succeeded with 3 packages instead of 135 and failed two steps
+    // later as `TS2688: Cannot find type definition file for 'office-js'`.
+    //
+    // This would have failed every production deploy, because prebuild:next
+    // runs this build.
+    expect(scripts['build:addin']).toContain('--include=dev')
   })
 
   it('checks the install before trusting it', () => {

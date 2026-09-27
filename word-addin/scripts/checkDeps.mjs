@@ -2,14 +2,17 @@
 /**
  * Fail early, and say why, when the dependency tree is incomplete.
  *
- * `prebuild:next` installs this nested project during the root build. That
- * install landed incomplete once in GitHub Actions — 3 packages where a clean
- * checkout gets 135 — and the only symptom was
+ * `prebuild:next` installs this nested project during the root build, and the
+ * root CI build runs under `NODE_ENV=production` (scripts/ciBuild.mjs), which
+ * makes npm omit devDependencies. Everything this project builds with — vite,
+ * typescript, @types/office-js — is a devDependency, so the install quietly
+ * produced 3 packages instead of 135 and the only symptom was
  * `error TS2688: Cannot find type definition file for 'office-js'`, which reads
- * like a tsconfig fault rather than a missing install. It could not be
- * reproduced on macOS with npm 10 or 11, from a clean clone, or after a root
- * `npm ci`, so this runs between the install and the build to name the real
- * problem wherever it next happens.
+ * like a tsconfig fault rather than a missing install.
+ *
+ * `--include=dev` in `build:addin` is the fix. This check stays because the
+ * distance between that cause and that symptom is the whole problem: anything
+ * else that truncates the tree should fail here, naming itself.
  *
  * Only the packages whose absence produces a misleading error are checked —
  * anything else fails as itself.
@@ -45,8 +48,9 @@ if (missing.length > 0) {
       '',
       '    npm run build:addin',
       '',
-      'If it persists in CI, the nested install is resolving against the parent',
-      'tree — see word-addin/README.md, "How the pane is hosted".',
+      'A build under NODE_ENV=production omits devDependencies unless the install',
+      'passes --include=dev, which is what every package here is. See',
+      'word-addin/README.md, "How the pane is hosted".',
       '',
     ].join('\n'),
   )

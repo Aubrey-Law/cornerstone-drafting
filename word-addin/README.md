@@ -171,6 +171,15 @@ From the repository root, `npm run build:addin` runs that build on its own, and
 therefore fails a production deploy of Cornerstone**, which is why the
 `word-addin` job in `.github/workflows/app-ci.yml` gates it.
 
+That install passes `--include=dev`, and must. Both the CI build
+(`scripts/ciBuild.mjs`) and Vercel set `NODE_ENV=production`, under which npm
+omits devDependencies — and every package this project builds with is one:
+`vite`, `typescript`, `@types/office-js`. Without the flag the install succeeds
+with 3 packages instead of 135 and fails two steps later as
+`TS2688: Cannot find type definition file for 'office-js'`, which reads like a
+tsconfig fault. `scripts/checkDeps.mjs` runs between the install and the build
+so that gap cannot reopen silently.
+
 `base` is `/addin/` for a build and `/` for the dev server: development serves
 this project at the origin root, where the sideloaded `manifest.xml` expects it.
 

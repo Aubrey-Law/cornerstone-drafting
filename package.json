@@ -35,7 +35,7 @@
     "design:coverage": "tsx scripts/report-design-answer-coverage.ts",
     "clauses:import": "tsx scripts/import-estate-clauses.ts",
     "seed:browser-fixture": "tsx scripts/seedBrowserFixture.ts",
-    "build:addin": "cd word-addin && npm ci && node scripts/checkDeps.mjs && npm run build",
+    "build:addin": "cd word-addin && npm ci --include=dev && node scripts/checkDeps.mjs && npm run build",
     "prebuild:next": "npm run theme:generate && npm run build:addin",
     "validate-env": "node scripts/validateEnv.mjs",
     "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
