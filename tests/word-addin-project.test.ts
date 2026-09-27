@@ -89,12 +89,36 @@ describe('word-addin production hosting', () => {
   const scripts = rootPkg.scripts as Record<string, string>
   const viteConfig = read('word-addin/vite.config.ts')
 
-  it('builds through a prefix install, never a workspace one', () => {
+  it('installs this project on its own terms, never the root tree', () => {
     // The root `npm ci` does not install this project — it is not a workspace,
     // and pinning that above is worth nothing if the build quietly relies on
     // hoisted dependencies instead.
-    expect(scripts['build:addin']).toContain('--prefix word-addin')
-    expect(scripts['build:addin']).toContain('npm --prefix word-addin ci')
+    //
+    // Runs from the project directory rather than with `npm --prefix`. That
+    // prefix form produced a 3-package tree in GitHub Actions where a clean
+    // checkout gets 135, and the only symptom was tsc failing to find the
+    // `office-js` type definitions — which reads as a tsconfig fault. It could
+    // not be reproduced on macOS with npm 10 or 11, from a clean clone, or
+    // after a root `npm ci`.
+    expect(scripts['build:addin']).toContain('cd word-addin')
+    expect(scripts['build:addin']).toContain('npm ci')
+    expect(scripts['build:addin']).not.toContain('--prefix')
+    expect(scripts['build:addin']).not.toContain('-w ')
+  })
+
+  it('checks the install before trusting it', () => {
+    // Between the install and the build, so an incomplete tree fails as itself
+    // instead of as a confusing type error.
+    expect(scripts['build:addin']).toContain('checkDeps.mjs')
+    const order = scripts['build:addin']
+    expect(order.indexOf('npm ci')).toBeLessThan(order.indexOf('checkDeps.mjs'))
+    expect(order.indexOf('checkDeps.mjs')).toBeLessThan(order.indexOf('npm run build'))
+
+    const check = read('word-addin/scripts/checkDeps.mjs')
+    // The two that tsc reports as a tsconfig error rather than a missing module.
+    expect(check).toContain('@types/office-js')
+    expect(check).toContain('@types/node')
+    expect(check).toContain('process.exit(1)')
   })
 
   it('runs that build before every Next build', () => {
