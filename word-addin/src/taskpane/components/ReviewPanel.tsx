@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { listPlaybooks, streamReview, type PlaybookSummary } from '../api/client'
+import { listPlaybooks, streamReview, streamScan, type PlaybookSummary } from '../api/client'
 import {
   actionsFor,
   applyReviewEvent,
@@ -23,6 +23,23 @@ import {
   type StatusFilter,
 } from '../review/model'
 import {
+  applyScanEvent,
+  categoriesOf,
+  EMPTY_SCAN,
+  filterItems,
+  IMPORTANCE_LABEL,
+  itemActions,
+  SCAN_LABEL,
+  scanCommentText,
+  scanReplacements,
+  tallyImportance,
+  type Importance,
+  type ScanItem,
+  type ScanKind,
+  type ScanSort,
+  type ScanState,
+} from '../review/scan'
+import {
   commentOnCitation,
   insertAfterCursorTracked,
   readParagraphTexts,
@@ -40,9 +57,10 @@ import { currentDocumentName, MAX_UPLOAD_BASE64_CHARS, readDocumentBytes } from 
  * pane marks up — a comment, a tracked replacement — is anchored to text that
  * is really there. Findings stream in as rules settle, issues first.
  *
- * Three screens: a summary (the playbook's pass rate and the issues to work),
- * the full report (every rule with its status, filterable), and one finding
- * with what can be done about it. What the attorney has done to a finding —
+ * Screens: a summary (the playbook's pass rate, the issue-spotting and
+ * proofreading passes, and the issues to work), a full report for each, and
+ * one finding or item with what can be done about it. Issue spotting runs
+ * alongside the playbook; proofreading runs when asked for. What the attorney has done to a finding —
  * a comment, a tracked change and its decision — is held here, not in the
  * finding's screen, so it survives moving between them.
  *
@@ -57,8 +75,14 @@ import { currentDocumentName, MAX_UPLOAD_BASE64_CHARS, readDocumentBytes } from 
  * not saved.
  */
 
-type ListView = 'summary' | 'report'
-type View = { name: ListView } | { name: 'rule'; ruleNumber: string; back: ListView }
+type View =
+  | { name: 'summary' }
+  | { name: 'report' }
+  | { name: 'scan'; kind: ScanKind }
+  | { name: 'rule'; ruleNumber: string; back: View }
+  | { name: 'item'; kind: ScanKind; id: string; back: View }
+
+const NO_SCANS: Record<ScanKind, ScanState> = { issues: EMPTY_SCAN, proofread: EMPTY_SCAN }
 
 /** What has been done to one finding in Word. */
 interface Worked {
@@ -88,6 +112,8 @@ export default function ReviewPanel({
   const [bulkNote, setBulkNote] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const [scans, setScans] = useState<Record<ScanKind, ScanState>>(NO_SCANS)
+  const scanAbort = useRef<Record<ScanKind, AbortController | null>>({ issues: null, proofread: null })
 
   useEffect(() => {
     let cancelled = false
@@ -103,8 +129,39 @@ export default function ReviewPanel({
     return () => {
       cancelled = true
       abortRef.current?.abort()
+      scanAbort.current.issues?.abort()
+      scanAbort.current.proofread?.abort()
     }
   }, [])
+
+  /**
+   * One issue-spotting or proofreading pass. Reads the document itself unless
+   * handed the paragraphs the playbook review just read, so both see the same text.
+   */
+  const runScanKind = async (kind: ScanKind, given?: string[]) => {
+    scanAbort.current[kind]?.abort()
+    const controller = new AbortController()
+    scanAbort.current[kind] = controller
+    const update = (change: (state: ScanState) => ScanState) =>
+      setScans((current) => (scanAbort.current[kind] === controller ? { ...current, [kind]: change(current[kind]) } : current))
+    setScans((current) => ({ ...current, [kind]: { ...EMPTY_SCAN, started: true } }))
+    try {
+      const paragraphs = given ?? (await readParagraphTexts())
+      await streamScan({
+        kind,
+        paragraphs,
+        matterId,
+        signal: controller.signal,
+        onEvent: (event) => update((state) => ({ ...applyScanEvent(state, event), started: true })),
+      })
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        update((state) => ({ ...state, done: true, error: err instanceof Error ? err.message : 'The check failed.' }))
+      }
+    } finally {
+      if (controller.signal.aborted) update((state) => (state.done ? state : { ...state, done: true, aborted: true }))
+    }
+  }
 
   const run = async () => {
     if (!slug) return
@@ -120,6 +177,8 @@ export default function ReviewPanel({
     setView({ name: 'summary' })
     try {
       const paragraphs = await readParagraphTexts()
+      // Alongside the playbook, not after it: the attorney is waiting on both.
+      void runScanKind('issues', paragraphs)
       const fileBase64 = await readSnapshot(paragraphs)
       await streamReview({
         paragraphs,
@@ -143,10 +202,18 @@ export default function ReviewPanel({
     }
   }
 
-  const stop = () => abortRef.current?.abort()
+  const stop = () => {
+    abortRef.current?.abort()
+    scanAbort.current.issues?.abort()
+    scanAbort.current.proofread?.abort()
+  }
+  const scanRunning = (kind: ScanKind) => scans[kind].started && !scans[kind].done
+  const busy = running || scanRunning('issues') || scanRunning('proofread')
 
-  const markWorked = (ruleNumber: string, change: Worked) =>
-    setWorked((current) => ({ ...current, [ruleNumber]: { ...current[ruleNumber], ...change } }))
+  /** Keyed by rule number for a finding, by item id for a scan item; the two never collide. */
+  const markWorked = (key: string, change: Worked) =>
+    setWorked((current) => ({ ...current, [key]: { ...current[key], ...change } }))
+  const dismiss = (key: string) => setDismissed((current) => new Set(current).add(key))
 
   const rows = useMemo(() => ruleRows(review), [review])
   const counts = useMemo(() => tally(rows), [rows])
@@ -155,21 +222,26 @@ export default function ReviewPanel({
     () => orderFindings(review.findings, review.rules).filter((f) => isIssue(f) && !dismissed.has(f.ruleNumber)),
     [review.findings, review.rules, dismissed],
   )
-  const pendingBulk = bulkReplacements(review).filter(({ finding }) => !worked[finding.ruleNumber]?.bookmark)
+  const pendingBulk = bulkReplacements(review)
+    .filter(({ finding }) => !worked[finding.ruleNumber]?.bookmark)
+    .map(({ finding, text }) => ({ key: finding.ruleNumber, citation: finding.citation!, text }))
+  const pendingScanBulk = (kind: ScanKind) =>
+    scanReplacements(scans[kind].items)
+      .filter(({ item }) => !worked[item.id]?.bookmark && !dismissed.has(item.id))
+      .map(({ item, text }) => ({ key: item.id, citation: item.citation!, text }))
 
   /** Every verified suggestion as a tracked change, one after another, so Word sees them in order. */
-  const applyAll = async () => {
+  const applyAll = async (edits: Array<{ key: string; citation: { blockIndex: number; quote: string }; text: string }>) => {
     setBulkBusy(true)
     setBulkNote(null)
     let applied = 0
     let refused = 0
     try {
-      for (const { finding, text } of pendingBulk) {
-        const citation = finding.citation!
+      for (const { key, citation, text } of edits) {
         const result = await replaceCitationTracked({ blockIndex: citation.blockIndex, quote: citation.quote }, text)
         if (result.ok) {
           applied += 1
-          markWorked(finding.ruleNumber, { bookmark: result.bookmark ?? 'applied' })
+          markWorked(key, { bookmark: result.bookmark ?? 'applied' })
         } else {
           refused += 1
         }
@@ -197,20 +269,59 @@ export default function ReviewPanel({
     const row = rows.find((r) => r.rule.number === view.ruleNumber)
     if (row) {
       return (
-        <Screen onBack={() => setView({ name: view.back })} backLabel={view.back === 'report' ? 'Playbook' : 'Review'}>
+        <Screen onBack={() => setView(view.back)} backLabel={backLabel(view.back)}>
           <RuleDetail
             row={row}
             playbookTitle={review.playbook?.title ?? 'Review'}
             worked={worked[row.rule.number] ?? {}}
             onWorked={(change) => markWorked(row.rule.number, change)}
             onDismiss={() => {
-              setDismissed((current) => new Set(current).add(row.rule.number))
-              setView({ name: view.back })
+              dismiss(row.rule.number)
+              setView(view.back)
             }}
           />
         </Screen>
       )
     }
+  }
+
+  if (view.name === 'item') {
+    const item = scans[view.kind].items.find((i) => i.id === view.id)
+    if (item) {
+      return (
+        <Screen onBack={() => setView(view.back)} backLabel={backLabel(view.back)}>
+          <ItemDetail
+            kind={view.kind}
+            item={item}
+            worked={worked[item.id] ?? {}}
+            onWorked={(change) => markWorked(item.id, change)}
+            onDismiss={() => {
+              dismiss(item.id)
+              setView(view.back)
+            }}
+          />
+        </Screen>
+      )
+    }
+  }
+
+  if (view.name === 'scan') {
+    const kind = view.kind
+    return (
+      <ScanReport
+        kind={kind}
+        scan={scans[kind]}
+        dismissed={dismissed}
+        running={scanRunning(kind)}
+        bulkCount={pendingScanBulk(kind).length}
+        bulkBusy={bulkBusy}
+        bulkNote={bulkNote}
+        onBack={() => setView({ name: 'summary' })}
+        onOpen={(id) => setView({ name: 'item', kind, id, back: view })}
+        onRerun={() => void runScanKind(kind)}
+        onApplyAll={() => void applyAll(pendingScanBulk(kind))}
+      />
+    )
   }
 
   if (view.name === 'report' && review.playbook) {
@@ -224,9 +335,9 @@ export default function ReviewPanel({
         bulkBusy={bulkBusy}
         bulkNote={bulkNote}
         onBack={() => setView({ name: 'summary' })}
-        onOpen={(ruleNumber) => setView({ name: 'rule', ruleNumber, back: 'report' })}
+        onOpen={(ruleNumber) => setView({ name: 'rule', ruleNumber, back: { name: 'report' } })}
         onRerun={() => void run()}
-        onApplyAll={() => void applyAll()}
+        onApplyAll={() => void applyAll(pendingBulk)}
       />
     )
   }
@@ -238,7 +349,7 @@ export default function ReviewPanel({
           aria-label="Playbook"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
-          disabled={running}
+          disabled={busy}
           className="min-w-0 flex-1 rounded border border-[color:var(--color-line)] bg-transparent px-2 py-1"
         >
           {playbooks.map((p) => (
@@ -247,7 +358,7 @@ export default function ReviewPanel({
             </option>
           ))}
         </select>
-        {running ? (
+        {busy ? (
           <button type="button" onClick={stop} className="rounded border border-[color:var(--color-line)] px-3 py-1">
             Stop
           </button>
@@ -270,71 +381,126 @@ export default function ReviewPanel({
 
       {error && <p className="text-fail">{error}</p>}
 
+      <h1 className="text-lg font-semibold">Review</h1>
+
       {review.playbook && (
-        <>
-          <h1 className="text-lg font-semibold">Review</h1>
+        <button
+          type="button"
+          onClick={() => setView({ name: 'report' })}
+          className="block w-full rounded-lg border border-[color:var(--color-line)] p-3 text-left hover:bg-[color:var(--color-surface-sunken)]"
+          data-testid="playbook-card"
+        >
+          <span className="flex items-center gap-2 text-[11px] text-[color:var(--color-ink-muted)]">
+            <DocIcon />
+            <span className="min-w-0 flex-1 truncate">{review.playbook.title}</span>
+            <span className="shrink-0">Full report ›</span>
+          </span>
+          <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <Count value={counts.passed} label="passed" tone="pass" />
+            <Count value={counts.failed} label="failed" tone="fail" />
+            {counts.didNotRun > 0 && <Count value={counts.didNotRun} label="did not run" tone="warn" />}
+            {counts.pending > 0 && <Count value={counts.pending} label="checking" tone="muted" />}
+          </span>
+          <ProgressBar counts={counts} />
+        </button>
+      )}
 
-          <button
-            type="button"
-            onClick={() => setView({ name: 'report' })}
-            className="block w-full rounded-lg border border-[color:var(--color-line)] p-3 text-left hover:bg-[color:var(--color-surface-sunken)]"
-            data-testid="playbook-card"
-          >
-            <span className="flex items-center gap-2 text-[11px] text-[color:var(--color-ink-muted)]">
-              <DocIcon />
-              <span className="min-w-0 flex-1 truncate">{review.playbook.title}</span>
-              <span className="shrink-0">Full report ›</span>
-            </span>
-            <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <Count value={counts.passed} label="passed" tone="pass" />
-              <Count value={counts.failed} label="failed" tone="fail" />
-              {counts.didNotRun > 0 && <Count value={counts.didNotRun} label="did not run" tone="warn" />}
-              {counts.pending > 0 && <Count value={counts.pending} label="checking" tone="muted" />}
-            </span>
-            <ProgressBar counts={counts} />
-          </button>
-
-          <div className="space-y-0.5 text-[11px] text-[color:var(--color-ink-muted)]" data-testid="review-status">
-            <MatterNote context={review.matterContext} linked={Boolean(matterId)} />
-            <RecordingNote review={review} />
-            {review.aborted && <p>Stopped before every rule was checked.</p>}
-            {review.error && <p className="text-fail">{review.error}</p>}
-          </div>
-
-          <TopIssues
-            issues={issues}
-            ruleByNumber={ruleByNumber}
-            done={review.done}
-            anySettled={review.findings.length > 0}
-            onOpen={(ruleNumber) => setView({ name: 'rule', ruleNumber, back: 'summary' })}
+      <div className="grid grid-cols-2 gap-2">
+        {(['issues', 'proofread'] as ScanKind[]).map((kind) => (
+          <ScanCard
+            key={kind}
+            kind={kind}
+            scan={scans[kind]}
+            dismissed={dismissed}
+            running={scanRunning(kind)}
+            onStart={() => void runScanKind(kind)}
+            onOpen={() => setView({ name: 'scan', kind })}
           />
-        </>
+        ))}
+      </div>
+
+      {review.playbook && (
+        <div className="space-y-0.5 text-[11px] text-[color:var(--color-ink-muted)]" data-testid="review-status">
+          <MatterNote context={review.matterContext} linked={Boolean(matterId)} />
+          <RecordingNote review={review} />
+          {review.aborted && <p>Stopped before every rule was checked.</p>}
+          {review.error && <p className="text-fail">{review.error}</p>}
+        </div>
+      )}
+
+      {(review.playbook || scans.issues.started) && (
+        <TopIssues
+          entries={topEntries({
+            findings: issues,
+            ruleByNumber,
+            items: scans.issues.items.filter((item) => !dismissed.has(item.id)),
+            openRule: (ruleNumber) => setView({ name: 'rule', ruleNumber, back: { name: 'summary' } }),
+            openItem: (id) => setView({ name: 'item', kind: 'issues', id, back: { name: 'summary' } }),
+          })}
+          done={(!review.playbook || review.done) && (!scans.issues.started || scans.issues.done)}
+          anySettled={review.findings.length > 0 || scans.issues.done}
+        />
       )}
     </div>
   )
 }
 
-function TopIssues({
-  issues,
-  ruleByNumber,
-  done,
-  anySettled,
-  onOpen,
-}: {
-  issues: ReviewFindingEvent[]
+interface TopEntry {
+  key: string
+  /** Lower is more urgent; a blocker ranks above everything. */
+  rank: number
+  source: string
+  pill: ReactNode
+  title: string
+  searchText: string
+  onOpen: () => void
+}
+
+const RISK_RANK: Record<Risk, number> = { blocker: 0, high: 1, medium: 2, low: 3 }
+const IMPORTANCE_RANK: Record<Importance, number> = { important: 1, notable: 2, minor: 3 }
+
+/** Playbook failures and issue-spotting items in one list, most urgent first, playbook first within a rank. */
+function topEntries(args: {
+  findings: ReviewFindingEvent[]
   ruleByNumber: Map<string, ReviewRuleInfo>
-  done: boolean
-  anySettled: boolean
-  onOpen: (ruleNumber: string) => void
-}) {
+  items: ScanItem[]
+  openRule: (ruleNumber: string) => void
+  openItem: (id: string) => void
+}): TopEntry[] {
+  const rules: TopEntry[] = args.findings.map((finding) => {
+    const statement = args.ruleByNumber.get(finding.ruleNumber)?.statement ?? `Rule ${finding.ruleNumber}`
+    return {
+      key: `rule:${finding.ruleNumber}`,
+      rank: finding.severity ? RISK_RANK[finding.severity] : 3,
+      source: `Playbook rule ${finding.ruleNumber}`,
+      pill: finding.severity ? <RiskPill risk={finding.severity} /> : null,
+      title: statement,
+      searchText: `${statement} ${finding.rationale}`,
+      onOpen: () => args.openRule(finding.ruleNumber),
+    }
+  })
+  const items: TopEntry[] = args.items
+    .filter((item) => item.importance !== 'minor')
+    .map((item) => ({
+      key: `item:${item.id}`,
+      rank: IMPORTANCE_RANK[item.importance],
+      source: item.category,
+      pill: <ImportancePill importance={item.importance} />,
+      title: item.title,
+      searchText: `${item.title} ${item.explanation}`,
+      onOpen: () => args.openItem(item.id),
+    }))
+  return [...rules, ...items]
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => a.entry.rank - b.entry.rank || a.index - b.index)
+    .map(({ entry }) => entry)
+}
+
+function TopIssues({ entries, done, anySettled }: { entries: TopEntry[]; done: boolean; anySettled: boolean }) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const needle = query.trim().toLowerCase()
-  const shown = needle
-    ? issues.filter((f) =>
-        `${ruleByNumber.get(f.ruleNumber)?.statement ?? ''} ${f.rationale}`.toLowerCase().includes(needle),
-      )
-    : issues
+  const shown = needle ? entries.filter((e) => e.searchText.toLowerCase().includes(needle)) : entries
 
   return (
     <section className="space-y-2">
@@ -362,22 +528,20 @@ function TopIssues({
 
       {shown.length > 0 ? (
         <ul className="space-y-2">
-          {shown.map((finding) => (
-            <li key={finding.ruleNumber}>
+          {shown.map((entry) => (
+            <li key={entry.key}>
               <button
                 type="button"
-                onClick={() => onOpen(finding.ruleNumber)}
+                onClick={entry.onOpen}
                 className="block w-full rounded-lg border border-[color:var(--color-line)] p-3 text-left hover:bg-[color:var(--color-surface-sunken)]"
                 data-testid="issue-card"
               >
                 <span className="flex items-center gap-2 text-[11px] text-[color:var(--color-ink-muted)]">
                   <DocIcon />
-                  <span className="flex-1">Playbook rule {finding.ruleNumber}</span>
-                  {finding.severity && <RiskPill risk={finding.severity} />}
+                  <span className="min-w-0 flex-1 truncate">{entry.source}</span>
+                  {entry.pill}
                 </span>
-                <span className="mt-1.5 line-clamp-2 block font-medium">
-                  {ruleByNumber.get(finding.ruleNumber)?.statement ?? `Rule ${finding.ruleNumber}`}
-                </span>
+                <span className="mt-1.5 line-clamp-2 block font-medium">{entry.title}</span>
               </button>
             </li>
           ))}
@@ -388,12 +552,356 @@ function TopIssues({
             ? 'No issue matches that search.'
             : done
               ? anySettled
-                ? 'No issues found against this playbook.'
-                : 'No rule settled, so there is nothing to show.'
-              : 'Issues appear here as rules are checked.'}
+                ? 'No issues found.'
+                : 'Nothing settled, so there is nothing to show.'
+              : 'Issues appear here as the document is checked.'}
         </p>
       )}
     </section>
+  )
+}
+
+function backLabel(view: View): string {
+  switch (view.name) {
+    case 'report':
+      return 'Playbook'
+    case 'scan':
+      return SCAN_LABEL[view.kind]
+    default:
+      return 'Review'
+  }
+}
+
+const SCAN_BLURB: Record<ScanKind, string> = {
+  issues: 'Substantive problems across the whole plan: names, fiduciaries, gifts, inconsistencies.',
+  proofread: 'Catch typos, placeholders, undefined terms, and broken cross-references.',
+}
+
+function ScanCard({
+  kind,
+  scan,
+  dismissed,
+  running,
+  onStart,
+  onOpen,
+}: {
+  kind: ScanKind
+  scan: ScanState
+  dismissed: Set<string>
+  running: boolean
+  onStart: () => void
+  onOpen: () => void
+}) {
+  if (!scan.started) {
+    return (
+      <button
+        type="button"
+        onClick={onStart}
+        className="rounded-lg border border-dashed border-[color:var(--color-line)] p-3 text-center hover:bg-[color:var(--color-surface-sunken)]"
+        data-testid={`${kind}-card`}
+      >
+        <span className="block text-[color:var(--color-ink-muted)]">+</span>
+        <span className="block font-medium">{SCAN_LABEL[kind]}</span>
+        <span className="mt-1 block text-[11px] text-[color:var(--color-ink-muted)]">{SCAN_BLURB[kind]}</span>
+      </button>
+    )
+  }
+  const items = scan.items.filter((item) => !dismissed.has(item.id))
+  const counts = tallyImportance(items)
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-lg border border-[color:var(--color-line)] p-3 text-left hover:bg-[color:var(--color-surface-sunken)]"
+      data-testid={`${kind}-card`}
+    >
+      <span className="flex items-center gap-1.5 text-[11px] text-[color:var(--color-ink-muted)]">
+        <span className="flex-1">{SCAN_LABEL[kind]}</span>
+        <span>›</span>
+      </span>
+      <span className="mt-2 flex items-center gap-2">
+        <span className="flex items-baseline gap-1">
+          <span className="text-lg font-semibold">{items.length}</span>
+          <span className="text-[11px] text-[color:var(--color-ink-muted)]">{items.length === 1 ? 'issue' : 'issues'}</span>
+        </span>
+        <span className="flex-1" />
+        {running ? <Spinner /> : <ImportanceRing counts={counts} />}
+      </span>
+      {scan.error && <span className="mt-1 block text-[11px] text-fail">{scan.error}</span>}
+      {!scan.error && scan.failures.length > 0 && (
+        <span className="mt-1 block text-[11px] text-warn">
+          {scan.failures.length} {scan.failures.length === 1 ? 'section' : 'sections'} not checked
+        </span>
+      )}
+    </button>
+  )
+}
+
+function ScanReport({
+  kind,
+  scan,
+  dismissed,
+  running,
+  bulkCount,
+  bulkBusy,
+  bulkNote,
+  onBack,
+  onOpen,
+  onRerun,
+  onApplyAll,
+}: {
+  kind: ScanKind
+  scan: ScanState
+  dismissed: Set<string>
+  running: boolean
+  bulkCount: number
+  bulkBusy: boolean
+  bulkNote: string | null
+  onBack: () => void
+  onOpen: (id: string) => void
+  onRerun: () => void
+  onApplyAll: () => void
+}) {
+  const [category, setCategory] = useState<string | 'all'>('all')
+  const [importance, setImportance] = useState<Importance | 'all'>('all')
+  const [sort, setSort] = useState<ScanSort>('importance')
+  const [query, setQuery] = useState('')
+  const items = scan.items.filter((item) => !dismissed.has(item.id))
+  const counts = tallyImportance(items)
+  const shown = filterItems(items, { category, importance, query, sort })
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <div className="flex-1 space-y-3 p-3">
+        <BackButton onClick={onBack} label="Review" />
+        <div>
+          <h1 className="text-lg font-semibold">{SCAN_LABEL[kind]}</h1>
+          <p className="text-[11px] text-[color:var(--color-ink-muted)]">{SCAN_BLURB[kind]}</p>
+        </div>
+
+        <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1" data-testid="scan-summary">
+          {(['important', 'notable', 'minor'] as Importance[]).map((level) => (
+            <span key={level} className="flex items-baseline gap-1">
+              <span className="text-2xl font-semibold">{counts[level]}</span>
+              <span className={`inline-block h-2 w-2 rounded-sm ${TONE_DOT[IMPORTANCE_TONE[level]]}`} aria-hidden />
+              <span className="text-[11px] text-[color:var(--color-ink-muted)]">{IMPORTANCE_LABEL[level]}</span>
+            </span>
+          ))}
+          {running && <span className="text-[11px] text-[color:var(--color-ink-muted)]">Checking…</span>}
+        </p>
+        {scan.error && <p className="text-fail">{scan.error}</p>}
+        {scan.failures.length > 0 && (
+          // Named, never folded into the count: a section never checked is not a section with nothing wrong.
+          <p className="text-[11px] text-warn">
+            Not checked: {scan.failures.map((f) => `section ${f.section} (${f.reason})`).join(', ')}. Rerun, or check those parts by hand.
+          </p>
+        )}
+        {scan.aborted && <p className="text-[11px] text-[color:var(--color-ink-muted)]">Stopped before every section was checked.</p>}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-full border border-[color:var(--color-line)] bg-transparent px-2 py-0.5 text-[11px]"
+          >
+            <option value="all">All categories</option>
+            {categoriesOf(items).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Importance"
+            value={importance}
+            onChange={(e) => setImportance(e.target.value as Importance | 'all')}
+            className="rounded-full border border-[color:var(--color-line)] bg-transparent px-2 py-0.5 text-[11px]"
+          >
+            <option value="all">Any importance</option>
+            {(['important', 'notable', 'minor'] as Importance[]).map((level) => (
+              <option key={level} value={level}>
+                {IMPORTANCE_LABEL[level]}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Order"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as ScanSort)}
+            className="rounded-full border border-[color:var(--color-line)] bg-transparent px-2 py-0.5 text-[11px]"
+          >
+            <option value="importance">Importance</option>
+            <option value="document">Document order</option>
+          </select>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            aria-label="Search items"
+            className="min-w-0 flex-1 rounded border border-[color:var(--color-line)] bg-transparent px-2 py-0.5 text-[11px]"
+          />
+        </div>
+
+        <ul className="space-y-2" data-testid="item-list">
+          {shown.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => onOpen(item.id)}
+                className="block w-full rounded-lg border border-[color:var(--color-line)] p-3 text-left hover:bg-[color:var(--color-surface-sunken)]"
+              >
+                <span className="flex items-center gap-2 text-[11px] text-[color:var(--color-ink-muted)]">
+                  <span className="min-w-0 flex-1 truncate">{item.category}</span>
+                  <ImportancePill importance={item.importance} />
+                </span>
+                <span className="mt-1.5 line-clamp-2 block font-medium">{item.title}</span>
+              </button>
+            </li>
+          ))}
+          {shown.length === 0 && (
+            <li className="text-[color:var(--color-ink-muted)]">
+              {items.length === 0 ? (running ? 'Items appear here as sections are checked.' : 'Nothing found.') : 'Nothing matches.'}
+            </li>
+          )}
+        </ul>
+        {bulkNote && <p className="text-[11px] text-[color:var(--color-ink-muted)]">{bulkNote}</p>}
+      </div>
+
+      <div className="sticky bottom-0 flex items-center justify-around gap-2 border-t border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-3 py-2 text-[12px]">
+        <button type="button" onClick={onRerun} disabled={running} className="disabled:opacity-40">
+          ↻ Rerun
+        </button>
+        <button
+          type="button"
+          onClick={onApplyAll}
+          disabled={running || bulkBusy || bulkCount === 0}
+          title="Every verified suggestion, as tracked changes."
+          className="disabled:opacity-40"
+        >
+          ✓ {bulkBusy ? 'Applying…' : `Apply all${bulkCount > 0 ? ` (${bulkCount})` : ''}`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ItemDetail({
+  kind,
+  item,
+  worked,
+  onWorked,
+  onDismiss,
+}: {
+  kind: ScanKind
+  item: ScanItem
+  worked: Worked
+  onWorked: (change: Worked) => void
+  onDismiss: () => void
+}) {
+  const actions = itemActions(item)
+  const [note, setNote] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const target = item.citation ? { blockIndex: item.citation.blockIndex, quote: item.citation.quote } : null
+  const { commented, bookmark, resolved } = worked
+  const button = 'rounded border border-[color:var(--color-line)] px-2 py-0.5'
+
+  const act = async (work: () => Promise<{ ok: boolean; reason?: string; bookmark?: string }>, done?: (b?: string) => void) => {
+    setBusy(true)
+    setNote(null)
+    try {
+      const result = await work()
+      if (result.ok) done?.(result.bookmark)
+      else setNote(result.reason ?? 'Word could not do that.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const decide = async (decision: 'accept' | 'reject') => {
+    if (!bookmark) return
+    const result = await resolveTrackedEdit(bookmark, decision)
+    if (result.ok) onWorked({ resolved: decision })
+    else setNote(result.reason === 'no-revisions' ? 'Already resolved in Word.' : 'Use Word’s Review tab for this one.')
+  }
+
+  return (
+    <div className="space-y-2" data-testid="item-detail">
+      <p className="flex items-center gap-2 text-[11px] text-[color:var(--color-ink-muted)]">
+        <span className="flex-1">
+          {SCAN_LABEL[kind]} · {item.category}
+        </span>
+        <ImportancePill importance={item.importance} />
+      </p>
+      <h2 className="font-semibold">{item.title}</h2>
+      {item.explanation && <p>{item.explanation}</p>}
+      {item.citation && (
+        <blockquote className="border-l-2 border-[color:var(--color-line)] pl-2 font-serif text-[12px] text-[color:var(--color-ink-muted)]">
+          {item.citation.quote}
+        </blockquote>
+      )}
+      {!item.citation && item.attemptedQuote && (
+        <p className="text-[11px] text-[color:var(--color-ink-muted)]">
+          The passage this item quoted could not be found in the document, so it cannot be marked up. Check it by hand.
+        </p>
+      )}
+      {actions.replace && (
+        <div className="rounded bg-pass/10 p-2 font-serif text-[12px]">
+          <p className="mb-0.5 font-sans text-[11px] font-medium text-pass">Suggested</p>
+          {actions.replace}
+        </div>
+      )}
+
+      {note && <p className="text-[11px] text-fail">{note}</p>}
+      {bookmark && !resolved && <p className="text-[11px] text-[color:var(--color-ink-muted)]">Applied as a tracked change.</p>}
+      {resolved && <p className="text-[11px] text-[color:var(--color-ink-muted)]">{resolved === 'accept' ? 'Accepted.' : 'Rejected.'}</p>}
+
+      <div className="flex flex-wrap gap-2 text-[11px]">
+        {actions.reveal && target && (
+          <button type="button" disabled={busy} onClick={() => void act(() => revealCitation(target))} className="underline">
+            Show in document
+          </button>
+        )}
+        {actions.comment && target && !commented && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => commentOnCitation(target, scanCommentText(kind, item)), () => onWorked({ commented: true }))}
+            className={button}
+          >
+            Add comment
+          </button>
+        )}
+        {commented && <span className="text-[color:var(--color-ink-muted)]">Comment added.</span>}
+        {actions.replace && target && !bookmark && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => replaceCitationTracked(target, actions.replace!), (b) => onWorked({ bookmark: b ?? 'applied' }))}
+            className={button}
+          >
+            Apply suggestion
+          </button>
+        )}
+        {bookmark && bookmark !== 'applied' && !resolved && (
+          <>
+            <button type="button" onClick={() => void decide('accept')} className={button}>
+              Accept
+            </button>
+            <button type="button" onClick={() => void decide('reject')} className={button}>
+              Reject
+            </button>
+            <button type="button" onClick={() => void revealTrackedEdit(bookmark)} className="underline">
+              Show change
+            </button>
+          </>
+        )}
+        <button type="button" onClick={onDismiss} className="ml-auto text-[color:var(--color-ink-muted)] underline">
+          Dismiss
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -824,6 +1332,63 @@ function RiskPill({ risk }: { risk: Risk }) {
       <span aria-hidden>▲</span>
       {RISK_LABEL[risk]}
     </span>
+  )
+}
+
+const IMPORTANCE_TONE: Record<Importance, Tone> = { important: 'fail', notable: 'warn', minor: 'muted' }
+
+function ImportancePill({ importance }: { importance: Importance }) {
+  const tone = IMPORTANCE_TONE[importance]
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-medium ${TONE_TEXT[tone]}`}
+    >
+      <span aria-hidden>{importance === 'minor' ? '●' : '▲'}</span>
+      {IMPORTANCE_LABEL[importance]}
+    </span>
+  )
+}
+
+/** Important, notable and minor as arcs of one ring — the card's at-a-glance mix. */
+function ImportanceRing({ counts }: { counts: Record<Importance, number> }) {
+  const total = counts.important + counts.notable + counts.minor
+  const r = 9
+  const circumference = 2 * Math.PI * r
+  let offset = 0
+  const arcs = (['important', 'notable', 'minor'] as Importance[]).flatMap((level) => {
+    if (total === 0 || counts[level] === 0) return []
+    const length = (counts[level] / total) * circumference
+    const arc = { level, length, offset }
+    offset += length
+    return [arc]
+  })
+  const stroke: Record<Importance, string> = { important: 'var(--color-fail)', notable: 'var(--color-warn)', minor: 'var(--color-line)' }
+  return (
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden className="-rotate-90">
+      <circle cx="13" cy="13" r={r} fill="none" stroke="var(--color-surface-sunken)" strokeWidth="4" />
+      {arcs.map((arc) => (
+        <circle
+          key={arc.level}
+          cx="13"
+          cy="13"
+          r={r}
+          fill="none"
+          stroke={stroke[arc.level]}
+          strokeWidth="4"
+          strokeDasharray={`${arc.length} ${circumference - arc.length}`}
+          strokeDashoffset={-arc.offset}
+        />
+      ))}
+    </svg>
+  )
+}
+
+function Spinner() {
+  return (
+    <span
+      aria-label="Checking"
+      className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-[color:var(--color-line)] border-t-[color:var(--color-accent)]"
+    />
   )
 }
 

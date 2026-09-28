@@ -1,5 +1,6 @@
 import { clearSession, loadSession, signIn } from '../auth/session'
 import { parseReviewFrame, type ReviewEvent } from '../review/model'
+import type { ScanEvent, ScanKind } from '../review/scan'
 
 /**
  * Every call is same-origin: the dev server proxies `/api` through to
@@ -533,5 +534,57 @@ export async function streamReview(args: StreamReviewArgs): Promise<void> {
     }
 
     if (!sawDone) throw new ApiError('The connection dropped before the review finished.', 502)
+  }, true)
+}
+
+export interface StreamScanArgs {
+  kind: ScanKind
+  paragraphs: string[]
+  matterId: string | null
+  signal?: AbortSignal
+  onEvent: (event: ScanEvent) => void
+}
+
+/**
+ * Issue spotting or proofreading over the open document, reporting items as
+ * each section settles. The same stream shape as `streamReview`, and the same
+ * `data: {...}` frames, so the same parser reads them.
+ */
+export async function streamScan(args: StreamScanArgs): Promise<void> {
+  return withAuthRetry(async () => {
+    let res: Response
+    try {
+      res = await fetch('/api/addin/scan', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: args.kind, paragraphs: args.paragraphs, matterId: args.matterId }),
+        signal: deadline(REVIEW_TIMEOUT_MS, args.signal),
+      })
+    } catch (err) {
+      describeAbort(err, REVIEW_TIMEOUT_MS / 1000)
+    }
+    if (!res.ok) throw new ApiError(await describeFailure(res), res.status)
+    if (!res.body) throw new ApiError('The server returned an empty stream.', 502)
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let sawDone = false
+
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const event = parseReviewFrame(frame) as unknown as ScanEvent | null
+        if (!event) continue
+        if ('done' in event || 'error' in event) sawDone = true
+        args.onEvent(event)
+      }
+    }
+
+    if (!sawDone) throw new ApiError('The connection dropped before the check finished.', 502)
   }, true)
 }
