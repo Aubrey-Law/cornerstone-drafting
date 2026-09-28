@@ -94,11 +94,29 @@ function decodeDocx(fileBase64: string): Buffer | null {
   return bytes
 }
 
-export async function startReviewRecording(
+export interface SnapshotInput {
+  fileBase64: string
+  documentName: string | null
+  layer: TextLayer
+  matterId: string | null
+  sourceDocumentId: string | null
+  userId: string
+}
+
+export type SnapshotResult =
+  | { ok: true; reviewUploadId: string; textLayerId: string }
+  | { ok: false; reason: string }
+
+/**
+ * Keeps the document as it was in Word — the .docx under `review-uploads/`
+ * as a `review_uploads` row, and the paragraph text layer every citation
+ * indexes. What a saved review and a saved scan both anchor to.
+ */
+export async function storeSnapshot(
   admin: Client,
-  input: StartRecordingInput,
+  input: SnapshotInput,
   storage: RecordingStorage = R2_STORAGE,
-): Promise<StartRecordingResult> {
+): Promise<SnapshotResult> {
   const bytes = decodeDocx(input.fileBase64)
   if (!bytes) return { ok: false, reason: 'The document could not be read from Word to keep a copy.' }
 
@@ -156,7 +174,18 @@ export async function startReviewRecording(
   if (layerError || !layerRow) {
     return { ok: false, reason: `Could not store the document text: ${layerError?.message ?? 'no row returned'}` }
   }
-  const textLayerId = String(layerRow.id)
+  return { ok: true, reviewUploadId, textLayerId: String(layerRow.id) }
+}
+
+export async function startReviewRecording(
+  admin: Client,
+  input: StartRecordingInput,
+  storage: RecordingStorage = R2_STORAGE,
+): Promise<StartRecordingResult> {
+  const snapshot = await storeSnapshot(admin, input, storage)
+  if (!snapshot.ok) return snapshot
+  const { reviewUploadId, textLayerId } = snapshot
+  const now = new Date().toISOString()
 
   const { data: runRow, error: runError } = await admin
     .from('workflow_runs')

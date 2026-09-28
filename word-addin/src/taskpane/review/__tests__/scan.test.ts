@@ -44,6 +44,15 @@ describe('applyScanEvent', () => {
     expect(state.items.map((i) => i.id)).toEqual(['a', 'b', 'c', 'd'])
   })
 
+  it('keeps whether the pass is saved, and a save that stopped part-way', () => {
+    let state = applyScanEvent(EMPTY_SCAN, { start: true, kind: 'issues', recording: { saved: true, scanId: 's1', reviewUploadId: 'u1' } })
+    expect(state.recording).toEqual({ saved: true, scanId: 's1', reviewUploadId: 'u1' })
+    state = applyScanEvent(state, { done: true, sections: 1, completed: 1, aborted: false, recordingProblem: 'disk full' })
+    expect(state.recordingProblem).toBe('disk full')
+    // An older server sends no recording at all: that is "unknown", not "saved".
+    expect(applyScanEvent(EMPTY_SCAN, { start: true, kind: 'issues' }).recording).toBeNull()
+  })
+
   it('treats an error frame as the end of the pass', () => {
     expect(applyScanEvent({ ...EMPTY_SCAN, started: true }, { error: 'boom' })).toMatchObject({ done: true, error: 'boom' })
   })

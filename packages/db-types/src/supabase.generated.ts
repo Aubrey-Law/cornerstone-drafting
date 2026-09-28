@@ -2782,6 +2782,138 @@ export type Database = {
           },
         ]
       }
+      document_scan_items: {
+        Row: {
+          attempted_quote: string | null
+          block_index: number | null
+          category: string
+          char_end: number | null
+          char_start: number | null
+          citation_refusal: string | null
+          created_at: string
+          explanation: string
+          id: string
+          importance: string
+          quote: string | null
+          replacement: string | null
+          scan_id: string
+          sequence: number
+          title: string
+        }
+        Insert: {
+          attempted_quote?: string | null
+          block_index?: number | null
+          category: string
+          char_end?: number | null
+          char_start?: number | null
+          citation_refusal?: string | null
+          created_at?: string
+          explanation?: string
+          id?: string
+          importance: string
+          quote?: string | null
+          replacement?: string | null
+          scan_id: string
+          sequence: number
+          title: string
+        }
+        Update: {
+          attempted_quote?: string | null
+          block_index?: number | null
+          category?: string
+          char_end?: number | null
+          char_start?: number | null
+          citation_refusal?: string | null
+          created_at?: string
+          explanation?: string
+          id?: string
+          importance?: string
+          quote?: string | null
+          replacement?: string | null
+          scan_id?: string
+          sequence?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_scan_items_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "document_scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_scans: {
+        Row: {
+          created_by: string | null
+          failures: Json
+          finished_at: string | null
+          id: string
+          item_count: number
+          kind: string
+          model: string | null
+          review_upload_id: string
+          section_completed: number
+          section_total: number | null
+          started_at: string
+          status: string
+          text_layer_id: string
+        }
+        Insert: {
+          created_by?: string | null
+          failures?: Json
+          finished_at?: string | null
+          id?: string
+          item_count?: number
+          kind: string
+          model?: string | null
+          review_upload_id: string
+          section_completed?: number
+          section_total?: number | null
+          started_at?: string
+          status?: string
+          text_layer_id: string
+        }
+        Update: {
+          created_by?: string | null
+          failures?: Json
+          finished_at?: string | null
+          id?: string
+          item_count?: number
+          kind?: string
+          model?: string | null
+          review_upload_id?: string
+          section_completed?: number
+          section_total?: number | null
+          started_at?: string
+          status?: string
+          text_layer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_scans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_scans_review_upload_id_fkey"
+            columns: ["review_upload_id"]
+            isOneToOne: false
+            referencedRelation: "review_uploads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_scans_text_layer_id_fkey"
+            columns: ["text_layer_id"]
+            isOneToOne: false
+            referencedRelation: "document_text_layers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_template_events: {
         Row: {
           actor_id: string

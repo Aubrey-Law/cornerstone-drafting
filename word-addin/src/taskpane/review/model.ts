@@ -44,7 +44,10 @@ export type ReviewMatterContext =
   | { state: 'no_sheet' }
   | { state: 'unavailable'; reason: string }
 
-export type ReviewRecording = { saved: true; runId: string } | { saved: false; reason: string }
+export type ReviewRecording =
+  /** `reviewUploadId`: the saved copy of the document, which a scan in the same session shares. */
+  | { saved: true; runId: string; reviewUploadId?: string }
+  | { saved: false; reason: string }
 
 export type ReviewEvent =
   | {

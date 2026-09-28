@@ -1,12 +1,14 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { loadRun } from '@/lib/review/history'
+import { loadScanSummaries } from '@/lib/review/scans'
 import { isCitable } from '@/lib/review/order'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { loadLinkableMatters } from '@/lib/review/uploads'
 import { loadPublishedPrompts } from '@/lib/prompts/repository'
 import { statusFromSteps } from '@/lib/runs/steps'
 import { RunProgressRefresh } from '../components/RunProgressRefresh'
+import { ScanHistoryList } from '../components/ScanHistoryList'
 import { StoredFindings } from './StoredFindings'
 import { UploadPanel } from './UploadPanel'
 
@@ -36,6 +38,9 @@ export default async function SavedReviewPage({ params }: { params: Promise<{ ru
           .map(prompt => ({ slug: prompt.slug, title: prompt.title })),
       }
     : null
+
+  // Issue spotting and proofreading run against this same saved copy.
+  const scans = run.reviewUploadId ? await loadScanSummaries(client, { reviewUploadId: run.reviewUploadId }) : []
 
   const cited = run.findings.filter(isCitable).length
   const refused = run.findings.filter(f => f.citationRefusal !== null).length
@@ -91,6 +96,12 @@ export default async function SavedReviewPage({ params }: { params: Promise<{ ru
           <p className="text-xs text-muted-foreground">
             Did not run: {run.failures.map(failure => `rule ${failure.ruleNumber} (${failure.reason})`).join(', ')}
           </p>
+        ) : null}
+        {scans.length > 0 ? (
+          <div className="pt-2" data-testid="run-scans">
+            <p className="text-xs font-medium text-muted-foreground">Also checked with this copy</p>
+            <ScanHistoryList scans={scans} showDocument={false} />
+          </div>
         ) : null}
       </header>
       <StoredFindings runId={run.runId} findings={run.findings} layer={run.layer} steps={run.steps} />

@@ -135,7 +135,7 @@ export async function POST(req: Request) {
          * the review running unrecorded rather than not running at all.
          */
         let recorder: ReviewRecorder | null = null
-        let recording: { saved: true; runId: string } | { saved: false; reason: string } = {
+        let recording: { saved: true; runId: string; reviewUploadId: string } | { saved: false; reason: string } = {
           saved: false,
           reason: 'The pane did not send the document, so this review is not saved.',
         }
@@ -156,7 +156,7 @@ export async function POST(req: Request) {
           }))
           if (started.ok) {
             recorder = started.recorder
-            recording = { saved: true, runId: recorder.runId }
+            recording = { saved: true, runId: recorder.runId, reviewUploadId: recorder.reviewUploadId }
           } else {
             recording = { saved: false, reason: started.reason }
           }

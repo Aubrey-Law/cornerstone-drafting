@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { loadRunSummaries } from '@/lib/review/history'
+import { loadScanSummaries } from '@/lib/review/scans'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { RunHistoryList } from './components/RunHistoryList'
+import { ScanHistoryList } from './components/ScanHistoryList'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +13,8 @@ export const dynamic = 'force-dynamic'
  */
 export default async function ReviewHistoryPage() {
   await requireStaffPage()
-  const runs = await loadRunSummaries(reviewClient(), 100)
+  const client = reviewClient()
+  const [runs, scans] = await Promise.all([loadRunSummaries(client, 100), loadScanSummaries(client, { limit: 100 })])
 
   return (
     <div className="space-y-4 px-6 py-5">
@@ -42,6 +45,13 @@ export default async function ReviewHistoryPage() {
           No reviews yet. Start one here, or from the Review tab in Word.
         </p>
       )}
+      {scans.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Issue spotting and proofreading</h2>
+          <p className="text-xs text-muted-foreground">Checks run from the Review tab in Word, against the same saved copy of the document.</p>
+          <ScanHistoryList scans={scans} />
+        </section>
+      ) : null}
     </div>
   )
 }

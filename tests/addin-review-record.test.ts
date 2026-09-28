@@ -331,7 +331,8 @@ describe('POST /api/addin/review with the document', () => {
     expect(admin.tables.workflow_findings).toHaveLength(2)
 
     const state = events.reduce(applyReviewEvent, EMPTY_REVIEW)
-    expect(state.recording).toEqual({ saved: true, runId })
+    // The saved copy's id travels with it, so a scan in the same session can share that copy.
+    expect(state.recording).toEqual({ saved: true, runId, reviewUploadId: String(admin.tables.review_uploads[0].id) })
     expect(state.recordingProblem).toBeNull()
   })
 

@@ -113,6 +113,8 @@ export default function ReviewPanel({
   const [bulkNote, setBulkNote] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  /** The latest review's saved copy of the document, which scans share. */
+  const reviewUploadRef = useRef<string | null>(null)
   const [scans, setScans] = useState<Record<ScanKind, ScanState>>(NO_SCANS)
   const scanAbort = useRef<Record<ScanKind, AbortController | null>>({ issues: null, proofread: null })
 
@@ -137,9 +139,16 @@ export default function ReviewPanel({
 
   /**
    * One issue-spotting or proofreading pass. Reads the document itself unless
-   * handed the paragraphs the playbook review just read, so both see the same text.
+   * handed what the playbook review just read, so both see the same text.
+   *
+   * Saved against the review's copy of the document when there is one — the
+   * server checks the text still matches — and otherwise against a copy of its
+   * own, from the bytes sent alongside.
    */
-  const runScanKind = async (kind: ScanKind, given?: string[]) => {
+  const runScanKind = async (
+    kind: ScanKind,
+    given?: { paragraphs: string[]; fileBase64: string | null; reviewUploadId: string | null },
+  ) => {
     scanAbort.current[kind]?.abort()
     const controller = new AbortController()
     scanAbort.current[kind] = controller
@@ -147,11 +156,16 @@ export default function ReviewPanel({
       setScans((current) => (scanAbort.current[kind] === controller ? { ...current, [kind]: change(current[kind]) } : current))
     setScans((current) => ({ ...current, [kind]: { ...EMPTY_SCAN, started: true } }))
     try {
-      const paragraphs = given ?? (await readParagraphTexts())
+      const paragraphs = given?.paragraphs ?? (await readParagraphTexts())
+      const fileBase64 = given ? given.fileBase64 : await readSnapshot(paragraphs)
       await streamScan({
         kind,
         paragraphs,
         matterId,
+        reviewUploadId: given ? given.reviewUploadId : reviewUploadRef.current,
+        fileBase64,
+        documentName: currentDocumentName(),
+        documentId: linkedDocumentId,
         signal: controller.signal,
         onEvent: (event) => update((state) => ({ ...applyScanEvent(state, event), started: true })),
       })
@@ -176,11 +190,24 @@ export default function ReviewPanel({
     setBulkNote(null)
     setReview(EMPTY_REVIEW)
     setView({ name: 'summary' })
+    reviewUploadRef.current = null
+    let paragraphs: string[] | null = null
+    let fileBase64: string | null = null
+    let issuesLaunched = false
+    /*
+     * Alongside the playbook, not after it: the attorney is waiting on both.
+     * Launched on the review's first frame, which says where the review saved
+     * its copy of the document, so the scan can share that copy rather than
+     * keep a second one.
+     */
+    const launchIssues = (reviewUploadId: string | null) => {
+      if (issuesLaunched || !paragraphs) return
+      issuesLaunched = true
+      void runScanKind('issues', { paragraphs, fileBase64, reviewUploadId })
+    }
     try {
-      const paragraphs = await readParagraphTexts()
-      // Alongside the playbook, not after it: the attorney is waiting on both.
-      void runScanKind('issues', paragraphs)
-      const fileBase64 = await readSnapshot(paragraphs)
+      paragraphs = await readParagraphTexts()
+      fileBase64 = await readSnapshot(paragraphs)
       await streamReview({
         paragraphs,
         playbookSlug: slug,
@@ -189,11 +216,20 @@ export default function ReviewPanel({
         documentName: currentDocumentName(),
         documentId: linkedDocumentId,
         signal: controller.signal,
-        onEvent: (event) => setReview((state) => applyReviewEvent(state, event)),
+        onEvent: (event) => {
+          setReview((state) => applyReviewEvent(state, event))
+          if ('start' in event) {
+            const uploadId = event.recording?.saved ? (event.recording.reviewUploadId ?? null) : null
+            reviewUploadRef.current = uploadId
+            launchIssues(uploadId)
+          }
+        },
       })
     } catch (err) {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'The review failed.')
     } finally {
+      // A review that failed before its first frame still gets its issue spotting.
+      if (!controller.signal.aborted) launchIssues(null)
       // Stopped by the attorney: no done frame will arrive, so say so here —
       // unless a newer review has already replaced this one.
       if (controller.signal.aborted && abortRef.current === controller) {
@@ -671,6 +707,7 @@ function ScanReport({
   const items = scan.items.filter((item) => !dismissed.has(item.id))
   const counts = tallyImportance(items)
   const shown = filterItems(items, { category, importance, query, sort })
+  const savedScanId = scan.recording?.saved ? scan.recording.scanId : null
 
   return (
     <div className="flex min-h-full flex-col">
@@ -699,6 +736,7 @@ function ScanReport({
           </p>
         )}
         {scan.aborted && <p className="text-[11px] text-[color:var(--color-ink-muted)]">Stopped before every section was checked.</p>}
+        <ScanRecordingNote scan={scan} />
 
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -784,8 +822,33 @@ function ScanReport({
         >
           ✓ {bulkBusy ? 'Applying…' : `Apply all${bulkCount > 0 ? ` (${bulkCount})` : ''}`}
         </button>
+        {savedScanId && (
+          <button type="button" onClick={() => openInCornerstone(`/admin/review/scans/${savedScanId}`)}>
+            ↗ Open in Cornerstone
+          </button>
+        )}
       </div>
     </div>
+  )
+}
+
+/** Whether this pass is in review history, in the same words as a review's note. */
+function ScanRecordingNote({ scan }: { scan: ScanState }) {
+  const recording = scan.recording
+  if (!recording) return null
+  const muted = 'text-[11px] text-[color:var(--color-ink-muted)]'
+  if (!recording.saved) return <p className={muted} data-testid="scan-recording">Not saved to review history: {recording.reason}</p>
+  if (scan.recordingProblem) {
+    return (
+      <p className="text-[11px] text-fail" data-testid="scan-recording">
+        Saving stopped part-way ({scan.recordingProblem}). What is on screen is complete; the saved copy is not.
+      </p>
+    )
+  }
+  return (
+    <p className={muted} data-testid="scan-recording">
+      {scan.done ? 'Saved to review history.' : 'Saving to review history as it runs.'}
+    </p>
   )
 }
 

@@ -24,15 +24,23 @@ export interface ScanItem {
   attemptedQuote: string | null
 }
 
+export type ScanRecording =
+  | { saved: true; scanId: string; reviewUploadId: string }
+  | { saved: false; reason: string }
+
 export type ScanEvent =
-  | { start: true; kind: ScanKind }
+  | { start: true; kind: ScanKind; recording?: ScanRecording }
   | { items: ScanItem[] }
   | { failure: { section: number; reason: string } }
-  | { done: true; sections: number; completed: number; aborted: boolean }
+  | { done: true; sections: number; completed: number; aborted: boolean; recordingProblem?: string }
   | { error: string }
 
 export interface ScanState {
   started: boolean
+  /** Null before the scan starts, or from a server that predates saving. */
+  recording: ScanRecording | null
+  /** Set when saving started but a later write failed. */
+  recordingProblem: string | null
   items: ScanItem[]
   failures: Array<{ section: number; reason: string }>
   sections: number | null
@@ -43,6 +51,8 @@ export interface ScanState {
 
 export const EMPTY_SCAN: ScanState = {
   started: false,
+  recording: null,
+  recordingProblem: null,
   items: [],
   failures: [],
   sections: null,
@@ -52,10 +62,12 @@ export const EMPTY_SCAN: ScanState = {
 }
 
 export function applyScanEvent(state: ScanState, event: ScanEvent): ScanState {
-  if ('start' in event) return { ...EMPTY_SCAN, started: true }
+  if ('start' in event) return { ...EMPTY_SCAN, started: true, recording: event.recording ?? null }
   if ('items' in event) return { ...state, items: [...state.items, ...event.items] }
   if ('failure' in event) return { ...state, failures: [...state.failures, event.failure] }
-  if ('done' in event) return { ...state, done: true, aborted: event.aborted, sections: event.sections }
+  if ('done' in event) {
+    return { ...state, done: true, aborted: event.aborted, sections: event.sections, recordingProblem: event.recordingProblem ?? null }
+  }
   return { ...state, error: event.error, done: true }
 }
 

@@ -541,6 +541,12 @@ export interface StreamScanArgs {
   kind: ScanKind
   paragraphs: string[]
   matterId: string | null
+  /** A review's saved copy of this document, to save the scan against. */
+  reviewUploadId?: string | null
+  /** Or the open .docx, base64, for a saved copy of the scan's own. Neither: the scan runs unsaved. */
+  fileBase64?: string | null
+  documentName?: string | null
+  documentId?: string | null
   signal?: AbortSignal
   onEvent: (event: ScanEvent) => void
 }
@@ -557,7 +563,15 @@ export async function streamScan(args: StreamScanArgs): Promise<void> {
       res = await fetch('/api/addin/scan', {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: args.kind, paragraphs: args.paragraphs, matterId: args.matterId }),
+        body: JSON.stringify({
+          kind: args.kind,
+          paragraphs: args.paragraphs,
+          matterId: args.matterId,
+          reviewUploadId: args.reviewUploadId ?? undefined,
+          fileBase64: args.fileBase64 ?? undefined,
+          documentName: args.documentName ?? undefined,
+          documentId: args.documentId ?? undefined,
+        }),
         signal: deadline(REVIEW_TIMEOUT_MS, args.signal),
       })
     } catch (err) {
