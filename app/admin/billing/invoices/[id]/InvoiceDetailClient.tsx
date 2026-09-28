@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, FileText, Pencil, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, Banknote, Bell, CreditCard, Download, FileText, MoreHorizontal, Pencil, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -12,8 +12,19 @@ import { InvoicePreview } from '@/components/billing/InvoicePreview'
 import { InvoiceStatusBadge } from '@/components/billing/InvoiceStatusBadge'
 import { RecordInvoicePaymentDialog } from '@/components/billing/RecordInvoicePaymentDialog'
 import { VoidInvoiceDialog } from '@/components/billing/VoidInvoiceDialog'
+import {
+  InvoiceReminderDialog,
+  type InvoiceReminderTone,
+} from '@/components/billing/InvoiceReminderDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -53,6 +64,7 @@ export default function InvoiceDetailClient({
   const router = useRouter()
   const token = useAccessToken()
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [reminderOpen, setReminderOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [busy, setBusy] = useState<
@@ -60,8 +72,10 @@ export default function InvoiceDetailClient({
     | 'issue-send' | 'issue-download' | 'render' | null
   >(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
+  const reminderOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
   const discardOpenerRef = useRef<HTMLElement | null>(null)
+  const moreActionsRef = useRef<HTMLButtonElement | null>(null)
 
   const isDraft = invoice.status === 'draft'
   const isVoid = invoice.status === 'void'
@@ -69,6 +83,14 @@ export default function InvoiceDetailClient({
 
   function rememberOpener(setter: (open: boolean) => void, ref: typeof paymentOpenerRef) {
     ref.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setter(true)
+  }
+
+  function openFromActionsMenu(
+    setter: (open: boolean) => void,
+    ref: typeof paymentOpenerRef,
+  ) {
+    ref.current = moreActionsRef.current
     setter(true)
   }
 
@@ -161,13 +183,14 @@ export default function InvoiceDetailClient({
     }
   }
 
-  async function remind() {
+  async function remind(tone: InvoiceReminderTone) {
     setBusy('reminder')
     try {
       await post(`/api/admin/billing/invoices/${invoice.id}/reminder`, {
-        tone: invoice.daysPastDue > 45 ? 'final' : invoice.daysPastDue > 14 ? 'firm' : 'friendly',
+        tone,
         attachInvoice: true,
       })
+      setReminderOpen(false)
       toast.success('Reminder sent')
       router.refresh()
     } catch (error) {
@@ -313,88 +336,31 @@ export default function InvoiceDetailClient({
                 All invoices
               </Link>
             </Button>
-            {documentId && (
-              <Button type="button" variant="outline" className="min-h-11" onClick={() => void download()}>
-                <Download className="size-4" aria-hidden />
-                Download
-              </Button>
-            )}
             {isDraft && (
-              <>
-                <Button asChild variant="outline" className="min-h-11">
-                  <Link href={`/admin/billing/invoices/${invoice.id}/edit`}>
-                    <Pencil className="size-4" aria-hidden />
-                    Edit
-                  </Link>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11"
-                  disabled={busy !== null}
-                  onClick={() => rememberOpener(setDiscardOpen, discardOpenerRef)}
-                >
-                  <Trash2 className="size-4" aria-hidden />
-                  Discard
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11"
-                  disabled={busy !== null}
-                  onClick={() => void issue('download')}
-                >
-                  <Download className="size-4" aria-hidden />
-                  {busy === 'issue-download' ? 'Issuing…' : 'Issue & download'}
-                </Button>
-                <Button
-                  type="button"
-                  className="min-h-11"
-                  disabled={busy !== null}
-                  onClick={() => void issue('send')}
-                >
-                  <Send className="size-4" aria-hidden />
-                  {busy === 'issue-send' ? 'Issuing…' : 'Issue & send'}
-                </Button>
-              </>
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={busy !== null}
+                onClick={() => void issue('send')}
+              >
+                <Send className="size-4" aria-hidden />
+                {busy === 'issue-send' ? 'Issuing…' : 'Issue & send'}
+              </Button>
             )}
             {!isDraft && !isVoid && (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11"
-                  disabled={busy !== null}
-                  onClick={() => void resend()}
-                >
-                  <Send className="size-4" aria-hidden />
-                  {busy === 'send' ? 'Sending…' : invoice.sentAt ? 'Resend' : 'Send'}
-                </Button>
                 {invoice.overdue && (
                   <Button
                     type="button"
-                    variant="outline"
                     className="min-h-11"
                     disabled={busy !== null}
-                    onClick={() => void remind()}
+                    onClick={() => rememberOpener(setReminderOpen, reminderOpenerRef)}
                   >
                     <Bell className="size-4" aria-hidden />
-                    {busy === 'reminder' ? 'Sending…' : 'Send reminder'}
+                    Review reminder
                   </Button>
                 )}
-                {paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11"
-                    disabled={busy !== null}
-                    onClick={() => void createPayLink()}
-                  >
-                    <CreditCard className="size-4" aria-hidden />
-                    {busy === 'checkout' ? 'Creating…' : 'Create pay link'}
-                  </Button>
-                )}
-                {invoice.balance > 0 && (
+                {invoice.balance > 0 && !invoice.overdue && (
                   <Button
                     type="button"
                     className="min-h-11"
@@ -404,16 +370,80 @@ export default function InvoiceDetailClient({
                     Record payment
                   </Button>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11"
-                  onClick={() => rememberOpener(setVoidOpen, voidOpenerRef)}
-                >
-                  <Ban className="size-4" aria-hidden />
-                  Void
-                </Button>
               </>
+            )}
+            {!isVoid && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    ref={moreActionsRef}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="min-h-11 min-w-11"
+                    aria-label="More invoice actions"
+                    disabled={busy !== null}
+                  >
+                    <MoreHorizontal className="size-4" aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {documentId && (
+                    <DropdownMenuItem onSelect={() => void download()}>
+                      <Download className="size-4" aria-hidden />
+                      Download invoice
+                    </DropdownMenuItem>
+                  )}
+                  {isDraft ? (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/billing/invoices/${invoice.id}/edit`}>
+                          <Pencil className="size-4" aria-hidden />
+                          Edit draft
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void issue('download')}>
+                        <Download className="size-4" aria-hidden />
+                        Issue & download
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => openFromActionsMenu(setDiscardOpen, discardOpenerRef)}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                        Discard draft
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <DropdownMenuItem onSelect={() => void resend()}>
+                        <Send className="size-4" aria-hidden />
+                        {invoice.sentAt ? 'Resend invoice' : 'Send invoice'}
+                      </DropdownMenuItem>
+                      {paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
+                        <DropdownMenuItem onSelect={() => void createPayLink()}>
+                          <CreditCard className="size-4" aria-hidden />
+                          Create pay link
+                        </DropdownMenuItem>
+                      )}
+                      {invoice.balance > 0 && invoice.overdue && (
+                        <DropdownMenuItem onSelect={() => openFromActionsMenu(setPaymentOpen, paymentOpenerRef)}>
+                          <Banknote className="size-4" aria-hidden />
+                          Record payment
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => openFromActionsMenu(setVoidOpen, voidOpenerRef)}
+                      >
+                        Void invoice
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </>
         }
@@ -569,6 +599,15 @@ export default function InvoiceDetailClient({
         saving={busy === 'payment'}
         returnFocusRef={paymentOpenerRef}
         onSave={recordPayment}
+      />
+
+      <InvoiceReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        invoice={invoice}
+        sending={busy === 'reminder'}
+        returnFocusRef={reminderOpenerRef}
+        onSend={remind}
       />
 
       <DiscardInvoiceDialog
