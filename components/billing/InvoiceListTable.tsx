@@ -23,6 +23,62 @@ export interface InvoiceListRowView extends Invoice {
   daysPastDue: number
 }
 
+function InvoiceNextAction({ invoice }: { invoice: InvoiceListRowView }) {
+  const detailHref = `/admin/billing/invoices/${invoice.id}`
+  if (invoice.kind === 'credit_note') {
+    return (
+      <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+        <Link href={detailHref} aria-label={`View credit note for ${invoice.clientName}`}>
+          View credit note
+        </Link>
+      </Button>
+    )
+  }
+  if (invoice.status === 'draft') {
+    return (
+      <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+        <Link href={`${detailHref}/edit`} aria-label={`Continue draft for ${invoice.clientName}`}>
+          Continue draft
+        </Link>
+      </Button>
+    )
+  }
+  if (invoice.overdue) {
+    return (
+      <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+        <Link href={detailHref} aria-label={`Review reminder for ${invoice.clientName}`}>
+          Review reminder
+        </Link>
+      </Button>
+    )
+  }
+  if (invoice.status === 'paid') {
+    return (
+      <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+        <Link href={detailHref} aria-label={`View paid invoice for ${invoice.clientName}`}>
+          View invoice
+        </Link>
+      </Button>
+    )
+  }
+  if (invoice.balance > 0 && invoice.status !== 'void') {
+    return (
+      <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+        <Link href={detailHref} aria-label={`Record payment for ${invoice.clientName}`}>
+          Record payment
+        </Link>
+      </Button>
+    )
+  }
+  return (
+    <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+      <Link href={detailHref} aria-label={`View invoice for ${invoice.clientName}`}>
+        View invoice
+      </Link>
+    </Button>
+  )
+}
+
 /**
  * The invoice register. Shared by the Billing page's Invoices tab and the
  * standalone /admin/billing/invoices route so the two cannot drift.
@@ -54,7 +110,8 @@ export function InvoiceListTable({ invoices }: { invoices: InvoiceListRowView[] 
             <TableHead>Due</TableHead>
             <TableHead className="text-right">Total</TableHead>
             <TableHead className="text-right">Balance</TableHead>
-            <TableHead className="pr-4">Status</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="pr-4 text-right"><span className="sr-only">Next action</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -97,8 +154,11 @@ export function InvoiceListTable({ invoices }: { invoices: InvoiceListRowView[] 
               <TableCell className="text-right font-medium tabular-nums">
                 {moneyExact(invoice.balance)}
               </TableCell>
-              <TableCell className="pr-4">
+              <TableCell>
                 <InvoiceStatusBadge invoice={invoice} overdue={invoice.overdue} />
+              </TableCell>
+              <TableCell className="pr-4 text-right">
+                <InvoiceNextAction invoice={invoice} />
               </TableCell>
             </TableRow>
           ))}

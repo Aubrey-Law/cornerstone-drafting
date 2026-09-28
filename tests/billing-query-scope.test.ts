@@ -9,6 +9,9 @@ vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from: (table: s
     in: (field: string, value: unknown) => { read.filters.push(['in', field, value]); return chain },
     gte: (field: string, value: unknown) => { read.filters.push(['gte', field, value]); return chain },
     lt: (field: string, value: unknown) => { read.filters.push(['lt', field, value]); return chain },
+    lte: (field: string, value: unknown) => { read.filters.push(['lte', field, value]); return chain },
+    ilike: (field: string, value: unknown) => { read.filters.push(['ilike', field, value]); return chain },
+    limit: () => chain,
     range: (from: number, to: number) => { read.range = [from, to]; return chain },
     then: (resolve: (value: unknown) => unknown) => {
       if (state.fail) return Promise.resolve(resolve({ data: null, count: null, error: { message: 'offline' } }))
@@ -30,13 +33,61 @@ describe('invoice page scope and accounting', () => {
     expect(result.total).toBe(121)
     expect(result.rows).toHaveLength(21)
     expect(result.rows[0].balance).toBe(7000)
-    expect(state.reads[0].range).toEqual([100,149])
-    expect(state.reads[0].filters).toEqual([['eq','matter_id','selected-matter'],['eq','status','issued'],['gte','issue_date','2026-09-01'],['lt','issue_date','2026-10-01']])
+    const pageRead = state.reads.find(read => read.table === 'invoices' && read.range)
+    expect(pageRead?.range).toEqual([100,149])
+    expect(pageRead?.filters).toEqual([['eq','matter_id','selected-matter'],['eq','status','issued'],['gte','issue_date','2026-09-01'],['lt','issue_date','2026-10-01']])
     expect(state.reads.find(read => read.table === 'billing_payments')?.filters[0][2]).toHaveLength(21)
   })
   it('clamps an out-of-range page and fails visibly when the register is unavailable', async () => {
-    expect((await fetchInvoicePage({ page: 99, pageSize: 50 })).page).toBe(3)
+    expect((await fetchInvoicePage({ page: 99, pageSize: 50, queue: 'all' })).page).toBe(3)
     state.fail = true
     await expect(fetchInvoicePage({ page: 1, pageSize: 50 })).rejects.toThrow('unavailable')
+  })
+
+  it('scopes collection queues to invoices and applies firm-date urgency bounds', async () => {
+    await fetchInvoicePage({ page: 1, pageSize: 50, queue: 'past_due' }, new Date('2026-09-10T12:00Z'))
+
+    const pageRead = state.reads.find(read => read.table === 'invoices' && read.range)
+    expect(pageRead?.filters).toEqual([
+      ['eq', 'kind', 'invoice'],
+      ['in', 'status', ['issued', 'partial']],
+      ['lt', 'due_date', '2026-09-10'],
+    ])
+    expect(state.reads.some(read => read.filters.some(filter =>
+      filter[0] === 'lte' && filter[1] === 'due_date' && filter[2] === '2026-09-24',
+    ))).toBe(true)
+  })
+
+  it('builds the default attention page in past-due, due-soon, then draft order', async () => {
+    const result = await fetchInvoicePage({ page: 1, pageSize: 50 }, new Date('2026-09-10T12:00Z'))
+
+    const pageRead = state.reads.find(read => read.table === 'invoices' && read.range)
+    expect(pageRead?.filters).toEqual([
+      ['eq', 'kind', 'invoice'],
+      ['in', 'status', ['issued', 'partial']],
+      ['lt', 'due_date', '2026-09-10'],
+    ])
+    expect(result.counts.attention).toBe(
+      result.counts.past_due + result.counts.due_soon + result.counts.draft,
+    )
+  })
+
+  it('searches invoice, client, and matter identifiers before applying exact pagination', async () => {
+    await fetchInvoicePage({ page: 1, pageSize: 50, queue: 'all', search: 'A_B%' })
+
+    expect(state.reads.some(read => read.table === 'invoices' && read.filters.some(filter =>
+      filter[0] === 'ilike' && filter[1] === 'number' && filter[2] === '%A\\_B\\%%',
+    ))).toBe(true)
+    expect(state.reads.some(read => read.table === 'invoices' && read.filters.some(filter =>
+      filter[0] === 'ilike' && filter[1] === 'bill_to_name',
+    ))).toBe(true)
+    expect(state.reads.some(read => read.table === 'matters' && read.filters.some(filter =>
+      filter[0] === 'ilike' && filter[1] === 'matter_number',
+    ))).toBe(true)
+    expect(state.reads.some(read => read.table === 'v_matter_pipeline' && read.filters.some(filter =>
+      filter[0] === 'ilike' && filter[1] === 'client_name',
+    ))).toBe(true)
+    const pageRead = state.reads.find(read => read.table === 'invoices' && read.range)
+    expect(pageRead?.filters.some(filter => filter[0] === 'in' && filter[1] === 'id')).toBe(true)
   })
 })

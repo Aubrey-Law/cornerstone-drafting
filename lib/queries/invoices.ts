@@ -163,6 +163,96 @@ export interface InvoiceListRow extends Invoice {
   daysPastDue: number
 }
 
+export const invoiceQueueFilters = ['attention', 'draft', 'due_soon', 'past_due', 'paid', 'all'] as const
+export type InvoiceQueueFilter = (typeof invoiceQueueFilters)[number]
+export type InvoiceQueueCounts = Record<InvoiceQueueFilter, number>
+
+const invoiceSearchLimit = 500
+
+function addCalendarDays(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day + days))
+  return date.toISOString().slice(0, 10)
+}
+
+function invoiceSearchPattern(search: string): string {
+  return `%${search.replace(/[\\%_]/g, value => `\\${value}`)}%`
+}
+
+async function resolveInvoiceSearchIds(search: string): Promise<string[] | null> {
+  const value = search.trim()
+  if (!value) return null
+  if (value.length > 200) throw new Error('Invoice search is too long')
+
+  const admin = getAdminClient()
+  const pattern = invoiceSearchPattern(value)
+  const [numberResult, billToResult, matterNumberResult, clientResult, matterNameResult] = await Promise.all([
+    admin.from('invoices').select('id').ilike('number', pattern).limit(invoiceSearchLimit + 1),
+    admin.from('invoices').select('id').ilike('bill_to_name', pattern).limit(invoiceSearchLimit + 1),
+    admin.from('matters').select('id').ilike('matter_number', pattern).limit(invoiceSearchLimit + 1),
+    admin.from('v_matter_pipeline').select('matter_id').ilike('client_name', pattern).limit(invoiceSearchLimit + 1),
+    admin.from('v_matter_pipeline').select('matter_id').ilike('matter_name', pattern).limit(invoiceSearchLimit + 1),
+  ])
+  const results = [numberResult, billToResult, matterNumberResult, clientResult, matterNameResult]
+  const error = results.find(result => result.error)?.error
+  if (error) throw new Error('Invoice search is temporarily unavailable')
+  if (results.some(result => (result.data?.length ?? 0) > invoiceSearchLimit)) {
+    throw new Error('Too many invoice search matches. Please narrow the search.')
+  }
+
+  const invoiceIds = new Set([
+    ...((numberResult.data ?? []) as { id: string }[]).map(row => row.id),
+    ...((billToResult.data ?? []) as { id: string }[]).map(row => row.id),
+  ])
+  const matterIds = [...new Set([
+    ...((matterNumberResult.data ?? []) as { id: string }[]).map(row => row.id),
+    ...((clientResult.data ?? []) as { matter_id: string }[]).map(row => row.matter_id),
+    ...((matterNameResult.data ?? []) as { matter_id: string }[]).map(row => row.matter_id),
+  ])]
+  if (matterIds.length > 0) {
+    const matterInvoiceResult = await admin
+      .from('invoices')
+      .select('id')
+      .in('matter_id', matterIds)
+      .limit(invoiceSearchLimit + 1)
+    if (matterInvoiceResult.error) throw new Error('Invoice search is temporarily unavailable')
+    if ((matterInvoiceResult.data?.length ?? 0) > invoiceSearchLimit) {
+      throw new Error('Too many invoice search matches. Please narrow the search.')
+    }
+    for (const row of (matterInvoiceResult.data ?? []) as { id: string }[]) invoiceIds.add(row.id)
+  }
+  return [...invoiceIds]
+}
+
+type InvoiceFilterQuery = {
+  eq(column: string, value: unknown): InvoiceFilterQuery
+  in(column: string, values: readonly unknown[]): InvoiceFilterQuery
+  gte(column: string, value: unknown): InvoiceFilterQuery
+  lt(column: string, value: unknown): InvoiceFilterQuery
+  lte(column: string, value: unknown): InvoiceFilterQuery
+}
+
+function applyInvoiceQueue(
+  query: InvoiceFilterQuery,
+  queue: InvoiceQueueFilter,
+  today: string,
+): InvoiceFilterQuery {
+  const scoped = queue === 'all' ? query : query.eq('kind', 'invoice')
+  if (queue === 'attention') return scoped.in('status', ['draft', 'issued', 'partial'])
+  if (queue === 'draft') return scoped.eq('status', 'draft')
+  if (queue === 'due_soon') {
+    return scoped
+      .in('status', ['issued', 'partial'])
+      .gte('due_date', today)
+      .lte('due_date', addCalendarDays(today, 14))
+  }
+  if (queue === 'past_due') {
+    return scoped.in('status', ['issued', 'partial']).lt('due_date', today)
+  }
+  if (queue === 'paid') return scoped.eq('status', 'paid')
+  return scoped
+}
+
 /** Every invoice, newest first. Optionally narrowed to one matter or status. */
 export async function fetchInvoices(
   filter: { matterId?: string; status?: InvoiceStatus } = {},
@@ -278,27 +368,106 @@ export async function fetchInvoiceableCharges(
     }))
 }
 
-export type InvoicePageQuery = PageRequest & { matterId?: string; status?: InvoiceStatus; issueMonth?: string }
-export async function fetchInvoicePage(input: InvoicePageQuery, now?: Date): Promise<PageResult<InvoiceListRow>> {
+export type InvoicePageQuery = PageRequest & {
+  matterId?: string
+  status?: InvoiceStatus
+  issueMonth?: string
+  queue?: InvoiceQueueFilter
+  search?: string
+}
+export type InvoicePageResult = PageResult<InvoiceListRow> & { counts: InvoiceQueueCounts }
+
+export async function fetchInvoicePage(input: InvoicePageQuery, now?: Date): Promise<InvoicePageResult> {
   const page = pageRequest(input)
   if (input.status && !['draft','issued','partial','paid','void'].includes(input.status)) throw new Error('Invalid invoice status')
+  const legacyStatus = input.queue === undefined ? input.status : undefined
+  const queue: InvoiceQueueFilter = input.queue ?? (legacyStatus ? 'all' : 'attention')
+  if (!invoiceQueueFilters.includes(queue as InvoiceQueueFilter)) throw new Error('Invalid invoice queue')
+  const today = firmTodayKey(now)
   const admin = getAdminClient()
-  let query = admin.from('invoices').select('*', { count: 'exact' })
-  if (input.matterId) query = query.eq('matter_id', input.matterId)
-  if (input.status) query = query.eq('status', input.status)
-  if (input.issueMonth) {
-    const range = monthRange(input.issueMonth)
-    query = query.gte('issue_date', range.from).lt('issue_date', range.to)
+  const searchIds = await resolveInvoiceSearchIds(input.search ?? '')
+  const issueRange = input.issueMonth ? monthRange(input.issueMonth) : null
+
+  function applyScope(query: InvoiceFilterQuery): InvoiceFilterQuery {
+    let scoped = query
+    if (input.matterId) scoped = scoped.eq('matter_id', input.matterId)
+    if (legacyStatus) scoped = scoped.eq('status', legacyStatus)
+    if (searchIds) scoped = scoped.in('id', searchIds)
+    if (issueRange) scoped = scoped.gte('issue_date', issueRange.from).lt('issue_date', issueRange.to)
+    return scoped
   }
-  const offset = (page.page - 1) * page.pageSize
-  const { data, error, count } = await query.order('created_at', { ascending:false }).order('id', { ascending:false }).range(offset, offset + page.pageSize - 1)
-  if (error || count === null) throw new Error('Invoice register is temporarily unavailable')
-  const lastPage = Math.max(1, Math.ceil(count / page.pageSize))
+
+  const countedFilters = invoiceQueueFilters.filter(filter => filter !== 'attention')
+  const countEntries = await Promise.all(countedFilters.map(async filter => {
+    let countQuery = admin.from('invoices').select('id', { count: 'exact', head: true })
+    countQuery = applyInvoiceQueue(
+      applyScope(countQuery as unknown as InvoiceFilterQuery),
+      filter,
+      today,
+    ) as unknown as typeof countQuery
+    const { count, error } = await countQuery
+    if (error || count === null) throw new Error('Invoice register is temporarily unavailable')
+    return [filter, count] as const
+  }))
+  const counts = Object.fromEntries(countEntries) as Omit<InvoiceQueueCounts, 'attention'> & { attention?: number }
+  counts.attention = counts.past_due + counts.due_soon + counts.draft
+  const completeCounts = counts as InvoiceQueueCounts
+
+  const total = completeCounts[queue]
+  const lastPage = Math.max(1, Math.ceil(total / page.pageSize))
   if (page.page > lastPage) return fetchInvoicePage({ ...input, page:lastPage }, now)
-  const raw = (data ?? []) as InvoiceRow[]
+  if (total === 0) return { ...page, total, rows: [], counts: completeCounts }
+
+  const offset = (page.page - 1) * page.pageSize
+
+  async function fetchRows(filter: InvoiceQueueFilter, from: number, size: number): Promise<InvoiceRow[]> {
+    let query = admin.from('invoices').select('*')
+    query = applyInvoiceQueue(
+      applyScope(query as unknown as InvoiceFilterQuery),
+      filter,
+      today,
+    ) as unknown as typeof query
+    if (filter === 'due_soon' || filter === 'past_due') {
+      query = query.order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+    } else if (filter === 'draft') {
+      query = query.order('created_at', { ascending: true })
+    } else {
+      query = query.order('created_at', { ascending: false })
+    }
+    const { data, error } = await query
+      .order('id', { ascending: false })
+      .range(from, from + size - 1)
+    if (error) throw new Error('Invoice register is temporarily unavailable')
+    return (data ?? []) as InvoiceRow[]
+  }
+
+  let raw: InvoiceRow[]
+  if (queue === 'attention') {
+    const segments: { filter: InvoiceQueueFilter; from: number; size: number }[] = []
+    let skipped = offset
+    let remaining = page.pageSize
+    for (const filter of ['past_due', 'due_soon', 'draft'] as const) {
+      const count = completeCounts[filter]
+      if (skipped >= count) {
+        skipped -= count
+        continue
+      }
+      const size = Math.min(remaining, count - skipped)
+      if (size > 0) segments.push({ filter, from: skipped, size })
+      remaining -= size
+      skipped = 0
+      if (remaining === 0) break
+    }
+    raw = (await Promise.all(segments.map(segment =>
+      fetchRows(segment.filter, segment.from, segment.size),
+    ))).flat()
+  } else {
+    raw = await fetchRows(queue, offset, page.pageSize)
+  }
   const [invoices, accounting] = await Promise.all([attachContext(raw), loadInvoiceAccounting(admin, raw)])
-  return { ...page, total:count, rows:invoices.map(invoice => {
+  return { ...page, total, counts: completeCounts, rows:invoices.map(invoice => {
     const { balance, collected } = accounting.get(invoice.id)!
-    return { ...invoice, balance, collected, ...invoiceOverdue(invoice,balance,firmTodayKey(now)) }
+    return { ...invoice, balance, collected, ...invoiceOverdue(invoice,balance,today) }
   }) }
 }
