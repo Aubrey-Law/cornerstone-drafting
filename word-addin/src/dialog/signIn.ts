@@ -109,7 +109,14 @@ export interface SupabaseConfig {
  * shipped to every browser that loads Cornerstone.
  */
 export function readSupabaseConfig(
-  env: Record<string, string | boolean | undefined> = import.meta.env,
+  // Two named reads, not the whole `import.meta.env`. Passing that object
+  // wholesale made Vite emit every key it held into the bundle rather than
+  // substituting the two that are used — which is how the platform's injected
+  // variables got published alongside them.
+  env: Record<string, string | boolean | undefined> = {
+    NEXT_PUBLIC_SUPABASE_URL: import.meta.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  },
 ): SupabaseConfig {
   const url = env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY

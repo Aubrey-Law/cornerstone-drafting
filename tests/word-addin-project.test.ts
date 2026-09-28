@@ -195,6 +195,32 @@ describe('word-addin production hosting', () => {
     expect(read('word-addin/src/dialogUrl.ts')).toContain('import.meta.env.BASE_URL')
   })
 
+  it('publishes named environment values, not a prefix', () => {
+    // The pane's bundle is served unauthenticated. `envPrefix: ['VITE_',
+    // 'NEXT_PUBLIC_']` published whatever the platform chose to put behind that
+    // prefix, and Vercel puts a lot there: NEXT_PUBLIC_VERCEL_GIT_COMMIT_MESSAGE,
+    // _COMMIT_SHA, _REPO_OWNER, _PROJECT_ID, the author's login and the internal
+    // deployment hostnames all shipped to anyone who could fetch the URL.
+    // Comments stripped first — the config explains at length what it no longer
+    // does, and that prose is not a setting. Same idiom as the sideload test.
+    const code = viteConfig.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    expect(code).not.toMatch(/envPrefix:\s*\[[^\]]*'NEXT_PUBLIC_'/)
+    expect(code).toContain('PUBLISHED_ENV')
+    // Exactly the two the sign-in dialog needs, named one by one.
+    expect(code).toMatch(
+      /PUBLISHED_ENV = \[\s*'NEXT_PUBLIC_SUPABASE_URL',\s*'NEXT_PUBLIC_SUPABASE_ANON_KEY'\s*\]/,
+    )
+  })
+
+  it('never hands the whole environment object to application code', () => {
+    // The second half of the same leak: a default parameter of
+    // `import.meta.env` makes Vite emit every key the object holds instead of
+    // substituting the ones actually read.
+    const signIn = read('word-addin/src/dialog/signIn.ts')
+    expect(signIn).not.toMatch(/=\s*import\.meta\.env\s*,/)
+    expect(signIn).toContain('NEXT_PUBLIC_SUPABASE_URL: import.meta.env.NEXT_PUBLIC_SUPABASE_URL')
+  })
+
   it('is build output, not source', () => {
     expect(read('.gitignore')).toContain('public/addin/')
   })
