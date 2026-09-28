@@ -41,7 +41,7 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
         description={
           <>
             {run.matterId ? (
-              <Link href={`/admin/matters/${run.matterId}`} className="font-medium text-primary hover:underline">
+              <Link href={`/admin/matters/${run.matterId}?tab=reviews`} className="font-medium text-primary hover:underline">
                 {run.matterTitle}
               </Link>
             ) : (
@@ -53,12 +53,19 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
           </>
         }
         actions={
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/admin/field-audits">
-              <ArrowLeft className="size-4" aria-hidden />
-              All field audits
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/field-audits">
+                <ArrowLeft className="size-4" aria-hidden />
+                All field audits
+              </Link>
+            </Button>
+            {run.matterId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/admin/matters/${run.matterId}?tab=reviews`}>Open matter</Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
       {/* A check that never ran is not a check that found nothing. */}

@@ -82,14 +82,29 @@ describe('MatterReviewsTab', () => {
   })
 
   it('says so when there are none, and when they cannot be loaded', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ reviews: [] }), { status: 200 })))
+    // The tab's field-audit card loads its own data; only the reviews answer varies here.
+    const reviewsAnswer = (body: unknown, status: number) =>
+      vi.fn(async (url: string) =>
+        url.endsWith('/reviews')
+          ? new Response(JSON.stringify(body), { status })
+          : new Response(JSON.stringify({ prompts: [], hasDesignSheet: false, runs: [], unresolvedBlocker: null }), { status: 200 }),
+      )
+    vi.stubGlobal('fetch', reviewsAnswer({ reviews: [] }, 200))
     const { unmount } = render(<MatterReviewsTab matterId="m1" />)
     expect(await screen.findByText(/No reviews yet/)).toBeTruthy()
     unmount()
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 })))
+    vi.stubGlobal('fetch', reviewsAnswer({ error: 'boom' }, 500))
     render(<MatterReviewsTab matterId="m1" />)
     expect(await screen.findByText('boom')).toBeTruthy()
+  })
+
+  it('shows the matter’s field audits beside its playbook reviews', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ reviews: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<MatterReviewsTab matterId="m1" />)
+    expect(await screen.findByTestId('matter-field-audits')).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/matters/m1/field-audits')
   })
 })
 

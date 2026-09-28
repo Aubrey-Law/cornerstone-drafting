@@ -22,6 +22,13 @@ vi.mock('@/lib/serverActionAuth', () => ({
     return auth.staff
   }),
 }))
+vi.mock('@/lib/apiAuth', () => ({
+  requireAdmin: vi.fn(async () =>
+    auth.staff
+      ? { err: null, userId: auth.staff }
+      : { err: new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }), userId: null },
+  ),
+}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((to: string) => {
@@ -46,6 +53,7 @@ import { runAudit } from '@/app/admin/field-audits/actions'
 import { recordFieldAuditDisposition, retryRun } from '@/app/admin/field-audits/[runId]/actions'
 import FieldAuditsPage from '@/app/admin/field-audits/page'
 import FieldAuditRunPage from '@/app/admin/field-audits/[runId]/page'
+import { GET as matterFieldAudits } from '@/app/api/admin/matters/[id]/field-audits/route'
 
 const asClient = (client: ReturnType<typeof makeFakeClient>) => client as unknown as SupabaseClient<GeneratedDatabase>
 
@@ -107,6 +115,7 @@ function seed() {
       { id: 'f1', run_id: 'run-audit', rule_number: '1', outcome: 'absent', severity: 'blocker', rationale: 'No trustee.', disposition: 'open' },
     ],
     workflow_field_references: [],
+    design_sheets: [],
     workflow_run_steps: [{ run_id: 'run-audit', unit_id: '1', sequence: 0, status: 'succeeded', attempts: 1, finding_id: 'f1' }],
   })
 }
@@ -212,5 +221,58 @@ describe('the field-audit pages', () => {
   it('show a field-audit run, and 404 a review run', async () => {
     expect(await FieldAuditRunPage({ params: Promise.resolve({ runId: 'run-audit' }) })).toBeTruthy()
     await expect(FieldAuditRunPage({ params: Promise.resolve({ runId: 'run-review' }) })).rejects.toThrow('notFound')
+  })
+})
+
+describe('GET /api/admin/matters/[id]/field-audits', () => {
+  // The route takes a real matter id; the rest of this file's fixture uses 'm1'.
+  const MATTER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  const OTHER = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  const get = (id: string) => matterFieldAudits(new Request('http://localhost'), { params: Promise.resolve({ id }) })
+
+  beforeEach(() => {
+    const fixture = seed()
+    for (const row of fixture.tableRows('matters')) row.id = MATTER
+    for (const row of fixture.tableRows('workflow_runs')) row.matter_id = MATTER
+    fixture.tableRows('matters').push({ id: OTHER, name: 'Jones Estate Plan' })
+    fixture.tableRows('workflow_runs').push({
+      id: 'run-other',
+      kind: 'field_audit',
+      matter_id: OTHER,
+      prompt_version_id: 'v1',
+      status: 'completed',
+      finding_count: 0,
+      failed_count: 0,
+      failures: [],
+      started_at: '2026-09-27T11:00:00Z',
+    })
+    auth.client = asClient(fixture)
+  })
+
+  it('offers field-audit prompts only, this matter\'s runs, and its open blocker', async () => {
+    const response = await get(MATTER)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      prompts: Array<{ slug: string; checkCount: number }>
+      hasDesignSheet: boolean
+      runs: Array<{ runId: string }>
+      unresolvedBlocker: { runId: string; ruleNumbers: string[] } | null
+    }
+    expect(body.prompts).toEqual([{ slug: 'ma-design-sheet-audit', title: 'Design sheet audit', checkCount: 1 }])
+    expect(body.runs.map(run => run.runId)).toEqual(['run-audit'])
+    expect(body.unresolvedBlocker).toMatchObject({ runId: 'run-audit', ruleNumbers: ['1'] })
+    expect(body.hasDesignSheet).toBe(false)
+  })
+
+  it('says whether the matter has a design sheet to audit', async () => {
+    ;(auth.client as unknown as ReturnType<typeof makeFakeClient>).tableRows('design_sheets').push({ matter_id: MATTER })
+    const body = (await (await get(MATTER)).json()) as { hasDesignSheet: boolean }
+    expect(body.hasDesignSheet).toBe(true)
+  })
+
+  it('refuses a malformed id and a caller who is not staff', async () => {
+    expect((await get('m1')).status).toBe(400)
+    auth.staff = null
+    expect((await get(MATTER)).status).toBe(403)
   })
 })

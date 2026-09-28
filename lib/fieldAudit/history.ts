@@ -111,21 +111,23 @@ export interface FieldAuditRunSummary {
 }
 
 /**
- * Recent field-audit runs, newest first — the list `/admin/field-audits` shows so a run
- * recorded there has somewhere to be seen. The review analogue of this,
+ * Recent field-audit runs, newest first — the list `/admin/field-audits` and a
+ * matter's Reviews tab show so a run has somewhere to be seen. The review analogue of this,
  * `loadRunSummaries` in `lib/review/history.ts`, joins to a document; a field
  * audit has none, so this joins to the matter and the prompt it ran instead.
  */
 export async function loadFieldAuditRunSummaries(
   client: SupabaseClient<GeneratedDatabase>,
   limit = 25,
+  options: { matterId?: string } = {},
 ): Promise<FieldAuditRunSummary[]> {
-  const { data: runs, error } = await client
+  let query = client
     .from('workflow_runs')
     .select('id, matter_id, prompt_version_id, status, finding_count, failed_count, finished_at')
     .eq('kind', 'field_audit')
-    .order('started_at', { ascending: false })
-    .limit(limit)
+  // One matter's runs, for its Reviews tab.
+  if (options.matterId) query = query.eq('matter_id', options.matterId)
+  const { data: runs, error } = await query.order('started_at', { ascending: false }).limit(limit)
   if (error) throw new Error(`Could not load runs: ${error.message}`)
   if (!runs || runs.length === 0) return []
 

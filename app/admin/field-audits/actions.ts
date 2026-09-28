@@ -49,6 +49,7 @@ export async function runAudit(_previous: RunAuditState, form: FormData): Promis
   const result = await runMatterAudit(reviewClient(), { slug, matterId, userId })
   if (!result.ok) return { ...emptyState, ok: false, message: result.message }
 
+  // The matter's Reviews tab reloads itself; the firm-wide page is server-rendered.
   revalidatePath('/admin/field-audits')
   return { ok: true, message: null, runId: result.runId }
 }
