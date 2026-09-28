@@ -5,7 +5,7 @@ import { runMatterAudit, type RunMatterAuditResult } from '@/lib/fieldAudit/run'
 /**
  * Turning one claimed `prompt_stage_triggers` row into a queued run, or into
  * a recorded skip — the tick's counterpart to a person picking a prompt and
- * a matter on `/prompts`.
+ * a matter on `/admin/field-audits`.
  *
  * The trigger (the Postgres one, in `20261103000000_stage_triggered_runs.sql`)
  * stays deliberately dumb: it knows a stage was entered and which prompts
@@ -29,7 +29,7 @@ export interface Settlement {
  * `skipped`, never `failed`. A matter reaching `drafting` with an empty
  * `concerns` field is not a run that failed; it is a run that should not
  * have started, and recording it as a failure would make `failed_count` mean
- * something else and fill `/prompts` with runs that never had a chance to
+ * something else and fill `/admin/field-audits` with runs that never had a chance to
  * say anything true.
  */
 export function settlementFor(result: RunMatterAuditResult): Settlement {
