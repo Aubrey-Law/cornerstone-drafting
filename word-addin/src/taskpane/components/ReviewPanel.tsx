@@ -10,6 +10,7 @@ import {
   isIssue,
   orderFindings,
   RISK_LABEL,
+  ruleHeading,
   ruleRows,
   STATUS_LABEL,
   tally,
@@ -468,14 +469,15 @@ function topEntries(args: {
   openItem: (id: string) => void
 }): TopEntry[] {
   const rules: TopEntry[] = args.findings.map((finding) => {
-    const statement = args.ruleByNumber.get(finding.ruleNumber)?.statement ?? `Rule ${finding.ruleNumber}`
+    const rule = args.ruleByNumber.get(finding.ruleNumber)
+    const statement = ruleHeading(rule, finding.ruleNumber)
     return {
       key: `rule:${finding.ruleNumber}`,
       rank: finding.severity ? RISK_RANK[finding.severity] : 3,
       source: `Playbook rule ${finding.ruleNumber}`,
       pill: finding.severity ? <RiskPill risk={finding.severity} /> : null,
       title: statement,
-      searchText: `${statement} ${finding.rationale}`,
+      searchText: `${statement} ${rule?.statement ?? ''} ${finding.rationale}`,
       onOpen: () => args.openRule(finding.ruleNumber),
     }
   })
@@ -1004,7 +1006,12 @@ function Report({
                 onClick={() => onOpen(row.rule.number)}
                 className="flex w-full items-center gap-2 rounded-lg border border-[color:var(--color-line)] px-3 py-2 text-left hover:bg-[color:var(--color-surface-sunken)]"
               >
-                <span className="line-clamp-2 min-w-0 flex-1 font-medium">{row.rule.statement}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-2 block font-medium">{ruleHeading(row.rule, row.rule.number)}</span>
+                  {row.rule.title?.trim() && (
+                    <span className="mt-0.5 line-clamp-1 block text-[11px] text-[color:var(--color-ink-muted)]">{row.rule.statement}</span>
+                  )}
+                </span>
                 <StatusPill status={row.status} />
               </button>
             </li>
@@ -1059,7 +1066,8 @@ function RuleDetail({
         <span className="flex-1">Playbook rule {rule.number}</span>
         {finding?.severity && isIssue(finding) ? <RiskPill risk={finding.severity} /> : <StatusPill status={row.status} />}
       </p>
-      <h2 className="font-semibold">{rule.statement}</h2>
+      <h2 className="font-semibold">{ruleHeading(rule, rule.number)}</h2>
+      {rule.title?.trim() && <p className="text-[color:var(--color-ink-muted)]">{rule.statement}</p>}
       {row.status === 'pending' && <p className="text-[color:var(--color-ink-muted)]">Still being checked.</p>}
       {row.status === 'did_not_run' && (
         <p className="text-warn">This rule did not run ({row.failureReason}). Check it by hand; it is not a pass.</p>

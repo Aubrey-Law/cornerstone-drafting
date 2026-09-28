@@ -20,11 +20,12 @@ export interface PublishedPlaybookChoice {
   slug: string
   title: string
   version: number
-  rules: Array<{ statement: string; risk: Risk; preferredLanguage: string | null; conditions: RuleCondition[] }>
+  rules: Array<{ title?: string | null; statement: string; risk: Risk; preferredLanguage: string | null; conditions: RuleCondition[] }>
 }
 
 export interface BuilderRule {
   key: string
+  title: string
   statement: string
   risk: Risk
   preferredLanguage: string
@@ -51,6 +52,7 @@ const nextKey = (prefix: string) => `${prefix}-${++keyCounter}`
 export function rowsFromPublished(playbook: PublishedPlaybookChoice): BuilderRule[] {
   return playbook.rules.map((rule) => ({
     key: nextKey('p'),
+    title: rule.title ?? '',
     statement: rule.statement,
     risk: rule.risk,
     preferredLanguage: rule.preferredLanguage ?? '',
@@ -70,6 +72,7 @@ export function rowsFromPublished(playbook: PublishedPlaybookChoice): BuilderRul
 export function rowsFromCandidates(candidates: CandidateRule[]): BuilderRule[] {
   return candidates.map((candidate) => ({
     key: nextKey('x'),
+    title: candidate.title,
     statement: candidate.statement,
     risk: candidate.risk,
     preferredLanguage: candidate.preferredLanguage ?? '',
@@ -141,6 +144,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
       ...current,
       {
         key: nextKey('m'),
+        title: '',
         statement: '',
         risk: 'medium',
         preferredLanguage: '',
@@ -204,6 +208,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
           changeSummary.trim() ||
           (extraction ? `Built from ${extraction.filename}${basePlaybook ? ` on version ${basePlaybook.version}` : ''}.` : null),
         rules: included.map((rule) => ({
+          title: rule.title,
           statement: rule.statement,
           risk: rule.risk,
           preferredLanguage: rule.preferredLanguage,
@@ -458,6 +463,14 @@ function RuleRow({
           Remove
         </button>
       </div>
+      <input
+        aria-label="Rule title"
+        value={rule.title}
+        onChange={(event) => onChange({ title: event.target.value })}
+        maxLength={80}
+        placeholder="Short title for lists, e.g. Successor Trustee Designation"
+        className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm font-medium"
+      />
       <textarea
         aria-label="Rule statement"
         value={rule.statement}

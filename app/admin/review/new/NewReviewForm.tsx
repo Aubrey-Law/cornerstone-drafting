@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 export interface PlaybookChoice {
   slug: string
   title: string
-  rules: Array<{ number: string; risk: string; statement: string; appliesWhen: string[] }>
+  rules: Array<{ number: string; risk: string; title?: string | null; statement: string; appliesWhen: string[] }>
 }
 
 export interface MatterChoice {
@@ -176,8 +176,9 @@ export function NewReviewForm({
               {playbook.rules.map(rule => (
                 <li key={rule.number}>
                   <span className="font-medium text-foreground">
-                    {rule.number}. [{rule.risk}]
+                    {rule.number}. [{rule.risk}]{rule.title ? ` ${rule.title}` : ''}
                   </span>{' '}
+                  {rule.title ? '— ' : ''}
                   {rule.statement}
                   {rule.appliesWhen.length > 0 ? ` (only when ${rule.appliesWhen.join('; ')})` : ''}
                 </li>

@@ -32,6 +32,7 @@ export default async function NewReviewPage({
           ? prompt.body.rules.map(rule => ({
               number: rule.number,
               risk: rule.risk,
+              title: rule.title ?? null,
               statement: rule.statement,
               appliesWhen: (rule.conditions ?? []).map(describeCondition),
             }))

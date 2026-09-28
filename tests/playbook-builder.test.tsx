@@ -10,6 +10,7 @@ import { PlaybookBuilder, rowsFromCandidates } from '@/app/admin/playbooks/Playb
 
 const candidate = (over: Partial<CandidateRule>): CandidateRule => ({
   id: 'w0-0',
+  title: 'Trustee Bond Waiver',
   statement: 'Our trustees serve without bond.',
   risk: 'medium',
   topic: 'Bond',
@@ -56,7 +57,7 @@ describe('PlaybookBuilder', () => {
             title: 'Massachusetts revocable trust — firm quality review',
             version: 1,
             rules: [
-              { statement: 'Rule one.', risk: 'high', preferredLanguage: null, conditions: [] },
+              { title: 'First Rule', statement: 'Rule one.', risk: 'high', preferredLanguage: null, conditions: [] },
               {
                 statement: 'Rule two.',
                 risk: 'blocker',
@@ -70,6 +71,8 @@ describe('PlaybookBuilder', () => {
     )
     fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'ma-trust-firm-qa' } })
     expect(screen.getAllByTestId('builder-rule')).toHaveLength(2)
+    // Titles load for editing; a rule published without one starts blank.
+    expect(screen.getAllByLabelText('Rule title').map((input) => (input as HTMLInputElement).value)).toEqual(['First Rule', ''])
     expect(screen.getByLabelText('Playbook id')).toBeDisabled()
     expect(screen.getByText(/Publishing creates version 2/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Publish 2 rules' })).toBeEnabled()

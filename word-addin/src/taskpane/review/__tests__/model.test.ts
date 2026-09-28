@@ -4,6 +4,7 @@ import {
   applyReviewEvent,
   bulkReplacements,
   filterRows,
+  ruleHeading,
   ruleRows,
   tally,
   commentText,
@@ -193,5 +194,24 @@ describe('the report view', () => {
       ],
     }
     expect(bulkReplacements(withUnverified).map((r) => [r.finding.ruleNumber, r.text])).toEqual([['2', 'considering other resources']])
+  })
+})
+
+describe('rule titles', () => {
+  it('lists a rule by its title, falling back to the statement', () => {
+    expect(ruleHeading({ ...RULES[0], title: 'Bond Waiver' }, '1')).toBe('Bond Waiver')
+    expect(ruleHeading({ ...RULES[0], title: '  ' }, '1')).toBe('Bond is waived for named trustees.')
+    expect(ruleHeading(undefined, '7')).toBe('Rule 7')
+  })
+
+  it('puts the title in the Word comment and lets search find it', () => {
+    const rule = { ...RULES[1], title: 'Other Resources Standard' }
+    expect(commentText(finding({ ruleNumber: '2', severity: 'blocker' }), rule, 'T').split('\n').slice(0, 3)).toEqual([
+      'Cornerstone review — T, rule 2 (blocker)',
+      'Other Resources Standard',
+      'Discretionary standards address other resources.',
+    ])
+    const rows = ruleRows({ ...EMPTY_REVIEW, rules: [RULES[0], rule] })
+    expect(filterRows(rows, { status: 'all', query: 'resources standard', sort: 'playbook' }).map((r) => r.rule.number)).toEqual(['2'])
   })
 })

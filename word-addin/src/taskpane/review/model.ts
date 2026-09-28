@@ -14,6 +14,8 @@ export type Outcome = 'compliant' | 'deviation' | 'absent' | 'not_applicable'
 
 export interface ReviewRuleInfo {
   number: string
+  /** A short heading for lists; absent for a rule published without one, or from an older server. */
+  title?: string | null
   risk: Risk
   statement: string
   preferredLanguage: string | null
@@ -172,9 +174,15 @@ export function actionsFor(finding: ReviewFindingEvent, rule: ReviewRuleInfo | u
   }
 }
 
+/** What a list shows for a rule: its title when it has one, else its statement. */
+export function ruleHeading(rule: ReviewRuleInfo | undefined, ruleNumber: string): string {
+  return rule?.title?.trim() || rule?.statement || `Rule ${ruleNumber}`
+}
+
 /** The Word comment text for a finding. */
 export function commentText(finding: ReviewFindingEvent, rule: ReviewRuleInfo | undefined, playbookTitle: string): string {
   const lines = [`Cornerstone review — ${playbookTitle}, rule ${finding.ruleNumber}${finding.severity ? ` (${finding.severity})` : ''}`]
+  if (rule?.title?.trim()) lines.push(rule.title.trim())
   if (rule) lines.push(rule.statement)
   if (finding.rationale) lines.push('', finding.rationale)
   if (finding.proposedLanguage) lines.push('', `Suggested: ${finding.proposedLanguage}`)
@@ -250,6 +258,7 @@ export function filterRows(rows: RuleRow[], options: { status: StatusFilter; que
       (options.status === 'all' || row.status === options.status) &&
       (!query ||
         row.rule.statement.toLowerCase().includes(query) ||
+        (row.rule.title ?? '').toLowerCase().includes(query) ||
         row.rule.number.toLowerCase() === query ||
         (row.finding?.rationale ?? '').toLowerCase().includes(query)),
   )

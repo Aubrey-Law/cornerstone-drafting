@@ -168,6 +168,7 @@ export async function POST(req: Request) {
           playbook: { slug: playbook.slug, title: playbook.title, version: playbook.version },
           rules: playbook.rules.map(rule => ({
             number: rule.number,
+            title: rule.title ?? null,
             risk: rule.risk,
             statement: rule.statement,
             preferredLanguage: rule.preferredLanguage ?? null,

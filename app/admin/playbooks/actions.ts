@@ -45,6 +45,7 @@ export async function publishPlaybook(input: PublishPlaybookInput): Promise<Publ
       return { ok: false, message: `Rule ${rules.length + 1} has a condition the review cannot test.` }
     }
     rules.push({
+      title: typeof rule.title === 'string' ? rule.title : null,
       statement,
       risk,
       preferredLanguage: typeof rule.preferredLanguage === 'string' ? rule.preferredLanguage : null,

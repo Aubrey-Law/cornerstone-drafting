@@ -44,6 +44,19 @@ describe('buildReviewBody', () => {
     expect(() => buildReviewBody([{ statement: '   ', risk: 'low' }])).toThrow()
   })
 
+  it('stores a trimmed title last, and leaves an untitled rule exactly as it was', () => {
+    const body = buildReviewBody([{ ...RULES[0], title: '  Bond Waiver Scope  ' }, { ...RULES[1], title: '   ' }])
+    expect(Object.keys(body.rules[0])).toEqual(['number', 'statement', 'risk', 'title'])
+    expect(body.rules[0].title).toBe('Bond Waiver Scope')
+    expect('title' in body.rules[1]).toBe(false)
+    // An untitled body hashes as it did before titles existed.
+    expect(contentHashFor(buildReviewBody(RULES))).toBe(contentHashFor(buildReviewBody(RULES.map((r) => ({ ...r, title: null })))))
+  })
+
+  it('refuses a title longer than a list can show', () => {
+    expect(() => buildReviewBody([{ ...RULES[0], title: 'x'.repeat(81) }])).toThrow()
+  })
+
   it('hashes the body the way the seeded version was hashed', () => {
     const body = buildReviewBody(RULES)
     expect(contentHashFor(body)).toBe(crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex'))

@@ -77,6 +77,25 @@ describe('candidatesFromInput', () => {
     )
   })
 
+  it('gives each candidate its own short title, falling back to the topic', () => {
+    const [titled, untitled, long] = candidatesFromInput(
+      {
+        rules: [
+          { ...spendthrift, title: 'Spendthrift Protection' },
+          { ...spendthrift, title: '  ', topic: 'Spendthrift' },
+          { ...spendthrift, title: `Spendthrift ${'protection '.repeat(12)}` },
+        ],
+      },
+      layer,
+      0,
+      WHOLE,
+    )
+    expect(titled.title).toBe('Spendthrift Protection')
+    expect(untitled.title).toBe('Spendthrift')
+    expect(long.title.length).toBeLessThanOrEqual(80)
+    expect(long.title.endsWith('…')).toBe(true)
+  })
+
   it('keeps an unverified candidate, marks it, and gives it no preferred language', () => {
     const [candidate] = candidatesFromInput(
       { rules: [{ ...spendthrift, quote: 'The trust is irrevocable.', block_index: 1 }] },
