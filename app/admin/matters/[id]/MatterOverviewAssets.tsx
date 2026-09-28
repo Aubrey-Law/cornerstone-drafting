@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { TabsContent } from '@/components/ui/tabs'
 import type { PipelineMatter } from '@/types/database'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -31,11 +32,16 @@ export function MatterOverviewAssets({
 
   return (
     <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Assets</h3>
-        <p className="text-xs text-muted-foreground">
-          Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">Assets</h3>
+          <p className="text-xs text-muted-foreground">
+            Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.
+          </p>
+        </div>
+        <Link href={`/admin/funding/${matterId}`} className="text-xs underline underline-offset-4">
+          Trust funding
+        </Link>
       </div>
       <MatterAssetsTab
         matterId={matterId}
