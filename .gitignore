@@ -35,3 +35,5 @@ firma-webhook-captures/
 
 # Word add-in build output (its own npm project; node_modules already matched above)
 word-addin/dist/
+# Where `npm run build:addin` emits the pane for the Next app to serve.
+public/addin/

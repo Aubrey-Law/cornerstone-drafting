@@ -154,3 +154,50 @@ jobs:
       - name: Workbench
         if: ${{ !cancelled() && steps.prior.outputs.skip != 'true' }}
         run: npm run -w apps/workbench verify
+
+  # The Word add-in is a separate npm project nested in this repo, with its own
+  # lock file and its own toolchain. `tests/word-addin-project.test.ts` pins that
+  # isolation — it is not a workspace, and the root typecheck, lint, vitest and
+  # Next build all exclude it — which has the side effect that nothing above
+  # touches it. Its `npm test` and `npm run build` have only ever run on a
+  # developer's machine.
+  #
+  # That becomes load-bearing the moment the pane is served by the Next app:
+  # `prebuild:next` will build the add-in, so an add-in that does not compile
+  # stops being a broken pane and starts being a failed production deploy of
+  # Cornerstone. This job is the gate that keeps that from reaching main.
+  #
+  # A separate job, not more steps on `verify`: the install is a different lock
+  # file, and at roughly two minutes against that job's fourteen there is no
+  # reason to serialise them.
+  #
+  # Deliberately without the duplicate-run guard above. That guard exists
+  # because two full runs of `verify` cost twenty-eight minutes; replicating its
+  # gh-api call here to save two would cost more in complexity than it returns.
+  word-addin:
+    name: Word add-in build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          # The root `npm ci` does not install this project, so the cache must
+          # be keyed on the add-in's own lock file rather than the root's.
+          cache-dependency-path: word-addin/package-lock.json
+
+      - name: Install
+        run: npm --prefix word-addin ci
+
+      # `build` is `typecheck && vite build`, so this covers both. It is safe
+      # headlessly: vite.config.ts mints an HTTPS cert only when the command is
+      # `serve`, so a build will not try to install a CA into a keychain that
+      # does not exist.
+      - name: Build
+        run: npm --prefix word-addin run build
+
+      - name: Test
+        run: npm --prefix word-addin test

@@ -79,6 +79,112 @@ describe('word-addin build isolation', () => {
 })
 
 /**
+ * The pane is served by the Next app out of `public/addin/`, which is the only
+ * thing that makes the add-in's API calls same-origin in production. That is a
+ * build-artifact path, deliberately not a source-tree merge: every exclusion
+ * above still holds.
+ */
+describe('word-addin production hosting', () => {
+  const rootPkg = JSON.parse(read('package.json'))
+  const scripts = rootPkg.scripts as Record<string, string>
+  const viteConfig = read('word-addin/vite.config.ts')
+
+  it('installs this project on its own terms, never the root tree', () => {
+    // The root `npm ci` does not install this project — it is not a workspace,
+    // and pinning that above is worth nothing if the build quietly relies on
+    // hoisted dependencies instead.
+    //
+    expect(scripts['build:addin']).toContain('cd word-addin')
+    expect(scripts['build:addin']).toContain('npm ci')
+    expect(scripts['build:addin']).not.toContain('-w ')
+  })
+
+  it('installs devDependencies even under NODE_ENV=production', () => {
+    // The one that actually bit. scripts/ciBuild.mjs sets NODE_ENV=production,
+    // and Vercel sets it too, so `npm ci` omits devDependencies — which here is
+    // everything that builds the pane: vite, typescript, @types/office-js. The
+    // install succeeded with 3 packages instead of 135 and failed two steps
+    // later as `TS2688: Cannot find type definition file for 'office-js'`.
+    //
+    // This would have failed every production deploy, because prebuild:next
+    // runs this build.
+    expect(scripts['build:addin']).toContain('--include=dev')
+  })
+
+  it('checks the install before trusting it', () => {
+    // Between the install and the build, so an incomplete tree fails as itself
+    // instead of as a confusing type error.
+    expect(scripts['build:addin']).toContain('checkDeps.mjs')
+    const order = scripts['build:addin']
+    expect(order.indexOf('npm ci')).toBeLessThan(order.indexOf('checkDeps.mjs'))
+    expect(order.indexOf('checkDeps.mjs')).toBeLessThan(order.indexOf('npm run build'))
+
+    const check = read('word-addin/scripts/checkDeps.mjs')
+    // The two that tsc reports as a tsconfig error rather than a missing module.
+    expect(check).toContain('@types/office-js')
+    expect(check).toContain('@types/node')
+    expect(check).toContain('process.exit(1)')
+  })
+
+  it('runs that build before every Next build', () => {
+    // Vercel's build command is `build:next`, so `prebuild:next` is what makes
+    // the pane exist in the deployment at all.
+    expect(scripts['prebuild:next']).toContain('build:addin')
+  })
+
+  it('emits into the Next app public directory', () => {
+    expect(viteConfig).toContain("'../public/addin'")
+    // Vite refuses to clear an outDir outside its own root without this.
+    expect(viteConfig).toMatch(/emptyOutDir:\s*true/)
+  })
+
+  it('prefixes built asset URLs but leaves the dev server at the root', () => {
+    // `manifest.xml` sideloads against https://localhost:3100/taskpane.html, so
+    // a `/addin/` base in development would 404 the pane.
+    expect(viteConfig).toMatch(/base:\s*command === 'build' \? '\/addin\/' : '\/'/)
+  })
+
+  it('keeps hashed bundles out of the unhashed icon directory', () => {
+    // Vite copies `public/assets/` verbatim — the ribbon icons are not
+    // content-hashed. They share a cache rule with whatever sits beside them,
+    // and `immutable` is right for a hashed bundle and wrong for an icon.
+    expect(viteConfig).toMatch(/assetsDir:\s*'static'/)
+
+    const nextConfig = read('next.config.mjs')
+    expect(nextConfig).toContain("source: '/addin/static/:path*'")
+    expect(nextConfig).toContain('immutable')
+    expect(nextConfig).not.toContain("source: '/addin/assets/:path*'")
+  })
+
+  it('never caches the three HTML entry points', () => {
+    // Word's WebView holds on to add-in content hard enough that a cached
+    // bundle reads as a bug. These three are the whole set.
+    const nextConfig = read('next.config.mjs')
+    expect(nextConfig).toMatch(/\['taskpane', 'dialog', 'commands'\]/)
+    expect(nextConfig).toContain('no-store, no-cache, must-revalidate')
+  })
+
+  it('refuses to deploy a pane that cannot sign in', () => {
+    // Vite inlines the Supabase values at build time. With neither a root .env
+    // nor the variables in the environment the build still succeeds and emits
+    // `createClient(undefined, undefined)`: a pane that loads, renders, and
+    // fails only when an attorney tries to sign in. Observed for real — a fresh
+    // worktree has no .env, and the build said nothing.
+    //
+    // Scoped to a production Vercel build because CI and fresh worktrees both
+    // build with no environment at all, and failing those would be noise.
+    expect(viteConfig).toContain('assertSignInIsPossible')
+    expect(viteConfig).toContain('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+    expect(viteConfig).toMatch(/process\.env\.VERCEL_ENV === 'production'/)
+    expect(viteConfig).toContain('throw new Error(')
+  })
+
+  it('is build output, not source', () => {
+    expect(read('.gitignore')).toContain('public/addin/')
+  })
+})
+
+/**
  * Sideloading is hand-rolled because `office-addin-debugging` cannot do it on
  * macOS: it hard-links the manifest into Word's app container, and `link(2)`
  * fails there with EPERM. These pin the copy-based replacement.
@@ -157,8 +263,48 @@ describe('word-addin sideload scripts', () => {
   })
 })
 
-describe('word-addin manifest', () => {
-  const manifest = new XMLParser({ ignoreAttributes: false }).parse(read('word-addin/manifest.xml'))
+
+/**
+ * The production manifest is generated, and the copy in the tree is what an
+ * administrator uploads to Microsoft 365. Both facts have to stay true at once.
+ */
+describe('word-addin production manifest', () => {
+  const prod = read('word-addin/manifest.prod.xml')
+  const dev = read('word-addin/manifest.xml')
+
+  it('matches what the generator produces', async () => {
+    const { buildProductionManifest } = await import('../word-addin/scripts/manifest.mjs')
+    expect(prod).toBe(buildProductionManifest(dev))
+  })
+
+  it('carries its own identity, so a sideload and a deployment can coexist', () => {
+    const id = (xml: string) => xml.match(/<Id>\s*([0-9a-fA-F-]{36})\s*<\/Id>/)?.[1]
+    expect(id(prod)).toBeTruthy()
+    expect(id(prod)).not.toBe(id(dev))
+  })
+
+  it('points at the deployed origin, never at a developer machine', () => {
+    // The whole failure this guards: the development manifest was once uploaded
+    // to Integrated apps as-is, which installs an add-in whose pane is served
+    // from a localhost port that nothing on an attorney's machine is listening on.
+    expect(prod).not.toMatch(/localhost:\d+/)
+    expect(prod).toContain('https://cornerstone.aubreylegal.com/addin/taskpane.html')
+  })
+
+  it('serves the pane from the path the build writes', () => {
+    // `base: '/addin/'` and `outDir: ../public/addin` on one side, these URLs on
+    // the other. They are the same decision and have to move together.
+    for (const file of ['taskpane.html', 'commands.html', 'assets/icon-32.png']) {
+      expect(prod).toContain(`https://cornerstone.aubreylegal.com/addin/${file}`)
+    }
+  })
+})
+
+describe.each([
+  ['development', 'word-addin/manifest.xml'],
+  ['production', 'word-addin/manifest.prod.xml'],
+])('word-addin %s manifest', (_kind, manifestPath) => {
+  const manifest = new XMLParser({ ignoreAttributes: false }).parse(read(manifestPath))
   const app = manifest.OfficeApp
 
   it('is a Word task pane with document write access', () => {
@@ -177,7 +323,7 @@ describe('word-addin manifest', () => {
   it('does not declare desktop-only or dialog requirement sets', () => {
     // Declaring WordApiDesktop (for pageSetup) or DialogApi would make the
     // add-in refuse to load in Word on the web entirely. Probe them at runtime.
-    const raw = read('word-addin/manifest.xml')
+    const raw = read(manifestPath)
     expect(raw).not.toContain('WordApiDesktop')
     expect(raw).not.toContain('DialogApi')
   })
@@ -188,10 +334,17 @@ describe('word-addin manifest', () => {
   })
 
   it('lists every origin it navigates to in AppDomains', () => {
-    const raw = read('word-addin/manifest.xml')
+    // Generalised from a localhost-only match: an Office dialog may navigate
+    // only to a listed domain, and the production manifest is not on localhost,
+    // so the old pattern passed it vacuously.
+    const raw = read(manifestPath)
     const domains = [app.AppDomains.AppDomain].flat()
-    for (const url of raw.match(/https:\/\/localhost:\d+/g) ?? []) {
-      expect(domains).toContain(url)
-    }
+    const origins = new Set(
+      (raw.match(/https:\/\/[a-z0-9.:-]+/gi) ?? [])
+        .filter((url) => !url.includes('schemas.microsoft.com'))
+        .filter((url) => !url.includes('appsforoffice'))
+        .map((url) => new URL(url).origin),
+    )
+    for (const origin of origins) expect(domains).toContain(origin)
   })
 })

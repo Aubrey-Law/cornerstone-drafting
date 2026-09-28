@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabase } from '@/lib/supabaseServer'
+import { ensureUserProfile } from '@/lib/auth/ensureUserProfile'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
 
@@ -23,30 +24,54 @@ export async function resolveUserRole(userId: string): Promise<string | null> {
   return profile?.role ?? null
 }
 
-async function userFromBearer(token: string) {
+/**
+ * The caller's own Supabase client, scoped to their bearer token, alongside the
+ * user it resolves to.
+ *
+ * The client is returned and not discarded because `ensure_user_profile` is
+ * SECURITY DEFINER over `auth.uid()`: it has to be called as the user, and the
+ * service-role client has no `auth.uid()` to read.
+ */
+async function clientFromBearer(token: string) {
   const sb = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${token}` } } },
   )
   const { data: { user } } = await sb.auth.getUser()
-  return user
+  return { sb, user }
 }
 
 /** Resolve an authenticated bearer user without imposing an admin role. */
 export async function getBearerUser(req: Request) {
   const token = getBearerToken(req)
-  return token ? userFromBearer(token) : null
+  return token ? (await clientFromBearer(token)).user : null
 }
 
 // Verifies the user against Supabase Auth (remote hop) AND checks role.
 async function verifyAdmin(_req: Request) {
   const token = getBearerToken(_req)
   if (token) {
-    const user = await userFromBearer(token)
+    const { sb, user } = await clientFromBearer(token)
     if (!user) return { err: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), userId: null, user: null }
 
-    const role = await resolveUserRole(user.id)
+    // A bearer caller may have no `public.users` row at all.
+    //
+    // The cookie path below cannot reach this state: `/auth/callback` and
+    // `/auth/login` both run `ensureUserProfile` as part of signing in. The Word
+    // add-in never touches either — its dialog talks to Supabase directly — so a
+    // firm attorney signing in from Word arrived here authenticated, roleless,
+    // and 403'd with nothing on screen explaining why. The documented
+    // workaround was to go and open the web app once, which is no answer for an
+    // add-in pushed to a machine.
+    //
+    // Bootstrapping here rather than in the add-in's own routes covers every
+    // bearer caller, and cannot be used to self-elevate: `ensure_user_profile`
+    // derives the role from the confirmed address on `auth.users`, so a
+    // non-firm address still becomes 'client' and still fails the gate below.
+    let role = await resolveUserRole(user.id)
+    if (!role) role = await ensureUserProfile(sb, user)
+
     if (!role || !ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
       return { err: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), userId: null, user: null }
     }

@@ -25,6 +25,43 @@ const nextConfig = {
       { source: '/admin/crm/sync', destination: '/admin/settings/sync', permanent: true },
     ];
   },
+  /**
+   * The Word add-in pane, served out of `public/addin/`.
+   *
+   * Word's WebView caches add-in content hard enough that a cached bundle is
+   * indistinguishable from a bug — the pane keeps running code that has already
+   * been replaced. The dev server answers this by refusing to let anything be
+   * cached; production cannot do that wholesale without re-downloading the
+   * bundle on every open, so the split is by file:
+   *
+   * - the HTML entry points are never cached, so a deploy is picked up
+   * - the assets beside them are content-hashed by Vite, so they are immutable
+   *
+   * Without the first rule an attorney who has opened the pane once keeps that
+   * day's build, and `npm run clear-cache` is a developer command they do not
+   * have.
+   */
+  async headers() {
+    return [
+      // Named one by one rather than matched by extension: these three are the
+      // whole set (they are the `rollupOptions.input` of the add-in build), and
+      // a literal source cannot be got wrong by a path-matching subtlety.
+      ...['taskpane', 'dialog', 'commands'].map((page) => ({
+        source: `/addin/${page}.html`,
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+        ],
+      })),
+      // Content-hashed by Vite, so the name changes whenever the bytes do.
+      // The unhashed ribbon icons live in /addin/assets/ and are deliberately
+      // left out of this rule — they keep the default revalidating behaviour.
+      {
+        source: '/addin/static/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+    ];
+  },
   transpilePackages: ['@aubrey-law/drafting-engine', '@aubrey-law/estate-fields'],
   outputFileTracingRoot: path.resolve(process.cwd()),
   // Word masters and document-generation assets are read at runtime via fs;

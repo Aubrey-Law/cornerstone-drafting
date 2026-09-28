@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, type ProxyOptions, type ServerOptions, type UserConfig } from 'vite'
+import { defineConfig, loadEnv, type ProxyOptions, type ServerOptions, type UserConfig } from 'vite'
 
 /** The pane's own port. 3002 is the Cornerstone Next dev server. */
 const PANE_PORT = 3100
@@ -47,8 +47,57 @@ function proxyToCornerstone(): ProxyOptions {
   }
 }
 
-export default defineConfig(async ({ command }): Promise<UserConfig> => ({
+
+/**
+ * Refuse to ship a pane that cannot sign in.
+ *
+ * The sign-in dialog reads NEXT_PUBLIC_SUPABASE_URL and
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY, and Vite inlines them at build time from the
+ * repository root `.env` or, where there is no such file (Vercel), from the
+ * process environment. When neither supplies them the build still succeeds and
+ * emits `createClient(undefined, undefined)` — a pane that loads, renders, and
+ * fails only when an attorney tries to sign in.
+ *
+ * Hard failure is scoped to a real deployment on purpose. CI builds this
+ * project with no environment at all, and so does a fresh worktree; breaking
+ * those would be noise. A production Vercel build is the one case where the
+ * output reaches somebody.
+ */
+function assertSignInIsPossible(mode: string, envDir: string): void {
+  const env = loadEnv(mode, envDir, ['VITE_', 'NEXT_PUBLIC_'])
+  const missing = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'].filter(
+    (name) => !env[name],
+  )
+  if (missing.length === 0) return
+
+  const detail = `the sign-in dialog needs ${missing.join(' and ')}`
+  if (process.env.VERCEL_ENV === 'production') {
+    throw new Error(
+      `Refusing to build the Word add-in without Supabase credentials: ${detail}. ` +
+        'Set them on the Vercel project; the pane would otherwise deploy unable to sign anyone in.',
+    )
+  }
+  console.warn(`[word-addin] building without Supabase credentials — ${detail}. Sign-in will not work.`)
+}
+
+export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
+  const envDir = resolve(import.meta.dirname, '..')
+  if (command === 'build') assertSignInIsPossible(mode, envDir)
+
+  return {
   plugins: [react(), tailwindcss()],
+  /**
+   * Production is served by the Next app out of `public/addin/`, so a built
+   * asset URL has to carry that prefix. Development is not: the dev server is
+   * the origin root, `manifest.xml` points at `https://localhost:3100/taskpane.html`,
+   * and prefixing there would 404 every sideloaded pane.
+   *
+   * Same origin either way — which is the point. Word's WebView blocks mixed
+   * content, and sharing Cornerstone's origin in production is what keeps the
+   * pane's `/api/addin/*` calls same-origin without any CORS handling, exactly
+   * as the dev proxy does locally.
+   */
+  base: command === 'build' ? '/addin/' : '/',
   /**
    * An inline (empty) PostCSS config, which is what stops Vite searching for
    * one on disk.
@@ -83,7 +132,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
    * add-in needs no env setup of its own and cannot drift out of step with the
    * app it signs into.
    */
-  envDir: resolve(import.meta.dirname, '..'),
+  envDir,
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   resolve: {
     alias: { '@': resolve(import.meta.dirname, 'src') },
@@ -123,7 +172,28 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
     proxy: { '/api': proxyToCornerstone() },
   },
   build: {
-    outDir: 'dist',
+    /**
+     * Straight into the Next app's `public/`, which Next copies into the
+     * deployment and serves statically — no route handler, and nothing about
+     * the add-in enters the Next module graph. `tests/word-addin-project.test.ts`
+     * pins the isolation that makes that safe.
+     *
+     * `emptyOutDir` has to be explicit because the directory is outside this
+     * project's root; Vite refuses to clear such a directory otherwise.
+     */
+    outDir: resolve(import.meta.dirname, '../public/addin'),
+    emptyOutDir: true,
+    /**
+     * Content-hashed bundles go to `static/`, away from `assets/`.
+     *
+     * `public/assets/` holds the ribbon icons, which Vite copies verbatim and
+     * does NOT hash. Left in one directory with the hashed bundles there is no
+     * way to write a cache rule that is right for both: the bundles want
+     * `immutable`, and a year-long immutable cache on `icon-32.png` means a
+     * replaced icon never reaches anyone. Separating them lets `next.config.mjs`
+     * cache each correctly.
+     */
+    assetsDir: 'static',
     rollupOptions: {
       input: {
         taskpane: resolve(import.meta.dirname, 'taskpane.html'),
@@ -132,4 +202,5 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
       },
     },
   },
-}))
+  }
+})

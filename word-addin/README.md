@@ -24,9 +24,13 @@ Prototype status — sideloaded, firm-internal. Not published to AppSource.
   `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from that same
   file: `vite.config.ts` points Vite's `envDir` at the repository root, so the
   add-in has no env file of its own to fill in.
-- **A staff account.** Every `/api/addin/*` route calls `requireAdmin`, which
-  wants a `users.role` of `attorney` or `admin`. Signing in without one gets a
-  403 on the pane's first call rather than at the sign-in step.
+- **A firm account.** Every `/api/addin/*` route calls `requireAdmin`, which
+  wants a `users.role` of `attorney` or `admin`. There is nothing to set up by
+  hand: a first-time caller with no `public.users` row is provisioned on their
+  first request, and an `@aubreylegal.com` address becomes `attorney`. The role
+  comes from the confirmed address on `auth.users`, so signing in with an
+  outside address is provisioned `client` and still gets a 403 on the pane's
+  first call rather than at the sign-in step.
 - **One Supabase setting, once per project.** **Authentication → URL
   Configuration → Redirect URLs** must include `https://localhost:3100/**`, or
   the sign-in dialog ends up on the project's Site URL instead of coming back
@@ -153,12 +157,85 @@ Supabase project, two things follow: add its domain to `<AppDomains>` in
 re-sideload with `npm start`, and add `https://localhost:3100/**` to *that*
 project's redirect URLs.
 
-`npm run build` writes `dist/` — `taskpane.html`, `commands.html`, `dialog.html`
-and their assets. Nothing in this repo hosts it: publishing the pane properly
-would mean serving `dist/` over HTTPS and repointing every URL in
-`manifest.xml` — `SourceLocation`, `Taskpane.Url`, `Commands.Url`, the icons —
-at that origin, and adding it to `<AppDomains>`. Until then the manifest is a
-development one and the pane runs from each attorney's own machine.
+### How the pane is hosted
+
+`npm run build` writes the Next app's `public/addin/` — `taskpane.html`,
+`commands.html`, `dialog.html`, the content-hashed bundles under `static/`, and
+the ribbon icons under `assets/`. Next copies `public/` into the deployment and
+serves it, so the pane and every `/api/addin/*` call share one origin in
+production exactly as the dev proxy arranges locally. Nothing about the add-in
+enters the Next module graph; `tests/word-addin-project.test.ts` pins the
+isolation that keeps it out of the root typecheck, lint and Next build.
+
+From the repository root, `npm run build:addin` runs that build on its own, and
+`prebuild:next` runs it before every `next build`. **A broken add-in build
+therefore fails a production deploy of Cornerstone**, which is why the
+`word-addin` job in `.github/workflows/app-ci.yml` gates it.
+
+That install passes `--include=dev`, and must. Both the CI build
+(`scripts/ciBuild.mjs`) and Vercel set `NODE_ENV=production`, under which npm
+omits devDependencies — and every package this project builds with is one:
+`vite`, `typescript`, `@types/office-js`. Without the flag the install succeeds
+with 3 packages instead of 135 and fails two steps later as
+`TS2688: Cannot find type definition file for 'office-js'`, which reads like a
+tsconfig fault. `scripts/checkDeps.mjs` runs between the install and the build
+so that gap cannot reopen silently.
+
+`base` is `/addin/` for a build and `/` for the dev server: development serves
+this project at the origin root, where the sideloaded `manifest.xml` expects it.
+
+The manifest in this directory remains the **development** one, pointing at
+`https://localhost:3100`. A production manifest points `SourceLocation`,
+`Taskpane.Url`, `Commands.Url` and the icons at the deployed origin under
+`/addin/`, lists that origin in `<AppDomains>`, and carries its own `<Id>` so it
+can coexist with a developer's sideload.
+
+### Deploying to the firm
+
+Two manifests live here and they are not interchangeable:
+
+| file | `<Id>` | points at | used for |
+| --- | --- | --- | --- |
+| `manifest.xml` | `eb710b66-…` | `https://localhost:3100` | sideloading on a developer machine |
+| `manifest.prod.xml` | `a9e939cf-…` | `https://cornerstone.aubreylegal.com/addin` | Microsoft 365 → Integrated apps |
+
+`manifest.prod.xml` is **generated** — `npm run manifest` rewrites it from
+`manifest.xml`, and `tests/word-addin-project.test.ts` fails if the two
+disagree. Edit `manifest.xml` (or `scripts/manifest.mjs`), never the generated
+file.
+
+**Never upload `manifest.xml` to Integrated apps.** It installs an add-in whose
+pane is served from a localhost port that nothing on an attorney's machine is
+listening on, so the ribbon button opens a pane that cannot load — and it
+carries the development `<Id>`, so it also collides with any sideload. This has
+happened once; the tests above now catch it.
+
+To deploy:
+
+1. **The pane has to exist first.** `https://cornerstone.aubreylegal.com/addin/taskpane.html`
+   must return 200 — it is built by `prebuild:next`, so it appears with the first
+   production deploy that includes it. Check before uploading:
+   ```bash
+   curl -sI https://cornerstone.aubreylegal.com/addin/taskpane.html | head -1
+   ```
+2. **Supabase redirect URLs** must include `https://cornerstone.aubreylegal.com/addin/**`,
+   or the sign-in dialog leaves and never comes back. See
+   [The OAuth round trip](#the-oauth-round-trip).
+3. Microsoft 365 admin center → **Settings → Integrated apps → Upload custom
+   apps**, upload `manifest.prod.xml`, and assign to a group rather than the
+   whole tenant for a first pass.
+4. Assignment and removal both take up to **24 hours** to reach clients.
+
+**To remove a deployment:** Integrated apps → select the add-in → **Remove app**.
+Removing by GUID matters when more than one has been uploaded: the development
+and production manifests are different add-ins to Office, so uploading the
+production one does **not** replace a development one already deployed.
+
+**To ship a change:** bump `<Version>` in `scripts/manifest.mjs`
+(`PRODUCTION_VERSION`), re-run `npm run manifest`, and re-upload. Office caches
+the manifest and keeps serving the old one until the version increases. The
+pane's own code needs no version bump — it is fetched fresh, because
+`next.config.mjs` sends `no-store` for the HTML entry points.
 
 ### Why sideloading is hand-rolled
 
@@ -624,8 +701,6 @@ document, so they preview before applying and apply as tracked changes.
 - **Desktop first.** Word on the web should work but is untested; Mac
   under-reports deleted revisions through `getTrackedChanges()`, which the pane
   notes on the card rather than treating as a failure.
-- **A first-time staff user with no `users` row gets a 403** with no explanation.
-  Open the Cornerstone web app once first.
 - **Documents over roughly 3.5 MB** cannot be style-swept or saved as a version:
   both send the whole file, and Vercel caps the request body. The version save
   names the size before spending the upload; the style sweep does not.
