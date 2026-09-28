@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Landmark } from 'lucide-react'
+import { ArrowLeft, Landmark } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/funding/format'
 import { loadFundingRows } from '@/lib/funding/repository'
@@ -40,6 +41,14 @@ export default async function FundingPage() {
               outside the plans on {outstanding.length} {outstanding.length === 1 ? 'matter' : 'matters'}.
             </>
           )
+        }
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/matters">
+              <ArrowLeft className="size-4" aria-hidden />
+              Matters
+            </Link>
+          </Button>
         }
       />
 

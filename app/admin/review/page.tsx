@@ -31,6 +31,9 @@ export default async function ReviewHistoryPage() {
         actions={
           <>
             <Button asChild variant="outline" size="sm">
+              <Link href="/admin/field-audits">Field audits</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
               <Link href="/admin/playbooks">Build a playbook</Link>
             </Button>
             <Button asChild size="sm">

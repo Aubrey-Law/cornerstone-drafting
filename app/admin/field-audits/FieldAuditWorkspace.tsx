@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import Link from 'next/link'
-import { ListChecks } from 'lucide-react'
+import { ArrowLeft, ListChecks } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -73,7 +73,15 @@ export function FieldAuditWorkspace({
     <div className="space-y-4">
       <PageHeader
         title="Field audits"
-        description="Checks a matter's design sheet against a published audit prompt and opens tasks for what it finds."
+        description="Checks a matter's design sheet against a published audit prompt and opens tasks for what it finds. Each matter's audits are also on its Reviews tab."
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/review">
+              <ArrowLeft className="size-4" aria-hidden />
+              Reviews
+            </Link>
+          </Button>
+        }
       />
 
       {unresolvedBlockers.length > 0 ? (

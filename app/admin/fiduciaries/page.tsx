@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { loadFiduciaryOverview } from '@/lib/fiduciary/view'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
@@ -33,6 +34,14 @@ export default async function FiduciariesPage() {
             Who holds which office, across every document at once, for each hired matter.
             {matters.length > 0 ? ` ${withGaps} of ${matters.length} ${matters.length === 1 ? 'has' : 'have'} a gap.` : ''}
           </>
+        }
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/matters">
+              <ArrowLeft className="size-4" aria-hidden />
+              Matters
+            </Link>
+          </Button>
         }
       />
 

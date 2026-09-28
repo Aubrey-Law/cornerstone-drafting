@@ -122,6 +122,31 @@ function MatterRow({
   )
 }
 
+/**
+ * Worklists without a nav entry of their own, and the item that owns them:
+ * the close-out lists open from the Matters dashboard, field audits sit with
+ * Reviews and the playbook builder.
+ */
+const NAV_SECTION_OWNERS: Record<string, readonly string[]> = {
+  '/admin/matters/list': ['/admin/funding', '/admin/execution', '/admin/fiduciaries'],
+  '/admin/review': ['/admin/field-audits', '/admin/playbooks'],
+}
+
+function isOwnedSection(href: string, pathname: string): boolean {
+  return (NAV_SECTION_OWNERS[href] ?? []).some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+/** Whether a nav item is the section the current route belongs to. */
+export function isNavItemActive(item: Pick<AdminNavItem, 'href' | 'exact'>, pathname: string): boolean {
+  return (
+    pathname === item.href
+    || (!item.exact && pathname.startsWith(`${item.href}/`))
+    || (item.href === '/admin/matters/list' && pathname.startsWith('/admin/matters/'))
+    || (item.href === '/admin/crm/opportunities' && pathname.startsWith('/admin/leads/'))
+    || isOwnedSection(item.href, pathname)
+  )
+}
+
 export function AdminSidebar({
   pathname,
   compact,
@@ -147,10 +172,7 @@ export function AdminSidebar({
           {navItems
             .filter(item => item.group === group)
             .map(item => {
-              const active =
-                pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
-                || (item.href === '/admin/matters/list' && pathname.startsWith('/admin/matters/'))
-                || (item.href === '/admin/crm/opportunities' && pathname.startsWith('/admin/leads/'))
+              const active = isNavItemActive(item, pathname)
               const Icon = item.icon
               const badge = getNavBadge(item.href, badgeCounts)
               return (
