@@ -25,6 +25,8 @@
  * Every step here has a deadline. Nothing in this file may wait forever.
  */
 
+import { dialogUrl } from '@/dialogUrl'
+
 /** The pane's `session.ts` parses this discriminator. Keep them identical. */
 export const HANDOFF_TYPE = 'cornerstone-addin-session'
 
@@ -194,7 +196,7 @@ export async function beginOAuth(
   deps: SignInDeps = {},
 ): Promise<string> {
   const config = deps.config ?? readSupabaseConfig()
-  const redirectTo = deps.redirectTo ?? `${globalThis.location.origin}/dialog.html`
+  const redirectTo = deps.redirectTo ?? dialogUrl()
 
   const verifier = generateVerifier()
   const challenge = await generateChallenge(verifier)

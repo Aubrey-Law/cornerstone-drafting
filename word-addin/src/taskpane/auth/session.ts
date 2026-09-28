@@ -7,6 +7,8 @@
  * one document when the attorney's session is not.
  */
 
+import { dialogUrl } from '@/dialogUrl'
+
 const STORAGE_KEY = 'cornerstone.addin.session.v1'
 
 /** The dialog and this module agree on this discriminator. */
@@ -73,7 +75,7 @@ export function signIn(): Promise<StoredSession> {
     // completed a sign-in: its client bundle did not execute in Word's WebView,
     // so the page froze on its server-rendered first paint. `dialog.html` is a
     // plain Vite entry with no SSR, no hydration and no /_next dependency.
-    const url = `${window.location.origin}/dialog.html`
+    const url = dialogUrl(window.location.origin)
 
     Office.context.ui.displayDialogAsync(
       url,

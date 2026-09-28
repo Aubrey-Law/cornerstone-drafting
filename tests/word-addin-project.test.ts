@@ -179,6 +179,22 @@ describe('word-addin production hosting', () => {
     expect(viteConfig).toContain('throw new Error(')
   })
 
+  it('derives the dialog URL from the base, never a hardcoded root path', () => {
+    // `${location.origin}/dialog.html` was correct while the pane was served at
+    // the origin root. Moving it under /addin/ did not break the build, the
+    // types or any test — it resolved to a 404 in production, so Office opened
+    // an empty dialog and the OAuth round trip had nowhere to return to. Found
+    // only by reading the deployed bundle.
+    const sources = ['word-addin/src/taskpane/auth/session.ts', 'word-addin/src/dialog/signIn.ts']
+    for (const file of sources) {
+      const source = read(file)
+      expect(source).toContain('dialogUrl')
+      expect(source).not.toMatch(/location\.origin\}\/dialog\.html/)
+    }
+    // The single definition both share, and the base it reads.
+    expect(read('word-addin/src/dialogUrl.ts')).toContain('import.meta.env.BASE_URL')
+  })
+
   it('is build output, not source', () => {
     expect(read('.gitignore')).toContain('public/addin/')
   })
