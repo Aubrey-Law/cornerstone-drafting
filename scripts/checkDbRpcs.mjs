@@ -30,15 +30,11 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-// The root app's own directories, plus the workbench's. The workbench calls
-// `ensure_user_profile` on its sign-in path, and scanning only the repository
-// root meant that call — and every one the workbench adds — went unverified.
+// The app's own directories.
 const SOURCE_DIRS = [
   'app',
   'lib',
   'components',
-  'apps/workbench/app',
-  'apps/workbench/lib',
   // The matters MCP server. Not part of either app, and its one RPC
   // (`correct_matter`) is the only write path an agent has into matters — so
   // an unverified call here is the failure this script exists to catch.

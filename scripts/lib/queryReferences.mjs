@@ -1,7 +1,7 @@
 // Every column name the code asks Postgres for, and where it asks.
 //
 // Shared by two checks that need the same answer from different sources of
-// truth: apps/workbench/tests/query-columns.test.ts compares these against the
+// truth: tests/query-columns.test.ts compares these against the
 // generated types (fast, offline, but only as current as the last regeneration),
 // and scripts/checkDbColumns.mjs compares them against the live database.
 //
@@ -133,5 +133,27 @@ export function collectQueryReferences({ roots, repoRoot = process.cwd() }) {
   return { references, embedded }
 }
 
-/** The directories whose queries both checks cover. */
-export const WORKBENCH_ROOTS = ['apps/workbench/lib', 'apps/workbench/app']
+/**
+ * The directories whose queries both checks cover: the code moved in from the
+ * retired workbench app, which is where the invented-column bug lived. The rest
+ * of the app is not covered yet — much of it builds selects dynamically.
+ */
+export const CHECKED_ROOTS = [
+  'lib/ceremony',
+  'lib/execution',
+  'lib/fiduciary',
+  'lib/fieldAudit',
+  'lib/funding',
+  'lib/identity',
+  'lib/playbooks',
+  'lib/prompts',
+  'lib/review',
+  'lib/runs',
+  'app/admin/execution',
+  'app/admin/fiduciaries',
+  'app/admin/field-audits',
+  'app/admin/funding',
+  'app/admin/playbooks',
+  'app/admin/review',
+  'app/api/cron/run-queue',
+]

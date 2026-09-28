@@ -2,7 +2,7 @@
   "name": "@aubrey-law/ui",
   "version": "0.1.0",
   "private": true,
-  "description": "The shared design system: shadcn/Radix primitives, the theme token source and its generated CSS, and cn(). Consumed by the root app (through components/ui shims) and the workbench.",
+  "description": "The shared design system: shadcn/Radix primitives, the theme token source and its generated CSS, and cn(). Consumed by the app through components/ui shims.",
   "type": "module",
   "exports": {
     "./utils": "./src/utils.ts",

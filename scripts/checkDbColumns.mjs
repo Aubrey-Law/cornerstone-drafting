@@ -1,4 +1,4 @@
-// Cross-check every column the workbench queries against what the database
+// Cross-check every column the checked code queries against what the database
 // actually has.
 //
 // The companion to checkDbRpcs.mjs, and here for the same reason: the answer has
@@ -21,10 +21,10 @@
 // `matters.title` case) fails on every event.
 //
 // Run: npm run check:db-columns
-// Exits 1 when the workbench reads a column the database does not have.
+// Exits 1 when the checked code reads a column the database does not have.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { collectQueryReferences, WORKBENCH_ROOTS } from './lib/queryReferences.mjs'
+import { collectQueryReferences, CHECKED_ROOTS } from './lib/queryReferences.mjs'
 import { classifyMissingReferences, migrationDefinedSchema } from './lib/migrationSchema.mjs'
 
 // Standalone node scripts do not get Next.js env loading; read the same files
@@ -61,7 +61,7 @@ loadEnvFile('.env')
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const { references, embedded } = collectQueryReferences({ roots: WORKBENCH_ROOTS })
+const { references, embedded } = collectQueryReferences({ roots: CHECKED_ROOTS })
 
 if (embedded.length > 0) {
   console.error('\n❌ This check cannot read an embedded select, so it would skip its columns:\n')

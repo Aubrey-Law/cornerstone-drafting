@@ -7,7 +7,7 @@ import type { MattersClient } from './client'
  * fake client without loading the SDK, and `tools.ts` stays a thin adapter.
  *
  * The column lists are string constants in this file so `scripts/checkDbColumns.mjs`
- * can see them — the same reason `apps/workbench/lib/prompts/designSheet.ts`
+ * can see them — the same reason `lib/prompts/designSheet.ts`
  * does it.
  */
 

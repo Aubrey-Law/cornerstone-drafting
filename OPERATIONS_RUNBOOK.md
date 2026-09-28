@@ -62,39 +62,30 @@ Re-verify quarterly.
 3. Confirm Supabase **Redirect URLs** include `https://<your-host>/auth/callback` for every deployment host.
 4. Account must be `role IN ('attorney','admin')` in `public.users` with an `@aubreylegal.com` email.
 
-#### Google sign-in succeeds but lands you in the *other* app
+#### Google sign-in succeeds but lands you on the wrong page or host
 
-**Symptom:** you click "Continue with Google" on the workbench, authenticate
-normally, and arrive signed in — at the root Cornerstone app instead.
-
-This is the same missing **Redirect URLs** entry as item 4 above, but it does
-not look like a failure, so it is worth its own line. When Supabase is handed a
-`redirect_to` that is not on the allow-list it does not error and does not log
-anything: it silently discards it and uses **Site URL**, which is the root app.
-Sign-in genuinely succeeded; only the destination was overridden.
+This is the same missing **Redirect URLs** entry as item 3 above, but it does
+not look like a failure. When Supabase is handed a `redirect_to` that is not on
+the allow-list it does not error and does not log anything: it silently
+discards it and uses **Site URL**. Sign-in genuinely succeeded; only the
+destination was overridden.
 
 Fix: Supabase Dashboard → Authentication → **URL Configuration** → *Redirect
-URLs*. Both apps share one Supabase project, so every host of **both** must be
-listed. `supabase/config.toml`'s `additional_redirect_urls` is the written
-record of what that list should contain, and
-`tests/auth-redirect-allowlist.test.ts` keeps it from drifting again — but
-neither can read the dashboard, so the dashboard is a manual step.
-
-Note the workbench's production domain drops the dot from the Vercel project
-name: the project is `cornerstone-drafting-2.0`, the domain is
-`cornerstone-drafting-20.vercel.app`.
+URLs*. `supabase/config.toml`'s `additional_redirect_urls` is the written record
+of what that list should contain, and `tests/auth-redirect-allowlist.test.ts`
+keeps it from drifting — but neither can read the dashboard, so the dashboard
+is a manual step. Once the retired workbench's Vercel project
+(`cornerstone-drafting-2.0`) is paused, its `https://cornerstone-drafting-20.vercel.app/**`
+entry can be removed there.
 
 **Use the wildcard form — an exact URL is not a safer version of the same
 entry, it is a broken one.** Redirect URLs are glob patterns. An entry of
 `https://host/auth/callback` matches that URL and nothing else, query string
-included, and both apps append `?redirectTo=<path>` to the callback whenever
-the visitor reached the login page by being bounced off a gated URL. So an
-exact entry works when you type `/auth/login` yourself and fails when you click
-a link into the app — the same host, the same account, silently landing in the
-other app. Write it as:
+included, and the app appends `?redirectTo=<path>` to the callback whenever the
+visitor reached the login page by being bounced off a gated URL. Write it as:
 
 ```
-https://cornerstone-drafting-20.vercel.app/**
+https://cornerstone.aubreylegal.com/**
 ```
 
 **How to check the list without guessing.** `auth.flow_state.referrer` stores
@@ -416,7 +407,7 @@ Operational rules:
 
 - Stripe is the only supported online processor. `PAYMENTS_PROVIDER=lawpay` is rejected until LawPay checkout, webhooks, refunds, and funds-handling policy are complete.
 - The workflow cron runs every five minutes and requires `CRON_SECRET`. Failed jobs stop after their configured retry count and require the authenticated manual retry endpoint.
-- The run queue cron (`/api/cron/run-queue`) runs every minute and requires `CRON_SECRET` and `ANTHROPIC_API_KEY`. It works queued reviews (Cornerstone, the Word add-in), field audits and stage-triggered runs, and carries the fiduciary and name-agreement task sweeps. A run whose worker died is handed back after 10 minutes, at most 3 times. It moved here from the review workbench's `/api/cron/tick`; the workbench no longer declares a cron.
+- The run queue cron (`/api/cron/run-queue`) runs every minute and requires `CRON_SECRET` and `ANTHROPIC_API_KEY`. It works queued reviews (Cornerstone, the Word add-in), field audits and stage-triggered runs, and carries the fiduciary and name-agreement task sweeps. A run whose worker died is handed back after 10 minutes, at most 3 times. It moved here from the retired review workbench's `/api/cron/tick`.
 - Overdue reminders are drafts only. A staff user must approve each reminder; no cron path sends them.
 - Matter close-out is rejected server-side while direct-pay balances, ready milestones, open legal-plan claims, or payment exceptions remain. A financial exception requires an attorney-authored reason.
 - Cost items represent incurred costs only. The operating-account workflow does not accept advance cost deposits or trust funds.

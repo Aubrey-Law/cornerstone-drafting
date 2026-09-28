@@ -207,7 +207,7 @@ export async function runFieldAudit(
  * Whether one finding may act.
  *
  * Extracted from `actionableFindings` so the withdrawal rule in
- * `apps/workbench/lib/fieldAudit/tasks.ts` can ask the same question from the
+ * `lib/fieldAudit/tasks.ts` can ask the same question from the
  * other side without carrying its own copy of the answer. Two copies could
  * disagree, and the shape of that disagreement is a finding that is refused as
  * unverifiable *and* counted as grounds for withdrawing an earlier one — which

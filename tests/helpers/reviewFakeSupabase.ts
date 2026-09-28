@@ -14,7 +14,7 @@
  * `.delete()` was added for retry (`lib/runs/retry.ts`), which deletes a
  * retried unit's superseded finding by id before writing the new one.
  *
- * Copied from `apps/workbench/tests/helpers/fakeSupabase.ts` for the review
+ * Copied from the retired workbench's `tests/helpers/fakeSupabase.ts` for the review
  * code ported into Cornerstone (`lib/review`, `lib/runs`, `lib/prompts`), with
  * `.is()` (a null-safe equality, for `column is null`) and
  * `.or()` added for `loadRunSummaries`' matter scope: comma-separated
