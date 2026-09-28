@@ -27,6 +27,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
 import type { TaskView } from '@/lib/matterPageTabs'
 import { TaskComposer } from './TaskComposer'
 import { TaskPlanView } from './TaskPlanView'
@@ -199,7 +200,7 @@ export function RecordTasksTab({
   if (mode === 'plan' && planMatter) {
     return (
       <div className="space-y-3">
-        <ViewSwitch value={mode} onChange={switchView} />
+        <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />
         <TaskPlanView
           matterId={planMatter}
           enabled
@@ -216,7 +217,7 @@ export function RecordTasksTab({
     <div className="@container">
     <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-3">
-        {planMatter && <ViewSwitch value={mode} onChange={switchView} />}
+        {planMatter && <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
             <button
@@ -509,42 +510,10 @@ export function RecordTasksTab({
  * work by due date, the plan groups every task on the matter — client- and
  * automation-owned rows included — by the stage it belongs to.
  */
-function ViewSwitch({
-  value,
-  onChange,
-}: {
-  value: TaskView
-  onChange: (view: TaskView) => void
-}) {
-  const options: { value: TaskView; label: string; icon: typeof ListTodo }[] = [
-    { value: 'queue', label: 'Queue', icon: ListTodo },
-    { value: 'plan', label: 'Plan', icon: CalendarRange },
-  ]
-  return (
-    <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
-      {options.map(option => {
-        const Icon = option.icon
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            aria-pressed={value === option.value}
-            className={cn(
-              'flex items-center gap-1 rounded px-2 py-1 transition-colors',
-              value === option.value
-                ? 'bg-card font-medium text-foreground shadow-xs'
-                : 'text-muted-foreground',
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden />
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
+const TASK_VIEW_OPTIONS: readonly ViewSwitchOption<TaskView>[] = [
+  { value: 'queue', label: 'Queue', icon: ListTodo },
+  { value: 'plan', label: 'Plan', icon: CalendarRange },
+]
 
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (

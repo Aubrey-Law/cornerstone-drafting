@@ -10,7 +10,7 @@ class ResizeObserverStub {
   disconnect() {}
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
-import { ExecutionChecklist } from '@/app/admin/execution/[matterId]/ExecutionChecklist'
+import { ExecutionChecklist } from '@/app/admin/matters/[id]/tabs/signing/ExecutionChecklist'
 
 afterEach(cleanup)
 

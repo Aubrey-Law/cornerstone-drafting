@@ -5,6 +5,7 @@ import { listenForMatterContacts } from '@/lib/matters/contactEvents'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { FileText, Signature } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { useConfirm } from '@/components/useConfirm'
@@ -48,13 +49,19 @@ import { Badge } from '@/components/ui/badge'
 import { MobileRecordSectionSelect } from '@/components/admin/MobileRecordSectionSelect'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
+  type AssetView,
   type CommunicationChannel,
+  type DocumentView,
   type MatterTab,
+  parseAssetView,
   parseCommunicationChannel,
+  parseDocumentView,
   parseMatterTab,
   parseTaskView,
   type TaskView,
 } from '@/lib/matterPageTabs'
+import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
+import { MatterSigningPanel } from './tabs/signing/MatterSigningPanel'
 import {
   mergeUnreviewedCounts,
   type UnreviewedUploadCounts,
@@ -110,6 +117,11 @@ import { useMatterDocuments } from './useMatterDocuments'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
+
+const DOCUMENT_VIEW_OPTIONS: readonly ViewSwitchOption<DocumentView>[] = [
+  { value: 'files', label: 'Files', icon: FileText },
+  { value: 'signing', label: 'Signing', icon: Signature },
+]
 
 const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'overview', label: 'Overview' },
@@ -230,6 +242,10 @@ function MatterDetailClientInner({
   // The Tasks tab's two faces. `?tab=sla` from an older link resolves to
   // `tasks`, so plan links keep working; `?view=plan` opens the plan directly.
   const taskView = parseTaskView(searchParams.get('view'))
+  // Assets' inventory or funding, Documents' files or signing — `?view=` on
+  // those tabs, the same parameter the Tasks tab uses.
+  const assetView = parseAssetView(activeTab === 'assets' ? searchParams.get('view') : null)
+  const documentView = parseDocumentView(activeTab === 'documents' ? searchParams.get('view') : null)
 
   const [matter, setMatter] = useState(initialMatter)
   const [contacts, setContacts] = useState(initialContacts)
@@ -398,6 +414,17 @@ function MatterDetailClientInner({
     params.set('tab', 'tasks')
     if (view === 'queue') params.delete('view')
     else params.set('view', view)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams])
+
+  /** Switches the face of the current tab; the default face drops `?view=`. */
+  const setTabView = useCallback((tab: 'assets' | 'documents', view: AssetView | DocumentView, defaultView: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', tab)
+    if (view === defaultView) params.delete('view')
+    else params.set('view', view)
+    if (tab === 'documents') { params.delete('scope'); params.delete('document') }
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [pathname, router, searchParams])
@@ -1130,43 +1157,59 @@ function MatterDetailClientInner({
                 anticipatedInheritance={Boolean(matterDetails?.ep_anticipated_inheritance)}
                 onAnticipatedInheritanceChange={next =>
                   void handleSaveMatterDetailField('ep_anticipated_inheritance', next)}
+                view={assetView}
+                onViewChange={view => setTabView('assets', view, 'inventory')}
               />
 
               <TabsContent value="documents" className="space-y-4">
-                {(documentsError || foldersError) && (
-                  <div role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm">
-                    <p>{documentsError || foldersError}</p>
-                    <Button variant="outline" size="sm" disabled={docsLoading} onClick={() => void loadDocuments()}>Retry</Button>
-                  </div>
+                <div className="flex justify-end">
+                  <ViewSwitch
+                    value={documentView}
+                    options={DOCUMENT_VIEW_OPTIONS}
+                    onChange={view => setTabView('documents', view, 'files')}
+                    label="Documents view"
+                  />
+                </div>
+                {documentView === 'signing' ? (
+                  <MatterSigningPanel matterId={matterId} />
+                ) : (
+                  <>
+                    {(documentsError || foldersError) && (
+                      <div role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm">
+                        <p>{documentsError || foldersError}</p>
+                        <Button variant="outline" size="sm" disabled={docsLoading} onClick={() => void loadDocuments()}>Retry</Button>
+                      </div>
+                    )}
+                    <MatterDocumentsTab
+                      matterId={matterId}
+                      clientName={matter.client_name}
+                      deepLinkedDocumentId={searchParams.get('document')}
+                      initialScope={searchParams.get('scope') === 'unreviewed' ? 'unreviewed'
+                        : searchParams.get('scope') === 'shared' ? 'shared'
+                          : searchParams.get('scope') === 'client' ? 'client' : 'all'}
+                      onScopeChange={scope => {
+                        const params = new URLSearchParams(searchParams.toString())
+                        if (scope === 'all') params.delete('scope')
+                        else params.set('scope', scope)
+                        params.delete('document')
+                        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+                      }}
+                      documents={documents}
+                      folders={documentFolders}
+                      loading={docsLoading}
+                      loadError={documentsError}
+                      onDocumentsChanged={loadDocuments}
+                      unreviewedUploadCounts={unreviewedUploadCounts}
+                      onReviewPortalUploads={handleMarkPortalUploadsReviewed}
+                      onReviewIntakeUploads={openIntakeSheet}
+                      esignDocumentsEnabled={esignDocumentsEnabled}
+                      signatureRequests={signatureRequests}
+                      defaultSigner={matter.client_email
+                        ? { name: matter.client_name ?? '', email: matter.client_email }
+                        : null}
+                    />
+                  </>
                 )}
-                <MatterDocumentsTab
-                  matterId={matterId}
-                  clientName={matter.client_name}
-                  deepLinkedDocumentId={searchParams.get('document')}
-                  initialScope={searchParams.get('scope') === 'unreviewed' ? 'unreviewed'
-                    : searchParams.get('scope') === 'shared' ? 'shared'
-                      : searchParams.get('scope') === 'client' ? 'client' : 'all'}
-                  onScopeChange={scope => {
-                    const params = new URLSearchParams(searchParams.toString())
-                    if (scope === 'all') params.delete('scope')
-                    else params.set('scope', scope)
-                    params.delete('document')
-                    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-                  }}
-                  documents={documents}
-                  folders={documentFolders}
-                  loading={docsLoading}
-                  loadError={documentsError}
-                  onDocumentsChanged={loadDocuments}
-                  unreviewedUploadCounts={unreviewedUploadCounts}
-                  onReviewPortalUploads={handleMarkPortalUploadsReviewed}
-                  onReviewIntakeUploads={openIntakeSheet}
-                  esignDocumentsEnabled={esignDocumentsEnabled}
-                  signatureRequests={signatureRequests}
-                  defaultSigner={matter.client_email
-                    ? { name: matter.client_name ?? '', email: matter.client_email }
-                    : null}
-                />
               </TabsContent>
 
               <MatterBillingTab

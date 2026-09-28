@@ -11,12 +11,12 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 
-vi.mock('@/app/admin/execution/[matterId]/ceremonyActions', () => ({
+vi.mock('@/app/admin/matters/[id]/tabs/signing/ceremonyActions', () => ({
   recordCeremony: vi.fn(),
   recordCeremonyDocument: vi.fn(),
 }))
 
-import { CeremonyRecord } from '@/app/admin/execution/[matterId]/CeremonyRecord'
+import { CeremonyRecord } from '@/app/admin/matters/[id]/tabs/signing/CeremonyRecord'
 import type { Ceremony } from '@/lib/ceremony/repository'
 
 afterEach(cleanup)

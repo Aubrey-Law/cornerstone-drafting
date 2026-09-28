@@ -35,9 +35,25 @@ const money = (value: number | string | null) => {
   return typeof amount === 'number' && Number.isFinite(amount) ? formatMoney(amount) : '—'
 }
 
-export function AssetRow({ matterId, asset }: { matterId: string; asset: FundingAsset }) {
+export function AssetRow({
+  matterId,
+  asset,
+  onSaved,
+}: {
+  matterId: string
+  asset: FundingAsset
+  /** Called after a save succeeds, so the view can reload what it shows. */
+  onSaved?: () => void
+}) {
   const [open, setOpen] = useState(false)
-  const [state, submit, pending] = useActionState(recordAssetFunding, { message: null } as FundingFormState)
+  const [state, submit, pending] = useActionState(async (previous: FundingFormState, form: FormData) => {
+    const result = await recordAssetFunding(previous, form)
+    if (!result.message) {
+      setOpen(false)
+      onSaved?.()
+    }
+    return result
+  }, { message: null } as FundingFormState)
   const [status, setStatus] = useState<FundingStatus>(asset.status)
 
   /**

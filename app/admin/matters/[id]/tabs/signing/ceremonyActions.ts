@@ -48,7 +48,7 @@ export async function recordCeremony(
   })
 
   if (!result.ok) return { message: result.message }
-  revalidatePath(`/admin/execution/${matterId}`)
+  revalidatePath('/admin/execution')
   return { message: null }
 }
 
@@ -90,6 +90,6 @@ export async function recordCeremonyDocument(
   })
 
   if (!result.ok) return { message: result.message }
-  revalidatePath(`/admin/execution/${matterId}`)
+  revalidatePath('/admin/execution')
   return { message: null }
 }
