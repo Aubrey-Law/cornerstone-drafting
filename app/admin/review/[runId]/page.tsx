@@ -1,4 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { notFound } from 'next/navigation'
 import { loadRun } from '@/lib/review/history'
 import { loadScanSummaries } from '@/lib/review/scans'
@@ -13,6 +18,7 @@ import { StoredFindings } from './StoredFindings'
 import { UploadPanel } from './UploadPanel'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Review' }
 
 /**
  * One saved review: its findings, each against the passage it cites in the
@@ -47,45 +53,41 @@ export default async function SavedReviewPage({ params }: { params: Promise<{ ru
   const matterId = run.matterId ?? run.uploadMatterId ?? null
 
   return (
-    <div className="flex flex-col">
+    <div className="space-y-4">
       <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
-      <header className="space-y-1 border-b border-border px-6 py-4">
-        <nav className="flex gap-3 text-xs text-muted-foreground">
-          <Link href="/admin/review" className="underline underline-offset-4">
-            Reviews
-          </Link>
-          {matterId ? (
-            <Link href={`/admin/matters/${matterId}?tab=reviews`} className="underline underline-offset-4">
-              Matter
-            </Link>
-          ) : null}
-        </nav>
-        <h1 className="text-lg font-semibold tracking-tight">
-          {run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : `${run.kind} run`}
-        </h1>
-        {run.reviewUploadId ? (
-          <p className="text-sm" data-testid="unfiled-document">
-            {run.documentLabel ?? 'Uploaded document'}{' '}
-            <span className="text-xs text-muted-foreground">
-              · {run.uploadFromWord ? 'from Word' : 'upload'}
-              {run.uploadMatterTitle ? `, linked to ${run.uploadMatterTitle}` : ', not filed on a matter'}
+      <PageHeader
+        eyebrow="Review"
+        title={run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : `${run.kind} run`}
+        description={
+          run.reviewUploadId ? (
+            <span data-testid="unfiled-document">
+              <span className="text-foreground">{run.documentLabel ?? 'Uploaded document'}</span>{' '}
+              <span className="text-xs">
+                · {run.uploadFromWord ? 'from Word' : 'upload'}
+                {run.uploadMatterTitle ? `, linked to ${run.uploadMatterTitle}` : ', not filed on a matter'}
+              </span>
             </span>
-          </p>
-        ) : run.documentLabel ? (
-          <p className="text-sm">{run.documentLabel}</p>
-        ) : null}
-        {run.reviewUploadId && uploadOptions ? (
-          <UploadPanel
-            runId={run.runId}
-            reviewUploadId={run.reviewUploadId}
-            linkedMatterId={run.uploadMatterId ?? null}
-            linkedMatterTitle={run.uploadMatterTitle ?? null}
-            filed={run.uploadFiled ?? false}
-            fromWord={run.uploadFromWord ?? false}
-            matters={uploadOptions.matters}
-            playbooks={uploadOptions.playbooks}
-          />
-        ) : null}
+          ) : (
+            run.documentLabel ?? undefined
+          )
+        }
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/review">
+                <ArrowLeft className="size-4" aria-hidden />
+                All reviews
+              </Link>
+            </Button>
+            {matterId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/admin/matters/${matterId}?tab=reviews`}>Open matter</Link>
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+      <div className="space-y-1">
         <p className="text-xs text-muted-foreground">
           {run.findings.length} findings · {cited} cited · {refused} citations rejected
           {run.failedCount > 0 ? ` · ${run.failedCount} rules failed` : ''}
@@ -97,14 +99,30 @@ export default async function SavedReviewPage({ params }: { params: Promise<{ ru
             Did not run: {run.failures.map(failure => `rule ${failure.ruleNumber} (${failure.reason})`).join(', ')}
           </p>
         ) : null}
-        {scans.length > 0 ? (
-          <div className="pt-2" data-testid="run-scans">
-            <p className="text-xs font-medium text-muted-foreground">Also checked with this copy</p>
-            <ScanHistoryList scans={scans} showDocument={false} />
-          </div>
-        ) : null}
-      </header>
-      <StoredFindings runId={run.runId} findings={run.findings} layer={run.layer} steps={run.steps} />
+      </div>
+      {run.reviewUploadId && uploadOptions ? (
+        <UploadPanel
+          runId={run.runId}
+          reviewUploadId={run.reviewUploadId}
+          linkedMatterId={run.uploadMatterId ?? null}
+          linkedMatterTitle={run.uploadMatterTitle ?? null}
+          filed={run.uploadFiled ?? false}
+          fromWord={run.uploadFromWord ?? false}
+          matters={uploadOptions.matters}
+          playbooks={uploadOptions.playbooks}
+        />
+      ) : null}
+      {scans.length > 0 ? (
+        <Card className="gap-0 py-0" data-testid="run-scans">
+          <CardHeader className="block space-y-1 border-b py-3 [.border-b]:pb-3">
+            <CardTitle className="text-sm">Also checked with this copy</CardTitle>
+          </CardHeader>
+          <ScanHistoryList scans={scans} showDocument={false} />
+        </Card>
+      ) : null}
+      <Card className="gap-0 overflow-hidden py-0">
+        <StoredFindings runId={run.runId} findings={run.findings} layer={run.layer} steps={run.steps} />
+      </Card>
     </div>
   )
 }

@@ -4,12 +4,15 @@ import { useActionState, useOptimistic } from 'react'
 import { Button } from '@/components/ui/button'
 import type { Importance, ScanDisposition, StoredScanItem } from '@/lib/review/scans'
 import { recordScanDisposition } from './actions'
+import { Badge } from '@/components/ui/badge'
+import { TONE_BADGE, TONE_NOTICE, type Tone } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 const IMPORTANCE_LABEL: Record<Importance, string> = { important: 'Important', notable: 'Notable', minor: 'Minor' }
-const IMPORTANCE_CLASS: Record<Importance, string> = {
-  important: 'border-destructive/40 text-destructive',
-  notable: 'border-warning/50 text-warning',
-  minor: 'border-border text-muted-foreground',
+const IMPORTANCE_TONE: Record<Importance, Tone> = {
+  important: 'danger',
+  notable: 'warning',
+  minor: 'neutral',
 }
 
 /** `open` is no decision, so it is no button pressed rather than a fourth choice. */
@@ -48,21 +51,21 @@ export function ScanItemsList({ scanId, items }: { scanId: string; items: Stored
   return (
     <>
       {state.message ? (
-        <p role="alert" className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+        <p role="alert" className={cn('mx-4 mt-4', TONE_NOTICE.danger)}>
           {state.message}
         </p>
       ) : null}
-      <p className="px-6 pt-3 text-xs text-muted-foreground" data-testid="scan-decided">
+      <p className="px-4 pt-3 text-xs text-muted-foreground" data-testid="scan-decided">
         {decided} of {items.length} decided
       </p>
       <ul className="divide-y divide-border" data-testid="scan-items">
         {items.map(item => (
-          <li key={item.id} className="space-y-1.5 px-6 py-4">
+          <li key={item.id} className="space-y-1.5 px-4 py-4">
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{item.category}</span>
-              <span className={`rounded-full border px-2 py-0.5 font-medium ${IMPORTANCE_CLASS[item.importance]}`}>
+              <Badge variant="outline" className={cn('text-micro', TONE_BADGE[IMPORTANCE_TONE[item.importance]])}>
                 {IMPORTANCE_LABEL[item.importance]}
-              </span>
+              </Badge>
               {item.citation ? <span>¶ {item.citation.blockIndex}</span> : null}
             </p>
             <p className="font-medium">{item.title}</p>

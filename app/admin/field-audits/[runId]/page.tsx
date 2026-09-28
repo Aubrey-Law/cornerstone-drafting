@@ -1,5 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
 import { loadAnyRun } from '@/lib/runs/history'
 import { loadFieldAuditFindings } from '@/lib/fieldAudit/history'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
@@ -8,6 +12,7 @@ import { RunProgressRefresh } from '@/app/admin/review/components/RunProgressRef
 import { FieldAuditRunView } from './FieldAuditRunView'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Field audit' }
 
 const finishedOn = (value: string) =>
   new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -28,34 +33,40 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
   const findings = await loadFieldAuditFindings(client, runId)
 
   return (
-    <div className="flex flex-col">
+    <div className="space-y-4">
       <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
-      <header className="space-y-1 border-b border-border px-6 py-4">
-        <Link href="/admin/field-audits" className="text-xs text-muted-foreground underline underline-offset-4">
-          Field audits
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight">
-          {run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : 'Field audit'}
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          {run.matterId ? (
-            <Link href={`/admin/matters/${run.matterId}`} className="underline underline-offset-4">
-              {run.matterTitle}
+      <PageHeader
+        eyebrow="Field audit"
+        title={run.promptSlug ? `${run.promptSlug} v${run.promptVersionNumber}` : 'Field audit'}
+        description={
+          <>
+            {run.matterId ? (
+              <Link href={`/admin/matters/${run.matterId}`} className="font-medium text-primary hover:underline">
+                {run.matterTitle}
+              </Link>
+            ) : (
+              run.matterTitle
+            )}{' '}
+            · {findings.length} findings
+            {run.failedCount > 0 ? ` · ${run.failedCount} checks failed` : ''}
+            {run.finishedAt ? ` · ${finishedOn(run.finishedAt)}` : ''}
+          </>
+        }
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/field-audits">
+              <ArrowLeft className="size-4" aria-hidden />
+              All field audits
             </Link>
-          ) : (
-            run.matterTitle
-          )}{' '}
-          · {findings.length} findings
-          {run.failedCount > 0 ? ` · ${run.failedCount} checks failed` : ''}
-          {run.finishedAt ? ` · ${finishedOn(run.finishedAt)}` : ''}
+          </Button>
+        }
+      />
+      {/* A check that never ran is not a check that found nothing. */}
+      {run.failures.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Did not run: {run.failures.map(failure => `check ${failure.ruleNumber} (${failure.reason})`).join(', ')}
         </p>
-        {/* A check that never ran is not a check that found nothing. */}
-        {run.failures.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Did not run: {run.failures.map(failure => `check ${failure.ruleNumber} (${failure.reason})`).join(', ')}
-          </p>
-        ) : null}
-      </header>
+      ) : null}
       <FieldAuditRunView runId={run.runId} findings={findings} steps={run.steps} />
     </div>
   )

@@ -7,12 +7,12 @@ import { SCAN_LABEL, scanStatusLabel, type ScanSummary } from '@/lib/review/scan
  */
 export function ScanHistoryList({ scans, showDocument = true }: { scans: ScanSummary[]; showDocument?: boolean }) {
   return (
-    <ul className="divide-y divide-border border-y border-border" data-testid="scan-history">
+    <ul className="divide-y divide-border" data-testid="scan-history">
       {scans.map(scan => (
         <li key={scan.scanId}>
           <Link
             href={`/admin/review/scans/${scan.scanId}`}
-            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 py-3 text-sm hover:bg-accent"
+            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm transition-colors hover:bg-accent"
           >
             <span className="min-w-0">
               <span className="font-medium">{SCAN_LABEL[scan.kind]}</span>

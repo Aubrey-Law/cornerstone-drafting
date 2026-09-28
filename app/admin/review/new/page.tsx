@@ -1,4 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { describeCondition } from '@aubrey-law/citations/review/conditions'
 import { loadPublishedPrompts } from '@/lib/prompts/repository'
 import { loadReviewableByMatter } from '@/lib/review/matterDocuments'
@@ -7,6 +12,7 @@ import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { NewReviewForm } from './NewReviewForm'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Start a review' }
 
 /**
  * Starting a review: a published playbook against a current document on a
@@ -61,32 +67,38 @@ export default async function NewReviewPage({
         : (playbooks[0]?.slug ?? '')
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <header className="space-y-1">
-        <Link href="/admin/review" className="text-xs text-muted-foreground underline underline-offset-4">
-          Reviews
-        </Link>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold tracking-tight">Start a review</h1>
-          <Link href="/admin/playbooks" className="text-sm underline underline-offset-4">
-            Build a playbook
-          </Link>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Runs a playbook against one document. Each finding quotes the passage it is about, checked against the
-          document&apos;s own text. The review is saved and fills in over a minute or two.
-        </p>
-      </header>
-      {playbooks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No review playbook is published yet.</p>
-      ) : (
-        <NewReviewForm
-          playbooks={playbooks}
-          defaultSlug={defaultSlug}
-          matters={matters}
-          initialMatterId={initialMatterId}
-        />
-      )}
+    <div className="space-y-4">
+      <PageHeader
+        title="Start a review"
+        description="Runs a playbook against one document. Each finding quotes the passage it is about, checked against the document's own text. The review is saved and fills in over a minute or two."
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/review">
+                <ArrowLeft className="size-4" aria-hidden />
+                All reviews
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/playbooks">Build a playbook</Link>
+            </Button>
+          </>
+        }
+      />
+      <Card>
+        <CardContent>
+          {playbooks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No review playbook is published yet.</p>
+          ) : (
+            <NewReviewForm
+              playbooks={playbooks}
+              defaultSlug={defaultSlug}
+              matters={matters}
+              initialMatterId={initialMatterId}
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -1,9 +1,18 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Signature } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { PageHeader } from '@/components/PageHeader'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { detectKinds } from '@/lib/execution/detect'
 import { loadExecutionMatters } from '@/lib/execution/repository'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
+import { TONE_BADGE } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Execution' }
 
 /**
  * Every hired matter with drafted documents, and what each needs to be signed
@@ -18,34 +27,42 @@ export default async function ExecutionPage() {
     .sort((a, b) => a.title.localeCompare(b.title))
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <header className="space-y-1">
-        <h1 className="text-lg font-semibold tracking-tight">Execution</h1>
-        <p className="text-sm text-muted-foreground">
-          What each document needs to be signed properly in Massachusetts, and the record of the signing.
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        title="Execution"
+        description="What each document needs to be signed properly in Massachusetts, and the record of the signing."
+      />
 
-      {matters.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No hired matter has drafted documents yet.</p>
-      ) : (
-        <ul className="divide-y divide-border border-y border-border" data-testid="execution-worklist">
-          {matters.map(matter => (
-            <li key={matter.matterId}>
-              <Link
-                href={`/admin/execution/${matter.matterId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 hover:bg-accent"
-              >
-                <span className="font-medium">{matter.title}</span>
-                <span className="text-sm text-muted-foreground">
-                  {matter.detected.kinds.length} document{matter.detected.kinds.length === 1 ? '' : 's'} recognised
-                  {matter.detected.unmatched.length > 0 ? ` · ${matter.detected.unmatched.length} to confirm` : ''}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Card className="gap-0 py-0">
+        {matters.length === 0 ? (
+          <EmptyState
+            icon={Signature}
+            title="Nothing to sign yet"
+            description="No hired matter has drafted documents yet."
+          />
+        ) : (
+          <ul className="divide-y divide-border" data-testid="execution-worklist">
+            {matters.map(matter => (
+              <li key={matter.matterId}>
+                <Link
+                  href={`/admin/execution/${matter.matterId}`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-accent"
+                >
+                  <span className="text-sm font-medium">{matter.title}</span>
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {matter.detected.kinds.length} document{matter.detected.kinds.length === 1 ? '' : 's'} recognised
+                    {matter.detected.unmatched.length > 0 ? (
+                      <Badge variant="outline" className={cn('text-micro', TONE_BADGE.warning)}>
+                        {matter.detected.unmatched.length} to confirm
+                      </Badge>
+                    ) : null}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }

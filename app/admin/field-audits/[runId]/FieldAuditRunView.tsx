@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useOptimistic, useTransition } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { FieldAuditOutcome } from '@aubrey-law/citations/fieldAudit/types'
 import type { StoredFieldAuditFinding } from '@/lib/fieldAudit/history'
@@ -8,6 +9,8 @@ import type { Disposition } from '@/lib/review/persist'
 import { statusFromSteps, type RunStep } from '@/lib/runs/steps'
 import { RunSteps } from '@/app/admin/review/components/RunSteps'
 import { recordFieldAuditDisposition, retryRun } from './actions'
+import { TONE_BADGE, TONE_NOTICE, severityTone } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 const OUTCOME_LABEL: Record<FieldAuditOutcome, string> = {
   deviation: 'Deviation',
@@ -21,13 +24,6 @@ const DECISIONS: Array<{ value: Exclude<Disposition, 'open'>; label: string }> =
   { value: 'rejected', label: 'Reject' },
   { value: 'deferred', label: 'Defer' },
 ]
-
-const SEVERITY_CLASS: Record<string, string> = {
-  blocker: 'border-destructive/50 bg-destructive/10 text-destructive',
-  high: 'border-warning/60 bg-warning/15 text-warning',
-  medium: 'border-warning/30 bg-warning/5 text-warning',
-  low: 'border-border bg-muted text-muted-foreground',
-}
 
 /**
  * A recorded field audit, read back — the field-audit analogue of
@@ -72,9 +68,9 @@ export function FieldAuditRunView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 py-8">
+    <div className="w-full max-w-3xl space-y-6">
       {decisionState.message ? (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+        <p role="alert" className={TONE_NOTICE.danger}>
           {decisionState.message}
         </p>
       ) : null}
@@ -83,17 +79,15 @@ export function FieldAuditRunView({
           <li
             key={finding.findingId}
             data-testid={`finding-${finding.checkNumber}`}
-            className="space-y-2 rounded-md border border-border p-3 text-sm"
+            className="space-y-2 rounded-lg border border-border bg-card p-4 text-sm shadow-xs"
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">Check {finding.checkNumber}</span>
               <span className="text-xs text-muted-foreground">{OUTCOME_LABEL[finding.outcome]}</span>
               {finding.severity ? (
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_CLASS[finding.severity] ?? ''}`}
-                >
+                <Badge variant="outline" className={cn('text-micro capitalize', TONE_BADGE[severityTone(finding.severity)])}>
                   {finding.severity}
-                </span>
+                </Badge>
               ) : null}
               <span className="ml-auto flex gap-1" role="group" aria-label={`Decision on check ${finding.checkNumber}`}>
                 {DECISIONS.map((decision) => (
@@ -112,7 +106,7 @@ export function FieldAuditRunView({
             </div>
             <p>{finding.rationale}</p>
             {finding.references.length > 0 ? (
-              <ul className="space-y-1 rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
+              <ul className="space-y-1 rounded-md bg-muted p-2 text-xs text-muted-foreground">
                 {finding.references.map((reference, index) => (
                   <li key={`${reference.fieldKey}-${index}`}>
                     <span className="font-medium text-foreground">{reference.fieldKey}</span>

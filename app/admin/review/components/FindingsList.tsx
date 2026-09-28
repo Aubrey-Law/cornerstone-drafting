@@ -1,8 +1,11 @@
 'use client'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ReviewFinding } from '@aubrey-law/citations/review/types'
 import { isCitable, orderFindings } from '@/lib/review/order'
+import { TONE_BADGE, severityTone } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 export type Disposition = 'accepted' | 'rejected' | 'deferred'
 
@@ -11,13 +14,6 @@ const OUTCOME_LABEL: Record<ReviewFinding['outcome'], string> = {
   absent: 'Absent',
   compliant: 'Compliant',
   not_applicable: 'Not applicable',
-}
-
-const SEVERITY_CLASS: Record<string, string> = {
-  blocker: 'border-destructive/50 bg-destructive/10 text-destructive',
-  high: 'border-warning/60 bg-warning/15 text-warning',
-  medium: 'border-warning/30 bg-warning/5 text-warning',
-  low: 'border-border bg-muted text-muted-foreground',
 }
 
 const DISPOSITIONS: Array<{ value: Disposition; label: string }> = [
@@ -92,14 +88,10 @@ export function FindingsList({
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">Rule {finding.ruleNumber}</span>
-              <span
-                className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
-                  finding.severity ? SEVERITY_CLASS[finding.severity] : SEVERITY_CLASS.low
-                }`}
-              >
+              <Badge variant="outline" className={cn('text-micro', TONE_BADGE[severityTone(finding.severity)])}>
                 {OUTCOME_LABEL[finding.outcome].toLowerCase()}
                 {finding.severity ? ` · ${finding.severity}` : ''}
-              </span>
+              </Badge>
             </div>
 
             <p className="text-sm">{finding.rationale}</p>

@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { RunSummary } from '@/lib/review/history'
 import { RunHistoryList } from '@/app/admin/review/components/RunHistoryList'
 
@@ -33,35 +35,30 @@ export function MatterReviewsTab({ matterId }: { matterId: string }) {
   }, [matterId])
 
   return (
-    <section className="rounded-lg border border-border bg-card" data-testid="matter-reviews">
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
-        <div>
-          <h3 className="text-sm font-semibold">Reviews</h3>
-          <p className="text-xs text-muted-foreground">
-            Playbook reviews of this matter&apos;s documents, its prior plans, and drafts reviewed from Word.
-          </p>
-        </div>
-        <Link
-          href={`/admin/review/new?matter=${encodeURIComponent(matterId)}`}
-          className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
-        >
-          Review a document
-        </Link>
-      </div>
-      <div className="px-4 py-2">
-        {error ? (
-          <p className="py-3 text-sm text-destructive">{error}</p>
-        ) : runs === null ? (
-          <p className="py-3 text-sm text-muted-foreground">Loading reviews…</p>
-        ) : runs.length === 0 ? (
-          <p className="py-3 text-sm text-muted-foreground">
-            No reviews yet. Review one of this matter&apos;s documents, or run one from the Review tab in Word with
-            this matter linked.
-          </p>
-        ) : (
-          <RunHistoryList runs={runs} showMatter={false} />
-        )}
-      </div>
-    </section>
+    <Card className="gap-0 py-0" data-testid="matter-reviews">
+      <CardHeader className="border-b py-3 [.border-b]:pb-3">
+        <CardTitle className="text-sm">Reviews</CardTitle>
+        <CardDescription className="text-xs">
+          Playbook reviews of this matter&apos;s documents, its prior plans, and drafts reviewed from Word.
+        </CardDescription>
+        <CardAction>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/admin/review/new?matter=${encodeURIComponent(matterId)}`}>Review a document</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      {error ? (
+        <p className="px-4 py-3 text-sm text-destructive">{error}</p>
+      ) : runs === null ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">Loading reviews…</p>
+      ) : runs.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          No reviews yet. Review one of this matter&apos;s documents, or run one from the Review tab in Word with this
+          matter linked.
+        </p>
+      ) : (
+        <RunHistoryList runs={runs} showMatter={false} />
+      )}
+    </Card>
   )
 }

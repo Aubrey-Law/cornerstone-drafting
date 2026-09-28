@@ -93,6 +93,23 @@ function upload(name = 'Trust form.docx', extra: Record<string, string> = {}) {
   return new Request('http://localhost/api/admin/playbooks/extract', { method: 'POST', body: form })
 }
 
+
+/** The first element in a server component's tree whose props carry `key`. */
+function findPropsWith(node: unknown, key: string): Record<string, unknown> | undefined {
+  if (!node || typeof node !== 'object') return undefined
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findPropsWith(child, key)
+      if (found) return found
+    }
+    return undefined
+  }
+  const props = (node as { props?: Record<string, unknown> }).props
+  if (!props) return undefined
+  if (key in props) return props
+  return findPropsWith(props.children, key)
+}
+
 describe('POST /api/admin/playbooks/extract', () => {
   it('proposes rules from a precedent as the signed-in attorney, and stores nothing', async () => {
     const response = await extractRoute(upload('Trust form.docx', { documentType: 'Revocable trust' }))
@@ -162,13 +179,8 @@ describe('the builder and Start a review pages', () => {
 
   it('preselect the playbook the builder just published, via ?playbook=', async () => {
     const formOf = async (playbook?: string) => {
-      const element = (await NewReviewPage({ searchParams: Promise.resolve(playbook ? { playbook } : {}) })) as {
-        props: { children: Array<{ props?: Record<string, unknown> } | false | null> }
-      }
-      const form = element.props.children.find(child => child && child.props && 'defaultSlug' in child.props) as {
-        props: { defaultSlug: string }
-      }
-      return form.props.defaultSlug
+      const element = await NewReviewPage({ searchParams: Promise.resolve(playbook ? { playbook } : {}) })
+      return findPropsWith(element, 'defaultSlug')?.defaultSlug
     }
     expect(await formOf('ma-will-firm-qa')).toBe('ma-will-firm-qa')
     // An unknown slug falls back to the default rather than preselecting nothing.

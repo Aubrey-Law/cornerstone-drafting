@@ -4,11 +4,12 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MatterFiduciaryView } from '@/lib/fiduciary/view'
+import { TONE_NOTICE, type Tone } from '@/lib/ui/tone'
 
-const SEVERITY_CLASS: Record<MatterFiduciaryView['issues'][number]['severity'], string> = {
-  error: 'border-destructive/50 bg-destructive/10',
-  gap: 'border-warning/50 bg-warning/15',
-  note: 'border-border bg-muted',
+const SEVERITY_TONE: Record<MatterFiduciaryView['issues'][number]['severity'], Tone> = {
+  error: 'danger',
+  gap: 'warning',
+  note: 'neutral',
 }
 
 const SEVERITY_LABEL: Record<MatterFiduciaryView['issues'][number]['severity'], string> = {
@@ -80,7 +81,7 @@ export function MatterFiduciaryMatrixCard({ matterId }: { matterId: string }) {
             ) : (
               <ul className="space-y-2" data-testid="fiduciary-issues">
                 {view.issues.map(issue => (
-                  <li key={issue.message} className={`rounded-md border p-3 text-sm ${SEVERITY_CLASS[issue.severity]}`}>
+                  <li key={issue.message} className={TONE_NOTICE[SEVERITY_TONE[issue.severity]]}>
                     <span className="font-medium">{SEVERITY_LABEL[issue.severity]}</span>
                     {issue.message}
                   </li>
