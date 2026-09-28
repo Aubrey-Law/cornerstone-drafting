@@ -22,6 +22,8 @@ import { SLUG_PATTERN } from './slug'
  */
 
 export interface DraftRule {
+  /** A short heading for lists. Blank or absent is not stored. */
+  title?: string | null
   statement: string
   risk: ReviewRule['risk']
   preferredLanguage?: string | null
@@ -47,12 +49,14 @@ export function buildReviewBody(rules: DraftRule[]) {
     inputs: [] as never[],
     rules: rules.map((rule, index) => {
       const preferred = rule.preferredLanguage?.trim()
+      const title = rule.title?.trim()
       return {
         number: String(index + 1),
         risk: rule.risk,
         statement: rule.statement.trim(),
         ...(preferred ? { preferredLanguage: preferred } : {}),
         ...(rule.conditions && rule.conditions.length > 0 ? { conditions: rule.conditions } : {}),
+        ...(title ? { title } : {}),
       }
     }),
   }
@@ -93,7 +97,7 @@ export async function publishReviewPlaybook(
   try {
     body = buildReviewBody(input.rules)
   } catch {
-    return { ok: false, message: 'Every rule needs a statement, a risk level, and conditions that name a known matter fact.' }
+    return { ok: false, message: 'Every rule needs a statement, a risk level, a title of at most 80 characters, and conditions that name a known matter fact.' }
   }
 
   const { data: existing, error: existingError } = await client

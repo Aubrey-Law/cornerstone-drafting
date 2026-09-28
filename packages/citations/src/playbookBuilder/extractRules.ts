@@ -41,6 +41,8 @@ export type CandidateRisk = ReviewRule['risk']
 export interface CandidateRule {
   /** Stable within one extraction — `w<window>-<n>` — for UI keys only. */
   id: string
+  /** A short heading for this one rule ("Successor Trustee Designation"), for lists. */
+  title: string
   statement: string
   risk: CandidateRisk
   /** A short heading for grouping ("Trustee succession", "Spendthrift"). */
@@ -105,6 +107,11 @@ const EXTRACT_TOOL: Anthropic.Tool = {
               type: 'string',
               description: 'Two to five words naming the provision ("Trustee succession").',
             },
+            title: {
+              type: 'string',
+              description:
+                'Two to six words in Title Case naming this one rule, distinct from the other rules on the same topic ("Successor Trustee Designation", "Alternate Successor Trustees").',
+            },
             statement: {
               type: 'string',
               description:
@@ -137,7 +144,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
                 'True when the quoted clause is settled wording the firm would want in every draft of this kind. False when it names this client’s people, property, amounts or dates.',
             },
           },
-          required: ['topic', 'statement', 'risk', 'quote', 'block_index', 'applies_when', 'use_as_preferred_language'],
+          required: ['topic', 'title', 'statement', 'risk', 'quote', 'block_index', 'applies_when', 'use_as_preferred_language'],
           additionalProperties: false,
         },
       },
@@ -234,6 +241,15 @@ function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+/** Titles are for lists; one that runs past the schema's limit is cut at a word. */
+export const MAX_TITLE_CHARS = 80
+function shortTitle(value: string | null): string | null {
+  if (!value) return null
+  if (value.length <= MAX_TITLE_CHARS) return value
+  const cut = value.slice(0, MAX_TITLE_CHARS - 1)
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 20 ? cut.lastIndexOf(' ') : cut.length)}…`
+}
+
 /**
  * One window's tool input into candidates, each quote verified against the
  * layer. Items missing a statement or carrying an unknown risk are dropped:
@@ -281,6 +297,7 @@ export function candidatesFromInput(
 
     candidates.push({
       id: `w${windowNumber}-${n}`,
+      title: shortTitle(text(item.title)) ?? shortTitle(text(item.topic)) ?? 'Untitled rule',
       statement,
       risk,
       topic: text(item.topic) ?? 'General',

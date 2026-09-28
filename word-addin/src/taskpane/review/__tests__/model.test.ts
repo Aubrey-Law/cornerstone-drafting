@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
   applyReviewEvent,
+  bulkReplacements,
+  filterRows,
+  ruleHeading,
+  ruleRows,
+  tally,
   commentText,
   EMPTY_REVIEW,
   orderFindings,
@@ -140,5 +145,73 @@ describe('commentText', () => {
     expect(text).toBe(
       'Cornerstone review — Trust review, rule 1 (medium)\nBond is waived for named trustees.\n\nWaiver runs to anyone.\n\nSuggested: named trustees only',
     )
+  })
+})
+
+describe('the report view', () => {
+  const state = {
+    ...EMPTY_REVIEW,
+    rules: [...RULES, { number: '4', risk: 'low' as const, statement: 'Pets are provided for.', preferredLanguage: null }],
+    findings: [
+      finding({ ruleNumber: '1', outcome: 'compliant' }),
+      finding({ ruleNumber: '2', outcome: 'deviation', severity: 'blocker', citation: cited, proposedLanguage: 'considering other resources' }),
+      finding({ ruleNumber: '3', outcome: 'not_applicable' }),
+    ],
+    failures: [] as Array<{ ruleNumber: string; reason: string }>,
+  }
+
+  it('gives every rule a status, keeping unsettled and failed-to-run rules apart from passes', () => {
+    const rows = ruleRows({ ...state, failures: [{ ruleNumber: '4', reason: 'timeout' }] })
+    expect(rows.map((r) => r.status)).toEqual(['passed', 'failed', 'not_applicable', 'did_not_run'])
+    expect(rows[3].failureReason).toBe('timeout')
+    expect(ruleRows(state)[3].status).toBe('pending')
+  })
+
+  it('counts a pass rate over checked, applicable rules, never rounding a failure up to 100%', () => {
+    expect(tally(ruleRows(state))).toMatchObject({ passed: 1, failed: 1, notApplicable: 1, pending: 1, percentPassed: 50 })
+    const many = { ...state, rules: [] as ReviewRuleInfo[], findings: [] as ReviewFindingEvent[] }
+    for (let i = 0; i < 200; i++) {
+      many.rules.push({ number: String(i), risk: 'low', statement: `r${i}`, preferredLanguage: null })
+      many.findings.push(finding({ ruleNumber: String(i), outcome: i === 0 ? 'deviation' : 'compliant' }))
+    }
+    expect(tally(ruleRows(many)).percentPassed).toBe(99)
+    expect(tally(ruleRows(EMPTY_REVIEW)).percentPassed).toBeNull()
+  })
+
+  it('filters by status and text, and sorts failures first by severity', () => {
+    const rows = ruleRows(state)
+    expect(filterRows(rows, { status: 'failed', query: '', sort: 'playbook' }).map((r) => r.rule.number)).toEqual(['2'])
+    expect(filterRows(rows, { status: 'all', query: 'GUARDIANS', sort: 'playbook' }).map((r) => r.rule.number)).toEqual(['3'])
+    expect(filterRows(rows, { status: 'all', query: '', sort: 'severity' }).map((r) => r.rule.number)).toEqual(['2', '4', '1', '3'])
+  })
+
+  it('bulk-applies only verified deviations with proposed language', () => {
+    const withUnverified = {
+      ...state,
+      findings: [
+        ...state.findings,
+        finding({ ruleNumber: '4', outcome: 'deviation', proposedLanguage: 'x', citation: { ...cited, verification: 'unverified' } }),
+      ],
+    }
+    expect(bulkReplacements(withUnverified).map((r) => [r.finding.ruleNumber, r.text])).toEqual([['2', 'considering other resources']])
+  })
+})
+
+describe('rule titles', () => {
+  it('lists a rule by its title, falling back to the statement', () => {
+    expect(ruleHeading({ ...RULES[0], title: 'Bond Waiver' }, '1')).toBe('Bond Waiver')
+    expect(ruleHeading({ ...RULES[0], title: '  ' }, '1')).toBe('Bond is waived for named trustees.')
+    expect(ruleHeading(undefined, '7')).toBe('Rule 7')
+  })
+
+  it('puts the title in the Word comment and lets search find it', () => {
+    const rule = { ...RULES[1], title: 'Other Resources Standard' }
+    expect(commentText(finding({ ruleNumber: '2', severity: 'blocker' }), rule, 'T').split('\n').slice(0, 3)).toEqual([
+      'Cornerstone review — T, rule 2 (blocker)',
+      'Other Resources Standard',
+      'Discretionary standards address other resources.',
+    ])
+    const rows = ruleRows({ ...EMPTY_REVIEW, rules: [RULES[0], rule] })
+    expect(filterRows(rows, { status: 'all', query: 'resources standard', sort: 'playbook' }).map((r) => r.rule.number)).toEqual(['2'])
   })
 })

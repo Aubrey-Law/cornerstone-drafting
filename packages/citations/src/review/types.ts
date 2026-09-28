@@ -26,6 +26,12 @@ export const reviewRuleSchema = z.object({
    * (and still hashes) exactly as it did.
    */
   conditions: z.array(ruleConditionSchema).optional(),
+  /**
+   * A short heading for lists ("Successor Trustee Designation"). Display only:
+   * the model is asked about the statement, never the title. Optional and
+   * last, so a body published without titles parses and hashes as before.
+   */
+  title: z.string().min(1).max(80).optional(),
 })
 
 export const reviewPlaybookSchema = z.object({

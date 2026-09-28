@@ -24,6 +24,7 @@ export default async function PlaybooksPage() {
             title: prompt.title,
             version: prompt.versionNumber,
             rules: prompt.body.rules.map(rule => ({
+              title: rule.title ?? null,
               statement: rule.statement,
               risk: rule.risk,
               preferredLanguage: rule.preferredLanguage ?? null,
