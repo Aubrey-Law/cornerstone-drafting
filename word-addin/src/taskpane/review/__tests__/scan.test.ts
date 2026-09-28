@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   applyScanEvent,
   categoriesOf,
+  decisionForWordAction,
   EMPTY_SCAN,
   filterItems,
   itemActions,
+  nextDecision,
   scanCommentText,
   scanReplacements,
   tallyImportance,
@@ -95,5 +97,20 @@ describe('what an item may do', () => {
     expect(scanCommentText('proofread', ITEMS[2])).toBe(
       'Cornerstone proofread — Spelling & grammar (notable)\nPronoun case\n\n“between you and I” should be “me”.\n\nSuggested: you and me',
     )
+  })
+})
+
+describe('decisions on items', () => {
+  it('take back the decision already recorded when pressed again', () => {
+    expect(nextDecision(undefined, 'accepted')).toBe('accepted')
+    expect(nextDecision('accepted', 'accepted')).toBe('open')
+    expect(nextDecision('accepted', 'deferred')).toBe('deferred')
+    expect(nextDecision('open', 'rejected')).toBe('rejected')
+  })
+
+  it('follow what was done in Word, and say a dismissal was one', () => {
+    expect(decisionForWordAction('accept')).toEqual({ disposition: 'accepted', note: 'Tracked change accepted in Word' })
+    expect(decisionForWordAction('reject')).toEqual({ disposition: 'rejected', note: 'Tracked change rejected in Word' })
+    expect(decisionForWordAction('dismiss')).toEqual({ disposition: 'rejected', note: 'Dismissed in Word' })
   })
 })

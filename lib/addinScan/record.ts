@@ -143,6 +143,8 @@ function createRecorder(admin: Client, scanId: string, reviewUploadId: string): 
         return {
           scan_id: scanId,
           sequence: sequence++,
+          // The id the pane knows the item by, so a decision made in Word can name it.
+          item_key: item.id,
           category: item.category,
           importance: item.importance,
           title: item.title,

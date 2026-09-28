@@ -48,6 +48,9 @@ create table if not exists public.document_scan_items (
   scan_id uuid not null references public.document_scans(id) on delete cascade,
   -- Order within the scan: section, then position in that section's answer.
   sequence integer not null check (sequence >= 0),
+  -- The id the pane knew the item by while it streamed, so a decision made in
+  -- Word can name the item before the pane has ever seen its row id.
+  item_key text not null check (length(btrim(item_key)) > 0),
   category text not null check (length(btrim(category)) > 0),
   importance text not null check (importance = any (array['important', 'notable', 'minor'])),
   title text not null check (length(btrim(title)) > 0),
@@ -62,6 +65,12 @@ create table if not exists public.document_scan_items (
   quote text,
   citation_refusal text,
   attempted_quote text,
+  -- The attorney's decision, as for a playbook finding: open is no decision.
+  disposition text not null default 'open'
+    check (disposition = any (array['open', 'accepted', 'rejected', 'deferred'])),
+  disposition_note text,
+  disposition_by uuid references public.users(id) on delete set null,
+  disposition_at timestamptz,
   created_at timestamptz not null default now(),
   constraint document_scan_items_citation_whole
     check (
@@ -71,7 +80,10 @@ create table if not exists public.document_scan_items (
     ),
   constraint document_scan_items_replacement_needs_citation
     check (replacement is null or quote is not null),
-  unique (scan_id, sequence)
+  constraint document_scan_items_decision_stamped
+    check ((disposition = 'open') = (disposition_at is null)),
+  unique (scan_id, sequence),
+  unique (scan_id, item_key)
 );
 
 comment on table public.document_scan_items is

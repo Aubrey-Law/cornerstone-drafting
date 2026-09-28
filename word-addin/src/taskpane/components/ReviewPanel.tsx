@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { listPlaybooks, streamReview, streamScan, type PlaybookSummary } from '../api/client'
+import { listPlaybooks, saveScanDecision, streamReview, streamScan, type PlaybookSummary } from '../api/client'
 import {
   actionsFor,
   applyReviewEvent,
@@ -26,15 +26,19 @@ import {
 import {
   applyScanEvent,
   categoriesOf,
+  DECISION_LABEL,
+  decisionForWordAction,
   EMPTY_SCAN,
   filterItems,
   IMPORTANCE_LABEL,
   itemActions,
+  nextDecision,
   SCAN_LABEL,
   scanCommentText,
   scanReplacements,
   tallyImportance,
   type Importance,
+  type ScanDecision,
   type ScanItem,
   type ScanKind,
   type ScanSort,
@@ -91,6 +95,10 @@ interface Worked {
   /** The tracked change's bookmark, or 'applied' when Word gave none back. */
   bookmark?: string
   resolved?: 'accept' | 'reject'
+  /** A scan item's decision, and whether review history has it. */
+  decision?: ScanDecision
+  decisionSave?: 'saving' | 'saved' | 'failed' | 'unsaved'
+  decisionProblem?: string
 }
 
 export default function ReviewPanel({
@@ -155,6 +163,11 @@ export default function ReviewPanel({
     const update = (change: (state: ScanState) => ScanState) =>
       setScans((current) => (scanAbort.current[kind] === controller ? { ...current, [kind]: change(current[kind]) } : current))
     setScans((current) => ({ ...current, [kind]: { ...EMPTY_SCAN, started: true } }))
+    // Item ids restart with each run, so what was done to the last run's items
+    // (a decision above all, which names a saved item) must not carry over.
+    const stale = (key: string) => key.startsWith(`${kind}-`)
+    setWorked((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !stale(key))))
+    setDismissed((current) => new Set([...current].filter((key) => !stale(key))))
     try {
       const paragraphs = given?.paragraphs ?? (await readParagraphTexts())
       const fileBase64 = given ? given.fileBase64 : await readSnapshot(paragraphs)
@@ -252,6 +265,34 @@ export default function ReviewPanel({
     setWorked((current) => ({ ...current, [key]: { ...current[key], ...change } }))
   const dismiss = (key: string) => setDismissed((current) => new Set(current).add(key))
 
+  /**
+   * A decision on a scan item, held here and saved to the check's review
+   * history when the check was saved. The latest one wins: a slow save that
+   * lands after a newer decision does not overwrite what the pane shows.
+   */
+  const decisionSeq = useRef<Record<string, number>>({})
+  const recordDecision = (kind: ScanKind, item: ScanItem, disposition: ScanDecision, note: string | null = null) => {
+    const recording = scans[kind].recording
+    if (!recording?.saved) {
+      markWorked(item.id, { decision: disposition, decisionSave: 'unsaved', decisionProblem: undefined })
+      return
+    }
+    const seq = (decisionSeq.current[item.id] ?? 0) + 1
+    decisionSeq.current[item.id] = seq
+    markWorked(item.id, { decision: disposition, decisionSave: 'saving', decisionProblem: undefined })
+    saveScanDecision({ scanId: recording.scanId, itemKey: item.id, disposition, note })
+      .then(() => {
+        if (decisionSeq.current[item.id] === seq) markWorked(item.id, { decisionSave: 'saved' })
+      })
+      .catch((err: unknown) => {
+        if (decisionSeq.current[item.id] !== seq) return
+        markWorked(item.id, {
+          decisionSave: 'failed',
+          decisionProblem: err instanceof Error ? err.message : 'Could not save the decision.',
+        })
+      })
+  }
+
   const rows = useMemo(() => ruleRows(review), [review])
   const counts = useMemo(() => tally(rows), [rows])
   const ruleByNumber = useMemo(() => new Map(review.rules.map((rule) => [rule.number, rule])), [review.rules])
@@ -331,8 +372,12 @@ export default function ReviewPanel({
             kind={view.kind}
             item={item}
             worked={worked[item.id] ?? {}}
+            saved={scans[view.kind].recording?.saved === true}
             onWorked={(change) => markWorked(item.id, change)}
+            onDecide={(disposition, note) => recordDecision(view.kind, item, disposition, note)}
             onDismiss={() => {
+              const { disposition, note } = decisionForWordAction('dismiss')
+              recordDecision(view.kind, item, disposition, note)
               dismiss(item.id)
               setView(view.back)
             }}
@@ -856,13 +901,18 @@ function ItemDetail({
   kind,
   item,
   worked,
+  saved,
   onWorked,
+  onDecide,
   onDismiss,
 }: {
   kind: ScanKind
   item: ScanItem
   worked: Worked
+  /** Whether the check is in review history, so a decision here is kept there. */
+  saved: boolean
   onWorked: (change: Worked) => void
+  onDecide: (disposition: ScanDecision, note: string | null) => void
   onDismiss: () => void
 }) {
   const actions = itemActions(item)
@@ -887,8 +937,11 @@ function ItemDetail({
   const decide = async (decision: 'accept' | 'reject') => {
     if (!bookmark) return
     const result = await resolveTrackedEdit(bookmark, decision)
-    if (result.ok) onWorked({ resolved: decision })
-    else setNote(result.reason === 'no-revisions' ? 'Already resolved in Word.' : 'Use Word’s Review tab for this one.')
+    if (result.ok) {
+      onWorked({ resolved: decision })
+      const { disposition, note: why } = decisionForWordAction(decision)
+      onDecide(disposition, why)
+    } else setNote(result.reason === 'no-revisions' ? 'Already resolved in Word.' : 'Use Word’s Review tab for this one.')
   }
 
   return (
@@ -952,10 +1005,10 @@ function ItemDetail({
         {bookmark && bookmark !== 'applied' && !resolved && (
           <>
             <button type="button" onClick={() => void decide('accept')} className={button}>
-              Accept
+              Accept change
             </button>
             <button type="button" onClick={() => void decide('reject')} className={button}>
-              Reject
+              Reject change
             </button>
             <button type="button" onClick={() => void revealTrackedEdit(bookmark)} className="underline">
               Show change
@@ -966,6 +1019,60 @@ function ItemDetail({
           Dismiss
         </button>
       </div>
+
+      <DecisionRow worked={worked} saved={saved} onDecide={(chosen) => onDecide(nextDecision(worked.decision, chosen), null)} />
+    </div>
+  )
+}
+
+/**
+ * The attorney's decision on a scan item, as Cornerstone's saved check shows
+ * it. Said plainly when it is not kept anywhere but this pane.
+ */
+function DecisionRow({
+  worked,
+  saved,
+  onDecide,
+}: {
+  worked: Worked
+  saved: boolean
+  onDecide: (chosen: Exclude<ScanDecision, 'open'>) => void
+}) {
+  const { decision, decisionSave, decisionProblem } = worked
+  const choices: Array<Exclude<ScanDecision, 'open'>> = ['accepted', 'rejected', 'deferred']
+  const status =
+    decisionSave === 'saving'
+      ? 'Saving…'
+      : decisionSave === 'saved'
+        ? 'Saved to review history.'
+        : decisionSave === 'failed'
+          ? `Not saved: ${decisionProblem ?? 'the save failed'}.`
+          : !saved
+            ? 'This check is not saved, so decisions stay in Word.'
+            : null
+  return (
+    <div className="space-y-1 border-t border-[color:var(--color-line)] pt-2" data-testid="item-decision">
+      <div className="flex flex-wrap items-center gap-1 text-[11px]">
+        <span className="mr-1 text-[color:var(--color-ink-muted)]">Decision</span>
+        {choices.map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            aria-pressed={decision === choice}
+            onClick={() => onDecide(choice)}
+            className={
+              decision === choice
+                ? 'rounded border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-2 py-0.5 text-white'
+                : 'rounded border border-[color:var(--color-line)] px-2 py-0.5'
+            }
+          >
+            {DECISION_LABEL[choice]}
+          </button>
+        ))}
+      </div>
+      {status && (
+        <p className={`text-[11px] ${decisionSave === 'failed' ? 'text-fail' : 'text-[color:var(--color-ink-muted)]'}`}>{status}</p>
+      )}
     </div>
   )
 }

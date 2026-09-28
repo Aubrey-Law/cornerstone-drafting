@@ -24,6 +24,16 @@ export interface ScanItem {
   attemptedQuote: string | null
 }
 
+/** A saved item's decision, as `lib/review/scans.ts` stores it; `open` reopens it. */
+export type ScanDecision = 'open' | 'accepted' | 'rejected' | 'deferred'
+
+/** The decision buttons, as Cornerstone's saved check labels them. */
+export const DECISION_LABEL: Record<Exclude<ScanDecision, 'open'>, string> = {
+  accepted: 'Accept',
+  rejected: 'Reject',
+  deferred: 'Defer',
+}
+
 export type ScanRecording =
   | { saved: true; scanId: string; reviewUploadId: string }
   | { saved: false; reason: string }
@@ -144,4 +154,20 @@ export function scanCommentText(kind: ScanKind, item: ScanItem): string {
   if (item.explanation) lines.push('', item.explanation)
   if (item.replacement) lines.push('', `Suggested: ${item.replacement}`)
   return lines.join('\n')
+}
+
+/** Pressing the decision already recorded takes it back, as in Cornerstone. */
+export function nextDecision(current: ScanDecision | undefined, chosen: Exclude<ScanDecision, 'open'>): ScanDecision {
+  return current === chosen ? 'open' : chosen
+}
+
+/**
+ * What a Word action says about the attorney's decision on an item. Accepting
+ * or rejecting its tracked change is the decision; dismissing it is a
+ * rejection, noted as such so Cornerstone can tell it from a considered one.
+ */
+export function decisionForWordAction(action: 'accept' | 'reject' | 'dismiss'): { disposition: ScanDecision; note: string | null } {
+  if (action === 'accept') return { disposition: 'accepted', note: 'Tracked change accepted in Word' }
+  if (action === 'reject') return { disposition: 'rejected', note: 'Tracked change rejected in Word' }
+  return { disposition: 'rejected', note: 'Dismissed in Word' }
 }

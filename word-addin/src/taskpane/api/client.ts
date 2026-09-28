@@ -1,6 +1,6 @@
 import { clearSession, loadSession, signIn } from '../auth/session'
 import { parseReviewFrame, type ReviewEvent } from '../review/model'
-import type { ScanEvent, ScanKind } from '../review/scan'
+import type { ScanDecision, ScanEvent, ScanKind } from '../review/scan'
 
 /**
  * Every call is same-origin: the dev server proxies `/api` through to
@@ -601,4 +601,22 @@ export async function streamScan(args: StreamScanArgs): Promise<void> {
 
     if (!sawDone) throw new ApiError('The connection dropped before the check finished.', 502)
   }, true)
+}
+
+/**
+ * Records a decision made in Word on a saved check's item, in its review
+ * history. A 404 means the item is not saved (its section still being written,
+ * or saving stopped part-way); the caller says the decision stays in Word.
+ */
+export function saveScanDecision(args: {
+  scanId: string
+  itemKey: string
+  disposition: ScanDecision
+  note?: string | null
+}): Promise<{ ok: true; itemId: string }> {
+  return apiPost<{ ok: true; itemId: string }>(
+    '/api/addin/scan/decision',
+    { scanId: args.scanId, itemKey: args.itemKey, disposition: args.disposition, note: args.note ?? undefined },
+    PROBE_TIMEOUT_MS,
+  )
 }

@@ -14,6 +14,9 @@ type Client = SupabaseClient<GeneratedDatabase>
 
 export type ScanKind = 'issues' | 'proofread'
 export type Importance = 'important' | 'notable' | 'minor'
+/** As for a playbook finding: `open` is no decision yet, and is what reopening sets. */
+export type ScanDisposition = 'open' | 'accepted' | 'rejected' | 'deferred'
+export const SCAN_DISPOSITIONS: ScanDisposition[] = ['open', 'accepted', 'rejected', 'deferred']
 
 export const SCAN_LABEL: Record<ScanKind, string> = { issues: 'Issue spotting', proofread: 'Proofread' }
 
@@ -34,6 +37,8 @@ export interface ScanSummary {
 
 export interface StoredScanItem {
   id: string
+  /** The id the Word pane knew the item by while it streamed. */
+  itemKey: string
   category: string
   importance: Importance
   title: string
@@ -42,6 +47,8 @@ export interface StoredScanItem {
   citation: { blockIndex: number; charStart: number; charEnd: number; quote: string } | null
   citationRefusal: string | null
   attemptedQuote: string | null
+  disposition: ScanDisposition
+  dispositionNote: string | null
 }
 
 export interface StoredScan extends ScanSummary {
@@ -119,13 +126,16 @@ export async function loadScan(client: Client, scanId: string): Promise<StoredSc
 
   const { data: items, error: itemsError } = await client
     .from('document_scan_items')
-    .select('id, sequence, category, importance, title, explanation, replacement, block_index, char_start, char_end, quote, citation_refusal, attempted_quote')
+    .select(
+      'id, sequence, item_key, category, importance, title, explanation, replacement, block_index, char_start, char_end, quote, citation_refusal, attempted_quote, disposition, disposition_note',
+    )
     .eq('scan_id', scanId)
     .order('sequence', { ascending: true })
   if (itemsError) throw new Error(`Could not load the check's items: ${itemsError.message}`)
 
   const stored: StoredScanItem[] = (items ?? []).map(item => ({
     id: String(item.id),
+    itemKey: item.item_key,
     category: item.category,
     importance: (['important', 'notable', 'minor'].includes(item.importance) ? item.importance : 'notable') as Importance,
     title: item.title,
@@ -137,6 +147,10 @@ export async function loadScan(client: Client, scanId: string): Promise<StoredSc
         : null,
     citationRefusal: item.citation_refusal,
     attemptedQuote: item.attempted_quote,
+    disposition: (SCAN_DISPOSITIONS as string[]).includes(item.disposition)
+      ? (item.disposition as ScanDisposition)
+      : 'open',
+    dispositionNote: item.disposition_note,
   }))
 
   return {
@@ -147,6 +161,46 @@ export async function loadScan(client: Client, scanId: string): Promise<StoredSc
       .sort((a, b) => IMPORTANCE_ORDER[a.item.importance] - IMPORTANCE_ORDER[b.item.importance] || a.index - b.index)
       .map(({ item }) => item),
   }
+}
+
+export type SaveScanDispositionResult = { ok: true; itemId: string } | { ok: false; reason: 'not_found' | 'error'; message: string }
+
+/**
+ * Records the attorney's decision on one saved item, from Cornerstone (by the
+ * item's row id) or from Word (by the scan and the id the pane streamed it
+ * under — the pane never sees row ids). Reopening clears who and when, so a
+ * row never carries a time without a decision.
+ */
+export async function saveScanDisposition(
+  client: Client,
+  input: {
+    item: { itemId: string } | { scanId: string; itemKey: string }
+    disposition: ScanDisposition
+    note: string | null
+    userId: string
+  },
+): Promise<SaveScanDispositionResult> {
+  const reopened = input.disposition === 'open'
+  let query = client
+    .from('document_scan_items')
+    .update({
+      disposition: input.disposition,
+      disposition_note: reopened ? null : input.note,
+      disposition_by: reopened ? null : input.userId,
+      disposition_at: reopened ? null : new Date().toISOString(),
+    })
+  query =
+    'itemId' in input.item
+      ? query.eq('id', input.item.itemId)
+      : query.eq('scan_id', input.item.scanId).eq('item_key', input.item.itemKey)
+  const { data, error } = await query.select('id')
+  if (error) return { ok: false, reason: 'error', message: `Could not save the decision: ${error.message}` }
+  // Zero rows is an item not saved (yet): Word can decide on an item whose
+  // section is still being written, or on a check that was never saved.
+  if (!data || data.length === 0) {
+    return { ok: false, reason: 'not_found', message: 'That item is not saved in review history.' }
+  }
+  return { ok: true, itemId: String(data[0].id) }
 }
 
 /** The saved playbook review that kept this copy of the document, when one did. */

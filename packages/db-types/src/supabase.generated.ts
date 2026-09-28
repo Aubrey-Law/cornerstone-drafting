@@ -2791,9 +2791,14 @@ export type Database = {
           char_start: number | null
           citation_refusal: string | null
           created_at: string
+          disposition: string
+          disposition_at: string | null
+          disposition_by: string | null
+          disposition_note: string | null
           explanation: string
           id: string
           importance: string
+          item_key: string
           quote: string | null
           replacement: string | null
           scan_id: string
@@ -2808,9 +2813,14 @@ export type Database = {
           char_start?: number | null
           citation_refusal?: string | null
           created_at?: string
+          disposition?: string
+          disposition_at?: string | null
+          disposition_by?: string | null
+          disposition_note?: string | null
           explanation?: string
           id?: string
           importance: string
+          item_key: string
           quote?: string | null
           replacement?: string | null
           scan_id: string
@@ -2825,9 +2835,14 @@ export type Database = {
           char_start?: number | null
           citation_refusal?: string | null
           created_at?: string
+          disposition?: string
+          disposition_at?: string | null
+          disposition_by?: string | null
+          disposition_note?: string | null
           explanation?: string
           id?: string
           importance?: string
+          item_key?: string
           quote?: string | null
           replacement?: string | null
           scan_id?: string
@@ -2835,6 +2850,13 @@ export type Database = {
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "document_scan_items_disposition_by_fkey"
+            columns: ["disposition_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "document_scan_items_scan_id_fkey"
             columns: ["scan_id"]

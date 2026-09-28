@@ -134,8 +134,8 @@ describe('startScanRecording', () => {
     await started.recorder.finish({ sections: 2, completed: 1, aborted: false, failures: [{ section: 2, reason: 'timeout' }] })
 
     const [first, second] = admin.tableRows('document_scan_items')
-    expect(first).toMatchObject({ sequence: 0, block_index: 1, char_start: 47, char_end: 52, quote: '[TBD]', replacement: 'Avideep', citation_refusal: null })
-    expect(second).toMatchObject({ sequence: 1, block_index: null, quote: null, replacement: null, citation_refusal: 'not_found', attempted_quote: 'nowhere' })
+    expect(first).toMatchObject({ sequence: 0, item_key: 'a', block_index: 1, char_start: 47, char_end: 52, quote: '[TBD]', replacement: 'Avideep', citation_refusal: null })
+    expect(second).toMatchObject({ sequence: 1, item_key: 'b', block_index: null, quote: null, replacement: null, citation_refusal: 'not_found', attempted_quote: 'nowhere' })
     expect(admin.tableRows('document_scans')[0]).toMatchObject({
       status: 'partial',
       section_total: 2,
