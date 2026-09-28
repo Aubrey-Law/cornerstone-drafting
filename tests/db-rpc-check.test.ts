@@ -168,8 +168,7 @@ describe('checkDbRpcs exit codes', () => {
 /** The RPC names the script itself collects, read the same way it reads them. */
 function calledRpcNames(): string[] {
   const dirs = [
-    'app', 'lib', 'components',
-    'apps/workbench/app', 'apps/workbench/lib', 'tools/matters-mcp/src',
+    'app', 'lib', 'components', 'tools/matters-mcp/src',
   ]
   const skip = new Set(['node_modules', '.next', 'dist', 'build'])
   const names = new Set<string>()

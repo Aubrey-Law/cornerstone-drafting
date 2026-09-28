@@ -84,10 +84,8 @@ describe('@aubrey-law/ui package', () => {
     expect(scripts['theme:generate']).toMatch(/packages\/ui\/scripts\/generate-theme-css\.ts/)
   })
 
-  it('is a dependency of both apps', () => {
+  it('is a dependency of the app', () => {
     const rootPkg = JSON.parse(read(path.join(root, 'package.json'))) as { dependencies: Record<string, string> }
-    const wb = JSON.parse(read(path.join(root, 'apps/workbench/package.json'))) as { dependencies: Record<string, string> }
     expect(rootPkg.dependencies['@aubrey-law/ui']).toBe('*')
-    expect(wb.dependencies['@aubrey-law/ui']).toBe('*')
   })
 })

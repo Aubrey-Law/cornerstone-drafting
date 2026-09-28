@@ -9,7 +9,7 @@ import {
   classifyMissingReferences,
   migrationDefinedSchema,
 } from '@/scripts/lib/migrationSchema.mjs'
-import { collectQueryReferences, WORKBENCH_ROOTS } from '@/scripts/lib/queryReferences.mjs'
+import { collectQueryReferences, CHECKED_ROOTS } from '@/scripts/lib/queryReferences.mjs'
 
 /**
  * The column check has to tell "this column vanished from the database" from
@@ -85,9 +85,9 @@ describe('checkDbColumns exit codes', () => {
   let url = ''
 
   beforeAll(async () => {
-    // Everything the workbench reads, minus exactly what this branch's
+    // Everything the checked code reads, minus exactly what this branch's
     // migration adds — the state of the shared database before it merges.
-    const { references } = collectQueryReferences({ roots: WORKBENCH_ROOTS, repoRoot: process.cwd() })
+    const { references } = collectQueryReferences({ roots: CHECKED_ROOTS, repoRoot: process.cwd() })
     const definitions: Record<string, { properties: Record<string, unknown> }> = {}
     for (const { table, column } of references) {
       if (table === 'review_uploads' || column === 'review_upload_id') continue

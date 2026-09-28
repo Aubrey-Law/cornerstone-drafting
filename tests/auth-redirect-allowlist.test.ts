@@ -73,9 +73,9 @@ const allowList: string[] = (() => {
 })()
 
 describe('the Supabase redirect allow-list', () => {
-  it('covers both apps’ dev servers, on both loopback spellings', () => {
+  it('covers the app’s dev server, on both loopback spellings', () => {
     const missing: string[] = []
-    for (const pkg of ['package.json', 'apps/workbench/package.json']) {
+    for (const pkg of ['package.json']) {
       const port = devPortOf(pkg)
       for (const host of ['localhost', '127.0.0.1']) {
         const entry = `http://${host}:${port}${WILDCARD}`
@@ -85,12 +85,10 @@ describe('the Supabase redirect allow-list', () => {
     expect(missing).toEqual([])
   })
 
-  it('covers the workbench’s production host, not only the root app’s', () => {
-    // Measured 2026-09-09: cornerstone-drafting-20.vercel.app serves "Sign in ·
-    // Aubrey Law Workbench", and cornerstone-drafting.vercel.app serves the root
-    // app. The Vercel project is named `cornerstone-drafting-2.0`; its default
-    // domain drops the dot, which is the easier of the two to leave out.
-    expect(allowList).toContain(`https://cornerstone-drafting-20.vercel.app${WILDCARD}`)
+  it('covers the app’s production hosts', () => {
+    // The retired workbench (cornerstone-drafting-20.vercel.app) is gone from
+    // the local list; only the app's own hosts remain.
+    expect(allowList).not.toContain(`https://cornerstone-drafting-20.vercel.app${WILDCARD}`)
     expect(allowList).toContain(`https://cornerstone-drafting.vercel.app${WILDCARD}`)
     expect(allowList).toContain(`https://cornerstone.aubreylegal.com${WILDCARD}`)
   })

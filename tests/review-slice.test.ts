@@ -10,12 +10,12 @@ import type { TextLayer } from '@/lib/textLayer/types'
 /**
  * Used to be read from `tools/workflows/review/ma-trust-firm-qa.json`. That
  * file is gone — the playbook lives in the database now (see
- * `apps/workbench/lib/review/playbook.ts` and the seed migration
+ * `lib/review/playbook.ts` and the seed migration
  * `supabase/migrations/20261028010000_seed_review_playbook.sql`), read there
  * through a Supabase client this standalone script deliberately has no
  * dependency on. Inlined here rather than reintroducing that dependency,
  * kept byte-for-byte identical to what the seed migration inserts (see
- * `apps/workbench/tests/review-playbook.test.ts`, which checks the migration
+ * `tests/review-playbook.test.ts`, which checks the migration
  * against its own stated hash) so this file's assertions — about *this*
  * playbook's rules and severities — keep meaning what they said.
  */

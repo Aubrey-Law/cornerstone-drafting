@@ -1,7 +1,7 @@
 name: Database schema check
 
 # Verifies every Supabase RPC the app calls is actually resolvable, and every
-# column the workbench reads actually exists.
+# column the checked code (scripts/lib/queryReferences.mjs) reads actually exists.
 #
 # The scheduled run is the important one. The outage this guards against was not
 # caused by a code change — migration 20260812000000 was recorded as applied

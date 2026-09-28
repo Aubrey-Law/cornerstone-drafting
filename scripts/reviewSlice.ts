@@ -9,7 +9,7 @@
  * one). The firm's one playbook, `ma-trust-firm-qa`, used to be bundled as
  * `tools/workflows/review/ma-trust-firm-qa.json` and this script defaulted to
  * it; it now lives in the database as a published prompt (see
- * `apps/workbench/lib/review/playbook.ts`), which this script — a
+ * `lib/review/playbook.ts`), which this script — a
  * credential-free, no-matter-touched diagnostic — deliberately does not
  * query. Export the playbook to a file to use it here.
  *
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
     console.error(
       'Usage: npm run review:slice -- --file <document.pdf|document.docx> --playbook <playbook.json>\n\n' +
         'The playbook is no longer bundled in the repository — it lives in the database as a published ' +
-        'prompt (see apps/workbench/lib/review/playbook.ts). Export it to a file to use it here.',
+        'prompt (see lib/review/playbook.ts). Export it to a file to use it here.',
     )
     process.exit(2)
   }

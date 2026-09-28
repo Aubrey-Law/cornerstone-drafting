@@ -122,7 +122,7 @@ export default function ReviewPanel({
   if (playbooks.length === 0) {
     return (
       <p className="p-3 text-[color:var(--color-ink-muted)]">
-        No review playbooks are published yet. Build one in the workbench under “Build a playbook”.
+        No review playbooks are published yet. Build one in Cornerstone under Reviews → “Build a playbook”.
       </p>
     )
   }
