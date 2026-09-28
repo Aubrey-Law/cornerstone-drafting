@@ -180,3 +180,111 @@ export function commentText(finding: ReviewFindingEvent, rule: ReviewRuleInfo | 
   if (finding.proposedLanguage) lines.push('', `Suggested: ${finding.proposedLanguage}`)
   return lines.join('\n')
 }
+
+/**
+ * Where one rule stands, for the report view. `pending` is a rule the stream
+ * has not settled yet; `did_not_run` is one that failed to run, and stays
+ * separate from `passed` — a rule that never ran is not a rule that found nothing.
+ */
+export type RuleStatus = 'passed' | 'failed' | 'not_applicable' | 'did_not_run' | 'pending'
+
+export interface RuleRow {
+  rule: ReviewRuleInfo
+  status: RuleStatus
+  finding: ReviewFindingEvent | null
+  failureReason: string | null
+}
+
+/** One row per playbook rule, in playbook order. */
+export function ruleRows(state: ReviewState): RuleRow[] {
+  const findings = new Map(state.findings.map((f) => [f.ruleNumber, f]))
+  const failures = new Map(state.failures.map((f) => [f.ruleNumber, f.reason]))
+  return state.rules.map((rule) => {
+    const finding = findings.get(rule.number) ?? null
+    const failureReason = failures.get(rule.number) ?? null
+    let status: RuleStatus = 'pending'
+    if (finding) {
+      status = isIssue(finding) ? 'failed' : finding.outcome === 'not_applicable' ? 'not_applicable' : 'passed'
+    } else if (failureReason !== null) {
+      status = 'did_not_run'
+    }
+    return { rule, status, finding, failureReason }
+  })
+}
+
+export interface ReviewTally {
+  passed: number
+  failed: number
+  notApplicable: number
+  didNotRun: number
+  pending: number
+  /**
+   * Passed as a share of rules that were checked and applied. Floored, so a
+   * run with any failure never rounds up to 100%. Null until one has settled.
+   */
+  percentPassed: number | null
+}
+
+export function tally(rows: RuleRow[]): ReviewTally {
+  const count = (status: RuleStatus) => rows.filter((row) => row.status === status).length
+  const passed = count('passed')
+  const failed = count('failed')
+  return {
+    passed,
+    failed,
+    notApplicable: count('not_applicable'),
+    didNotRun: count('did_not_run'),
+    pending: count('pending'),
+    percentPassed: passed + failed > 0 ? Math.floor((passed / (passed + failed)) * 100) : null,
+  }
+}
+
+export type StatusFilter = 'all' | RuleStatus
+export type RuleSort = 'playbook' | 'severity'
+
+/** The report list: filtered by status and a text query, in playbook or severity order. */
+export function filterRows(rows: RuleRow[], options: { status: StatusFilter; query: string; sort: RuleSort }): RuleRow[] {
+  const query = options.query.trim().toLowerCase()
+  const kept = rows.filter(
+    (row) =>
+      (options.status === 'all' || row.status === options.status) &&
+      (!query ||
+        row.rule.statement.toLowerCase().includes(query) ||
+        row.rule.number.toLowerCase() === query ||
+        (row.finding?.rationale ?? '').toLowerCase().includes(query)),
+  )
+  if (options.sort === 'playbook') return kept
+  const statusOrder: Record<RuleStatus, number> = { failed: 0, did_not_run: 1, pending: 2, passed: 3, not_applicable: 4 }
+  return kept
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        statusOrder[a.row.status] - statusOrder[b.row.status] ||
+        RISK_ORDER[a.row.finding?.severity ?? a.row.rule.risk] - RISK_ORDER[b.row.finding?.severity ?? b.row.rule.risk] ||
+        a.index - b.index,
+    )
+    .map(({ row }) => row)
+}
+
+export const RISK_LABEL: Record<Risk, string> = { blocker: 'Blocker', high: 'High', medium: 'Medium', low: 'Low' }
+
+export const STATUS_LABEL: Record<RuleStatus, string> = {
+  passed: 'Passed',
+  failed: 'Failed',
+  not_applicable: 'Not applicable',
+  did_not_run: 'Did not run',
+  pending: 'Checking',
+}
+
+/**
+ * The tracked replacements "Apply all" may make: every verified deviation that
+ * carries proposed language. Absences are left out on purpose — their firm
+ * language goes wherever the cursor is, which only makes sense one at a time.
+ */
+export function bulkReplacements(state: ReviewState): Array<{ finding: ReviewFindingEvent; text: string }> {
+  const rules = new Map(state.rules.map((rule) => [rule.number, rule]))
+  return orderFindings(state.findings, state.rules).flatMap((finding) => {
+    const replace = actionsFor(finding, rules.get(finding.ruleNumber)).replace
+    return replace ? [{ finding, text: replace }] : []
+  })
+}

@@ -11,6 +11,10 @@
   --color-accent: #1f5f8b;
   --color-surface: #ffffff;
   --color-surface-sunken: #f6f8fa;
+  /* Review statuses: passed, failed, and needs-a-look (did not run, medium risk). */
+  --color-pass: #1a7f4b;
+  --color-fail: #c62828;
+  --color-warn: #a15c00;
 }
 
 html,
