@@ -51,7 +51,7 @@ export async function recordAssetFunding(
 
   if (!result.ok) return { message: result.message }
 
-  revalidatePath(`/admin/funding/${matterId}`)
+  // The matter's Funding view reloads itself; the firm-wide list is server-rendered.
   revalidatePath('/admin/funding')
   return { message: null }
 }

@@ -24,6 +24,13 @@ vi.mock('@/lib/serverActionAuth', () => ({
     return auth.staff
   }),
 }))
+vi.mock('@/lib/apiAuth', () => ({
+  requireAdmin: vi.fn(async () =>
+    auth.staff
+      ? { err: null, userId: auth.staff }
+      : { err: new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }), userId: null },
+  ),
+}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((to: string) => {
@@ -42,8 +49,9 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 
 import ExecutionPage from '@/app/admin/execution/page'
-import MatterExecutionPage from '@/app/admin/execution/[matterId]/page'
-import { recordCeremony, recordCeremonyDocument } from '@/app/admin/execution/[matterId]/ceremonyActions'
+import MatterExecutionRedirect from '@/app/admin/execution/[matterId]/page'
+import { GET as matterSigning } from '@/app/api/admin/matters/[id]/signing/route'
+import { recordCeremony, recordCeremonyDocument } from '@/app/admin/matters/[id]/tabs/signing/ceremonyActions'
 
 const SMITH = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const JONES = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -98,21 +106,38 @@ describe('/admin/execution', () => {
     expect(rows[0].textContent).toContain('Smith Estate Plan')
     expect(rows[0].textContent).toContain('2 documents recognised')
     expect(rows[0].textContent).toContain('1 to confirm')
-    expect(rows[0].querySelector('a')).toHaveAttribute('href', `/admin/execution/${SMITH}`)
+    expect(rows[0].querySelector('a')).toHaveAttribute('href', `/admin/matters/${SMITH}?tab=documents&view=signing`)
   })
 })
 
 describe('/admin/execution/[matterId]', () => {
-  it('renders the checklist and the signing record for a hired matter', async () => {
-    render(await MatterExecutionPage({ params: Promise.resolve({ matterId: SMITH }) }))
-    expect(screen.getByRole('heading', { name: 'Smith Estate Plan' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open matter' })).toHaveAttribute('href', `/admin/matters/${SMITH}?tab=documents`)
-    expect(screen.getByText(/Scan 0042\.pdf/)).toBeInTheDocument()
+  it('redirects to the Signing view of the matter\'s Documents tab', async () => {
+    await expect(MatterExecutionRedirect({ params: Promise.resolve({ matterId: SMITH }) })).rejects.toThrow(
+      `redirect:/admin/matters/${SMITH}?tab=documents&view=signing`,
+    )
+  })
+})
+
+describe('GET /api/admin/matters/[id]/signing', () => {
+  const get = (id: string) => matterSigning(new Request('http://localhost'), { params: Promise.resolve({ id }) })
+
+  it('returns what the drafts need to be signed, and what it could not place', async () => {
+    const response = await get(SMITH)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { signing: { kinds: string[]; unmatched: string[]; ceremony: unknown } }
+    expect(body.signing.kinds).toHaveLength(2)
+    expect(body.signing.unmatched).toEqual([expect.stringMatching(/Scan 0042\.pdf/)])
+    expect(body.signing.ceremony).toBeNull()
   })
 
-  it('404s on a lead, or a malformed id', async () => {
-    await expect(MatterExecutionPage({ params: Promise.resolve({ matterId: LEAD }) })).rejects.toThrow('notFound')
-    await expect(MatterExecutionPage({ params: Promise.resolve({ matterId: 'x' }) })).rejects.toThrow('notFound')
+  it('answers signing: null for a matter that is not hired', async () => {
+    expect(await (await get(LEAD)).json()).toEqual({ signing: null })
+  })
+
+  it('refuses a malformed id and a caller who is not staff', async () => {
+    expect((await get('x')).status).toBe(400)
+    auth.staff = null
+    expect((await get(SMITH)).status).toBe(403)
   })
 })
 

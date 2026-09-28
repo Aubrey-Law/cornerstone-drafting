@@ -51,3 +51,21 @@ export function parseCommunicationChannel(value: string | null | undefined): Com
   // merged timeline.
   return 'all'
 }
+
+/** Which face of the Assets tab to show: the inventory, or its trust funding. */
+export const ASSET_VIEWS = ['inventory', 'funding'] as const
+
+export type AssetView = (typeof ASSET_VIEWS)[number]
+
+export function parseAssetView(value: string | null | undefined): AssetView {
+  return value && (ASSET_VIEWS as readonly string[]).includes(value) ? (value as AssetView) : 'inventory'
+}
+
+/** Which face of the Documents tab to show: the files, or the signing. */
+export const DOCUMENT_VIEWS = ['files', 'signing'] as const
+
+export type DocumentView = (typeof DOCUMENT_VIEWS)[number]
+
+export function parseDocumentView(value: string | null | undefined): DocumentView {
+  return value && (DOCUMENT_VIEWS as readonly string[]).includes(value) ? (value as DocumentView) : 'files'
+}

@@ -1,61 +1,10 @@
-import type { Metadata } from 'next'
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
-import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { loadCeremony } from '@/lib/ceremony/repository'
-import { detectKinds } from '@/lib/execution/detect'
-import { loadExecutionMatters } from '@/lib/execution/repository'
-import { requireStaffPage, reviewClient } from '@/lib/review/staff'
-import { CeremonyRecord } from './CeremonyRecord'
-import { ExecutionChecklist } from './ExecutionChecklist'
-
-export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: 'Signing' }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { redirect } from 'next/navigation'
 
 /**
- * One matter's signing: the checklist of what each drafted document needs,
- * and the record of the appointment itself. Ported from the workbench's
- * `/execution/[matterId]`.
+ * A matter's signing checklist and record live on the matter now, as the
+ * Signing view of its Documents tab. Old links and bookmarks land there.
  */
-export default async function MatterExecutionPage({ params }: { params: Promise<{ matterId: string }> }) {
-  await requireStaffPage()
-
+export default async function MatterExecutionRedirect({ params }: { params: Promise<{ matterId: string }> }) {
   const { matterId } = await params
-  if (!UUID.test(matterId)) notFound()
-
-  const client = reviewClient()
-  const [matter] = await loadExecutionMatters(client, { matterId })
-  if (!matter) notFound()
-
-  const detected = detectKinds(matter.documentNames)
-  const ceremony = await loadCeremony(client, matterId)
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Signing"
-        title={matter.title}
-        actions={
-          <>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/admin/execution">
-                <ArrowLeft className="size-4" aria-hidden />
-                All signings
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/admin/matters/${matterId}?tab=documents`}>Open matter</Link>
-            </Button>
-          </>
-        }
-      />
-
-      <ExecutionChecklist detected={detected.kinds} unmatched={detected.unmatched} />
-      <CeremonyRecord matterId={matterId} ceremony={ceremony} kinds={detected.kinds} />
-    </div>
-  )
+  redirect(`/admin/matters/${encodeURIComponent(matterId)}?tab=documents&view=signing`)
 }

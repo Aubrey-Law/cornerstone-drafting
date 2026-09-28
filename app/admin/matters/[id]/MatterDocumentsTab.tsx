@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownAZ,
@@ -710,11 +709,6 @@ export function MatterDocumentsTab({
               className="hidden"
               onChange={event => void handleUpload(event.target.files)}
             />
-            {recordLabel !== 'lead' && (
-              <Link href={`/admin/execution/${matterId}`} className="px-1 text-xs underline underline-offset-4">
-                Signing checklist
-              </Link>
-            )}
             <Button
               type="button"
               size="sm"

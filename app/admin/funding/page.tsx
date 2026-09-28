@@ -55,7 +55,7 @@ export default async function FundingPage() {
             {matters.map(matter => (
               <li key={matter.matterId}>
                 <Link
-                  href={`/admin/funding/${matter.matterId}`}
+                  href={`/admin/matters/${matter.matterId}?tab=assets&view=funding`}
                   className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-accent"
                 >
                   <span className="text-sm font-medium">{matter.title}</span>

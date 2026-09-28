@@ -45,7 +45,7 @@ export default async function ExecutionPage() {
             {matters.map(matter => (
               <li key={matter.matterId}>
                 <Link
-                  href={`/admin/execution/${matter.matterId}`}
+                  href={`/admin/matters/${matter.matterId}?tab=documents&view=signing`}
                   className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-accent"
                 >
                   <span className="text-sm font-medium">{matter.title}</span>

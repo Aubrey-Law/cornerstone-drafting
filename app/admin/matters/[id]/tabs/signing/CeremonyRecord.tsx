@@ -19,6 +19,18 @@ const SEVERITY_TONE: Record<Problem['severity'], Tone> = {
   incomplete: 'warning',
 }
 
+type CeremonyFormState = { message: string | null }
+type CeremonyAction = (previous: CeremonyFormState | null, form: FormData) => Promise<CeremonyFormState>
+
+/** Runs a save and, when it succeeds, asks the view to reload. */
+function withReload(action: CeremonyAction, onSaved?: () => void) {
+  return async (previous: CeremonyFormState, form: FormData) => {
+    const result = await action(previous, form)
+    if (!result.message) onSaved?.()
+    return result
+  }
+}
+
 function ProblemList({ problems }: { problems: Problem[] }) {
   if (problems.length === 0) return null
   return (
@@ -51,12 +63,15 @@ export function CeremonyRecord({
   matterId,
   ceremony,
   kinds,
+  onSaved,
 }: {
   matterId: string
   ceremony: Ceremony | null
   kinds: DocumentKind[]
+  /** Called after a save succeeds, so the view can reload the record. */
+  onSaved?: () => void
 }) {
-  const [state, submit, pending] = useActionState(recordCeremony, { message: null })
+  const [state, submit, pending] = useActionState(withReload(recordCeremony, onSaved), { message: null })
   const [roles, setRoles] = useState({
     witnessOneName: ceremony?.witnessOneName ?? '',
     witnessTwoName: ceremony?.witnessTwoName ?? '',
@@ -177,6 +192,7 @@ export function CeremonyRecord({
                   ceremonyId={ceremony.id}
                   kind={kind}
                   record={ceremony.documents.find((doc) => doc.documentKind === kind) ?? null}
+                  onSaved={onSaved}
                 />
               ))}
             </ul>
@@ -196,13 +212,15 @@ function DocumentEntry({
   ceremonyId,
   kind,
   record,
+  onSaved,
 }: {
   matterId: string
   ceremonyId: string
   kind: DocumentKind
   record: Ceremony['documents'][number] | null
+  onSaved?: () => void
 }) {
-  const [state, submit, pending] = useActionState(recordCeremonyDocument, { message: null })
+  const [state, submit, pending] = useActionState(withReload(recordCeremonyDocument, onSaved), { message: null })
   const [executed, setExecuted] = useState(record?.executed ?? false)
   const requirement = requirementsFor(kind)
 

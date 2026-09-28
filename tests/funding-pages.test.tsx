@@ -24,6 +24,13 @@ vi.mock('@/lib/serverActionAuth', () => ({
     return auth.staff
   }),
 }))
+vi.mock('@/lib/apiAuth', () => ({
+  requireAdmin: vi.fn(async () =>
+    auth.staff
+      ? { err: null, userId: auth.staff }
+      : { err: new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }), userId: null },
+  ),
+}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((to: string) => {
@@ -35,9 +42,10 @@ vi.mock('next/navigation', () => ({
 }))
 
 import FundingPage from '@/app/admin/funding/page'
-import MatterFundingPage from '@/app/admin/funding/[matterId]/page'
-import { recordAssetFunding } from '@/app/admin/funding/[matterId]/actions'
-import { AssetRow } from '@/app/admin/funding/[matterId]/AssetRow'
+import MatterFundingRedirect from '@/app/admin/funding/[matterId]/page'
+import { GET as matterFunding } from '@/app/api/admin/matters/[id]/funding/route'
+import { recordAssetFunding } from '@/app/admin/matters/[id]/tabs/funding/actions'
+import { AssetRow } from '@/app/admin/matters/[id]/tabs/funding/AssetRow'
 import type { FundingAsset } from '@/lib/funding/rollup'
 
 const SMITH = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -92,26 +100,40 @@ describe('/admin/funding', () => {
     ])
     expect(screen.queryByText('Lee (lead)')).not.toBeInTheDocument()
     expect(screen.getByText('$1,600,000')).toBeInTheDocument()
-    expect(rows[1].querySelector('a')).toHaveAttribute('href', `/admin/funding/${SMITH}`)
+    expect(rows[1].querySelector('a')).toHaveAttribute('href', `/admin/matters/${SMITH}?tab=assets&view=funding`)
     expect(rows[1].textContent).toContain('1 of 2 outstanding')
   })
 })
 
 describe('/admin/funding/[matterId]', () => {
-  it('shows each asset with what has been recorded, and the rest as suggestions', async () => {
-    render(await MatterFundingPage({ params: Promise.resolve({ matterId: SMITH }) }))
-    expect(screen.getByText('$400,000', { selector: 'span.font-medium' })).toBeInTheDocument()
-    expect(screen.getByTestId('asset-a-house').textContent).toContain('New deed (suggested)')
-    expect(screen.getByTestId('asset-a-ira').textContent).toContain('Confirmed · Aug 1, 2026')
+  it('redirects to the Funding view of the matter\'s Assets tab', async () => {
+    await expect(MatterFundingRedirect({ params: Promise.resolve({ matterId: SMITH }) })).rejects.toThrow(
+      `redirect:/admin/matters/${SMITH}?tab=assets&view=funding`,
+    )
+  })
+})
+
+describe('GET /api/admin/matters/[id]/funding', () => {
+  const get = (id: string) => matterFunding(new Request('http://localhost'), { params: Promise.resolve({ id }) })
+
+  it('returns each asset with what has been recorded, and the rest as suggestions', async () => {
+    const response = await get(SMITH)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { assets: FundingAsset[]; summary: { unfundedValue: number; total: number } }
+    expect(body.summary).toMatchObject({ unfundedValue: 400000, total: 2 })
+    expect(body.assets.find(a => a.assetId === 'a-house')).toMatchObject({ method: 'deed', isRecorded: false })
+    expect(body.assets.find(a => a.assetId === 'a-ira')).toMatchObject({ status: 'confirmed', confirmedOn: '2026-08-01' })
   })
 
-  it('404s on a malformed id', async () => {
-    await expect(MatterFundingPage({ params: Promise.resolve({ matterId: 'nope' }) })).rejects.toThrow('notFound')
+  it('answers an empty list, not a 404, when a matter has nothing to track', async () => {
+    const body = (await (await get(LEAD)).json()) as { assets: FundingAsset[] }
+    expect(body.assets).toEqual([])
   })
 
-  it('explains, rather than 404s, when a matter has nothing to track', async () => {
-    render(await MatterFundingPage({ params: Promise.resolve({ matterId: LEAD }) }))
-    expect(screen.getByText(/none\s+to track yet/)).toBeInTheDocument()
+  it('refuses a malformed id and a caller who is not staff', async () => {
+    expect((await get('nope')).status).toBe(400)
+    auth.staff = null
+    expect((await get(SMITH)).status).toBe(403)
   })
 })
 
@@ -175,5 +197,14 @@ describe('AssetRow', () => {
     expect(screen.queryByLabelText('Confirmation received')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'confirmed' } })
     expect(screen.getByLabelText('Confirmation received')).toBeRequired()
+  })
+
+  it('closes and asks the view to reload once a save succeeds', async () => {
+    const onSaved = vi.fn()
+    render(<AssetRow matterId={SMITH} asset={{ ...ira, assetId: 'a-house', category: 'real_estate', method: 'deed' }} onSaved={onSaved} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
   })
 })

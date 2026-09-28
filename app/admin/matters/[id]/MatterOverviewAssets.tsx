@@ -1,8 +1,11 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import Link from 'next/link'
+import { Landmark, List } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
+import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
+import type { AssetView } from '@/lib/matterPageTabs'
+import { MatterFundingPanel } from './tabs/funding/MatterFundingPanel'
 import type { PipelineMatter } from '@/types/database'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 
@@ -11,6 +14,11 @@ const MatterAssetsTab = dynamic(
   { ssr: false, loading: () => <p className="text-xs text-muted-foreground">Loading assets…</p> },
 )
 
+const ASSET_VIEW_OPTIONS: readonly ViewSwitchOption<AssetView>[] = [
+  { value: 'inventory', label: 'Inventory', icon: List },
+  { value: 'funding', label: 'Funding', icon: Landmark },
+]
+
 interface Props {
   matterId: string
   matter: PipelineMatter
@@ -18,6 +26,9 @@ interface Props {
   enabled?: boolean
   anticipatedInheritance?: boolean
   onAnticipatedInheritanceChange?: (next: boolean) => void
+  /** Inventory, or its trust funding. Without `onViewChange` only the inventory shows. */
+  view?: AssetView
+  onViewChange?: (view: AssetView) => void
 }
 
 export function MatterOverviewAssets({
@@ -27,8 +38,11 @@ export function MatterOverviewAssets({
   enabled = true,
   anticipatedInheritance = false,
   onAnticipatedInheritanceChange,
+  view = 'inventory',
+  onViewChange,
 }: Props) {
   const token = useAccessToken()
+  const showFunding = view === 'funding' && Boolean(onViewChange)
 
   return (
     <section className="space-y-3">
@@ -36,24 +50,30 @@ export function MatterOverviewAssets({
         <div>
           <h3 className="text-sm font-semibold">Assets</h3>
           <p className="text-xs text-muted-foreground">
-            Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.
+            {showFunding
+              ? 'Whether each asset has been moved into the plan, confirmed by the institution.'
+              : 'Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.'}
           </p>
         </div>
-        <Link href={`/admin/funding/${matterId}`} className="text-xs underline underline-offset-4">
-          Trust funding
-        </Link>
+        {onViewChange ? (
+          <ViewSwitch value={view} options={ASSET_VIEW_OPTIONS} onChange={onViewChange} label="Assets view" />
+        ) : null}
       </div>
-      <MatterAssetsTab
-        matterId={matterId}
-        intakeId={intakeId}
-        clientName={matter.client_name}
-        spouseName={matter.spouse_name}
-        maritalStatus={matter.marital_status}
-        accessToken={token}
-        enabled={enabled}
-        anticipatedInheritance={anticipatedInheritance}
-        onAnticipatedInheritanceChange={onAnticipatedInheritanceChange}
-      />
+      {showFunding ? (
+        <MatterFundingPanel matterId={matterId} />
+      ) : (
+        <MatterAssetsTab
+          matterId={matterId}
+          intakeId={intakeId}
+          clientName={matter.client_name}
+          spouseName={matter.spouse_name}
+          maritalStatus={matter.marital_status}
+          accessToken={token}
+          enabled={enabled}
+          anticipatedInheritance={anticipatedInheritance}
+          onAnticipatedInheritanceChange={onAnticipatedInheritanceChange}
+        />
+      )}
     </section>
   )
 }
@@ -65,6 +85,8 @@ export function MatterAssetsTabContent({
   enabled = true,
   anticipatedInheritance = false,
   onAnticipatedInheritanceChange,
+  view,
+  onViewChange,
 }: Props) {
   return (
     <TabsContent value="assets" className="space-y-4">
@@ -75,6 +97,8 @@ export function MatterAssetsTabContent({
         enabled={enabled}
         anticipatedInheritance={anticipatedInheritance}
         onAnticipatedInheritanceChange={onAnticipatedInheritanceChange}
+        view={view}
+        onViewChange={onViewChange}
       />
     </TabsContent>
   )
