@@ -4,7 +4,7 @@ import { MercuryDepositsCard } from './MercuryDepositsCard'
 
 /**
  * Server component, so it reads Mercury directly rather than fetching its own
- * API route — the same shape BillingSummary uses.
+ * API route — the same shape the Reports view uses.
  *
  * Renders nothing at all when Mercury is unconfigured: an absent integration
  * should leave the page exactly as it was.

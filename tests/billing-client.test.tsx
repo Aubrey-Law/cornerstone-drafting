@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { BillingSnapshot } from '@/lib/billing/types'
 
@@ -29,6 +29,31 @@ vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'access-t
 vi.mock('sonner', () => ({ toast }))
 
 import BillingClient from '@/app/admin/billing/BillingClient'
+
+async function chooseRecordAction(
+  user: ReturnType<typeof userEvent.setup>,
+  name: 'Log payment' | 'Add charge',
+) {
+  await user.click(screen.getByRole('button', { name: 'Record' }))
+  await user.click(await screen.findByRole('menuitem', { name }))
+}
+
+async function chooseRowAction(
+  user: ReturnType<typeof userEvent.setup>,
+  rowName: string,
+  name: 'Edit charge' | 'Delete charge',
+) {
+  await user.click(screen.getByRole('button', { name: `More actions for ${rowName}` }))
+  await user.click(await screen.findByRole('menuitem', { name }))
+}
+
+async function chooseSelectionAction(
+  user: ReturnType<typeof userEvent.setup>,
+  name: 'Delete selected',
+) {
+  await user.click(screen.getByRole('button', { name: 'More selected actions' }))
+  await user.click(await screen.findByRole('menuitem', { name }))
+}
 
 const snapshot: BillingSnapshot = {
   selectedMonth: '2026-07',
@@ -139,7 +164,10 @@ if (!HTMLElement.prototype.scrollIntoView) {
 }
 
 describe('billing workspace', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -176,7 +204,7 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Log payment' }))
+    await chooseRecordAction(user, 'Log payment')
     expect(screen.getByRole('dialog', { name: 'Log payment' })).toBeTruthy()
     expect(screen.getByLabelText('Billing item').textContent).toContain('Chen, Marcus & Lily')
 
@@ -193,8 +221,8 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    const opener = screen.getByRole('button', { name: 'Log payment' })
-    await user.click(opener)
+    const opener = screen.getByRole('button', { name: 'Record' })
+    await chooseRecordAction(user, 'Log payment')
     expect(screen.getByRole('dialog', { name: 'Log payment' })).toBeTruthy()
 
     await user.keyboard('{Escape}')
@@ -210,7 +238,7 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Log payment' }))
+    await chooseRecordAction(user, 'Log payment')
     const amount = screen.getByLabelText('Amount')
     await user.clear(amount)
     await user.type(amount, '125.50')
@@ -240,7 +268,7 @@ describe('billing workspace', () => {
     vi.stubGlobal('fetch', post)
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    await chooseRecordAction(user, 'Add charge')
     const dialog = await screen.findByRole('dialog')
     // Unlike the matter tab, this surface must pick a matter.
     expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
@@ -267,7 +295,7 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    await chooseRecordAction(user, 'Add charge')
     const dialog = await screen.findByRole('dialog')
 
     // Chen carries the flat fee in the fixture, so the default pick warns.
@@ -280,28 +308,58 @@ describe('billing workspace', () => {
 
   // ── Phase 3: page shape, filtering and batch billing ──────────────────
 
-  it('opens on the ledger and keeps the analytics on Insights', async () => {
-    const user = userEvent.setup()
+  it('opens on billing work and keeps reporting cards in Reports', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    // The thing you act on is what you land on.
-    expect(screen.getByRole('tab', { name: 'Ledger' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('link', { name: 'Billing work' }).getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('columnheader', { name: 'Client / matter' })).toBeTruthy()
-
-    await user.click(screen.getByRole('tab', { name: 'Insights' }))
-    await waitFor(() =>
-      expect(navigation.replace).toHaveBeenCalledWith(
-        expect.stringContaining('tab=insights'),
-        expect.anything(),
-      ))
+    expect(screen.queryByText('Collected this month')).toBeNull()
+    expect(screen.queryByText('Collection goal')).toBeNull()
   })
 
-  it('puts the primary verbs in the page header, not inside a metric card', () => {
+  it('reduces the page header to one primary action and two menus', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    for (const name of ['Log payment', 'Add charge', 'New invoice']) {
-      expect(screen.getByRole(name === 'New invoice' ? 'link' : 'button', { name })).toBeTruthy()
-    }
+    expect(screen.getByRole('link', { name: 'New invoice' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Record' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'More billing actions' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Add charge' })).toBeNull()
+  })
+
+  it('turns the work summary into direct filters without loading reporting cards', () => {
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
+
+    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Open balances.*1/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Past due.*1/ })).toBeTruthy()
+  })
+
+  it('debounces ledger search before replacing the URL', () => {
+    vi.useFakeTimers()
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search billing clients' }), {
+      target: { value: 'Chen' },
+    })
+    expect(navigation.replace).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(300)
+    expect(navigation.replace).toHaveBeenCalledWith(
+      expect.stringContaining('search=Chen'),
+      { scroll: false },
+    )
+    vi.useRealTimers()
+  })
+
+  it('shows a compact ledger without duplicate accounting columns', () => {
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
+
+    const ledger = within(screen.getByRole('table'))
+    expect(ledger.getByRole('columnheader', { name: 'Charge / invoice' })).toBeTruthy()
+    expect(ledger.getByRole('columnheader', { name: 'Balance' })).toBeTruthy()
+    expect(ledger.queryByRole('columnheader', { name: 'Billed' })).toBeNull()
+    expect(ledger.queryByRole('columnheader', { name: 'Collected' })).toBeNull()
+    expect(ledger.queryByRole('columnheader', { name: 'Age' })).toBeNull()
   })
 
   it('offers a To invoice filter for work that still needs billing', async () => {
@@ -376,6 +434,7 @@ describe('billing workspace', () => {
   // The reminder used to open a blank `mailto:`. It now sends a branded email
   // with the invoice attached and records the send.
   it('sends a real templated reminder for an overdue invoice', async () => {
+    navigation.params = new URLSearchParams('tab=insights')
     const user = userEvent.setup()
     const request = vi.fn().mockResolvedValue(Response.json({ sent: true }))
     vi.stubGlobal('fetch', request)
@@ -428,9 +487,7 @@ describe('billing workspace', () => {
     vi.stubGlobal('fetch', request)
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', {
-      name: 'Delete Flat fee — Joint trust package for Chen, Marcus & Lily',
-    }))
+    await chooseRowAction(user, 'Flat fee — Joint trust package for Chen, Marcus & Lily', 'Delete charge')
     const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
     await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
 
@@ -458,7 +515,7 @@ describe('billing workspace', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select all billing items in view' }))
     expect(screen.getByText('1 selected')).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    await chooseSelectionAction(user, 'Delete selected')
     const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
     await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
 
@@ -479,7 +536,7 @@ describe('billing workspace', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
     await user.click(screen.getByRole('checkbox', { name: 'Select all billing items in view' }))
-    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    await chooseSelectionAction(user, 'Delete selected')
     const dialog = await screen.findByRole('dialog', { name: 'Delete 2 charges?' })
     await user.click(within(dialog).getByRole('button', { name: 'Delete 2 charges' }))
 
@@ -500,9 +557,7 @@ describe('billing workspace', () => {
     vi.stubGlobal('fetch', request)
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', {
-      name: 'Delete Flat fee — Joint trust package for Chen, Marcus & Lily',
-    }))
+    await chooseRowAction(user, 'Flat fee — Joint trust package for Chen, Marcus & Lily', 'Delete charge')
     const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
     await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
 
@@ -518,9 +573,7 @@ describe('billing workspace', () => {
     vi.stubGlobal('fetch', request)
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', {
-      name: 'Edit Flat fee — Joint trust package for Chen, Marcus & Lily',
-    }))
+    await chooseRowAction(user, 'Flat fee — Joint trust package for Chen, Marcus & Lily', 'Edit charge')
     const dialog = await screen.findByRole('dialog', { name: 'Edit charge' })
     // The matter picker gives way: an edit stays where its payments are.
     expect(within(dialog).queryByLabelText('Matter')).toBeNull()
@@ -548,17 +601,16 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} invoices={[]} />)
 
-    await user.click(screen.getByRole('button', {
-      name: 'Edit Flat fee — Joint trust package for Chen, Marcus & Lily',
-    }))
+    await chooseRowAction(user, 'Flat fee — Joint trust package for Chen, Marcus & Lily', 'Edit charge')
     await user.click(within(await screen.findByRole('dialog', { name: 'Edit charge' }))
       .getByRole('button', { name: 'Cancel' }))
 
-    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    await chooseRecordAction(user, 'Add charge')
     const dialog = await screen.findByRole('dialog', { name: 'Add charge' })
     expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
   })
   it('shows the note a payment was logged with in the recent payments rail', () => {
+    navigation.params = new URLSearchParams('tab=insights')
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
     const rail = screen.getByText('Recent payments').closest('[data-slot="card"]') as HTMLElement
@@ -566,6 +618,7 @@ describe('billing workspace', () => {
   })
 
   it('falls back to the charge the payment paid when no note was written', () => {
+    navigation.params = new URLSearchParams('tab=insights')
     const noNote = {
       ...snapshot,
       recentPayments: [{ ...snapshot.recentPayments[0], note: null }],

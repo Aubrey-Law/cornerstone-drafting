@@ -4,7 +4,6 @@ import { firmTodayKey } from '@/lib/firmDate'
 import { fetchBillingData, fetchBillingMatterOptions, fetchLedgerPage } from '@/lib/queries/billing'
 import { InvoiceRegister } from './InvoiceRegister'
 import { Suspense } from 'react'
-import { BillingSummary } from './BillingSummary'
 import { MercuryDeposits } from './MercuryDeposits'
 import { buildBillingSnapshot } from '@/lib/billing/metrics'
 import type { BillingFilter } from '@/lib/billing/types'
@@ -34,8 +33,7 @@ export default async function BillingPage({
     const ledger=await fetchLedgerPage({...pageRequest({page:params.page}),filter,search:typeof params.search==='string' ? params.search : '',month})
     const snapshot=buildBillingSnapshot({items:[],payments:[],selectedMonth:month,annualGoalCents:0,dismissedNudgeKeys:[],unpreparedClaims:[]})
     snapshot.rows=ledger.rows
-    return <BillingClient initialSnapshot={snapshot} loadError={null} weekStart="" matterOptions={[]} invoices={[]} pagination={ledger}
-      summary={<Suspense fallback={<p className="text-sm text-muted-foreground">Loading financial summary…</p>}><BillingSummary userId={auth.id} month={month} /></Suspense>} />
+    return <BillingClient initialSnapshot={snapshot} loadError={null} weekStart="" matterOptions={[]} invoices={[]} pagination={ledger} />
   }
   const [data, matterOptions] = await Promise.all([
     fetchBillingData({

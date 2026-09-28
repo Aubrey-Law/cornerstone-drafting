@@ -1,8 +1,8 @@
 'use client'
 import { NavigationReady } from '@/app/admin/components/NavigationTiming'
 
-import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { Banknote, Download, FileText, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Banknote, ChevronDown, Download, FileText, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -13,6 +13,12 @@ import { SearchField } from '@/components/SearchField'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { filterBillingRows } from '@/lib/billing/metrics'
 import { planBatchInvoices } from '@/lib/billing/invoices'
@@ -41,11 +47,9 @@ import {
 } from '@/components/billing/AddChargeDialog'
 import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
 import { BatchInvoiceDialog } from '@/components/billing/BatchInvoiceDialog'
-import {
-  InvoiceListTable,
-  type InvoiceListRowView,
-} from '@/components/billing/InvoiceListTable'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { InvoiceListRowView } from '@/components/billing/InvoiceListTable'
+import { BillingViewNav } from './BillingViewNav'
+import { BillingWorkSummary } from './BillingWorkSummary'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -66,7 +70,7 @@ export default function BillingClient({
   loadError,
   weekStart,
   matterOptions,
-  invoices, pagination, summary, bankDeposits,
+  pagination, bankDeposits,
 }: {
   initialSnapshot: BillingSnapshot
   loadError: string | null
@@ -74,20 +78,19 @@ export default function BillingClient({
   matterOptions: BillingMatterOption[]
   invoices: InvoiceListRowView[]
   pagination?: LedgerPage
-  summary?: ReactNode
   bankDeposits?: ReactNode
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const routeQuery = searchParams.toString()
   const token = useAccessToken()
   const filter = validFilter(searchParams.get('filter'))
   const search = searchParams.get('search') ?? ''
+  const [searchDraft, setSearchDraft] = useState(search)
   const month = /^\d{4}-\d{2}$/.test(searchParams.get('month') ?? '')
     ? searchParams.get('month')!
     : initialSnapshot.selectedMonth
-  const tab = ['invoices', 'insights'].includes(searchParams.get('tab') ?? '')
-    ? searchParams.get('tab')!
-    : 'ledger'
+  const view = searchParams.get('tab') === 'insights' ? 'reports' : 'work'
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -103,10 +106,11 @@ export default function BillingClient({
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const chargeOpenerRef = useRef<HTMLElement | null>(null)
   const deleteOpenerRef = useRef<HTMLElement | null>(null)
+  const recordOpenerRef = useRef<HTMLButtonElement | null>(null)
 
   const rows = useMemo(
-    () => pagination ? initialSnapshot.rows : filterBillingRows(initialSnapshot.rows, filter, search, month),
-    [filter, initialSnapshot.rows, month, search, pagination],
+    () => pagination ? initialSnapshot.rows : filterBillingRows(initialSnapshot.rows, filter, searchDraft, month),
+    [filter, initialSnapshot.rows, month, pagination, searchDraft],
   )
   // Only what the current filter shows can be acted on, so a selection left
   // behind by another filter never quietly widens a delete.
@@ -144,7 +148,7 @@ export default function BillingClient({
   const counts=pagination?.counts ?? localCounts
 
   function setUrl(next: Partial<{ filter: BillingFilter; search: string; month: string; tab: string }>) {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(routeQuery)
     params.delete('page')
     if (next.tab !== undefined) {
       if (next.tab === 'ledger') params.delete('tab')
@@ -161,6 +165,18 @@ export default function BillingClient({
     const query = params.toString()
     router.replace(`/admin/billing${query ? `?${query}` : ''}`, { scroll: false })
   }
+
+  useEffect(() => {
+    setSearchDraft(search)
+  }, [search])
+
+  useEffect(() => {
+    if (searchDraft === search) return
+    const timer = window.setTimeout(() => setUrl({ search: searchDraft }), 300)
+    return () => window.clearTimeout(timer)
+    // setUrl is derived from the same route state represented by these values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, month, routeQuery, search, searchDraft])
 
   function headers(): HeadersInit {
     return {
@@ -216,10 +232,10 @@ export default function BillingClient({
     )
   }
 
-  function openPayment(row?: BillingLedgerRow) {
-    paymentOpenerRef.current = document.activeElement instanceof HTMLElement
+  function openPayment(row?: BillingLedgerRow, opener?: HTMLElement | null) {
+    paymentOpenerRef.current = opener ?? (document.activeElement instanceof HTMLElement
       ? document.activeElement
-      : null
+      : null)
     setPaymentItemId(row?.id ?? initialSnapshot.rows.find(candidate => candidate.balance > 0)?.id ?? null)
     setPaymentOpen(true)
   }
@@ -342,10 +358,10 @@ export default function BillingClient({
     }
   }
 
-  function openCharge() {
-    chargeOpenerRef.current = document.activeElement instanceof HTMLElement
+  function openCharge(opener?: HTMLElement | null) {
+    chargeOpenerRef.current = opener ?? (document.activeElement instanceof HTMLElement
       ? document.activeElement
-      : null
+      : null)
     setEditingCharge(null)
     setChargeOpen(true)
   }
@@ -455,45 +471,46 @@ export default function BillingClient({
       <NavigationReady route="Billing" />
       <PageHeader
         title="Billing"
-        description={`Fees, legal plan claims, and costs across all matters · ${new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-15T12:00:00Z`))}`}
+        description="Charges, invoices, payments, and legal plan claims across all matters."
         actions={
           <>
-            <label className="sr-only" htmlFor="billing-month">Collection month</label>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => openPayment()}
-            >
-              <Banknote className="size-4" aria-hidden />
-              Log payment
-            </Button>
-            <Button type="button" variant="outline" className="min-h-11" onClick={openCharge}>
-              <FileText className="size-4" aria-hidden />
-              Add charge
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button ref={recordOpenerRef} type="button" variant="outline" className="min-h-11">
+                  Record
+                  <ChevronDown className="size-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => openPayment(undefined, recordOpenerRef.current)}>
+                  <Banknote className="size-4" aria-hidden />
+                  Log payment
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openCharge(recordOpenerRef.current)}>
+                  <FileText className="size-4" aria-hidden />
+                  Add charge
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button asChild className="min-h-11">
               <Link href="/admin/billing/invoices/new">
                 <Plus className="size-4" aria-hidden />
                 New invoice
               </Link>
             </Button>
-            <Input
-              id="billing-month"
-              type="month"
-              value={month}
-              onChange={event => setUrl({ month: event.target.value })}
-              className="min-h-11 w-[10.5rem]"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => void downloadAccountingCsv()}
-            >
-              <Download className="size-4" aria-hidden />
-              Export CSV
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="More billing actions">
+                  <MoreHorizontal className="size-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void downloadAccountingCsv()}>
+                  <Download className="size-4" aria-hidden />
+                  Export CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
@@ -504,32 +521,23 @@ export default function BillingClient({
         </div>
       )}
 
-      {summary ?? <FinanceHeroCards snapshot={initialSnapshot} />}
+      <BillingViewNav active={view} />
 
-      {/* The ledger is what you act on, so it is the landing tab; the
-          analytics that used to sit above it move to Insights. */}
-      <Tabs value={tab} onValueChange={value => setUrl({ tab: value })} className="min-w-0 gap-4">
-        <TabsList>
-          <TabsTrigger value="ledger" className="min-h-11">Ledger</TabsTrigger>
-          <TabsTrigger value="invoices" className="min-h-11">
-            Invoices{invoices.length > 0 ? ` (${invoices.length})` : ''}
-          </TabsTrigger>
-          <TabsTrigger value="insights" className="min-h-11">Insights</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="ledger" className="min-w-0 space-y-4">
+      {view === 'work' ? (
+        <div className="min-w-0 space-y-4">
+          <BillingWorkSummary counts={counts} month={month} />
           {pagination && <div className="flex items-center gap-3 text-sm"><span>{pagination.total} matching charges · page {pagination.page}</span>{[pagination.page-1,pagination.page+1].map((page,index)=>{
             const params=new URLSearchParams(searchParams.toString());params.set('page',String(page))
             return <Button key={index} variant="outline" size="sm" disabled={index===0 ? page<1 : pagination.page*pagination.pageSize>=pagination.total} onClick={()=>router.push(`/admin/billing?${params}`)}>{index===0 ? 'Previous' : 'Next'}</Button>
-          })}<Link href="/admin/billing?tab=insights" className="underline">Insights and billing follow-up</Link></div>}
-          <div className={pagination ? "min-w-0" : "grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"}>
+          })}</div>}
+          <div className="min-w-0">
             <Card className="min-w-0 gap-0 py-0">
               <CardHeader className="gap-3 border-b border-border py-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <CardTitle className="text-sm">Ledger</CardTitle>
                   <SearchField
-                    value={search}
-                    onValueChange={value => setUrl({ search: value })}
+                    value={searchDraft}
+                    onValueChange={setSearchDraft}
                     placeholder="Search clients…"
                     aria-label="Search billing clients"
                     containerClassName="min-h-11 min-w-[14rem] flex-1 sm:max-w-sm"
@@ -567,22 +575,30 @@ export default function BillingClient({
                     )}
                     <Button
                       type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => askDelete(selection)}
-                      disabled={deleting}
-                    >
-                      <Trash2 className="size-4" aria-hidden />
-                      Delete selected
-                    </Button>
-                    <Button
-                      type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedRows({})}
                     >
                       Clear selection
                     </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" aria-label="More selected actions">
+                          <MoreHorizontal className="size-4" aria-hidden />
+                          More
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          disabled={deleting}
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => askDelete(selection)}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                          Delete selected
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 )}
               </CardHeader>
@@ -603,36 +619,36 @@ export default function BillingClient({
                 />
               </CardContent>
             </Card>
-            {!pagination && <div className="space-y-3">
-              <CollectionGoalCard snapshot={initialSnapshot} />
-              <BillingRail
-                snapshot={initialSnapshot}
-                onNudgeAction={nudge => void actOnNudge(nudge)}
-                onDismiss={nudge => void dismissNudge(nudge)}
-              />
-              <RecentPaymentsCard payments={initialSnapshot.recentPayments} />
-            </div>}
           </div>
-        </TabsContent>
-
-        <TabsContent value="invoices" className="min-w-0">
-          <Card className="min-w-0 gap-0 py-0">
-            <CardContent className="px-0">
-              <InvoiceListTable invoices={invoices} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="insights" className="min-w-0">
-          <div className="mb-4 grid gap-4 lg:grid-cols-3"><CollectionGoalCard snapshot={initialSnapshot}/><BillingRail snapshot={initialSnapshot} onNudgeAction={nudge=>void actOnNudge(nudge)} onDismiss={nudge=>void dismissNudge(nudge)}/><RecentPaymentsCard payments={initialSnapshot.recentPayments}/></div>
+        </div>
+      ) : (
+        <div className="min-w-0 space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Reporting period</p>
+              <p className="text-xs text-muted-foreground">Monthly collections and costs; annual figures are labeled separately.</p>
+            </div>
+            <div>
+              <label className="sr-only" htmlFor="billing-month">Reporting month</label>
+              <Input
+                id="billing-month"
+                type="month"
+                value={month}
+                onChange={event => setUrl({ month: event.target.value })}
+                className="min-h-11 w-[10.5rem]"
+              />
+            </div>
+          </div>
+          <FinanceHeroCards snapshot={initialSnapshot} />
+          <div className="grid gap-4 lg:grid-cols-3"><CollectionGoalCard snapshot={initialSnapshot}/><BillingRail snapshot={initialSnapshot} onNudgeAction={nudge=>void actOnNudge(nudge)} onDismiss={nudge=>void dismissNudge(nudge)}/><RecentPaymentsCard payments={initialSnapshot.recentPayments}/></div>
           <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
             <RevenueSourcesCard revenue={initialSnapshot.revenue} />
             <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
             <ReceivablesSummaryCard snapshot={initialSnapshot} />
             {bankDeposits}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       <AddChargeDialog
         open={chargeOpen}

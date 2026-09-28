@@ -2,6 +2,13 @@ import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import {
   Table,
@@ -14,7 +21,7 @@ import {
 import { billingMoney } from '@/lib/billing/metrics'
 import type { BillingLedgerRow } from '@/lib/billing/types'
 import { cn } from '@/lib/utils'
-import { Pencil, ReceiptText, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
 export function LedgerTable({
   rows,
@@ -70,7 +77,7 @@ export function LedgerTable({
 
   return (
     <div className="overflow-x-auto">
-      <Table className="min-w-[940px]">
+      <Table className="min-w-[760px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-10 pl-4">
@@ -81,15 +88,11 @@ export function LedgerTable({
               />
             </TableHead>
             <TableHead>Client / matter</TableHead>
-            <TableHead>Item</TableHead>
-            <TableHead>Invoice</TableHead>
-            <TableHead className="text-right">Billed</TableHead>
-            <TableHead className="text-right">Collected</TableHead>
+            <TableHead>Charge / invoice</TableHead>
             <TableHead className="text-right">Balance</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Age</TableHead>
+            <TableHead>Status / age</TableHead>
             <TableHead className="text-right"><span className="sr-only">Action</span></TableHead>
-            <TableHead className="w-20 pr-4"><span className="sr-only">Edit or delete</span></TableHead>
+            <TableHead className="w-12 pr-4"><span className="sr-only">More actions</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -108,13 +111,13 @@ export function LedgerTable({
                     aria-label={`Select all ${group.rows.length} ${partial ? 'shown ' : ''}charges for ${group.clientName}`}
                   />
                 </TableCell>
-                <TableCell colSpan={5} className="text-xs font-medium">
+                <TableCell colSpan={2} className="text-xs font-medium">
                   {group.clientName} · {group.rows.length} charges
                 </TableCell>
                 <TableCell className="text-right text-xs font-semibold tabular-nums">
                   {billingMoney(group.balance)}
                 </TableCell>
-                <TableCell colSpan={4} className="pr-4 text-xs text-muted-foreground">
+                <TableCell colSpan={3} className="pr-4 text-xs text-muted-foreground">
                   {partial ? 'shown charges subtotal' : 'matter total'}
                 </TableCell>
               </TableRow>
@@ -137,8 +140,8 @@ export function LedgerTable({
                   </Link>
                   <p className="text-xs text-muted-foreground">{row.matterNumber ?? 'No matter number'}</p>
                 </TableCell>
-                <TableCell className="max-w-52 whitespace-normal">{row.label}</TableCell>
-                <TableCell className="whitespace-nowrap">
+                <TableCell className="max-w-64 whitespace-normal">
+                  <p>{row.label}</p>
                   {row.invoiceId ? (
                     /* A draft has no number yet, but it still has a page — and
                        that page is where it is edited, issued or discarded. */
@@ -149,23 +152,23 @@ export function LedgerTable({
                       {row.invoiceNumber ?? 'Draft'}
                     </Link>
                   ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
+                    <span className="text-xs text-muted-foreground">Not on an invoice</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{billingMoney(row.amountBilled)}</TableCell>
-                <TableCell className="text-right tabular-nums">{billingMoney(row.collected)}</TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{billingMoney(row.balance)}</TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">
                   <BillingStatusBadge row={row} />
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    'text-right tabular-nums text-muted-foreground',
-                    row.overdue && 'font-semibold text-destructive',
-                  )}
-                  title={row.invoicedAt ? `Invoiced ${row.invoicedAt.slice(0, 10)}` : undefined}
-                >
-                  {row.status === 'paid' ? '—' : `${row.ageDays}d`}
+                  {row.status !== 'paid' ? (
+                    <p
+                      className={cn(
+                        'mt-1 text-xs tabular-nums text-muted-foreground',
+                        row.overdue && 'font-semibold text-destructive',
+                      )}
+                      title={row.invoicedAt ? `Invoiced ${row.invoicedAt.slice(0, 10)}` : undefined}
+                    >
+                      {row.ageDays} days
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell className="text-right">
                   {/* A plan claim is billed to the carrier, so it gets its own
@@ -224,26 +227,33 @@ export function LedgerTable({
                   ) : null}
                 </TableCell>
                 <TableCell className="whitespace-nowrap pr-4 text-right">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-foreground"
-                    aria-label={`Edit ${row.label} for ${row.clientName}`}
-                    onClick={() => onEdit(row)}
-                  >
-                    <Pencil className="size-4" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${row.label} for ${row.clientName}`}
-                    onClick={() => onDelete([row])}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 text-muted-foreground hover:text-foreground"
+                        aria-label={`More actions for ${row.label} for ${row.clientName}`}
+                      >
+                        <MoreHorizontal className="size-4" aria-hidden />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => onEdit(row)}>
+                        <Pencil className="size-4" aria-hidden />
+                        Edit charge
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => onDelete([row])}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                        Delete charge
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             )),
