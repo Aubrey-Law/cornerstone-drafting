@@ -1,5 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
 import { loadCeremony } from '@/lib/ceremony/repository'
 import { detectKinds } from '@/lib/execution/detect'
 import { loadExecutionMatters } from '@/lib/execution/repository'
@@ -8,6 +12,7 @@ import { CeremonyRecord } from './CeremonyRecord'
 import { ExecutionChecklist } from './ExecutionChecklist'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Signing' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -30,22 +35,27 @@ export default async function MatterExecutionPage({ params }: { params: Promise<
   const ceremony = await loadCeremony(client, matterId)
 
   return (
-    <div className="space-y-6 px-6 py-5">
-      <header className="space-y-1">
-        <Link href="/admin/execution" className="text-xs text-muted-foreground underline underline-offset-4">
-          Execution
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight">
-          <Link href={`/admin/matters/${matterId}?tab=documents`} className="hover:underline">
-            {matter.title}
-          </Link>
-        </h1>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Signing"
+        title={matter.title}
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/execution">
+                <ArrowLeft className="size-4" aria-hidden />
+                All signings
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/matters/${matterId}?tab=documents`}>Open matter</Link>
+            </Button>
+          </>
+        }
+      />
 
-      <div className="space-y-12">
-        <ExecutionChecklist detected={detected.kinds} unmatched={detected.unmatched} />
-        <CeremonyRecord matterId={matterId} ceremony={ceremony} kinds={detected.kinds} />
-      </div>
+      <ExecutionChecklist detected={detected.kinds} unmatched={detected.unmatched} />
+      <CeremonyRecord matterId={matterId} ceremony={ceremony} kinds={detected.kinds} />
     </div>
   )
 }

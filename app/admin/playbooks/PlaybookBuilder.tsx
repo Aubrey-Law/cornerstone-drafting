@@ -2,7 +2,12 @@
 
 import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { TONE_NOTICE } from '@/lib/ui/tone'
 import type { CandidateRule, ExtractRulesResult } from '@aubrey-law/citations/playbookBuilder/extractRules'
 import {
   APPLIES_WHEN,
@@ -221,30 +226,35 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
   }
 
   return (
-    <div className="flex flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
-        <div>
-          <Link href="/admin/review" className="text-xs text-muted-foreground underline underline-offset-4">
-            Reviews
-          </Link>
-          <h1 className="text-lg font-semibold tracking-tight">Build a playbook</h1>
-        </div>
-        <Link href="/admin/review/new" className="text-sm underline underline-offset-4">
-          Start a review
-        </Link>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Build a playbook"
+        description="Extract rules from precedent, adjust them, and publish a playbook the review runs against."
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/review">
+                <ArrowLeft className="size-4" aria-hidden />
+                All reviews
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/review/new">Start a review</Link>
+            </Button>
+          </>
+        }
+      />
 
-      <main className="mx-auto w-full max-w-4xl space-y-8 px-6 py-8">
+      <div className="w-full max-w-4xl space-y-8">
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">1. Playbook</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span className="text-muted-foreground">Start from</span>
-              <select
+              <NativeSelect
                 aria-label="Start from"
                 value={base}
                 onChange={(event) => chooseBase(event.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               >
                 <option value="">A new playbook</option>
                 {playbooks.map((playbook) => (
@@ -252,33 +262,31 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
                     {playbook.title} (v{playbook.version}, {playbook.rules.length} rules)
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-muted-foreground">Document type</span>
-              <input
+              <Input
                 aria-label="Document type"
                 value={documentType}
                 onChange={(event) => setDocumentType(event.target.value)}
                 placeholder="revocable trust, will, durable power of attorney…"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               />
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-muted-foreground">Title</span>
-              <input
+              <Input
                 aria-label="Title"
                 value={title}
                 onChange={(event) => {
                   setTitle(event.target.value)
                   if (!slugTouched) setSlug(slugFromTitle(event.target.value))
                 }}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               />
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-muted-foreground">Playbook id</span>
-              <input
+              <Input
                 aria-label="Playbook id"
                 value={slug}
                 disabled={Boolean(basePlaybook)}
@@ -286,7 +294,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
                   setSlug(event.target.value)
                   setSlugTouched(true)
                 }}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 font-mono text-sm disabled:opacity-60"
+                className="font-mono"
               />
             </label>
           </div>
@@ -337,7 +345,7 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
         </section>
 
         {error ? (
-          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <p role="alert" className={TONE_NOTICE.danger}>
             {error}
           </p>
         ) : null}
@@ -379,12 +387,11 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
 
         <section className="space-y-3 border-t border-border pt-6">
           <h2 className="text-sm font-semibold">4. Publish</h2>
-          <input
+          <Input
             aria-label="What changed"
             value={changeSummary}
             onChange={(event) => setChangeSummary(event.target.value)}
             placeholder="What changed in this version (optional)"
-            className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
           />
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" onClick={onPublish} disabled={publishing || included.length === 0}>
@@ -393,14 +400,14 @@ export function PlaybookBuilder({ playbooks }: { playbooks: PublishedPlaybookCho
             {published ? (
               <p className="text-sm" data-testid="published">
                 Published version {published.versionNumber} with {published.ruleCount} rules.{' '}
-                <Link href={`/admin/review/new?playbook=${encodeURIComponent(published.slug)}`} className="underline underline-offset-4">
+                <Link href={`/admin/review/new?playbook=${encodeURIComponent(published.slug)}`} className="font-medium text-primary hover:underline">
                   Test it on a draft
                 </Link>
               </p>
             ) : null}
           </div>
         </section>
-      </main>
+      </div>
     </div>
   )
 }
@@ -441,18 +448,18 @@ function RuleRow({
         <span className="text-xs text-muted-foreground">
           · {rule.origin === 'published' ? 'current version' : rule.origin === 'extracted' ? 'from precedent' : 'added by hand'}
         </span>
-        <select
+        <NativeSelect
           aria-label="Risk"
           value={rule.risk}
           onChange={(event) => onChange({ risk: event.target.value as Risk })}
-          className="ml-auto h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+          className="ml-auto h-8 w-auto text-xs md:text-xs"
         >
           {RISKS.map((risk) => (
             <option key={risk} value={risk}>
               {risk}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <button type="button" onClick={() => onMove(-1)} disabled={first} className="text-xs underline disabled:opacity-40">
           Up
         </button>
@@ -568,14 +575,14 @@ export function ConditionsEditor({
         </span>
       ))}
       {available.length > 0 ? (
-        <select
+        <NativeSelect
           aria-label="Add a condition"
           value=""
           onChange={(event) => {
             const condition = APPLIES_WHEN[event.target.value]
             if (condition) onChange([...conditions, condition])
           }}
-          className="h-7 rounded-md border border-input bg-transparent px-1 text-xs"
+          className="h-7 w-auto px-1 text-xs md:text-xs"
         >
           <option value="">+ condition</option>
           {available.map(([word]) => (
@@ -583,7 +590,7 @@ export function ConditionsEditor({
               {APPLIES_WHEN_LABELS[word] ?? word}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       ) : null}
     </div>
   )

@@ -1,5 +1,10 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/funding/format'
 import { fundingSummary } from '@/lib/funding/model'
 import { loadFundingRows } from '@/lib/funding/repository'
@@ -8,8 +13,20 @@ import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { AssetRow } from './AssetRow'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Trust funding' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function BackToFunding() {
+  return (
+    <Button asChild variant="ghost" size="sm">
+      <Link href="/admin/funding">
+        <ArrowLeft className="size-4" aria-hidden />
+        All funding
+      </Link>
+    </Button>
+  )
+}
 
 /**
  * One matter's funding: each asset the client listed at intake, how it joins
@@ -27,17 +44,20 @@ export default async function MatterFundingPage({ params }: { params: Promise<{ 
   // not yet hired or with nothing listed at intake.
   if (rows.length === 0) {
     return (
-      <div className="space-y-2 px-6 py-5">
-        <Link href="/admin/funding" className="text-xs text-muted-foreground underline underline-offset-4">
-          Funding
-        </Link>
-        <p className="text-sm text-muted-foreground">
-          Funding is tracked for hired matters against the assets listed at intake. This matter has none
-          to track yet.{' '}
-          <Link href={`/admin/matters/${matterId}?tab=assets`} className="underline underline-offset-4">
-            Back to its assets
-          </Link>
-        </p>
+      <div className="space-y-4">
+        <PageHeader
+          title="Trust funding"
+          description={
+            <>
+              Funding is tracked for hired matters against the assets listed at intake. This matter has none
+              to track yet.{' '}
+              <Link href={`/admin/matters/${matterId}?tab=assets`} className="font-medium text-primary hover:underline">
+                Back to its assets
+              </Link>
+            </>
+          }
+          actions={<BackToFunding />}
+        />
       </div>
     )
   }
@@ -46,18 +66,12 @@ export default async function MatterFundingPage({ params }: { params: Promise<{ 
   const summary = fundingSummary(assets)
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <header className="space-y-1">
-        <Link href="/admin/funding" className="text-xs text-muted-foreground underline underline-offset-4">
-          Funding
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight">
-          <Link href={`/admin/matters/${matterId}?tab=assets`} className="hover:underline">
-            {rows[0].matter_title ?? 'Matter'}
-          </Link>
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {summary.isComplete ? (
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Trust funding"
+        title={rows[0].matter_title ?? 'Matter'}
+        description={
+          summary.isComplete ? (
             'Every asset is confirmed or deliberately excluded.'
           ) : (
             <>
@@ -65,15 +79,25 @@ export default async function MatterFundingPage({ params }: { params: Promise<{ 
               {summary.unfundedCount} of {summary.total} {summary.total === 1 ? 'asset' : 'assets'} is still
               outside the plan.
             </>
-          )}
-        </p>
-      </header>
+          )
+        }
+        actions={
+          <>
+            <BackToFunding />
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/matters/${matterId}?tab=assets`}>Open matter</Link>
+            </Button>
+          </>
+        }
+      />
 
-      <ul className="divide-y divide-border border-y border-border">
-        {assets.map(asset => (
-          <AssetRow key={asset.assetId} matterId={matterId} asset={asset} />
-        ))}
-      </ul>
+      <Card className="gap-0 py-0">
+        <ul className="divide-y divide-border">
+          {assets.map(asset => (
+            <AssetRow key={asset.assetId} matterId={matterId} asset={asset} />
+          ))}
+        </ul>
+      </Card>
     </div>
   )
 }

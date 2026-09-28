@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 
 export interface PlaybookChoice {
   slug: string
@@ -18,7 +20,7 @@ export interface MatterChoice {
 
 type Source = 'filed' | 'upload'
 
-const SELECT = 'h-9 w-full max-w-md rounded-md border border-input bg-transparent px-2 text-sm'
+const FIELD = 'max-w-md'
 
 /**
  * Choose what to review and which playbook to run, then start it. A filed
@@ -111,16 +113,16 @@ export function NewReviewForm({
 
         {source === 'filed' ? (
           <div className="space-y-2">
-            <select aria-label="Matter" className={SELECT} value={matterId} onChange={e => setMatterId(e.target.value)}>
+            <NativeSelect aria-label="Matter" className={FIELD} value={matterId} onChange={e => setMatterId(e.target.value)}>
               {matters.map(m => (
                 <option key={m.matterId} value={m.matterId}>
                   {m.title}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               aria-label="Document"
-              className={SELECT}
+              className={FIELD}
               value={chosenVersion}
               onChange={e => setVersionId(e.target.value)}
             >
@@ -129,7 +131,7 @@ export function NewReviewForm({
                   {d.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <p className="text-xs text-muted-foreground">
               The current version of each Word or PDF document on a hired matter. The matter&apos;s design sheet decides
               which conditional rules apply.
@@ -144,11 +146,11 @@ export function NewReviewForm({
               className="block text-sm"
               onChange={e => setFile(e.target.files?.[0] ?? null)}
             />
-            <input
+            <Input
               aria-label="Name for this document"
               type="text"
               placeholder="Name (optional), e.g. Smith — 2019 will from prior counsel"
-              className={SELECT}
+              className={FIELD}
               value={label}
               onChange={e => setLabel(e.target.value)}
             />
@@ -162,13 +164,13 @@ export function NewReviewForm({
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Playbook</legend>
-        <select aria-label="Playbook" className={SELECT} value={slug} onChange={e => setSlug(e.target.value)}>
+        <NativeSelect aria-label="Playbook" className={FIELD} value={slug} onChange={e => setSlug(e.target.value)}>
           {playbooks.map(p => (
             <option key={p.slug} value={p.slug}>
               {p.title}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {playbook ? (
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer">{playbook.rules.length} rules</summary>

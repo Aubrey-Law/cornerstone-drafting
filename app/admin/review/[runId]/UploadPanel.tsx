@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { NativeSelect } from '@/components/ui/native-select'
 import { linkUpload, reviewUploadAgain, type LinkUploadState } from './actions'
 
 const INITIAL: LinkUploadState = { ok: null, message: null }
@@ -58,7 +59,7 @@ export function UploadPanel({
   }
 
   return (
-    <div className="flex flex-wrap items-start gap-x-8 gap-y-3 pt-2 text-xs" data-testid="upload-panel">
+    <div className="flex flex-wrap items-start gap-x-8 gap-y-3 rounded-lg border border-border bg-card p-3 text-xs shadow-xs" data-testid="upload-panel">
       <form action={action} className="flex flex-wrap items-center gap-2">
         <input type="hidden" name="reviewUploadId" value={reviewUploadId} />
         <input type="hidden" name="runId" value={runId} />
@@ -76,7 +77,7 @@ export function UploadPanel({
             ) : (
               <>
                 To add it to the matter&apos;s documents, use Add to documents on the matter&apos;s{' '}
-                <Link href={`/admin/matters/${linkedMatterId}?tab=documents`} className="underline underline-offset-4">
+                <Link href={`/admin/matters/${linkedMatterId}?tab=documents`} className="font-medium text-primary hover:underline">
                   Documents tab
                 </Link>
                 .
@@ -86,12 +87,12 @@ export function UploadPanel({
         ) : null}
         {/* Keyed on the saved link so the picker resets to it when the page
             refreshes after saving, rather than keeping a stale choice. */}
-        <select
+        <NativeSelect
           key={linkedMatterId ?? 'none'}
           name="matterId"
           aria-label="Link to matter"
           defaultValue={linkedMatterId ?? ''}
-          className="h-8 max-w-64 rounded-md border border-input bg-transparent px-2"
+          className="h-8 w-auto max-w-64"
         >
           <option value="">No matter</option>
           {matters.map((matter) => (
@@ -99,7 +100,7 @@ export function UploadPanel({
               {matter.title}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <Button type="submit" variant="outline" size="sm" disabled={linking}>
           {linking ? 'Saving…' : 'Save link'}
         </Button>
@@ -112,18 +113,18 @@ export function UploadPanel({
 
       {playbooks.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <NativeSelect
             aria-label="Playbook for another review"
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
-            className="h-8 max-w-64 rounded-md border border-input bg-transparent px-2"
+            className="h-8 w-auto max-w-64"
           >
             {playbooks.map((playbook) => (
               <option key={playbook.slug} value={playbook.slug}>
                 {playbook.title}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <Button type="button" size="sm" onClick={() => void reviewAgain()} disabled={queueing}>
             {queueing ? 'Queueing…' : 'Review again'}
           </Button>

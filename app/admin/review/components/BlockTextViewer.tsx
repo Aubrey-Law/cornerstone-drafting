@@ -67,7 +67,7 @@ export function BlockTextViewer({
               {overlaps ? (
                 <>
                   {block.text.slice(0, from - block.charStart)}
-                  <mark className="rounded bg-warning/25 px-0.5 text-foreground">
+                  <mark className="rounded bg-amber-bg px-0.5 text-foreground ring-1 ring-amber-border">
                     {block.text.slice(from - block.charStart, to - block.charStart)}
                   </mark>
                   {block.text.slice(to - block.charStart)}

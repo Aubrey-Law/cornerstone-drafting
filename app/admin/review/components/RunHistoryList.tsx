@@ -7,12 +7,12 @@ import type { RunSummary } from '@/lib/review/history'
  */
 export function RunHistoryList({ runs, showMatter = true }: { runs: RunSummary[]; showMatter?: boolean }) {
   return (
-    <ul className="divide-y divide-border border-y border-border" data-testid="run-history">
+    <ul className="divide-y divide-border" data-testid="run-history">
       {runs.map(run => (
         <li key={run.runId}>
           <Link
             href={`/admin/review/${run.runId}`}
-            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 py-3 text-sm hover:bg-accent"
+            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm transition-colors hover:bg-accent"
           >
             <span className="min-w-0">
               <span className="font-medium">{run.documentName}</span>

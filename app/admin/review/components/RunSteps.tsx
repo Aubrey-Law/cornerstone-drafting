@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import type { RunStatus, RunStep } from '@/lib/runs/steps'
+import { TONE_NOTICE } from '@/lib/ui/tone'
 
 /**
  * What each unit of a run did, and what retrying it would cost.
@@ -75,7 +76,7 @@ export function RunSteps({
       </ul>
 
       {retryMessage ? (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+        <p role="alert" className={TONE_NOTICE.danger}>
           {retryMessage}
         </p>
       ) : null}

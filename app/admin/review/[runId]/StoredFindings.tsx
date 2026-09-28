@@ -9,6 +9,7 @@ import { BlockTextViewer } from '../components/BlockTextViewer'
 import { FindingsList } from '../components/FindingsList'
 import { RunSteps } from '../components/RunSteps'
 import { recordDisposition, retryRun } from './actions'
+import { TONE_NOTICE } from '@/lib/ui/tone'
 
 /**
  * A recorded review, read back.
@@ -62,7 +63,7 @@ export function StoredFindings({
     <div className="grid flex-1 grid-cols-1 lg:grid-cols-2">
       <section className="border-b border-border lg:border-b-0 lg:border-r">
         {state.message ? (
-          <p role="alert" className="m-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <p role="alert" className={`m-4 ${TONE_NOTICE.danger}`}>
             {state.message}
           </p>
         ) : null}

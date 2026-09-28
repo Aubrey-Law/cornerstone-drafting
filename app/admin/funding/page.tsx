@@ -1,10 +1,19 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Landmark } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { PageHeader } from '@/components/PageHeader'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/funding/format'
 import { loadFundingRows } from '@/lib/funding/repository'
 import { summariseMatters } from '@/lib/funding/rollup'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
+import { TONE_BADGE } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Funding' }
 
 /**
  * The trust-funding worklist, ordered by exposure. An unfunded trust is the
@@ -21,48 +30,55 @@ export default async function FundingPage() {
   const outstanding = matters.filter(m => !m.summary.isComplete)
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <header className="space-y-1">
-        <h1 className="text-lg font-semibold tracking-tight">Funding</h1>
-        {matters.length === 0 ? null : (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{formatMoney(totalUnfunded)}</span> sits
-            outside the plans on {outstanding.length} {outstanding.length === 1 ? 'matter' : 'matters'}.
-          </p>
-        )}
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        title="Funding"
+        description={
+          matters.length === 0 ? undefined : (
+            <>
+              <span className="font-medium text-foreground">{formatMoney(totalUnfunded)}</span> sits
+              outside the plans on {outstanding.length} {outstanding.length === 1 ? 'matter' : 'matters'}.
+            </>
+          )
+        }
+      />
 
-      {matters.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No hired matter has assets recorded at intake yet. Funding is tracked against the assets
-          the client listed, so there is nothing to show until one does.
-        </p>
-      ) : (
-        <ul className="divide-y divide-border border-y border-border" data-testid="funding-worklist">
-          {matters.map(matter => (
-            <li key={matter.matterId}>
-              <Link
-                href={`/admin/funding/${matter.matterId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 hover:bg-accent"
-              >
-                <span className="font-medium">{matter.title}</span>
-                <span className="flex items-baseline gap-3 text-sm">
-                  {matter.summary.isComplete ? (
-                    <span className="text-muted-foreground">Fully funded</span>
-                  ) : (
-                    <>
-                      <span className="font-medium">{formatMoney(matter.summary.unfundedValue)}</span>
-                      <span className="text-muted-foreground">
-                        {matter.summary.unfundedCount} of {matter.summary.total} outstanding
-                      </span>
-                    </>
-                  )}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Card className="gap-0 py-0">
+        {matters.length === 0 ? (
+          <EmptyState
+            icon={Landmark}
+            title="Nothing to fund yet"
+            description="No hired matter has assets recorded at intake yet. Funding is tracked against the assets the client listed, so there is nothing to show until one does."
+          />
+        ) : (
+          <ul className="divide-y divide-border" data-testid="funding-worklist">
+            {matters.map(matter => (
+              <li key={matter.matterId}>
+                <Link
+                  href={`/admin/funding/${matter.matterId}`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-accent"
+                >
+                  <span className="text-sm font-medium">{matter.title}</span>
+                  <span className="flex items-center gap-3 text-sm">
+                    {matter.summary.isComplete ? (
+                      <Badge variant="outline" className={cn('text-micro', TONE_BADGE.success)}>
+                        Fully funded
+                      </Badge>
+                    ) : (
+                      <>
+                        <span className="font-medium tabular-nums">{formatMoney(matter.summary.unfundedValue)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {matter.summary.unfundedCount} of {matter.summary.total} outstanding
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }

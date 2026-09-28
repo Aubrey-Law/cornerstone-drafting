@@ -1,10 +1,16 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { notFound } from 'next/navigation'
 import { loadReviewRunIdForUpload, loadScan, SCAN_LABEL, scanStatusLabel, type Importance } from '@/lib/review/scans'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { ScanItemsList } from './ScanItemsList'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Word check' }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -28,27 +34,33 @@ export default async function SavedScanPage({ params }: { params: Promise<{ scan
   for (const item of scan.items) counts[item.importance] += 1
 
   return (
-    <div className="flex flex-col">
-      <header className="space-y-1 border-b border-border px-6 py-4">
-        <nav className="flex gap-3 text-xs text-muted-foreground">
-          <Link href="/admin/review" className="underline underline-offset-4">
-            Reviews
-          </Link>
-          {reviewRunId ? (
-            <Link href={`/admin/review/${reviewRunId}`} className="underline underline-offset-4">
-              The review it ran with
-            </Link>
-          ) : null}
-          {scan.matterId ? (
-            <Link href={`/admin/matters/${scan.matterId}?tab=reviews`} className="underline underline-offset-4">
-              Matter
-            </Link>
-          ) : null}
-        </nav>
-        <h1 className="text-lg font-semibold tracking-tight">{SCAN_LABEL[scan.kind]}</h1>
-        <p className="text-sm">
-          {scan.documentName} <span className="text-xs text-muted-foreground">· from Word</span>
-        </p>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="From Word"
+        title={SCAN_LABEL[scan.kind]}
+        description={scan.documentName}
+        actions={
+          <>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/review">
+                <ArrowLeft className="size-4" aria-hidden />
+                All reviews
+              </Link>
+            </Button>
+            {reviewRunId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/admin/review/${reviewRunId}`}>The review it ran with</Link>
+              </Button>
+            ) : null}
+            {scan.matterId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/admin/matters/${scan.matterId}?tab=reviews`}>Open matter</Link>
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+      <div className="space-y-1">
         <p className="text-xs text-muted-foreground" data-testid="scan-counts">
           {counts.important} important · {counts.notable} notable · {counts.minor} minor · {scanStatusLabel(scan)} ·{' '}
           {scan.startedAt.slice(0, 10)}
@@ -59,15 +71,17 @@ export default async function SavedScanPage({ params }: { params: Promise<{ scan
             Not checked: {scan.failures.map(f => `section ${f.section} (${f.reason})`).join(', ')}
           </p>
         ) : null}
-      </header>
+      </div>
 
-      {scan.items.length === 0 ? (
-        <p className="px-6 py-5 text-sm text-muted-foreground">
-          {scan.status === 'completed' ? 'Nothing found.' : 'No items were saved.'}
-        </p>
-      ) : (
-        <ScanItemsList scanId={scan.scanId} items={scan.items} />
-      )}
+      <Card className="gap-0 py-0">
+        {scan.items.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-muted-foreground">
+            {scan.status === 'completed' ? 'Nothing found.' : 'No items were saved.'}
+          </p>
+        ) : (
+          <ScanItemsList scanId={scan.scanId} items={scan.items} />
+        )}
+      </Card>
     </div>
   )
 }

@@ -2,18 +2,21 @@
 
 import { useActionState, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import type { Ceremony } from '@/lib/ceremony/repository'
 import { ceremonyProblems, type Problem } from '@/lib/ceremony/validation'
 import { documentLabel, requirementsFor, type DocumentKind } from '@/lib/execution/requirements'
 import { formatDate } from '@/lib/funding/format'
+import { TONE_NOTICE, type Tone } from '@/lib/ui/tone'
 import { recordCeremony, recordCeremonyDocument } from './ceremonyActions'
 
-const SEVERITY_CLASS: Record<Problem['severity'], string> = {
-  invalid: 'border-destructive/50 bg-destructive/10',
-  incomplete: 'border-warning/50 bg-warning/10',
+const SEVERITY_TONE: Record<Problem['severity'], Tone> = {
+  invalid: 'danger',
+  incomplete: 'warning',
 }
 
 function ProblemList({ problems }: { problems: Problem[] }) {
@@ -23,7 +26,7 @@ function ProblemList({ problems }: { problems: Problem[] }) {
       {problems.map((problem) => (
         <li
           key={`${problem.documentKind ?? 'ceremony'}:${problem.message}`}
-          className={`rounded-md border p-3 text-sm ${SEVERITY_CLASS[problem.severity]}`}
+          className={TONE_NOTICE[SEVERITY_TONE[problem.severity]]}
         >
           <span className="font-medium">
             {problem.severity === 'invalid' ? 'May not be valid. ' : 'Still outstanding. '}
@@ -84,110 +87,107 @@ export function CeremonyRecord({
   const signingProxy = kinds.includes('health_care_proxy')
 
   return (
-    <section className="space-y-4" data-testid="ceremony-record">
-      <div>
-        <h2 className="text-sm font-semibold">The signing</h2>
-        <p className="text-xs text-muted-foreground">
+    <Card data-testid="ceremony-record">
+      <CardHeader className="border-b">
+        <CardTitle className="text-sm">The signing</CardTitle>
+        <CardDescription className="text-xs">
           Who was in the room and what they signed. This is the file&rsquo;s answer years later,
           when nobody remembers.
-        </p>
-      </div>
+        </CardDescription>
+      </CardHeader>
 
-      <form action={submit} className="grid gap-3 rounded-md border border-border p-4 sm:grid-cols-2">
-        <input type="hidden" name="matterId" value={matterId} />
-        <input type="hidden" name="ceremonyId" value={ceremony?.id ?? ''} />
+      <CardContent className="space-y-4">
+        <form action={submit} className="grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="matterId" value={matterId} />
+          <input type="hidden" name="ceremonyId" value={ceremony?.id ?? ''} />
 
-        <div className="space-y-1.5">
-          <Label htmlFor="scheduledFor">When</Label>
-          <Input
-            id="scheduledFor"
-            name="scheduledFor"
-            type="datetime-local"
-            defaultValue={ceremony?.scheduledFor?.slice(0, 16) ?? ''}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="location">Where</Label>
-          <Input id="location" name="location" defaultValue={ceremony?.location ?? ''} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="witnessOneName">First witness</Label>
-          <Input id="witnessOneName" name="witnessOneName" {...field('witnessOneName')} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="witnessTwoName">Second witness</Label>
-          <Input id="witnessTwoName" name="witnessTwoName" {...field('witnessTwoName')} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="notaryName">Notary</Label>
-          <Input id="notaryName" name="notaryName" {...field('notaryName')} />
-        </div>
-        {signingProxy ? (
           <div className="space-y-1.5">
-            <Label htmlFor="healthCareAgentName">Health care agent</Label>
-            <Input id="healthCareAgentName" name="healthCareAgentName" {...field('healthCareAgentName')} />
-            {/* Asked because the agent may not witness their own appointment.
-                Making someone name them is most of the check. */}
-            <p className="text-xs text-muted-foreground">
-              Named so the proxy can be checked: the agent may not witness it.
-            </p>
+            <Label htmlFor="scheduledFor">When</Label>
+            <Input
+              id="scheduledFor"
+              name="scheduledFor"
+              type="datetime-local"
+              defaultValue={ceremony?.scheduledFor?.slice(0, 16) ?? ''}
+            />
           </div>
-        ) : null}
+          <div className="space-y-1.5">
+            <Label htmlFor="location">Where</Label>
+            <Input id="location" name="location" defaultValue={ceremony?.location ?? ''} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="witnessOneName">First witness</Label>
+            <Input id="witnessOneName" name="witnessOneName" {...field('witnessOneName')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="witnessTwoName">Second witness</Label>
+            <Input id="witnessTwoName" name="witnessTwoName" {...field('witnessTwoName')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="notaryName">Notary</Label>
+            <Input id="notaryName" name="notaryName" {...field('notaryName')} />
+          </div>
+          {signingProxy ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="healthCareAgentName">Health care agent</Label>
+              <Input id="healthCareAgentName" name="healthCareAgentName" {...field('healthCareAgentName')} />
+              {/* Asked because the agent may not witness their own appointment.
+                  Making someone name them is most of the check. */}
+              <p className="text-xs text-muted-foreground">
+                Named so the proxy can be checked: the agent may not witness it.
+              </p>
+            </div>
+          ) : null}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="status">Status</Label>
-          <select
-            id="status"
-            name="status"
-            defaultValue={ceremony?.status ?? 'scheduled'}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            <option value="scheduled">Scheduled</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="note">Note</Label>
-          <Input id="note" name="note" defaultValue={ceremony?.note ?? ''} />
-        </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="status">Status</Label>
+            <NativeSelect id="status" name="status" defaultValue={ceremony?.status ?? 'scheduled'}>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </NativeSelect>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="note">Note</Label>
+            <Input id="note" name="note" defaultValue={ceremony?.note ?? ''} />
+          </div>
 
-        {state.message ? (
-          <p role="alert" className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-            {state.message}
+          {state.message ? (
+            <p role="alert" className={`sm:col-span-2 ${TONE_NOTICE.danger}`}>
+              {state.message}
+            </p>
+          ) : null}
+
+          <div className="sm:col-span-2">
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? 'Saving…' : ceremony ? 'Save the appointment' : 'Start the record'}
+            </Button>
+          </div>
+        </form>
+
+        <ProblemList problems={problems} />
+
+        {ceremony ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">What was signed</h3>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {kinds.map((kind) => (
+                <DocumentEntry
+                  key={kind}
+                  matterId={matterId}
+                  ceremonyId={ceremony.id}
+                  kind={kind}
+                  record={ceremony.documents.find((doc) => doc.documentKind === kind) ?? null}
+                />
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Start the record above, then tick off each document as it is signed.
           </p>
-        ) : null}
-
-        <div className="sm:col-span-2">
-          <Button type="submit" size="sm" disabled={pending}>
-            {pending ? 'Saving…' : ceremony ? 'Save the appointment' : 'Start the record'}
-          </Button>
-        </div>
-      </form>
-
-      <ProblemList problems={problems} />
-
-      {ceremony ? (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold">What was signed</h3>
-          <ul className="divide-y divide-border border-y border-border">
-            {kinds.map((kind) => (
-              <DocumentEntry
-                key={kind}
-                matterId={matterId}
-                ceremonyId={ceremony.id}
-                kind={kind}
-                record={ceremony.documents.find((doc) => doc.documentKind === kind) ?? null}
-              />
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Start the record above, then tick off each document as it is signed.
-        </p>
-      )}
-    </section>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -207,7 +207,7 @@ function DocumentEntry({
   const requirement = requirementsFor(kind)
 
   return (
-    <li className="py-4" data-testid={`ceremony-${kind}`}>
+    <li className="px-4 py-3" data-testid={`ceremony-${kind}`}>
       <form action={submit} className="space-y-3">
         <input type="hidden" name="matterId" value={matterId} />
         <input type="hidden" name="ceremonyId" value={ceremonyId} />
@@ -274,7 +274,7 @@ function DocumentEntry({
         ) : null}
 
         {state.message ? (
-          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <p role="alert" className={TONE_NOTICE.danger}>
             {state.message}
           </p>
         ) : null}

@@ -1,8 +1,17 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { ShieldCheck } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { PageHeader } from '@/components/PageHeader'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { loadFiduciaryOverview } from '@/lib/fiduciary/view'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
+import { TONE_BADGE } from '@/lib/ui/tone'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Fiduciaries' }
 
 /**
  * Every hired matter with appointments recorded, gaps first. A gap is an
@@ -16,34 +25,45 @@ export default async function FiduciariesPage() {
   const withGaps = matters.filter(matter => matter.gaps > 0).length
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <header className="space-y-1">
-        <h1 className="text-lg font-semibold tracking-tight">Fiduciaries</h1>
-        <p className="text-sm text-muted-foreground">
-          Who holds which office, across every document at once, for each hired matter.
-          {matters.length > 0 ? ` ${withGaps} of ${matters.length} ${matters.length === 1 ? 'has' : 'have'} a gap.` : ''}
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        title="Fiduciaries"
+        description={
+          <>
+            Who holds which office, across every document at once, for each hired matter.
+            {matters.length > 0 ? ` ${withGaps} of ${matters.length} ${matters.length === 1 ? 'has' : 'have'} a gap.` : ''}
+          </>
+        }
+      />
 
-      {matters.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No hired matter has appointments recorded yet.</p>
-      ) : (
-        <ul className="divide-y divide-border border-y border-border" data-testid="fiduciary-overview">
-          {matters.map(matter => (
-            <li key={matter.matterId}>
-              <Link
-                href={`/admin/matters/${matter.matterId}?tab=people`}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 hover:bg-accent"
-              >
-                <span className="font-medium">{matter.title}</span>
-                <span className={matter.gaps > 0 ? 'text-sm text-warning' : 'text-sm text-muted-foreground'}>
-                  {matter.gaps === 0 ? 'No gaps' : `${matter.gaps} ${matter.gaps === 1 ? 'gap' : 'gaps'}`}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Card className="gap-0 py-0">
+        {matters.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="No appointments yet"
+            description="No hired matter has appointments recorded yet."
+          />
+        ) : (
+          <ul className="divide-y divide-border" data-testid="fiduciary-overview">
+            {matters.map(matter => (
+              <li key={matter.matterId}>
+                <Link
+                  href={`/admin/matters/${matter.matterId}?tab=people`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-accent"
+                >
+                  <span className="text-sm font-medium">{matter.title}</span>
+                  <Badge
+                    variant="outline"
+                    className={cn('text-micro', TONE_BADGE[matter.gaps > 0 ? 'warning' : 'neutral'])}
+                  >
+                    {matter.gaps === 0 ? 'No gaps' : `${matter.gaps} ${matter.gaps === 1 ? 'gap' : 'gaps'}`}
+                  </Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }

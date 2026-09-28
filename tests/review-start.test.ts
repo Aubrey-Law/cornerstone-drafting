@@ -98,6 +98,23 @@ beforeEach(() => {
   auth.apiUser = 'staff-1'
 })
 
+
+/** The first element in a server component's tree whose props carry `key`. */
+function findPropsWith(node: unknown, key: string): Record<string, unknown> | undefined {
+  if (!node || typeof node !== 'object') return undefined
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findPropsWith(child, key)
+      if (found) return found
+    }
+    return undefined
+  }
+  const props = (node as { props?: Record<string, unknown> }).props
+  if (!props) return undefined
+  if (key in props) return props
+  return findPropsWith(props.children, key)
+}
+
 describe('startReview', () => {
   it('queues a review of a filed document with its matter, its facts pinned, and a pending step per rule', async () => {
     const client = seed()
@@ -197,10 +214,8 @@ describe('the Start a review page', () => {
 
   it('offers hired matters’ current documents and published playbooks, preselecting ?matter=', async () => {
     auth.client = asClient(seed())
-    const element = (await NewReviewPage({ searchParams: Promise.resolve({ matter: MATTER }) })) as {
-      props: { children: Array<{ props?: Record<string, unknown> } | false | null> }
-    }
-    const form = element.props.children.find(child => child && child.props && 'matters' in child.props) as {
+    const element = await NewReviewPage({ searchParams: Promise.resolve({ matter: MATTER }) })
+    const form = { props: findPropsWith(element, 'matters') } as {
       props: { matters: unknown; initialMatterId: string; defaultSlug: string; playbooks: Array<{ rules: unknown[] }> }
     }
     expect(form.props.initialMatterId).toBe(MATTER)

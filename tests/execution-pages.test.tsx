@@ -96,7 +96,8 @@ describe('/admin/execution', () => {
     const rows = [...screen.getByTestId('execution-worklist').querySelectorAll('li')]
     expect(rows).toHaveLength(1)
     expect(rows[0].textContent).toContain('Smith Estate Plan')
-    expect(rows[0].textContent).toContain('2 documents recognised · 1 to confirm')
+    expect(rows[0].textContent).toContain('2 documents recognised')
+    expect(rows[0].textContent).toContain('1 to confirm')
     expect(rows[0].querySelector('a')).toHaveAttribute('href', `/admin/execution/${SMITH}`)
   })
 })
@@ -104,7 +105,8 @@ describe('/admin/execution', () => {
 describe('/admin/execution/[matterId]', () => {
   it('renders the checklist and the signing record for a hired matter', async () => {
     render(await MatterExecutionPage({ params: Promise.resolve({ matterId: SMITH }) }))
-    expect(screen.getByRole('link', { name: 'Smith Estate Plan' })).toHaveAttribute('href', `/admin/matters/${SMITH}?tab=documents`)
+    expect(screen.getByRole('heading', { name: 'Smith Estate Plan' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open matter' })).toHaveAttribute('href', `/admin/matters/${SMITH}?tab=documents`)
     expect(screen.getByText(/Scan 0042\.pdf/)).toBeInTheDocument()
   })
 
