@@ -69,19 +69,23 @@ function invoice(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
 
 function renderDetail(
   overrides: Partial<InvoiceDetail> = {},
-  options: { pdfConversionEnabled?: boolean } = {},
+  options: { pdfConversionEnabled?: boolean; paymentsEnabled?: boolean } = {},
 ) {
   return render(
     <InvoiceDetailClient
       invoice={invoice(overrides)}
       firm={{ name: 'Aubrey Law', remitTo: 'Aubrey Law · Needham, MA' }}
-      paymentsEnabled={false}
+      paymentsEnabled={options.paymentsEnabled ?? false}
       pdfConversionEnabled={options.pdfConversionEnabled ?? false}
     />,
   )
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
+
+async function openInvoiceActions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /More invoice actions/ }))
+}
 
 describe('issuing from the invoice detail page', () => {
   beforeEach(() => {
@@ -96,10 +100,12 @@ describe('issuing from the invoice detail page', () => {
 
   // Before this existed, a saved draft had no action on its own page at all —
   // the only way to issue was the composer you had already left.
-  it('offers both issue actions on a draft', () => {
+  it('offers both issue actions on a draft', async () => {
+    const user = userEvent.setup()
     renderDetail()
     expect(screen.getByRole('button', { name: /Issue & send/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Issue & download/ })).toBeTruthy()
+    await openInvoiceActions(user)
+    expect(screen.getByRole('menuitem', { name: /Issue & download/ })).toBeTruthy()
   })
 
   it('issues and emails', async () => {
@@ -127,7 +133,8 @@ describe('issuing from the invoice detail page', () => {
     download.mockResolvedValue(undefined)
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /Issue & download/ }))
 
     await waitFor(() => expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ send: false }))
     await waitFor(() => expect(download).toHaveBeenCalledWith({
@@ -146,7 +153,8 @@ describe('issuing from the invoice detail page', () => {
     }))
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /Issue & download/ }))
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
       'Invoice issued, but no document was produced to download',
@@ -168,38 +176,44 @@ describe('issuing from the invoice detail page', () => {
     ))
   })
 
-  it('drops the issue actions once the invoice is issued', () => {
+  it('drops the issue actions once the invoice is issued', async () => {
+    const user = userEvent.setup()
     renderDetail({ status: 'issued', number: '2026-0004', issuedAt: '2026-08-17T12:00:00.000Z' })
 
     expect(screen.queryByRole('button', { name: /Issue & send/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Issue & download/ })).toBeNull()
-    // Replaced by the post-issue actions.
-    expect(screen.getByRole('button', { name: /^Send$/ })).toBeTruthy()
+    await openInvoiceActions(user)
+    expect(screen.getByRole('menuitem', { name: /^Send invoice$/ })).toBeTruthy()
   })
 
   // The RPCs behind both of these shipped with the invoice schema, but nothing
   // in the UI called them: a draft could only be issued or abandoned in place.
-  it('links a draft to its editor', () => {
+  it('links a draft to its editor', async () => {
+    const user = userEvent.setup()
     renderDetail()
 
-    expect(screen.getByRole('link', { name: /^Edit$/ }).getAttribute('href'))
+    await openInvoiceActions(user)
+    expect(screen.getByRole('link', { name: /^Edit draft$/ }).getAttribute('href'))
       .toBe('/admin/billing/invoices/inv-1/edit')
   })
 
-  it('offers no editor once the invoice is issued', () => {
+  it('offers no editor once the invoice is issued', async () => {
+    const user = userEvent.setup()
     renderDetail({ status: 'issued', number: '2026-0004' })
 
-    expect(screen.queryByRole('link', { name: /^Edit$/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^Edit draft$/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Discard$/ })).toBeNull()
+    await openInvoiceActions(user)
     // Void is the issued-invoice equivalent: it keeps the number on the record.
-    expect(screen.getByRole('button', { name: /^Void$/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Void invoice$/ })).toBeTruthy()
   })
 
   it('confirms before discarding, naming what goes back to the ledger', async () => {
     const user = userEvent.setup()
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /^Discard draft$/ }))
 
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog.textContent).toContain('1 charge')
@@ -212,7 +226,8 @@ describe('issuing from the invoice detail page', () => {
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) })
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /^Discard draft$/ }))
     await user.click(await screen.findByRole('button', { name: /Discard draft/ }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
@@ -336,7 +351,8 @@ describe('issuing from the invoice detail page', () => {
     })
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /Issue & download/ }))
 
     await waitFor(() => expect(download).toHaveBeenCalled())
     expect(toast.warning).toHaveBeenCalledWith(
@@ -354,11 +370,80 @@ describe('issuing from the invoice detail page', () => {
     })
     renderDetail()
 
-    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+    await openInvoiceActions(user)
+    await user.click(screen.getByRole('menuitem', { name: /^Discard draft$/ }))
     await user.click(await screen.findByRole('button', { name: /Discard draft/ }))
 
     await waitFor(() => expect(toast.error)
       .toHaveBeenCalledWith('Only a draft invoice can be discarded'))
     expect(navigation.push).not.toHaveBeenCalled()
+  })
+
+  it('keeps one draft primary action and moves secondary actions into a menu', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    expect(screen.getByRole('button', { name: /^Issue & send$/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Issue & download$/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^Edit$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Discard$/ })).toBeNull()
+
+    await openInvoiceActions(user)
+
+    expect(await screen.findByRole('link', { name: /^Edit draft$/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Issue & download$/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Discard draft$/ })).toBeTruthy()
+  })
+
+  it('reviews an overdue reminder before sending it', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValue(Response.json({ sent: true }))
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      issuedAt: '2026-08-17T12:00:00.000Z',
+      sentAt: '2026-08-17T13:00:00.000Z',
+      dueDate: '2026-08-31',
+      overdue: true,
+      daysPastDue: 28,
+      lastRemindedAt: '2026-09-14T14:30:00.000Z',
+      pdfDocumentId: 'doc-pdf',
+    })
+
+    expect(screen.queryByRole('button', { name: /^Send reminder$/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^Review reminder$/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Review payment reminder/ })
+    expect(dialog.textContent).toContain('chen@example.com')
+    expect(dialog.textContent).toContain('Firm')
+    expect(dialog.textContent).toContain('Invoice PDF attached')
+    expect(dialog.textContent).toContain('Last reminder')
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /^Send reminder$/ }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      tone: 'firm',
+      attachInvoice: true,
+    })
+  })
+
+  it('uses record payment as the primary action when an open invoice is not overdue', async () => {
+    const user = userEvent.setup()
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      issuedAt: '2026-08-17T12:00:00.000Z',
+      pdfDocumentId: 'doc-pdf',
+    }, { paymentsEnabled: true })
+
+    expect(screen.getByRole('button', { name: /^Record payment$/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Send$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Create pay link$/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /More invoice actions/ }))
+    expect(await screen.findByRole('menuitem', { name: /^Send invoice$/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Create pay link$/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Void invoice$/ })).toBeTruthy()
   })
 })
