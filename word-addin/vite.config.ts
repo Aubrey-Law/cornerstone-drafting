@@ -80,9 +80,30 @@ function assertSignInIsPossible(mode: string, envDir: string): void {
   console.warn(`[word-addin] building without Supabase credentials — ${detail}. Sign-in will not work.`)
 }
 
+/** The only two values from the environment that the pane is allowed to carry. */
+const PUBLISHED_ENV = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'] as const
+
 export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
   const envDir = resolve(import.meta.dirname, '..')
   if (command === 'build') assertSignInIsPossible(mode, envDir)
+
+  /**
+   * Name each value instead of inlining a prefix.
+   *
+   * `envPrefix: ['VITE_', 'NEXT_PUBLIC_']` used to put every matching variable
+   * into `import.meta.env`. On Vercel that prefix is not ours alone: it injects
+   * NEXT_PUBLIC_VERCEL_GIT_COMMIT_MESSAGE, _COMMIT_SHA, _REPO_OWNER,
+   * _PROJECT_ID, the author's login and the internal deployment hostnames. All
+   * of them shipped in the pane's bundle, which is served unauthenticated — so
+   * every commit message reached anyone who could fetch the URL.
+   *
+   * A prefix publishes whatever the platform decides to put behind it. A list
+   * publishes what we chose.
+   */
+  const env = loadEnv(mode, envDir, ['NEXT_PUBLIC_'])
+  const published = Object.fromEntries(
+    PUBLISHED_ENV.map((name) => [`import.meta.env.${name}`, JSON.stringify(env[name] ?? '')]),
+  )
 
   return {
   plugins: [react(), tailwindcss()],
@@ -119,6 +140,7 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
    * bundle announces itself instead of being mistaken for broken code.
    */
   define: {
+    ...published,
     __BUILD_STAMP__: JSON.stringify(new Date().toISOString().slice(0, 19).replace('T', ' ')),
   },
   /**
@@ -133,7 +155,9 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
    * app it signs into.
    */
   envDir,
-  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+  // Deliberately NOT ['VITE_', 'NEXT_PUBLIC_'] — see `published` above. Vite's
+  // own BASE_URL/MODE/DEV/PROD/SSR are unaffected; they are not env-file values.
+  envPrefix: ['VITE_CORNERSTONE_'],
   resolve: {
     alias: { '@': resolve(import.meta.dirname, 'src') },
   },
