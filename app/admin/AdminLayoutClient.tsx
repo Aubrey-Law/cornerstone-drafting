@@ -24,7 +24,7 @@ import {
   MessageSquareText,
   Sun,
 } from 'lucide-react'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -290,7 +290,7 @@ export default function AdminLayoutClient({
           navGroups={ADMIN_NAV_GROUPS}
           onNavigate={() => setMobileOpen(false)}
         />
-        <div className={cn('mt-auto border-t border-border p-2', compact && 'flex justify-center')}>
+        <div className={cn('mt-auto shrink-0 border-t border-border bg-card p-2', compact && 'flex justify-center')}>
           <ThemeToggle collapsed={compact} variant="sidebar" />
         </div>
       </aside>
@@ -362,7 +362,8 @@ export default function AdminLayoutClient({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="flex w-56 flex-col p-0">
           <div className="flex h-14 items-center border-b border-border px-4">
-            <span className="text-sm font-semibold">Cornerstone</span>
+            <SheetTitle className="text-sm font-semibold">Cornerstone</SheetTitle>
+            <SheetDescription className="sr-only">Main navigation</SheetDescription>
           </div>
           <AdminSidebar
             pathname={pathname}
@@ -373,7 +374,7 @@ export default function AdminLayoutClient({
             navGroups={ADMIN_NAV_GROUPS}
             onNavigate={() => setMobileOpen(false)}
           />
-          <div className="mt-auto border-t border-border p-2">
+          <div className="mt-auto shrink-0 border-t border-border bg-card p-2">
             <ThemeToggle variant="sidebar" />
           </div>
         </SheetContent>
