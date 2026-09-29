@@ -52,7 +52,10 @@ function MatterRow({
 }) {
   const milestone = matter.last_milestone_at ? Date.parse(matter.last_milestone_at) : null
   const milestoneMs = milestone !== null && Number.isFinite(milestone) ? milestone : null
-  const subtitle = [matter.client_name, formatLastMilestone(milestoneMs)]
+  // The title is already the client's name, so the second line carries what
+  // tells two of that client's matters apart: when it last moved, then its
+  // number. The date goes first so truncation clips the number, not the date.
+  const subtitle = [formatLastMilestone(milestoneMs), matter.matter_number]
     .filter(Boolean)
     .join(' · ')
 
@@ -161,9 +164,11 @@ export function AdminSidebar({
   const activeMatterId = pathname.match(/^\/admin\/matters\/(?!new$|list$)([^/]+)/)?.[1]
 
   return (
-    <nav className="flex min-h-0 flex-1 flex-col p-2">
+    // One scroll area between the logo and the theme footer. Without it a short
+    // window pushed the last items under the footer instead of scrolling.
+    <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
       {navGroups.map(group => (
-        <div key={group} className={cn('flex flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
+        <div key={group} className={cn('flex shrink-0 flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
           {!compact ? (
             <p className="px-3 pb-1 pt-2 text-micro font-semibold uppercase tracking-wider text-muted-foreground/70">
               {group}
@@ -250,13 +255,13 @@ export function AdminSidebar({
         group labels are.
       */}
       {!compact && (matters.pinned.length > 0 || matters.recent.length > 0) && (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 pt-1">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-1">
           {matters.pinned.length > 0 && (
-            <div className="flex min-h-0 flex-col">
+            <div className="flex flex-col">
               <p className="px-3 pb-1 pt-2 text-micro font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Pinned
               </p>
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div>
                 {matters.pinned.map(matter => (
                   <MatterRow
                     key={matter.matter_id}
@@ -273,11 +278,14 @@ export function AdminSidebar({
           )}
 
           {/*
-            No heading. The recent list reads as a continuation of the matters
-            above it rather than as a second, separately-titled thing.
+            Headed like Pinned: below Tools and Settings, an unlabeled row of
+            matters read as a stray nav item rather than as the recent list.
           */}
           {matters.recent.length > 0 && (
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col">
+              <p className="px-3 pb-1 pt-2 text-micro font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Recent
+              </p>
               {matters.recent.map(matter => (
                 <MatterRow
                   key={matter.matter_id}
