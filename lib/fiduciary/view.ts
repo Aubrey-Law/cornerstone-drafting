@@ -1,6 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GeneratedDatabase } from '@/types/supabase'
-import { buildMatrix, matrixIssues, roleLabel, type ForParty, type IssueSeverity, type MatrixIssue } from './matrix'
+import {
+  buildMatrix,
+  matrixIssues,
+  roleLabel,
+  type FiduciaryRole,
+  type ForParty,
+  type IssueSeverity,
+  type MatrixIssue,
+} from './matrix'
 import { loadFiduciaries } from './repository'
 
 /**
@@ -13,6 +21,8 @@ import { loadFiduciaries } from './repository'
  */
 
 export interface FiduciaryChainView {
+  /** The office, for matching against the design sheet's slots. */
+  roleKey: FiduciaryRole
   role: string
   forParty: ForParty
   people: Array<{ name: string; isCoagent: boolean }>
@@ -59,6 +69,7 @@ export async function loadMatterFiduciaryView(
       message,
     })),
     chains: matrix.chains.map((chain) => ({
+      roleKey: chain.role,
       role: roleLabel(chain.role),
       forParty: chain.forParty,
       people: chain.people.map((person) => ({ name: person.name, isCoagent: person.isCoagent })),

@@ -6,13 +6,24 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { RunSummary } from '@/lib/review/history'
 import { RunHistoryList } from '@/app/admin/review/components/RunHistoryList'
+import { MatterFieldAuditsCard } from './MatterFieldAuditsCard'
 
 /**
- * The matter's recorded playbook reviews: of its filed documents, of prior
- * plans linked to it, and those run from the Word add-in against its drafts.
- * Loaded when the tab is opened, like the other tabs' data.
+ * The matter's Reviews tab: the checks run on its work. Playbook reviews of
+ * its filed documents, of prior plans linked to it, and of drafts reviewed
+ * from the Word add-in; and field audits of its design sheet. Loaded when the
+ * tab is opened, like the other tabs' data.
  */
 export function MatterReviewsTab({ matterId }: { matterId: string }) {
+  return (
+    <div className="space-y-4">
+      <MatterPlaybookReviewsCard matterId={matterId} />
+      <MatterFieldAuditsCard matterId={matterId} />
+    </div>
+  )
+}
+
+function MatterPlaybookReviewsCard({ matterId }: { matterId: string }) {
   const [runs, setRuns] = useState<RunSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,7 +48,7 @@ export function MatterReviewsTab({ matterId }: { matterId: string }) {
   return (
     <Card className="gap-0 py-0" data-testid="matter-reviews">
       <CardHeader className="border-b py-3 [.border-b]:pb-3">
-        <CardTitle className="text-sm">Reviews</CardTitle>
+        <CardTitle className="text-sm">Playbook reviews</CardTitle>
         <CardDescription className="text-xs">
           Playbook reviews of this matter&apos;s documents, its prior plans, and drafts reviewed from Word.
         </CardDescription>

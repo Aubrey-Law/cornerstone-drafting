@@ -35,7 +35,8 @@ vi.mock('next/navigation', () => ({
 import { loadFiduciaryOverview, loadMatterFiduciaryView } from '@/lib/fiduciary/view'
 import { GET } from '@/app/api/admin/matters/[id]/fiduciaries/route'
 import FiduciariesPage from '@/app/admin/fiduciaries/page'
-import { MatterFiduciaryMatrixCard } from '@/app/admin/matters/[id]/MatterFiduciaryMatrixCard'
+import { MatterFiduciaryCard } from '@/app/admin/matters/[id]/MatterFiduciaryCard'
+import { EMPTY_PLAN_MIRROR } from '@/lib/matter/planMirror'
 
 const SMITH = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const JONES = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -105,6 +106,7 @@ describe('the fiduciary view', () => {
       { name: 'Bob Smith', offices: ['Trustee'] },
     ])
     expect(view?.chains[0]).toEqual({
+      roleKey: 'trustee',
       role: 'Trustee',
       forParty: 'client',
       people: [
@@ -164,13 +166,13 @@ describe('the Fiduciaries page', () => {
   })
 })
 
-describe('the matter’s fiduciary check card', () => {
+describe('the matter’s fiduciaries card', () => {
   it('shows the matter’s gaps from the API', async () => {
     const view = await loadMatterFiduciaryView(asClient(seed()), SMITH)
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ fiduciaries: view }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<MatterFiduciaryMatrixCard matterId={SMITH} />)
+    render(<MatterFiduciaryCard matterId={SMITH} planMirror={EMPTY_PLAN_MIRROR} />)
     await waitFor(() => expect(screen.getByTestId('fiduciary-issues')).toBeTruthy())
     expect(fetchMock).toHaveBeenCalledWith(`/api/admin/matters/${SMITH}/fiduciaries`)
     expect(screen.getByText(/has no successor/)).toBeTruthy()
@@ -186,12 +188,45 @@ describe('the matter’s fiduciary check card', () => {
         }),
       ),
     )
-    const { unmount } = render(<MatterFiduciaryMatrixCard matterId={LEAD} />)
+    const { unmount } = render(<MatterFiduciaryCard matterId={LEAD} planMirror={EMPTY_PLAN_MIRROR} />)
     await waitFor(() => expect(screen.getByText(/No appointments are recorded/)).toBeTruthy())
     unmount()
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Matter not found' }), { status: 404 })))
-    render(<MatterFiduciaryMatrixCard matterId={LEAD} />)
+    render(<MatterFiduciaryCard matterId={LEAD} planMirror={EMPTY_PLAN_MIRROR} />)
     await waitFor(() => expect(screen.getByText('Matter not found')).toBeTruthy())
+  })
+
+  it('shows each design-sheet office beside what is recorded on people, and flags a difference', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            fiduciaries: {
+              matterId: SMITH,
+              title: 'x',
+              issues: [],
+              chains: [{ roleKey: 'trustee', role: 'Trustee', forParty: 'client', people: [{ name: 'Riley Client', isCoagent: false }] }],
+              people: [{ name: 'Riley Client', offices: ['Trustee'] }],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+    render(
+      <MatterFiduciaryCard
+        matterId={SMITH}
+        planMirror={{
+          ...EMPTY_PLAN_MIRROR,
+          fiduciaries: [{ key: 'trustee_slots', role: 'Trustee', primary: 'Morgan Client', successor: null }],
+        }}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Differs')).toBeTruthy())
+    const offices = screen.getByTestId('fiduciary-offices')
+    expect(offices.textContent).toContain('Morgan Client')
+    expect(offices.textContent).toContain('1. Riley Client')
   })
 })
