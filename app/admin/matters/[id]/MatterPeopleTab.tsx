@@ -14,6 +14,7 @@ import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
 import { MatterFiduciaryCard } from './MatterFiduciaryCard'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
+import { MatterTabHeader } from './MatterTabHeader'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 
 interface MatterPeopleTabProps {
@@ -44,28 +45,26 @@ export function MatterPeopleTabContent({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">People</h3>
-          <p className="text-xs text-muted-foreground">
-            Household, fiduciary, and beneficiary roles for this {recordLabel}.
-          </p>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm" variant="outline">
-              <Plus className="h-3.5 w-3.5" />
-              Add person
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => requestAdd('spouse')}>Spouse</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => requestAdd('child')}>Child</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => requestAdd('fiduciary')}>Fiduciary</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => requestAdd('beneficiary')}>Beneficiary</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <MatterTabHeader
+        title="People"
+        description={`Household, fiduciary, and beneficiary roles for this ${recordLabel}.`}
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="sm" variant="outline">
+                <Plus className="h-3.5 w-3.5" />
+                Add person
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => requestAdd('spouse')}>Spouse</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => requestAdd('child')}>Child</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => requestAdd('fiduciary')}>Fiduciary</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => requestAdd('beneficiary')}>Beneficiary</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      />
 
       {recordLabel === 'matter' && (
         <MatterFiduciaryCard matterId={matterId} planMirror={planMirror} />

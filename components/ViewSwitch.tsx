@@ -27,7 +27,7 @@ export function ViewSwitch<T extends string>({
   label?: string
 }) {
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
+    <div role="group" aria-label={label} className="inline-flex w-fit items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
       {options.map(option => {
         const Icon = option.icon
         return (

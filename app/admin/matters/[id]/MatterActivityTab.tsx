@@ -1,6 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { History } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { MatterActivity } from '@/types/database'
 import {
@@ -41,10 +44,13 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
   if (loading) return <p className="text-sm text-muted-foreground">Loading activity…</p>
   if (activity.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
-        <p className="text-sm font-medium">No activity yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">Stage changes, intake, comms, and drafting events appear here.</p>
-      </div>
+      <Card className="py-0">
+        <EmptyState
+          icon={History}
+          title="No activity yet"
+          description="Stage changes, intake, comms, and drafting events appear here."
+        />
+      </Card>
     )
   }
 
