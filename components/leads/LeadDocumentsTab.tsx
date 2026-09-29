@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
 import { MatterDocumentsTab } from '@/app/admin/matters/[id]/MatterDocumentsTab'
 import { listDocumentFolders, listDocuments, listSignatureRequests } from '@/lib/documents'
 import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
@@ -82,9 +84,13 @@ export function LeadDocumentsTab({
 }: LeadDocumentsTabProps) {
   if (!matterId) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Document storage is unavailable because this lead is not linked to an opportunity record.
-      </p>
+      <Card className="py-0">
+        <EmptyState
+          icon={FileText}
+          title="Documents unavailable"
+          description="Document storage is unavailable because this lead is not linked to an opportunity record."
+        />
+      </Card>
     )
   }
 

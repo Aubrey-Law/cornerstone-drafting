@@ -8,7 +8,7 @@ import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
 import { TabsContent } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/EmptyState'
-import { MatterTabHeader } from '../MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { cn, formatDateTime } from '@/lib/utils'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 import type { LinkedMatterNote } from './noteLinks'
@@ -70,7 +70,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
 
   return (
     <TabsContent value="notes" className="mt-0 space-y-4">
-      <MatterTabHeader
+      <RecordTabHeader
         title="Notes"
         description="Internal notes, client-communication notes, and meeting notes for this matter."
       />

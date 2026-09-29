@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { Landmark, List } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
 import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
-import { MatterTabHeader } from './MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import type { AssetView } from '@/lib/matterPageTabs'
 import { MatterFundingPanel } from './tabs/funding/MatterFundingPanel'
 import type { PipelineMatter } from '@/types/database'
@@ -47,7 +47,7 @@ export function MatterOverviewAssets({
 
   return (
     <section className="space-y-3">
-      <MatterTabHeader
+      <RecordTabHeader
         title="Assets"
         description={
           showFunding

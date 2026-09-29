@@ -19,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { TabsContent } from '@/components/ui/tabs'
-import { MatterTabHeader } from '../MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
@@ -551,7 +551,7 @@ export function MatterBillingTab({
 
   return (
     <TabsContent value="billing" className="space-y-4">
-      <MatterTabHeader
+      <RecordTabHeader
         title="Billing"
         description="Fee arrangement, charges, payments, and invoices for this matter."
       />

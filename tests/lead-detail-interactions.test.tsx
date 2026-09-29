@@ -45,7 +45,7 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset(); searchParams.current = new URLSearchParams() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
-function showTab(name: 'Overview' | 'Intake' | 'Assets' | 'Tasks' | 'Communications' | 'Documents' | 'Notes') {
+function showTab(name: 'Overview' | 'Intake' | 'Tasks' | 'People' | 'Assets' | 'Documents' | 'Messages' | 'Notes') {
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }

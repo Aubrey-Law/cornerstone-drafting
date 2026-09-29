@@ -86,7 +86,7 @@ import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterReviewsTab } from './MatterReviewsTab'
-import { MatterTabHeader } from './MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
@@ -1132,7 +1132,7 @@ function MatterDetailClientInner({
               </TabsContent>
 
               <TabsContent value="tasks" className="space-y-4">
-                <MatterTabHeader
+                <RecordTabHeader
                   title="Tasks"
                   description="Firm work on this matter, by due date or by stage."
                   actions={
@@ -1171,7 +1171,7 @@ function MatterDetailClientInner({
               />
 
               <TabsContent value="documents" className="space-y-4">
-                <MatterTabHeader
+                <RecordTabHeader
                   title="Documents"
                   description={documentView === 'signing'
                     ? 'The signing checklist and ceremony record for the drafted documents.'
@@ -1292,7 +1292,7 @@ function MatterDetailClientInner({
               />
 
               <TabsContent value="reviews" className="space-y-4">
-                <MatterTabHeader
+                <RecordTabHeader
                   title="Reviews"
                   description="Playbook reviews of this matter's documents and field audits of its design sheet."
                 />
@@ -1300,7 +1300,7 @@ function MatterDetailClientInner({
               </TabsContent>
 
               <TabsContent value="activity" className="space-y-4">
-                <MatterTabHeader
+                <RecordTabHeader
                   title="Activity"
                   description="Stage changes, intake, communications, and drafting events, newest first."
                 />

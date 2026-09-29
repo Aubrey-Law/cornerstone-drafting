@@ -2,9 +2,12 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, CircleDot, MessageSquareText } from 'lucide-react'
+import { CalendarDays, CircleDot, MessageSquareText, Pencil } from 'lucide-react'
 import { LeadLogCallDialog } from './LeadLogCallDialog'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { Input } from '@/components/ui/input'
 import { FormattedNote } from '@/components/notes/FormattedNote'
 import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
@@ -298,52 +301,58 @@ export function LeadTimelineCard({
       : <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{item.body}</p>
   }
 
+  const timelineActions = (
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" size="sm" variant="outline" onClick={() => setGranolaOpen(true)}>
+        Import from Granola
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => setMeetingOpen(true)}>
+        Add meeting note
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => setCallOpen(true)}>
+        Log call
+      </Button>
+    </div>
+  )
+
   return (
     <section className={variant === 'card' ? 'rounded-lg border border-border bg-card p-4 md:p-5' : ''}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className={variant === 'card' ? 'text-sm font-semibold' : 'sr-only'}>Timeline</h2>
-          {variant === 'card' && <p className="text-micro text-muted-foreground">Internal only</p>}
+      {lockedFilter === 'notes' ? (
+        // Locked to notes, the timeline is the lead's Notes tab.
+        <RecordTabHeader
+          title="Notes"
+          description="Internal notes, client-communication notes, and meeting notes for this lead."
+          actions={timelineActions}
+        />
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className={variant === 'card' ? 'text-sm font-semibold' : 'sr-only'}>Timeline</h2>
+            {variant === 'card' && <p className="text-micro text-muted-foreground">Internal only</p>}
+          </div>
+          {timelineActions}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => setGranolaOpen(true)}>
-            Import from Granola
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setMeetingOpen(true)}>
-            Add meeting note
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setCallOpen(true)}
-          >
-            Log call
-          </Button>
-        </div>
-      </div>
+      )}
 
-      <div className="mt-4 flex items-end gap-2">
-        <div className="min-w-0 flex-1">
-          <FormattedNoteEditor
+      <div className="mt-4 space-y-2 rounded-lg border border-border bg-card p-3">
+        <FormattedNoteEditor
           textareaRef={noteRef}
           ariaLabel="New note"
           value={body}
           onChange={setBody}
           placeholder={noteType === 'client_comm' ? 'Log a client communication' : 'Add an internal note'}
-          />
-        </div>
-        <Button type="button" disabled={pending || !body.trim()} onClick={() => void addNote()}>
-          Add note
-        </Button>
-      </div>
-      <div className="mt-2">
-        <NoteTypePicker
-          value={noteType}
-          onChange={setNoteType}
-          label="Note type"
-          disabled={pending}
         />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <NoteTypePicker
+            value={noteType}
+            onChange={setNoteType}
+            label="Note type"
+            disabled={pending}
+          />
+          <Button type="button" size="sm" disabled={pending || !body.trim()} onClick={() => void addNote()}>
+            Add note
+          </Button>
+        </div>
       </div>
       <p aria-live="polite" role={error ? 'alert' : undefined} className="mt-1 text-sm text-destructive">
         {error}
@@ -469,7 +478,18 @@ export function LeadTimelineCard({
             </article>
           )
         })}
-        {visibleItems.length === 0 && <p className="py-3 text-sm text-muted-foreground">No timeline items for this filter.</p>}
+        {visibleItems.length === 0 && (lockedFilter === 'notes' ? (
+          <Card className="py-0">
+            <EmptyState
+              icon={Pencil}
+              className="py-8"
+              title="No notes yet"
+              description="Internal notes, client-communication notes, and meeting notes you add appear here."
+            />
+          </Card>
+        ) : (
+          <p className="py-3 text-sm text-muted-foreground">No timeline items for this filter.</p>
+        ))}
       </div>
 
       {actorError && (

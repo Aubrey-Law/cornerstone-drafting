@@ -19,6 +19,8 @@ import {
   type TaskSource,
 } from '@/lib/tasks/types'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
@@ -322,14 +324,14 @@ export function RecordTasksTab({
         {loading && tasks.length === 0 ? (
           <p className="px-1 text-sm text-muted-foreground">Loading tasks…</p>
         ) : loadError && tasks.length === 0 ? null : listed.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-            <p className="text-sm font-medium">
-              {view === 'open' ? 'Nothing open on this record' : 'Nothing completed yet'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Add a task above, or apply a template to lay out the usual steps.
-            </p>
-          </div>
+          <Card className="py-0">
+            <EmptyState
+              icon={ListTodo}
+              className="py-8"
+              title={view === 'open' ? 'Nothing open on this record' : 'Nothing completed yet'}
+              description="Add a task above, or apply a template to lay out the usual steps."
+            />
+          </Card>
         ) : (
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {listed.map(task => (
