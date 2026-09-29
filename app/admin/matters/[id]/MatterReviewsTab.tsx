@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { FileSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/EmptyState'
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { RunSummary } from '@/lib/review/history'
 import { RunHistoryList } from '@/app/admin/review/components/RunHistoryList'
@@ -63,10 +65,12 @@ function MatterPlaybookReviewsCard({ matterId }: { matterId: string }) {
       ) : runs === null ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">Loading reviews…</p>
       ) : runs.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
-          No reviews yet. Review one of this matter&apos;s documents, or run one from the Review tab in Word with this
-          matter linked.
-        </p>
+        <EmptyState
+          icon={FileSearch}
+          className="py-8"
+          title="No reviews yet"
+          description="Review one of this matter's documents, or run one from the Review tab in Word with this matter linked."
+        />
       ) : (
         <RunHistoryList runs={runs} showMatter={false} />
       )}

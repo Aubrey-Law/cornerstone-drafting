@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { TabsContent } from '@/components/ui/tabs'
+import { MatterTabHeader } from '../MatterTabHeader'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
@@ -550,22 +551,28 @@ export function MatterBillingTab({
 
   return (
     <TabsContent value="billing" className="space-y-4">
+      <MatterTabHeader
+        title="Billing"
+        description="Fee arrangement, charges, payments, and invoices for this matter."
+      />
       {loading && !view ? (
         <div className="space-y-4" aria-busy>
           <Skeleton className="h-48 w-full" />
           <Skeleton className="h-40 w-full" />
         </div>
       ) : error ? (
-        <EmptyState
-          icon={AlertTriangle}
-          title="Billing unavailable"
-          description={error}
-          action={
-            <Button variant="outline" size="sm" onClick={() => void load()}>
-              Try again
-            </Button>
-          }
-        />
+        <Card className="py-0">
+          <EmptyState
+            icon={AlertTriangle}
+            title="Billing unavailable"
+            description={error}
+            action={
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                Try again
+              </Button>
+            }
+          />
+        </Card>
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-4">

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { Landmark, List } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
 import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
+import { MatterTabHeader } from './MatterTabHeader'
 import type { AssetView } from '@/lib/matterPageTabs'
 import { MatterFundingPanel } from './tabs/funding/MatterFundingPanel'
 import type { PipelineMatter } from '@/types/database'
@@ -46,19 +47,19 @@ export function MatterOverviewAssets({
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold">Assets</h3>
-          <p className="text-xs text-muted-foreground">
-            {showFunding
-              ? 'Whether each asset has been moved into the plan, confirmed by the institution.'
-              : 'Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.'}
-          </p>
-        </div>
-        {onViewChange ? (
-          <ViewSwitch value={view} options={ASSET_VIEW_OPTIONS} onChange={onViewChange} label="Assets view" />
-        ) : null}
-      </div>
+      <MatterTabHeader
+        title="Assets"
+        description={
+          showFunding
+            ? 'Whether each asset has been moved into the plan, confirmed by the institution.'
+            : 'Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.'
+        }
+        actions={
+          onViewChange ? (
+            <ViewSwitch value={view} options={ASSET_VIEW_OPTIONS} onChange={onViewChange} label="Assets view" />
+          ) : null
+        }
+      />
       {showFunding ? (
         <MatterFundingPanel matterId={matterId} />
       ) : (

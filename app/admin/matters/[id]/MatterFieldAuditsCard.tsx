@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useActionState, useCallback, useEffect, useState } from 'react'
+import { ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/EmptyState'
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
 import { runAudit, type RunAuditState } from '@/app/admin/field-audits/actions'
@@ -132,13 +134,26 @@ export function MatterFieldAuditsCard({ matterId }: { matterId: string }) {
       ) : view === null ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">Loading field audits…</p>
       ) : !view.hasDesignSheet ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
-          This matter has no design sheet yet, so there is nothing for a field audit to check.
-        </p>
+        <EmptyState
+          icon={ClipboardCheck}
+          className="py-8"
+          title="Nothing to audit yet"
+          description="This matter has no design sheet yet, so there is nothing for a field audit to check."
+        />
       ) : view.prompts.length === 0 && view.runs.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">No field-audit prompt is published yet.</p>
+        <EmptyState
+          icon={ClipboardCheck}
+          className="py-8"
+          title="No field audits available"
+          description="No field-audit prompt is published yet."
+        />
       ) : view.runs.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">No field audits have run on this matter yet.</p>
+        <EmptyState
+          icon={ClipboardCheck}
+          className="py-8"
+          title="No field audits yet"
+          description="No field audits have run on this matter yet."
+        />
       ) : (
         <ul className="divide-y divide-border" data-testid="matter-field-audit-runs">
           {view.runs.map(run => (

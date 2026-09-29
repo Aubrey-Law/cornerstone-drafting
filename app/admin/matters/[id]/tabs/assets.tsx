@@ -1,10 +1,12 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { Layers, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { Layers, Plus, RefreshCw, Sparkles, Trash2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
 import { AssetPortfolioSummary } from '@/components/assets/AssetPortfolioSummary'
 import { AssetDonutChart } from '@/components/assets/AssetDonutChart'
 import { AssetCategoryFilters } from '@/components/assets/AssetCategoryFilters'
@@ -250,8 +252,8 @@ function MatterAssetsTabImpl({
     <div className="space-y-6">
       {confirmDialog}
       <div className="flex flex-wrap items-center gap-3">
-        <Button className="gap-1.5 bg-brand-navy hover:bg-brand-navy/90" onClick={openAdd}>
-          <Plus className="h-4 w-4" />
+        <Button type="button" size="sm" className="gap-1.5" onClick={openAdd}>
+          <Plus className="h-3.5 w-3.5" />
           Add new asset
         </Button>
         <Button
@@ -295,19 +297,25 @@ function MatterAssetsTabImpl({
           <Skeleton className="h-64 w-full" />
         </div>
       ) : assets.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-muted px-6 py-12 text-center">
-          <p className="text-sm text-muted-foreground">No assets added yet.</p>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openAdd}>
-              <Plus className="h-3.5 w-3.5" />
-              Add First Asset
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setBulkOpen(true)}>
-              <Layers className="h-3.5 w-3.5" />
-              Bulk assets
-            </Button>
-          </div>
-        </div>
+        <Card className="py-0">
+          <EmptyState
+            icon={Wallet}
+            title="No assets yet"
+            description="Add the household's accounts, real estate, and policies one at a time or in bulk."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={openAdd}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add first asset
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setBulkOpen(true)}>
+                  <Layers className="h-3.5 w-3.5" />
+                  Bulk assets
+                </Button>
+              </div>
+            }
+          />
+        </Card>
       ) : (
         <>
           <EstateTaxExposureCard

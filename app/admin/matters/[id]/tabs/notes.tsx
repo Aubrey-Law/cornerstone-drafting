@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 import { FormattedNote } from '@/components/notes/FormattedNote'
 import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
 import { TabsContent } from '@/components/ui/tabs'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/EmptyState'
+import { MatterTabHeader } from '../MatterTabHeader'
 import { cn, formatDateTime } from '@/lib/utils'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 import type { LinkedMatterNote } from './noteLinks'
@@ -67,11 +70,70 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
 
   return (
     <TabsContent value="notes" className="mt-0 space-y-4">
-      {notes.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-text-tertiary">
-          <Pencil className="mx-auto mb-2 h-8 w-8 opacity-40" />
-          <p className="text-sm">No notes yet.</p>
+      <MatterTabHeader
+        title="Notes"
+        description="Internal notes, client-communication notes, and meeting notes for this matter."
+      />
+
+      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-micro font-medium text-muted-foreground">AI assistant</p>
+          <AssistantNotePromptButton />
         </div>
+        <FormattedNoteEditor
+          textareaRef={textareaRef}
+          ariaLabel="New matter note"
+          placeholder="Add a note... (Cmd+Enter to save)"
+          value={noteText}
+          onChange={setNoteText}
+          rows={3}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault()
+              void handleAddNote()
+            }
+          }}
+        />
+        <div className="flex gap-1">
+          {(['Internal', 'Client comm.'] as const).map(type => (
+            <button
+              key={type}
+              onClick={() => setNoteType(type)}
+              className={cn(
+                'rounded-full px-3 py-1 text-micro font-medium',
+                noteType === type
+                  ? type === 'Internal'
+                    ? 'bg-brand-navy text-white'
+                    : 'bg-primary text-primary-foreground'
+                  : 'bg-page-bg text-text-tertiary hover:bg-border'
+              )}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-end gap-3">
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
+            disabled={!noteText.trim() || noteSaving}
+            onClick={handleAddNote}
+          >
+            <Send className="h-3.5 w-3.5" /> Add note
+          </Button>
+        </div>
+      </div>
+
+      {notes.length === 0 ? (
+        <Card className="py-0">
+          <EmptyState
+            icon={Pencil}
+            className="py-8"
+            title="No notes yet"
+            description="Internal notes and client-communication notes you add appear here."
+          />
+        </Card>
       ) : (
         <div className="space-y-2">
           {notes.map(note => {
@@ -173,55 +235,6 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
           })}
         </div>
       )}
-
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-micro font-medium text-muted-foreground">AI assistant</p>
-          <AssistantNotePromptButton />
-        </div>
-        <FormattedNoteEditor
-          textareaRef={textareaRef}
-          ariaLabel="New matter note"
-          placeholder="Add a note... (Cmd+Enter to save)"
-          value={noteText}
-          onChange={setNoteText}
-          rows={3}
-          onKeyDown={event => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault()
-              void handleAddNote()
-            }
-          }}
-        />
-        <div className="flex gap-1">
-          {(['Internal', 'Client comm.'] as const).map(type => (
-            <button
-              key={type}
-              onClick={() => setNoteType(type)}
-              className={cn(
-                'rounded-full px-3 py-1 text-micro font-medium',
-                noteType === type
-                  ? type === 'Internal'
-                    ? 'bg-brand-navy text-white'
-                    : 'bg-primary text-primary-foreground'
-                  : 'bg-page-bg text-text-tertiary hover:bg-border'
-              )}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center justify-end gap-3">
-          <Button
-            size="sm"
-            className="gap-1 bg-primary text-xs text-primary-foreground"
-            disabled={!noteText.trim() || noteSaving}
-            onClick={handleAddNote}
-          >
-            <Send className="h-3 w-3" /> Add Note
-          </Button>
-        </div>
-      </div>
 
       {meetingNotes}
     </TabsContent>

@@ -59,6 +59,8 @@ export interface RecordTasksTabProps {
   /** Which view to open on, and how to reflect a switch in the URL. */
   view?: TaskView
   onViewChange?: (view: TaskView) => void
+  /** The caller renders the Queue/Plan switch itself, in its own header. */
+  hideViewSwitch?: boolean
 }
 
 /**
@@ -74,6 +76,7 @@ export function RecordTasksTab({
   planMatterId = null,
   view: viewMode,
   onViewChange,
+  hideViewSwitch = false,
 }: RecordTasksTabProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<TaskRow[]>([])
@@ -200,7 +203,9 @@ export function RecordTasksTab({
   if (mode === 'plan' && planMatter) {
     return (
       <div className="space-y-3">
-        <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />
+        {!hideViewSwitch && (
+          <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />
+        )}
         <TaskPlanView
           matterId={planMatter}
           enabled
@@ -217,7 +222,7 @@ export function RecordTasksTab({
     <div className="@container">
     <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-3">
-        {planMatter && <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />}
+        {planMatter && !hideViewSwitch && <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
             <button
@@ -510,7 +515,7 @@ export function RecordTasksTab({
  * work by due date, the plan groups every task on the matter — client- and
  * automation-owned rows included — by the stage it belongs to.
  */
-const TASK_VIEW_OPTIONS: readonly ViewSwitchOption<TaskView>[] = [
+export const TASK_VIEW_OPTIONS: readonly ViewSwitchOption<TaskView>[] = [
   { value: 'queue', label: 'Queue', icon: ListTodo },
   { value: 'plan', label: 'Plan', icon: CalendarRange },
 ]
@@ -518,7 +523,7 @@ const TASK_VIEW_OPTIONS: readonly ViewSwitchOption<TaskView>[] = [
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-card">
-      <h3 className="border-b border-border px-3 py-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="border-b border-border px-3 py-2 text-xs font-semibold">
         {title}
       </h3>
       <div className="px-3 py-2.5">{children}</div>

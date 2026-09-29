@@ -75,7 +75,7 @@ import {
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
-import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
+import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
@@ -86,6 +86,7 @@ import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterReviewsTab } from './MatterReviewsTab'
+import { MatterTabHeader } from './MatterTabHeader'
 import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
@@ -130,7 +131,7 @@ const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'assets', label: 'Assets' },
   { value: 'documents', label: 'Documents' },
   { value: 'billing', label: 'Billing' },
-  { value: 'communications', label: 'Portal messages' },
+  { value: 'communications', label: 'Messages' },
   { value: 'notes', label: 'Notes' },
   { value: 'reviews', label: 'Reviews' },
   { value: 'activity', label: 'Activity' },
@@ -1007,7 +1008,7 @@ function MatterDetailClientInner({
                 </TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="communications" className="gap-1.5">
-                  Portal messages
+                  Messages
                   {unreadPortalCount > 0 && (
                     <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
                       {unreadPortalCount}
@@ -1130,7 +1131,14 @@ function MatterDetailClientInner({
                 </div>
               </TabsContent>
 
-              <TabsContent value="tasks">
+              <TabsContent value="tasks" className="space-y-4">
+                <MatterTabHeader
+                  title="Tasks"
+                  description="Firm work on this matter, by due date or by stage."
+                  actions={
+                    <ViewSwitch value={taskView} options={TASK_VIEW_OPTIONS} onChange={setTaskView} label="Task view" />
+                  }
+                />
                 <RecordTasksTab
                   recordId={matterId}
                   recordKind="matter"
@@ -1139,6 +1147,7 @@ function MatterDetailClientInner({
                   onTasksChanged={() => void taskCounts.refresh()}
                   view={taskView}
                   onViewChange={setTaskView}
+                  hideViewSwitch
                 />
               </TabsContent>
 
@@ -1162,14 +1171,20 @@ function MatterDetailClientInner({
               />
 
               <TabsContent value="documents" className="space-y-4">
-                <div className="flex justify-end">
-                  <ViewSwitch
-                    value={documentView}
-                    options={DOCUMENT_VIEW_OPTIONS}
-                    onChange={view => setTabView('documents', view, 'files')}
-                    label="Documents view"
-                  />
-                </div>
+                <MatterTabHeader
+                  title="Documents"
+                  description={documentView === 'signing'
+                    ? 'The signing checklist and ceremony record for the drafted documents.'
+                    : 'Drafts, client uploads, and shared files for this matter.'}
+                  actions={
+                    <ViewSwitch
+                      value={documentView}
+                      options={DOCUMENT_VIEW_OPTIONS}
+                      onChange={view => setTabView('documents', view, 'files')}
+                      label="Documents view"
+                    />
+                  }
+                />
                 {documentView === 'signing' ? (
                   <MatterSigningPanel matterId={matterId} />
                 ) : (
@@ -1276,11 +1291,19 @@ function MatterDetailClientInner({
                 meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
               />
 
-              <TabsContent value="reviews">
+              <TabsContent value="reviews" className="space-y-4">
+                <MatterTabHeader
+                  title="Reviews"
+                  description="Playbook reviews of this matter's documents and field audits of its design sheet."
+                />
                 {activeTab === 'reviews' ? <MatterReviewsTab matterId={matterId} /> : null}
               </TabsContent>
 
-              <TabsContent value="activity">
+              <TabsContent value="activity" className="space-y-4">
+                <MatterTabHeader
+                  title="Activity"
+                  description="Stage changes, intake, communications, and drafting events, newest first."
+                />
                 <MatterActivityTab activity={activity} loading={activityLoading} />
               </TabsContent>
             </Tabs>

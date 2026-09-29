@@ -18,6 +18,7 @@ import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { CommunicationThread } from '@/components/comms/CommunicationThread'
 import type { CommunicationItem } from '@/lib/comms/thread'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
+import { MatterTabHeader } from '../MatterTabHeader'
 
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
@@ -164,22 +165,20 @@ export function MatterCommunicationsTab({
 
   return (
     <TabsContent value="communications" className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Portal messages</h3>
-          <p className="text-xs text-muted-foreground">
-            Secure portal messages and correspondence history for this matter.
-          </p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={onSendSchedulingLink}>
-            Send scheduling link
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={onBookForClient}>
-            Book for client…
-          </Button>
-        </div>
-      </div>
+      <MatterTabHeader
+        title="Messages"
+        description="Portal messages, texts, email, and call logs for this matter."
+        actions={
+          <>
+            <Button type="button" size="sm" variant="outline" onClick={onSendSchedulingLink}>
+              Send scheduling link
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onBookForClient}>
+              Book for client…
+            </Button>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 overflow-x-auto">
