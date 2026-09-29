@@ -67,6 +67,36 @@ export async function loadCeremony(
   }
 }
 
+/**
+ * Each matter's most recent signing status, for counting what is still to be
+ * signed across many matters at once. A matter with no appointment recorded
+ * is absent from the map.
+ */
+export async function loadCeremonyStatuses(
+  client: SupabaseClient<GeneratedDatabase>,
+  matterIds: readonly string[],
+): Promise<Map<string, CeremonyStatus>> {
+  const statuses = new Map<string, CeremonyStatus>()
+  if (matterIds.length === 0) return statuses
+
+  const { data: rows, error } = await client
+    .from('signing_ceremonies')
+    .select('matter_id, status, created_at')
+    .in('matter_id', [...matterIds])
+  if (error) throw new Error(`Could not load signing records: ${error.message}`)
+
+  // The latest per matter, as `loadCeremony` reads it: a matter can be signed more than once.
+  const latestAt = new Map<string, string>()
+  for (const row of rows ?? []) {
+    const matterId = String(row.matter_id)
+    const createdAt = String(row.created_at ?? '')
+    if ((latestAt.get(matterId) ?? '') > createdAt) continue
+    latestAt.set(matterId, createdAt)
+    statuses.set(matterId, (row.status as CeremonyStatus | null) ?? 'scheduled')
+  }
+  return statuses
+}
+
 export interface SaveCeremonyInput extends CeremonyRoles {
   matterId: string
   ceremonyId: string | null

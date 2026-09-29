@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import type { GeneratedDatabase } from '@/types/supabase'
 import { makeFakeClient } from './helpers/reviewFakeSupabase'
 
@@ -155,7 +155,7 @@ describe('the Fiduciaries page', () => {
 
   it('links each matter to its People tab, gaps first', async () => {
     render(await FiduciariesPage())
-    const links = screen.getAllByRole('link')
+    const links = within(screen.getByTestId('fiduciary-overview')).getAllByRole('link')
     expect(links.map(link => link.getAttribute('href'))).toEqual([
       `/admin/matters/${SMITH}?tab=people`,
       `/admin/matters/${JONES}?tab=people`,

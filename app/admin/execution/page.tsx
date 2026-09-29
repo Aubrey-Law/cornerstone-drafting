@@ -1,14 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Signature } from 'lucide-react'
+import { ArrowLeft, Signature } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { loadCeremonyStatuses, type CeremonyStatus } from '@/lib/ceremony/repository'
 import { detectKinds } from '@/lib/execution/detect'
 import { loadExecutionMatters } from '@/lib/execution/repository'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
-import { TONE_BADGE } from '@/lib/ui/tone'
+import { TONE_BADGE, type Tone } from '@/lib/ui/tone'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -18,19 +20,40 @@ export const metadata: Metadata = { title: 'Execution' }
  * Every hired matter with drafted documents, and what each needs to be signed
  * properly in Massachusetts. Ported from the workbench's `/execution`.
  */
+const SIGNING_BADGE: Record<CeremonyStatus, { label: string; tone: Tone }> = {
+  scheduled: { label: 'Scheduled', tone: 'info' },
+  completed: { label: 'Signed', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
+}
+
 export default async function ExecutionPage() {
   await requireStaffPage()
 
-  const matters = (await loadExecutionMatters(reviewClient()))
-    .map(matter => ({ ...matter, detected: detectKinds(matter.documentNames) }))
-    .filter(matter => matter.documentNames.length > 0)
-    .sort((a, b) => a.title.localeCompare(b.title))
+  const client = reviewClient()
+  const drafted = (await loadExecutionMatters(client)).filter(matter => matter.documentNames.length > 0)
+  const statuses = await loadCeremonyStatuses(client, drafted.map(matter => matter.matterId))
+  // Still to sign first, the same count the Matters dashboard's Close-out card shows.
+  const matters = drafted
+    .map(matter => ({
+      ...matter,
+      detected: detectKinds(matter.documentNames),
+      signing: statuses.get(matter.matterId) ?? null,
+    }))
+    .sort((a, b) => Number(a.signing === 'completed') - Number(b.signing === 'completed') || a.title.localeCompare(b.title))
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Execution"
         description="What each document needs to be signed properly in Massachusetts, and the record of the signing."
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/matters">
+              <ArrowLeft className="size-4" aria-hidden />
+              Matters
+            </Link>
+          </Button>
+        }
       />
 
       <Card className="gap-0 py-0">
@@ -54,6 +77,11 @@ export default async function ExecutionPage() {
                     {matter.detected.unmatched.length > 0 ? (
                       <Badge variant="outline" className={cn('text-micro', TONE_BADGE.warning)}>
                         {matter.detected.unmatched.length} to confirm
+                      </Badge>
+                    ) : null}
+                    {matter.signing ? (
+                      <Badge variant="outline" className={cn('text-micro', TONE_BADGE[SIGNING_BADGE[matter.signing].tone])}>
+                        {SIGNING_BADGE[matter.signing].label}
                       </Badge>
                     ) : null}
                   </span>

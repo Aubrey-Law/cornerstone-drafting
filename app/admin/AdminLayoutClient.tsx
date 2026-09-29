@@ -10,10 +10,6 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardCheck,
-  ShieldCheck,
-  ListChecks,
-  Landmark,
-  Signature,
   FilePenLine,
   ListTodo,
   LogOut,
@@ -93,10 +89,10 @@ export const adminNavItems: {
   { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },
   { href: '/admin/review', label: 'Reviews', icon: ClipboardCheck, group: 'Work' },
-  { href: '/admin/fiduciaries', label: 'Fiduciaries', icon: ShieldCheck, group: 'Work' },
-  { href: '/admin/field-audits', label: 'Field audits', icon: ListChecks, group: 'Work' },
-  { href: '/admin/funding', label: 'Funding', icon: Landmark, group: 'Work' },
-  { href: '/admin/execution', label: 'Execution', icon: Signature, group: 'Work' },
+  // Funding, signing and fiduciaries are worked on the matter (Assets,
+  // Documents, People) and field audits on its Reviews tab; their firm-wide
+  // worklists open from the Matters dashboard's Close-out card rather than
+  // taking four places in the nav. See NAV_SECTION_OWNERS in AdminSidebar.
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Finance' },

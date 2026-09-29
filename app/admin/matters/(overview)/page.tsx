@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
 import { getCachedClaims } from '@/lib/supabaseServer'
 import { fetchMatterDashboard } from '@/lib/queries/matterDashboard'
+import { loadMatterCloseoutSummary } from '@/lib/matters/closeout'
+import { reviewClient } from '@/lib/review/staff'
 import { PageHeader } from '@/components/PageHeader'
 import { OpenTasksCard } from '@/components/tasks/OpenTasksCard'
+import { MatterCloseoutCard } from './MatterCloseoutCard'
 import { MatterSliceCard } from './MatterSliceCard'
 import { MatterStatCards } from './MatterStatCards'
 import { RecentMattersTable } from './RecentMattersTable'
@@ -12,7 +15,10 @@ export const metadata: Metadata = { title: 'Matters' }
 
 export default async function MattersDashboardPage() {
   const auth = await getCachedClaims()
-  const { snapshot, aging, tasks, tasksError, error } = await fetchMatterDashboard(auth?.id ?? null)
+  const [{ snapshot, aging, tasks, tasksError, error }, closeout] = await Promise.all([
+    fetchMatterDashboard(auth?.id ?? null),
+    loadMatterCloseoutSummary(reviewClient()),
+  ])
 
   return (
     <div className="space-y-4">
@@ -51,6 +57,8 @@ export default async function MattersDashboardPage() {
           emptyLabel="No open matters."
         />
       </div>
+
+      <MatterCloseoutCard summary={closeout} />
 
       <RecentMattersTable matters={snapshot.recent} />
     </div>
