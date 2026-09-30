@@ -190,3 +190,82 @@ describe('parseAssetSpreadsheetRows — flat export', () => {
     expect(assets[1].details).toMatchObject({ institution: 'Mercury', account_type: 'Savings' })
   })
 })
+
+/** Mirrors an "Asset Report" export: content starts in column B, a formula-only summary table, then the inventory. */
+const ASSET_REPORT: string[][] = [
+  ['', 'ASSET REPORT', 'ASSET REPORT', 'ASSET REPORT', 'ASSET REPORT', 'ASSET REPORT'],
+  ['', 'DISCLAIMER: The below Asset Report is provided solely as a planning tool.'],
+  ['', 'CLIENT', '', '', '', 'Test Client and Test Spouse'],
+  ['', 'EXPORTED', '', '', '', '09-29-2026 at 04:41 PM'],
+  ['', 'Summary of Assets', 'Summary of Assets', 'Summary of Assets', 'Summary of Assets', 'Summary of Assets'],
+  ['', 'ASSET TYPE', '', 'CUR VALUE', 'CUR DEBT', 'NET VALUE'],
+  // Formula cells with no cached result read as blank
+  ['', 'Real Estate', '', '', '', ''],
+  ['', 'Bank Accounts', '', '', '', ''],
+  ['', 'Life Insurance', '', '', '', ''],
+  ['', 'Total', '', '', '', ''],
+  ['', 'Asset Inventory', 'Asset Inventory', 'Asset Inventory', 'Asset Inventory', 'Asset Inventory'],
+  ['', 'ASSET TYPE', 'OWNER', 'CUR VALUE', 'CUR DEBT', 'NET VALUE'],
+  ['', 'REAL ESTATE'],
+  ['', '12 Example Street, Needham, Massachusetts 02492', '', '1228000', '350000', ''],
+  ['', 'Subtotal Real Estate', '', '', '', ''],
+  ['', 'BANK ACCOUNTS'],
+  ['', 'Example Bank joint checking 0001', 'Joint', '23000', '0', ''],
+  ['', 'Subtotal Bank Accounts', '', '', '', ''],
+  ['', 'LIFE INSURANCE'],
+  ['', 'No life insurance'],
+  ['', 'Subtotal Life Insurance', '', '', '', ''],
+  ['', 'VEHICLES'],
+  ['', '2016 Mazda CX5', '', '5000', '0', ''],
+  ['', 'DIGITAL ASSETS'],
+  ['', 'No digital assets'],
+  ['', 'MINERAL INTERESTS'],
+  ['', 'Example royalty interest', '', '1500', '0', ''],
+  ['', 'Subtotal Mineral Interests', '', '', '', ''],
+]
+
+describe('parseAssetSpreadsheetRows — asset report', () => {
+  it('imports inventory rows with section categories and values, skipping summary, subtotals and placeholders', () => {
+    const assets = parseAssetSpreadsheetRows(ASSET_REPORT)
+    expect(assets.map(a => [a.category, a.description, a.value])).toEqual([
+      ['real_estate', '12 Example Street, Needham, Massachusetts 02492', 1228000],
+      ['bank', 'Example Bank joint checking 0001', 23000],
+      ['vehicles', '2016 Mazda CX5', 5000],
+      ['other', 'Example royalty interest', 1500],
+    ])
+    expect(assets[0].details).toEqual({ mortgage_balance: 350000 })
+    expect(assets[1]).toMatchObject({ ownership: 'joint', details: {} })
+  })
+
+  it('reads the real exceljs cell shapes (leading blank column, formula cells)', async () => {
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Assets')
+    ws.getCell('B2').value = 'ASSET TYPE'
+    ws.getCell('D2').value = 'CUR VALUE'
+    ws.getCell('B3').value = 'Real Estate'
+    ws.getCell('D3').value = { formula: 'D9' } as never
+    ws.getCell('B5').value = 'ASSET TYPE'
+    ws.getCell('C5').value = 'OWNER'
+    ws.getCell('D5').value = 'CUR VALUE'
+    ws.getCell('E5').value = 'CUR DEBT'
+    ws.getCell('B6').value = 'REAL ESTATE'
+    ws.getCell('B7').value = '  12 Example Street'
+    ws.getCell('D7').value = 600000
+    ws.getCell('E7').value = 0
+    ws.getCell('F7').value = { formula: 'D7-E7' } as never
+    const buffer = await wb.xlsx.writeBuffer()
+
+    const { parseAssetSpreadsheet } = await import('@/lib/import/parseAssetSpreadsheet')
+    const assets = await parseAssetSpreadsheet(new File([buffer as ArrayBuffer], 'report.xlsx'))
+    expect(assets).toEqual([
+      {
+        category: 'real_estate',
+        description: '12 Example Street',
+        value: 600000,
+        ownership: 'client',
+        details: { mortgage_balance: 0 },
+      },
+    ])
+  })
+})
