@@ -74,9 +74,13 @@ Fix: Supabase Dashboard → Authentication → **URL Configuration** → *Redire
 URLs*. `supabase/config.toml`'s `additional_redirect_urls` is the written record
 of what that list should contain, and `tests/auth-redirect-allowlist.test.ts`
 keeps it from drifting — but neither can read the dashboard, so the dashboard
-is a manual step. Once the retired workbench's Vercel project
-(`cornerstone-drafting-2.0`) is paused, its `https://cornerstone-drafting-20.vercel.app/**`
-entry can be removed there.
+is a manual step. The retired workbench's Vercel project
+(`cornerstone-drafting-2.0`) was paused on 2026-09-29 and
+`https://cornerstone-drafting-20.vercel.app` now answers 503, so its
+`https://cornerstone-drafting-20.vercel.app/**` entry should be removed from the
+dashboard list too. `config.toml` already omits it and the test asserts it stays
+out. Every production deploy runs on the `cornerstone-drafting` project, which
+serves `cornerstone.aubreylegal.com`.
 
 **Use the wildcard form — an exact URL is not a safer version of the same
 entry, it is a broken one.** Redirect URLs are glob patterns. An entry of
