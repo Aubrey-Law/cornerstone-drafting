@@ -36,6 +36,13 @@ const EXTRA_LABEL_ALIASES: Record<string, AssetCategory> = {
   'safe deposit box': 'other',
   vehicles: 'vehicles',
   'vehicles and other titled moving property': 'vehicles',
+  // Asset Report exports (section rows in caps under an "Asset Inventory" table)
+  'business interest': 'business',
+  'valuable personal property': 'personal_property',
+  firearms: 'personal_property',
+  'digital assets': 'crypto',
+  'mineral interest': 'other',
+  'mineral interests': 'other',
 }
 
 const HEADER_ALIASES: Record<string, string> = {
@@ -53,11 +60,15 @@ const HEADER_ALIASES: Record<string, string> = {
   balance: 'value',
   estimated_value: 'value',
   'estimated value': 'value',
+  'cur value': 'value',
+  'current value': 'value',
   property_type: 'property_type',
   'property type': 'property_type',
   mortgage_balance: 'mortgage_balance',
   'mortgage balance': 'mortgage_balance',
   'outstanding debt': 'mortgage_balance',
+  'cur debt': 'mortgage_balance',
+  'current debt': 'mortgage_balance',
   institution: 'institution',
   bank: 'institution',
   'insurance company': 'institution',
@@ -105,7 +116,7 @@ function normalizeHeader(raw: string): string {
 
 function mapHeader(raw: string): string | null {
   const normalized = normalizeHeader(raw)
-  if (!normalized || normalized === 'net') return null
+  if (!normalized || normalized === 'net' || normalized === 'net value') return null
   if (HEADER_ALIASES[normalized]) return HEADER_ALIASES[normalized]
   const snake = normalized.replace(/\s+/g, '_').replace(/\//g, '_')
   return HEADER_ALIASES[snake] ?? snake
@@ -377,9 +388,80 @@ function parseFlatAssetRows(rows: string[][]): ParsedSpreadsheetAsset[] {
   return assets
 }
 
+/**
+ * Asset Report exports: a "Summary of Assets" table (formula totals) followed by an
+ * "Asset Inventory" table headed ASSET TYPE | OWNER | CUR VALUE | CUR DEBT | NET VALUE,
+ * where caps section rows (REAL ESTATE, BANK ACCOUNTS, …) carry the category and the
+ * first column of each item row is its description. Returns the inventory header index.
+ */
+function findAssetReportHeaderIndex(rows: string[][]): number {
+  let fallback = -1
+  for (let i = 0; i < rows.length; i++) {
+    const mapped = rows[i].map(mapHeader)
+    if (mapped[0] !== 'category' || !mapped.includes('value') || mapped.includes('description')) {
+      continue
+    }
+    if (mapped.includes('ownership')) return i
+    fallback = i
+  }
+  return fallback
+}
+
+function parseAssetReportRows(rows: string[][], headerIndex: number): ParsedSpreadsheetAsset[] {
+  const headerMap = rows[headerIndex].map((cell, idx) => (idx === 0 ? 'description' : mapHeader(cell)))
+  const assets: ParsedSpreadsheetAsset[] = []
+  let currentCategory: AssetCategory | null = null
+
+  for (const row of rows.slice(headerIndex + 1)) {
+    const cells = row.map(cellToString)
+    const first = cells[0]?.trim() ?? ''
+    if (!first || /^(subtotal|total)\b/i.test(first)) continue
+
+    if (cells.slice(1).every(c => !c.trim())) {
+      // "No life insurance" placeholders sit under their section; everything else
+      // with no values is a section title.
+      if (/^no\s/i.test(first)) continue
+      currentCategory = /^liabilit/i.test(first) ? null : (resolveSectionCategory(first) ?? 'other')
+      continue
+    }
+    if (!currentCategory) continue
+
+    const record: Record<string, string> = {}
+    headerMap.forEach((key, idx) => {
+      if (key) record[key] = cells[idx] ?? ''
+    })
+    const asset = recordToAsset(record, currentCategory)
+    if (!asset) continue
+    // CUR DEBT is filled on every row; only a real-estate mortgage or an actual debt means anything.
+    if (asset.details.mortgage_balance === 0 && currentCategory !== 'real_estate') {
+      delete asset.details.mortgage_balance
+    }
+    assets.push(asset)
+  }
+
+  return assets
+}
+
+/** Drop columns that are blank in every row (reports that start in column B, etc.). */
+function dropBlankColumns(rows: string[][]): string[][] {
+  const width = Math.max(0, ...rows.map(r => r.length))
+  const keep: number[] = []
+  for (let col = 0; col < width; col++) {
+    if (rows.some(r => cellToString(r[col]))) keep.push(col)
+  }
+  if (keep.length === width) return rows
+  return rows.map(r => keep.map(col => r[col] ?? ''))
+}
+
 /** Parse spreadsheet row matrices (CSV or XLSX cell strings) into assets. */
-export function parseAssetSpreadsheetRows(rows: string[][]): ParsedSpreadsheetAsset[] {
-  if (rows.length === 0) return []
+export function parseAssetSpreadsheetRows(input: string[][]): ParsedSpreadsheetAsset[] {
+  if (input.length === 0) return []
+  const rows = dropBlankColumns(input)
+
+  const assetReportHeader = findAssetReportHeaderIndex(rows)
+  if (assetReportHeader >= 0) {
+    return parseAssetReportRows(rows, assetReportHeader)
+  }
 
   if (isFinancialSummaryFormat(rows)) {
     return parseFinancialSummaryRows(rows)
