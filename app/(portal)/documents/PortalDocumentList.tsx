@@ -4,6 +4,8 @@ import { Download, Eye, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
+import { EmptyState } from '@/components/EmptyState'
+import { Card } from '@/components/ui/card'
 import { getDocumentUrl, isWordDocument } from '@/lib/documents'
 import type { MatterDocument } from '@/types/database'
 
@@ -96,13 +98,13 @@ export default function PortalDocumentList({ documents }: { documents: MatterDoc
 
   if (documents.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-card py-16 text-center">
-        <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-foreground">No documents have been shared yet.</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          PDFs your attorney shares for review or signing will appear here.
-        </p>
-      </div>
+      <Card className="py-0">
+        <EmptyState
+          icon={FileText}
+          title="No documents shared yet"
+          description="PDFs your attorney shares for review or signing will appear here."
+        />
+      </Card>
     )
   }
 

@@ -21,13 +21,14 @@ import { getFirmConfig } from '@/lib/firmConfig'
 
 const firm = getFirmConfig()
 
+// Billing keeps its /account address so existing links and bookmarks work.
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/intake', label: 'Intake', icon: ClipboardList },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
-  { href: '/account', label: 'Account', icon: ReceiptText },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/schedule', label: 'Schedule', icon: CalendarClock },
+  { href: '/account', label: 'Billing', icon: ReceiptText },
 ]
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {

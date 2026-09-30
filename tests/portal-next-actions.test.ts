@@ -72,7 +72,7 @@ describe('portal next actions', () => {
 
   it('links an actually issued invoice with an outstanding balance', () => {
     expect(computePortalNextAction({ ...complete, outstandingInvoiceCount: 1 })).toMatchObject({
-      kind: 'account', label: 'View account', href: '/account',
+      kind: 'account', label: 'View billing', href: '/account',
     })
   })
 

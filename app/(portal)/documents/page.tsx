@@ -7,6 +7,7 @@ import { getFirmConfig } from '@/lib/firmConfig'
 import { Button } from '@/components/ui/button'
 import PortalDocumentList from './PortalDocumentList'
 import ClientUploadCard from './ClientUploadCard'
+import { PortalPageHeader } from '../PortalPageHeader'
 
 const firm = getFirmConfig()
 
@@ -42,16 +43,11 @@ export default async function DocumentsPage() {
   const matterClosed = matter.status === 'closed'
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Client documents
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold text-foreground">Documents</h1>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          Shared drafts and signed copies from {firm.firmName}.
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      <PortalPageHeader
+        title="Documents"
+        description={`Shared drafts and signed copies from ${firm.firmName}, and anything you send us.`}
+      />
 
       <PortalDocumentList documents={documents} />
 

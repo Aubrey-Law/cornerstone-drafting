@@ -8,7 +8,9 @@ import { cn } from '@/lib/utils'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { useMessagesRealtime, type RealtimeMessageRow } from '@/lib/messages/useMessagesRealtime'
 import { linkifyText } from '@/lib/linkify'
-import { Send } from 'lucide-react'
+import { MessageSquare, Send } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { PortalPageHeader } from '../PortalPageHeader'
 
 import type { MessageCursor } from '@/lib/messages/history'
 
@@ -180,24 +182,26 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="mx-auto flex h-full max-w-4xl flex-col px-4 py-8">
+      <PortalPageHeader
+        title="Messages"
+        description={`A secure conversation with ${firm.firmName}.`}
+      />
       <div
         data-testid="message-column"
-        className="mx-auto flex min-h-full w-full max-w-3xl flex-col border-x border-border/60"
+        className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card"
       >
-      <div className="border-b border-border bg-background px-6 py-4">
-        <h1 className="text-base font-semibold text-foreground">Messages</h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">{firm.firmName}</p>
-      </div>
-
-      <div className="flex-1 space-y-5 px-4 py-6">
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6">
         {older && <Button variant="outline" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? 'Loading…' : 'Load older messages'}</Button>}
         {historyError && <p role="alert">{historyError}</p>}
         {readError && <p role="alert">{readError} <button className="underline" onClick={() => setReadRetry(n => n + 1)}>Retry</button></p>}
         {messages.length === 0 && (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            No messages yet. Send a message to {firm.firmName} below.
-          </p>
+          <EmptyState
+            icon={MessageSquare}
+            className="py-10"
+            title="No messages yet"
+            description={`Send a message to ${firm.firmName} below.`}
+          />
         )}
 
         {messageGroups.map(group => (
@@ -249,7 +253,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
         <div ref={bottomRef} />
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-background px-4 py-3">
+      <div className="border-t border-border bg-card px-4 py-3">
         <div className="flex items-end gap-2">
           <ResizableTextarea
             handleLabel="Resize the message box"
@@ -267,10 +271,10 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
             aria-label="Send message"
             onClick={handleSend}
             disabled={!draft.trim() || isPending}
-            size="icon"
-            className="shrink-0"
+            className="shrink-0 gap-1.5"
           >
             <Send className="h-4 w-4" />
+            Send
           </Button>
         </div>
         <p className="mt-1.5 text-micro text-muted-foreground">

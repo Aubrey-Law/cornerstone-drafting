@@ -3,6 +3,7 @@ import { getAppointmentTypesForPortal } from '@/lib/appointments/portalTypes'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import SchedulePageClient from './SchedulePageClient'
+import { PortalPageHeader } from '../PortalPageHeader'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,23 +22,18 @@ export default async function PortalSchedulePage() {
   const types = await getAppointmentTypesForPortal()
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Client portal
-      </p>
-      <h1 className="mt-1 text-2xl font-semibold text-foreground">Schedule an appointment</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Pick a time that works for you — only openings on our calendar are shown.
-      </p>
-      <div className="mt-8">
-        <SchedulePageClient
-          types={types}
-          defaultFirstName={firstName || (!lastName ? historicalName : '')}
-          defaultLastName={lastName}
-          defaultEmail={auth.email ?? ''}
-          defaultPhone={phone}
-        />
-      </div>
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      <PortalPageHeader
+        title="Schedule"
+        description="Book an appointment. Pick a time that works for you — only openings on our calendar are shown."
+      />
+      <SchedulePageClient
+        types={types}
+        defaultFirstName={firstName || (!lastName ? historicalName : '')}
+        defaultLastName={lastName}
+        defaultEmail={auth.email ?? ''}
+        defaultPhone={phone}
+      />
     </div>
   )
 }

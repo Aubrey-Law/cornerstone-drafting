@@ -5,6 +5,7 @@ import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { Button } from '@/components/ui/button'
+import { PortalPageHeader } from '../PortalPageHeader'
 import { PortalAccountCard } from '@/components/portal/PortalAccountCard'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
@@ -139,29 +140,22 @@ export default async function PortalDashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      {/* ── header ── */}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {progress.heading}
-          </p>
-          {/* The serif comes from `.client-root` on the portal shell now; it
-              was this one inline style before, and every client-facing heading
-              gets it rather than just this one. */}
-          <h1 className="mt-1 text-3xl font-semibold text-foreground">
-            Welcome back{firstName ? `, ${firstName}` : ''}
-          </h1>
-        </div>
-        {matter && (
-          <p className="text-sm text-muted-foreground sm:text-right">
+      {/* The serif comes from `.client-root` on the portal shell; every
+          client-facing heading gets it. Only the dashboard names the plan
+          above its title. */}
+      <PortalPageHeader
+        eyebrow={progress.heading}
+        title={`Welcome back${firstName ? `, ${firstName}` : ''}`}
+        aside={matter ? (
+          <>
             {meta?.matterName ?? 'Your matter'}
             {meta?.createdAt && ` · started ${STARTED_DATE.format(new Date(meta.createdAt))}`}
-          </p>
-        )}
-      </div>
+          </>
+        ) : null}
+      />
 
       {/* ── stage tracker ── */}
-      <section className="mt-6 rounded-lg border border-border bg-card p-5">
+      <section className="rounded-lg border border-border bg-card p-5">
         <ol className="flex items-start">
           {progress.milestones.map((step, i) => {
             const done = step.state === 'completed'
@@ -227,7 +221,7 @@ export default async function PortalDashboardPage() {
 
       {/* Only shown when there is something to say: a client with no invoices
           should not be told their balance is zero. */}
-      {matter && !accountResult.available && <p role="alert" className="mt-4 text-sm text-destructive">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}
+      {matter && !accountResult.available && <p role="alert" className="mt-4 text-sm text-destructive">Billing is temporarily unavailable. <Link href="/account" className="underline">Retry billing</Link></p>}
       {account && account.invoices.length > 0 && (
         <div className="mt-4">
           <PortalAccountCard account={account} />
@@ -261,12 +255,9 @@ export default async function PortalDashboardPage() {
               ))}
             </ul>
           )}
-          <Link
-            href="/documents"
-            className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
-          >
-            All documents →
-          </Link>
+          <Button asChild size="sm" variant="outline" className="mt-4">
+            <Link href="/documents">All documents</Link>
+          </Button>
         </section>
 
         <section className="rounded-lg border border-border bg-card p-5">
@@ -293,8 +284,8 @@ export default async function PortalDashboardPage() {
             </>
           ) : (
             <>
-              <p className="mt-2 text-sm text-muted-foreground">No messages yet</p>
-              <Button asChild size="sm" className="mt-4">
+              <p className="mt-2 text-sm text-muted-foreground">No messages yet.</p>
+              <Button asChild size="sm" variant="outline" className="mt-4">
                 <Link href="/messages">Send a message</Link>
               </Button>
             </>

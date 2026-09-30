@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { Lock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { type IntakeRow } from '@/lib/intakeSections'
@@ -53,10 +55,13 @@ export default async function IntakeHomePage() {
                 To request changes, email{' '}
                 <a href={`mailto:${firm.email}`} className="underline">{firm.email}</a>.
               </p>
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <RequestUnlockButton
                   requestedAt={(intakeRow.unlock_requested_at as string | null) ?? null}
                 />
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/dashboard">Back to portal</Link>
+                </Button>
               </div>
             </div>
           </div>

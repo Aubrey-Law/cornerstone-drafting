@@ -81,8 +81,8 @@ export function computePortalNextAction(facts: PortalNextActionFacts): PortalNex
   if (facts.outstandingInvoiceCount > 0) {
     return {
       kind: 'account',
-      message: 'Your account has an issued invoice with a balance due.',
-      label: 'View account',
+      message: 'You have an invoice with a balance due.',
+      label: 'View billing',
       href: '/account',
     }
   }
