@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { PortalAccountCard } from '@/components/portal/PortalAccountCard'
+import { PortalPageHeader } from '../PortalPageHeader'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { fetchPortalAccount } from '@/lib/queries/portal'
@@ -18,13 +19,17 @@ export default async function PortalAccountPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-2xl font-semibold text-foreground">Account</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Review balances, pay open invoices, and download paid invoices as receipts.
-      </p>
-      <div className="mt-6">
-        <>{account ? <PortalAccountCard account={account} showAll /> : <p role="alert">Your account is temporarily unavailable. <Link href="/account" className="underline">Retry account</Link></p>}</>
-      </div>
+      <PortalPageHeader
+        title="Billing"
+        description="Review balances, pay open invoices, and download paid invoices as receipts."
+      />
+      {account ? (
+        <PortalAccountCard account={account} showAll />
+      ) : (
+        <p role="alert" className="text-sm text-destructive">
+          Billing is temporarily unavailable. <Link href="/account" className="underline">Retry billing</Link>
+        </p>
+      )}
     </div>
   )
 }

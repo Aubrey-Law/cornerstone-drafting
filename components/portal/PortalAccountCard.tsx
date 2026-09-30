@@ -58,7 +58,7 @@ export function PortalAccountCard({ account, showAll = false }: { account: Porta
 
   return (
     <section className="rounded-lg border border-border bg-card p-5">
-      <h2 className="text-sm font-semibold text-foreground">Your account</h2>
+      <h2 className="text-sm font-semibold text-foreground">Billing</h2>
 
       {account.balanceCents > 0 ? (
         <>

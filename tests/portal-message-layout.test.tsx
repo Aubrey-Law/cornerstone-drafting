@@ -14,7 +14,7 @@ vi.mock('@/lib/messages/useMessagesRealtime', () => ({
 }))
 
 describe('portal message layout', () => {
-  it('keeps the header, conversation, and composer in the shared portal content column', () => {
+  it('opens on the shared portal page header above a framed conversation and composer', () => {
     Element.prototype.scrollIntoView = vi.fn()
 
     render(
@@ -25,9 +25,13 @@ describe('portal message layout', () => {
       />,
     )
 
+    const header = screen.getByTestId('portal-page-header')
     const column = screen.getByTestId('message-column')
-    expect(column.className).toContain('max-w-3xl')
-    expect(column.contains(screen.getByRole('heading', { name: 'Messages' }))).toBe(true)
+    // The title sits in the same page header as every other portal page,
+    // and the page shares their width.
+    expect(header.contains(screen.getByRole('heading', { name: 'Messages' }))).toBe(true)
+    expect(header.parentElement?.className).toContain('max-w-4xl')
     expect(column.contains(screen.getByPlaceholderText('Write a message…'))).toBe(true)
+    expect(screen.getByRole('button', { name: 'Send message' }).textContent).toContain('Send')
   })
 })

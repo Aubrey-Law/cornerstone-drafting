@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
@@ -446,12 +447,23 @@ export default function GuidedInterview({
     }
   }
 
+  // The questionnaire opens outside the portal shell, so a client needs a way
+  // back to the rest of the portal from here.
+  const portalLink = isAttorney ? null : (
+    <Link
+      href="/dashboard"
+      style={{ font: '500 13px/1 var(--gi-sans)', color: 'var(--gi-faint)', textDecoration: 'none' }}
+    >
+      ← Back to portal
+    </Link>
+  )
+
   // ===== render: submitted/locked (client) =====
   if (submitted && !isAttorney) {
     return (
       <div className="guided-interview" style={{ ...guidedPageStyle, minHeight: '100vh' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-          <BrandBar saveStatus="saved" matterLabel={undefined} />
+          <BrandBar saveStatus="saved" matterLabel={undefined} actions={portalLink} />
           <div style={{
             display: 'flex', gap: 16, alignItems: 'flex-start',
             background: 'var(--gi-amber-bg)', border: '1px solid var(--gi-amber-border)', borderRadius: 14, padding: '22px 26px',
@@ -478,6 +490,7 @@ export default function GuidedInterview({
         <BrandBar
           saveStatus={isAttorney ? (attorneySaving === 'idle' ? 'saved' : attorneySaving) : (saveStatus === 'idle' ? 'saved' : saveStatus)}
           matterLabel={isAttorney ? matterLabel : undefined}
+          actions={portalLink}
         />
 
         {/* Mobile stand-in for the rail's progress card (hidden at lg and up). */}
