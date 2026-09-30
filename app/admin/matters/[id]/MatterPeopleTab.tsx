@@ -14,7 +14,7 @@ import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
 import { MatterFiduciaryCard } from './MatterFiduciaryCard'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
-import { MatterTabHeader } from './MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 
 interface MatterPeopleTabProps {
@@ -45,7 +45,7 @@ export function MatterPeopleTabContent({
 
   return (
     <div className="space-y-6">
-      <MatterTabHeader
+      <RecordTabHeader
         title="People"
         description={`Household, fiduciary, and beneficiary roles for this ${recordLabel}.`}
         actions={

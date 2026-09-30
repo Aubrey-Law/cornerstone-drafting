@@ -7,6 +7,7 @@ import { MessageSquareText, Phone } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { FilterChip } from '@/components/FilterChip'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
 import { openExternalPhone } from '@/lib/clientPhone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -48,6 +49,12 @@ export interface RecordCommunicationsCardProps {
   smsDisabledReason?: string
   defaultChannel?: 'sms' | 'email'
   onClientContact?: () => void | Promise<void>
+  /**
+   * Opens the thread with a tab header of this title, carrying the scope line
+   * and the Texts and Call actions. Without it the card sits in a panel and
+   * keeps its compact layout.
+   */
+  title?: string
 }
 
 /**
@@ -71,6 +78,7 @@ function RecordCommunicationsContent({
   smsDisabledReason,
   defaultChannel,
   onClientContact,
+  title,
 }: RecordCommunicationsCardProps) {
   const token = useAccessToken()
   const [channel, setChannel] = useState<ThreadChannelFilter>(
@@ -160,41 +168,57 @@ function RecordCommunicationsContent({
     { key: 'email', label: 'Email' },
   ]
 
+  const scope = 'Client messages: texts and recorded outbound email. Inbound email is not included. Internal notes are in Notes.'
+  const channelChips = (
+    <div className="flex items-center gap-2 overflow-x-auto">
+      {chips.map(chip => (
+        <FilterChip key={chip.key} selected={channel === chip.key} onClick={() => setChannel(chip.key)}>
+          {chip.label}
+        </FilterChip>
+      ))}
+    </div>
+  )
+  const actions = textsPhone || recipientPhone ? (
+    <div className="flex items-center gap-2">
+      {textsPhone && (
+        <Link
+          href={`/admin/texts?phone=${encodeURIComponent(textsPhone.slice(2))}`}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'no-underline')}
+        >
+          <MessageSquareText className="h-3.5 w-3.5" />
+          Open in Texts
+        </Link>
+      )}
+      {recipientPhone && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => openExternalPhone({ number: recipientPhone })}
+        >
+          <Phone className="h-3.5 w-3.5" />
+          Call {recipientName.split(' ')[0] || 'contact'}
+        </Button>
+      )}
+    </div>
+  ) : null
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {chips.map(chip => (
-            <FilterChip key={chip.key} selected={channel === chip.key} onClick={() => setChannel(chip.key)}>
-              {chip.label}
-            </FilterChip>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-        {textsPhone && (
-          <Link
-            href={`/admin/texts?phone=${encodeURIComponent(textsPhone.slice(2))}`}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'no-underline')}
-          >
-            <MessageSquareText className="h-3.5 w-3.5" />
-            Open in Texts
-          </Link>
-        )}
-        {recipientPhone && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => openExternalPhone({ number: recipientPhone })}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            Call {recipientName.split(' ')[0] || 'contact'}
-          </Button>
-        )}
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground">Client messages: texts and recorded outbound email. Inbound email is not included. Internal notes are in Notes.</p>
+      {title ? (
+        <>
+          <RecordTabHeader title={title} description={scope} actions={actions} />
+          {channelChips}
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {channelChips}
+            {actions}
+          </div>
+          <p className="text-xs text-muted-foreground">{scope}</p>
+        </>
+      )}
       {readError && <p role="alert">{readError} <Button variant="link" onClick={() => void loadMessages()}>Retry history</Button></p>}
       <CommunicationThread
         items={items}

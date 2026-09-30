@@ -7,16 +7,16 @@ function read(relativePath: string) {
 }
 
 describe('lead assets and document management', () => {
-  it('folds the shared matter People workspace into the lead Intake tab', () => {
+  it('gives the shared matter People workspace its own lead tab', () => {
     const leadPage = read('app/admin/leads/[id]/page.tsx')
     const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
     const leadTabs = read('lib/leads/leadPageTabs.ts')
 
-    // People is no longer a tab of its own — it reads as part of Intake.
-    expect(leadTabs).not.toContain("'people',")
-    expect(leadTabs).toContain("people: 'intake'")
+    // People has its own tab again, as on the matter page.
+    expect(leadTabs).toContain("'people'")
+    expect(leadTabs).not.toContain("people: 'intake'")
     expect(leadPage).toContain('fetchMatterContacts(lead.matter_id)')
-    expect(leadDetail).not.toContain('<TabsTrigger value="people">')
+    expect(leadDetail).toContain('<TabsTrigger value="people">People</TabsTrigger>')
     expect(leadDetail).toContain('<MatterPeopleTabContent')
     expect(leadDetail).toContain('recordLabel="lead"')
   })
@@ -43,12 +43,12 @@ describe('lead assets and document management', () => {
 })
 
 describe('the opportunity workspace after the intake consolidation', () => {
-  it('opens on Overview with dedicated intake and work tabs', () => {
+  it('opens on Overview with the shared tabs in the matter page order', () => {
     const leadTabs = read('lib/leads/leadPageTabs.ts')
     const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
 
     expect(leadTabs).toContain(
-      "export const LEAD_TABS = ['overview', 'intake', 'assets', 'tasks', 'communications', 'documents', 'notes'] as const",
+      "export const LEAD_TABS = ['overview', 'intake', 'tasks', 'people', 'assets', 'documents', 'communications', 'notes'] as const",
     )
     // Plan and Timeline are folded into Intake, so neither has a trigger left.
     expect(leadDetail).not.toContain('<TabsTrigger value="plan">')
@@ -56,7 +56,7 @@ describe('the opportunity workspace after the intake consolidation', () => {
     // Intake is the landing tab, so it stays out of the URL like Plan did.
     expect(leadDetail).toContain("if (tab === 'overview') params.delete('tab')")
 
-    const order = ['overview', 'intake', 'assets', 'tasks', 'communications', 'documents', 'notes']
+    const order = ['overview', 'intake', 'tasks', 'people', 'assets', 'documents', 'communications', 'notes']
       .map(tab => leadDetail.indexOf(`<TabsTrigger value="${tab}"`))
     expect(order.every(index => index > 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
@@ -65,12 +65,15 @@ describe('the opportunity workspace after the intake consolidation', () => {
   it('keeps next-step context on Overview and questionnaire work in Intake', () => {
     const detail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
     const overview = detail.slice(detail.indexOf('<TabsContent value="overview"'), detail.indexOf('<TabsContent value="intake"'))
-    const intake = detail.slice(detail.indexOf('<TabsContent value="intake"'), detail.indexOf('<TabsContent value="tasks"'))
+    const intake = detail.slice(detail.indexOf('<TabsContent value="intake"'), detail.indexOf('<TabsContent value="people"'))
+    const people = detail.slice(detail.indexOf('<TabsContent value="people"'), detail.indexOf('<TabsContent value="tasks"'))
     expect(overview).toContain('<LeadOverview')
     expect(overview).toContain('{timeline}')
     expect(intake).toContain('<LeadIntakeCard')
-    expect(intake).toContain('<MatterPeopleTabContent')
+    expect(intake).not.toContain('<MatterPeopleTabContent')
     expect(intake).not.toContain('<LeadScoreCard')
+    expect(people).toContain('<MatterPeopleTabContent')
+    expect(people).toContain('<LeadChannelsCard')
   })
 
   it('moves the stage onto the rail and leaves the extra channels with the people', () => {

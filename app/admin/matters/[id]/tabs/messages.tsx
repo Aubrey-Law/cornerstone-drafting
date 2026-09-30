@@ -18,7 +18,7 @@ import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { CommunicationThread } from '@/components/comms/CommunicationThread'
 import type { CommunicationItem } from '@/lib/comms/thread'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
-import { MatterTabHeader } from '../MatterTabHeader'
+import { RecordTabHeader } from '@/components/RecordTabHeader'
 
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
@@ -165,7 +165,7 @@ export function MatterCommunicationsTab({
 
   return (
     <TabsContent value="communications" className="space-y-4">
-      <MatterTabHeader
+      <RecordTabHeader
         title="Messages"
         description="Portal messages, texts, email, and call logs for this matter."
         actions={

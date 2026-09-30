@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 
 /**
- * The top of every matter tab but Overview: what the tab is, one line on what
+ * The top of every matter or lead tab but Overview: what the tab is, one line on what
  * it holds, and its actions — a view switch included — on the right. One
  * shape, so each tab starts in the same place and its controls are where the
  * last tab's were.
  */
-export function MatterTabHeader({
+export function RecordTabHeader({
   title,
   description,
   actions,
@@ -16,7 +16,7 @@ export function MatterTabHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3" data-testid="matter-tab-header">
+    <div className="flex flex-wrap items-start justify-between gap-3" data-testid="record-tab-header">
       <div className="min-w-0">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
