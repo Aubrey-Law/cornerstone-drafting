@@ -28,9 +28,12 @@ interface PersonResult {
   secondEmail: string | null
 }
 
+type VideoProvider = 'google_meet' | 'microsoft_teams'
+
 interface Draft {
   typeId: string
   locationType: LocationType
+  videoProvider: VideoProvider
   attendeeFirstName: string
   attendeeLastName: string
   attendeeEmail: string
@@ -45,6 +48,7 @@ function initialDraft(types: BookableType[], prefillIso?: string | null): Draft 
   return {
     typeId: types[0]?.id ?? '',
     locationType: allowedFormats(types[0])[0],
+    videoProvider: 'google_meet',
     attendeeFirstName: '',
     attendeeLastName: '',
     attendeeEmail: '',
@@ -91,7 +95,20 @@ export function QuickBookPopover({
   const [connected, setConnected] = useState(true)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booking, setBooking] = useState(false)
+  const [teamsConnected, setTeamsConnected] = useState(false)
   const selectedType = types.find(type => type.id === draft.typeId)
+
+  // Teams is offered only once Microsoft 365 is connected; otherwise the
+  // choice would book a Meet anyway and surprise the attorney.
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    void fetch('/api/admin/microsoft/status', { headers: authHeaders(), signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(body => setTeamsConnected(Boolean(body?.connected && body?.hasTeamsScope)))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [open, authHeaders])
 
   useEffect(() => {
     if (!open) return
@@ -158,6 +175,7 @@ export function QuickBookPopover({
         body: JSON.stringify({
           typeId: draft.typeId,
           locationType: draft.locationType,
+          videoProvider: draft.locationType === 'teams' && teamsConnected ? draft.videoProvider : undefined,
           startIso: draft.startIso,
           attendeeFirstName: draft.attendeeFirstName,
           attendeeLastName: draft.attendeeLastName,
@@ -173,7 +191,11 @@ export function QuickBookPopover({
         toast.error(body.error ?? 'Booking failed')
         return
       }
-      toast.success('Appointment booked — confirmation email sent')
+      if (body.teamsMeetingError) {
+        toast.warning(`Booked with Google Meet: the Teams meeting could not be created (${body.teamsMeetingError})`)
+      } else {
+        toast.success('Appointment booked — confirmation email sent')
+      }
       onOpenChange(false)
       setDraft(initialDraft(types, null))
       setQuery('')
@@ -307,6 +329,24 @@ export function QuickBookPopover({
                 </button>
               ))}
             </div>
+            {draft.locationType === 'teams' && teamsConnected && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="text-micro text-muted-foreground">Video:</span>
+                {([
+                  ['google_meet', 'Google Meet'],
+                  ['microsoft_teams', 'Microsoft Teams'],
+                ] as const).map(([provider, label]) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    onClick={() => setDraft(current => ({ ...current, videoProvider: provider }))}
+                    className={cn('rounded-full border px-2.5 py-1 text-xs', draft.videoProvider === provider ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-accent')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </Step>
 
           <Step number="4" title="When">

@@ -57,6 +57,16 @@ export async function rescheduleAppointmentEvent(
   await google.rescheduleCalendarEvent(eventId, startIso, endIso)
 }
 
+/** Swap an appointment's event onto a Teams join link. No event, nothing to do. */
+export async function attachTeamsMeetingToAppointmentEvent(
+  appointment: AppointmentEventIds,
+  joinUrl: string,
+): Promise<void> {
+  const eventId = eventIdForAppointment(appointment)
+  if (!eventId) return
+  await google.attachTeamsMeetingToCalendarEvent(eventId, joinUrl)
+}
+
 /** RSVP state for an appointment's event. */
 export async function appointmentEventAttendees(
   appointment: AppointmentEventIds,

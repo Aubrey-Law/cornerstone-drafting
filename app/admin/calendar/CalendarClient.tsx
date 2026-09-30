@@ -1005,6 +1005,10 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         onOpenChange={open => !open && setSelectedAppointment(null)}
         authHeaders={authHeaders}
         onReschedule={beginReschedule}
+        onAppointmentChanged={updated => {
+          setSelectedAppointment(current => (current?.id === updated.id ? updated : current))
+          setAppointments(rows => rows.map(row => (row.id === updated.id ? updated : row)))
+        }}
         onBookNext={appointment => {
           setSelectedAppointment(null)
           openQuickBook({ date: addDays(new Date(appointment.startTime), 7) })

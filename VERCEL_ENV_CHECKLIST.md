@@ -278,10 +278,36 @@ Where an older grant is still in place, remove Cornerstone at
 connect again. The callback refuses to store a connection without one rather
 than saving something that stops working within the hour.
 
+## Optional — Microsoft Teams meetings
+
+Lets appointments carry a Microsoft Teams join link instead of Google Meet. The
+calendar stays on Google: Cornerstone creates a Teams meeting through Microsoft
+Graph (`/me/onlineMeetings`) and puts its join link on the Google event and in
+the client's confirmation and reminder emails. Staff choose **Microsoft Teams**
+under *Video* when quick-booking a virtual meeting, or press **Add Teams
+meeting** on an upcoming appointment in the calendar drawer.
+
+| Variable | Purpose |
+|----------|---------|
+| `MICROSOFT_CLIENT_ID` | Application (client) ID of the Entra app registration |
+| `MICROSOFT_CLIENT_SECRET` | A client secret *value* for that registration |
+| `MICROSOFT_REDIRECT_URI` | Must exactly match a *Web* redirect URI on the registration: `https://<host>/api/admin/microsoft/callback` |
+| `MICROSOFT_TENANT_ID` | Optional. The firm's tenant ID or domain; defaults to `organizations` (any work or school account) |
+
+Connect from **Settings → Google & Teams → Microsoft Teams**.
+
+**Entra setup:** register an app (*Accounts in this organizational directory
+only* is enough), add the redirect URI above as a *Web* platform, create a
+client secret, and under **API permissions** add Microsoft Graph *delegated*
+`User.Read`, `offline_access` and `OnlineMeetings.ReadWrite`, then **Grant
+admin consent**. Teams meetings need a work or school account with a Teams
+licence; Graph refuses them for personal Microsoft accounts.
+
 ## Retired — Microsoft 365 (Outlook mail and calendar, Microsoft sign-in)
 
 The firm runs on Google. Nothing in the app reads or writes Outlook, and the
-"Continue with Microsoft" sign-in button is gone.
+"Continue with Microsoft" sign-in button is gone. (Teams meetings, above, are a
+separate opt-in with their own `MICROSOFT_*` variables and never touch Outlook.)
 
 These variables are no longer read by any code path and can be deleted from
 Vercel and from every local env file:

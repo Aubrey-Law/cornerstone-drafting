@@ -18,6 +18,7 @@ interface DueReminderRow {
   attendee_phone: string | null
   second_attendee_email: string | null
   online_meeting_url: string | null
+  online_meeting_provider?: 'google_meet' | 'microsoft_teams' | null
   location_type: string | null
   created_at: string
   raw?: unknown
@@ -52,7 +53,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   const { data, error } = await admin
     .from('appointments')
-    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, attendee_phone, second_attendee_email, online_meeting_url, location_type, created_at, raw')
+    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, attendee_phone, second_attendee_email, online_meeting_url, online_meeting_provider, location_type, created_at, raw')
     .eq('status', 'scheduled')
     .is('reminder_sent_at', null)
     .gt('start_time', nowIso)
@@ -135,6 +136,7 @@ async function sendReminderEmail(input: {
         { ...type, locationType: resolveLocationType(row.location_type, type) },
         office,
         row.online_meeting_url,
+        row.online_meeting_provider ?? null,
       )
     : null
 

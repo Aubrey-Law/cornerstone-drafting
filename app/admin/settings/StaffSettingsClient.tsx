@@ -28,6 +28,7 @@ import { EmailSettingsSection } from './EmailSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
 import { CalendlyLinksSection } from './CalendlyLinksSection'
 import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
+import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { TemplateCenter } from './TemplateCenter'
 
@@ -401,7 +402,7 @@ export function StaffSettingsClient({
             ['models', 'Models'],
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
-            ['google', 'Google'],
+            ['google', 'Google & Teams'],
             ['email', 'Email'],
             ['scheduling', 'Scheduling'],
             ['lawmatics', 'Lawmatics'],
@@ -759,6 +760,8 @@ export function StaffSettingsClient({
           </p>
         </section>
       )}
+
+      {tab === 'google' && <MicrosoftTeamsSection />}
 
       {tab === 'email' && <EmailSettingsSection />}
 
