@@ -303,6 +303,9 @@ export function buildWorkGraph(
   }
 
   for (const appointment of sources.today.appointmentsToday) {
+    // A free/busy interval protects the suggested schedule, but has no title,
+    // client, or legal context and therefore cannot justify a preparation task.
+    if (appointment.id.startsWith('calendar-busy:')) continue
     const starts = Date.parse(appointment.next_appointment)
     if (Number.isNaN(starts) || starts < now.getTime()) continue
     const hours = (starts - now.getTime()) / 3_600_000

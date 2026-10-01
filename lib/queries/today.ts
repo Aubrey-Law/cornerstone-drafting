@@ -36,6 +36,8 @@ export interface TodayAppointment {
   matter_id: string | null
   client_name: string | null
   next_appointment: string
+  /** Exact end when the calendar source provides it; legacy rows default to one hour. */
+  end_at?: string
   next_appointment_type: string | null
   href: string
   is_all_day: boolean
@@ -166,7 +168,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
     fetchDueTasks(dueThrough),
     admin
       .from('appointments')
-      .select('id, start_time, status, attendee_name, linked_matter_id, google_event_id, appointment_type_id')
+      .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id, appointment_type_id')
       .gte('start_time', calendarFrom)
       .lt('start_time', calendarTo)
       .eq('status', 'scheduled')
@@ -214,6 +216,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
   const appointmentRows = (appointmentsRes.data ?? []) as Array<{
     id: string
     start_time: string
+    end_time: string
     attendee_name: string
     linked_matter_id: string | null
     google_event_id: string | null
@@ -239,6 +242,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
       matter_id: row.linked_matter_id,
       client_name: row.attendee_name || null,
       next_appointment: row.start_time,
+      end_at: row.end_time,
       next_appointment_type: row.appointment_type_id
         ? appointmentTypeById.get(row.appointment_type_id) ?? null
         : null,

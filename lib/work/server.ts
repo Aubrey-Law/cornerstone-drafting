@@ -1,7 +1,9 @@
 import 'server-only'
 
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { fetchCalendarBusy } from '@/lib/appointments/calendarBusy'
 import { isSmsConfigured } from '@/lib/communications/config'
+import { firmTodayKey } from '@/lib/firmDate'
 import { fetchEmailTriageQueue, fetchTriageEnabled } from '@/lib/queries/emailTriage'
 import { listSmsThreads } from '@/lib/queries/smsThreads'
 import { fetchDueTasks } from '@/lib/queries/tasks'
@@ -17,6 +19,7 @@ import {
   type WorkItemOverride,
   type WorkPreferences,
 } from '@/lib/work/types'
+import { addCalendarBusyToToday } from '@/lib/work/calendarBusy'
 
 interface WorkPreferencesRow {
   max_must_do: number
@@ -88,9 +91,20 @@ export async function fetchWorkGraphForUser(
 ): Promise<WorkGraphResult> {
   const sourceErrors: string[] = []
   const through = new Date(now.getTime() + 5 * 86_400_000).toISOString()
+  const todayKey = firmTodayKey(now)
+  const firmNoonUtc = Date.parse(`${todayKey}T12:00:00Z`)
+  const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000)
+  const calendarTo = new Date(firmNoonUtc + 18 * 60 * 60 * 1000)
 
-  const [today, futureTasks, overrides, email, sms, failedWorkflowJobs, failedAutomationRuns] = await Promise.all([
-    fetchTodayData({ includeCalendar: true }),
+  const [today, calendarBusy, futureTasks, overrides, email, sms, failedWorkflowJobs, failedAutomationRuns] = await Promise.all([
+    // The work graph must not synchronously enumerate every visible Google
+    // calendar. One freeBusy request below supplies the planner with the same
+    // blocking calendars while the database remains the source of obligations.
+    fetchTodayData({ includeCalendar: false }),
+    // Leave room inside the 1.5s API SLO for the database adapters. A slow
+    // provider is reported as a source error rather than silently producing a
+    // schedule that looks conflict-free.
+    optionalSource('calendar', () => fetchCalendarBusy(calendarFrom, calendarTo, { timeoutMs: 900 }), [], sourceErrors),
     optionalSource('future_tasks', () => fetchDueTasks(through), [], sourceErrors),
     userId ? fetchWorkOverrides(userId) : Promise.resolve([]),
     optionalSource('email', async () =>
@@ -120,7 +134,7 @@ export async function fetchWorkGraphForUser(
   ])
 
   return buildWorkGraph({
-    today,
+    today: addCalendarBusyToToday(today, calendarBusy),
     futureTasks,
     overrides,
     email,
