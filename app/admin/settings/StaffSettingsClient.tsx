@@ -50,6 +50,7 @@ type Tab =
  * switch — but they belong to Settings, so the tab strip links to them.
  */
 const SETTINGS_SUBROUTES = [
+  { href: '/admin/settings/command-center', label: 'Command center' },
   { href: '/admin/settings/estate-tax', label: 'Estate tax' },
   { href: '/admin/settings/style-sets', label: 'Style sets' },
   { href: '/admin/settings/sync', label: 'Sync' },

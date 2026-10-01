@@ -10,6 +10,10 @@ const shadowRollout = fs.readFileSync(
   path.join(process.cwd(), 'supabase/migrations/20270102090100_command_center_shadow_rollout.sql'),
   'utf8',
 )
+const rolloutMetrics = fs.readFileSync(
+  path.join(process.cwd(), 'supabase/migrations/20270102090200_command_center_rollout_metrics.sql'),
+  'utf8',
+)
 
 describe('command center database foundation', () => {
   for (const table of [
@@ -34,5 +38,12 @@ describe('command center database foundation', () => {
   it('keeps the command center opt-in until shadow reconciliation passes', () => {
     expect(migration).toContain('command_center_v2_enabled boolean not null default false')
     expect(shadowRollout).toContain('set command_center_v2_enabled = false')
+  })
+
+  it('stores aggregate-only shadow evidence behind staff RLS', () => {
+    expect(rolloutMetrics).toContain('create table public.work_graph_reconciliation_runs')
+    expect(rolloutMetrics).toContain('enable row level security')
+    expect(rolloutMetrics).toContain('work_graph_reconciliation_staff_select')
+    expect(rolloutMetrics).not.toMatch(/\n\s+(title|message_body|legal_fact|work_key)\s/)
   })
 })

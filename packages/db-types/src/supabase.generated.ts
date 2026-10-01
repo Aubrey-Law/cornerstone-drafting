@@ -281,8 +281,8 @@ export type Database = {
           manage_token_expires_at: string | null
           manage_token_hash: string | null
           notes: string | null
-          online_meeting_url: string | null
           online_meeting_provider: string | null
+          online_meeting_url: string | null
           raw: Json
           reminder_sent_at: string | null
           second_attendee_email: string | null
@@ -314,8 +314,8 @@ export type Database = {
           manage_token_expires_at?: string | null
           manage_token_hash?: string | null
           notes?: string | null
-          online_meeting_url?: string | null
           online_meeting_provider?: string | null
+          online_meeting_url?: string | null
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
@@ -347,8 +347,8 @@ export type Database = {
           manage_token_expires_at?: string | null
           manage_token_hash?: string | null
           notes?: string | null
-          online_meeting_url?: string | null
           online_meeting_provider?: string | null
+          online_meeting_url?: string | null
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
@@ -5286,6 +5286,8 @@ export type Database = {
           calendar_daily_target_minutes: number
           city: string | null
           command_center_v2_enabled: boolean
+          command_center_v2_enabled_at: string | null
+          command_center_v2_enabled_by: string | null
           durable_workflow_jobs_enabled: boolean
           email: string | null
           email_logo_header: boolean
@@ -5318,6 +5320,8 @@ export type Database = {
           calendar_daily_target_minutes?: number
           city?: string | null
           command_center_v2_enabled?: boolean
+          command_center_v2_enabled_at?: string | null
+          command_center_v2_enabled_by?: string | null
           durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
@@ -5350,6 +5354,8 @@ export type Database = {
           calendar_daily_target_minutes?: number
           city?: string | null
           command_center_v2_enabled?: boolean
+          command_center_v2_enabled_at?: string | null
+          command_center_v2_enabled_by?: string | null
           durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
@@ -9774,6 +9780,81 @@ export type Database = {
         }
         Relationships: []
       }
+      work_graph_reconciliation_runs: {
+        Row: {
+          additional_count: number
+          canonical_count: number
+          coverage_percent: number
+          created_at: string
+          critical_count: number
+          critical_misclassified_count: number
+          differently_ranked_count: number
+          duplicate_count: number
+          duration_ms: number
+          firm_date: string
+          generated_at: string
+          id: string
+          idempotency_key: string
+          legacy_count: number
+          mapped_count: number
+          omitted_count: number
+          ownership_violation_count: number
+          readiness_passed: boolean
+          source_counts: Json
+          source_error_codes: string[]
+          trigger: string
+          user_id: string
+        }
+        Insert: {
+          additional_count: number
+          canonical_count: number
+          coverage_percent: number
+          created_at?: string
+          critical_count: number
+          critical_misclassified_count: number
+          differently_ranked_count: number
+          duplicate_count: number
+          duration_ms: number
+          firm_date: string
+          generated_at: string
+          id?: string
+          idempotency_key: string
+          legacy_count: number
+          mapped_count: number
+          omitted_count: number
+          ownership_violation_count: number
+          readiness_passed?: boolean
+          source_counts?: Json
+          source_error_codes?: string[]
+          trigger: string
+          user_id: string
+        }
+        Update: {
+          additional_count?: number
+          canonical_count?: number
+          coverage_percent?: number
+          created_at?: string
+          critical_count?: number
+          critical_misclassified_count?: number
+          differently_ranked_count?: number
+          duplicate_count?: number
+          duration_ms?: number
+          firm_date?: string
+          generated_at?: string
+          id?: string
+          idempotency_key?: string
+          legacy_count?: number
+          mapped_count?: number
+          omitted_count?: number
+          ownership_violation_count?: number
+          readiness_passed?: boolean
+          source_counts?: Json
+          source_error_codes?: string[]
+          trigger?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       work_item_overrides: {
         Row: {
           assigned_to: string | null
@@ -10611,13 +10692,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_intake_matter_id_fkey"
-            columns: ["matter_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["cornerstone_matter_id"]
             isOneToOne: false
             referencedRelation: "matters"
@@ -10627,8 +10701,8 @@ export type Database = {
             foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["matter_id"]
             isOneToOne: false
-            referencedRelation: "v_matter_pipeline"
-            referencedColumns: ["matter_id"]
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_intake_matter_id_fkey"
@@ -10640,13 +10714,20 @@ export type Database = {
           {
             foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "client_intake_matter_id_fkey"
+            columns: ["cornerstone_matter_id"]
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
           },
           {
             foreignKeyName: "client_intake_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
+            columns: ["matter_id"]
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
