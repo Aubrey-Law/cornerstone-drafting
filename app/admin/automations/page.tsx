@@ -1,11 +1,10 @@
-import { Activity, AlertTriangle, Clock3, Workflow } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { listAutomationRules } from '@/lib/automations/server'
-import { SYSTEM_AUTOMATIONS } from '@/lib/automations/registry'
 import { AutomationsClient, type AutomationRuleView } from './AutomationsClient'
 import { ApprovalInbox, type ApprovalProposal } from './ApprovalInbox'
 import { getCachedClaims } from '@/lib/supabaseServer'
@@ -14,9 +13,10 @@ export const dynamic = 'force-dynamic'
 
 export default async function AutomationsPage() {
   const auth = await getCachedClaims()
-  const [rules, failed, pendingResult, executionResult] = await Promise.all([
+  const [rules, failedJobs, failedRuns, pendingResult, executionResult] = await Promise.all([
     listAutomationRules().catch(() => []),
     getAdminClient().from('workflow_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+    getAdminClient().from('automation_runs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
     getAdminClient().from('action_proposals')
       .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
       .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
@@ -26,7 +26,7 @@ export default async function AutomationsPage() {
       .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
       .order('created_at', { ascending: false }).limit(10),
   ])
-  const failedCount = failed.count ?? 0
+  const failedCount = (failedJobs.count ?? 0) + (failedRuns.count ?? 0)
   const pending = pendingResult.data ?? []
   const executions = executionResult.data ?? []
 
@@ -47,33 +47,10 @@ export default async function AutomationsPage() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-base font-semibold">Configurable rules</h2>
-          <p className="text-sm text-muted-foreground">Templates begin paused. “Enable safely” starts in dry-run mode.</p>
+          <h2 className="text-base font-semibold">Operational control</h2>
+          <p className="text-sm text-muted-foreground">System schedules and allowlisted rules share one health, history, approval, and pause surface.</p>
         </div>
         <AutomationsClient initialRules={rules as unknown as AutomationRuleView[]} />
-      </section>
-
-      <section className="mt-6 space-y-3">
-        <div>
-          <h2 className="text-base font-semibold">System schedules</h2>
-          <p className="text-sm text-muted-foreground">Deployment-managed jobs already operating across Cornerstone.</p>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {SYSTEM_AUTOMATIONS.map(automation => (
-            <Card key={automation.key}>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-2"><Workflow className="h-4 w-4" />{automation.name}</span>
-                  <Badge variant="outline">System</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{automation.schedule}</CardDescription>
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Activity className="h-3.5 w-3.5" />Managed by deployment configuration</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </section>
 
       <section className="mt-6 grid gap-4 lg:grid-cols-2">

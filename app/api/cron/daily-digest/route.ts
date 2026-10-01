@@ -6,6 +6,7 @@ import { appUrl } from '@/lib/urls'
 import { fetchWorkGraphForUser } from '@/lib/work/server'
 import { createDailyPlanPreview } from '@/lib/work/planner'
 import { DEFAULT_WORK_PREFERENCES } from '@/lib/work/types'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ function escapeHtml(value: string) {
 
 // GET /api/cron/daily-digest — a deterministic summary of the same canonical
 // work graph as Today. It does not ask an LLM to select or reorder obligations.
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,4 +66,8 @@ export async function GET(req: Request) {
     communication: plan.communication.length,
     overload: plan.overload,
   })
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('daily-digest', req, () => handle(req), { leaseSeconds: 180 })
 }

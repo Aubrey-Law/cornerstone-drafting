@@ -13,6 +13,7 @@ import { toRunSteps } from '@/lib/runs/steps'
 import { materialiseStageTrigger } from '@/lib/runs/triggers'
 import { workRun } from '@/lib/runs/worker'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { runSystemAutomation } from '@/lib/automations/control'
 import type { GeneratedDatabase } from '@/types/supabase'
 import type { FieldAuditBody } from '@aubrey-law/citations/prompt/body'
 import type { ModelCaller } from '@aubrey-law/citations/review/model'
@@ -52,7 +53,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   // No secret means no, never "allow" — an unauthenticated worker able to
   // claim and work runs is worse than a queue that never runs at all.
@@ -218,4 +219,8 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({ reaped, materialised, fiduciary, identity, claimedRunId: runId, worked: result.worked, done: result.done })
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('run-queue', req, () => handle(req), { leaseSeconds: 300 })
 }

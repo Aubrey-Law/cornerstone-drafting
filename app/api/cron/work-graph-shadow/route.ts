@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { runWorkGraphReconciliation } from '@/lib/work/rolloutServer'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 240
 
 // One aggregate-only shadow sample per staff user and firm business date.
 // The idempotency key makes Vercel retries harmless.
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -50,4 +51,8 @@ export async function GET(req: Request) {
     passed: results.filter(result => result.passed).length,
     failed: failed.length,
   }, { status: failed.length ? 207 : 200 })
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('work-graph-shadow', req, () => handle(req), { leaseSeconds: 300 })
 }

@@ -15,6 +15,9 @@ describe('shared action registry', () => {
       { key: 'calendar.hold.create', risk: 'internal_write' },
       { key: 'email.draft.send', risk: 'external_write' },
       { key: 'matter.stage.transition', risk: 'legal_financial' },
+      { key: 'workflow.enqueue', risk: 'internal_write' },
+      { key: 'email.draft.prepare', risk: 'prepare' },
+      { key: 'billing.reminders.prepare', risk: 'prepare' },
     ]))
   })
 
@@ -22,6 +25,7 @@ describe('shared action registry', () => {
     expect(() => getActionDefinition('task.complete')?.validate({ taskId: 'not-a-uuid' }, actor)).toThrow('valid task')
     expect(() => getActionDefinition('work.override')?.validate({ workKey: 'task:1', state: 'snoozed' }, actor)).toThrow('wake time')
     expect(() => getActionDefinition('email.draft.send')?.validate({ draftId: 'not-a-uuid' }, actor)).toThrow('valid identifier')
+    expect(() => getActionDefinition('workflow.enqueue')?.validate({ type: 'delete_everything', matterId: actor.id, dedupeKey: 'bad' }, actor)).toThrow('allowlisted')
   })
 
   it('drops prompt-injected keys from task proposals', () => {
