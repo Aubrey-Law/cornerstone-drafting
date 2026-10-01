@@ -116,6 +116,22 @@ describe('canonical work graph', () => {
     expect(graph.items[0]).toMatchObject({ state: 'snoozed', priorityBand: 4 })
   })
 
+  it('uses calendar-only busy time for planning without inventing a preparation obligation', () => {
+    const graph = buildWorkGraph({ today: today({ appointmentsToday: [{
+      id: 'calendar-busy:2026-09-30T15:00:00.000Z:2026-09-30T16:00:00.000Z',
+      matter_id: null,
+      client_name: null,
+      next_appointment: '2026-09-30T15:00:00.000Z',
+      end_at: '2026-09-30T16:00:00.000Z',
+      next_appointment_type: 'Calendar commitment',
+      href: '/admin/calendar',
+      is_all_day: false,
+    }] }) }, NOW)
+
+    expect(graph.items).toEqual([])
+    expect(graph.appointments).toHaveLength(1)
+  })
+
   it('reconciles shadow and canonical queues without exposing source content', () => {
     const legacy = buildWorkGraph({ today: today({ tasksDueToday: [task({ due_at: '2026-09-30T16:00:00.000Z' })] }) }, NOW)
     const extra = task({ id: '00000000-0000-4000-8000-000000000002', due_at: '2026-10-01T16:00:00.000Z' })

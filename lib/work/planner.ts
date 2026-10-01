@@ -41,7 +41,11 @@ function appointmentBusyIntervals(appointments: TodayAppointment[]): Array<{ sta
     .filter(appointment => !appointment.is_all_day)
     .flatMap(appointment => {
       const start = Date.parse(appointment.next_appointment)
-      return Number.isNaN(start) ? [] : [{ start, end: start + 60 * MINUTE_MS }]
+      const parsedEnd = appointment.end_at ? Date.parse(appointment.end_at) : NaN
+      const end = Number.isFinite(parsedEnd) && parsedEnd > start
+        ? parsedEnd
+        : start + 60 * MINUTE_MS
+      return Number.isNaN(start) ? [] : [{ start, end }]
     })
     .sort((a, b) => a.start - b.start)
 }

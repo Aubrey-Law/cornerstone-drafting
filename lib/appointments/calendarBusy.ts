@@ -38,15 +38,25 @@ async function googleFetch(input: string, init: RequestInit = {}): Promise<Respo
  * client books on top of something already in the attorney's calendar, so a
  * read failure has to be louder than an empty result.
  */
-export async function fetchCalendarBusy(rangeStart: Date, rangeEnd: Date): Promise<Interval[]> {
+export async function fetchCalendarBusy(
+  rangeStart: Date,
+  rangeEnd: Date,
+  options: { timeoutMs?: number } = {},
+): Promise<Interval[]> {
   const conn = await getGoogleConnectionForUser(null)
   if (!conn) {
     throw new AvailabilityUnavailableError('Google Calendar is not connected')
   }
 
   let token: string
+  let blockingCalendarIds: string[]
   try {
-    token = await getAccessToken(conn.user_id)
+    const [resolvedToken, settings] = await Promise.all([
+      getAccessToken(conn.user_id),
+      getSchedulingSettings(),
+    ])
+    token = resolvedToken
+    blockingCalendarIds = settings.blockingCalendarIds
   } catch (err) {
     console.error('[appointments] Google token acquisition failed:', err)
     throw new AvailabilityUnavailableError(
@@ -54,12 +64,12 @@ export async function fetchCalendarBusy(rangeStart: Date, rangeEnd: Date): Promi
     )
   }
 
-  const { blockingCalendarIds } = await getSchedulingSettings()
   const requestedIds = busyCalendarIds(blockingCalendarIds)
 
   const r = await googleFetch(`${CALENDAR_BASE}/freeBusy`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
     body: JSON.stringify({
       timeMin: rangeStart.toISOString(),
       timeMax: rangeEnd.toISOString(),

@@ -7,6 +7,7 @@ vi.mock('@/lib/appointments/googleEvents', () => ({
   findOpenSlots: vi.fn(),
   listCalendarEvents: vi.fn(),
 }))
+vi.mock('@/lib/appointments/calendarBusy', () => ({ fetchCalendarBusy: vi.fn(async () => []) }))
 
 const today = vi.hoisted(() => ({
   fetchTodayData: vi.fn(),
@@ -75,7 +76,7 @@ describe('the firm-today tool', () => {
     const result = await firmTodayToolExecutor.execute({}, hooks)
     const body = JSON.parse(result.content) as Record<string, unknown>
 
-    expect(today.fetchTodayData).toHaveBeenCalledWith({ includeCalendar: true })
+    expect(today.fetchTodayData).toHaveBeenCalledWith({ includeCalendar: false })
     expect(body.ok).toBe(true)
     expect(body.now).toMatchObject({ source: 'portal_message', title: 'Reply to Amy Chen', record: { type: 'matter', id: 'm1' } })
     const mustDo = body.must_do as Array<Record<string, unknown>>

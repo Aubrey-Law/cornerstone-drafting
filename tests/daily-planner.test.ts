@@ -60,4 +60,20 @@ describe('daily planner', () => {
     expect(itemsExceptNow([now, item('after', 1)], now).map(value => value.workKey))
       .toEqual(['after'])
   })
+
+  it('fits work after the exact end of a calendar busy interval', () => {
+    const preview = createDailyPlanPreview({
+      items: [item('next', 1)],
+      preferences: DEFAULT_WORK_PREFERENCES,
+      now: NOW,
+      appointments: [{
+        id: 'calendar-busy:one', matter_id: null, client_name: null,
+        next_appointment: '2026-09-30T13:15:00.000Z',
+        end_at: '2026-09-30T14:45:00.000Z',
+        next_appointment_type: 'Calendar commitment', href: '/admin/calendar', is_all_day: false,
+      }],
+    })
+
+    expect(preview.blocks[0]?.startAt).toBe('2026-09-30T14:45:00.000Z')
+  })
 })
