@@ -1,8 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
-import { createCalendarHold } from '@/lib/appointments/googleEvents'
 import { computeSlots } from '@/lib/appointments/availability'
-import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
+import { fetchAllBusy } from '@/lib/appointments/calendarBusy'
 import { getSchedulingSettings, listAppointmentTypes } from '@/lib/appointments/settings'
 import { effectiveWeeklyHours } from '@/lib/appointments/types'
 import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
@@ -26,9 +25,8 @@ import { proposeWrite } from '@/lib/adminChat/proposals'
 import { parseRecurrence as parseRecurrenceText } from '@/lib/tasks/recurrence'
 import type { TaskRecurrence } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { createTaskCalendarHold } from '@/lib/tasks/calendarHold'
 
-const DAY_MS = 86_400_000
-const TASK_HOLD_TYPE_KEY = 'task_block'
 
 interface CalendarPlanningContext {
   defaultMatterId?: string | null
@@ -200,53 +198,6 @@ function normalizeChecklist(value: unknown): ChecklistItem[] {
   })
 }
 
-async function getOrCreateTaskHoldType(admin: ReturnType<typeof getAdminClient>): Promise<string> {
-  const { data: existing, error: existingError } = await admin
-    .from('appointment_types')
-    .select('id, key')
-    .eq('key', TASK_HOLD_TYPE_KEY)
-    .maybeSingle()
-  if (existingError) throw existingError
-  if (existing?.id) return existing.id as string
-
-  const inserted = await admin.from('appointment_types').insert({
-    key: TASK_HOLD_TYPE_KEY,
-    slug: 'task-block',
-    label: 'Task hold',
-    description: 'Internal planning hold created from tasks.',
-    duration_minutes: 30,
-    location_type: 'phone',
-    location_types: ['phone'],
-    active: false,
-    public: false,
-    sort: 999,
-  } as const)
-
-  if (inserted.error) {
-    if (inserted.error.code !== '23505') throw inserted.error
-    const retried = await admin
-      .from('appointment_types')
-      .select('id, key')
-      .eq('key', TASK_HOLD_TYPE_KEY)
-      .maybeSingle()
-    if (retried.data?.id) return retried.data.id as string
-    throw inserted.error
-  }
-
-  const { data: refreshed, error: refreshedError } = await admin
-    .from('appointment_types')
-    .select('id, key')
-    .eq('key', TASK_HOLD_TYPE_KEY)
-    .maybeSingle()
-  if (refreshedError) throw refreshedError
-  if (refreshed?.id) return refreshed.id as string
-  throw new Error('Unable to initialize task hold appointment type')
-}
-
-function taskHoldTypeLabel(taskTitle: string): string {
-  return `Task hold: ${taskTitle}`
-}
-
 function buildCreateTaskPayload(fields: Record<string, unknown>, context: CalendarPlanningContext): CreateTaskInput {
   const title = typeof fields.title === 'string' ? fields.title.trim() : ''
   if (!title) throw new Error('title is required')
@@ -352,79 +303,19 @@ async function createTaskFromInput(input: CreateTaskInput, actor: { id: string; 
   if (!task) throw new Error('Task creation failed')
 
   if (input.calendarAddToCalendar && input.calendarStartAt && input.calendarDurationMinutes) {
-    const startMs = Date.parse(input.calendarStartAt)
-    const endMs = startMs + input.calendarDurationMinutes * 60_000
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-      await admin.from('tasks').delete().eq('id', task.id)
-      throw new Error('Invalid calendar window')
-    }
-
     try {
-      const busy = await fetchAllBusy(new Date(startMs - DAY_MS), new Date(endMs + DAY_MS))
-      if (busy.some(interval => startMs < interval.end && endMs > interval.start)) {
-        await admin.from('tasks').delete().eq('id', task.id)
-        throw new Error('That time overlaps an existing appointment')
-      }
+      await createTaskCalendarHold({
+        admin,
+        task,
+        startAt: input.calendarStartAt,
+        durationMinutes: input.calendarDurationMinutes,
+        showAsBusy: input.calendarShowAsBusy,
+        actorId: actor?.id ?? null,
+        actorEmail: actor?.email ?? null,
+      })
     } catch (error) {
       await admin.from('tasks').delete().eq('id', task.id)
-      if (error instanceof AvailabilityUnavailableError) {
-        throw new Error(error.message)
-      }
-      throw new Error('Could not verify calendar availability')
-    }
-
-    const appointmentTypeId = await getOrCreateTaskHoldType(admin)
-    const startIso = new Date(startMs).toISOString()
-    const endIso = new Date(endMs).toISOString()
-    const attendeeName = taskHoldTypeLabel(input.title)
-
-    const appointment = await admin
-      .from('appointments')
-      .insert({
-        appointment_type_id: appointmentTypeId,
-        start_time: startIso,
-        end_time: endIso,
-        status: 'scheduled',
-        attendee_name: attendeeName,
-        attendee_email: actor?.email?.toLowerCase() || 'noreply@aubreylegal.com',
-        attendee_phone: null,
-        notes: `Created from task ${input.title}`,
-        linked_lead_id: input.leadId,
-        linked_matter_id: input.matterId,
-        booked_by_user_id: actor?.id ?? null,
-        source: 'admin',
-        raw: {
-          source: 'task_calendar_hold',
-          calendarShowAsBusy: input.calendarShowAsBusy,
-          taskId: task.id,
-          taskTitle: input.title,
-          taskTypeLabel: attendeeName,
-          suppressDueReminder: true,
-        },
-      })
-      .select('id')
-      .single()
-
-    if (appointment.error || !appointment.data?.id) {
-      await admin.from('tasks').delete().eq('id', task.id)
-      throw new Error(appointment.error ? appointment.error.message : 'Could not create calendar hold')
-    }
-
-    try {
-      const hold = await createCalendarHold({
-        title: attendeeName,
-        startIso,
-        endIso,
-        matterId: input.matterId,
-        showAsBusy: input.calendarShowAsBusy,
-      })
-      await admin
-        .from('appointments')
-        .update({ google_event_id: hold.eventId })
-        .eq('id', appointment.data.id)
-        .is('google_event_id', null)
-    } catch {
-      console.error('[assistant-calendar-tools] failed to create task calendar hold in Google Calendar', task.id)
+      throw error
     }
   }
 

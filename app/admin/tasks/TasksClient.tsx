@@ -43,12 +43,20 @@ import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { OPEN_TASK_CAPTURE_EVENT } from '@/components/tasks/taskEvents'
 import { TaskTemplateSheet, type TaskTemplate } from '@/components/tasks/TaskTemplateSheet'
 import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
+import {
+  compareTasksByWorkSummary,
+  type TaskWorkSummaries,
+} from '@/lib/work/taskSummary'
 
 import type { TaskPageParams } from '@/lib/tasks/pageParams'
 
 type ScopeKey = 'mine' | 'team' | 'unassigned'
 
-type GroupKey = 'due' | 'matter'
+type GroupKey = 'priority' | 'due' | 'matter'
+
+type PriorityGroupKey = 'critical' | 'today' | 'soon' | 'planned' | 'waiting'
+
+const EMPTY_WORK_SUMMARIES: TaskWorkSummaries = {}
 
 interface Assignee {
   id: string
@@ -61,6 +69,7 @@ interface TasksClientProps {
   assignees: Assignee[]
   templates: TaskTemplate[]
   viewerId: string | null
+  workSummaries?: TaskWorkSummaries
   pagination?: { params: TaskPageParams; total: number; doneTotal: number; scopeCounts: Record<ScopeKey, number> }
 }
 
@@ -151,6 +160,7 @@ export function TasksClient({
   assignees,
   templates,
   viewerId,
+  workSummaries = EMPTY_WORK_SUMMARIES,
   pagination,
 }: TasksClientProps) {
   usePrimaryReady('Tasks')
@@ -174,8 +184,14 @@ export function TasksClient({
   const assigneeFilter = pagination?.params.assignee ?? localAssigneeFilter
   const [localOpenOnly, setOpenOnly] = useState(true)
   const openOnly = pagination ? !pagination.params.showDone : localOpenOnly
-  const [groupBy, setGroupBy] = useState<GroupKey>('due')
+  // Embedded/test consumers that do not provide canonical summaries retain
+  // the legacy due-date queue. The real page always provides them and opens in
+  // the shared priority order.
+  const [groupBy, setGroupBy] = useState<GroupKey>(() =>
+    workSummaries === EMPTY_WORK_SUMMARIES ? 'due' : 'priority',
+  )
   const [laterOpen, setLaterOpen] = useState(false)
+  const [waitingOpen, setWaitingOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
   // ⌘K links a task as `/admin/tasks?focus=<id>`, so the row it found is the
   // one highlighted on arrival. It is a seed, not a binding: the keyboard
@@ -309,6 +325,28 @@ export function TasksClient({
     return buckets
   }, [scoped])
 
+  const priorityGroups = useMemo(() => {
+    const buckets: Record<PriorityGroupKey, TaskRow[]> = {
+      critical: [], today: [], soon: [], planned: [], waiting: [],
+    }
+    for (const task of scoped) {
+      const band = workSummaries[task.id]?.priorityBand ?? 3
+      const key: PriorityGroupKey = band === 0
+        ? 'critical'
+        : band === 1
+          ? 'today'
+          : band === 2
+            ? 'soon'
+            : band === 4
+              ? 'waiting'
+              : 'planned'
+      buckets[key].push(task)
+    }
+    const compare = compareTasksByWorkSummary(workSummaries, compareTasks)
+    for (const rows of Object.values(buckets)) rows.sort(compare)
+    return buckets
+  }, [scoped, workSummaries])
+
   const recordGroups = useMemo(
     () => (groupBy === 'matter' ? groupTasksByRecord(scoped) : []),
     [groupBy, scoped],
@@ -330,10 +368,18 @@ export function TasksClient({
     () => [
       ...(groupBy === 'matter'
         ? recordGroups.flatMap(group => group.tasks)
-        : [...groups.overdue, ...groups.today, ...groups.week, ...(laterOpen ? groups.later : [])]),
+        : groupBy === 'priority'
+          ? [
+              ...priorityGroups.critical,
+              ...priorityGroups.today,
+              ...priorityGroups.soon,
+              ...(laterOpen ? priorityGroups.planned : []),
+              ...(waitingOpen ? priorityGroups.waiting : []),
+            ]
+          : [...groups.overdue, ...groups.today, ...groups.week, ...(laterOpen ? groups.later : [])]),
       ...(doneOpen ? doneTodayScoped : []),
     ],
-    [groupBy, recordGroups, groups, laterOpen, doneOpen, doneTodayScoped],
+    [groupBy, recordGroups, groups, priorityGroups, laterOpen, waitingOpen, doneOpen, doneTodayScoped],
   )
 
   // A filter can hide a row that is still selected, and "6 selected" over a
@@ -441,6 +487,7 @@ export function TasksClient({
     <TaskListRow
       key={task.id}
       task={task}
+      workSummary={workSummaries[task.id]}
       focused={focusId === task.id}
       selected={selectedIds.has(task.id)}
       pending={actions.isPending(task.id)}
@@ -476,8 +523,7 @@ export function TasksClient({
     />
   )
 
-  const nothingToShow =
-    groups.overdue.length + groups.today.length + groups.week.length + groups.later.length === 0
+  const nothingToShow = scoped.length === 0
 
   return (
     // Full width, matching Matters and Drafting — the queue reads better with
@@ -601,12 +647,15 @@ export function TasksClient({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="sm" className="h-7 text-xs">
-                Group: {groupBy === 'matter' ? 'Matter' : 'Due date'}
+                Group: {groupBy === 'matter' ? 'Matter' : groupBy === 'priority' ? 'Priority' : 'Due date'}
                 <ChevronDown className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuLabel className="text-xs">Group by</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => { setGroupBy('priority'); setFocusId(null) }}>
+                Priority
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => { setGroupBy('due'); setFocusId(null) }}>
                 Due date
               </DropdownMenuItem>
@@ -647,6 +696,34 @@ export function TasksClient({
                 {group.tasks.map(renderRow)}
               </GroupShell>
             ))
+          ) : groupBy === 'priority' ? (
+            <>
+              <GroupShell title="Critical" count={priorityGroups.critical.length} accent>
+                {priorityGroups.critical.map(renderRow)}
+              </GroupShell>
+              <GroupShell title="Must do today" count={priorityGroups.today.length}>
+                {priorityGroups.today.map(renderRow)}
+              </GroupShell>
+              <GroupShell title="Soon · next 3 business days" count={priorityGroups.soon.length}>
+                {priorityGroups.soon.map(renderRow)}
+              </GroupShell>
+              <CollapsedGroup
+                title="Planned"
+                count={priorityGroups.planned.length}
+                open={laterOpen}
+                onToggle={() => setLaterOpen(prev => !prev)}
+              >
+                {priorityGroups.planned.map(renderRow)}
+              </CollapsedGroup>
+              <CollapsedGroup
+                title="Waiting & blocked"
+                count={priorityGroups.waiting.length}
+                open={waitingOpen}
+                onToggle={() => setWaitingOpen(prev => !prev)}
+              >
+                {priorityGroups.waiting.map(renderRow)}
+              </CollapsedGroup>
+            </>
           ) : (
             <>
               <GroupShell title="Overdue" count={groups.overdue.length} accent>
