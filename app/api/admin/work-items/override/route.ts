@@ -8,7 +8,9 @@ const STATES: WorkState[] = ['open', 'blocked', 'waiting', 'snoozed']
 
 export async function PATCH(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const body = await req.json().catch(() => null) as Record<string, unknown> | null
   const workKey = typeof body?.workKey === 'string' ? body.workKey.trim() : ''
   const state = body?.state as WorkState
@@ -37,7 +39,9 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const workKey = new URL(req.url).searchParams.get('workKey')?.trim() ?? ''
   if (!workKey) return NextResponse.json({ error: 'workKey is required' }, { status: 400 })
   const { error } = await getAdminClient().from('work_item_overrides').delete()

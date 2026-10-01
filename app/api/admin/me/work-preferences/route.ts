@@ -18,13 +18,17 @@ function time(value: unknown, label: string) {
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   return NextResponse.json({ preferences: await fetchWorkPreferences(auth.userId) })
 }
 
 export async function PATCH(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const body = await req.json() as Record<string, unknown>
     const row = {

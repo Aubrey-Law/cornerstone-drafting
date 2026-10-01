@@ -9,7 +9,9 @@ export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const body = await req.json().catch(() => ({})) as { date?: unknown }
   const date = typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
     ? body.date

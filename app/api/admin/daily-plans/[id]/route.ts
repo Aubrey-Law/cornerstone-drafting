@@ -8,7 +8,9 @@ const ITEM_STATUSES: DailyPlanItemStatus[] = ['planned', 'started', 'completed',
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   if (!isUuid(id)) return NextResponse.json({ error: 'Invalid daily plan' }, { status: 400 })
   const body = await req.json().catch(() => null) as Record<string, unknown> | null

@@ -5,7 +5,9 @@ import { executeActionProposal } from '@/lib/actions/server'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.user) return auth.err
+  if (auth.err || !auth.user) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   if (!isUuid(id)) return NextResponse.json({ error: 'Invalid proposal' }, { status: 400 })
   try {

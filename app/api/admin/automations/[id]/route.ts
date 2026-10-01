@@ -6,7 +6,9 @@ import { validateAutomationRule } from '@/lib/automations/server'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   if (!isUuid(id)) return NextResponse.json({ error: 'Invalid automation' }, { status: 400 })
   try {

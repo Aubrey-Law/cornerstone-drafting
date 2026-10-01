@@ -14,7 +14,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const input = validateAutomationRule(await req.json().catch(() => null))
     return NextResponse.json({ rule: await createAutomationRule(input, auth.userId) }, { status: 201 })

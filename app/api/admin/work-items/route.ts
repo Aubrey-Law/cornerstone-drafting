@@ -12,7 +12,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err
+  if (auth.err || !auth.userId) {
+    return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const url = new URL(req.url)
   const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date') ?? '')
     ? url.searchParams.get('date') as string
