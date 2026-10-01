@@ -3,7 +3,8 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { firmTodayKey } from '@/lib/firmDate'
 import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
 import { createDailyPlanPreview } from '@/lib/work/planner'
-import { saveDailyPlan } from '@/lib/work/plans'
+import { fetchDailyPlan, saveDailyPlan } from '@/lib/work/plans'
+import { recordCommandCenterUsageSafely } from '@/lib/work/usageServer'
 
 export const runtime = 'nodejs'
 
@@ -16,15 +17,20 @@ export async function POST(req: Request) {
   const date = typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
     ? body.date
     : firmTodayKey()
-  const [graph, preferences] = await Promise.all([
+  const [graph, preferences, existing] = await Promise.all([
     fetchWorkGraphForUser(auth.userId),
     fetchWorkPreferences(auth.userId),
+    fetchDailyPlan(auth.userId, date),
   ])
   const preview = createDailyPlanPreview({ items: graph.items, preferences, appointments: graph.appointments, date })
   const stored = await saveDailyPlan({
     userId: auth.userId,
     preview,
     interruptionBufferPercent: preferences.interruptionBufferPercent,
+  })
+  await recordCommandCenterUsageSafely({
+    userId: auth.userId,
+    event: existing ? 'plan_replanned' : 'plan_generated',
   })
   return NextResponse.json({ plan: stored, preview, sourceErrors: graph.sourceErrors })
 }

@@ -22,6 +22,8 @@ export interface FullFirmSettings extends FirmConfig {
   commandCenterV2Enabled: boolean
   /** Start of the current parallel-run window, or null while disabled. */
   commandCenterV2EnabledAt: string | null
+  /** Final cutover after ten business days of passing parallel evidence. */
+  commandCenterCutoverAt: string | null
 }
 
 interface FirmSettingsRow {
@@ -44,6 +46,7 @@ interface FirmSettingsRow {
   calendar_daily_target_minutes: number | null
   command_center_v2_enabled: boolean | null
   command_center_v2_enabled_at: string | null
+  command_center_cutover_at: string | null
 }
 
 let cache: { value: FullFirmSettings; at: number } | null = null
@@ -69,6 +72,7 @@ function defaults(): FullFirmSettings {
     // runs beside the legacy Today page.
     commandCenterV2Enabled: false,
     commandCenterV2EnabledAt: null,
+    commandCenterCutoverAt: null,
   }
 }
 
@@ -104,6 +108,7 @@ export async function loadFirmSettings(force = false): Promise<FullFirmSettings>
           calendarDailyTargetMinutes: row.calendar_daily_target_minutes ?? base.calendarDailyTargetMinutes,
           commandCenterV2Enabled: row.command_center_v2_enabled ?? base.commandCenterV2Enabled,
           commandCenterV2EnabledAt: row.command_center_v2_enabled_at ?? null,
+          commandCenterCutoverAt: row.command_center_cutover_at ?? null,
         }
       : base
     cache = { value: merged, at: Date.now() }
