@@ -149,7 +149,7 @@ export function CommandCenterRolloutClient({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Observed performance</CardDescription>
+            <CardDescription>Clean-streak performance</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Gauge className="h-5 w-5" />
               {readiness.p95DurationMs === null ? 'Not measured' : `${readiness.p95DurationMs} ms p95`}

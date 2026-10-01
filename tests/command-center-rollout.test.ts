@@ -114,6 +114,22 @@ describe('command center rollout gate', () => {
     })
   })
 
+  it('uses the firm date when deciding whether a hard deadline is overdue', () => {
+    const graph: WorkGraphResult = {
+      generatedAt: NOW.toISOString(),
+      items: [item({
+        hardDueAt: '2026-10-01T13:00:00.000Z',
+        priorityBand: 1,
+      })],
+      appointments: [],
+      sourceErrors: [],
+    }
+
+    const snapshot = analyzeWorkGraphRollout(graph, reconciliation(), 400, NOW)
+    expect(snapshot.metrics.criticalMisclassifiedCount).toBe(0)
+    expect(snapshot.metrics.readinessPassed).toBe(true)
+  })
+
   it('requires three consecutive passing samples and enforces p95 latency', () => {
     expect(calculateCommandCenterRolloutReadiness([run('one'), run('two')]).ready).toBe(false)
 
@@ -127,5 +143,21 @@ describe('command center rollout gate', () => {
     ])
     expect(slow.ready).toBe(false)
     expect(slow.criteria.find(criterion => criterion.key === 'performance')?.passed).toBe(false)
+  })
+
+  it('measures p95 over the latest consecutive clean cohort', () => {
+    const readiness = calculateCommandCenterRolloutReadiness([
+      run('one', { durationMs: 450 }),
+      run('two', { durationMs: 500 }),
+      run('three', { durationMs: 550 }),
+      run('old-release-failure', { durationMs: 7_723, readinessPassed: false }),
+    ])
+
+    expect(readiness).toMatchObject({
+      ready: true,
+      sampleCount: 4,
+      consecutivePasses: 3,
+      p95DurationMs: 550,
+    })
   })
 })
