@@ -11,7 +11,12 @@ import {
 } from '@/lib/slaTasks/schedule'
 import type { PlanScheduleFields } from '@/lib/slaTasks/schedule'
 import { SLA_PHASES, type SlaTemplateTask } from '@/lib/slaTasks/types'
-import { COLLEGE_PREP_SLA_V1, ESTATE_PLANNING_SLA_V3, slaTemplateForPracticeArea } from '@/lib/slaTasks/generate'
+import {
+  COLLEGE_PREP_SLA_V1,
+  ESTATE_PLANNING_LP_SLA_V1,
+  ESTATE_PLANNING_SLA_V3,
+  slaTemplateForPracticeArea,
+} from '@/lib/slaTasks/generate'
 
 /**
  * The College Preparation Plan runs its own checklist. Two things have to hold
@@ -62,9 +67,13 @@ describe('picking a checklist from the practice area', () => {
     expect(slaTemplateForPracticeArea('College Preparation Plan')).toBe(COLLEGE_PREP_SLA_V1)
   })
 
-  it('leaves both estate planning areas on the estate template', () => {
+  it('leaves private-pay estate planning on the estate template', () => {
     expect(slaTemplateForPracticeArea('EP')).toBe(ESTATE_PLANNING_SLA_V3)
-    expect(slaTemplateForPracticeArea('EP-LP')).toBe(ESTATE_PLANNING_SLA_V3)
+  })
+
+  it('sends legal-plan estate matters to the LP template', () => {
+    expect(slaTemplateForPracticeArea('EP-LP')).toBe(ESTATE_PLANNING_LP_SLA_V1)
+    expect(slaTemplateForPracticeArea('Estate Planning - LP')).toBe(ESTATE_PLANNING_LP_SLA_V1)
   })
 
   it('uses the dedicated probate administration track', () => {
