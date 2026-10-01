@@ -1,3 +1,5 @@
+import type { CalendarTodayPlan } from '@/lib/work/calendarPlan'
+
 export type LocationType = 'phone' | 'teams' | 'in_person'
 export type CalendarView = 'month' | 'week' | 'day' | 'plan'
 export type EventCategory = 'discovery' | 'meeting' | 'draft' | 'signing' | 'internal'
@@ -85,6 +87,7 @@ export interface CalendarRailData {
 }
 
 export interface PlanData {
+  today: CalendarTodayPlan
   days: Array<{
     date: string
     clientMinutes: number

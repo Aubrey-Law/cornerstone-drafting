@@ -1,9 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarPlus, Sparkles } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CalendarPlus, CheckCircle2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import type { PlanData } from './types'
+
+const BAND_LABEL = ['Critical', 'Today', 'Soon', 'Planned', 'Waiting'] as const
 
 function minutesLabel(value: number) {
   const hours = Math.floor(value / 60)
@@ -29,6 +33,75 @@ export function PlanView({
   )[0]
   return (
     <div className="space-y-4">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Today&apos;s working plan</h2>
+              <Badge variant={data.today.status === 'committed' ? 'default' : 'secondary'}>
+                {data.today.status === 'uncommitted' ? 'Preview' : data.today.status}
+              </Badge>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {minutesLabel(data.today.plannedMinutes)} planned of {minutesLabel(data.today.capacityMinutes)} available.
+              {' '}This is the same priority order used by Today.
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/admin">Open Today plan</Link>
+          </Button>
+        </div>
+
+        {data.today.overload && (
+          <div role="alert" className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            Critical work exceeds available capacity by {minutesLabel(data.today.overloadMinutes)}. Defer, delegate, or reschedule a specific item in Today.
+          </div>
+        )}
+
+        {data.today.items.length ? (
+          <ol className="mt-3 divide-y divide-border overflow-hidden rounded-md border border-border">
+            {data.today.items.map(item => (
+              <li key={item.workKey} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant={item.priorityBand === 0 ? 'destructive' : 'secondary'} className="text-micro">
+                      {BAND_LABEL[item.priorityBand]}
+                    </Badge>
+                    {item.itemStatus === 'completed' && (
+                      <span className="inline-flex items-center gap-1 text-micro text-green">
+                        <CheckCircle2 className="size-3" aria-hidden /> Done
+                      </span>
+                    )}
+                    <Link href={item.href} className="truncate text-xs font-semibold text-foreground hover:underline">
+                      {item.title}
+                    </Link>
+                  </div>
+                  <p className="mt-1 truncate text-micro text-muted-foreground">
+                    {item.recordName} · {item.priorityReasons.join(' · ')}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right text-xs text-muted-foreground">
+                  {item.blockStart ? (
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                      <CalendarClock className="size-3.5" aria-hidden />
+                      {new Date(item.blockStart).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', timeZone: FIRM_TIMEZONE,
+                      })}
+                    </span>
+                  ) : (
+                    <span>Not scheduled</span>
+                  )}
+                  <div className="text-micro">{minutesLabel(item.estimateMinutes)}</div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-3 rounded-md bg-muted p-3 text-xs text-muted-foreground">No executable work is planned for today.</p>
+        )}
+      </section>
+
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-2">
           <div>

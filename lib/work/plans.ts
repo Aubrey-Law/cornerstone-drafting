@@ -87,8 +87,12 @@ export async function saveDailyPlan(input: {
   if (deleteError) throw new Error(deleteError.message)
 
   const blocks = new Map(input.preview.blocks.map(block => [block.workKey, block]))
+  const communicationBlock = blocks.get('batch:communications')
+  let communicationBlockAssigned = false
   const rows = laneRows(input.preview).map(({ lane, item }, position) => {
     const block = blocks.get(item.workKey)
+      ?? (lane === 'communication' && !communicationBlockAssigned ? communicationBlock : undefined)
+    if (lane === 'communication' && block === communicationBlock) communicationBlockAssigned = true
     const old = previousByKey.get(item.workKey)
     return {
       plan_id: planId,

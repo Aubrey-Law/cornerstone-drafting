@@ -8,6 +8,10 @@ import { fetchDueTasks, fetchTasks } from '@/lib/queries/tasks'
 import { effectiveDueAt, taskDueGroup } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { loadFirmSettings } from '@/lib/firmSettings'
+import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
+import { createDailyPlanPreview } from '@/lib/work/planner'
+import { fetchDailyPlan } from '@/lib/work/plans'
+import { buildCalendarTodayPlan } from '@/lib/work/calendarPlan'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,8 +26,9 @@ export async function GET(req: NextRequest) {
   const rangeTo = new Date(`${dates[dates.length - 1]}T23:59:59-05:00`)
   const lastWeekFrom = new Date(rangeFrom.getTime() - 7 * 86_400_000)
   const admin = getAdminClient()
+  const todayKey = firmTodayKey()
 
-  const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult] = await Promise.all([
+  const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult, workGraph, workPreferences, storedPlan] = await Promise.all([
     admin
       .from('appointments')
       .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, google_event_id')
@@ -47,6 +52,9 @@ export async function GET(req: NextRequest) {
       .eq('event_type', 'stage_changed')
       .gte('created_at', lastWeekFrom.toISOString())
       .lt('created_at', rangeFrom.toISOString()),
+    fetchWorkGraphForUser(auth.userId),
+    fetchWorkPreferences(auth.userId),
+    fetchDailyPlan(auth.userId, todayKey),
   ])
   const appointments = appointmentResult.data ?? []
   const targetMinutes = firmSettings.calendarDailyTargetMinutes
@@ -111,7 +119,17 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     connected,
-    days: aggregateWorkload(dates, workEvents, targetMinutes, firmTodayKey()),
+    days: aggregateWorkload(dates, workEvents, targetMinutes, todayKey),
+    today: buildCalendarTodayPlan({
+      items: workGraph.items,
+      preview: createDailyPlanPreview({
+        items: workGraph.items,
+        appointments: workGraph.appointments,
+        preferences: workPreferences,
+        date: todayKey,
+      }),
+      stored: storedPlan,
+    }),
     deadlines,
     unscheduledTasks,
     review: {

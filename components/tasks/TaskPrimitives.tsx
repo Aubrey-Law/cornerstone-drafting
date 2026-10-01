@@ -17,6 +17,15 @@ import {
   taskRecordHref,
   type TaskRow,
 } from '@/lib/tasks/types'
+import type { TaskWorkSummary } from '@/lib/work/taskSummary'
+
+const WORK_BAND_LABEL: Record<TaskWorkSummary['priorityBand'], string> = {
+  0: 'Critical',
+  1: 'Today',
+  2: 'Soon',
+  3: 'Planned',
+  4: 'Waiting',
+}
 
 export function TaskSourcePill({ source, className }: { source: TaskRow['source']; className?: string }) {
   return (
@@ -140,6 +149,7 @@ export function TaskMetaLine({ task, showRecord = true }: { task: TaskRow; showR
 
 interface TaskRowProps {
   task: TaskRow
+  workSummary?: TaskWorkSummary
   focused?: boolean
   /** Held in a multi-row selection. Distinct from `focused`, which is the one
    *  row the keyboard is pointing at — a selection can be many rows wide and
@@ -160,6 +170,7 @@ interface TaskRowProps {
  */
 export function TaskListRow({
   task,
+  workSummary,
   focused = false,
   selected = false,
   pending = false,
@@ -225,6 +236,21 @@ export function TaskListRow({
             )}
           </span>
           <TaskMetaLine task={task} showRecord={showRecord} />
+          {workSummary && (
+            <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-micro text-muted-foreground">
+              <span className={cn(
+                'rounded px-1.5 py-0.5 font-semibold',
+                workSummary.priorityBand === 0
+                  ? 'bg-destructive/15 text-destructive'
+                  : 'bg-muted text-muted-foreground',
+              )}>
+                {WORK_BAND_LABEL[workSummary.priorityBand]}
+              </span>
+              {workSummary.priorityReasons.map(reason => (
+                <span key={reason.code} className="truncate">{reason.label}</span>
+              ))}
+            </span>
+          )}
         </span>
         {estimate && (
           <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">{estimate}</span>

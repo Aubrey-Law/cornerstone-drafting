@@ -128,8 +128,6 @@ interface PlanBlockDraft {
   title: string
   durationMinutes: string
   showAsBusy: boolean
-  matterId: string | null
-  leadId: string | null
 }
 
 function toTimeInputValue(date: Date): string {
@@ -516,8 +514,6 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       title: deadline.label,
       durationMinutes: String(durationMinutes),
       showAsBusy: true,
-      matterId: deadline.matterId ?? null,
-      leadId: deadline.leadId ?? null,
     })
   }
 
@@ -533,36 +529,29 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       toast.error('Add a valid date and time for the block.')
       return
     }
-    if (!planBlock.matterId && !planBlock.leadId) {
-      toast.error('This deadline is not tied to a matter or lead yet.')
-      return
-    }
-
     setPlanBlockSubmitting(true)
     try {
-      const payload: Record<string, unknown> = {
-        title: planBlock.title.trim() || 'Task block',
-        due_at: start.toISOString(),
-        calendarAddToCalendar: true,
-        calendarStartAt: start.toISOString(),
-        calendarDurationMinutes: durationMinutes,
-        calendarShowAsBusy: planBlock.showAsBusy,
-      }
-      if (planBlock.matterId) payload.matter_id = planBlock.matterId
-      else payload.lead_id = planBlock.leadId
-
-      const response = await fetch('/api/admin/tasks', {
+      const response = await fetch(`/api/admin/tasks/${planBlock.id}/calendar-hold`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          startAt: start.toISOString(),
+          durationMinutes,
+          showAsBusy: planBlock.showAsBusy,
+        }),
       })
-      const json = await response.json().catch(() => ({}))
+      const json = await response.json().catch(() => ({})) as {
+        error?: string
+        hold?: { alreadyExists?: boolean }
+      }
       if (!response.ok) {
         toast.error(json.error ?? 'Could not create that block')
         return
       }
 
-      toast.success('Planned block created and added to calendar')
+      toast.success(json.hold?.alreadyExists
+        ? 'This task already has an active calendar block'
+        : 'Task added to the calendar without creating a duplicate')
       setPlanBlock(null)
       void load()
     } finally {
@@ -928,14 +917,14 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           </DialogHeader>
           {planBlock && (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Create a calendar hold from a task deadline.</p>
+              <p className="text-sm text-muted-foreground">Add this existing task to the calendar. Its deadline will not change.</p>
               <div>
                 <Label htmlFor="plan-block-title">Title</Label>
                 <Input
                   id="plan-block-title"
                   className="mt-1"
                   value={planBlock.title}
-                  onChange={event => setPlanBlock({ ...planBlock, title: event.target.value })}
+                  readOnly
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
