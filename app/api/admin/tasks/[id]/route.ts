@@ -12,6 +12,7 @@ import {
   type TaskRow,
   type TaskStatus,
 } from '@/lib/tasks/types'
+import { taskStatusStamps } from '@/lib/tasks/statusMutation'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -46,27 +47,6 @@ function optionalTimestamp(value: unknown): string | null {
  * `restoreTasksForReopenedRecord` will drag back to `open` the next time its
  * record is reopened, undoing the completion the user just recorded.
  */
-function statusStamps(
-  status: TaskStatus,
-  existing: TaskRow,
-  userId: string | null,
-): Record<string, unknown> {
-  if (status !== 'done') {
-    return { status, completed_at: null, completed_by: null, skipped_at: null, closeout_reason: null }
-  }
-  // An edit saved against a task that was already finished is not a second
-  // completion: re-dating it would move the task between one day's "Done
-  // today" and another's for a change to its title.
-  const recorded = existing.status === 'done' && existing.completed_at
-  return {
-    status,
-    completed_at: recorded ? existing.completed_at : new Date().toISOString(),
-    completed_by: recorded ? existing.completed_by : userId,
-    skipped_at: null,
-    closeout_reason: null,
-  }
-}
-
 function normalizeChecklist(value: unknown): ChecklistItem[] {
   if (!Array.isArray(value)) return []
   return value.flatMap(item => {
@@ -120,10 +100,10 @@ export async function PATCH(req: Request, { params }: Params) {
       // Stamped like any other completion: "Done today" is read off
       // `completed_at`, so a task finished by its last checkbox would otherwise
       // leave the queue without ever landing anywhere the user can see it.
-      Object.assign(patch, statusStamps('done', existing, auth.userId))
+      Object.assign(patch, taskStatusStamps('done', existing, auth.userId))
       completing = true
     } else if (!allDone && existing.status === 'done') {
-      Object.assign(patch, statusStamps('open', existing, auth.userId))
+      Object.assign(patch, taskStatusStamps('open', existing, auth.userId))
     }
   }
 
@@ -133,7 +113,7 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
     const status = body.status as TaskStatus
-    Object.assign(patch, statusStamps(status, existing, auth.userId))
+    Object.assign(patch, taskStatusStamps(status, existing, auth.userId))
     if (status === 'done') {
       if (existing.status !== 'done') completing = true
       // Completing a checklist task closes out its remaining items.
@@ -189,10 +169,10 @@ export async function PATCH(req: Request, { params }: Params) {
     if (!statusRequested && checklist.length > 0) {
       const allDone = checklist.every(item => item.done)
       if (allDone && existing.status !== 'done') {
-        Object.assign(patch, statusStamps('done', existing, auth.userId))
+        Object.assign(patch, taskStatusStamps('done', existing, auth.userId))
         completing = true
       } else if (!allDone && existing.status === 'done') {
-        Object.assign(patch, statusStamps('open', existing, auth.userId))
+        Object.assign(patch, taskStatusStamps('open', existing, auth.userId))
         completing = false
       }
     }

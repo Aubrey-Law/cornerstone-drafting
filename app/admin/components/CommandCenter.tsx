@@ -1,0 +1,544 @@
+'use client'
+
+import { useMemo, useState, type ChangeEvent } from 'react'
+import Link from 'next/link'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bot,
+  CalendarClock,
+  Check,
+  Clock3,
+  ExternalLink,
+  Focus,
+  Loader2,
+  MessageSquare,
+  PauseCircle,
+  Play,
+  RefreshCw,
+  Settings2,
+  Users,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { cn } from '@/lib/utils'
+import type { DailyPlanPreview, WorkItem, WorkPreferences } from '@/lib/work/types'
+import type { DailyPlanStatus } from '@/lib/work/plans'
+import { itemsExceptNow } from '@/lib/work/presentation'
+
+interface Props {
+  initialPreview: DailyPlanPreview
+  preferences: WorkPreferences
+  initialPlan: { id: string; status: DailyPlanStatus } | null
+  sourceErrors: string[]
+}
+
+const BAND_LABEL = ['Critical', 'Must do', 'Soon', 'Planned', 'Waiting'] as const
+
+function PlanningPreferences({
+  value,
+  onSaved,
+}: {
+  value: WorkPreferences
+  onSaved: (preferences: WorkPreferences) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const response = await fetch('/api/admin/me/work-preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      })
+      const body = await response.json().catch(() => ({})) as { preferences?: WorkPreferences; error?: string }
+      if (!response.ok || !body.preferences) throw new Error(body.error ?? 'Preferences could not be saved')
+      await onSaved(body.preferences)
+      setOpen(false)
+      toast.success('Planning preferences saved')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Preferences could not be saved')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const numberField = (key: keyof WorkPreferences) => (event: ChangeEvent<HTMLInputElement>) => {
+    setDraft(current => ({ ...current, [key]: Number(event.target.value) }))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={next => {
+      setOpen(next)
+      if (next) setDraft(value)
+    }}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm"><Settings2 /> Planning preferences</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Planning preferences</DialogTitle>
+          <DialogDescription>Set guardrails that keep the plan realistic and reduce overload.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label htmlFor="max-must-do">Must-do limit</Label><Input id="max-must-do" type="number" min={1} max={10} value={draft.maxMustDo} onChange={numberField('maxMustDo')} /></div>
+          <div className="space-y-1.5"><Label htmlFor="focus-capacity">Focus capacity (minutes)</Label><Input id="focus-capacity" type="number" min={30} max={720} step={15} value={draft.focusCapacityMinutes} onChange={numberField('focusCapacityMinutes')} /></div>
+          <div className="space-y-1.5"><Label htmlFor="interrupt-buffer">Interruption buffer (%)</Label><Input id="interrupt-buffer" type="number" min={0} max={60} step={5} value={draft.interruptionBufferPercent} onChange={numberField('interruptionBufferPercent')} /></div>
+          <div className="space-y-1.5"><Label htmlFor="focus-block">Default focus block</Label><Input id="focus-block" type="number" min={15} max={120} step={5} value={draft.focusBlockMinutes} onChange={numberField('focusBlockMinutes')} /></div>
+          <div className="space-y-1.5"><Label htmlFor="max-focus-block">Maximum focus block</Label><Input id="max-focus-block" type="number" min={15} max={180} step={5} value={draft.maxFocusBlockMinutes} onChange={numberField('maxFocusBlockMinutes')} /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="admin-batch">Administrative batch</Label>
+            <NativeSelect id="admin-batch" value={String(draft.adminBatchMinutes)} onChange={event => setDraft(current => ({ ...current, adminBatchMinutes: Number(event.target.value) as 15 | 30 }))}>
+              <option value="15">15 minutes</option><option value="30">30 minutes</option>
+            </NativeSelect>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="workday-start">Workday starts</Label><Input id="workday-start" type="time" value={draft.workdayStart} onChange={event => setDraft(current => ({ ...current, workdayStart: event.target.value }))} /></div>
+          <div className="space-y-1.5"><Label htmlFor="workday-end">Workday ends</Label><Input id="workday-end" type="time" value={draft.workdayEnd} onChange={event => setDraft(current => ({ ...current, workdayEnd: event.target.value }))} /></div>
+        </div>
+        <DialogFooter><Button onClick={save} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Check />} Save preferences</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function formatMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}h ${rest}m` : `${hours}h`
+}
+
+function formatBlock(iso: string) {
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
+}
+
+function assistantHref(item: WorkItem) {
+  const params = new URLSearchParams()
+  if (item.record.type === 'matter' && item.record.id) params.set('matter', item.record.id)
+  if (item.record.type === 'lead' && item.record.id) params.set('lead', item.record.id)
+  return `/admin/assistant${params.size ? `?${params}` : ''}`
+}
+
+function WorkCard({
+  item,
+  primary = false,
+  planId,
+  onRefresh,
+}: {
+  item: WorkItem
+  primary?: boolean
+  planId: string | null
+  onRefresh: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function planStatus(status: 'started' | 'completed') {
+    if (!planId) return
+    const response = await fetch(`/api/admin/daily-plans/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item: { workKey: item.workKey, status } }),
+    })
+    if (!response.ok) throw new Error('The daily plan could not be updated')
+  }
+
+  async function executeInternalAction(
+    actionKey: string,
+    referencePayload: Record<string, unknown>,
+    displaySummary: string,
+  ) {
+    const proposed = await fetch('/api/admin/actions/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        actionKey,
+        referencePayload,
+        displaySummary,
+        recordType: item.record.type,
+        recordId: item.record.id,
+      }),
+    })
+    const proposedBody = await proposed.json().catch(() => ({})) as {
+      proposal?: { id: string }
+      error?: string
+    }
+    if (!proposed.ok || !proposedBody.proposal) {
+      throw new Error(proposedBody.error ?? 'The action could not be prepared')
+    }
+    const executed = await fetch(`/api/admin/actions/proposals/${proposedBody.proposal.id}/execute`, {
+      method: 'POST',
+    })
+    const executedBody = await executed.json().catch(() => ({})) as { error?: string }
+    if (!executed.ok) throw new Error(executedBody.error ?? 'The action could not be completed')
+  }
+
+  async function start() {
+    setBusy('start')
+    try {
+      if (item.sourceType === 'task') {
+        await executeInternalAction('task.start', { taskId: item.sourceIds[0] }, `Start task: ${item.title}`)
+      }
+      await planStatus('started')
+      await onRefresh()
+      toast.success('Marked in progress')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to start this work')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function done() {
+    setBusy('done')
+    try {
+      if (item.sourceType === 'task') {
+        await executeInternalAction('task.complete', { taskId: item.sourceIds[0] }, `Complete task: ${item.title}`)
+      } else {
+        // Non-task items represent external state (an unread message, intake,
+        // invoice, etc.). Opening and resolving that source is the only honest
+        // completion path; a local checkmark must not hide unfinished work.
+        toast.info('Resolve this in its source record; Cornerstone will clear it automatically.')
+        return
+      }
+      await planStatus('completed')
+      await onRefresh()
+      toast.success('Completed')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to complete this work')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function override(state: 'snoozed' | 'blocked') {
+    setBusy(state)
+    try {
+      const snoozedUntil = state === 'snoozed'
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : null
+      await executeInternalAction(
+        'work.override',
+        { workKey: item.workKey, state, snoozedUntil },
+        `${state === 'snoozed' ? 'Snooze' : 'Block'} work: ${item.title}`,
+      )
+      await onRefresh()
+      toast.success(state === 'snoozed' ? 'Snoozed for one day' : 'Moved to blocked')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update this work')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <article className={cn(
+      'rounded-xl border bg-card p-4 shadow-sm',
+      primary && 'border-primary/40 bg-primary/[0.035] p-5',
+    )}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={item.priorityBand === 0 ? 'destructive' : 'secondary'}>
+              {BAND_LABEL[item.priorityBand]}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{formatMinutes(item.estimateMinutes)}</span>
+            <span className="truncate text-xs text-muted-foreground">{item.record.name}</span>
+          </div>
+          <h3 className={cn('mt-2 font-semibold text-foreground', primary ? 'text-lg' : 'text-sm')}>
+            {item.title}
+          </h3>
+          <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {item.priorityReasons.slice(0, 2).map(reason => (
+              <li key={reason.code} className="flex items-center gap-1">
+                <span className="h-1 w-1 rounded-full bg-current" aria-hidden />
+                {reason.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <Button asChild size="sm">
+          <Link href={item.href}>{item.actionLabel}<ArrowRight className="h-3.5 w-3.5" aria-hidden /></Link>
+        </Button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/70 pt-3">
+        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null || !planId}>
+          {busy === 'start' ? <Loader2 className="animate-spin" /> : <Play />} Start
+        </Button>
+        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={done} disabled={busy !== null}>
+          {busy === 'done' ? <Loader2 className="animate-spin" /> : <Check />} Done
+        </Button>
+        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('snoozed')} disabled={busy !== null}>
+          {busy === 'snoozed' ? <Loader2 className="animate-spin" /> : <Clock3 />} Snooze
+        </Button>
+        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('blocked')} disabled={busy !== null}>
+          {busy === 'blocked' ? <Loader2 className="animate-spin" /> : <PauseCircle />} Blocked
+        </Button>
+        <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
+          <Link href={`${item.href}${item.href.includes('?') ? '&' : '?'}delegate=1`}><Users /> Delegate</Link>
+        </Button>
+        <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
+          <Link href={assistantHref(item)}><Bot /> Ask Cornerstone</Link>
+        </Button>
+        {item.evidence.length > 1 && (
+          <span className="ml-auto self-center text-micro text-muted-foreground">
+            {item.evidence.length} sources combined
+          </span>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function WorkList({
+  items,
+  empty,
+  planId,
+  onRefresh,
+}: {
+  items: WorkItem[]
+  empty: string
+  planId: string | null
+  onRefresh: () => Promise<void>
+}) {
+  if (!items.length) return <p className="py-5 text-center text-sm text-muted-foreground">{empty}</p>
+  return <div className="space-y-2">{items.map(item => (
+    <WorkCard key={item.workKey} item={item} planId={planId} onRefresh={onRefresh} />
+  ))}</div>
+}
+
+export function CommandCenter({ initialPreview, preferences, initialPlan, sourceErrors }: Props) {
+  const [preview, setPreview] = useState(initialPreview)
+  const [workPreferences, setWorkPreferences] = useState(preferences)
+  const [plan, setPlan] = useState(initialPlan)
+  const [focusMode, setFocusMode] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const blockItems = useMemo(() => {
+    const all = [...preview.mustDo, ...preview.suggested, ...preview.communication]
+    return new Map(all.map(item => [item.workKey, item]))
+  }, [preview])
+  // `now` points at an item in one of the plan lanes. Render that obligation
+  // once, as the prominent next action, instead of making an ADHD user decide
+  // whether two identical cards represent two separate commitments.
+  const visibleMustDo = itemsExceptNow(preview.mustDo, preview.now)
+  const visibleCommunication = itemsExceptNow(preview.communication, preview.now)
+  const visibleSuggested = itemsExceptNow(preview.suggested, preview.now)
+
+  async function refresh() {
+    const response = await fetch(`/api/admin/work-items?date=${encodeURIComponent(preview.date)}`, { cache: 'no-store' })
+    const body = await response.json().catch(() => ({})) as { plan?: DailyPlanPreview; preferences?: WorkPreferences; error?: string }
+    if (!response.ok || !body.plan) throw new Error(body.error ?? 'The command center could not refresh')
+    setPreview(body.plan)
+    if (body.preferences) setWorkPreferences(body.preferences)
+  }
+
+  async function generate() {
+    setBusy('generate')
+    try {
+      const response = await fetch('/api/admin/daily-plans/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: preview.date }),
+      })
+      const body = await response.json().catch(() => ({})) as {
+        plan?: { id: string; status: DailyPlanStatus }
+        preview?: DailyPlanPreview
+        error?: string
+      }
+      if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
+      setPlan({ id: body.plan.id, status: body.plan.status })
+      setPreview(body.preview)
+      toast.success('Draft day created')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The plan could not be generated')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function commit() {
+    if (!plan) return
+    setBusy('commit')
+    try {
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'committed' }),
+      })
+      const body = await response.json().catch(() => ({})) as { plan?: { status: DailyPlanStatus }; error?: string }
+      if (!response.ok || !body.plan) throw new Error(body.error ?? 'The plan could not be committed')
+      setPlan(current => current ? { ...current, status: body.plan!.status } : current)
+      toast.success('Today’s plan is committed')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The plan could not be committed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (focusMode && preview.now) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Focus mode</p>
+            <h2 className="text-2xl font-semibold">Only the next step</h2>
+          </div>
+          <Button variant="outline" onClick={() => setFocusMode(false)}>View full plan</Button>
+        </div>
+        <WorkCard item={preview.now} primary planId={plan?.id ?? null} onRefresh={refresh} />
+        <p className="text-center text-xs text-muted-foreground">
+          The rest of the queue is still safe. Finish, snooze, or block this item to reveal the next one.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span><strong>{formatMinutes(preview.plannedMinutes)}</strong> planned</span>
+          <span className="text-muted-foreground">{formatMinutes(preview.capacityMinutes)} available after {workPreferences.interruptionBufferPercent}% buffer</span>
+          {plan && <Badge variant="outline" className="capitalize">{plan.status}</Badge>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <PlanningPreferences value={workPreferences} onSaved={async next => { setWorkPreferences(next); await refresh() }} />
+          <Button variant="outline" size="sm" onClick={() => setFocusMode(true)} disabled={!preview.now}>
+            <Focus /> Focus now
+          </Button>
+          <Button variant="outline" size="sm" onClick={generate} disabled={busy !== null}>
+            {busy === 'generate' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {plan ? 'Replan' : 'Create draft plan'}
+          </Button>
+          <Button size="sm" onClick={commit} disabled={!plan || plan.status === 'committed' || busy !== null}>
+            {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />}
+            Commit plan
+          </Button>
+        </div>
+      </div>
+
+      {preview.overload && (
+        <div role="alert" className="flex gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+          <div>
+            <p className="font-semibold text-foreground">Today is over capacity by {formatMinutes(preview.overloadMinutes)}.</p>
+            <p className="mt-1 text-muted-foreground">Do not hide the conflict. Defer, delegate, or reschedule one of the must-do items below.</p>
+          </div>
+        </div>
+      )}
+
+      {sourceErrors.length > 0 && (
+        <div role="status" className="rounded-lg border border-amber-border bg-amber-bg/50 px-3 py-2 text-xs text-amber-strong">
+          Some sources could not be refreshed: {sourceErrors.join(', ')}. Visible work is still usable, but the plan may be incomplete.
+        </div>
+      )}
+
+      <section aria-labelledby="now-heading">
+        <div className="mb-2 flex items-center gap-2">
+          <Focus className="h-4 w-4 text-primary" aria-hidden />
+          <h2 id="now-heading" className="text-base font-semibold">Now</h2>
+        </div>
+        {preview.now
+          ? <WorkCard item={preview.now} primary planId={plan?.id ?? null} onRefresh={refresh} />
+          : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No firm-owned work needs attention.</CardContent></Card>}
+      </section>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Must do</CardTitle>
+              <CardDescription>Critical work is never hidden; otherwise this list stops at {workPreferences.maxMustDo}.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkList items={visibleMustDo} empty="No additional must-do items." planId={plan?.id ?? null} onRefresh={refresh} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base"><MessageSquare className="h-4 w-4" /> Communication batch</CardTitle>
+              <CardDescription>{visibleCommunication.length} replies grouped into a {workPreferences.adminBatchMinutes}-minute admin block.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkList items={visibleCommunication} empty="No additional replies waiting." planId={plan?.id ?? null} onRefresh={refresh} />
+              <Button asChild variant="link" size="sm" className="mt-2 px-0">
+                <Link href="/admin/communications">Open all communications <ExternalLink /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Suggested next</CardTitle>
+              <CardDescription>Important work that fits the remaining capacity.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkList items={visibleSuggested} empty="No additional work fits today’s capacity." planId={plan?.id ?? null} onRefresh={refresh} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <aside className="space-y-4 xl:sticky xl:top-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Suggested day</CardTitle>
+              <CardDescription>Focus blocks avoid recorded appointments and keep ten-minute transitions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {preview.blocks.length ? preview.blocks.map(block => {
+                const item = blockItems.get(block.workKey)
+                return (
+                  <div key={block.workKey} className="flex gap-3 rounded-lg border px-3 py-2 text-sm">
+                    <span className="shrink-0 font-medium tabular-nums">{formatBlock(block.startAt)}</span>
+                    <span className="min-w-0 truncate text-muted-foreground">{item?.title ?? 'Communication batch'}</span>
+                  </div>
+                )
+              }) : <p className="text-sm text-muted-foreground">No focus blocks fit the remaining workday.</p>}
+              <Button asChild variant="outline" size="sm" className="w-full">
+                <Link href="/admin/calendar">Review calendar</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Waiting or blocked</CardTitle>
+              <CardDescription>Visible for context, excluded from Focus Mode.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkList items={preview.waiting.slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} onRefresh={refresh} />
+              {preview.waiting.length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {preview.waiting.length - 8} more</p>}
+            </CardContent>
+          </Card>
+
+          <details className="rounded-xl border bg-card p-4">
+            <summary className="cursor-pointer text-sm font-semibold">Later · {preview.later.length}</summary>
+            <div className="mt-3">
+              <WorkList items={preview.later} empty="Nothing deferred." planId={plan?.id ?? null} onRefresh={refresh} />
+            </div>
+          </details>
+        </aside>
+      </div>
+    </div>
+  )
+}

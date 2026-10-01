@@ -7,13 +7,126 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  // Local type generation does not currently emit this hosted PostgREST hint;
+  // preserve it so createClient continues to infer the checked API version.
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      action_executions: {
+        Row: {
+          action_key: string
+          actor_id: string
+          after_digest: string | null
+          before_digest: string | null
+          created_at: string
+          error_code: string | null
+          error_summary: string | null
+          id: string
+          idempotency_key: string
+          proposal_id: string | null
+          record_id: string | null
+          record_type: string | null
+          risk: string
+          status: string
+        }
+        Insert: {
+          action_key: string
+          actor_id: string
+          after_digest?: string | null
+          before_digest?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_summary?: string | null
+          id?: string
+          idempotency_key: string
+          proposal_id?: string | null
+          record_id?: string | null
+          record_type?: string | null
+          risk: string
+          status: string
+        }
+        Update: {
+          action_key?: string
+          actor_id?: string
+          after_digest?: string | null
+          before_digest?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_summary?: string | null
+          id?: string
+          idempotency_key?: string
+          proposal_id?: string | null
+          record_id?: string | null
+          record_type?: string | null
+          risk?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_executions_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "action_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_proposals: {
+        Row: {
+          accepted_at: string | null
+          action_key: string
+          actor_id: string
+          created_at: string
+          display_summary: string
+          executed_at: string | null
+          expires_at: string
+          id: string
+          idempotency_key: string
+          record_id: string | null
+          record_type: string | null
+          reference_payload: Json
+          risk: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          action_key: string
+          actor_id: string
+          created_at?: string
+          display_summary: string
+          executed_at?: string | null
+          expires_at?: string
+          id?: string
+          idempotency_key: string
+          record_id?: string | null
+          record_type?: string | null
+          reference_payload?: Json
+          risk: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          action_key?: string
+          actor_id?: string
+          created_at?: string
+          display_summary?: string
+          executed_at?: string | null
+          expires_at?: string
+          id?: string
+          idempotency_key?: string
+          record_id?: string | null
+          record_type?: string | null
+          reference_payload?: Json
+          risk?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           cache_creation_input_tokens: number
@@ -483,6 +596,116 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      automation_rules: {
+        Row: {
+          action_config: Json
+          action_key: string
+          approval_policy: string
+          conditions: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          mode: string
+          name: string
+          system_key: string | null
+          trigger_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          action_config?: Json
+          action_key: string
+          approval_policy?: string
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          mode?: string
+          name: string
+          system_key?: string | null
+          trigger_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          action_config?: Json
+          action_key?: string
+          approval_policy?: string
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          mode?: string
+          name?: string
+          system_key?: string | null
+          trigger_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: {
+          attempt: number
+          created_at: string
+          error_code: string | null
+          error_summary: string | null
+          executed_count: number
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          next_retry_at: string | null
+          proposed_count: number
+          rule_id: string | null
+          started_at: string
+          status: string
+          system_key: string | null
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          error_code?: string | null
+          error_summary?: string | null
+          executed_count?: number
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          next_retry_at?: string | null
+          proposed_count?: number
+          rule_id?: string | null
+          started_at?: string
+          status: string
+          system_key?: string | null
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          error_code?: string | null
+          error_summary?: string | null
+          executed_count?: number
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          next_retry_at?: string | null
+          proposed_count?: number
+          rule_id?: string | null
+          started_at?: string
+          status?: string
+          system_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       billing_adjustments: {
         Row: {
@@ -2256,6 +2479,119 @@ export type Database = {
           },
         ]
       }
+      daily_plan_items: {
+        Row: {
+          block_end: string | null
+          block_start: string | null
+          completed_at: string | null
+          created_at: string
+          estimate_minutes: number
+          id: string
+          lane: string
+          plan_id: string
+          position: number
+          priority_band: number
+          reason_codes: string[]
+          record_id: string | null
+          record_type: string
+          source_type: string
+          status: string
+          updated_at: string
+          work_key: string
+        }
+        Insert: {
+          block_end?: string | null
+          block_start?: string | null
+          completed_at?: string | null
+          created_at?: string
+          estimate_minutes: number
+          id?: string
+          lane: string
+          plan_id: string
+          position: number
+          priority_band: number
+          reason_codes?: string[]
+          record_id?: string | null
+          record_type: string
+          source_type: string
+          status?: string
+          updated_at?: string
+          work_key: string
+        }
+        Update: {
+          block_end?: string | null
+          block_start?: string | null
+          completed_at?: string | null
+          created_at?: string
+          estimate_minutes?: number
+          id?: string
+          lane?: string
+          plan_id?: string
+          position?: number
+          priority_band?: number
+          reason_codes?: string[]
+          record_id?: string | null
+          record_type?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+          work_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "daily_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_plans: {
+        Row: {
+          capacity_minutes: number
+          closed_at: string | null
+          committed_at: string | null
+          created_at: string
+          generated_at: string
+          id: string
+          interruption_buffer_percent: number
+          plan_date: string
+          planned_minutes: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capacity_minutes: number
+          closed_at?: string | null
+          committed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          id?: string
+          interruption_buffer_percent?: number
+          plan_date: string
+          planned_minutes?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capacity_minutes?: number
+          closed_at?: string | null
+          committed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          id?: string
+          interruption_buffer_percent?: number
+          plan_date?: string
+          planned_minutes?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       design_sheets: {
         Row: {
           assets: Json | null
@@ -3483,7 +3819,6 @@ export type Database = {
           provider: string | null
           provider_message_id: string | null
           reply_to: string | null
-          resend_id: string | null
           sent_at: string | null
           status: string
           subject: string | null
@@ -3506,7 +3841,6 @@ export type Database = {
           provider?: string | null
           provider_message_id?: string | null
           reply_to?: string | null
-          resend_id?: string | null
           sent_at?: string | null
           status?: string
           subject?: string | null
@@ -3529,7 +3863,6 @@ export type Database = {
           provider?: string | null
           provider_message_id?: string | null
           reply_to?: string | null
-          resend_id?: string | null
           sent_at?: string | null
           status?: string
           subject?: string | null
@@ -4209,7 +4542,7 @@ export type Database = {
       }
       esign_audit_events: {
         Row: {
-          agreement_id: string
+          agreement_id: string | null
           created_at: string
           detail: Json
           event_type: string
@@ -4217,10 +4550,11 @@ export type Database = {
           ip: unknown
           occurred_at: string
           session_id: string | null
+          signature_request_id: string | null
           user_agent: string | null
         }
         Insert: {
-          agreement_id: string
+          agreement_id?: string | null
           created_at?: string
           detail?: Json
           event_type: string
@@ -4228,10 +4562,11 @@ export type Database = {
           ip?: unknown
           occurred_at?: string
           session_id?: string | null
+          signature_request_id?: string | null
           user_agent?: string | null
         }
         Update: {
-          agreement_id?: string
+          agreement_id?: string | null
           created_at?: string
           detail?: Json
           event_type?: string
@@ -4239,6 +4574,7 @@ export type Database = {
           ip?: unknown
           occurred_at?: string
           session_id?: string | null
+          signature_request_id?: string | null
           user_agent?: string | null
         }
         Relationships: [
@@ -4254,6 +4590,13 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "esign_signing_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "esign_audit_events_signature_request_id_fkey"
+            columns: ["signature_request_id"]
+            isOneToOne: false
+            referencedRelation: "signature_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -4298,13 +4641,14 @@ export type Database = {
       }
       esign_signing_sessions: {
         Row: {
-          agreement_id: string
+          agreement_id: string | null
           created_at: string
           decline_reason: string | null
           declined_at: string | null
           expires_at: string
           id: string
           recipient_key: string
+          signature_request_id: string | null
           signed_at: string | null
           status: string
           token_hash: string
@@ -4312,13 +4656,14 @@ export type Database = {
           viewed_at: string | null
         }
         Insert: {
-          agreement_id: string
+          agreement_id?: string | null
           created_at?: string
           decline_reason?: string | null
           declined_at?: string | null
           expires_at: string
           id?: string
           recipient_key: string
+          signature_request_id?: string | null
           signed_at?: string | null
           status?: string
           token_hash: string
@@ -4326,13 +4671,14 @@ export type Database = {
           viewed_at?: string | null
         }
         Update: {
-          agreement_id?: string
+          agreement_id?: string | null
           created_at?: string
           decline_reason?: string | null
           declined_at?: string | null
           expires_at?: string
           id?: string
           recipient_key?: string
+          signature_request_id?: string | null
           signed_at?: string | null
           status?: string
           token_hash?: string
@@ -4345,6 +4691,13 @@ export type Database = {
             columns: ["agreement_id"]
             isOneToOne: false
             referencedRelation: "engagement_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "esign_signing_sessions_signature_request_id_fkey"
+            columns: ["signature_request_id"]
+            isOneToOne: false
+            referencedRelation: "signature_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -4932,6 +5285,7 @@ export type Database = {
           billing_milestones_enabled: boolean
           calendar_daily_target_minutes: number
           city: string | null
+          command_center_v2_enabled: boolean
           durable_workflow_jobs_enabled: boolean
           email: string | null
           email_logo_header: boolean
@@ -4939,6 +5293,7 @@ export type Database = {
           email_signature_html: string | null
           email_triage_enabled: boolean
           email_triage_query: string | null
+          esign_documents_enabled: boolean
           esign_native_enabled: boolean
           estate_tax_schedules: Json
           firm_name: string | null
@@ -4962,6 +5317,7 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          command_center_v2_enabled?: boolean
           durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
@@ -4969,6 +5325,7 @@ export type Database = {
           email_signature_html?: string | null
           email_triage_enabled?: boolean
           email_triage_query?: string | null
+          esign_documents_enabled?: boolean
           esign_native_enabled?: boolean
           estate_tax_schedules?: Json
           firm_name?: string | null
@@ -4992,6 +5349,7 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          command_center_v2_enabled?: boolean
           durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
@@ -4999,6 +5357,7 @@ export type Database = {
           email_signature_html?: string | null
           email_triage_enabled?: boolean
           email_triage_query?: string | null
+          esign_documents_enabled?: boolean
           esign_native_enabled?: boolean
           estate_tax_schedules?: Json
           firm_name?: string | null
@@ -7885,6 +8244,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "review_uploads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "review_uploads_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
             foreignKeyName: "review_uploads_source_document_id_fkey"
             columns: ["source_document_id"]
             isOneToOne: false
@@ -8111,6 +8484,172 @@ export type Database = {
         }
         Relationships: []
       }
+      signature_request_recipients: {
+        Row: {
+          created_at: string
+          declined_at: string | null
+          email: string
+          external_recipient_id: string | null
+          id: string
+          last_reminded_at: string | null
+          name: string
+          recipient_key: string
+          recipient_order: number
+          request_id: string
+          sent_at: string | null
+          signed_at: string | null
+          status: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          declined_at?: string | null
+          email: string
+          external_recipient_id?: string | null
+          id?: string
+          last_reminded_at?: string | null
+          name: string
+          recipient_key: string
+          recipient_order: number
+          request_id: string
+          sent_at?: string | null
+          signed_at?: string | null
+          status?: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          declined_at?: string | null
+          email?: string
+          external_recipient_id?: string | null
+          id?: string
+          last_reminded_at?: string | null
+          name?: string
+          recipient_key?: string
+          recipient_order?: number
+          request_id?: string
+          sent_at?: string | null
+          signed_at?: string | null
+          status?: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_request_recipients_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "signature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_requests: {
+        Row: {
+          ceremony_attestation_text: string | null
+          ceremony_attested_at: string | null
+          ceremony_attested_by: string | null
+          completed_at: string | null
+          completed_r2_key: string | null
+          created_at: string
+          external_request_id: string | null
+          id: string
+          matter_id: string
+          name: string
+          prepared_r2_key: string | null
+          provider: string
+          provider_sync_error: string | null
+          provider_sync_error_at: string | null
+          send_lease_expires_at: string | null
+          send_lease_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          source_document_id: string | null
+          source_r2_key: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ceremony_attestation_text?: string | null
+          ceremony_attested_at?: string | null
+          ceremony_attested_by?: string | null
+          completed_at?: string | null
+          completed_r2_key?: string | null
+          created_at?: string
+          external_request_id?: string | null
+          id?: string
+          matter_id: string
+          name: string
+          prepared_r2_key?: string | null
+          provider?: string
+          provider_sync_error?: string | null
+          provider_sync_error_at?: string | null
+          send_lease_expires_at?: string | null
+          send_lease_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          source_document_id?: string | null
+          source_r2_key: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ceremony_attestation_text?: string | null
+          ceremony_attested_at?: string | null
+          ceremony_attested_by?: string | null
+          completed_at?: string | null
+          completed_r2_key?: string | null
+          created_at?: string
+          external_request_id?: string | null
+          id?: string
+          matter_id?: string
+          name?: string
+          prepared_r2_key?: string | null
+          provider?: string
+          provider_sync_error?: string | null
+          provider_sync_error_at?: string | null
+          send_lease_expires_at?: string | null
+          send_lease_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          source_document_id?: string | null
+          source_r2_key?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_requests_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_requests_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "signature_requests_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "signature_requests_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signing_ceremonies: {
         Row: {
           completed_at: string | null
@@ -8235,6 +8774,8 @@ export type Database = {
           body: string
           contact_id: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           direction: string
           error: string | null
           from_number: string | null
@@ -8259,6 +8800,8 @@ export type Database = {
           body: string
           contact_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction: string
           error?: string | null
           from_number?: string | null
@@ -8283,6 +8826,8 @@ export type Database = {
           body?: string
           contact_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction?: string
           error?: string | null
           from_number?: string | null
@@ -8337,6 +8882,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sms_opt_outs: {
+        Row: {
+          opted_in_at: string | null
+          opted_out_at: string
+          phone: string
+          source_message_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          opted_in_at?: string | null
+          opted_out_at?: string
+          phone: string
+          source_message_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          opted_in_at?: string | null
+          opted_out_at?: string
+          phone?: string
+          source_message_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_opt_outs_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "sms_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_opt_outs_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "v_sms_threads"
+            referencedColumns: ["last_message_id"]
+          },
+        ]
+      }
+      sms_thread_state: {
+        Row: {
+          archived_at: string | null
+          archived_by: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          archived_by?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       stage_sla: {
         Row: {
@@ -9100,6 +9705,48 @@ export type Database = {
           },
         ]
       }
+      user_work_preferences: {
+        Row: {
+          admin_batch_minutes: number
+          created_at: string
+          focus_block_minutes: number
+          focus_capacity_minutes: number
+          interruption_buffer_percent: number
+          max_focus_block_minutes: number
+          max_must_do: number
+          updated_at: string
+          user_id: string
+          workday_end: string
+          workday_start: string
+        }
+        Insert: {
+          admin_batch_minutes?: number
+          created_at?: string
+          focus_block_minutes?: number
+          focus_capacity_minutes?: number
+          interruption_buffer_percent?: number
+          max_focus_block_minutes?: number
+          max_must_do?: number
+          updated_at?: string
+          user_id: string
+          workday_end?: string
+          workday_start?: string
+        }
+        Update: {
+          admin_batch_minutes?: number
+          created_at?: string
+          focus_block_minutes?: number
+          focus_capacity_minutes?: number
+          interruption_buffer_percent?: number
+          max_focus_block_minutes?: number
+          max_must_do?: number
+          updated_at?: string
+          user_id?: string
+          workday_end?: string
+          workday_start?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string
@@ -9124,6 +9771,42 @@ export type Database = {
           id?: string
           preferences?: Json
           role?: string
+        }
+        Relationships: []
+      }
+      work_item_overrides: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          id: string
+          note: string | null
+          snoozed_until: string | null
+          state: string
+          updated_at: string
+          user_id: string
+          work_key: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          snoozed_until?: string | null
+          state?: string
+          updated_at?: string
+          user_id: string
+          work_key: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          snoozed_until?: string | null
+          state?: string
+          updated_at?: string
+          user_id?: string
+          work_key?: string
         }
         Relationships: []
       }
@@ -10322,6 +11005,27 @@ export type Database = {
         }
         Relationships: []
       }
+      v_sms_threads: {
+        Row: {
+          archived: boolean | null
+          archived_at: string | null
+          contact_id: string | null
+          last_body: string | null
+          last_direction: string | null
+          last_message_at: string | null
+          last_message_id: string | null
+          last_status: string | null
+          lead_id: string | null
+          matter_id: string | null
+          message_count: number | null
+          opted_out: boolean | null
+          phone: string | null
+          phone_e164: string | null
+          recipient_name: string | null
+          unread_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acquire_integration_entity_lease: {
@@ -10624,12 +11328,13 @@ export type Database = {
           kind: string
           last_tick_at: string | null
           locked_by: string | null
-          matter_id: string
+          matter_id: string | null
           model: string | null
           prompt_version_id: string | null
           reclaims: number
           render_version: number | null
           resolved_inputs: Json | null
+          review_upload_id: string | null
           rule_total: number
           started_at: string
           status: string
@@ -11203,6 +11908,10 @@ export type Database = {
         }[]
       }
       is_contact_channel_list: { Args: { value: Json }; Returns: boolean }
+      is_legal_plan_billing: {
+        Args: { p_billing_type: string }
+        Returns: boolean
+      }
       issue_invoice: {
         Args: { p_actor_id: string; p_invoice_id: string }
         Returns: {
@@ -12326,12 +13035,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12355,11 +13064,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12380,11 +13089,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12405,11 +13114,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -12422,11 +13131,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

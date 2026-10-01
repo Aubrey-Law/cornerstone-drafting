@@ -5,12 +5,12 @@
  */
 import type { LeadEditableField } from '@/lib/leads/details'
 import {
-  ENGAGEMENT_REQUIRED_FIELDS,
   FIELD_DEFINITIONS,
   hasText,
   leadFieldApplies,
   leadFieldDefinition,
 } from '@/lib/leads/fieldDefinitions'
+import { LEAD_REQUIRED_FIELD_KEYS } from '@/lib/lifecycle/requirements'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
 export type LeadReadinessItem = {
@@ -60,7 +60,7 @@ export function computeLeadReadiness(
       key: definition.key,
       label: definition.missingLabel,
       complete: definition.complete(lead, spouse),
-      required: ENGAGEMENT_REQUIRED_FIELDS.includes(definition.key),
+      required: LEAD_REQUIRED_FIELD_KEYS.includes(definition.key),
     }))
 
   items.push(

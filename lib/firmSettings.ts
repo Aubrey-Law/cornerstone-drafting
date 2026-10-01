@@ -18,6 +18,8 @@ export interface FullFirmSettings extends FirmConfig {
   emailSignatureDefault: boolean
   /** Calendar Plan view workload target for one working day. */
   calendarDailyTargetMinutes: number
+  /** Canonical work graph and ADHD-focused home page. */
+  commandCenterV2Enabled: boolean
 }
 
 interface FirmSettingsRow {
@@ -38,6 +40,7 @@ interface FirmSettingsRow {
   email_signature_html: string | null
   email_signature_default: boolean | null
   calendar_daily_target_minutes: number | null
+  command_center_v2_enabled: boolean | null
 }
 
 let cache: { value: FullFirmSettings; at: number } | null = null
@@ -59,6 +62,9 @@ function defaults(): FullFirmSettings {
     emailSignatureHtml: '',
     emailSignatureDefault: true,
     calendarDailyTargetMinutes: 360,
+    // The command center is intentionally opt-in while its shadow reconciliation
+    // runs beside the legacy Today page.
+    commandCenterV2Enabled: false,
   }
 }
 
@@ -92,6 +98,7 @@ export async function loadFirmSettings(force = false): Promise<FullFirmSettings>
           emailSignatureHtml: row.email_signature_html ?? base.emailSignatureHtml,
           emailSignatureDefault: row.email_signature_default ?? base.emailSignatureDefault,
           calendarDailyTargetMinutes: row.calendar_daily_target_minutes ?? base.calendarDailyTargetMinutes,
+          commandCenterV2Enabled: row.command_center_v2_enabled ?? base.commandCenterV2Enabled,
         }
       : base
     cache = { value: merged, at: Date.now() }

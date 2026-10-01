@@ -60,22 +60,28 @@ beforeEach(() => {
 })
 
 describe('the firm-today tool', () => {
-  it('reads the same facts the Today page is built from, with links', async () => {
+  it('reads the same canonical ranked plan as the command center, with links', async () => {
+    const data = fixture()
+    data.waitingOnYou = [{
+      ...data.atRisk[0],
+      action: { kind: 'draft', label: 'Draft', href: '/admin/matters/m1' },
+      nudge_matter_id: null,
+    } as never]
+    data.waitingOnClient = [{
+      ...data.atRisk[1], action: null, nudge_matter_id: null,
+    } as never]
+    today.fetchTodayData.mockResolvedValueOnce(data)
     const { hooks, events } = ctx()
     const result = await firmTodayToolExecutor.execute({}, hooks)
     const body = JSON.parse(result.content) as Record<string, unknown>
 
-    expect(today.fetchTodayData).toHaveBeenCalledWith({ includeCalendar: false })
+    expect(today.fetchTodayData).toHaveBeenCalledWith({ includeCalendar: true })
     expect(body.ok).toBe(true)
-    expect(body.active_matter_count).toBe(31)
-    const atRisk = body.at_risk as Array<Record<string, unknown>>
-    expect(atRisk[0]).toMatchObject({ client_name: 'Amy Chen', type: 'matter', ball_in: 'attorney', days_over_sla: 5, url: '/admin/matters/m1' })
-    expect(atRisk[1]).toMatchObject({ type: 'lead', url: '/admin/crm/opportunities/l1' })
-    expect((body.unread_client_messages as unknown[]).length).toBe(1)
-    expect((body.intakes_to_review as Array<Record<string, unknown>>)[0]).toMatchObject({ client_name: 'Cara Diaz', url: '/admin/drafting/m2' })
-    expect((body.overdue_tasks as Array<Record<string, unknown>>)[0]).toMatchObject({ title: 'Call Amy about trustee', matter_id: 'm1' })
-    expect(body.billing).toMatchObject({ overdue_invoice_count: 1, overdue_dollars: 2500, unbilled_dollars: 1200 })
-    expect(events.at(-1)).toMatchObject({ tool: READ_FIRM_TODAY_TOOL_NAME, status: 'done', result: { at_risk_count: 2, unread_count: 1, overdue_task_count: 1 } })
+    expect(body.now).toMatchObject({ source: 'portal_message', title: 'Reply to Amy Chen', record: { type: 'matter', id: 'm1' } })
+    const mustDo = body.must_do as Array<Record<string, unknown>>
+    expect(mustDo.some(item => item.source === 'portal_message')).toBe(true)
+    expect((body.waiting_or_blocked as Array<Record<string, unknown>>).some(item => item.owner === 'client')).toBe(true)
+    expect(events.at(-1)).toMatchObject({ tool: READ_FIRM_TODAY_TOOL_NAME, status: 'done', result: { overload: expect.any(Boolean) } })
   })
 
   it('reports a failed read as a tool error, not an empty day', async () => {
