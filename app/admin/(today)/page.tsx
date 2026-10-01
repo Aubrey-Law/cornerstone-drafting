@@ -16,6 +16,7 @@ import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/datab
 import { PageHeader } from '@/components/PageHeader'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { CommandCenter } from '@/app/admin/components/CommandCenter'
+import { CommandCenterTelemetry } from '@/app/admin/components/CommandCenterTelemetry'
 import { getCachedClaims } from '@/lib/supabaseServer'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
@@ -52,6 +53,7 @@ async function LegacyTodayPage() {
   return (
     <>
       <NavigationReady route="Today" />
+      <CommandCenterTelemetry event="legacy_today_opened" />
     <AdminPageShell className="mx-auto w-full max-w-[1240px]">
       <PageHeader
         title={dateLabel}
@@ -140,7 +142,8 @@ export default async function AdminTodayPage({
   const params = (await searchParams) ?? {}
   const legacy = (Array.isArray(params.legacy) ? params.legacy[0] : params.legacy) === '1'
   const [auth, settings] = await Promise.all([getCachedClaims(), loadFirmSettings()])
-  if (!settings.commandCenterV2Enabled || legacy || !auth) return <LegacyTodayPage />
+  const legacyFallbackAvailable = !settings.commandCenterCutoverAt
+  if (!settings.commandCenterV2Enabled || (legacy && legacyFallbackAvailable) || !auth) return <LegacyTodayPage />
 
   const now = new Date()
   const [graph, preferences] = await Promise.all([
@@ -164,19 +167,20 @@ export default async function AdminTodayPage({
   return (
     <>
       <NavigationReady route="Today" />
+      <CommandCenterTelemetry event="command_center_opened" />
       <AdminPageShell className="mx-auto w-full max-w-[1380px]">
         <PageHeader
           eyebrow="Daily command center"
           title={dateLabel}
           description="One plan across client work, deadlines, communications, calendar, billing, and automation."
-          actions={
+          actions={legacyFallbackAvailable ? (
             <Link
               href="/admin?legacy=1"
               className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               View legacy Today
             </Link>
-          }
+          ) : undefined}
         />
         <CommandCenter
           initialPreview={preview}

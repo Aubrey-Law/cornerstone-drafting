@@ -13,10 +13,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function AutomationsPage() {
   const auth = await getCachedClaims()
-  const [rules, failedJobs, failedRuns, pendingResult, executionResult] = await Promise.all([
+  const [rules, failedJobs, pendingResult, executionResult] = await Promise.all([
     listAutomationRules().catch(() => []),
     getAdminClient().from('workflow_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
-    getAdminClient().from('automation_runs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
     getAdminClient().from('action_proposals')
       .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
       .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
@@ -26,7 +25,12 @@ export default async function AutomationsPage() {
       .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
       .order('created_at', { ascending: false }).limit(10),
   ])
-  const failedCount = (failedJobs.count ?? 0) + (failedRuns.count ?? 0)
+  // A successful retry resolves its prior failure. Count only rules whose
+  // latest run is failed instead of treating immutable failure history as
+  // active work forever.
+  const failedCount = (failedJobs.count ?? 0) + rules.filter(rule => (
+    rule.last_failure_at && (!rule.last_success_at || rule.last_failure_at > rule.last_success_at)
+  )).length
   const pending = pendingResult.data ?? []
   const executions = executionResult.data ?? []
 

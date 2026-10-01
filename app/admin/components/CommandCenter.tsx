@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -136,15 +136,30 @@ function assistantHref(item: WorkItem) {
   return `/admin/assistant${params.size ? `?${params}` : ''}`
 }
 
+async function recordUsage(event: 'work_snoozed' | 'work_blocked') {
+  try {
+    await fetch('/api/admin/command-center/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event }),
+      keepalive: true,
+    })
+  } catch {
+    // Aggregate rollout telemetry must never block the underlying work action.
+  }
+}
+
 function WorkCard({
   item,
   primary = false,
   planId,
+  openedAtRef,
   onRefresh,
 }: {
   item: WorkItem
   primary?: boolean
   planId: string | null
+  openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
 }) {
   const [busy, setBusy] = useState<string | null>(null)
@@ -154,7 +169,10 @@ function WorkCard({
     const response = await fetch(`/api/admin/daily-plans/${planId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item: { workKey: item.workKey, status } }),
+      body: JSON.stringify({
+        item: { workKey: item.workKey, status },
+        choiceDurationSeconds: status === 'started' ? Math.round((Date.now() - openedAtRef.current) / 1000) : undefined,
+      }),
     })
     if (!response.ok) throw new Error('The daily plan could not be updated')
   }
@@ -239,6 +257,7 @@ function WorkCard({
         { workKey: item.workKey, state, snoozedUntil },
         `${state === 'snoozed' ? 'Snooze' : 'Block'} work: ${item.title}`,
       )
+      await recordUsage(state === 'snoozed' ? 'work_snoozed' : 'work_blocked')
       await onRefresh()
       toast.success(state === 'snoozed' ? 'Snoozed for one day' : 'Moved to blocked')
     } catch (error) {
@@ -312,20 +331,23 @@ function WorkList({
   items,
   empty,
   planId,
+  openedAtRef,
   onRefresh,
 }: {
   items: WorkItem[]
   empty: string
   planId: string | null
+  openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
 }) {
   if (!items.length) return <p className="py-5 text-center text-sm text-muted-foreground">{empty}</p>
   return <div className="space-y-2">{items.map(item => (
-    <WorkCard key={item.workKey} item={item} planId={planId} onRefresh={onRefresh} />
+    <WorkCard key={item.workKey} item={item} planId={planId} openedAtRef={openedAtRef} onRefresh={onRefresh} />
   ))}</div>
 }
 
 export function CommandCenter({ initialPreview, preferences, initialPlan, sourceErrors }: Props) {
+  const openedAtMs = useRef(Date.now())
   const [preview, setPreview] = useState(initialPreview)
   const [workPreferences, setWorkPreferences] = useState(preferences)
   const [plan, setPlan] = useState(initialPlan)
@@ -382,7 +404,10 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
       const response = await fetch(`/api/admin/daily-plans/${plan.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'committed' }),
+        body: JSON.stringify({
+          status: 'committed',
+          planningDurationSeconds: Math.round((Date.now() - openedAtMs.current) / 1000),
+        }),
       })
       const body = await response.json().catch(() => ({})) as { plan?: { status: DailyPlanStatus }; error?: string }
       if (!response.ok || !body.plan) throw new Error(body.error ?? 'The plan could not be committed')
@@ -405,7 +430,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           </div>
           <Button variant="outline" onClick={() => setFocusMode(false)}>View full plan</Button>
         </div>
-        <WorkCard item={preview.now} primary planId={plan?.id ?? null} onRefresh={refresh} />
+        <WorkCard item={preview.now} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
         <p className="text-center text-xs text-muted-foreground">
           The rest of the queue is still safe. Finish, snooze, or block this item to reveal the next one.
         </p>
@@ -459,7 +484,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           <h2 id="now-heading" className="text-base font-semibold">Now</h2>
         </div>
         {preview.now
-          ? <WorkCard item={preview.now} primary planId={plan?.id ?? null} onRefresh={refresh} />
+          ? <WorkCard item={preview.now} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
           : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No firm-owned work needs attention.</CardContent></Card>}
       </section>
 
@@ -471,7 +496,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               <CardDescription>Critical work is never hidden; otherwise this list stops at {workPreferences.maxMustDo}.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleMustDo} empty="No additional must-do items." planId={plan?.id ?? null} onRefresh={refresh} />
+              <WorkList items={visibleMustDo} empty="No additional must-do items." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
             </CardContent>
           </Card>
 
@@ -481,7 +506,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               <CardDescription>{visibleCommunication.length} replies grouped into a {workPreferences.adminBatchMinutes}-minute admin block.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleCommunication} empty="No additional replies waiting." planId={plan?.id ?? null} onRefresh={refresh} />
+              <WorkList items={visibleCommunication} empty="No additional replies waiting." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
               <Button asChild variant="link" size="sm" className="mt-2 px-0">
                 <Link href="/admin/communications">Open all communications <ExternalLink /></Link>
               </Button>
@@ -494,7 +519,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               <CardDescription>Important work that fits the remaining capacity.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleSuggested} empty="No additional work fits today’s capacity." planId={plan?.id ?? null} onRefresh={refresh} />
+              <WorkList items={visibleSuggested} empty="No additional work fits today’s capacity." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
             </CardContent>
           </Card>
         </div>
@@ -527,7 +552,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               <CardDescription>Visible for context, excluded from Focus Mode.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={preview.waiting.slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} onRefresh={refresh} />
+              <WorkList items={preview.waiting.slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
               {preview.waiting.length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {preview.waiting.length - 8} more</p>}
             </CardContent>
           </Card>
@@ -535,7 +560,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           <details className="rounded-xl border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">Later · {preview.later.length}</summary>
             <div className="mt-3">
-              <WorkList items={preview.later} empty="Nothing deferred." planId={plan?.id ?? null} onRefresh={refresh} />
+              <WorkList items={preview.later} empty="Nothing deferred." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
             </div>
           </details>
         </aside>

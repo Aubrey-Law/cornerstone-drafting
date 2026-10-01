@@ -1804,6 +1804,66 @@ export type Database = {
           },
         ]
       }
+      command_center_usage_daily: {
+        Row: {
+          command_center_open_count: number
+          created_at: string
+          firm_date: string
+          first_choice_seconds: number | null
+          first_opened_at: string | null
+          last_event_at: string
+          legacy_today_open_count: number
+          plan_closed_count: number
+          plan_committed_count: number
+          plan_generated_count: number
+          plan_replanned_count: number
+          planning_seconds: number | null
+          user_id: string
+          work_blocked_count: number
+          work_completed_count: number
+          work_snoozed_count: number
+          work_started_count: number
+        }
+        Insert: {
+          command_center_open_count?: number
+          created_at?: string
+          firm_date: string
+          first_choice_seconds?: number | null
+          first_opened_at?: string | null
+          last_event_at?: string
+          legacy_today_open_count?: number
+          plan_closed_count?: number
+          plan_committed_count?: number
+          plan_generated_count?: number
+          plan_replanned_count?: number
+          planning_seconds?: number | null
+          user_id: string
+          work_blocked_count?: number
+          work_completed_count?: number
+          work_snoozed_count?: number
+          work_started_count?: number
+        }
+        Update: {
+          command_center_open_count?: number
+          created_at?: string
+          firm_date?: string
+          first_choice_seconds?: number | null
+          first_opened_at?: string | null
+          last_event_at?: string
+          legacy_today_open_count?: number
+          plan_closed_count?: number
+          plan_committed_count?: number
+          plan_generated_count?: number
+          plan_replanned_count?: number
+          planning_seconds?: number | null
+          user_id?: string
+          work_blocked_count?: number
+          work_completed_count?: number
+          work_snoozed_count?: number
+          work_started_count?: number
+        }
+        Relationships: []
+      }
       communication_thread_state: {
         Row: {
           archived_at: string | null
@@ -5400,6 +5460,8 @@ export type Database = {
           billing_milestones_enabled: boolean
           calendar_daily_target_minutes: number
           city: string | null
+          command_center_cutover_at: string | null
+          command_center_cutover_by: string | null
           command_center_v2_enabled: boolean
           command_center_v2_enabled_at: string | null
           command_center_v2_enabled_by: string | null
@@ -5434,6 +5496,8 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          command_center_cutover_at?: string | null
+          command_center_cutover_by?: string | null
           command_center_v2_enabled?: boolean
           command_center_v2_enabled_at?: string | null
           command_center_v2_enabled_by?: string | null
@@ -5468,6 +5532,8 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          command_center_cutover_at?: string | null
+          command_center_cutover_by?: string | null
           command_center_v2_enabled?: boolean
           command_center_v2_enabled_at?: string | null
           command_center_v2_enabled_by?: string | null
@@ -12609,6 +12675,39 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "billing_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_command_center_usage: {
+        Args: {
+          p_duration_seconds?: number
+          p_event: string
+          p_firm_date: string
+          p_user_id: string
+        }
+        Returns: {
+          command_center_open_count: number
+          created_at: string
+          firm_date: string
+          first_choice_seconds: number | null
+          first_opened_at: string | null
+          last_event_at: string
+          legacy_today_open_count: number
+          plan_closed_count: number
+          plan_committed_count: number
+          plan_generated_count: number
+          plan_replanned_count: number
+          planning_seconds: number | null
+          user_id: string
+          work_blocked_count: number
+          work_completed_count: number
+          work_snoozed_count: number
+          work_started_count: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "command_center_usage_daily"
           isOneToOne: true
           isSetofReturn: false
         }

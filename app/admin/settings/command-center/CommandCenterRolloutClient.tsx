@@ -23,12 +23,14 @@ import type {
   CommandCenterRolloutReadiness,
   WorkGraphReconciliationRun,
 } from '@/lib/work/rollout'
+import type { CommandCenterCutoverReadiness } from '@/lib/work/cutover'
 
 interface AuditResponse {
   run: WorkGraphReconciliationRun
   readiness: CommandCenterRolloutReadiness
   reconciliation: WorkGraphReconciliation | null
   sourceDurationsMs: Record<string, number> | null
+  cutoverReadiness?: CommandCenterCutoverReadiness
   error?: string
 }
 
@@ -58,20 +60,26 @@ function CountList({ title, values }: { title: string; values: string[] }) {
 export function CommandCenterRolloutClient({
   initialEnabled,
   initialEnabledAt,
+  initialCutoverAt,
   initialReadiness,
+  initialCutoverReadiness,
   initialRuns,
   isAdministrator,
 }: {
   initialEnabled: boolean
   initialEnabledAt: string | null
+  initialCutoverAt: string | null
   initialReadiness: CommandCenterRolloutReadiness
+  initialCutoverReadiness: CommandCenterCutoverReadiness
   initialRuns: WorkGraphReconciliationRun[]
   isAdministrator: boolean
 }) {
   const router = useRouter()
   const [enabled, setEnabled] = useState(initialEnabled)
   const [enabledAt, setEnabledAt] = useState(initialEnabledAt)
+  const [cutoverAt, setCutoverAt] = useState(initialCutoverAt)
   const [readiness, setReadiness] = useState(initialReadiness)
+  const [cutoverReadiness, setCutoverReadiness] = useState(initialCutoverReadiness)
   const [runs, setRuns] = useState(initialRuns)
   const [detail, setDetail] = useState<WorkGraphReconciliation | null>(null)
   const [sourceDurations, setSourceDurations] = useState<Record<string, number> | null>(null)
@@ -85,6 +93,7 @@ export function CommandCenterRolloutClient({
       if (!response.ok || !body.run) throw new Error(body.error ?? 'The shadow audit failed')
       setRuns(current => [body.run, ...current.filter(run => run.id !== body.run.id)].slice(0, 20))
       setReadiness(body.readiness)
+      if (body.cutoverReadiness) setCutoverReadiness(body.cutoverReadiness)
       setDetail(body.reconciliation)
       setSourceDurations(body.sourceDurationsMs)
       toast.success(body.run.readinessPassed ? 'Shadow audit passed' : 'Shadow audit recorded issues to review')
@@ -95,24 +104,33 @@ export function CommandCenterRolloutClient({
     }
   }
 
-  async function setRollout(nextEnabled: boolean) {
+  async function setRollout(action: 'enable_parallel' | 'cutover' | 'rollback') {
     setBusy('toggle')
     try {
       const response = await fetch('/api/admin/settings/command-center', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: nextEnabled }),
+        body: JSON.stringify({ action }),
       })
       const body = await response.json().catch(() => ({})) as {
         error?: string
         readiness?: CommandCenterRolloutReadiness
-        settings?: { command_center_v2_enabled?: boolean; command_center_v2_enabled_at?: string | null }
+        cutoverReadiness?: CommandCenterCutoverReadiness
+        settings?: {
+          command_center_v2_enabled?: boolean
+          command_center_v2_enabled_at?: string | null
+          command_center_cutover_at?: string | null
+        }
       }
       if (body.readiness) setReadiness(body.readiness)
+      if (body.cutoverReadiness) setCutoverReadiness(body.cutoverReadiness)
       if (!response.ok) throw new Error(body.error ?? 'The rollout setting could not be changed')
       setEnabled(Boolean(body.settings?.command_center_v2_enabled))
       setEnabledAt(body.settings?.command_center_v2_enabled_at ?? null)
-      toast.success(nextEnabled ? 'Daily Command Center enabled' : 'Legacy Today restored')
+      setCutoverAt(body.settings?.command_center_cutover_at ?? null)
+      toast.success(action === 'cutover'
+        ? 'Command Center cutover finalized'
+        : action === 'rollback' ? 'Legacy Today restored' : 'Parallel Command Center enabled')
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The rollout setting could not be changed')
@@ -131,11 +149,13 @@ export function CommandCenterRolloutClient({
             <CardDescription>Current experience</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
               {enabled ? <CheckCircle2 className="h-5 w-5 text-green" /> : <Activity className="h-5 w-5 text-muted-foreground" />}
-              {enabled ? 'Command Center' : 'Legacy Today'}
+              {cutoverAt ? 'Cutover complete' : enabled ? 'Parallel run' : 'Legacy Today'}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            {enabledAt ? `Parallel run started ${formatTimestamp(enabledAt)}.` : 'The new experience remains opt-in and hidden.'}
+            {cutoverAt
+              ? `Finalized ${formatTimestamp(cutoverAt)}.`
+              : enabledAt ? `Parallel run started ${formatTimestamp(enabledAt)}.` : 'The new experience remains opt-in and hidden.'}
           </CardContent>
         </Card>
         <Card>
@@ -177,14 +197,22 @@ export function CommandCenterRolloutClient({
               Run shadow audit
             </Button>
             {isAdministrator && (
-              <Button
-                variant={enabled ? 'outline' : 'default'}
-                onClick={() => setRollout(!enabled)}
-                disabled={busy !== null || (!enabled && !readiness.ready)}
-              >
-                {busy === 'toggle' && <Loader2 className="animate-spin" />}
-                {enabled ? 'Restore legacy Today' : 'Enable Command Center'}
-              </Button>
+              <>
+                {!enabled ? (
+                  <Button onClick={() => setRollout('enable_parallel')} disabled={busy !== null || !readiness.ready}>
+                    {busy === 'toggle' && <Loader2 className="animate-spin" />} Enable parallel run
+                  </Button>
+                ) : !cutoverAt ? (
+                  <Button onClick={() => setRollout('cutover')} disabled={busy !== null || !cutoverReadiness.ready}>
+                    {busy === 'toggle' && <Loader2 className="animate-spin" />} Finalize cutover
+                  </Button>
+                ) : null}
+                {enabled && (
+                  <Button variant="outline" onClick={() => setRollout('rollback')} disabled={busy !== null}>
+                    Emergency rollback
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </CardHeader>
@@ -203,13 +231,48 @@ export function CommandCenterRolloutClient({
             ))}
           </div>
           {!isAdministrator && <p className="mt-3 text-xs text-muted-foreground">An administrator must activate or disable the firm-wide experience.</p>}
-          {enabled && (
+          {enabled && !cutoverAt && (
             <p className="mt-3 text-xs text-muted-foreground">
               Keep the legacy path available for ten business days. <Link className="underline" href="/admin?legacy=1">Open legacy Today</Link>.
             </p>
           )}
         </CardContent>
       </Card>
+
+      {enabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              {cutoverAt || cutoverReadiness.ready
+                ? <CheckCircle2 className="h-5 w-5 text-green" />
+                : <AlertTriangle className="h-5 w-5 text-amber" />}
+              Final cutover gate {cutoverAt ? 'completed' : cutoverReadiness.ready ? 'passed' : 'collecting evidence'}
+            </CardTitle>
+            <CardDescription>Cutover requires ten passing business days plus the planning and next-task speed targets.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Parallel evidence</p><p className="mt-1 text-lg font-semibold">{cutoverReadiness.parallelBusinessDays}/10 days</p></div>
+              <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Median planning</p><p className="mt-1 text-lg font-semibold">{cutoverReadiness.medianPlanningSeconds === null ? '—' : `${cutoverReadiness.medianPlanningSeconds}s`}</p></div>
+              <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Median next choice</p><p className="mt-1 text-lg font-semibold">{cutoverReadiness.medianChoiceSeconds === null ? '—' : `${cutoverReadiness.medianChoiceSeconds}s`}</p></div>
+              <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Started work completed</p><p className="mt-1 text-lg font-semibold">{cutoverReadiness.completionRatePercent === null ? '—' : `${cutoverReadiness.completionRatePercent}%`}</p></div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {cutoverReadiness.criteria.map(criterion => (
+                <div key={criterion.key} className="flex gap-2 rounded-lg border p-3">
+                  {criterion.passed
+                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green" />
+                    : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />}
+                  <div><p className="text-sm font-medium">{criterion.label}</p><p className="text-xs text-muted-foreground">{criterion.detail}</p></div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Observed during the evidence window: {cutoverReadiness.legacyOpenCount} legacy visits, {cutoverReadiness.snoozeCount} snoozes, and {cutoverReadiness.automationFailureCount} currently surfaced automation failures.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {detail && (
         <Card>
