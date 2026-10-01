@@ -6,9 +6,9 @@ import type { AdminChatToolEmit } from '@/lib/adminChat/engine'
  * A tool that mutates firm or client data is not gated by a sentence in the
  * system prompt — client-authored text reaches that prompt, so a note or intake
  * field could ask for the write. Instead the tool returns a proposal, the card
- * renders an Accept button, and the write happens in
- * `app/api/admin/calendar/proposals/route.ts`, which re-validates the payload
- * under the attorney's own session.
+ * renders an Accept button, and the acceptance route adapts it into the shared
+ * action registry. That service revalidates the payload under the attorney's
+ * own session, reserves an idempotency key, and records the result.
  */
 export type AssistantProposalKind =
   | 'create_hold'
