@@ -62,7 +62,6 @@ function MonthDelta({ total }: { total: MatterTotal }) {
 
 export function MatterStatCards({
   snapshot,
-  aging,
 }: {
   snapshot: MatterDashboardSnapshot
   aging: MatterAgingTiles
@@ -87,12 +86,8 @@ export function MatterStatCards({
         icon={AlarmClock}
         label="Needs attention"
         value={snapshot.needsAttention}
-        caption={
-          aging.red > 0
-            ? `${aging.red} past SLA${aging.amber > 0 ? `, ${aging.amber} approaching` : ''}`
-            : 'Quiet or with uploads to read'
-        }
-        href="/admin/pipeline/aging"
+        caption="Firm-owned Critical, Must do, and Soon work"
+        href="/admin/matters/list?card=attention"
       />
       <StatCard
         icon={FileSignature}

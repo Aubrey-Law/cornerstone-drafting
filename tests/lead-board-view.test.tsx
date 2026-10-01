@@ -202,22 +202,26 @@ describe('what a board card is scanned for', () => {
     expect(screen.queryByText(/^\d{4}-EP-/)).toBeNull()
   })
 
-  it('names why a lead needs attention instead of just flagging it', () => {
-    // "Needs attention" was true of 16 of 35 leads, which told the reader
-    // nothing about which one to open.
+  it('shows the canonical next action instead of a separate urgency heuristic', () => {
     searchParams = new URLSearchParams('view=board')
-    renderLeads([leadRow({
+    const urgent = leadRow({
       id: 'urgent',
       full_name: 'Urgent Uma',
       lead_urgency: 'high',
       last_activity_at: new Date().toISOString(),
-    })])
+    })
+    renderLeads([urgent], { workSummaries: { urgent: {
+      recordType: 'lead', recordId: 'urgent', workKey: 'task:urgent', sourceType: 'task',
+      title: 'Call the prospective client', actionLabel: 'Start task', href: '/admin/tasks?focus=urgent',
+      owner: 'firm', state: 'open', priorityBand: 1,
+      priorityReasons: [{ code: 'due_today', label: 'Due today' }], dueAt: null,
+      estimateMinutes: 15, itemCount: 1, attentionCount: 1,
+    } } })
 
-    // Scoped to the card: "Needs attention" is also the name of a filter chip
-    // in the insights strip above the board, which stays.
     const card = screen.getByRole('article')
-    expect(within(card).getByText('High urgency')).toBeTruthy()
-    expect(within(card).queryByText('Needs attention')).toBeNull()
+    expect(within(card).getAllByText('Start task')).toHaveLength(2)
+    expect(within(card).getByText('Today')).toBeTruthy()
+    expect(within(card).queryByText('High urgency')).toBeNull()
   })
 
   it('falls back to the plan when no fee has been quoted', () => {

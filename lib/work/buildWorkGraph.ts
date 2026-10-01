@@ -28,6 +28,13 @@ export interface FailedAutomationRun {
   started_at: string
 }
 
+export interface DocumentReviewSource {
+  matterId: string
+  matterName: string
+  intakeCount: number
+  portalCount: number
+}
+
 export interface WorkGraphSources {
   today: TodayData
   futureTasks?: TaskRow[]
@@ -35,6 +42,7 @@ export interface WorkGraphSources {
   sms?: SmsThread[]
   failedWorkflowJobs?: FailedWorkflowJob[]
   failedAutomationRuns?: FailedAutomationRun[]
+  documentReviews?: DocumentReviewSource[]
   overrides?: WorkItemOverride[]
   sourceErrors?: string[]
 }
@@ -278,6 +286,28 @@ export function buildWorkGraph(
       estimateMinutes: 20,
       actionKey: 'matter.review-intake',
       staleSince: matter.matter_created ?? undefined,
+    })
+  }
+
+  for (const matter of sources.documentReviews ?? []) {
+    const total = matter.intakeCount + matter.portalCount
+    if (total <= 0) continue
+    const href = `/admin/matters/${matter.matterId}?tab=documents`
+    items.push({
+      workKey: `matter:${matter.matterId}:review-uploads`,
+      sourceType: 'document_review',
+      sourceIds: [matter.matterId],
+      evidence: evidence('document_review', matter.matterId, href),
+      record: { type: 'matter', id: matter.matterId, name: matter.matterName },
+      title: `Review ${total} new client upload${total === 1 ? '' : 's'}`,
+      actionLabel: 'Review documents',
+      href,
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 1,
+      priorityReasons: [{ code: 'document_review_ready', label: 'Client documents await review' }],
+      estimateMinutes: 20,
+      actionKey: 'matter.review-documents',
     })
   }
 

@@ -18,6 +18,10 @@ vi.mock('@/lib/communications/config', () => ({ isSmsConfigured: () => false }))
 vi.mock('@/lib/esign/firma', () => ({ isEsignConfigured: () => false }))
 vi.mock('@/lib/googleCalendar', () => ({ isGoogleConfigured: () => false }))
 vi.mock('@/lib/leads/activity', () => ({ buildLinkedMatterActivity: () => [] }))
+vi.mock('@/lib/supabaseServer', () => ({ getCachedClaims: async () => ({ id: 'staff-1' }) }))
+vi.mock('@/lib/work/server', () => ({
+  fetchWorkGraphForUser: vi.fn(async () => ({ items: [], appointments: [], sourceErrors: [], generatedAt: '' })),
+}))
 vi.mock('@/app/admin/matters/[id]/tabs/noteLinks', () => ({ mapMatterNoteRows: () => [] }))
 vi.mock('@/app/admin/matters/[id]/MatterDetailClient', () => ({ default: () => null }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from: (table: string) => {

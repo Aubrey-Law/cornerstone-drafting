@@ -8,6 +8,8 @@ import {
   leadExportFilename,
   LEAD_EXPORT_MAX_ROWS,
 } from '@/lib/leads/exportRows'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { attentionRecordIds, buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 /**
  * The leads contact export: name, email and phone as CSV.
@@ -39,7 +41,13 @@ export async function GET(req: Request) {
 
   let page
   try {
-    page = await fetchLeadExportRows(params, { limit })
+    const attentionIds = params.card === 'attention'
+      ? attentionRecordIds(buildRecordWorkSummaries(
+          (await fetchWorkGraphForUser(auth.userId)).items,
+          'lead',
+        ))
+      : undefined
+    page = await fetchLeadExportRows(params, { limit, attentionIds })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Lead export failed' },

@@ -22,11 +22,16 @@ PGPASSWORD=synthetic-fixture psql -h 127.0.0.1 -p 55493 -U postgres -d postgres 
 PGPASSWORD=synthetic-fixture PGOPTIONS='-c check_function_bodies=off' \
   psql -h 127.0.0.1 -p 55493 -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -f supabase/migrations/20261128000000_hide_closed_matters.sql
+
+PGPASSWORD=synthetic-fixture psql -h 127.0.0.1 -p 55493 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -f supabase/migrations/20270102090600_canonical_record_attention.sql
 ```
 
-The third migration goes on its own because of the second function it carries. `firm_matter_page_v1` is the one `matter-list-pagination` exercises and it reads only tables this fixture has; `drafting_hub_page`, in the same file, reads `design_sheets`, `doc_selections`, `drafting_hub_has_documents` and a dozen `matter_documents` columns the fixture deliberately does not stub, and no test here calls it. Postgres parses `language sql` bodies at creation time, so it would otherwise reject the file over a function nothing runs. `check_function_bodies=off` defers only that resolution — `ON_ERROR_STOP` still catches everything else.
+The closed-matter migration goes on its own because of the second function it carries. `firm_matter_page_v1` is the one `matter-list-pagination` exercises and it reads only tables this fixture has; `drafting_hub_page`, in the same file, reads `design_sheets`, `doc_selections`, `drafting_hub_has_documents` and a dozen `matter_documents` columns the fixture deliberately does not stub, and no test here calls it. Postgres parses `language sql` bodies at creation time, so it would otherwise reject the file over a function nothing runs. `check_function_bodies=off` defers only that resolution — `ON_ERROR_STOP` still catches everything else.
 
-Leaving it out is what made these tests wrong for a while: it redefined `firm_matter_page_v1` to hide closed matters by default and to take a `closed` toggle, so without it `matter-list-pagination` asserts a toggle the database it is talking to does not implement.
+The final migration replaces the old quiet/upload attention heuristic with the
+ordered canonical work-graph ids supplied by the server. Leaving either
+redefinition out makes `matter-list-pagination` exercise a stale contract.
 
 ```sh
 INTEGRATION_SUPABASE_URL=http://127.0.0.1:9 \

@@ -85,6 +85,26 @@ describe('canonical work graph', () => {
     expect(graph.items[0]).toMatchObject({ owner: 'client', state: 'waiting', priorityBand: 4 })
   })
 
+  it('surfaces unreviewed client uploads as canonical matter attention', () => {
+    const graph = buildWorkGraph({
+      today: today(),
+      documentReviews: [{
+        matterId: '10000000-0000-4000-8000-000000000001',
+        matterName: 'A Client',
+        intakeCount: 1,
+        portalCount: 2,
+      }],
+    }, NOW)
+
+    expect(graph.items).toContainEqual(expect.objectContaining({
+      workKey: 'matter:10000000-0000-4000-8000-000000000001:review-uploads',
+      sourceType: 'document_review',
+      title: 'Review 3 new client uploads',
+      priorityBand: 1,
+      estimateMinutes: 20,
+    }))
+  })
+
   it('collapses identical stable obligations and retains both evidence sources', () => {
     const base = aging()
     const graph = buildWorkGraph({ today: today({

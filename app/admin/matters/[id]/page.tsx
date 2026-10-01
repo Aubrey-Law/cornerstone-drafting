@@ -23,6 +23,9 @@ import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
 import type { IntakeSnapshot } from '@/lib/queries'
 import { profileMatterDetail } from '@/lib/performance/matterDetailTiming'
+import { getCachedClaims } from '@/lib/supabaseServer'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 export const dynamic = 'force-dynamic'
 
@@ -252,6 +255,7 @@ export default async function MatterDetailPage({ params }: Params) {
       { data: detailsRow, error: detailsError }, notes, designSheet,
       intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
       documentSignaturesEnabled,
+      workGraph,
     ] = await Promise.all([
       measure('core', () => fetchMatter(id)),
       measure('contacts', () => fetchMatterContacts(id)),
@@ -266,6 +270,10 @@ export default async function MatterDetailPage({ params }: Params) {
       measure('task-counts', () => fetchRecordTaskCounts(id)),
       intakeContext,
       measure('esign-documents', () => esignDocumentsEnabled()),
+      measure('work-graph', async () => {
+        const auth = await getCachedClaims()
+        return fetchWorkGraphForUser(auth?.id ?? null)
+      }),
     ])
     if (!matter) notFound()
 
@@ -337,6 +345,7 @@ export default async function MatterDetailPage({ params }: Params) {
         esignEnabled={isEsignConfigured()}
         esignDocumentsEnabled={documentSignaturesEnabled}
         emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
+        workSummary={buildRecordWorkSummaries(workGraph.items, 'matter')[id] ?? null}
       />
     )
   })

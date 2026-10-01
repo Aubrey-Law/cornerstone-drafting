@@ -82,6 +82,7 @@ import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTabContent } from '@/app/admin/matters/[id]/MatterPeopleTab'
 import { useConfirm } from '@/components/useConfirm'
 import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
+import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -134,6 +135,7 @@ type LeadDetailClientProps = {
   smsEnabled?: boolean
   /** firm_settings.esign_documents_enabled — sending a document for signature. */
   esignDocumentsEnabled?: boolean
+  workSummary?: import('@/lib/work/recordSummary').RecordWorkSummary | null
 }
 
 type LeadPatchResponse = {
@@ -208,6 +210,7 @@ export function LeadDetailClient({
   initialIntakeLinkRevoked = false,
   smsEnabled = true,
   esignDocumentsEnabled = false,
+  workSummary = null,
 }: LeadDetailClientProps) {
   const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
@@ -861,6 +864,8 @@ export function LeadDetailClient({
         </div>
       </header>
 
+      {workSummary && <RecordWorkStrip summary={workSummary} />}
+
       {error && (
         <p role="alert" aria-live="polite" className="border-b border-border bg-card px-4 py-1.5 text-xs text-destructive">
           {error}
@@ -889,7 +894,7 @@ export function LeadDetailClient({
         </ResponsiveDetailRail>
 
         <main className="@container flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-          {visibleAction && (
+          {!workSummary && visibleAction && (
             <div className="mb-4">
               <LeadNextAction
                 action={visibleAction}

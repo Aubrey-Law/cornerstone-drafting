@@ -90,7 +90,7 @@ export function MatterPipelineInsights({
     {
       label: 'Needs attention',
       value: String(attention),
-      detail: `Quiet ${QUIET_DAYS}+ days or unreviewed uploads`,
+      detail: 'Critical, due, client-waiting, or upcoming work',
       icon: AlertCircle,
       filter: 'attention',
     },

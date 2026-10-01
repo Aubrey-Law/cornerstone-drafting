@@ -10,6 +10,9 @@ import {
 } from '@/lib/leads/listParams'
 import type { LeadProgressFilter, LeadSortKey } from '@/lib/adminTables/leadTable'
 import { LeadsClient, type LeadRow } from './LeadsClient'
+import { getCachedClaims } from '@/lib/supabaseServer'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { attentionRecordIds, buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +56,20 @@ function readParams(params: SearchParams): LeadListParams {
 
 export default async function LeadsPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const params = readParams((await searchParams) ?? {})
-  const { rows, total, hasMore, summary, error } = await fetchLeadListPage(params)
+  const auth = await getCachedClaims()
+  // Ordinary list reads can overlap the work graph. The attention card waits
+  // because its database filter needs the graph's authoritative record ids.
+  const pagePromise = params.card === 'attention' ? null : fetchLeadListPage(params)
+  const graph = await fetchWorkGraphForUser(auth?.id ?? null)
+  const workSummaries = buildRecordWorkSummaries(graph.items, 'lead')
+  const attentionIds = attentionRecordIds(workSummaries)
+  const page = pagePromise
+    ? await pagePromise.then(result => ({
+        ...result,
+        summary: { ...result.summary, attention: attentionIds.length },
+      }))
+    : await fetchLeadListPage(params, { attentionIds })
+  const { rows, total, hasMore, summary, error } = page
 
   if (error) {
     return (
@@ -75,6 +91,7 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Promi
           total={total}
           hasMore={hasMore}
           summary={summary}
+          workSummaries={workSummaries}
           esignEnabled={isEsignConfigured()}
         />
       </Suspense>

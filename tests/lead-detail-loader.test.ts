@@ -115,6 +115,9 @@ vi.mock('@/lib/queries/tasks', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/queries/tasks')>(),
   fetchRecordTaskCounts: vi.fn(async () => ({ open: 603, overdue: 301 })),
 }))
+vi.mock('@/lib/work/server', () => ({
+  fetchWorkGraphForUser: vi.fn(async () => ({ items: [], appointments: [], sourceErrors: [], generatedAt: '' })),
+}))
 vi.mock('next/navigation', () => ({ notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND') }) }))
 vi.mock('@/app/admin/leads/[id]/LeadDetailClient', () => ({ LeadDetailClient: () => null }))
 

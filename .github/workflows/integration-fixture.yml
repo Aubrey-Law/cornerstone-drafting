@@ -42,10 +42,11 @@ on:
       # ledger-pagination imports the real @/lib/billing reducers and checks
       # them against the same rows read back through SQL.
       - 'lib/billing/**'
-      # The three migrations this catalog applies on top of the fixture.
+      # The migrations this catalog applies on top of the fixture.
       - 'supabase/migrations/20261123000000_workflow_job_leases.sql'
       - 'supabase/migrations/20261124000000_working_list_reads.sql'
       - 'supabase/migrations/20261128000000_hide_closed_matters.sql'
+      - 'supabase/migrations/20270102090600_canonical_record_attention.sql'
       - '.github/workflows/integration-fixture.yml'
   schedule:
     # 13:00 UTC on Mondays — after the anchor probe at 12:20 and the schema
@@ -124,6 +125,12 @@ jobs:
           set -euo pipefail
           PGOPTIONS='-c check_function_bodies=off' psql -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20261128000000_hide_closed_matters.sql
+
+      - name: Apply canonical record attention
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20270102090600_canonical_record_attention.sql
 
       # The two loopback markers satisfy the guard in
       # tests/support/verificationEnvironment.ts; nothing here speaks REST.

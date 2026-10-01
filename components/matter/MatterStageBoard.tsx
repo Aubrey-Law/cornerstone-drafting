@@ -32,6 +32,8 @@ import {
   type MatterStage,
   type StageGroup,
 } from '@/types/database'
+import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 /**
  * A matter as the board needs it. Callers map their own row shape onto this so
@@ -50,6 +52,8 @@ export interface StageBoardCard {
   quietDays?: number | null
   /** Prefetched on hover/focus and opened by `onOpen`. */
   href: string
+  /** Canonical record projection; absent on specialist boards such as Drafting. */
+  workSummary?: RecordWorkSummary
 }
 
 const BADGE_TONE_CLASS: Record<'success' | 'warning' | 'muted', string> = {
@@ -255,6 +259,9 @@ function BoardCard({
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {card.workSummary && (
+            <RecordWorkIndicator summary={card.workSummary} compact className="w-full" />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

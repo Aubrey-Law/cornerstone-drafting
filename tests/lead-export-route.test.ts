@@ -4,9 +4,11 @@ import { NextResponse } from 'next/server'
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   fetchLeadExportRows: vi.fn(),
+  fetchWorkGraphForUser: vi.fn(),
 }))
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: mocks.requireAdmin }))
 vi.mock('@/lib/queries/leadList', () => ({ fetchLeadExportRows: mocks.fetchLeadExportRows }))
+vi.mock('@/lib/work/server', () => ({ fetchWorkGraphForUser: mocks.fetchWorkGraphForUser }))
 
 import { GET } from '@/app/api/admin/leads/export/route'
 import { LEAD_EXPORT_MAX_ROWS } from '@/lib/leads/exportRows'
@@ -21,8 +23,10 @@ describe('the leads contact export route', () => {
   beforeEach(() => {
     mocks.requireAdmin.mockReset()
     mocks.fetchLeadExportRows.mockReset()
+    mocks.fetchWorkGraphForUser.mockReset()
     mocks.requireAdmin.mockResolvedValue({ err: null, userId: 'admin-1', user: null })
     mocks.fetchLeadExportRows.mockResolvedValue({ rows: ROWS, total: ROWS.length, truncated: false })
+    mocks.fetchWorkGraphForUser.mockResolvedValue({ items: [], appointments: [], sourceErrors: [], generatedAt: '' })
   })
 
   it('is admin-only — client contact data never leaves on an unauthenticated request', async () => {
@@ -65,6 +69,7 @@ describe('the leads contact export route', () => {
   it('narrows by an insight card, so a page export matches the list under one', async () => {
     await GET(new Request('https://app.test/api/admin/leads/export?card=attention'))
     expect((mocks.fetchLeadExportRows.mock.calls[0][0] as LeadListParams).card).toBe('attention')
+    expect(mocks.fetchLeadExportRows.mock.calls[0][1]).toMatchObject({ attentionIds: [] })
   })
 
   it('answers format=json with the same three fields', async () => {

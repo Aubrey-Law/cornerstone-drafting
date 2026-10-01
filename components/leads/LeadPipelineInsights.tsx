@@ -85,7 +85,7 @@ export function LeadPipelineInsights({
     {
       label: 'Needs attention',
       value: String(attentionCount),
-      detail: `High urgency or quiet ${STALE_DAYS}+ days`,
+      detail: 'Critical, due, client-waiting, or upcoming work',
       icon: AlertCircle,
       filter: 'attention',
     },
