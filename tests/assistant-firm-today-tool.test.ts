@@ -76,7 +76,10 @@ describe('the firm-today tool', () => {
     const result = await firmTodayToolExecutor.execute({}, hooks)
     const body = JSON.parse(result.content) as Record<string, unknown>
 
-    expect(today.fetchTodayData).toHaveBeenCalledWith({ includeCalendar: false })
+    expect(today.fetchTodayData).toHaveBeenCalledWith(expect.objectContaining({
+      includeCalendar: false,
+      dueTasks: expect.any(Promise),
+    }))
     expect(body.ok).toBe(true)
     expect(body.now).toMatchObject({ source: 'portal_message', title: 'Reply to Amy Chen', record: { type: 'matter', id: 'm1' } })
     const mustDo = body.must_do as Array<Record<string, unknown>>

@@ -86,6 +86,12 @@ describe('fetchCalendarBusy', () => {
     await expect(fetchCalendarBusy(FROM, TO)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
   })
 
+  it('applies the timeout to connection and token acquisition, not only freeBusy', async () => {
+    mocks.getConnection.mockImplementation(() => new Promise(() => {}))
+    await expect(fetchCalendarBusy(FROM, TO, { timeoutMs: 5 }))
+      .rejects.toBeInstanceOf(AvailabilityUnavailableError)
+  })
+
   it('throws when freeBusy errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'nope' }, 500)))
     await expect(fetchCalendarBusy(FROM, TO)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
@@ -109,6 +115,10 @@ describe('fetchCalendarBusy blocking calendars', () => {
 
     await fetchCalendarBusy(FROM, TO)
 
+    expect(mocks.getAccessToken).toHaveBeenCalledWith(
+      'user-1',
+      { connection: expect.objectContaining({ user_id: 'user-1' }) },
+    )
     const [, init] = fetchMock.mock.calls[0]!
     const body = JSON.parse(String(init.body))
     expect(body.items).toEqual([{ id: 'primary' }])

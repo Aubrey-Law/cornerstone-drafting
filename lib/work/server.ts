@@ -85,33 +85,60 @@ async function optionalSource<T>(
   }
 }
 
+async function timedSource<T>(
+  label: string,
+  load: () => Promise<T>,
+  durations: Record<string, number>,
+): Promise<T> {
+  const started = performance.now()
+  try {
+    return await load()
+  } finally {
+    durations[label] = Math.max(0, Math.round(performance.now() - started))
+  }
+}
+
 export async function fetchWorkGraphForUser(
   userId: string | null | undefined,
   now: Date = new Date(),
 ): Promise<WorkGraphResult> {
   const sourceErrors: string[] = []
+  const sourceDurationsMs: Record<string, number> = {}
   const through = new Date(now.getTime() + 5 * 86_400_000).toISOString()
   const todayKey = firmTodayKey(now)
   const firmNoonUtc = Date.parse(`${todayKey}T12:00:00Z`)
   const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000)
   const calendarTo = new Date(firmNoonUtc + 18 * 60 * 60 * 1000)
+  // Today and the canonical graph previously ran two identical due-task
+  // queries (including their record-name enrichment). Share the wider read;
+  // fetchTodayData still applies its exact firm-date grouping to this result.
+  const futureTasksPromise = timedSource(
+    'future_tasks',
+    () => optionalSource('future_tasks', () => fetchDueTasks(through), [], sourceErrors),
+    sourceDurationsMs,
+  )
 
   const [today, calendarBusy, futureTasks, overrides, email, sms, failedWorkflowJobs, failedAutomationRuns] = await Promise.all([
     // The work graph must not synchronously enumerate every visible Google
     // calendar. One freeBusy request below supplies the planner with the same
     // blocking calendars while the database remains the source of obligations.
-    fetchTodayData({ includeCalendar: false }),
+    timedSource('today', () => fetchTodayData({ includeCalendar: false, dueTasks: futureTasksPromise }), sourceDurationsMs),
     // Leave room inside the 1.5s API SLO for the database adapters. A slow
     // provider is reported as a source error rather than silently producing a
     // schedule that looks conflict-free.
-    optionalSource('calendar', () => fetchCalendarBusy(calendarFrom, calendarTo, { timeoutMs: 900 }), [], sourceErrors),
-    optionalSource('future_tasks', () => fetchDueTasks(through), [], sourceErrors),
-    userId ? fetchWorkOverrides(userId) : Promise.resolve([]),
-    optionalSource('email', async () =>
-      (await fetchTriageEnabled()) ? fetchEmailTriageQueue() : [], [], sourceErrors),
-    optionalSource('sms', async () =>
-      isSmsConfigured() ? listSmsThreads({ filter: 'unread', limit: 100 }) : [], [], sourceErrors),
-    optionalSource('automation_failures', async () => {
+    timedSource('calendar', () => optionalSource(
+      'calendar',
+      () => fetchCalendarBusy(calendarFrom, calendarTo, { timeoutMs: 900 }),
+      [],
+      sourceErrors,
+    ), sourceDurationsMs),
+    futureTasksPromise,
+    timedSource('overrides', () => userId ? fetchWorkOverrides(userId) : Promise.resolve([]), sourceDurationsMs),
+    timedSource('email', () => optionalSource('email', async () =>
+      (await fetchTriageEnabled()) ? fetchEmailTriageQueue() : [], [], sourceErrors), sourceDurationsMs),
+    timedSource('sms', () => optionalSource('sms', async () =>
+      isSmsConfigured() ? listSmsThreads({ filter: 'unread', limit: 100 }) : [], [], sourceErrors), sourceDurationsMs),
+    timedSource('automation_failures', () => optionalSource('automation_failures', async () => {
       const { data, error } = await getAdminClient()
         .from('workflow_jobs')
         .select('id, matter_id, job_type, updated_at')
@@ -120,8 +147,8 @@ export async function fetchWorkGraphForUser(
         .limit(100)
       if (error) throw error
       return (data ?? []) as FailedWorkflowJob[]
-    }, [], sourceErrors),
-    optionalSource('automation_rule_failures', async () => {
+    }, [], sourceErrors), sourceDurationsMs),
+    timedSource('automation_rule_failures', () => optionalSource('automation_rule_failures', async () => {
       const { data, error } = await getAdminClient()
         .from('automation_runs')
         .select('id, rule_id, system_key, error_summary, started_at')
@@ -130,17 +157,20 @@ export async function fetchWorkGraphForUser(
         .limit(100)
       if (error) throw error
       return (data ?? []) as FailedAutomationRun[]
-    }, [], sourceErrors),
+    }, [], sourceErrors), sourceDurationsMs),
   ])
 
-  return buildWorkGraph({
-    today: addCalendarBusyToToday(today, calendarBusy),
-    futureTasks,
-    overrides,
-    email,
-    sms,
-    failedWorkflowJobs,
-    failedAutomationRuns,
-    sourceErrors,
-  }, now)
+  return {
+    ...buildWorkGraph({
+      today: addCalendarBusyToToday(today, calendarBusy),
+      futureTasks,
+      overrides,
+      email,
+      sms,
+      failedWorkflowJobs,
+      failedAutomationRuns,
+      sourceErrors,
+    }, now),
+    sourceDurationsMs,
+  }
 }

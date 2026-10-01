@@ -136,4 +136,6 @@ export interface WorkGraphResult {
   items: WorkItem[]
   appointments: TodayAppointment[]
   sourceErrors: string[]
+  /** Aggregate adapter timings only; never includes record identifiers or content. */
+  sourceDurationsMs?: Record<string, number>
 }
