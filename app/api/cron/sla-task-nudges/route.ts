@@ -8,6 +8,7 @@ import { formatFirmDate } from '@/lib/format'
 import { toPlanTasks } from '@/lib/slaTasks/plan'
 import { PLAN_TASK_COLUMNS, type PlanTask, type SlaNudgeTier } from '@/lib/slaTasks/types'
 import type { TaskRow } from '@/lib/tasks/types'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,7 +85,7 @@ function bodyFor(pending: Pending, contact: MatterContact, firmName: string): st
  * is completed, skipped or blocked is not chased. Vercel supplies
  * `Authorization: Bearer ${CRON_SECRET}`.
  */
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -198,4 +199,8 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({ ok: true, sent, skipped: skipped.length, details: skipped })
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('sla-task-nudges', req, () => handle(req), { leaseSeconds: 300 })
 }

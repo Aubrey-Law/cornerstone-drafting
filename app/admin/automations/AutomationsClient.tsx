@@ -1,11 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { FlaskConical, Loader2, Pause, Play, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, FlaskConical, Loader2, Pause, Play, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
+export interface AutomationRunView {
+  id: string
+  status: string
+  started_at: string
+  finished_at?: string | null
+  attempt?: number
+  proposed_count?: number
+  executed_count?: number
+  error_summary?: string | null
+  next_retry_at?: string | null
+}
 
 export interface AutomationRuleView {
   id: string
@@ -17,34 +29,67 @@ export interface AutomationRuleView {
   action_config: Record<string, unknown>
   mode: 'dry_run' | 'live' | 'paused'
   approval_policy: 'automatic' | 'required' | 'prohibited'
-  lastRun?: { status?: string; started_at?: string; error_summary?: string | null } | null
+  origin: 'system_schedule' | 'rule_template' | 'custom_rule'
+  schedule_cron: string | null
+  schedule_timezone: string
+  next_run_at: string | null
+  last_success_at: string | null
+  last_failure_at: string | null
+  consecutive_failures: number
+  kill_switch: boolean
+  locked: boolean
+  max_attempts: number
+  lastRun?: AutomationRunView | null
+  lastSuccess?: AutomationRunView | null
+  lastFailure?: AutomationRunView | null
+  pendingApprovals?: number
+  recentRuns?: AutomationRunView[]
+}
+
+interface DryRunCandidate {
+  candidateKey: string
+  recordType: string
+  recordId: string | null
+  title: string
+  reason: string
+  href: string
+  actionKeys: string[]
+}
+
+const firmDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'America/New_York',
+})
+
+function formatTime(value?: string | null) {
+  return value ? firmDateTimeFormatter.format(new Date(value)) : 'Never'
+}
+
+function statusVariant(status?: string): 'default' | 'destructive' | 'outline' | 'secondary' {
+  if (status === 'failed') return 'destructive'
+  if (status === 'succeeded' || status === 'live') return 'default'
+  return 'outline'
 }
 
 export function AutomationsClient({ initialRules }: { initialRules: AutomationRuleView[] }) {
   const [rules, setRules] = useState(initialRules)
   const [busy, setBusy] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [dryRuns, setDryRuns] = useState<Record<string, DryRunCandidate[]>>({})
 
-  async function update(rule: AutomationRuleView, mode: AutomationRuleView['mode']) {
+  async function updateControl(rule: AutomationRuleView, mode: AutomationRuleView['mode'], killSwitch = false) {
     setBusy(rule.id)
     try {
       const response = await fetch(`/api/admin/automations/${rule.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: rule.name,
-          description: rule.description,
-          triggerKey: rule.trigger_key,
-          actionKey: rule.action_key,
-          conditions: rule.conditions,
-          actionConfig: rule.action_config,
-          mode,
-          approvalPolicy: rule.approval_policy,
-        }),
+        body: JSON.stringify({ controlOnly: true, mode, killSwitch }),
       })
       const body = await response.json().catch(() => ({})) as { rule?: AutomationRuleView; error?: string }
       if (!response.ok || !body.rule) throw new Error(body.error ?? 'Automation could not be updated')
       setRules(current => current.map(item => item.id === rule.id ? { ...item, ...body.rule } : item))
-      toast.success(mode === 'paused' ? 'Automation paused' : mode === 'dry_run' ? 'Dry-run mode enabled' : 'Automation enabled')
+      toast.success(killSwitch ? 'Kill switch engaged' : mode === 'paused' ? 'Automation paused' : mode === 'dry_run' ? 'Dry-run mode enabled' : 'Automation is live')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Automation could not be updated')
     } finally {
@@ -56,9 +101,12 @@ export function AutomationsClient({ initialRules }: { initialRules: AutomationRu
     setBusy(rule.id)
     try {
       const response = await fetch(`/api/admin/automations/${rule.id}/dry-run`, { method: 'POST' })
-      const body = await response.json().catch(() => ({})) as { proposed?: unknown[]; error?: string }
+      const body = await response.json().catch(() => ({})) as { proposed?: DryRunCandidate[]; error?: string }
       if (!response.ok) throw new Error(body.error ?? 'Dry run failed')
-      toast.success(`Dry run complete: ${body.proposed?.length ?? 0} action proposed, 0 executed`)
+      const proposed = body.proposed ?? []
+      setDryRuns(current => ({ ...current, [rule.id]: proposed }))
+      setExpanded(rule.id)
+      toast.success(`Dry run complete: ${proposed.reduce((count, candidate) => count + candidate.actionKeys.length, 0)} proposed, 0 executed`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Dry run failed')
     } finally {
@@ -66,52 +114,125 @@ export function AutomationsClient({ initialRules }: { initialRules: AutomationRu
     }
   }
 
+  async function retry(rule: AutomationRuleView, run: AutomationRunView) {
+    setBusy(rule.id)
+    try {
+      const response = await fetch(`/api/admin/automations/runs/${run.id}/retry`, { method: 'POST' })
+      const body = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'Retry failed')
+      toast.success('Retry completed without duplicating prior actions')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Retry failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {rules.map(rule => (
-        <Card key={rule.id}>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">{rule.name}</CardTitle>
-                <CardDescription className="mt-1">{rule.description}</CardDescription>
-              </div>
-              <Badge variant={rule.mode === 'live' ? 'default' : 'outline'} className="capitalize">
-                {rule.mode.replace('_', ' ')}
-              </Badge>
+    <div className="space-y-6">
+      {(['system_schedule', 'rule_template', 'custom_rule'] as const).map(origin => {
+        const group = rules.filter(rule => rule.origin === origin)
+        if (!group.length) return null
+        const heading = origin === 'system_schedule' ? 'System schedules' : origin === 'rule_template' ? 'Allowlisted templates' : 'Custom allowlisted rules'
+        return (
+          <section key={origin} aria-labelledby={`automation-${origin}`}>
+            <h3 id={`automation-${origin}`} className="mb-3 text-sm font-semibold">{heading}</h3>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {group.map(rule => {
+                const isBusy = busy === rule.id
+                const recentRuns = rule.recentRuns ?? []
+                const candidates = dryRuns[rule.id]
+                return (
+                  <Card key={rule.id} className={rule.kill_switch ? 'border-destructive/50' : ''}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base">{rule.name}</CardTitle>
+                          <CardDescription className="mt-1">{rule.description}</CardDescription>
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Badge variant="outline">{origin === 'system_schedule' ? 'System' : origin === 'rule_template' ? 'Template' : 'Custom'}</Badge>
+                          <Badge variant={rule.kill_switch ? 'destructive' : statusVariant(rule.mode)} className="capitalize">
+                            {rule.kill_switch ? 'stopped' : rule.mode.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Trigger</span>{rule.trigger_key.replaceAll('_', ' ')}</div>
+                        <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Action</span>{rule.action_key.replaceAll('_', ' ')}</div>
+                      </div>
+                      {rule.schedule_cron ? <p className="text-xs text-muted-foreground">Schedule: {rule.schedule_cron} {rule.schedule_timezone}</p> : null}
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <ShieldCheck className="h-3.5 w-3.5" /> {rule.approval_policy === 'required' ? 'Actions wait for approval' : 'Policy permits automatic preparation or internal execution'}
+                      </p>
+                      <div className="grid gap-2 rounded-md border p-2.5 text-xs sm:grid-cols-2">
+                        <div><span className="block text-muted-foreground">Next expected</span>{formatTime(rule.next_run_at)}</div>
+                        <div><span className="block text-muted-foreground">Pending approvals</span>{rule.pendingApprovals ?? 0}</div>
+                        <div><span className="block text-muted-foreground">Last success</span>{formatTime(rule.lastSuccess?.finished_at ?? rule.last_success_at)}</div>
+                        <div className={rule.lastFailure ? 'text-destructive' : ''}><span className="block text-muted-foreground">Last failure</span>{formatTime(rule.lastFailure?.finished_at ?? rule.last_failure_at)}</div>
+                      </div>
+                      {rule.lastFailure?.error_summary ? (
+                        <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {rule.lastFailure.error_summary}
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {origin !== 'system_schedule' ? (
+                          <Button size="sm" variant="outline" onClick={() => void dryRun(rule)} disabled={isBusy}>
+                            {isBusy ? <Loader2 className="animate-spin" /> : <FlaskConical />} Dry run
+                          </Button>
+                        ) : null}
+                        {rule.mode === 'paused' || rule.kill_switch ? (
+                          <Button size="sm" onClick={() => void updateControl(rule, origin === 'system_schedule' ? 'live' : 'dry_run')} disabled={isBusy}><Play /> Resume safely</Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => void updateControl(rule, 'paused')} disabled={isBusy}><Pause /> Pause</Button>
+                        )}
+                        {origin !== 'system_schedule' && rule.mode === 'dry_run' && !rule.kill_switch ? (
+                          <Button size="sm" onClick={() => void updateControl(rule, 'live')} disabled={isBusy}><Play /> Go live</Button>
+                        ) : null}
+                        {!rule.kill_switch ? (
+                          <Button size="sm" variant="destructive" onClick={() => void updateControl(rule, 'paused', true)} disabled={isBusy}>
+                            <ShieldAlert /> Kill switch
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="ghost" aria-expanded={expanded === rule.id} onClick={() => setExpanded(current => current === rule.id ? null : rule.id)}>
+                          {expanded === rule.id ? <ChevronUp /> : <ChevronDown />} History
+                        </Button>
+                      </div>
+                      {expanded === rule.id ? (
+                        <div className="space-y-2 border-t pt-3">
+                          {candidates ? (
+                            <div className="rounded-md bg-muted p-3 text-xs">
+                              <strong>Latest dry run: {candidates.length} candidate{candidates.length === 1 ? '' : 's'}, no side effects</strong>
+                              {candidates.length ? <ul className="mt-2 space-y-1">{candidates.map(candidate => (
+                                <li key={candidate.candidateKey}>{candidate.title} — {candidate.reason} ({candidate.actionKeys.join(', ')})</li>
+                              ))}</ul> : <p className="mt-1 text-muted-foreground">Nothing currently matches this trigger.</p>}
+                            </div>
+                          ) : null}
+                          {recentRuns.length ? recentRuns.map(run => (
+                            <div key={run.id} className="flex items-start justify-between gap-3 rounded-md border p-2 text-xs">
+                              <div>
+                                <div className="flex items-center gap-2"><Badge variant={statusVariant(run.status)}>{run.status.replace('_', ' ')}</Badge><span>{formatTime(run.started_at)}</span></div>
+                                <p className="mt-1 text-muted-foreground">Attempt {run.attempt ?? 1} · proposed {run.proposed_count ?? 0} · executed {run.executed_count ?? 0}</p>
+                                {run.next_retry_at ? <p className="mt-1 text-muted-foreground">Next retry: {formatTime(run.next_retry_at)}</p> : null}
+                              </div>
+                              {run.status === 'failed' && origin !== 'system_schedule' && (run.attempt ?? 1) < rule.max_attempts ? (
+                                <Button size="sm" variant="outline" onClick={() => void retry(rule, run)} disabled={isBusy}><RefreshCw /> Retry</Button>
+                              ) : null}
+                            </div>
+                          )) : <p className="text-xs text-muted-foreground">No runs recorded yet.</p>}
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Trigger</span>{rule.trigger_key.replaceAll('_', ' ')}</div>
-              <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Action</span>{rule.action_key.replaceAll('_', ' ')}</div>
-            </div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ShieldCheck className="h-3.5 w-3.5" /> {rule.approval_policy === 'required' ? 'Requires approval before execution' : 'Internal preparation may run automatically'}
-            </p>
-            <div className="rounded-md border px-2.5 py-2 text-xs">
-              <span className="text-muted-foreground">Last run: </span>
-              {rule.lastRun?.status ? (
-                <span className={rule.lastRun.status === 'failed' ? 'text-destructive' : 'text-foreground'}>
-                  {rule.lastRun.status.replace('_', ' ')}
-                  {rule.lastRun.started_at ? ` · ${new Date(rule.lastRun.started_at).toLocaleString()}` : ''}
-                  {rule.lastRun.error_summary ? ` · ${rule.lastRun.error_summary}` : ''}
-                </span>
-              ) : <span className="text-muted-foreground">Never</span>}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => dryRun(rule)} disabled={busy === rule.id}>
-                {busy === rule.id ? <Loader2 className="animate-spin" /> : <FlaskConical />} Dry run
-              </Button>
-              {rule.mode === 'paused' ? (
-                <Button size="sm" onClick={() => update(rule, 'dry_run')} disabled={busy === rule.id}><Play /> Enable safely</Button>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => update(rule, 'paused')} disabled={busy === rule.id}><Pause /> Pause</Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+          </section>
+        )
+      })}
     </div>
   )
 }

@@ -20,6 +20,7 @@ export type Database = {
           actor_id: string
           after_digest: string | null
           after_state: Json | null
+          automation_run_id: string | null
           before_digest: string | null
           before_state: Json | null
           completed_at: string | null
@@ -42,6 +43,7 @@ export type Database = {
           actor_id: string
           after_digest?: string | null
           after_state?: Json | null
+          automation_run_id?: string | null
           before_digest?: string | null
           before_state?: Json | null
           completed_at?: string | null
@@ -64,6 +66,7 @@ export type Database = {
           actor_id?: string
           after_digest?: string | null
           after_state?: Json | null
+          automation_run_id?: string | null
           before_digest?: string | null
           before_state?: Json | null
           completed_at?: string | null
@@ -83,6 +86,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "action_executions_automation_run_id_fkey"
+            columns: ["automation_run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "action_executions_proposal_id_fkey"
             columns: ["proposal_id"]
             isOneToOne: false
@@ -96,6 +106,7 @@ export type Database = {
           accepted_at: string | null
           action_key: string
           actor_id: string
+          automation_run_id: string | null
           confirmation_policy: string
           created_at: string
           display_summary: string
@@ -117,6 +128,7 @@ export type Database = {
           accepted_at?: string | null
           action_key: string
           actor_id: string
+          automation_run_id?: string | null
           confirmation_policy?: string
           created_at?: string
           display_summary: string
@@ -138,6 +150,7 @@ export type Database = {
           accepted_at?: string | null
           action_key?: string
           actor_id?: string
+          automation_run_id?: string | null
           confirmation_policy?: string
           created_at?: string
           display_summary?: string
@@ -155,7 +168,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "action_proposals_automation_run_id_fkey"
+            columns: ["automation_run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_usage: {
         Row: {
@@ -633,12 +654,23 @@ export type Database = {
           action_key: string
           approval_policy: string
           conditions: Json
+          consecutive_failures: number
           created_at: string
           created_by: string | null
           description: string | null
           id: string
+          kill_switch: boolean
+          last_failure_at: string | null
+          last_started_at: string | null
+          last_success_at: string | null
+          locked: boolean
+          max_attempts: number
           mode: string
           name: string
+          next_run_at: string | null
+          origin: string
+          schedule_cron: string | null
+          schedule_timezone: string
           system_key: string | null
           trigger_key: string
           updated_at: string
@@ -649,12 +681,23 @@ export type Database = {
           action_key: string
           approval_policy?: string
           conditions?: Json
+          consecutive_failures?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
+          kill_switch?: boolean
+          last_failure_at?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          locked?: boolean
+          max_attempts?: number
           mode?: string
           name: string
+          next_run_at?: string | null
+          origin?: string
+          schedule_cron?: string | null
+          schedule_timezone?: string
           system_key?: string | null
           trigger_key: string
           updated_at?: string
@@ -665,12 +708,23 @@ export type Database = {
           action_key?: string
           approval_policy?: string
           conditions?: Json
+          consecutive_failures?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
+          kill_switch?: boolean
+          last_failure_at?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          locked?: boolean
+          max_attempts?: number
           mode?: string
           name?: string
+          next_run_at?: string | null
+          origin?: string
+          schedule_cron?: string | null
+          schedule_timezone?: string
           system_key?: string | null
           trigger_key?: string
           updated_at?: string
@@ -680,54 +734,85 @@ export type Database = {
       }
       automation_runs: {
         Row: {
+          actor_id: string | null
           attempt: number
           created_at: string
           error_code: string | null
           error_summary: string | null
+          executed_action_keys: string[]
           executed_count: number
           finished_at: string | null
           id: string
           idempotency_key: string
+          lease_expires_at: string | null
           next_retry_at: string | null
+          output: Json
+          proposed_action_keys: string[]
           proposed_count: number
+          retry_of: string | null
+          retry_requested_at: string | null
           rule_id: string | null
           started_at: string
           status: string
           system_key: string | null
+          trigger_key: string | null
         }
         Insert: {
+          actor_id?: string | null
           attempt?: number
           created_at?: string
           error_code?: string | null
           error_summary?: string | null
+          executed_action_keys?: string[]
           executed_count?: number
           finished_at?: string | null
           id?: string
           idempotency_key: string
+          lease_expires_at?: string | null
           next_retry_at?: string | null
+          output?: Json
+          proposed_action_keys?: string[]
           proposed_count?: number
+          retry_of?: string | null
+          retry_requested_at?: string | null
           rule_id?: string | null
           started_at?: string
           status: string
           system_key?: string | null
+          trigger_key?: string | null
         }
         Update: {
+          actor_id?: string | null
           attempt?: number
           created_at?: string
           error_code?: string | null
           error_summary?: string | null
+          executed_action_keys?: string[]
           executed_count?: number
           finished_at?: string | null
           id?: string
           idempotency_key?: string
+          lease_expires_at?: string | null
           next_retry_at?: string | null
+          output?: Json
+          proposed_action_keys?: string[]
           proposed_count?: number
+          retry_of?: string | null
+          retry_requested_at?: string | null
           rule_id?: string | null
           started_at?: string
           status?: string
           system_key?: string | null
+          trigger_key?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "automation_runs_retry_of_fkey"
+            columns: ["retry_of"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "automation_runs_rule_id_fkey"
             columns: ["rule_id"]
@@ -11238,6 +11323,22 @@ export type Database = {
           execution_status: string
         }[]
       }
+      claim_automation_run: {
+        Args: {
+          p_actor_id?: string
+          p_idempotency_key: string
+          p_lease_seconds?: number
+          p_retry_of?: string
+          p_rule_id: string
+          p_status?: string
+        }
+        Returns: {
+          claim_reason: string
+          duplicate: boolean
+          run_id: string
+          run_status: string
+        }[]
+      }
       claim_draft_generation_run: {
         Args: {
           p_actor_id: string
@@ -11972,6 +12073,7 @@ export type Database = {
           actor_id: string
           after_digest: string | null
           after_state: Json | null
+          automation_run_id: string | null
           before_digest: string | null
           before_state: Json | null
           completed_at: string | null
@@ -11992,6 +12094,50 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "action_executions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      finish_automation_run: {
+        Args: {
+          p_error_code?: string
+          p_error_summary?: string
+          p_executed_action_keys?: string[]
+          p_executed_count?: number
+          p_next_retry_at?: string
+          p_output?: Json
+          p_proposed_action_keys?: string[]
+          p_proposed_count?: number
+          p_run_id: string
+          p_status: string
+        }
+        Returns: {
+          actor_id: string | null
+          attempt: number
+          created_at: string
+          error_code: string | null
+          error_summary: string | null
+          executed_action_keys: string[]
+          executed_count: number
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          next_retry_at: string | null
+          output: Json
+          proposed_action_keys: string[]
+          proposed_count: number
+          retry_of: string | null
+          retry_requested_at: string | null
+          rule_id: string | null
+          started_at: string
+          status: string
+          system_key: string | null
+          trigger_key: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "automation_runs"
           isOneToOne: true
           isSetofReturn: false
         }

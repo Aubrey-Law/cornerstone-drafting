@@ -148,6 +148,54 @@ function taskDelegateInput(value: unknown) {
   return { taskId, assigneeId }
 }
 
+const AUTOMATION_WORKFLOW_TYPES = [
+  'seed_design_sheet',
+  'ensure_sla_plan',
+  'fire_stage_task',
+  'annual_review',
+] as const
+
+type AutomationWorkflowType = (typeof AUTOMATION_WORKFLOW_TYPES)[number]
+
+function workflowEnqueueInput(value: unknown) {
+  const input = objectInput(value)
+  const type = typeof input.type === 'string' && AUTOMATION_WORKFLOW_TYPES.includes(input.type as AutomationWorkflowType)
+    ? input.type as AutomationWorkflowType
+    : null
+  const dedupeKey = requiredText(input, 'dedupeKey', 300)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!type) throw new Error('An allowlisted workflow type is required')
+  if (!matterId) throw new Error('A workflow matter is required')
+  const sourcePayload = input.payload && typeof input.payload === 'object' && !Array.isArray(input.payload)
+    ? input.payload as Record<string, unknown>
+    : {}
+  const payload = type === 'ensure_sla_plan'
+    ? { practiceArea: typeof sourcePayload.practiceArea === 'string' ? sourcePayload.practiceArea.slice(0, 20) : undefined, retemplate: sourcePayload.retemplate === true }
+    : type === 'fire_stage_task'
+      ? { stage: requiredText(sourcePayload, 'stage', 80) }
+      : {}
+  return { type, dedupeKey, matterId, payload }
+}
+
+function emailDraftPrepareInput(value: unknown): {
+  leadId: string
+  purpose: 'intake_reminder' | 'stale_lead_follow_up'
+} {
+  const input = objectInput(value)
+  const leadId = optionalUuid(input, 'leadId')
+  const purpose: 'intake_reminder' | 'stale_lead_follow_up' | null = input.purpose === 'intake_reminder' || input.purpose === 'stale_lead_follow_up'
+    ? input.purpose
+    : null
+  if (!leadId || !purpose) throw new Error('A valid lead draft purpose is required')
+  return { leadId, purpose }
+}
+
+function billingReminderPrepareInput(value: unknown) {
+  const input = objectInput(value)
+  const cycleKey = requiredText(input, 'cycleKey', 40)
+  return { cycleKey }
+}
+
 function overrideInput(value: unknown): { workKey: string; state: 'blocked' | 'snoozed'; snoozedUntil: string | null } {
   const input = objectInput(value)
   const workKey = typeof input.workKey === 'string' ? input.workKey.trim() : ''
@@ -491,6 +539,87 @@ const definitions: ActionDefinition[] = [
       return { taskId: task.id, assigneeId: task.assignee_id, updatedAt: task.updated_at }
     },
   } as ActionDefinition<ReturnType<typeof taskDelegateInput>>,
+  {
+    key: 'workflow.enqueue',
+    risk: 'internal_write',
+    validate: workflowEnqueueInput,
+    async preview(input, context) {
+      const { data, error } = await context.admin.from('matters').select('id, name, stage, updated_at').eq('id', input.matterId).maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Matter not found')
+      return {
+        display: { action: 'Queue workflow', workflow: input.type.replaceAll('_', ' '), matter: data.name, stage: data.stage },
+        auditBefore: { matterId: data.id, stage: data.stage, updatedAt: data.updated_at },
+        auditAfter: { matterId: data.id, workflow: input.type, dedupeKey: input.dedupeKey },
+      }
+    },
+    async execute(input, context) {
+      const { enqueueWorkflowJob } = await import('@/lib/workflowJobs')
+      return enqueueWorkflowJob({
+        type: input.type,
+        dedupeKey: input.dedupeKey,
+        matterId: input.matterId,
+        payload: input.type === 'annual_review' ? { ...input.payload, actorId: context.actor.id } : input.payload,
+        actorId: context.actor.id,
+      })
+    },
+    auditResult(result) {
+      return { workflowJobId: typeof result === 'string' ? result : null }
+    },
+  } as ActionDefinition<ReturnType<typeof workflowEnqueueInput>>,
+  {
+    key: 'email.draft.prepare',
+    risk: 'prepare',
+    validate: emailDraftPrepareInput,
+    async preview(input, context) {
+      const { previewAutomationLeadDraft } = await import('@/lib/email/prepareAutomationDraft')
+      const draft = await previewAutomationLeadDraft(context.admin, { ...input, actorId: context.actor.id })
+      return {
+        display: {
+          action: draft.existingDraftId ? 'Preserve existing email draft' : 'Prepare email draft',
+          recipient: draft.recipient,
+          channel: 'email',
+          subject: draft.subject,
+          content: draft.bodyHtml,
+        },
+        auditBefore: { leadId: draft.leadId, sourceUpdatedAt: draft.sourceUpdatedAt, existingDraftId: draft.existingDraftId },
+        auditAfter: { leadId: draft.leadId, purpose: draft.purpose, channel: 'email' },
+      }
+    },
+    async execute(input, context) {
+      const { prepareAutomationLeadDraft, previewAutomationLeadDraft } = await import('@/lib/email/prepareAutomationDraft')
+      const draft = await previewAutomationLeadDraft(context.admin, { ...input, actorId: context.actor.id })
+      return prepareAutomationLeadDraft(context.admin, draft, context.actor.id)
+    },
+    auditResult(result) {
+      const value = result as { id?: string; prepared?: boolean; preservedExisting?: boolean }
+      return { draftId: value.id, prepared: value.prepared, preservedExisting: value.preservedExisting }
+    },
+  } as ActionDefinition<ReturnType<typeof emailDraftPrepareInput>>,
+  {
+    key: 'billing.reminders.prepare',
+    risk: 'prepare',
+    validate: billingReminderPrepareInput,
+    async preview(input, context) {
+      const today = new Date().toISOString().slice(0, 10)
+      const { count, error } = await context.admin.from('invoices').select('id', { count: 'exact', head: true })
+        .in('status', ['issued', 'partial']).not('due_date', 'is', null).lt('due_date', today)
+      if (error) throw new Error(error.message)
+      return {
+        display: { action: 'Prepare invoice reminders', overdueInvoiceCount: count ?? 0, cycleKey: input.cycleKey },
+        auditBefore: null,
+        auditAfter: { cycleKey: input.cycleKey, overdueInvoiceCount: count ?? 0 },
+      }
+    },
+    async execute() {
+      const { prepareInvoiceReminderDrafts } = await import('@/lib/billing/prepareInvoiceReminders')
+      return prepareInvoiceReminderDrafts()
+    },
+    auditResult(result) {
+      const value = result as { drafted?: number; unavailable?: boolean }
+      return { drafted: value.drafted ?? 0, unavailable: value.unavailable === true }
+    },
+  } as ActionDefinition<ReturnType<typeof billingReminderPrepareInput>>,
 ]
 
 export function getActionDefinition(key: string): ActionDefinition | null {

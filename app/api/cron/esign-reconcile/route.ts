@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { reconcileStaleAgreements } from '@/lib/esign/reconcile'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export const maxDuration = 60
  * calls, not in the cron configuration: a schedule is a trigger, never a
  * security boundary, and vercel.json is the wrong place to hold either.
  */
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,4 +26,8 @@ export async function GET(req: Request) {
     console.error('[esign reconcile]', e)
     return NextResponse.json({ error: 'Reconciliation unavailable' }, { status: 503 })
   }
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('esign-reconcile', req, () => handle(req), { leaseSeconds: 300 })
 }

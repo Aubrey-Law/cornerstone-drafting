@@ -87,6 +87,7 @@ export async function createActionProposal(request: ActionProposalRequest, actor
     source: request.source ?? 'api',
     preview_digest: previewDigest,
     confirmation_policy: confirmationPolicy,
+    automation_run_id: request.automationRunId ?? null,
     ...(expiresAt ? { expires_at: expiresAt } : {}),
   }).select('*').single()
   if (error) {
@@ -98,6 +99,7 @@ export async function createActionProposal(request: ActionProposalRequest, actor
           existing.actor_id !== actor.id
           || existing.action_key !== definition.key
           || actionDigest(existing.reference_payload) !== actionDigest(input)
+          || existing.automation_run_id !== (request.automationRunId ?? null)
         ) {
           throw new ActionServiceError('Idempotency key already belongs to a different action', 'idempotency_conflict')
         }

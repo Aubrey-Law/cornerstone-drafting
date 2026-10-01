@@ -5,10 +5,11 @@ import { fetchDueTasks } from '@/lib/queries/tasks'
 import { taskDueGroup } from '@/lib/tasks/types'
 import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { appUrl } from '@/lib/urls'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -57,4 +58,8 @@ export async function GET(req: Request) {
     </div>`,
   })
   return NextResponse.json({ ok: result.ok, sent: result.ok, summary })
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('calendar-week-review', req, () => handle(req), { leaseSeconds: 120 })
 }

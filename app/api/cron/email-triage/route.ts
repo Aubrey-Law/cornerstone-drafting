@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { runEmailTriageScan } from '@/lib/emailTriage/scan'
+import { runSystemAutomation } from '@/lib/automations/control'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,11 +14,15 @@ export const maxDuration = 60
 // Always 200 with counts, including on a partial run. The scan is bounded and
 // idempotent — what it did not reach stays queued for the next pass — so a
 // short run is a normal outcome rather than a failure to alert on.
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   return NextResponse.json(await runEmailTriageScan({ trigger: 'cron' }))
+}
+
+export async function GET(req: Request) {
+  return runSystemAutomation('email-triage', req, () => handle(req), { leaseSeconds: 180 })
 }

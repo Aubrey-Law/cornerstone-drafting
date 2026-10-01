@@ -54,6 +54,7 @@ export interface ActionProposalRequest {
   idempotencyKey?: string
   source?: ActionSource
   expiresAt?: string
+  automationRunId?: string
 }
 
 export interface ActionExecutionRequest {
