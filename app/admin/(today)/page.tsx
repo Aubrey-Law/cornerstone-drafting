@@ -22,6 +22,8 @@ import { loadFirmSettings } from '@/lib/firmSettings'
 import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
 import { createDailyPlanPreview } from '@/lib/work/planner'
 import { fetchDailyPlan } from '@/lib/work/plans'
+import { getDailyPlanCalendarStatus } from '@/lib/work/dailyPlanCalendar'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -157,6 +159,9 @@ export default async function AdminTodayPage({
     now,
   })
   const stored = await fetchDailyPlan(auth.id, preview.date).catch(() => null)
+  const calendarStatus = stored
+    ? await getDailyPlanCalendarStatus(getAdminClient(), stored, graph.items).catch(() => null)
+    : null
   const dateLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -185,7 +190,7 @@ export default async function AdminTodayPage({
         <CommandCenter
           initialPreview={preview}
           preferences={preferences}
-          initialPlan={stored ? { id: stored.id, status: stored.status } : null}
+          initialPlan={stored ? { id: stored.id, status: stored.status, calendarStatus } : null}
           sourceErrors={graph.sourceErrors}
         />
       </AdminPageShell>

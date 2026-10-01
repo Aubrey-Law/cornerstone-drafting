@@ -159,6 +159,25 @@ export async function fetchDailyPlan(userId: string, date: string): Promise<Stor
   return { ...(plan as unknown as Omit<StoredDailyPlan, 'items'>), items: (items ?? []) as unknown as StoredDailyPlanItem[] }
 }
 
+export async function fetchDailyPlanById(userId: string, planId: string): Promise<StoredDailyPlan | null> {
+  const admin = getAdminClient()
+  const { data: plan, error } = await admin
+    .from('daily_plans')
+    .select('*')
+    .eq('id', planId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!plan) return null
+  const { data: items, error: itemsError } = await admin
+    .from('daily_plan_items')
+    .select('*')
+    .eq('plan_id', plan.id)
+    .order('position')
+  if (itemsError) throw new Error(itemsError.message)
+  return { ...(plan as unknown as Omit<StoredDailyPlan, 'items'>), items: (items ?? []) as unknown as StoredDailyPlanItem[] }
+}
+
 export async function updateDailyPlan(input: {
   userId: string
   planId: string

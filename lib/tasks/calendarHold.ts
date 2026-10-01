@@ -3,9 +3,9 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createCalendarHold } from '@/lib/appointments/googleEvents'
 import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/calendarBusy'
+import { getOrCreateInternalHoldType } from '@/lib/appointments/internalHoldType'
 import type { TaskRow } from '@/lib/tasks/types'
 
-const TASK_HOLD_TYPE_KEY = 'task_block'
 const DAY_MS = 86_400_000
 
 export class TaskCalendarHoldError extends Error {
@@ -13,39 +13,6 @@ export class TaskCalendarHoldError extends Error {
     super(message)
     this.name = 'TaskCalendarHoldError'
   }
-}
-
-async function getOrCreateTaskHoldType(admin: SupabaseClient): Promise<string> {
-  const { data: existing, error: existingError } = await admin
-    .from('appointment_types')
-    .select('id, key')
-    .eq('key', TASK_HOLD_TYPE_KEY)
-    .maybeSingle()
-  if (existingError) throw existingError
-  if (existing?.id) return existing.id as string
-
-  const insert = await admin.from('appointment_types').insert({
-    key: TASK_HOLD_TYPE_KEY,
-    slug: 'task-block',
-    label: 'Task hold',
-    description: 'Internal planning hold created from tasks.',
-    duration_minutes: 30,
-    location_type: 'phone',
-    location_types: ['phone'],
-    active: false,
-    public: false,
-    sort: 999,
-  } as const)
-
-  if (insert.error && insert.error.code !== '23505') throw insert.error
-  const refreshed = await admin
-    .from('appointment_types')
-    .select('id, key')
-    .eq('key', TASK_HOLD_TYPE_KEY)
-    .maybeSingle()
-  if (refreshed.error) throw refreshed.error
-  if (refreshed.data?.id) return refreshed.data.id as string
-  throw insert.error ?? new Error('Unable to initialize task hold appointment type')
 }
 
 export interface TaskCalendarHoldResult {
@@ -108,7 +75,7 @@ export async function createTaskCalendarHold(input: {
     throw new TaskCalendarHoldError('Could not verify calendar availability')
   }
 
-  const appointmentTypeId = await getOrCreateTaskHoldType(input.admin)
+  const appointmentTypeId = await getOrCreateInternalHoldType(input.admin)
   const startIso = new Date(startMs).toISOString()
   const endIso = new Date(endMs).toISOString()
   const attendeeName = `Task hold: ${input.task.title}`
@@ -150,6 +117,7 @@ export async function createTaskCalendarHold(input: {
       endIso,
       matterId: input.task.matter_id,
       showAsBusy: input.showAsBusy,
+      idempotencyKey: `task:${input.task.id}`,
     })
     const update = await input.admin
       .from('appointments')

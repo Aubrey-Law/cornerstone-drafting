@@ -114,7 +114,9 @@ describe('task calendar holds', () => {
       linked_matter_id: task.matter_id,
       raw: { source: 'task_calendar_hold', taskId: task.id, taskTitle: task.title },
     })
-    expect(mocks.createCalendarHold).toHaveBeenCalledOnce()
+    expect(mocks.createCalendarHold).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: `task:${task.id}`,
+    }))
   })
 
   it('rejects a conflicting block before writing an appointment', async () => {

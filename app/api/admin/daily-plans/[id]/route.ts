@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { isUuid } from '@/lib/queries/tasks'
 import { updateDailyPlan, type DailyPlanItemStatus, type DailyPlanStatus } from '@/lib/work/plans'
 import { recordCommandCenterUsageSafely, type CommandCenterUsageEvent } from '@/lib/work/usageServer'
+import { executeDailyPlanCalendarSync } from '@/lib/work/dailyPlanCalendarAction'
 
 const PLAN_STATUSES: DailyPlanStatus[] = ['draft', 'committed', 'closed']
 const ITEM_STATUSES: DailyPlanItemStatus[] = ['planned', 'started', 'completed', 'skipped']
@@ -47,7 +48,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (item?.status === 'started') events.push({ event: 'work_started', durationSeconds: choiceDurationSeconds })
     if (item?.status === 'completed') events.push({ event: 'work_completed' })
     await Promise.all(events.map(event => recordCommandCenterUsageSafely({ userId: auth.userId, ...event })))
-    return NextResponse.json({ plan })
+    let calendarSync = null
+    let calendarSyncError: string | null = null
+    if (status === 'committed' && auth.user) {
+      try {
+        calendarSync = await executeDailyPlanCalendarSync(plan.id, auth.user)
+      } catch (error) {
+        // The plan commitment is authoritative even when a connected calendar
+        // is temporarily unavailable. Return a recoverable warning instead of
+        // pretending the already-persisted plan failed to commit.
+        calendarSyncError = error instanceof Error ? error.message : 'Calendar blocks could not be synced'
+      }
+    }
+    return NextResponse.json({ plan, calendarSync, calendarSyncError })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to update the daily plan'
     return NextResponse.json({ error: message }, { status: message === 'Daily plan not found' ? 404 : 500 })
