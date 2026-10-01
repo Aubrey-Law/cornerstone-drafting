@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils'
 import type { DailyPlanPreview, WorkItem, WorkPreferences } from '@/lib/work/types'
 import type { DailyPlanStatus } from '@/lib/work/plans'
 import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib/work/dailyPlanCalendar'
+import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
 
 interface Props {
@@ -347,6 +348,135 @@ function WorkList({
   ))}</div>
 }
 
+function CloseReviewList({
+  items,
+  empty,
+}: {
+  items: EndOfDayWorkItem[]
+  empty: string
+}) {
+  if (!items.length) return <p className="text-sm text-muted-foreground">{empty}</p>
+  return (
+    <ul className="space-y-1.5 text-sm">
+      {items.map(item => (
+        <li key={item.workKey} className="flex items-start gap-2">
+          <span className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground" aria-hidden />
+          {item.href ? <Link className="text-primary underline-offset-4 hover:underline" href={item.href}>{item.title}</Link> : <span>{item.title}</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function EndOfDayClose({
+  plan,
+  disabled,
+  onClosed,
+}: {
+  plan: { id: string; status: DailyPlanStatus } | null
+  disabled: boolean
+  onClosed: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [preview, setPreview] = useState<EndOfDayClosePreview | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [closing, setClosing] = useState(false)
+
+  async function loadPreview() {
+    if (!plan) return
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}/close-preview`, { cache: 'no-store' })
+      const body = await response.json().catch(() => ({})) as { preview?: EndOfDayClosePreview; error?: string }
+      if (!response.ok || !body.preview) throw new Error(body.error ?? 'The close review could not be loaded')
+      setPreview(body.preview)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The close review could not be loaded')
+      setOpen(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function changeOpen(next: boolean) {
+    setOpen(next)
+    if (next) {
+      setPreview(null)
+      await loadPreview()
+    }
+  }
+
+  async function closePlan() {
+    if (!plan) return
+    setClosing(true)
+    try {
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}/close`, { method: 'POST' })
+      const body = await response.json().catch(() => ({})) as { plan?: { status?: DailyPlanStatus }; error?: string }
+      if (!response.ok || body.plan?.status !== 'closed') throw new Error(body.error ?? 'The daily plan could not be closed')
+      setOpen(false)
+      onClosed()
+      toast.success('Day closed. Unfinished work remains open for your next plan.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The daily plan could not be closed')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  if (!plan || plan.status !== 'committed') return null
+  return (
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" disabled={disabled}>Close day</Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>End-of-day close</DialogTitle>
+          <DialogDescription>
+            Review the day before closing it. This never completes, deletes, or reschedules unfinished source work.
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="animate-spin" /> Preparing your review…</div> : preview && (
+          <div className="space-y-5 py-2">
+            <section>
+              <h3 className="text-sm font-semibold">Completed · {preview.completed.length}</h3>
+              <div className="mt-2"><CloseReviewList items={preview.completed} empty="No work is recorded complete in this plan." /></div>
+            </section>
+            <section>
+              <h3 className="text-sm font-semibold">Carry forward · {preview.interrupted.length + preview.blocked.length + preview.snoozed.length}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">These items stay open with their original source deadlines and ownership.</p>
+              <div className="mt-2 space-y-3">
+                <CloseReviewList items={preview.interrupted} empty="No unfinished planned work." />
+                {preview.blocked.length > 0 && <CloseReviewList items={preview.blocked} empty="" />}
+                {preview.snoozed.length > 0 && <CloseReviewList items={preview.snoozed} empty="" />}
+              </div>
+            </section>
+            {preview.newCritical.length > 0 && <section>
+              <h3 className="text-sm font-semibold text-destructive">New critical work · {preview.newCritical.length}</h3>
+              <div className="mt-2"><CloseReviewList items={preview.newCritical} empty="" /></div>
+            </section>}
+            <section>
+              <h3 className="text-sm font-semibold">Unresolved risks</h3>
+              <div className="mt-2"><CloseReviewList items={preview.unresolvedRisks} empty="No critical or must-do risk is currently open." /></div>
+            </section>
+            <section className="rounded-lg border bg-muted p-3">
+              <h3 className="text-sm font-semibold">Tomorrow’s first action</h3>
+              <p className="mt-1 text-xs text-muted-foreground">A suggestion from the current deterministic ranking; it does not create tomorrow’s plan.</p>
+              <div className="mt-2"><CloseReviewList items={preview.tomorrowFirstAction ? [preview.tomorrowFirstAction] : []} empty="No firm-owned open work is currently ranked." /></div>
+            </section>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={closing}>Keep plan open</Button>
+          <Button onClick={closePlan} disabled={!preview || loading || closing}>
+            {closing ? <Loader2 className="animate-spin" /> : <Check />} Close day
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function CommandCenter({ initialPreview, preferences, initialPlan, sourceErrors }: Props) {
   const openedAtMs = useRef(Date.now())
   const [preview, setPreview] = useState(initialPreview)
@@ -512,6 +642,11 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
             {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />}
             Commit plan
           </Button>
+          <EndOfDayClose
+            plan={plan}
+            disabled={busy !== null}
+            onClosed={() => setPlan(current => current ? { ...current, status: 'closed' } : current)}
+          />
           {plan?.status === 'committed'
             && (!plan.calendarStatus || plan.calendarStatus.pendingBlocks > 0 || plan.calendarStatus.staleBlocks > 0) && (
               <Button size="sm" variant="outline" onClick={syncCalendar} disabled={busy !== null}>

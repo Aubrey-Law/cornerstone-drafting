@@ -103,6 +103,13 @@ function dailyPlanCalendarSyncInput(value: unknown) {
   return { planId }
 }
 
+function dailyPlanCloseInput(value: unknown) {
+  const input = objectInput(value)
+  const planId = optionalUuid(input, 'planId')
+  if (!planId) throw new Error('A valid daily plan is required')
+  return { planId }
+}
+
 function noteCreateInput(value: unknown) {
   const input = objectInput(value)
   const recordType = input.recordType === 'lead' ? 'lead' : input.recordType === 'matter' ? 'matter' : null
@@ -427,6 +434,58 @@ const definitions: ActionDefinition[] = [
       }
     },
   } as ActionDefinition<ReturnType<typeof dailyPlanCalendarSyncInput>>,
+  {
+    key: 'daily_plan.close',
+    risk: 'internal_write',
+    validate: dailyPlanCloseInput,
+    async preview(input, context) {
+      const [{ fetchDailyPlanById }, { fetchWorkGraphForUser }, { buildEndOfDayClosePreview }] = await Promise.all([
+        import('@/lib/work/plans'),
+        import('@/lib/work/server'),
+        import('@/lib/work/endOfDay'),
+      ])
+      const [plan, graph] = await Promise.all([
+        fetchDailyPlanById(context.actor.id, input.planId),
+        fetchWorkGraphForUser(context.actor.id),
+      ])
+      if (!plan) throw new Error('Daily plan not found')
+      if (plan.status !== 'committed') throw new Error('Only a committed daily plan can be closed')
+      const close = buildEndOfDayClosePreview(plan, graph.items)
+      return {
+        // The display is part of the stale-preview digest. It intentionally
+        // includes only currently visible operational titles, never raw
+        // communications or inferred legal facts.
+        display: {
+          action: 'Close daily plan',
+          planDate: plan.plan_date,
+          completed: close.completed.map(item => item.workKey),
+          blocked: close.blocked.map(item => item.workKey),
+          snoozed: close.snoozed.map(item => item.workKey),
+          interrupted: close.interrupted.map(item => item.workKey),
+          newCritical: close.newCritical.map(item => item.workKey),
+          unresolvedRisks: close.unresolvedRisks.map(item => item.workKey),
+          tomorrowFirstAction: close.tomorrowFirstAction?.workKey ?? null,
+        },
+        auditBefore: {
+          planId: plan.id,
+          status: plan.status,
+          itemStatuses: plan.items.map(item => ({ workKey: item.work_key, status: item.status })),
+        },
+        auditAfter: { planId: plan.id, status: 'closed' },
+      }
+    },
+    async execute(input, context) {
+      const { fetchDailyPlanById, updateDailyPlan } = await import('@/lib/work/plans')
+      const plan = await fetchDailyPlanById(context.actor.id, input.planId)
+      if (!plan) throw new Error('Daily plan not found')
+      if (plan.status !== 'committed') throw new Error('Only a committed daily plan can be closed')
+      return updateDailyPlan({ userId: context.actor.id, planId: input.planId, status: 'closed' })
+    },
+    auditResult(result) {
+      const plan = result as { id?: string; status?: string; closed_at?: string | null }
+      return { planId: plan.id, status: plan.status, closedAt: plan.closed_at ?? null }
+    },
+  } as ActionDefinition<ReturnType<typeof dailyPlanCloseInput>>,
   {
     key: 'note.create',
     risk: 'internal_write',
