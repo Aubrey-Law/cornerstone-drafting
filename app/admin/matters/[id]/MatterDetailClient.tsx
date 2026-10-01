@@ -80,7 +80,7 @@ import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterOperationalBrief } from './MatterOperationalBrief'
-import { matterOperationalBrief } from '@/lib/lifecycle/requirements'
+import { matterOperationalBrief } from '@/lib/lifecycle/matter'
 import { MatterOverviewStats } from './MatterOverviewStats'
 import { MatterDetailsCard } from './MatterDetailsCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
@@ -138,6 +138,17 @@ const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'reviews', label: 'Reviews' },
   { value: 'activity', label: 'Activity' },
 ]
+
+type StageLifecyclePreflight = {
+  stage: MatterStage
+  version: string
+  blockers: Array<{
+    key: string
+    label: string
+    owner: string
+    resolution: string
+  }>
+}
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
@@ -259,6 +270,7 @@ function MatterDetailClientInner({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [stageSaving, setStageSaving] = useState(false)
+  const [stagePreflight, setStagePreflight] = useState<StageLifecyclePreflight | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
@@ -648,11 +660,12 @@ function MatterDetailClientInner({
     }
   }
 
-  const handleStageChange = useCallback(async (stage: MatterStage) => {
-    if (!token || stage === matter.stage) return
+  const handleStageChange = useCallback(async (
+    stage: MatterStage,
+    confirmation?: { version: string; blockerKeys: string[] },
+  ): Promise<boolean> => {
+    if (!token || stage === matter.stage) return false
     setStageSaving(true)
-    const previous = matter.stage
-    setMatter(m => ({ ...m, stage }))
     try {
       const res = await fetch(`/api/admin/matters/${matter.matter_id}/stage`, {
         method: 'PATCH',
@@ -660,23 +673,44 @@ function MatterDetailClientInner({
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ stage }),
+        body: JSON.stringify({
+          stage,
+          confirmBlockers: Boolean(confirmation),
+          lifecycleVersion: confirmation?.version,
+          confirmedBlockerKeys: confirmation?.blockerKeys,
+        }),
       })
       const body = await res.json().catch(() => ({})) as {
         error?: string
-        lifecycle?: { blockers?: Array<{ label: string }> }
+        requiresConfirmation?: boolean
+        lifecycle?: {
+          version?: string
+          targetStage?: MatterStage
+          blockers?: StageLifecyclePreflight['blockers']
+        }
+      }
+      if (res.status === 409 && body.requiresConfirmation && body.lifecycle?.version) {
+        setStagePreflight({
+          stage: body.lifecycle.targetStage ?? stage,
+          version: body.lifecycle.version,
+          blockers: body.lifecycle.blockers ?? [],
+        })
+        return false
       }
       if (!res.ok) throw new Error(body.error ?? 'Could not update stage')
       const blockers = body.lifecycle?.blockers ?? []
+      setMatter(current => ({ ...current, stage }))
+      setStagePreflight(null)
       if (blockers.length) {
-        toast.warning(`Stage updated with ${blockers.length} lifecycle blocker${blockers.length === 1 ? '' : 's'} still open`)
+        toast.warning(`Stage updated after confirming ${blockers.length} lifecycle blocker${blockers.length === 1 ? '' : 's'}`)
       } else {
         toast.success(`Stage updated to ${stageLabel(stage)}`)
       }
       router.refresh()
+      return true
     } catch (e) {
-      setMatter(m => ({ ...m, stage: previous }))
       toast.error(e instanceof Error ? e.message : 'Could not update stage')
+      return false
     } finally {
       setStageSaving(false)
     }
@@ -691,8 +725,10 @@ function MatterDetailClientInner({
     if (closingMatter) return
     setClosingMatter(true)
     try {
-      await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
-      await handleStageChange('closed')
+      const advanced = await handleStageChange('closed')
+      if (advanced) {
+        await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
+      }
     } finally {
       setClosingMatter(false)
     }
@@ -1459,6 +1495,51 @@ function MatterDetailClientInner({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmUnlockIntake()}>Unlock intake</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={stagePreflight !== null}
+        onOpenChange={open => { if (!open && !stageSaving) setStagePreflight(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Advance with open lifecycle blockers?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cornerstone found the following requirements before {stagePreflight ? stageLabel(stagePreflight.stage) : 'the selected stage'}.
+              The stage has not changed. Confirm only if you have reviewed these exceptions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="space-y-2 text-sm">
+            {(stagePreflight?.blockers ?? []).map(blocker => (
+              <li key={blocker.key} className="rounded-md border p-2">
+                <span className="font-medium">{blocker.label}</span>
+                <span className="ml-1 text-muted-foreground">· {blocker.owner.replaceAll('_', ' ')}</span>
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={stageSaving}>Keep current stage</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={stageSaving || !stagePreflight}
+              onClick={event => {
+                event.preventDefault()
+                if (stagePreflight) {
+                  const preflight = stagePreflight
+                  void handleStageChange(preflight.stage, {
+                    version: preflight.version,
+                    blockerKeys: preflight.blockers.map(blocker => blocker.key),
+                  }).then(async advanced => {
+                    if (advanced && preflight.stage === 'closed') {
+                      await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
+                    }
+                  })
+                }
+              }}
+            >
+              {stageSaving ? 'Updating…' : 'Confirm exception and advance'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -3,12 +3,17 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterAging, type MatterAgingRow } from '@/lib/queries/pipelineAging'
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { computeMatterNextAction, type MatterNextActionKind } from '@/lib/matterNextAction'
+import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { invoiceOverdue } from '@/lib/billing/invoices'
 import { fetchDueTasks } from '@/lib/queries/tasks'
 import { taskDueGroup, type TaskRow } from '@/lib/tasks/types'
 import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
 import type { PipelineMatter } from '@/types/database'
+import {
+  loadMatterLifecycleEvidenceBatch,
+  type MatterLifecycleEvidence,
+} from '@/lib/lifecycle/server'
 
 export interface TodayUnreadThread {
   matter_id: string
@@ -19,8 +24,9 @@ export interface TodayUnreadThread {
 
 /** Serializable per-row primary action for the Today queue. */
 export interface TodayQueueAction {
-  kind: MatterNextActionKind
+  kind: MatterNextActionKind | NextAction['key']
   label: string
+  title?: string
   href: string
 }
 
@@ -123,10 +129,68 @@ const ACTION_LABEL: Record<MatterNextActionKind, string> = {
   'follow-up': 'Follow-up',
 }
 
-function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter>): TodayQueueRow {
+export interface LeadActionRow {
+  id: string
+  lead_status: string
+  intake_sent_at: string | null
+  intake_completed_at: string | null
+  next_appointment_at: string | null
+  engagement_fee_quoted: number | null
+  engagement_status: string | null
+  engagement_sent_at: string | null
+  engagement_signed_at: string | null
+  last_activity_at: string | null
+  updated_at: string | null
+}
+
+export function leadQueueAction(row: MatterAgingRow, lead: LeadActionRow): TodayQueueAction | null {
+  const next = computeNextAction({
+    leadStatus: lead.lead_status,
+    intakeSentAt: lead.intake_sent_at,
+    intakeCompletedAt: lead.intake_completed_at,
+    nextAppointmentAt: lead.next_appointment_at,
+    feeQuoted: lead.engagement_fee_quoted,
+    hasActiveAgreement: Boolean(lead.engagement_sent_at || lead.engagement_status),
+    engagementStatus: lead.engagement_status,
+    engagementSentAt: lead.engagement_sent_at,
+    engagementSignedAt: lead.engagement_signed_at,
+    discoveryCallAt: row.current_stage === 'discovery_call' ? lead.next_appointment_at : null,
+    planningSessionAt: row.current_stage === 'intake_completed' && row.is_scheduled
+      ? lead.next_appointment_at
+      : null,
+    lastTouchAt: lead.last_activity_at ?? lead.updated_at,
+  })
+  if (next.key === 'nothing' || next.actions.length === 0) return null
+  return {
+    kind: next.key,
+    label: next.actions[0].label,
+    title: next.title,
+    href: `/admin/leads/${lead.id}`,
+  }
+}
+
+function decorateRow(
+  row: MatterAgingRow,
+  matterById: Map<string, PipelineMatter>,
+  leadById: Map<string, LeadActionRow>,
+  lifecycleByMatter: Map<string, MatterLifecycleEvidence>,
+): TodayQueueRow {
+  if (row.entity === 'lead') {
+    const lead = leadById.get(row.id)
+    return {
+      ...row,
+      action: lead ? leadQueueAction(row, lead) : null,
+      nudge_matter_id: null,
+    }
+  }
   const matter = row.entity === 'matter' ? matterById.get(row.id) : undefined
   if (!matter) return { ...row, action: null, nudge_matter_id: null }
-  const next = computeMatterNextAction(matter)
+  const lifecycle = lifecycleByMatter.get(matter.matter_id)
+  const next = computeMatterNextAction(
+    lifecycle?.designStatus ? { ...matter, design_status: lifecycle.designStatus } : matter,
+    lifecycle?.engagement,
+    lifecycle?.reviewFlags,
+  )
   return {
     ...row,
     action: { kind: next.kind, label: ACTION_LABEL[next.kind] ?? next.cta, href: next.href },
@@ -163,7 +227,7 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
   // erring narrow would hide a task that is due.
   const dueThrough = calendarTo
 
-  const [aging, mattersRes, unreadRes, dueTasks, appointmentsRes, billing] = await Promise.all([
+  const [aging, mattersRes, leadActionsRes, unreadRes, dueTasks, appointmentsRes, billing] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -171,6 +235,14 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
       .neq('status', 'archived')
       .neq('stage', 'closed')
       .order('matter_created', { ascending: false }),
+    admin
+      .from('v_lead_list')
+      .select(
+        'id, lead_status, intake_sent_at, intake_completed_at, next_appointment_at, '
+        + 'engagement_fee_quoted, engagement_status, engagement_sent_at, engagement_signed_at, '
+        + 'last_activity_at, updated_at',
+      )
+      .eq('is_open', true),
     admin
       .from('messages')
       .select('matter_id, created_at')
@@ -188,11 +260,16 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
   ])
 
   if (mattersRes.error) throw new Error('Today matters are unavailable. Please retry.')
+  if (leadActionsRes.error) throw new Error('Today lead actions are unavailable. Please retry.')
   if (unreadRes.error) throw new Error('Today messages are unavailable. Please retry.')
   if (appointmentsRes.error) console.error('fetchTodayData appointments error:', appointmentsRes.error)
 
   const matters = (mattersRes.data ?? []) as PipelineMatter[]
   const matterById = new Map(matters.map(m => [m.matter_id, m]))
+  const lifecycleByMatter = await loadMatterLifecycleEvidenceBatch(matters.map(matter => matter.matter_id))
+  const leadById = new Map(
+    ((leadActionsRes.data ?? []) as unknown as LeadActionRow[]).map(lead => [lead.id, lead]),
+  )
 
   const unreadByMatter = new Map<string, TodayUnreadThread>()
   for (const row of (unreadRes.data ?? []) as Array<{ matter_id: string; created_at: string }>) {
@@ -217,12 +294,19 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
   )
 
   const intakeReview = matters.filter(m => m.stage === 'intake_review')
-  const intakeToSend = matters.filter(m => computeMatterNextAction(m).kind === 'send-intake')
+  const intakeToSend = matters.filter(matter => {
+    const lifecycle = lifecycleByMatter.get(matter.matter_id)
+    return computeMatterNextAction(
+      lifecycle?.designStatus ? { ...matter, design_status: lifecycle.designStatus } : matter,
+      lifecycle?.engagement,
+      lifecycle?.reviewFlags,
+    ).kind === 'send-intake'
+  })
 
   const atRisk = aging.rows.filter(row => !row.is_snoozed && row.health !== 'green')
-  const waitingOnYou = atRisk.filter(r => r.owner !== 'client').map(r => decorateRow(r, matterById))
-  const waitingOnClient = atRisk.filter(r => r.owner === 'client').map(r => decorateRow(r, matterById))
-  const snoozed = aging.rows.filter(r => r.is_snoozed).map(r => decorateRow(r, matterById))
+  const waitingOnYou = atRisk.filter(r => r.owner !== 'client').map(r => decorateRow(r, matterById, leadById, lifecycleByMatter))
+  const waitingOnClient = atRisk.filter(r => r.owner === 'client').map(r => decorateRow(r, matterById, leadById, lifecycleByMatter))
+  const snoozed = aging.rows.filter(r => r.is_snoozed).map(r => decorateRow(r, matterById, leadById, lifecycleByMatter))
 
   const appointmentRows = (appointmentsRes.data ?? []) as Array<{
     id: string

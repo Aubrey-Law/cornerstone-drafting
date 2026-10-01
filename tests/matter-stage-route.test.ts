@@ -21,6 +21,18 @@ describe('matter stage route', () => {
     expect(source).toContain("rpc('transition_matter_stage_with_jobs'")
     expect(source).toContain('p_stage: stage')
   })
+
+  it('returns an informed blocker preflight before the stage RPC', () => {
+    const source = fs.readFileSync(routePath, 'utf8')
+
+    expect(source).toContain('loadMatterLifecycleContext')
+    expect(source).toContain('matterStageTransitionPreflight')
+    expect(source).toContain('requiresConfirmation: true')
+    expect(source).toContain('confirmedBlockerKeys')
+    expect(source.indexOf('requiresConfirmation: true')).toBeLessThan(
+      source.indexOf("rpc('transition_matter_stage_with_jobs'"),
+    )
+  })
 })
 
 describe('drafting queue boundary', () => {

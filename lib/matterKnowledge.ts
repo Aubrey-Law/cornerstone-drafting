@@ -23,9 +23,18 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { documentFolderId } from '@/lib/documentWorkspace'
 import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
+import { computeNextAction } from '@/lib/leads/nextAction'
+import { scoringAppointmentAt } from '@/lib/leads/score'
+import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { leadOperationalBrief } from '@/lib/lifecycle/lead'
+import { matterOperationalBrief } from '@/lib/lifecycle/matter'
+import { loadMatterLifecycleContext } from '@/lib/lifecycle/server'
+import { computeMatterNextAction } from '@/lib/matterNextAction'
 
 export const MATTER_SECTIONS = [
   'overview',
+  'lifecycle',
   'people',
   'documents',
   'notes',
@@ -41,6 +50,7 @@ export type MatterSection = (typeof MATTER_SECTIONS)[number]
 
 export const MATTER_SECTION_DESCRIPTIONS: Record<MatterSection, string> = {
   overview: 'Matter number, name, practice area, stage, status, plan and dates.',
+  lifecycle: 'Canonical operational brief: next action, known and missing facts, ownership, conflicts and next-stage blockers.',
   people: 'Everyone on the matter — client, spouse, children, fiduciaries — with contact details.',
   documents: 'Every document filed to the matter: name, folder, provenance, size, sharing and review state.',
   notes: 'Matter notes, newest first.',
@@ -344,6 +354,72 @@ async function loadOverview(admin: Client, matterId: string) {
     documents_executed_at: pipeline.documents_executed_at ?? null,
     next_appointment: pipeline.next_appointment ?? null,
     next_appointment_type: pipeline.next_appointment_type ?? null,
+  }
+}
+
+async function loadLifecycle(admin: Client, matterId: string) {
+  const { data: matter, error } = await admin
+    .from('matters')
+    .select('id, relationship_status, client_intake_id, discovery_call_at, pmps_at')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!matter) throw new Error('Matter not found')
+  const lifecycleMatter = matter as unknown as {
+    id: string
+    relationship_status: string | null
+    client_intake_id: string | null
+    discovery_call_at: string | null
+    pmps_at: string | null
+  }
+
+  if (lifecycleMatter.relationship_status === 'hired') {
+    const context = await loadMatterLifecycleContext(matterId)
+    if (!context) throw new Error('Matter lifecycle not found')
+    return {
+      record_type: 'matter',
+      next_action: computeMatterNextAction(context.matter, context.engagement, context.reviewFlags),
+      operational_brief: matterOperationalBrief(
+        context.matter,
+        context.engagement,
+        context.reviewFlags,
+      ),
+    }
+  }
+
+  if (!lifecycleMatter.client_intake_id) throw new Error('Lead intake not found')
+  const [{ data: intake, error: intakeError }, spouse] = await Promise.all([
+    admin.from('client_intake').select('*').eq('id', lifecycleMatter.client_intake_id).maybeSingle(),
+    loadSpouseContact(admin as never, matterId),
+  ])
+  if (intakeError) throw new Error(intakeError.message)
+  if (!intake) throw new Error('Lead intake not found')
+
+  const lead = intake as unknown as LeadDetailRecord
+  const nextAppointmentAt = scoringAppointmentAt(lifecycleMatter.discovery_call_at, lifecycleMatter.pmps_at)
+  const nextAction = computeNextAction({
+    leadStatus: lead.lead_status ?? 'lead',
+    intakeSentAt: lead.intake_sent_at ?? null,
+    intakeCompletedAt: lead.intake_completed_at ?? null,
+    nextAppointmentAt,
+    feeQuoted: lead.engagement_fee_quoted,
+    hasActiveAgreement: Boolean(lead.engagement_sent_at || lead.engagement_status),
+    engagementStatus: lead.engagement_status,
+    engagementSentAt: lead.engagement_sent_at,
+    engagementSignedAt: lead.engagement_signed_at,
+    discoveryCallAt: lifecycleMatter.discovery_call_at,
+    planningSessionAt: lifecycleMatter.pmps_at,
+    lastTouchAt: lead.updated_at ?? null,
+  })
+  return {
+    record_type: 'lead',
+    next_action: nextAction,
+    operational_brief: leadOperationalBrief({
+      lead,
+      spouse: spouse as LeadSpouseRecord | null,
+      nextAction,
+      nextAppointmentAt,
+    }),
   }
 }
 
@@ -692,6 +768,7 @@ const SECTION_LOADERS: Record<
   (admin: Client, matterId: string, limit: number) => Promise<Record<string, unknown>>
 > = {
   overview: async (admin, matterId) => loadOverview(admin, matterId),
+  lifecycle: async (admin, matterId) => loadLifecycle(admin, matterId),
   people: loadPeople,
   documents: loadDocuments,
   notes: loadNotes,

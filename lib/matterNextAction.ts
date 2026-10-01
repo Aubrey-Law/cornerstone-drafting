@@ -3,7 +3,7 @@ import {
   resolveIntakeReviewTarget,
   type IntakeReadinessFlag,
 } from '@/lib/intakeReadiness'
-import { evaluateMatterRequirements } from '@/lib/lifecycle/requirements'
+import { evaluateMatterRequirements } from '@/lib/lifecycle/matter'
 
 export type MatterNextActionTone = 'default' | 'warning' | 'success'
 export type MatterNextActionKind =
@@ -39,7 +39,7 @@ export interface EngagementSnapshot {
 export function computeMatterNextAction(
   matter: PipelineMatter,
   engagement?: EngagementSnapshot,
-  reviewFlags: IntakeReadinessFlag[] = [],
+  reviewFlags?: IntakeReadinessFlag[],
 ): MatterNextAction {
   if (matter.status === 'closed' || matter.status === 'archived' || matter.stage === 'closed') {
     return {
@@ -90,7 +90,7 @@ export function computeMatterNextAction(
   const requirements = evaluateMatterRequirements(matter, engagement, reviewFlags)
   const unmet = new Map(requirements.filter(item => !item.satisfied).map(item => [item.key, item]))
 
-  if (unmet.has('intake_sent')) {
+  if (unmet.has('matter.intake_sent')) {
     return {
       kind: 'send-intake',
       title: 'Send intake questionnaire',
@@ -101,7 +101,7 @@ export function computeMatterNextAction(
     }
   }
 
-  if (unmet.has('intake_complete')) {
+  if (unmet.has('matter.intake_complete')) {
     return {
       kind: 'waiting-intake',
       title: 'Waiting for client intake',
@@ -112,7 +112,7 @@ export function computeMatterNextAction(
     }
   }
 
-  const engagementUnsigned = unmet.has('engagement_signed')
+  const engagementUnsigned = unmet.has('matter.engagement_signed')
   if (engagement && engagementUnsigned && (!engagement.sentAt || engagement.status === 'declined')) {
     return {
       kind: 'send-engagement',
@@ -138,7 +138,7 @@ export function computeMatterNextAction(
     }
   }
 
-  if (unmet.has('review_flags_resolved')) {
+  if (unmet.has('matter.review_flags_resolved') && reviewFlags?.length) {
     const first = resolveIntakeReviewTarget(reviewFlags[0])
     return {
       kind: 'resolve-review-flags',

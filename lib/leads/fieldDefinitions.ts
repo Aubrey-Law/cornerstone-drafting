@@ -9,6 +9,7 @@ import { MARITAL_STATUS_OPTIONS, maritalStatusLabel } from '@/lib/sharedFields'
 import { parsePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { LEAD_REQUIRED_FIELD_KEYS } from '@/lib/lifecycle/registry'
 
 export type LeadFieldInput =
   | 'text' | 'email' | 'date' | 'number' | 'select' | 'textarea' | 'address' | 'spouse'
@@ -301,15 +302,7 @@ export function leadFieldApplies(definition: LeadFieldDefinition, lead: LeadDeta
  * Fields the engagement agreement cannot be drafted without. Everything else is
  * useful context but never blocks the conversion.
  */
-export const ENGAGEMENT_REQUIRED_FIELDS: readonly LeadEditableField[] = [
-  'firstName',
-  'email',
-  'address',
-  'maritalStatus',
-  'spouse',
-  'practiceArea',
-  'fee',
-]
+export const ENGAGEMENT_REQUIRED_FIELDS: readonly LeadEditableField[] = LEAD_REQUIRED_FIELD_KEYS
 
 export function leadFieldDefinition(key: LeadEditableField): LeadFieldDefinition | undefined {
   return FIELD_DEFINITIONS.find(definition => definition.key === key)
