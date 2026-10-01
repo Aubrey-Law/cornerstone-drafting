@@ -28,6 +28,7 @@ import {
 
 export const ESTATE_PLANNING_SLA = 'estate_planning_sla'
 export const ESTATE_PLANNING_SLA_V3 = 'estate_planning_sla_v3'
+export const ESTATE_PLANNING_LP_SLA_V1 = 'estate_planning_lp_sla_v1'
 export const COLLEGE_PREP_SLA_V1 = 'college_prep_sla_v1'
 export const PROBATE_SLA_V1 = 'probate_sla_v1'
 
@@ -41,11 +42,15 @@ export const PROBATE_SLA_V1 = 'probate_sla_v1'
  *
  * Probate has a dedicated administration track rather than inheriting an
  * estate-planning checklist.
+ *
+ * Legal-plan estate matters (EP-LP) run a copy of the estate checklist that
+ * confirms plan coverage instead of invoicing and always files the plan claim.
  */
 export function slaTemplateForPracticeArea(practiceArea: unknown): string | null {
   const area = normalizePracticeArea(practiceArea)
   if (area === 'Probate') return PROBATE_SLA_V1
   if (area === 'CP') return COLLEGE_PREP_SLA_V1
+  if (area === 'EP-LP') return ESTATE_PLANNING_LP_SLA_V1
   return ESTATE_PLANNING_SLA_V3
 }
 

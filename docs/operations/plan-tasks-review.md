@@ -7,11 +7,11 @@ The SLA plan tasks Cornerstone generates for each practice area, as they stand o
 | Practice area | Template | Tasks | Target | Source |
 |---|---|---|---|---|
 | Estate Planning (EP) | `estate_planning_sla_v3` | 48 | ~14d soft pre-engagement + 28d firm after engagement (42 blended) | `supabase/migrations/20260824000001_estate_planning_sla_v3.sql` |
-| Estate Planning - LP (EP-LP) | `estate_planning_sla_v3` (shared with EP) | {{EPN}} | same as EP | same as EP |
+| Estate Planning - LP (EP-LP) | `estate_planning_lp_sla_v1` | 48 | same clocks as EP | `supabase/migrations/20270102090700_estate_planning_lp_sla_v1.sql` |
 | College Prep Plan (CP) | `college_prep_sla_v1` | 33 | ~10d soft + 14d firm (24 blended) | `supabase/migrations/20260922000000_college_prep_sla_v1.sql` |
 | Probate | `probate_sla_v1` | 9 | 14d pre-engagement + 166d (180 total) | `supabase/migrations/20261004000000_solo_practice_efficiency_billing.sql` |
 
-> **EP-LP has no checklist of its own.** `slaTemplateForPracticeArea` (`lib/slaTasks/generate.ts`) sends every practice area except CP and Probate to the EP template, so legal-plan matters get the same tasks as private-pay ones. The EP-LP section below repeats the EP list so you can mark it up separately. I've flagged four billing rows that probably differ under a legal plan. If you want LP to diverge, that means a new `estate_planning_lp_sla_v1` template plus a one-line routing change.
+> **EP-LP has its own checklist.** `slaTemplateForPracticeArea` (`lib/slaTasks/generate.ts`) routes EP-LP to `estate_planning_lp_sla_v1`. That checklist copies EP row for row, except for four billing tasks, which are marked "LP change" in the notes column. A test (`tests/estate-planning-lp-sla.test.ts`) keeps the two lists in step, so any further LP difference has to be added there too.
 
 > **Existing Probate matters keep their checklist.** The Probate track only applies to newly opened matters; `resyncMatterSlaTemplate` skips Probate on purpose.
 
@@ -150,7 +150,7 @@ The SLA plan tasks Cornerstone generates for each practice area, as they stand o
 
 ## 2. Estate Planning - LP (EP-LP)
 
-_Currently identical to EP. Rows in italics in the notes column are my suggested review points, not changes I've made._
+_Same as EP except the four rows marked "LP change": coverage is confirmed at engagement instead of invoicing, client billing covers only out-of-plan work, and the plan claim is always filed._
 
 #### Discovery
 
@@ -188,7 +188,7 @@ _Currently identical to EP. Rows in italics in the notes column are my suggested
 | # | Task | Owner | Due | Nudge / escalation | Flags | Keep / revise / cut — notes |
 |---|---|---|---|---|---|---|
 | LP-12 | Create matter folder in OneDrive | Auto | Day 0 |  | auto; skill: `new-matter-folder` |  |
-| LP-13 | Send invoice / collect payment | Firm | Day 0 |  | skill: `cornerstone-billing` | _Review: plan pays the firm — does the client get an invoice?_ |
+| LP-13 | Confirm legal plan coverage and obtain the case / authorization number | Firm | Day 0 |  |  | _LP change: replaces "Send invoice / collect payment"_ |
 
 #### Design
 
@@ -228,7 +228,7 @@ _Currently identical to EP. Rows in italics in the notes column are my suggested
 |---|---|---|---|---|---|---|
 | LP-26 | Indicate funding details for each asset in design sheet | Firm | Day 25 |  |  |  |
 | LP-27 | Print and tab all documents for signing | Firm | Day 27 |  |  |  |
-| LP-28 | Generate final invoice if balance due | Firm | Day 27 |  | conditional; skill: `cornerstone-billing` | _Review: likely N/A unless out-of-plan work_ |
+| LP-28 | Invoice the client for any out-of-plan work | Firm | Day 27 |  | conditional; skill: `cornerstone-billing` | _LP change: was "Generate final invoice if balance due"_ |
 | LP-29 | Generate DIY signing instructions | Firm | Day 25 |  | conditional; remote signing only |  |
 | LP-30 | Mail/deliver signing package to client | Firm | Day 25 |  | conditional; remote signing only |  |
 | LP-31 | Confirm client received package | Firm | Day 28 |  | conditional; remote signing only; pauses clock |  |
@@ -240,7 +240,7 @@ _Currently identical to EP. Rows in italics in the notes column are my suggested
 |---|---|---|---|---|---|---|
 | LP-33 | Signing meeting held | Firm | Day 28 |  |  |  |
 | LP-34 | Supervise execution (clients, notary, witnesses) | Firm | Day 28 |  |  |  |
-| LP-35 | Collect any balance due | Firm | Day 28 |  | conditional | _Review: likely N/A unless out-of-plan work_ |
+| LP-35 | Collect payment for any out-of-plan work | Firm | Day 28 |  | conditional | _LP change: was "Collect any balance due"_ |
 | LP-36 | Scan signed Certification of Trust; upload to OneDrive | Firm | Day 28 |  |  |  |
 | LP-37 | Review trust funding package with client | Firm | Day 28 |  | skill: `trust-funding` |  |
 | LP-38 | Originals received; proceed to post-signing | Firm | Day 35 |  | conditional; remote signing only |  |
@@ -255,7 +255,7 @@ _Currently identical to EP. Rows in italics in the notes column are my suggested
 | LP-42 | Draft closing / funding package | Firm | Day 34 |  | skill: `trust-funding` |  |
 | LP-43 | Deliver closing package to client | Firm | Day 35 |  |  |  |
 | LP-44 | Send handwritten thank-you note | Firm | Day 35 |  |  |  |
-| LP-45 | File legal plan claim if applicable (MetLife / LegalEASE / ARAG) | Firm | Day 38 |  | conditional; skill: `metlife-claim` | _Review: always applies on LP — make it required?_ |
+| LP-45 | File legal plan claim (MetLife / LegalEASE / ARAG) | Firm | Day 38 |  | skill: `metlife-claim` | _LP change: no longer conditional_ |
 
 #### Funding
 

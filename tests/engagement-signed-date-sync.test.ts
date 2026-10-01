@@ -260,10 +260,11 @@ describe('the engagement checklist item', () => {
    * templates. A rename there would leave the matcher silently ticking
    * nothing, with no failure anywhere.
    */
-  it('matches the title both SLA seeds actually use', () => {
+  it('matches the title every SLA seed actually uses', () => {
     for (const seed of [
       'supabase/migrations/20260824000001_estate_planning_sla_v3.sql',
       'supabase/migrations/20260922000000_college_prep_sla_v1.sql',
+      'supabase/migrations/20270102090700_estate_planning_lp_sla_v1.sql',
     ]) {
       const sql = fs.readFileSync(path.join(process.cwd(), seed), 'utf8')
       expect(sql).toContain(`"name":"${ENGAGEMENT_SIGNED_TASK_TITLE}"`)
