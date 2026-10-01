@@ -18,6 +18,8 @@ import {
  * `OnlineMeetings.ReadWrite` is the narrowest scope that does this. It needs a
  * work or school account: Graph refuses online meetings for personal Microsoft
  * accounts, which is why the default tenant is `organizations`, not `common`.
+ * A single-tenant registration (the documented setup) must set
+ * MICROSOFT_TENANT_ID: Microsoft refuses `organizations` for those (AADSTS50194).
  */
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
@@ -75,6 +77,9 @@ export function hasTeamsScope(scope: string | null | undefined): boolean {
 export function toMicrosoftDisplayError(error: string): string {
   if (/AADSTS50011/i.test(error) || /redirect_uri/i.test(error)) {
     return 'Microsoft rejected the redirect URI. MICROSOFT_REDIRECT_URI must match a Web redirect URI on the Entra app registration exactly.'
+  }
+  if (/AADSTS50194/i.test(error)) {
+    return 'The Entra app registration is single-tenant, so Microsoft needs the firm\'s tenant. Set MICROSOFT_TENANT_ID to the Directory (tenant) ID from the registration\'s Overview page and redeploy.'
   }
   if (/AADSTS7000215|invalid_client/i.test(error)) {
     return 'Microsoft rejected the client credentials. Check MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET against the Entra app registration.'

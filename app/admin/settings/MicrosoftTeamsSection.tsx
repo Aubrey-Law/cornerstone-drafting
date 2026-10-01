@@ -87,8 +87,9 @@ export function MicrosoftTeamsSection() {
         <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
           Microsoft Teams is not configured.
           {status.configIssue ? ` ${status.configIssue}.` : ''} Set MICROSOFT_CLIENT_ID,
-          MICROSOFT_CLIENT_SECRET and MICROSOFT_REDIRECT_URI (pointing at
-          /api/admin/microsoft/callback), then redeploy.
+          MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI (pointing at
+          /api/admin/microsoft/callback) and, for a single-tenant app registration,
+          MICROSOFT_TENANT_ID, then redeploy. VERCEL_ENV_CHECKLIST.md has the Entra steps.
         </p>
       ) : status.connected ? (
         <div className="space-y-3">

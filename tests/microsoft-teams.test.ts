@@ -20,6 +20,7 @@ import {
   getMicrosoftAuthUrl,
   hasTeamsScope,
   rescheduleTeamsMeeting,
+  toMicrosoftDisplayError,
 } from '@/lib/microsoftTeams'
 import { locationLine } from '@/lib/appointments/emailFormat'
 import type { AppointmentType } from '@/lib/appointments/types'
@@ -61,6 +62,16 @@ describe('Microsoft consent', () => {
     expect(scope).toContain('OnlineMeetings.ReadWrite')
     expect(url.searchParams.get('redirect_uri')).toBe('https://app.test/api/admin/microsoft/callback')
     expect(url.searchParams.get('state')).toBe('state-1')
+  })
+
+  it('uses the firm tenant when one is set', () => {
+    vi.stubEnv('MICROSOFT_TENANT_ID', 'tenant-123')
+    expect(new URL(getMicrosoftAuthUrl()).pathname).toBe('/tenant-123/oauth2/v2.0/authorize')
+  })
+
+  it('tells the attorney to set the tenant when a single-tenant app refuses the shared endpoint', () => {
+    expect(toMicrosoftDisplayError('AADSTS50194: Application is not configured as a multi-tenant application.'))
+      .toMatch(/MICROSOFT_TENANT_ID/)
   })
 
   it('recognises the Teams scope bare or as a Graph URL', () => {
