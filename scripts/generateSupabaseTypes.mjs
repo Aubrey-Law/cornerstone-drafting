@@ -22,17 +22,18 @@ import { projectRefFromUrl } from './checkMigrationDrift.mjs'
  * depends on a privilege it does not use.
  */
 
+const useLocalSchema = process.argv.includes('--local')
 const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const ref = process.env.SUPABASE_PROJECT_REF || projectRefFromUrl(url)
 
-if (!ref) {
+if (!useLocalSchema && !ref) {
   console.error(
     'Could not determine the Supabase project ref. Set SUPABASE_PROJECT_REF, or '
       + 'SUPABASE_URL to https://<ref>.supabase.co.',
   )
   process.exit(1)
 }
-if (!process.env.SUPABASE_ACCESS_TOKEN) {
+if (!useLocalSchema && !process.env.SUPABASE_ACCESS_TOKEN) {
   console.error('SUPABASE_ACCESS_TOKEN is required to read the schema from the hosted project.')
   process.exit(1)
 }
@@ -40,8 +41,10 @@ if (!process.env.SUPABASE_ACCESS_TOKEN) {
 const outputPath = 'packages/db-types/src/supabase.generated.ts'
 const temporaryPath = `${outputPath}.tmp`
 const result = spawnSync(
-  'supabase',
-  ['gen', 'types', 'typescript', '--project-id', ref, '--schema', 'public'],
+  process.platform === 'win32' ? 'supabase.cmd' : 'supabase',
+  useLocalSchema
+    ? ['gen', 'types', 'typescript', '--local', '--schema', 'public']
+    : ['gen', 'types', 'typescript', '--project-id', ref, '--schema', 'public'],
   { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
 )
 
@@ -51,6 +54,18 @@ if (!result.stdout.includes('export type Database')) {
   process.exit(1)
 }
 
-writeFileSync(temporaryPath, result.stdout)
+const generatedTypes = useLocalSchema && !result.stdout.includes('  __InternalSupabase: {')
+  ? result.stdout.replace(
+      /export type Database = \{\r?\n/,
+      'export type Database = {\n'
+        + '  // Local type generation does not currently emit this hosted PostgREST hint;\n'
+        + '  // preserve it so createClient continues to infer the checked API version.\n'
+        + '  __InternalSupabase: {\n'
+        + '    PostgrestVersion: "14.5"\n'
+        + '  }\n',
+    )
+  : result.stdout
+
+writeFileSync(temporaryPath, `${generatedTypes.trimEnd()}\n`)
 renameSync(temporaryPath, outputPath)
 console.log(`Wrote ${outputPath}`)

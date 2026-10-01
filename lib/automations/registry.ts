@@ -43,6 +43,7 @@ export const AUTOMATION_TEMPLATES: Array<{
 ]
 
 export const SYSTEM_AUTOMATIONS = [
+  { key: 'work-graph-shadow', name: 'Command center shadow audit', schedule: 'Weekdays at 7:45 AM ET', path: '/api/cron/work-graph-shadow' },
   { key: 'daily-digest', name: 'Daily digest', schedule: 'Weekdays at 8:00 AM ET', path: '/api/cron/daily-digest' },
   { key: 'sla-task-nudges', name: 'SLA task nudges', schedule: 'Weekdays at 8:00 AM ET', path: '/api/cron/sla-task-nudges' },
   { key: 'appointment-reminders', name: 'Appointment reminders', schedule: 'Hourly', path: '/api/cron/appointment-reminders' },

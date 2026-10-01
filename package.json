@@ -43,6 +43,7 @@
     "check:db-types": "node scripts/checkSupabaseTypes.mjs",
     "check:matter-contacts": "tsx scripts/checkMatterContactsConsistency.ts",
     "db:types:linked": "node scripts/generateSupabaseTypes.mjs",
+    "db:types:local": "node scripts/generateSupabaseTypes.mjs --local",
     "audit:field-consistency": "tsx scripts/reconcileFieldConsistency.ts",
     "audit:render-matrix": "vitest run tests/draft-preflight.test.ts tests/node-estate-generator.test.ts tests/estate-generator.test.ts tests/derive-documents-practice-area.test.ts",
     "supabase": "supabase",
