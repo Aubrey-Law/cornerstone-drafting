@@ -30,4 +30,20 @@ describe('work-graph calendar availability', () => {
       end_at: '2026-09-30T17:30:00.000Z',
     })
   })
+
+  it('preserves the portions of a longer busy block outside a native appointment', () => {
+    const merged = addCalendarBusyToToday(today(), [{
+      start: Date.parse('2026-09-30T13:00:00.000Z'),
+      end: Date.parse('2026-09-30T16:00:00.000Z'),
+    }])
+
+    expect(merged.appointmentsToday.map(appointment => [
+      appointment.next_appointment,
+      appointment.end_at,
+    ])).toEqual([
+      ['2026-09-30T13:00:00.000Z', '2026-09-30T14:00:00.000Z'],
+      ['2026-09-30T14:00:00.000Z', '2026-09-30T15:00:00.000Z'],
+      ['2026-09-30T15:00:00.000Z', '2026-09-30T16:00:00.000Z'],
+    ])
+  })
 })

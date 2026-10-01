@@ -18,7 +18,15 @@ export function addCalendarBusyToToday(today: TodayData, busy: Interval[]): Toda
 
   const calendarOnly: TodayAppointment[] = busy
     .filter(interval => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
-    .filter(interval => !nativeBusy.some(native => interval.start < native.end && interval.end > native.start))
+    .flatMap(interval => nativeBusy.reduce<Interval[]>((segments, native) => (
+      segments.flatMap(segment => {
+        if (segment.start >= native.end || segment.end <= native.start) return [segment]
+        return [
+          ...(segment.start < native.start ? [{ start: segment.start, end: native.start }] : []),
+          ...(segment.end > native.end ? [{ start: native.end, end: segment.end }] : []),
+        ]
+      })
+    ), [interval]))
     .map(interval => ({
       id: `calendar-busy:${new Date(interval.start).toISOString()}:${new Date(interval.end).toISOString()}`,
       matter_id: null,
