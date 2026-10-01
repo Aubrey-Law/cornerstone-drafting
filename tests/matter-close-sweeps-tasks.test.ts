@@ -17,6 +17,7 @@ const rpc = vi.hoisted(() => vi.fn())
 const archive = vi.hoisted(() => vi.fn(async () => 3))
 const restore = vi.hoisted(() => vi.fn(async () => 3))
 const fireEngineStageTask = vi.hoisted(() => vi.fn(async () => {}))
+const loadMatterLifecycleContext = vi.hoisted(() => vi.fn())
 
 const lifecycleQuery = () => ({
   select: () => ({
@@ -30,14 +31,30 @@ vi.mock('@/lib/apiAuth', () => ({
 }))
 vi.mock('@/lib/draftPayload/resolveMatterId', () => ({ resolveMatterId: async () => MATTER }))
 vi.mock('@/lib/stage-engine/fireStageTasks', () => ({ fireEngineStageTask }))
+vi.mock('@/lib/lifecycle/server', () => ({ loadMatterLifecycleContext }))
 vi.mock('@/lib/tasks/closeout', () => ({
   archiveTasksForClosedRecord: archive,
   restoreTasksForReopenedRecord: restore,
 }))
 
 import { PATCH } from '@/app/api/admin/matters/[id]/stage/route'
+import { LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/registry'
 
 function moveTo(stage: string, result: Record<string, unknown>) {
+  loadMatterLifecycleContext.mockResolvedValue({
+    matter: {
+      matter_id: MATTER,
+      stage: typeof result.previousStage === 'string' ? result.previousStage : 'drafting',
+      intake_status: 'completed',
+      intake_submitted_at: '2026-01-01T00:00:00.000Z',
+      design_status: 'ready',
+      drafts_sent_at: '2026-01-02T00:00:00.000Z',
+      signing_date: '2026-01-03',
+      documents_executed_at: '2026-01-04T00:00:00.000Z',
+    },
+    engagement: { signed: true, sentAt: '2026-01-01T00:00:00.000Z', status: 'signed' },
+    reviewFlags: [],
+  })
   rpc.mockResolvedValue({
     data: { matterId: MATTER, stage, previousStage: 'drafting', unchanged: false, durableJobs: false, ...result },
     error: null,
@@ -56,6 +73,7 @@ beforeEach(() => {
   archive.mockClear()
   restore.mockClear()
   fireEngineStageTask.mockClear()
+  loadMatterLifecycleContext.mockReset()
 })
 
 describe('closing a matter', () => {
@@ -97,5 +115,63 @@ describe('closing a matter', () => {
       { reasons: ['matter_closed'] },
     )
     expect(archive).not.toHaveBeenCalled()
+  })
+})
+
+describe('lifecycle preflight', () => {
+  function blockedContext() {
+    return {
+      matter: {
+        matter_id: MATTER,
+        stage: 'intake',
+        practice_area: 'EP',
+        intake_status: null,
+        intake_sent_at: null,
+        intake_submitted_at: null,
+      },
+      engagement: undefined,
+      reviewFlags: [],
+    }
+  }
+
+  it('returns blockers without calling the stage RPC', async () => {
+    loadMatterLifecycleContext.mockResolvedValue(blockedContext())
+
+    const res = await PATCH(new Request(`http://localhost/api/admin/matters/${MATTER}/stage`, {
+      method: 'PATCH',
+      body: JSON.stringify({ stage: 'design' }),
+    }), { params: Promise.resolve({ id: MATTER }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.lifecycle.blockers.map((blocker: { key: string }) => blocker.key)).toEqual([
+      'matter.intake_sent', 'matter.intake_complete',
+    ])
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('revalidates the exact registry version and blocker set before advancing', async () => {
+    loadMatterLifecycleContext.mockResolvedValue(blockedContext())
+    rpc.mockResolvedValue({
+      data: { matterId: MATTER, stage: 'design', previousStage: 'intake', unchanged: false, durableJobs: true },
+      error: null,
+    })
+    const request = (lifecycleVersion: string) => PATCH(
+      new Request(`http://localhost/api/admin/matters/${MATTER}/stage`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          stage: 'design',
+          confirmBlockers: true,
+          lifecycleVersion,
+          confirmedBlockerKeys: ['matter.intake_sent', 'matter.intake_complete'],
+        }),
+      }),
+      { params: Promise.resolve({ id: MATTER }) },
+    )
+
+    expect((await request('stale-registry')).status).toBe(409)
+    expect(rpc).not.toHaveBeenCalled()
+    expect((await request(LIFECYCLE_REGISTRY_VERSION)).status).toBe(200)
+    expect(rpc).toHaveBeenCalledTimes(1)
   })
 })

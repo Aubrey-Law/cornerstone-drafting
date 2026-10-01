@@ -79,6 +79,26 @@ describe('matter sections', () => {
     })
   })
 
+  it('gives the assistant the same canonical lifecycle action and blockers as record views', async () => {
+    seed({
+      matters: [MATTER_ROW],
+      v_matter_pipeline: [{
+        matter_id: 'matter-1', matter_name: 'Chen Trust', stage: 'intake', status: 'active',
+        practice_area: 'EP', intake_status: null, intake_sent_at: null,
+        intake_submitted_at: null, design_status: null,
+      }],
+      matter_details: [],
+      design_sheets: [],
+    })
+
+    const [lifecycle] = (await loadMatterDossier('matter-1', ['lifecycle'])).sections
+
+    expect(lifecycle.next_action).toMatchObject({ kind: 'send-intake' })
+    expect(lifecycle.operational_brief).toMatchObject({
+      blockers: [expect.objectContaining({ key: 'matter.intake_sent' })],
+    })
+  })
+
   it('reports billing in dollars, not the cents the ledger stores', async () => {
     seed({
       matters: [MATTER_ROW],

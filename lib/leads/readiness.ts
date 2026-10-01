@@ -10,7 +10,7 @@ import {
   leadFieldApplies,
   leadFieldDefinition,
 } from '@/lib/leads/fieldDefinitions'
-import { LEAD_REQUIRED_FIELD_KEYS } from '@/lib/lifecycle/requirements'
+import { evaluateLeadRequirements } from '@/lib/lifecycle/lead'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
 export type LeadReadinessItem = {
@@ -54,13 +54,16 @@ export function computeLeadReadiness(
   lead: LeadDetailRecord,
   spouse: LeadSpouseRecord | null,
 ): LeadReadiness {
+  const lifecycle = new Map(
+    evaluateLeadRequirements(lead, spouse).map(requirement => [requirement.source.field, requirement]),
+  )
   const items: LeadReadinessItem[] = FIELD_DEFINITIONS
     .filter(definition => leadFieldApplies(definition, lead))
     .map(definition => ({
       key: definition.key,
       label: definition.missingLabel,
       complete: definition.complete(lead, spouse),
-      required: LEAD_REQUIRED_FIELD_KEYS.includes(definition.key),
+      required: lifecycle.has(definition.key),
     }))
 
   items.push(

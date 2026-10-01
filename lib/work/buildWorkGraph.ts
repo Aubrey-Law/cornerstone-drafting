@@ -110,7 +110,7 @@ function taskItem(task: TaskRow, todayKey: string): WorkItem {
 }
 
 function agingKey(row: TodayQueueRow): string {
-  if (row.entity === 'matter' && row.action) return `matter:${row.id}:${row.action.kind}`
+  if (row.action) return `${row.entity}:${row.id}:${row.action.kind}`
   return `${row.entity}:${row.id}:stage:${row.current_stage}`
 }
 
@@ -129,7 +129,7 @@ function agingItem(row: TodayQueueRow): WorkItem {
     sourceIds: [`aging:${row.entity}:${row.id}`],
     evidence: evidence(sourceType, `aging:${row.entity}:${row.id}`, href),
     record: { type: row.entity, id: row.id, name: row.client_name ?? (row.entity === 'lead' ? 'Lead' : 'Matter') },
-    title: row.action?.label ?? (row.entity === 'lead' ? 'Review lead next step' : 'Advance matter'),
+    title: row.action?.title ?? row.action?.label ?? (row.entity === 'lead' ? 'Review lead next step' : 'Advance matter'),
     actionLabel: row.action?.label ?? 'Open record',
     href,
     owner: waiting ? 'client' : 'firm',
@@ -137,7 +137,7 @@ function agingItem(row: TodayQueueRow): WorkItem {
     priorityBand: band,
     priorityReasons: reasons,
     estimateMinutes: row.action?.kind === 'draft' ? 60 : row.entity === 'lead' ? 15 : 20,
-    actionKey: row.action?.kind ? `matter.${row.action.kind}` : `${row.entity}.review`,
+    actionKey: row.action?.kind ? `${row.entity}.${row.action.kind}` : `${row.entity}.review`,
     staleSince: row.stage_entered_at,
     clientWaitingSince: waiting ? undefined : row.stage_entered_at,
   }

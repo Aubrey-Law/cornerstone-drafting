@@ -3,8 +3,9 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
-import type { PipelineMatter } from '@/types/database'
-import { evaluateMatterRequirements, LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/requirements'
+import { LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/registry'
+import { matterStageTransitionPreflight } from '@/lib/lifecycle/matter'
+import { loadMatterLifecycleContext } from '@/lib/lifecycle/server'
 
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import {
@@ -21,7 +22,12 @@ export async function PATCH(req: Request, { params }: Params) {
   if (err) return err
 
   const { id: rawId } = await params
-  const body = await req.json().catch(() => null) as { stage?: string } | null
+  const body = await req.json().catch(() => null) as {
+    stage?: string
+    confirmBlockers?: boolean
+    lifecycleVersion?: string
+    confirmedBlockerKeys?: string[]
+  } | null
   const stage = body?.stage
 
   if (!stage || !VALID_STAGES.has(stage as MatterStage)) {
@@ -33,27 +39,53 @@ export async function PATCH(req: Request, { params }: Params) {
     const matterId = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
 
-    // Evaluate the versioned lifecycle gates before the write. This response is
-    // advisory during the staged rollout; the shared action layer will require
-    // individual confirmation before a consequential transition.
-    const [pipelineResult, engagementResult] = await Promise.all([
-      admin.from('v_matter_pipeline').select('*').eq('matter_id', matterId).maybeSingle(),
-      admin.from('matter_details')
-        .select('engagement_signed, engagement_sent_at, engagement_status')
-        .eq('client_id', matterId).maybeSingle(),
-    ])
-    const lifecycleBlockers = pipelineResult.data
-      ? evaluateMatterRequirements(
-          pipelineResult.data as PipelineMatter,
-          engagementResult.data
-            ? {
-                signed: Boolean(engagementResult.data.engagement_signed),
-                sentAt: engagementResult.data.engagement_sent_at ?? null,
-                status: engagementResult.data.engagement_status ?? null,
-              }
-            : undefined,
-        ).filter(requirement => !requirement.satisfied && requirement.blocksStage)
+    // Re-read every lifecycle source immediately before a consequential write.
+    // A forward transition with blockers returns a preflight response and does
+    // not mutate anything until the attorney confirms that exact registry
+    // version. Backward corrections remain unblocked.
+    const lifecycleContext = await loadMatterLifecycleContext(matterId)
+    if (!lifecycleContext) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+    const preflight = matterStageTransitionPreflight(
+      lifecycleContext.matter,
+      stage as MatterStage,
+      lifecycleContext.engagement,
+      lifecycleContext.reviewFlags,
+    )
+    if (preflight.requiresConfirmation && !body?.confirmBlockers) {
+      return NextResponse.json({
+        error: 'Review lifecycle blockers before changing stage.',
+        requiresConfirmation: true,
+        lifecycle: {
+          version: preflight.version,
+          fromStage: preflight.fromStage,
+          targetStage: preflight.targetStage,
+          blockers: preflight.blockers.map(({ key, label, owner, resolution, source }) => ({
+            key, label, owner, resolution, source,
+          })),
+        },
+      }, { status: 409 })
+    }
+    const currentBlockerKeys = preflight.blockers.map(blocker => blocker.key).sort()
+    const confirmedBlockerKeys = Array.isArray(body?.confirmedBlockerKeys)
+      ? [...new Set(body.confirmedBlockerKeys)].sort()
       : []
+    if (preflight.requiresConfirmation && (
+      body?.lifecycleVersion !== LIFECYCLE_REGISTRY_VERSION
+      || JSON.stringify(confirmedBlockerKeys) !== JSON.stringify(currentBlockerKeys)
+    )) {
+      return NextResponse.json({
+        error: 'Lifecycle requirements or record state changed. Review the blockers again.',
+        requiresConfirmation: true,
+        lifecycle: {
+          version: preflight.version,
+          fromStage: preflight.fromStage,
+          targetStage: preflight.targetStage,
+          blockers: preflight.blockers.map(({ key, label, owner, resolution, source }) => ({
+            key, label, owner, resolution, source,
+          })),
+        },
+      }, { status: 409 })
+    }
 
     const actorName =
       (user?.user_metadata?.full_name as string | undefined)
@@ -108,7 +140,10 @@ export async function PATCH(req: Request, { params }: Params) {
       ...result,
       lifecycle: {
         version: LIFECYCLE_REGISTRY_VERSION,
-        blockers: lifecycleBlockers.map(({ key, label, owner, resolution }) => ({ key, label, owner, resolution })),
+        confirmedWithBlockers: preflight.requiresConfirmation,
+        blockers: preflight.blockers.map(({ key, label, owner, resolution, source }) => ({
+          key, label, owner, resolution, source,
+        })),
       },
     })
   } catch (e) {

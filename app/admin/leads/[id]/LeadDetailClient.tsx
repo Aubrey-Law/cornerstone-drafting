@@ -16,6 +16,7 @@ import type { LeadEditableField } from '@/lib/leads/details'
 import { parseLeadTab, type LeadTab } from '@/lib/leads/leadPageTabs'
 import { parseTaskView, type TaskView } from '@/lib/matterPageTabs'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
+import { leadOperationalBrief } from '@/lib/lifecycle/lead'
 import type {
   LeadTimelineMeeting,
   LeadTimelineNote,
@@ -40,6 +41,7 @@ import { ViewSwitch } from '@/components/ViewSwitch'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { Card } from '@/components/ui/card'
+import { OperationalBrief } from '@/components/lifecycle/OperationalBrief'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { LeadFieldsRail, LEAD_DETAIL_RAIL_WIDTH } from '@/components/leads/LeadFieldsRail'
@@ -771,6 +773,12 @@ export function LeadDetailClient({
     && !snoozed
     ? availableAction
     : null
+  const operationalBrief = leadOperationalBrief({
+    lead,
+    spouse,
+    nextAction: availableAction,
+    nextAppointmentAt,
+  })
 
 
   const timeline = (
@@ -935,6 +943,16 @@ export function LeadDetailClient({
                 taskCount={taskCounts.open} tasksVersion={tasksVersion}
                 onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
                 onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />
+              <OperationalBrief brief={{
+                known: operationalBrief.known,
+                missing: operationalBrief.missing,
+                clientFollowUp: operationalBrief.clientFollowUp,
+                attorneyDecision: operationalBrief.attorneyDecision,
+                conflicts: operationalBrief.conflicts,
+                nextStageLabel: operationalBrief.nextStage,
+                nextStageBlockers: operationalBrief.blockers.map(item => item.label),
+                meetingPreparation: operationalBrief.meetingPreparation,
+              }} />
               <LeadScoreCard
                 leadId={lead.id}
                 score={leadScore}

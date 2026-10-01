@@ -88,7 +88,8 @@ describe('lead edit and delete source shape', () => {
   it('scores readiness from the shared field predicates plus the intake and engagement gates', () => {
     const source = read('lib/leads/readiness.ts')
     expect(source).toContain('FIELD_DEFINITIONS')
-    expect(source).toContain('LEAD_REQUIRED_FIELD_KEYS')
+    expect(source).toContain('evaluateLeadRequirements')
+    expect(source).toContain('lifecycle.has(definition.key)')
     expect(source).toContain("key: 'intake'")
     expect(source).toContain("key: 'engagement'")
   })
