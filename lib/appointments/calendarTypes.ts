@@ -19,7 +19,14 @@ export interface CreateEventInput {
   notes?: string | null
   /** In-person location line (office address) when locationType = in_person. */
   officeAddress?: string | null
+  /**
+   * A Teams join link created before the event. When set, the event carries
+   * it as its location and no Google Meet is requested.
+   */
+  teamsJoinUrl?: string | null
 }
+
+export type OnlineMeetingProvider = 'google_meet' | 'microsoft_teams'
 
 export interface CreatedEvent {
   eventId: string

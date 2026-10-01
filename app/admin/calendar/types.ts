@@ -18,6 +18,7 @@ export interface CalendarAppointment {
   source: string
   calendarSynced: boolean
   onlineMeetingUrl: string | null
+  onlineMeetingProvider?: 'google_meet' | 'microsoft_teams' | null
   linkedMatterId: string | null
   linkedMatterNumber: string | null
   linkedMatterStage: string | null

@@ -32,7 +32,15 @@ const state = vi.hoisted(() => ({
   jobs: [] as Array<Record<string, unknown>>,
   enqueueError: false,
   claims: null as { id: string; email: string } | null,
+  teamsCreated: [] as Array<Record<string, unknown>>,
+  teamsDeleted: [] as string[],
+  teamsRescheduled: [] as string[],
+  teamsError: null as Error | null,
   reset() {
+    this.teamsCreated = []
+    this.teamsDeleted = []
+    this.teamsRescheduled = []
+    this.teamsError = null
     this.inserts = []
     this.updates = []
     this.insertError = null
@@ -166,6 +174,16 @@ vi.mock('@/lib/appointments/googleEvents', () => ({
   }),
   rescheduleCalendarEvent: vi.fn(async () => {}),
   getCalendarEventAttendees: vi.fn(async () => []),
+}))
+
+vi.mock('@/lib/microsoftTeams', () => ({
+  createTeamsMeeting: vi.fn(async (input: Record<string, unknown>) => {
+    if (state.teamsError) throw state.teamsError
+    state.teamsCreated.push(input)
+    return { id: 'teams-1', joinUrl: 'https://teams.microsoft.com/l/meetup-join/abc' }
+  }),
+  deleteTeamsMeeting: vi.fn(async (id: string) => { state.teamsDeleted.push(id) }),
+  rescheduleTeamsMeeting: vi.fn(async (id: string) => { state.teamsRescheduled.push(id) }),
 }))
 
 vi.mock('@/lib/appointments/settings', () => ({
@@ -543,6 +561,39 @@ describe('bookAppointment', () => {
     expect(eventType?.locationType).toBe('teams')
   })
 
+  it('creates a Teams meeting instead of Meet when staff ask for Teams', async () => {
+    await bookAppointment({ ...bookingInput(), source: 'admin', locationType: 'teams', videoProvider: 'microsoft_teams' })
+
+    expect(state.teamsCreated).toEqual([expect.objectContaining({
+      startIso: SLOT_ISO,
+      endIso: '2026-08-10T14:30:00.000Z',
+    })])
+    expect(state.createdEvents[0]?.teamsJoinUrl).toBe('https://teams.microsoft.com/l/meetup-join/abc')
+    expect(state.updates).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        online_meeting_provider: 'microsoft_teams',
+        teams_meeting_id: 'teams-1',
+      }),
+    }))
+  })
+
+  it('ignores a Teams request for a phone appointment', async () => {
+    await bookAppointment({ ...bookingInput(), source: 'admin', locationType: 'phone', videoProvider: 'microsoft_teams' })
+    expect(state.teamsCreated).toHaveLength(0)
+    expect(state.createdEvents[0]?.teamsJoinUrl).toBeNull()
+  })
+
+  it('falls back to Meet and reports why when Teams cannot be created', async () => {
+    state.teamsError = new Error('Microsoft Teams is not connected')
+
+    const result = await bookAppointment({ ...bookingInput(), source: 'admin', locationType: 'teams', videoProvider: 'microsoft_teams' })
+
+    expect(result.teamsMeetingError).toMatch(/not connected/)
+    expect(state.createdEvents[0]?.teamsJoinUrl).toBeNull()
+    expect(state.emails.some(e => e.category === 'appointment_confirmation')).toBe(true)
+  })
+
   it('falls back to the default format when the choice is not allowed', async () => {
     await bookAppointment({ ...bookingInput(), locationType: 'in_person' })
     const insert = state.inserts.find(i => i.table === 'appointments')
@@ -704,6 +755,11 @@ describe('cancelAppointment', () => {
     updated_at: '2026-08-01T00:00:00Z',
   }
 
+  it('deletes the Teams meeting of a cancelled appointment', async () => {
+    await cancelAppointment({ appointment: { ...ROW, teams_meeting_id: 'teams-1' }, type: TYPE })
+    expect(state.teamsDeleted).toEqual(['teams-1'])
+  })
+
   it('cancels: updates status, deletes the calendar event, notes the lead', async () => {
     await cancelAppointment({ appointment: ROW, type: TYPE })
     expect(
@@ -813,6 +869,15 @@ describe('rescheduleAppointment', () => {
 
   // Tue 2026-08-11 10:00 ET = 14:00 UTC — inside tue 09:00–17:00.
   const MOVED_ISO = '2026-08-11T14:00:00.000Z'
+
+  it('moves the Teams meeting along with the appointment', async () => {
+    await rescheduleAppointment({
+      appointment: { ...ROW, teams_meeting_id: 'teams-1', online_meeting_provider: 'microsoft_teams' },
+      type: TYPE,
+      newStartIso: MOVED_ISO,
+    })
+    expect(state.teamsRescheduled).toEqual(['teams-1'])
+  })
 
   it.each([false, true])('enqueues rescheduling only when enabled (%s)', async enabled => {
     state.lawmaticsEnabled = enabled

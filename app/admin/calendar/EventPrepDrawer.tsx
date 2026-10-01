@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CalendarPlus, Check, Circle, ExternalLink, FileText, Mail, NotebookPen } from 'lucide-react'
+import { CalendarPlus, Check, Circle, ExternalLink, FileText, Mail, NotebookPen, Video } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { CalendarAppointment } from './types'
@@ -36,6 +37,7 @@ export function EventPrepDrawer({
   onOpenChange,
   authHeaders,
   onReschedule,
+  onAppointmentChanged,
   onBookNext,
 }: {
   appointment: CalendarAppointment | null
@@ -43,9 +45,50 @@ export function EventPrepDrawer({
   onOpenChange: (open: boolean) => void
   authHeaders: () => HeadersInit | undefined
   onReschedule: (appointment: CalendarAppointment) => void
+  onAppointmentChanged?: (appointment: CalendarAppointment) => void
   onBookNext: (appointment: CalendarAppointment) => void
 }) {
   const [detail, setDetail] = useState<EventDetail | null>(null)
+  const [addingTeams, setAddingTeams] = useState(false)
+  const hasTeamsMeeting = appointment?.onlineMeetingProvider === 'microsoft_teams' && Boolean(appointment.onlineMeetingUrl)
+  const canAddTeams = Boolean(
+    appointment &&
+      appointment.status === 'scheduled' &&
+      !hasTeamsMeeting &&
+      !isExternallyManagedSource(appointment.source) &&
+      Date.parse(appointment.endTime) > Date.now(),
+  )
+
+  async function addTeamsMeeting() {
+    if (!appointment) return
+    setAddingTeams(true)
+    try {
+      const response = await fetch('/api/admin/scheduling/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ appointmentId: appointment.id, action: 'add_teams_meeting' }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(body.error ?? 'Could not add a Teams meeting')
+        return
+      }
+      onAppointmentChanged?.({
+        ...appointment,
+        onlineMeetingUrl: body.onlineMeetingUrl ?? null,
+        onlineMeetingProvider: 'microsoft_teams',
+      })
+      if (body.calendarUpdated === false) {
+        toast.warning('Teams meeting created, but the Google Calendar invite could not be updated. Share the join link with the client.')
+      } else {
+        toast.success('Teams meeting added. Attendees were sent the updated invite.')
+      }
+    } catch {
+      toast.error('Could not add a Teams meeting')
+    } finally {
+      setAddingTeams(false)
+    }
+  }
   useEffect(() => {
     if (!open || !appointment) return
     setDetail(null)
@@ -84,7 +127,13 @@ export function EventPrepDrawer({
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
-                {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />Join</a></Button>}
+                {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />{hasTeamsMeeting ? 'Join Teams' : 'Join'}</a></Button>}
+                {canAddTeams && (
+                  <Button size="sm" variant="outline" disabled={addingTeams} onClick={() => void addTeamsMeeting()}>
+                    <Video className="mr-1 h-3.5 w-3.5" />
+                    {addingTeams ? 'Adding Teams…' : appointment.onlineMeetingUrl ? 'Switch to Teams' : 'Add Teams meeting'}
+                  </Button>
+                )}
                 {isExternallyManagedSource(appointment.source) ? (
                   <span className="rounded-full bg-card/80 px-2 py-1 text-micro font-medium text-foreground">
                     Managed in {externalSourceLabel(appointment.source)}

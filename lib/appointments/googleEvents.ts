@@ -79,6 +79,9 @@ function eventDescription(input: CreateEventInput): string {
   if (input.type.locationType === 'in_person' && input.officeAddress) {
     lines.push(`Location: ${input.officeAddress}`)
   }
+  if (input.teamsJoinUrl) {
+    lines.push('', teamsDescriptionBlock(input.teamsJoinUrl))
+  }
   if (input.notes) {
     lines.push('', 'Notes from client:', input.notes)
   }
@@ -86,7 +89,14 @@ function eventDescription(input: CreateEventInput): string {
   return lines.join('\n')
 }
 
+const TEAMS_BLOCK_HEADING = 'Microsoft Teams meeting'
+
+function teamsDescriptionBlock(joinUrl: string): string {
+  return `${TEAMS_BLOCK_HEADING}\nJoin: ${joinUrl}`
+}
+
 function locationLine(input: CreateEventInput): string | undefined {
+  if (input.teamsJoinUrl) return input.teamsJoinUrl
   if (input.type.locationType === 'in_person' && input.officeAddress) return input.officeAddress
   if (input.type.locationType === 'phone') {
     return input.attendeePhone ? `Phone: ${input.attendeePhone}` : 'Phone call'
@@ -98,9 +108,10 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
   const token = await connectedToken()
 
   // `teams` is the stored token for "this meeting happens online", kept from
-  // the Microsoft 365 era. It means a Meet link here; the value is opaque to
-  // clients, who only ever see the type's "Virtual meeting" label.
-  const wantsVideo = input.type.locationType === 'teams'
+  // the Microsoft 365 era. It means a Meet link here, unless a real Teams
+  // meeting was created for the booking, whose link then stands in for Meet.
+  // The value is opaque to clients, who only see the "Virtual meeting" label.
+  const wantsVideo = input.type.locationType === 'teams' && !input.teamsJoinUrl
 
   const payload: Record<string, unknown> = {
     summary: `${input.type.label} — ${input.attendeeName}`,
@@ -152,6 +163,7 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
   if (!created.id) throw new Error('Google Calendar event create returned no id')
 
   invalidateTodayCalendar()
+  if (input.teamsJoinUrl) return { eventId: created.id, onlineMeetingUrl: input.teamsJoinUrl }
   const videoEntry = created.conferenceData?.entryPoints?.find(
     entry => entry.entryPointType === 'video',
   )
@@ -159,6 +171,41 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
     eventId: created.id,
     onlineMeetingUrl: created.hangoutLink ?? videoEntry?.uri ?? null,
   }
+}
+
+/**
+ * Put a Teams join link on an existing event, replacing any Google Meet.
+ *
+ * The Meet is removed rather than left alongside: an invite carrying two
+ * different "join" links leaves the client guessing which one the attorney
+ * will be in. `sendUpdates=all` emails attendees the updated invite.
+ */
+export async function attachTeamsMeetingToCalendarEvent(
+  eventId: string,
+  joinUrl: string,
+): Promise<void> {
+  const token = await connectedToken()
+  const url = `${CALENDAR_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`
+
+  const current = await googleFetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!current.ok) throw await failure(current, 'event lookup')
+  const event = (await current.json().catch(() => ({}))) as { description?: string }
+
+  // An earlier Teams block is dropped so re-adding never stacks two links.
+  const kept = (event.description ?? '')
+    .split(/\n{2,}/)
+    .filter(block => !block.startsWith(TEAMS_BLOCK_HEADING))
+    .join('\n\n')
+    .trim()
+  const description = [teamsDescriptionBlock(joinUrl), kept].filter(Boolean).join('\n\n')
+
+  const r = await googleFetch(`${url}?${SEND_UPDATES}&conferenceDataVersion=1`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location: joinUrl, description, conferenceData: null }),
+  })
+  if (!r.ok) throw await failure(r, 'event update')
+  invalidateTodayCalendar()
 }
 
 export async function cancelCalendarEvent(eventId: string): Promise<void> {

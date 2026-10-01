@@ -13,6 +13,7 @@ vi.mock('@/lib/googleCalendar', () => ({
 }))
 
 import {
+  attachTeamsMeetingToCalendarEvent,
   cancelCalendarEvent,
   createCalendarEvent,
   rescheduleCalendarEvent,
@@ -190,5 +191,54 @@ describe('rescheduling a Google event', () => {
     await cancelCalendarEvent('evt/with spaces')
 
     expect(lastCall().url).toContain(encodeURIComponent('evt/with spaces'))
+  })
+})
+
+describe('Teams meetings on Google events', () => {
+  const teamsUrl = 'https://teams.microsoft.com/l/meetup-join/abc'
+
+  it('uses a Teams link instead of requesting a Meet', async () => {
+    respond({ id: 'evt-1', hangoutLink: 'https://meet.google.com/should-not-be-used' })
+
+    const created = await createCalendarEvent(
+      input({
+        type: { label: 'Consult', locationType: 'teams' } as CreateEventInput['type'],
+        teamsJoinUrl: teamsUrl,
+      }),
+    )
+
+    expect(sentBody().conferenceData).toBeUndefined()
+    expect(lastCall().url).not.toContain('conferenceDataVersion')
+    expect(sentBody().location).toBe(teamsUrl)
+    expect(String(sentBody().description)).toContain(teamsUrl)
+    expect(created.onlineMeetingUrl).toBe(teamsUrl)
+  })
+
+  it('swaps an existing event onto Teams, removing the Meet and emailing attendees', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ description: 'Consult with Jane.' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+
+    await attachTeamsMeetingToCalendarEvent('evt-1', teamsUrl)
+
+    expect(lastCall().init.method).toBe('PATCH')
+    expect(lastCall().url).toContain('sendUpdates=all')
+    expect(lastCall().url).toContain('conferenceDataVersion=1')
+    const body = sentBody()
+    expect(body.location).toBe(teamsUrl)
+    expect(body.conferenceData).toBeNull()
+    expect(body.description).toBe(`Microsoft Teams meeting\nJoin: ${teamsUrl}\n\nConsult with Jane.`)
+  })
+
+  it('does not stack a second Teams block when one is already there', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        description: 'Microsoft Teams meeting\nJoin: https://teams.microsoft.com/old\n\nConsult with Jane.',
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+
+    await attachTeamsMeetingToCalendarEvent('evt-1', teamsUrl)
+
+    expect(sentBody().description).toBe(`Microsoft Teams meeting\nJoin: ${teamsUrl}\n\nConsult with Jane.`)
   })
 })

@@ -1,3 +1,4 @@
+import type { OnlineMeetingProvider } from './calendarTypes'
 import type { AppointmentType } from './types'
 
 /** Human-readable start time in the firm timezone for email bodies. */
@@ -18,12 +19,21 @@ export function formatWhen(iso: string, timezone = 'America/New_York'): string {
   }
 }
 
-/** Location sentence for confirmation/reminder emails, by meeting format. */
+/**
+ * Location sentence for confirmation/reminder emails, by meeting format.
+ *
+ * A Teams meeting wins over the format: staff can add one to any appointment,
+ * and once they have, the Teams link is where the meeting happens.
+ */
 export function locationLine(
   type: AppointmentType,
   officeAddress: string | null,
   meetingUrl: string | null,
+  meetingProvider: OnlineMeetingProvider | null = null,
 ): string {
+  if (meetingProvider === 'microsoft_teams' && meetingUrl) {
+    return `Microsoft Teams — <a href="${meetingUrl}" style="color:#1a6b72">Join the meeting</a>`
+  }
   switch (type.locationType) {
     case 'teams':
       return meetingUrl
