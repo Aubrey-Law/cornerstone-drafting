@@ -3,11 +3,11 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migration = fs.readFileSync(
-  path.join(process.cwd(), 'supabase/migrations/20270101090000_command_center_foundation.sql'),
+  path.join(process.cwd(), 'supabase/migrations/20270102090000_command_center_foundation.sql'),
   'utf8',
 )
 const shadowRollout = fs.readFileSync(
-  path.join(process.cwd(), 'supabase/migrations/20270101090100_command_center_shadow_rollout.sql'),
+  path.join(process.cwd(), 'supabase/migrations/20270102090100_command_center_shadow_rollout.sql'),
   'utf8',
 )
 
