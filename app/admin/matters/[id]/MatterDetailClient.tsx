@@ -79,6 +79,8 @@ import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTask
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
+import { MatterOperationalBrief } from './MatterOperationalBrief'
+import { matterOperationalBrief } from '@/lib/lifecycle/requirements'
 import { MatterOverviewStats } from './MatterOverviewStats'
 import { MatterDetailsCard } from './MatterDetailsCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
@@ -660,9 +662,17 @@ function MatterDetailClientInner({
         },
         body: JSON.stringify({ stage }),
       })
-      const body = await res.json().catch(() => ({}))
+      const body = await res.json().catch(() => ({})) as {
+        error?: string
+        lifecycle?: { blockers?: Array<{ label: string }> }
+      }
       if (!res.ok) throw new Error(body.error ?? 'Could not update stage')
-      toast.success(`Stage updated to ${stageLabel(stage)}`)
+      const blockers = body.lifecycle?.blockers ?? []
+      if (blockers.length) {
+        toast.warning(`Stage updated with ${blockers.length} lifecycle blocker${blockers.length === 1 ? '' : 's'} still open`)
+      } else {
+        toast.success(`Stage updated to ${stageLabel(stage)}`)
+      }
       router.refresh()
     } catch (e) {
       setMatter(m => ({ ...m, stage: previous }))
@@ -835,6 +845,20 @@ function MatterDetailClientInner({
           : undefined,
         reviewFlags,
       ),
+    [matter, matterDetails, esignEnabled, reviewFlags],
+  )
+  const operationalBrief = useMemo(
+    () => matterOperationalBrief(
+      matter,
+      esignEnabled
+        ? {
+            signed: Boolean(matterDetails?.engagement_signed),
+            sentAt: matterDetails?.engagement_sent_at ?? null,
+            status: matterDetails?.engagement_status ?? null,
+          }
+        : undefined,
+      reviewFlags,
+    ),
     [matter, matterDetails, esignEnabled, reviewFlags],
   )
   // max(communications.created_at) — the rail's quiet chip is derived from the
@@ -1047,6 +1071,7 @@ function MatterDetailClientInner({
                     />
                   }
                 />
+                <MatterOperationalBrief brief={operationalBrief} />
                 {/* Action first, then the facts that support it. */}
                 <MatterOverviewStats
                   taskCounts={taskCounts}

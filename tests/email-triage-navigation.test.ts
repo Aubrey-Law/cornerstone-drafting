@@ -5,21 +5,19 @@ import { describe, expect, it } from 'vitest'
 import { adminNavItems } from '@/app/admin/AdminLayoutClient'
 import { EMPTY_SIDEBAR_COUNTS, getNavBadge } from '@/lib/sidebarBadges'
 
-const HREF = '/admin/email-triage'
+const HREF = '/admin/communications'
 
 function source(relative: string): string {
   return fs.readFileSync(path.join(process.cwd(), relative), 'utf8')
 }
 
-describe('email triage navigation', () => {
-  it('is in the shared desktop and mobile navigation source', () => {
-    expect(adminNavItems.some(item => item.href === HREF && item.label === 'Email triage')).toBe(true)
+describe('communications navigation', () => {
+  it('is the shared desktop and mobile entry point', () => {
+    expect(adminNavItems.some(item => item.href === HREF && item.label === 'Communications')).toBe(true)
   })
 
-  it('sits in the Daily group, beside Today', () => {
-    // It is a morning surface, not a record view: filed anywhere else it would
-    // not be seen at the moment it is useful.
-    expect(adminNavItems.find(item => item.href === HREF)?.group).toBe('Daily')
+  it('sits in Operations while Today owns the daily decision queue', () => {
+    expect(adminNavItems.find(item => item.href === HREF)?.group).toBe('Operations')
   })
 
   it('is reachable from the command palette', () => {
@@ -28,12 +26,12 @@ describe('email triage navigation', () => {
     expect(source('components/GlobalSearch.tsx')).toContain(HREF)
   })
 
-  it('badges waiting mail without borrowing the portal message count', () => {
-    // inboxNeedsReplyCount is unread portal messages and is already bound to
-    // /admin. Reusing it here would double-count one number in two places.
+  it('badges waiting mail in Communications and the authoritative Today queue', () => {
+    // Specialist navigation and Today may both signal attention because Today
+    // is now the cross-source decision queue rather than a portal-only inbox.
     const counts = { ...EMPTY_SIDEBAR_COUNTS, emailTriageNeedsReplyCount: 4 }
     expect(getNavBadge(HREF, counts)).toEqual({ value: 4, tone: 'accent' })
-    expect(getNavBadge('/admin', counts)).toBeNull()
+    expect(getNavBadge('/admin', counts)).toEqual({ value: 4, tone: 'accent' })
   })
 
   it('shows no badge when nothing is waiting', () => {

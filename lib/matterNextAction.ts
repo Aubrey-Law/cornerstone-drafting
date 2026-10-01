@@ -3,6 +3,7 @@ import {
   resolveIntakeReviewTarget,
   type IntakeReadinessFlag,
 } from '@/lib/intakeReadiness'
+import { evaluateMatterRequirements } from '@/lib/lifecycle/requirements'
 
 export type MatterNextActionTone = 'default' | 'warning' | 'success'
 export type MatterNextActionKind =
@@ -86,11 +87,10 @@ export function computeMatterNextAction(
     }
   }
 
-  const intakeStatus = matter.intake_status?.toLowerCase() ?? ''
-  const intakeComplete = intakeStatus === 'completed' || intakeStatus === 'approved' || intakeStatus === 'submitted'
-  const intakeSent = Boolean(matter.intake_sent_at) || intakeStatus === 'sent' || intakeComplete
+  const requirements = evaluateMatterRequirements(matter, engagement, reviewFlags)
+  const unmet = new Map(requirements.filter(item => !item.satisfied).map(item => [item.key, item]))
 
-  if (!intakeSent) {
+  if (unmet.has('intake_sent')) {
     return {
       kind: 'send-intake',
       title: 'Send intake questionnaire',
@@ -101,7 +101,7 @@ export function computeMatterNextAction(
     }
   }
 
-  if (!intakeComplete) {
+  if (unmet.has('intake_complete')) {
     return {
       kind: 'waiting-intake',
       title: 'Waiting for client intake',
@@ -112,8 +112,8 @@ export function computeMatterNextAction(
     }
   }
 
-  const engagementUnsigned = engagement && !engagement.signed
-  if (engagementUnsigned && (!engagement.sentAt || engagement.status === 'declined')) {
+  const engagementUnsigned = unmet.has('engagement_signed')
+  if (engagement && engagementUnsigned && (!engagement.sentAt || engagement.status === 'declined')) {
     return {
       kind: 'send-engagement',
       title: 'Send engagement agreement',
@@ -127,7 +127,7 @@ export function computeMatterNextAction(
     }
   }
 
-  if (engagementUnsigned && engagement.sentAt) {
+  if (engagement && engagementUnsigned && engagement.sentAt) {
     return {
       kind: 'waiting-engagement',
       title: 'Awaiting engagement signature',
@@ -138,7 +138,7 @@ export function computeMatterNextAction(
     }
   }
 
-  if (reviewFlags.length > 0) {
+  if (unmet.has('review_flags_resolved')) {
     const first = resolveIntakeReviewTarget(reviewFlags[0])
     return {
       kind: 'resolve-review-flags',

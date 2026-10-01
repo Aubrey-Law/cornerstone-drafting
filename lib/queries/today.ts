@@ -293,7 +293,10 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
       })))
   } catch (error) {
     // Today remains useful when the calendar is disconnected or briefly down.
-    console.error('fetchTodayData calendar error:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.toLowerCase().includes('not connected')) {
+      console.warn('fetchTodayData calendar unavailable:', message)
+    }
   }
   appointmentsToday.sort((a, b) => a.next_appointment.localeCompare(b.next_appointment))
 

@@ -18,7 +18,13 @@ const archive = vi.hoisted(() => vi.fn(async () => 3))
 const restore = vi.hoisted(() => vi.fn(async () => 3))
 const fireEngineStageTask = vi.hoisted(() => vi.fn(async () => {}))
 
-vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
+const lifecycleQuery = () => ({
+  select: () => ({
+    eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+  }),
+})
+
+vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc, from: lifecycleQuery }) }))
 vi.mock('@/lib/apiAuth', () => ({
   requireAdmin: async () => ({ err: null, userId: VIEWER, user: { id: VIEWER, email: 'a@example.test' } }),
 }))

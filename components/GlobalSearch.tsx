@@ -10,13 +10,14 @@ import {
   ListTodo,
   ReceiptText,
   FilePenLine,
-  MailSearch,
+  MessageSquareText,
   Search,
   Settings,
   Sparkles,
   Sun,
   User,
   UsersRound,
+  Zap,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -33,12 +34,13 @@ import { useSharedSidebarMatters } from '@/lib/matters/SidebarMattersContext'
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
-  { label: 'Email triage', href: '/admin/email-triage', icon: MailSearch },
+  { label: 'Communications', href: '/admin/communications', icon: MessageSquareText },
   { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters/list', icon: Briefcase },
   { label: 'Contacts', href: '/admin/contacts', icon: User },
   { label: 'Tasks', href: '/admin/tasks', icon: ListTodo },
   { label: 'Calendar', href: '/admin/calendar', icon: CalendarDays },
+  { label: 'Automations', href: '/admin/automations', icon: Zap },
   { label: 'Billing', href: '/admin/billing', icon: ReceiptText },
   { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },
   { label: 'Assistant', href: '/admin/assistant', icon: Sparkles },

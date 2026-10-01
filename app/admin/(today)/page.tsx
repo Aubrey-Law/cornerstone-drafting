@@ -15,6 +15,12 @@ import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/database'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
+import { CommandCenter } from '@/app/admin/components/CommandCenter'
+import { getCachedClaims } from '@/lib/supabaseServer'
+import { loadFirmSettings } from '@/lib/firmSettings'
+import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
+import { createDailyPlanPreview } from '@/lib/work/planner'
+import { fetchDailyPlan } from '@/lib/work/plans'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +33,7 @@ function toMatterItem(m: PipelineMatter): TodayMatterItem {
 }
 
 
-export default async function AdminTodayPage() {
+async function LegacyTodayPage() {
   const today = await fetchTodayData({ includeCalendar: false })
   const dateLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
@@ -122,6 +128,63 @@ export default async function AdminTodayPage() {
         </aside>
       </div>
     </AdminPageShell>
+    </>
+  )
+}
+
+export default async function AdminTodayPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = (await searchParams) ?? {}
+  const legacy = (Array.isArray(params.legacy) ? params.legacy[0] : params.legacy) === '1'
+  const [auth, settings] = await Promise.all([getCachedClaims(), loadFirmSettings()])
+  if (!settings.commandCenterV2Enabled || legacy || !auth) return <LegacyTodayPage />
+
+  const now = new Date()
+  const [graph, preferences] = await Promise.all([
+    fetchWorkGraphForUser(auth.id, now),
+    fetchWorkPreferences(auth.id),
+  ])
+  const preview = createDailyPlanPreview({
+    items: graph.items,
+    preferences,
+    appointments: graph.appointments,
+    now,
+  })
+  const stored = await fetchDailyPlan(auth.id, preview.date).catch(() => null)
+  const dateLabel = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: FIRM_TIMEZONE,
+  }).format(now)
+
+  return (
+    <>
+      <NavigationReady route="Today" />
+      <AdminPageShell className="mx-auto w-full max-w-[1380px]">
+        <PageHeader
+          eyebrow="Daily command center"
+          title={dateLabel}
+          description="One plan across client work, deadlines, communications, calendar, billing, and automation."
+          actions={
+            <Link
+              href="/admin?legacy=1"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              View legacy Today
+            </Link>
+          }
+        />
+        <CommandCenter
+          initialPreview={preview}
+          preferences={preferences}
+          initialPlan={stored ? { id: stored.id, status: stored.status } : null}
+          sourceErrors={graph.sourceErrors}
+        />
+      </AdminPageShell>
     </>
   )
 }

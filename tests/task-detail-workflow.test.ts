@@ -24,8 +24,8 @@ describe('task detail workflow', () => {
     // A checklist still decides the status — but only when the request did not
     // say outright, and only when there are items to decide from. What each
     // branch writes is exercised in tests/task-completion-persists.test.ts.
-    expect(taskRoute).toContain("Object.assign(patch, statusStamps('done', existing, auth.userId))")
-    expect(taskRoute).toContain("Object.assign(patch, statusStamps('open', existing, auth.userId))")
+    expect(taskRoute).toContain("Object.assign(patch, taskStatusStamps('done', existing, auth.userId))")
+    expect(taskRoute).toContain("Object.assign(patch, taskStatusStamps('open', existing, auth.userId))")
     expect(taskRoute).toContain('if (!statusRequested && checklist.length > 0)')
   })
 

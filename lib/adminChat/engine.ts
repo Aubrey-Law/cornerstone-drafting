@@ -331,7 +331,7 @@ export interface AdminChatToolExecutor {
   tool: Anthropic.Tool
   execute: (
     input: unknown,
-    ctx: { toolUseId: string; emit: AdminChatToolEmit },
+    ctx: { toolUseId: string; emit: AdminChatToolEmit; userId?: string | null },
   ) => Promise<{ content: string; isError?: boolean }>
 }
 
@@ -521,7 +521,11 @@ export function createAdminChatStream(options: AdminChatStreamOptions): Response
             }
             emit({ tool: block.name, tool_use_id: block.id, status: 'running' })
             try {
-              const result = await executor.execute(block.input, { toolUseId: block.id, emit })
+              const result = await executor.execute(block.input, {
+                toolUseId: block.id,
+                emit,
+                userId: options.usage.userId,
+              })
               toolResults.push({
                 type: 'tool_result',
                 tool_use_id: block.id,

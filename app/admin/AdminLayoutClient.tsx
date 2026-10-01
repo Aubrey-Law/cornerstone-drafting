@@ -20,9 +20,9 @@ import {
   ReceiptText,
   Settings,
   Sparkles,
-  MailSearch,
   MessageSquareText,
   Sun,
+  Zap,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -73,7 +73,7 @@ function isIconRailRoute(pathname: string): boolean {
   return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))
 }
 
-export type AdminNavGroup = 'Daily' | 'Clients' | 'Work' | 'Finance' | 'Tools'
+export type AdminNavGroup = 'Today' | 'Clients' | 'Work' | 'Operations' | 'Tools'
 export const adminNavItems: {
   href: string
   label: string
@@ -82,9 +82,7 @@ export const adminNavItems: {
   exact?: boolean
 }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
-  { href: '/admin', label: 'Today', icon: Sun, group: 'Daily', exact: true },
-  { href: '/admin/email-triage', label: 'Email triage', icon: MailSearch, group: 'Daily' },
-  { href: '/admin/texts', label: 'Texts', icon: MessageSquareText, group: 'Daily' },
+  { href: '/admin', label: 'Today', icon: Sun, group: 'Today', exact: true },
   { href: '/admin/crm/opportunities', label: 'Leads', icon: Send, group: 'Clients' },
   { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },
@@ -95,13 +93,15 @@ export const adminNavItems: {
   // taking four places in the nav. See NAV_SECTION_OWNERS in AdminSidebar.
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
-  { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Finance' },
+  { href: '/admin/communications', label: 'Communications', icon: MessageSquareText, group: 'Operations' },
+  { href: '/admin/automations', label: 'Automations', icon: Zap, group: 'Operations' },
+  { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Operations' },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles, group: 'Tools' },
   { href: '/admin/works', label: 'Library', icon: BookOpen, group: 'Tools' },
   { href: '/admin/settings', label: 'Settings', icon: Settings, group: 'Tools' },
 ]
 
-const ADMIN_NAV_GROUPS: AdminNavGroup[] = ['Daily', 'Clients', 'Work', 'Finance', 'Tools']
+const ADMIN_NAV_GROUPS: AdminNavGroup[] = ['Today', 'Clients', 'Work', 'Operations', 'Tools']
 
 interface AdminLayoutClientProps {
   children: React.ReactNode

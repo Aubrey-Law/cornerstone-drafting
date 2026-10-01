@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
+import type { PipelineMatter } from '@/types/database'
+import { evaluateMatterRequirements, LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/requirements'
 
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import {
@@ -30,6 +32,28 @@ export async function PATCH(req: Request, { params }: Params) {
     const admin = getAdminClient()
     const matterId = await resolveMatterId(rawId, admin).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!matterId) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+
+    // Evaluate the versioned lifecycle gates before the write. This response is
+    // advisory during the staged rollout; the shared action layer will require
+    // individual confirmation before a consequential transition.
+    const [pipelineResult, engagementResult] = await Promise.all([
+      admin.from('v_matter_pipeline').select('*').eq('matter_id', matterId).maybeSingle(),
+      admin.from('matter_details')
+        .select('engagement_signed, engagement_sent_at, engagement_status')
+        .eq('client_id', matterId).maybeSingle(),
+    ])
+    const lifecycleBlockers = pipelineResult.data
+      ? evaluateMatterRequirements(
+          pipelineResult.data as PipelineMatter,
+          engagementResult.data
+            ? {
+                signed: Boolean(engagementResult.data.engagement_signed),
+                sentAt: engagementResult.data.engagement_sent_at ?? null,
+                status: engagementResult.data.engagement_status ?? null,
+              }
+            : undefined,
+        ).filter(requirement => !requirement.satisfied && requirement.blocksStage)
+      : []
 
     const actorName =
       (user?.user_metadata?.full_name as string | undefined)
@@ -80,7 +104,13 @@ export async function PATCH(req: Request, { params }: Params) {
         console.error('[stage] fireEngineStageTask failed:', fireErr)
       }
     }
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      lifecycle: {
+        version: LIFECYCLE_REGISTRY_VERSION,
+        blockers: lifecycleBlockers.map(({ key, label, owner, resolution }) => ({ key, label, owner, resolution })),
+      },
+    })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not update stage'
     return NextResponse.json({ error: message }, { status: 500 })

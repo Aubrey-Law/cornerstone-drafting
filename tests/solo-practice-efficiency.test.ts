@@ -71,7 +71,7 @@ describe('solo-practice billing and workflow foundation', () => {
 describe('solo-practice navigation and drafting safeguards', () => {
   it('groups the firm navigation and retires Inbox', () => {
     const nav = read('app/admin/AdminLayoutClient.tsx')
-    for (const group of ['Daily', 'Clients', 'Work', 'Finance', 'Tools']) expect(nav).toContain(`'${group}'`)
+    for (const group of ['Today', 'Clients', 'Work', 'Operations', 'Tools']) expect(nav).toContain(`'${group}'`)
     expect(nav).not.toContain("href: '/admin/inbox'")
     expect(nav.indexOf("label: 'Drafting'")).toBeLessThan(nav.indexOf("label: 'Billing'"))
   })
