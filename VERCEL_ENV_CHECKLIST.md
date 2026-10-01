@@ -292,16 +292,41 @@ meeting** on an upcoming appointment in the calendar drawer.
 | `MICROSOFT_CLIENT_ID` | Application (client) ID of the Entra app registration |
 | `MICROSOFT_CLIENT_SECRET` | A client secret *value* for that registration |
 | `MICROSOFT_REDIRECT_URI` | Must exactly match a *Web* redirect URI on the registration: `https://<host>/api/admin/microsoft/callback` |
-| `MICROSOFT_TENANT_ID` | Optional. The firm's tenant ID or domain; defaults to `organizations` (any work or school account) |
+| `MICROSOFT_TENANT_ID` | The *Directory (tenant) ID* from the registration's Overview page. **Required for a single-tenant registration** (the recommended setup below): left unset, sign-in goes to the shared `organizations` endpoint, which Microsoft refuses for single-tenant apps with `AADSTS50194`. Only a multi-tenant registration can leave it unset |
 
 Connect from **Settings → Google & Teams → Microsoft Teams**.
 
-**Entra setup:** register an app (*Accounts in this organizational directory
-only* is enough), add the redirect URI above as a *Web* platform, create a
-client secret, and under **API permissions** add Microsoft Graph *delegated*
-`User.Read`, `offline_access` and `OnlineMeetings.ReadWrite`, then **Grant
-admin consent**. Teams meetings need a work or school account with a Teams
-licence; Graph refuses them for personal Microsoft accounts.
+**Entra setup** (entra.microsoft.com, signed in as a Global or Application
+Administrator):
+
+1. **App registrations → New registration.** Supported account types:
+   *Accounts in this organizational directory only (Single tenant)*. Redirect
+   URI: platform *Web*, the same URL as `MICROSOFT_REDIRECT_URI`.
+2. From **Overview**, copy the *Application (client) ID* into
+   `MICROSOFT_CLIENT_ID` and the *Directory (tenant) ID* into
+   `MICROSOFT_TENANT_ID`.
+3. **Certificates & secrets → New client secret.** Copy the secret's
+   **Value** (shown once) into `MICROSOFT_CLIENT_SECRET`, not its *Secret ID*,
+   which Microsoft rejects with `AADSTS7000215`. Secrets expire (24 months at
+   most), so note the date: Teams creation stops when it lapses.
+4. **API permissions → Add a permission → Microsoft Graph → Delegated:**
+   `OnlineMeetings.ReadWrite`, `offline_access`, `openid`, `email` (plus the
+   default `User.Read`), then **Grant admin consent**.
+5. Redeploy so the variables take effect, then connect from Settings with the
+   work account that will host the meetings.
+
+Teams meetings need a work or school account with a Teams licence; Graph
+refuses them for personal Microsoft accounts. For local development, add
+`http://localhost:3002/api/admin/microsoft/callback` as a second Web redirect
+URI.
+
+| Error | Cause |
+|-------|-------|
+| `AADSTS50011` | Redirect URI in Entra and `MICROSOFT_REDIRECT_URI` differ |
+| `AADSTS50194` | `MICROSOFT_TENANT_ID` unset for a single-tenant registration |
+| `AADSTS7000215` | Client secret is the *Secret ID*, or has expired |
+| `AADSTS65001` | Admin consent was not granted |
+| 403 when adding a meeting | The connected account has no Teams licence or a Teams meeting policy blocks it |
 
 ## Retired — Microsoft 365 (Outlook mail and calendar, Microsoft sign-in)
 
