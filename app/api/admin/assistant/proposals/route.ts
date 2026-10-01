@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
-import { createCalendarHold } from '@/lib/appointments/googleEvents'
-import { acceptTaskProposal } from '@/lib/adminChat/calendarTools'
-import { createLead } from '@/lib/leads/createLead'
+import { createActionProposal, executeActionProposal } from '@/lib/actions/server'
+import type { ActionProposalRequest } from '@/lib/actions/types'
 
 /**
  * Where an assistant proposal becomes a write.
@@ -10,87 +9,77 @@ import { createLead } from '@/lib/leads/createLead'
  * The mutating tools return proposals rather than executing, because
  * client-authored text (intake answers, matter notes, uploaded documents)
  * reaches the same system prompt the tools are described in. This route runs
- * under the attorney's own session, re-validates the payload the card carried,
- * and is the only place those writes happen.
+ * under the attorney's own session and adapts the card into the shared action
+ * registry. The registry re-validates current state and owns idempotency and
+ * audit; this route no longer performs those writes directly.
  */
 export async function POST(req: Request) {
   const auth = await requireAdmin(req)
-  if (auth.err || !auth.userId) return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const body = await req.json().catch(() => ({})) as { kind?: unknown; payload?: Record<string, unknown> }
+  if (auth.err || !auth.userId || !auth.user) return auth.err ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json().catch(() => ({})) as { kind?: unknown; payload?: Record<string, unknown>; proposalId?: unknown }
   const payload = body.payload ?? {}
+  const proposalId = typeof body.proposalId === 'string' ? body.proposalId.trim() : ''
 
-  if (body.kind === 'create_task') {
-    try {
-      const task = await acceptTaskProposal(payload, auth.user)
-      return NextResponse.json({ ok: true, taskId: task.id, title: task.title })
-    } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Could not create the task' },
-        { status: 400 },
-      )
-    }
+  if (!proposalId || proposalId.length > 200) {
+    return NextResponse.json({ error: 'A valid assistant proposal identifier is required' }, { status: 400 })
   }
 
-  if (body.kind === 'create_lead') {
-    const clientName = typeof payload.client_name === 'string' ? payload.client_name.trim() : ''
-    const clientEmail = typeof payload.client_email === 'string' ? payload.client_email.trim() : ''
-    if (!clientName || !clientEmail.includes('@')) {
-      return NextResponse.json({ error: 'A client name and email are required' }, { status: 400 })
-    }
-    const created = await createLead({
-      clientName,
-      clientEmail,
-      clientPhone: typeof payload.client_phone === 'string' ? payload.client_phone : null,
-      practiceArea: typeof payload.practice_area === 'string' ? payload.practice_area : 'EP',
-      feeQuoted: typeof payload.fee_quoted === 'number' ? payload.fee_quoted : null,
-    })
-    return NextResponse.json({
-      ok: true,
-      leadId: created.leadId,
-      clientName: created.clientName,
-      url: `/admin/crm/opportunities/${created.leadId}`,
-    })
+  const mapped: Record<string, { actionKey: string; summary: string }> = {
+    create_task: { actionKey: 'task.create', summary: typeof payload.title === 'string' ? `Create task: ${payload.title}` : 'Create task' },
+    create_lead: { actionKey: 'lead.create', summary: typeof payload.client_name === 'string' ? `Create lead: ${payload.client_name}` : 'Create lead' },
+    create_hold: { actionKey: 'calendar.hold.create', summary: typeof payload.title === 'string' ? `Create calendar hold: ${payload.title}` : 'Create calendar hold' },
+    register_custom_template: { actionKey: 'template.register', summary: typeof payload.label === 'string' ? `Register template: ${payload.label}` : 'Register template' },
   }
 
-  if (body.kind === 'register_custom_template') {
-    const label = typeof payload.label === 'string' ? payload.label.trim() : ''
-    const uploadId = typeof payload.upload_id === 'string' ? payload.upload_id : ''
-    if (!label || !uploadId) return NextResponse.json({ error: 'A label and upload are required' }, { status: 400 })
-    const { getTemplateBuilderUpload, loadTemplateBuilderBuffer } = await import('@/lib/templateBuilder/uploads')
-    const { createCustomTemplate } = await import('@/lib/documentTemplates/customTemplates')
-    const row = await getTemplateBuilderUpload(uploadId)
-    if (!row) return NextResponse.json({ error: 'That template upload no longer exists' }, { status: 404 })
+  const mapping = typeof body.kind === 'string' ? mapped[body.kind] : undefined
+  if (mapping) {
+    const recordType: ActionProposalRequest['recordType'] = typeof payload.matter_id === 'string'
+      ? 'matter'
+      : typeof payload.lead_id === 'string'
+        ? 'lead'
+        : 'firm'
+    const recordId = recordType === 'matter'
+      ? payload.matter_id as string
+      : recordType === 'lead'
+        ? payload.lead_id as string
+        : undefined
     try {
-      const created = await createCustomTemplate({
-        label,
-        buffer: await loadTemplateBuilderBuffer(row),
-        actorId: auth.userId,
-        outputFilename: typeof payload.output_filename === 'string' ? payload.output_filename : undefined,
+      const created = await createActionProposal({
+        actionKey: mapping.actionKey,
+        displaySummary: mapping.summary,
+        referencePayload: payload,
+        recordType,
+        recordId,
+        idempotencyKey: `assistant:${auth.userId}:${proposalId}`,
+        source: 'assistant',
+      }, auth.user)
+      const executed = await executeActionProposal(String(created.proposal.id), auth.user)
+      const result = executed.result as Record<string, unknown> | undefined
+      return NextResponse.json({
+        ok: true,
+        proposalId: created.proposal.id,
+        executionId: (executed.execution as { id?: string } | null)?.id ?? null,
+        duplicate: executed.duplicate,
+        result: result ?? null,
+        ...(mapping.actionKey === 'lead.create' && typeof result?.leadId === 'string'
+          ? { leadId: result.leadId, clientName: result.clientName, url: `/admin/crm/opportunities/${result.leadId}` }
+          : {}),
+        ...(mapping.actionKey === 'task.create' && typeof result?.id === 'string'
+          ? { taskId: result.id, title: result.title }
+          : {}),
+        ...(mapping.actionKey === 'calendar.hold.create' && typeof result?.eventId === 'string'
+          ? { eventId: result.eventId }
+          : {}),
+        ...(mapping.actionKey === 'template.register' && typeof result?.id === 'string'
+          ? { templateId: result.id, label: result.label }
+          : {}),
       })
-      return NextResponse.json({ ok: true, templateId: created.id, label: created.label })
     } catch (error) {
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Could not register the template' },
+        { error: error instanceof Error ? error.message : 'Could not apply this proposal' },
         { status: 400 },
       )
     }
-  }
-
-  if (body.kind === 'create_hold') {
-    const title = typeof payload.title === 'string' ? payload.title.trim() : ''
-    const start = typeof payload.start === 'string' ? payload.start : ''
-    const end = typeof payload.end === 'string' ? payload.end : ''
-    if (!title || !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) {
-      return NextResponse.json({ error: 'Valid title, start, and end are required' }, { status: 400 })
-    }
-    const result = await createCalendarHold({
-      title,
-      startIso: new Date(start).toISOString(),
-      endIso: new Date(end).toISOString(),
-      matterId: typeof payload.matter_id === 'string' ? payload.matter_id : null,
-      showAsBusy: payload.calendarShowAsBusy !== false,
-    })
-    return NextResponse.json({ ok: true, eventId: result.eventId })
   }
 
   if (body.kind === 'propose_reschedule') {

@@ -19,7 +19,11 @@ export type Database = {
           action_key: string
           actor_id: string
           after_digest: string | null
+          after_state: Json | null
           before_digest: string | null
+          before_state: Json | null
+          completed_at: string | null
+          confirmation_digest: string | null
           created_at: string
           error_code: string | null
           error_summary: string | null
@@ -29,13 +33,19 @@ export type Database = {
           record_id: string | null
           record_type: string | null
           risk: string
+          source: string
+          started_at: string
           status: string
         }
         Insert: {
           action_key: string
           actor_id: string
           after_digest?: string | null
+          after_state?: Json | null
           before_digest?: string | null
+          before_state?: Json | null
+          completed_at?: string | null
+          confirmation_digest?: string | null
           created_at?: string
           error_code?: string | null
           error_summary?: string | null
@@ -45,13 +55,19 @@ export type Database = {
           record_id?: string | null
           record_type?: string | null
           risk: string
-          status: string
+          source?: string
+          started_at?: string
+          status?: string
         }
         Update: {
           action_key?: string
           actor_id?: string
           after_digest?: string | null
+          after_state?: Json | null
           before_digest?: string | null
+          before_state?: Json | null
+          completed_at?: string | null
+          confirmation_digest?: string | null
           created_at?: string
           error_code?: string | null
           error_summary?: string | null
@@ -61,6 +77,8 @@ export type Database = {
           record_id?: string | null
           record_type?: string | null
           risk?: string
+          source?: string
+          started_at?: string
           status?: string
         }
         Relationships: [
@@ -78,16 +96,20 @@ export type Database = {
           accepted_at: string | null
           action_key: string
           actor_id: string
+          confirmation_policy: string
           created_at: string
           display_summary: string
           executed_at: string | null
           expires_at: string
           id: string
           idempotency_key: string
+          preview_digest: string | null
           record_id: string | null
           record_type: string | null
           reference_payload: Json
+          rejected_at: string | null
           risk: string
+          source: string
           status: string
           updated_at: string
         }
@@ -95,16 +117,20 @@ export type Database = {
           accepted_at?: string | null
           action_key: string
           actor_id: string
+          confirmation_policy?: string
           created_at?: string
           display_summary: string
           executed_at?: string | null
           expires_at?: string
           id?: string
           idempotency_key: string
+          preview_digest?: string | null
           record_id?: string | null
           record_type?: string | null
           reference_payload?: Json
+          rejected_at?: string | null
           risk: string
+          source?: string
           status?: string
           updated_at?: string
         }
@@ -112,16 +138,20 @@ export type Database = {
           accepted_at?: string | null
           action_key?: string
           actor_id?: string
+          confirmation_policy?: string
           created_at?: string
           display_summary?: string
           executed_at?: string | null
           expires_at?: string
           id?: string
           idempotency_key?: string
+          preview_digest?: string | null
           record_id?: string | null
           record_type?: string | null
           reference_payload?: Json
+          rejected_at?: string | null
           risk?: string
+          source?: string
           status?: string
           updated_at?: string
         }
@@ -11195,6 +11225,19 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_action_execution: {
+        Args: {
+          p_actor_id: string
+          p_confirmation_digest?: string
+          p_preview_digest: string
+          p_proposal_id: string
+        }
+        Returns: {
+          duplicate: boolean
+          execution_id: string
+          execution_status: string
+        }[]
+      }
       claim_draft_generation_run: {
         Args: {
           p_actor_id: string
@@ -11912,6 +11955,46 @@ export type Database = {
       ensure_user_profile: {
         Args: { p_display_name?: string }
         Returns: string
+      }
+      finish_action_execution: {
+        Args: {
+          p_actor_id: string
+          p_after_digest?: string
+          p_after_state?: Json
+          p_before_state?: Json
+          p_error_code?: string
+          p_error_summary?: string
+          p_execution_id: string
+          p_status: string
+        }
+        Returns: {
+          action_key: string
+          actor_id: string
+          after_digest: string | null
+          after_state: Json | null
+          before_digest: string | null
+          before_state: Json | null
+          completed_at: string | null
+          confirmation_digest: string | null
+          created_at: string
+          error_code: string | null
+          error_summary: string | null
+          id: string
+          idempotency_key: string
+          proposal_id: string | null
+          record_id: string | null
+          record_type: string | null
+          risk: string
+          source: string
+          started_at: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "action_executions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       finish_workflow_job: {
         Args: { p_error?: string; p_job_id: string }

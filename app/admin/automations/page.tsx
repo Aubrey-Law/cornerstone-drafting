@@ -7,18 +7,23 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { listAutomationRules } from '@/lib/automations/server'
 import { SYSTEM_AUTOMATIONS } from '@/lib/automations/registry'
 import { AutomationsClient, type AutomationRuleView } from './AutomationsClient'
+import { ApprovalInbox, type ApprovalProposal } from './ApprovalInbox'
+import { getCachedClaims } from '@/lib/supabaseServer'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AutomationsPage() {
+  const auth = await getCachedClaims()
   const [rules, failed, pendingResult, executionResult] = await Promise.all([
     listAutomationRules().catch(() => []),
     getAdminClient().from('workflow_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
     getAdminClient().from('action_proposals')
-      .select('id, action_key, risk, display_summary, created_at')
+      .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
+      .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
       .eq('status', 'pending').order('created_at', { ascending: false }).limit(10),
     getAdminClient().from('action_executions')
       .select('id, action_key, risk, status, error_summary, created_at')
+      .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
       .order('created_at', { ascending: false }).limit(10),
   ])
   const failedCount = failed.count ?? 0
@@ -77,13 +82,8 @@ export default async function AutomationsPage() {
             <CardTitle className="text-base">Pending approvals</CardTitle>
             <CardDescription>Prepared actions still waiting for an authorized user.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {pending.length ? pending.map(proposal => (
-              <div key={proposal.id} className="rounded-lg border p-3 text-sm">
-                <div className="flex items-center justify-between gap-2"><strong>{proposal.display_summary}</strong><Badge variant="outline">{proposal.risk.replace('_', ' ')}</Badge></div>
-                <p className="mt-1 text-xs text-muted-foreground">{proposal.action_key} · {new Date(proposal.created_at).toLocaleString()}</p>
-              </div>
-            )) : <p className="text-sm text-muted-foreground">No actions are waiting for approval.</p>}
+          <CardContent>
+            <ApprovalInbox initialProposals={pending as ApprovalProposal[]} />
           </CardContent>
         </Card>
         <Card>

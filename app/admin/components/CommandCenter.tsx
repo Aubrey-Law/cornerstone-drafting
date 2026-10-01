@@ -173,6 +173,7 @@ function WorkCard({
         displaySummary,
         recordType: item.record.type,
         recordId: item.record.id,
+        source: 'today',
       }),
     })
     const proposedBody = await proposed.json().catch(() => ({})) as {

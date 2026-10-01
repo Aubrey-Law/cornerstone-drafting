@@ -60,7 +60,7 @@ function ProposalCard({ event }: { event: ToolEvent }) {
       const response = await fetch('/api/admin/assistant/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: row.kind, payload: row.payload }),
+        body: JSON.stringify({ kind: row.kind, payload: row.payload, proposalId: row.id }),
       })
       const body = await response.json().catch(() => ({})) as { error?: string }
       if (response.ok) {
