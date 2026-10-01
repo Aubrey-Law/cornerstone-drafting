@@ -38,12 +38,13 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import type { DailyPlanPreview, WorkItem, WorkPreferences } from '@/lib/work/types'
 import type { DailyPlanStatus } from '@/lib/work/plans'
+import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib/work/dailyPlanCalendar'
 import { itemsExceptNow } from '@/lib/work/presentation'
 
 interface Props {
   initialPreview: DailyPlanPreview
   preferences: WorkPreferences
-  initialPlan: { id: string; status: DailyPlanStatus } | null
+  initialPlan: { id: string; status: DailyPlanStatus; calendarStatus: DailyPlanCalendarStatus | null } | null
   sourceErrors: string[]
 }
 
@@ -384,10 +385,11 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
       const body = await response.json().catch(() => ({})) as {
         plan?: { id: string; status: DailyPlanStatus }
         preview?: DailyPlanPreview
+        calendarStatus?: DailyPlanCalendarStatus
         error?: string
       }
       if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
-      setPlan({ id: body.plan.id, status: body.plan.status })
+      setPlan({ id: body.plan.id, status: body.plan.status, calendarStatus: body.calendarStatus ?? null })
       setPreview(body.preview)
       toast.success('Draft day created')
     } catch (error) {
@@ -409,12 +411,52 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           planningDurationSeconds: Math.round((Date.now() - openedAtMs.current) / 1000),
         }),
       })
-      const body = await response.json().catch(() => ({})) as { plan?: { status: DailyPlanStatus }; error?: string }
+      const body = await response.json().catch(() => ({})) as {
+        plan?: { status: DailyPlanStatus }
+        calendarSync?: DailyPlanCalendarSyncResult | null
+        calendarSyncError?: string | null
+        error?: string
+      }
       if (!response.ok || !body.plan) throw new Error(body.error ?? 'The plan could not be committed')
-      setPlan(current => current ? { ...current, status: body.plan!.status } : current)
-      toast.success('Today’s plan is committed')
+      setPlan(current => current ? {
+        ...current,
+        status: body.plan!.status,
+        calendarStatus: body.calendarSync ?? current.calendarStatus,
+      } : current)
+      if (body.calendarSyncError) {
+        toast.warning(`Plan committed. Calendar needs attention: ${body.calendarSyncError}`)
+      } else if (body.calendarSync && (body.calendarSync.pendingBlocks > 0 || body.calendarSync.staleBlocks > 0)) {
+        toast.warning(`Plan committed. ${body.calendarSync.syncedBlocks} of ${body.calendarSync.desiredBlocks} calendar blocks synced.`)
+      } else {
+        toast.success(body.calendarSync?.desiredBlocks
+          ? `Plan committed and ${body.calendarSync.syncedBlocks} calendar blocks reserved`
+          : 'Today’s plan is committed')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The plan could not be committed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function syncCalendar() {
+    if (!plan) return
+    setBusy('calendar-sync')
+    try {
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}/calendar-sync`, { method: 'POST' })
+      const body = await response.json().catch(() => ({})) as {
+        calendarSync?: DailyPlanCalendarSyncResult
+        error?: string
+      }
+      if (!response.ok || !body.calendarSync) throw new Error(body.error ?? 'Calendar blocks could not be synced')
+      setPlan(current => current ? { ...current, calendarStatus: body.calendarSync! } : current)
+      if (body.calendarSync.pendingBlocks > 0 || body.calendarSync.staleBlocks > 0) {
+        toast.warning(`${body.calendarSync.syncedBlocks} of ${body.calendarSync.desiredBlocks} calendar blocks synced. Retry after resolving conflicts.`)
+      } else {
+        toast.success(`${body.calendarSync.syncedBlocks} calendar blocks are reserved`)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Calendar blocks could not be synced')
     } finally {
       setBusy(null)
     }
@@ -445,6 +487,17 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           <span><strong>{formatMinutes(preview.plannedMinutes)}</strong> planned</span>
           <span className="text-muted-foreground">{formatMinutes(preview.capacityMinutes)} available after {workPreferences.interruptionBufferPercent}% buffer</span>
           {plan && <Badge variant="outline" className="capitalize">{plan.status}</Badge>}
+          {plan?.status === 'committed' && plan.calendarStatus && plan.calendarStatus.desiredBlocks > 0 && (
+            <span className={cn(
+              'inline-flex items-center gap-1 text-xs',
+              plan.calendarStatus.pendingBlocks || plan.calendarStatus.staleBlocks
+                ? 'text-amber-strong'
+                : 'text-green',
+            )}>
+              <CalendarClock className="size-3.5" aria-hidden />
+              {plan.calendarStatus.syncedBlocks}/{plan.calendarStatus.desiredBlocks} calendar blocks reserved
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <PlanningPreferences value={workPreferences} onSaved={async next => { setWorkPreferences(next); await refresh() }} />
@@ -459,6 +512,13 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
             {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />}
             Commit plan
           </Button>
+          {plan?.status === 'committed'
+            && (!plan.calendarStatus || plan.calendarStatus.pendingBlocks > 0 || plan.calendarStatus.staleBlocks > 0) && (
+              <Button size="sm" variant="outline" onClick={syncCalendar} disabled={busy !== null}>
+                {busy === 'calendar-sync' ? <Loader2 className="animate-spin" /> : <CalendarClock />}
+                Retry calendar
+              </Button>
+            )}
         </div>
       </div>
 

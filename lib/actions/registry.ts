@@ -96,6 +96,13 @@ function calendarHoldInput(value: unknown) {
   }
 }
 
+function dailyPlanCalendarSyncInput(value: unknown) {
+  const input = objectInput(value)
+  const planId = optionalUuid(input, 'planId')
+  if (!planId) throw new Error('A valid daily plan is required')
+  return { planId }
+}
+
 function noteCreateInput(value: unknown) {
   const input = objectInput(value)
   const recordType = input.recordType === 'lead' ? 'lead' : input.recordType === 'matter' ? 'matter' : null
@@ -348,15 +355,78 @@ const definitions: ActionDefinition[] = [
         auditAfter: { start: input.startIso, end: input.endIso, matterId: input.matterId, showAsBusy: input.showAsBusy },
       }
     },
-    async execute(input) {
+    async execute(input, context) {
       const { createCalendarHold } = await import('@/lib/appointments/googleEvents')
-      return createCalendarHold(input)
+      return createCalendarHold({ ...input, idempotencyKey: context.idempotencyKey })
     },
     auditResult(result) {
       const event = result as { eventId?: string }
       return { eventId: event.eventId }
     },
   } as ActionDefinition<ReturnType<typeof calendarHoldInput>>,
+  {
+    key: 'daily_plan.calendar.sync',
+    risk: 'internal_write',
+    validate: dailyPlanCalendarSyncInput,
+    async preview(input, context) {
+      const { fetchDailyPlanById } = await import('@/lib/work/plans')
+      const plan = await fetchDailyPlanById(context.actor.id, input.planId)
+      if (!plan) throw new Error('Daily plan not found')
+      const blockCount = plan.items.filter(item => item.block_start && item.block_end
+        && item.lane !== 'later' && item.status !== 'skipped').length
+      return {
+        display: {
+          action: 'Sync committed daily plan to calendar',
+          planDate: plan.plan_date,
+          generatedAt: plan.generated_at,
+          blockCount,
+        },
+        auditBefore: { planId: plan.id, status: plan.status, generatedAt: plan.generated_at, blockCount },
+        auditAfter: { planId: plan.id, planDate: plan.plan_date, blockCount },
+      }
+    },
+    async execute(input, context) {
+      const [{ fetchDailyPlanById }, { fetchWorkGraphForUser }, { syncDailyPlanCalendar }] = await Promise.all([
+        import('@/lib/work/plans'),
+        import('@/lib/work/server'),
+        import('@/lib/work/dailyPlanCalendar'),
+      ])
+      const [plan, graph] = await Promise.all([
+        fetchDailyPlanById(context.actor.id, input.planId),
+        fetchWorkGraphForUser(context.actor.id),
+      ])
+      if (!plan) throw new Error('Daily plan not found')
+      return syncDailyPlanCalendar({
+        admin: context.admin,
+        plan,
+        workItems: graph.items,
+        actorId: context.actor.id,
+        actorEmail: context.actor.email ?? null,
+      })
+    },
+    auditResult(result) {
+      const value = result as {
+        desiredBlocks?: number
+        syncedBlocks?: number
+        pendingBlocks?: number
+        staleBlocks?: number
+        created?: number
+        moved?: number
+        removed?: number
+        failures?: unknown[]
+      }
+      return {
+        desiredBlocks: value.desiredBlocks ?? 0,
+        syncedBlocks: value.syncedBlocks ?? 0,
+        pendingBlocks: value.pendingBlocks ?? 0,
+        staleBlocks: value.staleBlocks ?? 0,
+        created: value.created ?? 0,
+        moved: value.moved ?? 0,
+        removed: value.removed ?? 0,
+        failureCount: value.failures?.length ?? 0,
+      }
+    },
+  } as ActionDefinition<ReturnType<typeof dailyPlanCalendarSyncInput>>,
   {
     key: 'note.create',
     risk: 'internal_write',

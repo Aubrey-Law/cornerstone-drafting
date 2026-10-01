@@ -5,6 +5,8 @@ import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
 import { createDailyPlanPreview } from '@/lib/work/planner'
 import { fetchDailyPlan, saveDailyPlan } from '@/lib/work/plans'
 import { recordCommandCenterUsageSafely } from '@/lib/work/usageServer'
+import { getDailyPlanCalendarStatus } from '@/lib/work/dailyPlanCalendar'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 
@@ -32,5 +34,6 @@ export async function POST(req: Request) {
     userId: auth.userId,
     event: existing ? 'plan_replanned' : 'plan_generated',
   })
-  return NextResponse.json({ plan: stored, preview, sourceErrors: graph.sourceErrors })
+  const calendarStatus = await getDailyPlanCalendarStatus(getAdminClient(), stored, graph.items)
+  return NextResponse.json({ plan: stored, preview, sourceErrors: graph.sourceErrors, calendarStatus })
 }

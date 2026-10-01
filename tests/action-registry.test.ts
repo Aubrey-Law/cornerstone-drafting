@@ -13,6 +13,7 @@ describe('shared action registry', () => {
       { key: 'task.delegate', risk: 'internal_write' },
       { key: 'note.create', risk: 'internal_write' },
       { key: 'calendar.hold.create', risk: 'internal_write' },
+      { key: 'daily_plan.calendar.sync', risk: 'internal_write' },
       { key: 'email.draft.send', risk: 'external_write' },
       { key: 'matter.stage.transition', risk: 'legal_financial' },
       { key: 'workflow.enqueue', risk: 'internal_write' },

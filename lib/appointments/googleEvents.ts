@@ -1,4 +1,5 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { revalidateTag } from 'next/cache'
 import { getAccessToken, getGoogleConnectionForUser } from '@/lib/googleCalendar'
 import { visibleCalendars } from './calendarSelection'
@@ -256,12 +257,20 @@ export async function createCalendarHold(input: {
   endIso: string
   matterId?: string | null
   showAsBusy?: boolean
+  idempotencyKey?: string
 }): Promise<CreatedEvent> {
   const token = await connectedToken()
+  // Google accepts caller-selected event ids using base32hex characters. A
+  // stable digest turns retries after a database or network failure into the
+  // same event rather than a second calendar block.
+  const eventId = input.idempotencyKey
+    ? createHash('sha256').update(`cornerstone-calendar-hold:${input.idempotencyKey}`).digest('hex')
+    : undefined
   const r = await googleFetch(`${CALENDAR_BASE}/calendars/primary/events`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      ...(eventId ? { id: eventId } : {}),
       summary: `BLOCK · ${input.title}`,
       description: input.matterId
         ? `Cornerstone matter: ${input.matterId}`
@@ -271,6 +280,10 @@ export async function createCalendarHold(input: {
       transparency: input.showAsBusy === false ? 'transparent' : 'opaque',
     }),
   })
+  if (r.status === 409 && eventId) {
+    invalidateTodayCalendar()
+    return { eventId, onlineMeetingUrl: null }
+  }
   if (!r.ok) throw await failure(r, 'hold create')
   const json = (await r.json().catch(() => ({}))) as { id?: string }
   if (!json.id) throw new Error('Google Calendar hold create returned no id')
