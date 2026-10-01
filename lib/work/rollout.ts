@@ -1,5 +1,6 @@
 import { WORK_SOURCE_TYPES, type WorkGraphResult, type WorkSourceType } from '@/lib/work/types'
 import type { WorkGraphReconciliation } from '@/lib/work/reconciliation'
+import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 
 export const COMMAND_CENTER_ROLLOUT_THRESHOLDS = {
   minimumSamples: 3,
@@ -72,11 +73,11 @@ export function analyzeWorkGraphRollout(
     if (count > 0) sourceCounts[sourceType] = count
   }
 
-  const criticalMisclassifiedCount = graph.items.filter(item => (
-    Boolean(item.hardDueAt)
-    && new Date(item.hardDueAt!).getTime() < now.getTime()
-    && item.priorityBand !== 0
-  )).length
+  const todayKey = firmTodayKey(now)
+  const criticalMisclassifiedCount = graph.items.filter(item => {
+    const hardDueDate = item.hardDueAt ? firmDateKey(item.hardDueAt) : null
+    return Boolean(hardDueDate && hardDueDate < todayKey && item.priorityBand !== 0)
+  }).length
   const ownershipViolationCount = graph.items.filter(item => (
     item.owner !== 'firm' && item.priorityBand <= 1
   )).length
@@ -119,7 +120,11 @@ export function calculateCommandCenterRolloutReadiness(
   const latest = runs[0] ?? null
   const consecutivePasses = runs.findIndex(run => !run.readinessPassed)
   const passingStreak = consecutivePasses === -1 ? runs.length : consecutivePasses
-  const p95DurationMs = percentile95(runs.map(run => run.durationMs))
+  // Performance belongs to the same newest-first clean cohort as the streak.
+  // Once three clean samples supersede a failure, that older release must not
+  // keep the gate closed until it happens to age out of the 20-row history.
+  const performanceRuns = passingStreak > 0 ? runs.slice(0, passingStreak) : runs.slice(0, 1)
+  const p95DurationMs = percentile95(performanceRuns.map(run => run.durationMs))
   const criteria: RolloutCriterion[] = [
     {
       key: 'samples',
