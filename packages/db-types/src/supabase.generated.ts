@@ -169,6 +169,7 @@ export type Database = {
           manage_token_hash: string | null
           notes: string | null
           online_meeting_url: string | null
+          online_meeting_provider: string | null
           raw: Json
           reminder_sent_at: string | null
           second_attendee_email: string | null
@@ -178,6 +179,7 @@ export type Database = {
           source: string
           start_time: string
           status: string
+          teams_meeting_id: string | null
           updated_at: string
         }
         Insert: {
@@ -200,6 +202,7 @@ export type Database = {
           manage_token_hash?: string | null
           notes?: string | null
           online_meeting_url?: string | null
+          online_meeting_provider?: string | null
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
@@ -209,6 +212,7 @@ export type Database = {
           source?: string
           start_time: string
           status?: string
+          teams_meeting_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -231,6 +235,7 @@ export type Database = {
           manage_token_hash?: string | null
           notes?: string | null
           online_meeting_url?: string | null
+          online_meeting_provider?: string | null
           raw?: Json
           reminder_sent_at?: string | null
           second_attendee_email?: string | null
@@ -240,6 +245,7 @@ export type Database = {
           source?: string
           start_time?: string
           status?: string
+          teams_meeting_id?: string | null
           updated_at?: string
         }
         Relationships: [

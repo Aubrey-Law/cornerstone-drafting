@@ -17,6 +17,12 @@ import {
 import { runPostBookingAutomation } from './automation'
 import { formatWhen, locationLine } from './emailFormat'
 import { createManageToken } from './manageTokens'
+import type { OnlineMeetingProvider } from './calendarTypes'
+import {
+  cancelAppointmentTeamsMeeting,
+  createAppointmentTeamsMeeting,
+  rescheduleAppointmentTeamsMeeting,
+} from './teamsMeeting'
 import { getSchedulingSettings } from './settings'
 import {
   effectiveWeeklyHours,
@@ -63,6 +69,11 @@ export interface BookAppointmentInput {
   secondAttendeeEmail?: string | null
   source: AppointmentSource
   bookedByUserId?: string | null
+  /**
+   * Which service hosts a virtual meeting. Defaults to Google Meet; staff can
+   * ask for Microsoft Teams. Ignored unless the format is virtual.
+   */
+  videoProvider?: OnlineMeetingProvider | null
 }
 
 export interface BookAppointmentResult {
@@ -70,6 +81,8 @@ export interface BookAppointmentResult {
   startIso: string
   endIso: string
   manageToken: string
+  /** Set when Teams was asked for and could not be created (Meet was used). */
+  teamsMeetingError?: string
 }
 
 const DAY_MS = 86_400_000
@@ -230,6 +243,7 @@ async function sendConfirmationEmails(input: {
   attendeeEmail: string
   manageToken: string | null
   meetingUrl: string | null
+  meetingProvider?: OnlineMeetingProvider | null
   timezone: string
   action: 'Booked' | 'Rescheduled'
   /** Spouse/partner cc'd on the client-facing email. */
@@ -258,7 +272,7 @@ async function sendConfirmationEmails(input: {
         <h2 style="margin:0 0 12px">Your appointment is ${verb}</h2>
         <p><strong>${input.type.label}</strong></p>
         <p>${when}</p>
-        <p>${locationLine(input.type, office || null, input.meetingUrl)}</p>
+        <p>${locationLine(input.type, office || null, input.meetingUrl, input.meetingProvider ?? null)}</p>
         <p>A calendar invitation is on its way to your inbox.</p>
         ${manageHtml}
       </div>`,
@@ -437,7 +451,35 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
     .filter(Boolean)
     .join(', ')
-  let meetingUrl: string | null = null
+  // A Teams meeting is created before the event so its link can go on the
+  // invite in place of Meet. If Microsoft refuses, the booking still gets a
+  // Meet link rather than no way to join, and the caller is told.
+  let teams: { id: string; joinUrl: string } | null = null
+  let teamsMeetingError: string | undefined
+  if (locationType === 'teams' && input.videoProvider === 'microsoft_teams') {
+    try {
+      teams = await createAppointmentTeamsMeeting({
+        typeLabel: input.type.label,
+        attendeeName: input.attendeeName,
+        startIso,
+        endIso,
+      })
+      await admin
+        .from('appointments')
+        .update({
+          online_meeting_url: teams.joinUrl,
+          online_meeting_provider: 'microsoft_teams',
+          teams_meeting_id: teams.id,
+        })
+        .eq('id', appointmentId)
+    } catch (err) {
+      teamsMeetingError = err instanceof Error ? err.message : 'Teams meeting could not be created'
+      console.error('[appointments] Teams meeting create failed for', appointmentId, err)
+    }
+  }
+
+  let meetingUrl: string | null = teams?.joinUrl ?? null
+  let meetingProvider: OnlineMeetingProvider | null = teams ? 'microsoft_teams' : null
   try {
     const event = await createAppointmentEvent({
       type: effectiveType,
@@ -450,9 +492,11 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
       secondAttendeeEmail: input.secondAttendeeEmail,
       notes: input.notes,
       officeAddress: office || null,
+      teamsJoinUrl: teams?.joinUrl ?? null,
     })
     if (event) {
       meetingUrl = event.onlineMeetingUrl
+      if (!teams && meetingUrl) meetingProvider = 'google_meet'
       // The id is stored so a later cancel or reschedule can find its way back
       // to the same event.
       await admin
@@ -460,6 +504,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
         .update({
           google_event_id: event.eventId,
           online_meeting_url: meetingUrl,
+          online_meeting_provider: meetingProvider,
         })
         .eq('id', appointmentId)
     }
@@ -485,6 +530,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     ccEmail: input.secondAttendeeEmail?.trim().toLowerCase() || null,
     manageToken: manage.token,
     meetingUrl,
+    meetingProvider,
     timezone: settings.timezone,
     action: 'Booked',
     skipInternalAlert: input.source === 'admin',
@@ -500,7 +546,13 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   // The queue's optional actor is staff-only; portal attribution stays on the booking.
   await enqueueLawmaticsAfterCommit(appointmentId, input.source === 'admin' ? input.bookedByUserId : null)
   await enqueueStatularClientAfterCommit(appointmentId)
-  return { appointmentId, startIso, endIso, manageToken: manage.token }
+  return {
+    appointmentId,
+    startIso,
+    endIso,
+    manageToken: manage.token,
+    ...(teamsMeetingError ? { teamsMeetingError } : {}),
+  }
 }
 
 export interface CancelAppointmentInput {
@@ -528,6 +580,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
   } catch (err) {
     console.error('[appointments] calendar cancel failed for', appointment.id, err)
   }
+  await cancelAppointmentTeamsMeeting(appointment)
 
   await recordActivity({
     admin,
@@ -696,6 +749,7 @@ export async function rescheduleAppointment(
   } catch (err) {
     console.error('[appointments] calendar reschedule failed for', appointment.id, err)
   }
+  await rescheduleAppointmentTeamsMeeting(appointment, startIso, endIso)
 
   await recordActivity({
     admin,
@@ -717,6 +771,7 @@ export async function rescheduleAppointment(
     // Manage link keeps working — token is unchanged on reschedule.
     manageToken: null,
     meetingUrl: appointment.online_meeting_url,
+    meetingProvider: appointment.online_meeting_provider ?? null,
     timezone: settings.timezone,
     action: 'Rescheduled',
   })

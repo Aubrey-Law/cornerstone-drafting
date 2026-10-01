@@ -12,6 +12,7 @@ import { listAppointmentTypes } from '@/lib/appointments/settings'
 import { BookingNameValidationError, externalSourceLabel, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
+import { addTeamsMeetingToAppointment, TeamsMeetingError } from '@/lib/appointments/teamsMeeting'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, google_event_id, online_meeting_url, source, created_at, raw',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, google_event_id, online_meeting_url, online_meeting_provider, source, created_at, raw',
     )
 
   if (hasRange) {
@@ -125,6 +126,7 @@ export async function GET(req: NextRequest) {
       // not about which calendar it was.
       calendarSynced: Boolean(row.google_event_id),
       onlineMeetingUrl: row.online_meeting_url ?? null,
+      onlineMeetingProvider: row.online_meeting_provider ?? null,
     })),
   })
 }
@@ -143,6 +145,7 @@ interface PostBody {
   secondAttendeeFirstName?: unknown
   secondAttendeeLastName?: unknown
   secondAttendeeEmail?: unknown
+  videoProvider?: unknown
 }
 
 /**
@@ -211,12 +214,14 @@ export async function POST(req: NextRequest) {
       secondAttendeeEmail: secondAttendeeEmail || null,
       source: 'admin',
       bookedByUserId: userId ?? null,
+      videoProvider: body.videoProvider === 'microsoft_teams' ? 'microsoft_teams' : null,
     })
     return NextResponse.json({
       ok: true,
       appointmentId: result.appointmentId,
       startIso: result.startIso,
       endIso: result.endIso,
+      ...(result.teamsMeetingError ? { teamsMeetingError: result.teamsMeetingError } : {}),
     })
   } catch (e) {
     if (e instanceof SlotTakenError) {
@@ -242,10 +247,18 @@ interface PatchBody {
   sendFollowUp?: unknown
 }
 
+const PATCH_ACTIONS = ['cancel', 'reschedule', 'no_show', 'add_teams_meeting'] as const
+type PatchAction = (typeof PATCH_ACTIONS)[number]
+
+function isPatchAction(value: unknown): value is PatchAction {
+  return typeof value === 'string' && (PATCH_ACTIONS as readonly string[]).includes(value)
+}
+
 /**
  * Staff manages an existing appointment from the admin calendar:
  * cancel (client notified), reschedule (admin override — hard conflicts
- * only), or mark a past appointment as a no-show (optional follow-up email).
+ * only), mark a past appointment as a no-show (optional follow-up email), or
+ * add a Microsoft Teams meeting (the updated invite goes to attendees).
  */
 export async function PATCH(req: NextRequest) {
   const { err } = await requireAdmin(req)
@@ -254,9 +267,9 @@ export async function PATCH(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as PatchBody
   const appointmentId = typeof body.appointmentId === 'string' ? body.appointmentId : ''
   const action = body.action
-  if (!appointmentId || (action !== 'cancel' && action !== 'reschedule' && action !== 'no_show')) {
+  if (!appointmentId || !isPatchAction(action)) {
     return NextResponse.json(
-      { error: 'appointmentId and a valid action (cancel | reschedule | no_show) are required' },
+      { error: 'appointmentId and a valid action (cancel | reschedule | no_show | add_teams_meeting) are required' },
       { status: 400 },
     )
   }
@@ -298,6 +311,38 @@ export async function PATCH(req: NextRequest) {
       }
       await markNoShow({ appointment, type, sendFollowUp: body.sendFollowUp !== false })
       return NextResponse.json({ ok: true, status: 'no_show' })
+    }
+
+    if (action === 'add_teams_meeting') {
+      if (appointment.status !== 'scheduled') {
+        return NextResponse.json({ error: 'Only scheduled appointments can get a Teams meeting' }, { status: 409 })
+      }
+      if (Date.parse(appointment.end_time) < Date.now()) {
+        return NextResponse.json({ error: 'This appointment has already ended' }, { status: 409 })
+      }
+      try {
+        const result = await addTeamsMeetingToAppointment(appointment, type)
+        return NextResponse.json({
+          ok: true,
+          status: appointment.status,
+          onlineMeetingUrl: result.joinUrl,
+          onlineMeetingProvider: 'microsoft_teams',
+          calendarUpdated: result.calendarUpdated,
+        })
+      } catch (e) {
+        if (e instanceof TeamsMeetingError) {
+          const notConnected = /not connected/i.test(e.message)
+          return NextResponse.json(
+            {
+              error: notConnected
+                ? 'Microsoft Teams is not connected. Connect it under Settings → Google & Teams.'
+                : e.message,
+            },
+            { status: notConnected ? 409 : 502 },
+          )
+        }
+        throw e
+      }
     }
 
     // action === 'reschedule'

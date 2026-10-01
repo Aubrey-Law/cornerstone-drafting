@@ -129,6 +129,8 @@ export interface AppointmentRow {
   manage_token_expires_at: string | null
   reminder_sent_at: string | null
   online_meeting_url: string | null
+  online_meeting_provider?: 'google_meet' | 'microsoft_teams' | null
+  teams_meeting_id?: string | null
   source: AppointmentSource
   external_booking_uid?: string | null
   created_at: string

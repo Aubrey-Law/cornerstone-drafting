@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-export type CalendarProvider = 'google'
+export type CalendarProvider = 'google' | 'microsoft'
 
 export interface CalendarConnection {
   id: string
