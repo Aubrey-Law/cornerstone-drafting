@@ -21,7 +21,9 @@ import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { LeadScoreBadge } from '@/components/leads/LeadScoreBadge'
 import type { ScorableLeadRow } from '@/components/leads/LeadsTable'
 import { computeLeadScore, leadScoreInputFromRow, leadScoreIsActive } from '@/lib/leads/score'
-import { leadAttentionReason, leadValueLabel, leadWaitingLabel } from '@/lib/leads/cardFacts'
+import { leadValueLabel, leadWaitingLabel } from '@/lib/leads/cardFacts'
+import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 const DRAG_TYPE = 'text/lead-id'
 
@@ -30,6 +32,7 @@ interface LeadsBoardProps {
   hasAnyLeads: boolean
   busyLeadId: string | null
   esignEnabled: boolean
+  workSummaries?: Record<string, RecordWorkSummary>
   onEdit: (lead: LeadListRow) => void
   onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
@@ -80,6 +83,7 @@ export function LeadsBoard({
   hasAnyLeads,
   busyLeadId,
   esignEnabled,
+  workSummaries = {},
   onEdit,
   onStatusChange,
   onSendIntake,
@@ -168,6 +172,7 @@ export function LeadsBoard({
                     busy={busyLeadId === lead.id}
                     dragging={draggingId === lead.id}
                     esignEnabled={esignEnabled}
+                    workSummary={workSummaries[lead.id]}
                     onEdit={onEdit}
                     onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}
@@ -193,6 +198,7 @@ function BoardCard({
   busy,
   dragging,
   esignEnabled,
+  workSummary,
   onEdit,
   onStatusChange,
   onSendIntake,
@@ -207,6 +213,7 @@ function BoardCard({
   busy: boolean
   dragging: boolean
   esignEnabled: boolean
+  workSummary?: RecordWorkSummary
   onEdit: (lead: LeadListRow) => void
   onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
@@ -219,9 +226,6 @@ function BoardCard({
 }) {
   const step = nextStep(lead, esignEnabled)
   const chip = stateChip(lead)
-  // Named rather than boolean: "Needs attention" was true of 16 of 35 leads
-  // and told the reader nothing about which one to open.
-  const attention = leadAttentionReason(lead)
   const value = leadValueLabel(lead)
   const waiting = leadWaitingLabel(lead)
   const score = lead.scoreDetail ?? computeLeadScore(leadScoreInputFromRow(lead))
@@ -285,11 +289,7 @@ function BoardCard({
               {chip.label}
             </span>
           )}
-          {attention && (
-            <span className="rounded-full bg-red-bg px-2 py-0.5 text-micro font-medium text-red">
-              {attention}
-            </span>
-          )}
+          {workSummary && <RecordWorkIndicator summary={workSummary} compact className="w-full" />}
         </div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground">
@@ -310,7 +310,11 @@ function BoardCard({
         </div>
 
         <div className="mt-2">
-          {step.key === 'view_matter' && lead.matter_id ? (
+          {workSummary ? (
+            <Button size="sm" variant={workSummary.priorityBand <= 1 ? 'default' : 'outline'} className="h-7 w-full px-2.5 text-xs" asChild>
+              <Link href={workSummary.href}>{workSummary.actionLabel}</Link>
+            </Button>
+          ) : step.key === 'view_matter' && lead.matter_id ? (
             <Button size="sm" variant="outline" className="h-7 w-full px-2.5 text-xs" asChild>
               <Link href={`/admin/matters/${lead.matter_id}`}>{step.label}</Link>
             </Button>

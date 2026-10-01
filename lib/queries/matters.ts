@@ -104,13 +104,21 @@ export function clampMatterExportLimit(value: unknown): number {
 
 export async function fetchMatterExportRows(
   filters: MatterTableFilters,
-  options: { sort?: MatterSortKey; limit?: number; card?: 'attention'|'signing'|null } = {},
+  options: {
+    sort?: MatterSortKey
+    limit?: number
+    card?: 'attention'|'signing'|null
+    attentionIds?: string[]
+  } = {},
 ): Promise<MatterExportPage> {
   const limit = clampMatterExportLimit(options.limit ?? MATTER_EXPORT_DEFAULT_ROWS)
   const rows: MatterExportRow[] = []
   let total = 0
   for(let page=1;rows.length<limit;page++) {
-    const result=await fetchMatterPage({page,pageSize:100,filters,sort:options.sort ?? 'client_asc',card:options.card ?? null,view:'table',groupPages:{early:1,active:1,work:1,done:1,closed:1}})
+    const result=await fetchMatterPage(
+      {page,pageSize:100,filters,sort:options.sort ?? 'client_asc',card:options.card ?? null,view:'table',groupPages:{early:1,active:1,work:1,done:1,closed:1}},
+      { attentionIds: options.attentionIds },
+    )
     total=result.total
     rows.push(...result.rows.slice(0,limit-rows.length).map(toMatterExportRow))
     if(page*100>=total || result.rows.length===0) break
@@ -123,12 +131,15 @@ export type MatterPageResult = PageResult<MatterListRow> & {
   columns: Partial<Record<StageGroup,number>>
   insights: { open:number; attention:number; signing:number; intakePending:number; unreviewed:number }
 }
-export async function fetchMatterPage(params:MatterPageParams):Promise<MatterPageResult> {
+export async function fetchMatterPage(
+  params:MatterPageParams,
+  work: { attentionIds?: string[] } = {},
+):Promise<MatterPageResult> {
   const admin=getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
   const { data,error }=await admin.rpc('firm_matter_page_v1',{p_query:{
     ...pageRequest(params), search:params.filters.search,practice:params.filters.practice,stage:params.filters.stageGroup,
     sort:params.sort,card:params.card ?? '',view:params.view,groupPages:params.groupPages,
-    closed:params.filters.includeClosed ? 'show' : 'hide',
+    closed:params.filters.includeClosed ? 'show' : 'hide', attentionIds:work.attentionIds ?? [],
   }})
   if(error || !data) throw new Error('Matter list is temporarily unavailable. Please retry.')
   const page=data as unknown as MatterPageResult

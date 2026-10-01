@@ -31,6 +31,7 @@ export type PriorityReasonCode =
   | 'automation_failed'
   | 'billing_overdue'
   | 'intake_ready'
+  | 'document_review_ready'
   | 'intake_unsent'
   | 'high_priority'
   | 'blocked'

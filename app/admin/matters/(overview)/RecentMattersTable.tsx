@@ -22,6 +22,8 @@ import {
 } from '@/lib/matters/cardFacts'
 import { matterHref } from '@/lib/matters/matterActions'
 import type { MatterListRow } from '@/lib/queries/matters'
+import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 const BADGE_TONE: Record<string, string> = {
   success: 'border-green/40 bg-green-bg text-green',
@@ -29,7 +31,13 @@ const BADGE_TONE: Record<string, string> = {
   muted: 'border-border bg-muted text-muted-foreground',
 }
 
-export function RecentMattersTable({ matters }: { matters: MatterListRow[] }) {
+export function RecentMattersTable({
+  matters,
+  workSummaries = {},
+}: {
+  matters: MatterListRow[]
+  workSummaries?: Record<string, RecordWorkSummary>
+}) {
   return (
     <Card className="min-w-0 gap-0 py-0">
       <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
@@ -54,6 +62,7 @@ export function RecentMattersTable({ matters }: { matters: MatterListRow[] }) {
                   <TableHead>Client</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead>Intake</TableHead>
+                  <TableHead>Next action</TableHead>
                   <TableHead className="text-right">Last milestone</TableHead>
                 </TableRow>
               </TableHeader>
@@ -84,6 +93,9 @@ export function RecentMattersTable({ matters }: { matters: MatterListRow[] }) {
                         >
                           {badge.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[18rem]">
+                        <RecordWorkIndicator summary={workSummaries[matter.matter_id]} />
                       </TableCell>
                       <TableCell
                         className={cn('whitespace-nowrap text-right', matterRecencyTone(milestone))}

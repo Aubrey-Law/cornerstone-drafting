@@ -18,7 +18,6 @@ import {
   type MatterSortKey,
   type MatterTableFilters,
 } from '@/lib/adminTables/matterTable'
-import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
 import { matterExportCsv, matterExportFilename, toMatterExportRow } from '@/lib/matters/exportRows'
 import { downloadCsv } from '@/lib/browserDownload'
@@ -27,7 +26,6 @@ import { MatterStageBoard, type StageBoardCard } from '@/components/matter/Matte
 import {
   MatterPipelineInsights,
   isOpenMatter,
-  matterNeedsAttention,
   signingSoon,
   type MatterCardFilter,
 } from '@/components/matter/MatterPipelineInsights'
@@ -35,7 +33,6 @@ import { isMobileDetailViewport } from '@/components/layout/ResponsiveDetailRail
 import type { MatterPageParams } from '@/lib/matters/pageParams'
 import type { MatterPageResult } from '@/lib/queries/matters'
 import type { MatterListRow } from '@/lib/queries/matters'
-import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
 import {
   formatLastMilestone,
@@ -78,11 +75,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 const LawmaticsImportDialog = dynamic(() => import('./LawmaticsImportDialog'), { ssr: false })
 
 interface MattersClientProps {
   matters: MatterListRow[]
+  workSummaries?: Record<string, RecordWorkSummary>
   loadError?: string | null
   pagination?: MatterPageResult & {params:MatterPageParams}
 }
@@ -119,7 +119,7 @@ function MattersClientShell({ matters: _matters, loadError = null }: MattersClie
   )
 }
 
-function MattersClientInner({ matters: initialMatters, loadError = null, pagination }: MattersClientProps) {
+function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadError = null, pagination }: MattersClientProps) {
   usePrimaryReady('Matters')
   const searchParams = useSearchParams()
   const token = useAccessToken()
@@ -210,10 +210,10 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
   // so a card is a filter on top of the current view rather than a view of its
   // own — one table, one set of rows, whatever is selected above it.
   const carded = useMemo(() => {
-    if (cardFilter === 'attention') return matters.filter(m => isOpenMatter(m) && matterNeedsAttention(m))
+    if (cardFilter === 'attention') return matters.filter(m => isOpenMatter(m) && (workSummaries[m.matter_id]?.attentionCount ?? 0) > 0)
     if (cardFilter === 'signing') return matters.filter(m => isOpenMatter(m) && signingSoon(m))
     return matters
-  }, [cardFilter, matters])
+  }, [cardFilter, matters, workSummaries])
 
   const filtered = useMemo(
     () => pagination ? matters : filterAndSortMatters(carded, filters, sortKey),
@@ -262,10 +262,11 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
     title: matterTitle(m),
     subtitle: matterSubtitle(m),
     badge: matterIntakeBadge(m),
-    quietDays: matterQuietDays(m),
+    quietDays: workSummaries[m.matter_id] ? null : matterQuietDays(m),
     href: `/admin/matters/${m.matter_id}`,
-    meta: matterMetaFacts(m),
-  })), [filtered])
+    meta: workSummaries[m.matter_id] ? [] : matterMetaFacts(m),
+    workSummary: workSummaries[m.matter_id],
+  })), [filtered, workSummaries])
 
   const handleStageChange = (matterId: string, stage: MatterStage) => {
     setMatters(current =>
@@ -663,12 +664,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                 {filtered.map(m => {
                   const group = stageInfo(m.stage).group
                   const groupColor = GROUP_COLORS[group]
-                  const unreviewed = mergeUnreviewedCounts(
-                    m.unreviewed_intake_upload_count ?? 0,
-                    m.unreviewed_portal_upload_count ?? 0,
-                  )
                   const activity = matterLastMilestoneAt(m)
-                  const quietDays = matterQuietDays(m)
                   return (
                     <TableRow key={m.matter_id}>
                       <TableCell>
@@ -721,20 +717,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null, paginat
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {unreviewed.total > 0 && (
-                            <Badge
-                              variant="outline"
-                              className="border-amber-border bg-amber-bg text-micro text-amber"
-                              title={formatUnreviewedUploadDetail(unreviewed)}
-                            >
-                              {formatUnreviewedUploadLabel(unreviewed)}
-                            </Badge>
-                          )}
-                          {quietDays !== null && quietDays > QUIET_DAYS && (
-                            <Badge variant="outline" className="text-micro text-muted-foreground">
-                              quiet {quietDays}d
-                            </Badge>
-                          )}
+                          <RecordWorkIndicator summary={workSummaries[m.matter_id]} />
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

@@ -117,6 +117,7 @@ import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
+import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -190,6 +191,7 @@ interface MatterDetailClientProps {
   esignDocumentsEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
   initialTaskCounts?: RecordTaskCounts
+  workSummary?: import('@/lib/work/recordSummary').RecordWorkSummary | null
 }
 
 export default function MatterDetailClient(props: MatterDetailClientProps) {
@@ -243,6 +245,7 @@ function MatterDetailClientInner({
   esignDocumentsEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   initialTaskCounts = { open: 0, overdue: 0 },
+  workSummary = null,
 }: MatterDetailClientProps) {
   usePrimaryReady('Matter detail', matterId)
   const token = useAccessToken()
@@ -1018,6 +1021,8 @@ function MatterDetailClientInner({
               onStageChange={stage => void handleStageChange(stage)}
             />
           </div>
+
+          {workSummary && <RecordWorkStrip summary={workSummary} />}
 
           <MatterBlockerBanner
             matterId={matterId}

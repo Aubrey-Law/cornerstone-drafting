@@ -61,6 +61,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 export type LeadRow = LeadListRow
 
@@ -108,6 +109,7 @@ export function LeadsClient({
   total,
   hasMore,
   summary,
+  workSummaries,
   esignEnabled,
 }: {
   /** One page of the server's ordering — already filtered, sorted and ranked. */
@@ -116,6 +118,7 @@ export function LeadsClient({
   total: number
   hasMore: boolean
   summary: LeadListSummary
+  workSummaries?: Record<string, RecordWorkSummary>
   esignEnabled: boolean
 }) {
   usePrimaryReady('Leads')
@@ -724,6 +727,7 @@ export function LeadsClient({
             hasAnyLeads={initialLeads.length > 0}
             busyLeadId={busyLeadId}
             esignEnabled={esignEnabled}
+            workSummaries={workSummaries}
             onEdit={openEdit}
             onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
             onSendIntake={lead => void handleSendIntake(lead)}
@@ -743,6 +747,7 @@ export function LeadsClient({
             allSelected={allSelected}
             busyLeadId={busyLeadId}
             esignEnabled={esignEnabled}
+            workSummaries={workSummaries}
             onToggleAll={toggleAll}
             onToggleSelected={toggleSelected}
             onEdit={openEdit}

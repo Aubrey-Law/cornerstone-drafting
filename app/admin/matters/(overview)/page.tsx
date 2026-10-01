@@ -9,16 +9,21 @@ import { MatterCloseoutCard } from './MatterCloseoutCard'
 import { MatterSliceCard } from './MatterSliceCard'
 import { MatterStatCards } from './MatterStatCards'
 import { RecentMattersTable } from './RecentMattersTable'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { attentionRecordIds, buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Matters' }
 
 export default async function MattersDashboardPage() {
   const auth = await getCachedClaims()
-  const [{ snapshot, aging, tasks, tasksError, error }, closeout] = await Promise.all([
+  const [{ snapshot, aging, tasks, tasksError, error }, closeout, graph] = await Promise.all([
     fetchMatterDashboard(auth?.id ?? null),
     loadMatterCloseoutSummary(reviewClient()),
+    fetchWorkGraphForUser(auth?.id ?? null),
   ])
+  const workSummaries = buildRecordWorkSummaries(graph.items, 'matter')
+  const canonicalSnapshot = { ...snapshot, needsAttention: attentionRecordIds(workSummaries).length }
 
   return (
     <div className="space-y-4">
@@ -40,27 +45,27 @@ export default async function MattersDashboardPage() {
         </div>
       )}
 
-      <MatterStatCards snapshot={snapshot} aging={aging} />
+      <MatterStatCards snapshot={canonicalSnapshot} aging={aging} />
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <MatterSliceCard
           title="By stage"
           description="Open matters in the firm's stage order"
-          slices={snapshot.stages}
+          slices={canonicalSnapshot.stages}
           emptyLabel="No open matters."
         />
         <OpenTasksCard tasks={tasks} error={tasksError} />
         <MatterSliceCard
           title="Practice areas"
           description="How the open book divides up"
-          slices={snapshot.practiceAreas}
+          slices={canonicalSnapshot.practiceAreas}
           emptyLabel="No open matters."
         />
       </div>
 
       <MatterCloseoutCard summary={closeout} />
 
-      <RecentMattersTable matters={snapshot.recent} />
+      <RecentMattersTable matters={canonicalSnapshot.recent} workSummaries={workSummaries} />
     </div>
   )
 }

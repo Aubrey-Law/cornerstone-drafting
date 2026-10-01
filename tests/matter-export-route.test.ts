@@ -12,12 +12,14 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   tableResult: {} as Record<string, { data: unknown[]; error: { message: string } | null }>,
   queried: [] as string[],
+  fetchWorkGraphForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: mocks.requireAdmin }))
 vi.mock('@/lib/matter/unreviewedUploads', () => ({
   fetchUnreviewedUploadCountsForMatters: async () => new Map(),
 }))
+vi.mock('@/lib/work/server', () => ({ fetchWorkGraphForUser: mocks.fetchWorkGraphForUser }))
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
     async rpc(name: string, { p_query: query }: { p_query: { search:string; practice:string; stage:StageGroup|'all'; closed:string; sort:MatterSortKey; page:number; pageSize:number } }) {
@@ -98,8 +100,10 @@ const MATTERS = [
 describe('the matters export route', () => {
   beforeEach(() => {
     mocks.requireAdmin.mockReset()
+    mocks.fetchWorkGraphForUser.mockReset()
     mocks.queried.length = 0
     mocks.requireAdmin.mockResolvedValue({ err: null, userId: 'admin-1', user: null })
+    mocks.fetchWorkGraphForUser.mockResolvedValue({ items: [], appointments: [], sourceErrors: [], generatedAt: '' })
     mocks.tableResult = {
       v_matter_pipeline: { data: MATTERS, error: null },
       matters: {

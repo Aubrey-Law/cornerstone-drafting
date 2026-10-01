@@ -7,6 +7,8 @@ import {
 } from '@/lib/queries/matters'
 import { matterSortKeyFrom, matterTableFiltersFrom } from '@/lib/adminTables/matterTable'
 import { matterExportCsv, matterExportFilename, matterExportLabel } from '@/lib/matters/exportRows'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { attentionRecordIds, buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 /**
  * The matters list export: the columns the list shows, as CSV.
@@ -35,7 +37,14 @@ export async function GET(req: Request) {
 
   let page
   try {
-    page = await fetchMatterExportRows(filters, { sort, limit, card: query.get('card') === 'attention' ? 'attention' : query.get('card') === 'signing' ? 'signing' : null })
+    const card = query.get('card') === 'attention' ? 'attention' : query.get('card') === 'signing' ? 'signing' : null
+    const attentionIds = card === 'attention'
+      ? attentionRecordIds(buildRecordWorkSummaries(
+          (await fetchWorkGraphForUser(auth.userId)).items,
+          'matter',
+        ))
+      : undefined
+    page = await fetchMatterExportRows(filters, { sort, limit, card, attentionIds })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Matter export failed' },

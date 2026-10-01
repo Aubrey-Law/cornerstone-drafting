@@ -24,6 +24,8 @@ import {
   leadScoreIsActive,
   type LeadScore,
 } from '@/lib/leads/score'
+import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
+import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 export type NextStep =
   | { key: 'send_intake'; label: string; primary: true }
@@ -85,6 +87,7 @@ interface LeadsTableProps {
   allSelected: boolean
   busyLeadId: string | null
   esignEnabled: boolean
+  workSummaries?: Record<string, RecordWorkSummary>
   onToggleAll: (selected: boolean) => void
   onToggleSelected: (leadId: string, selected: boolean) => void
   onEdit: (lead: LeadListRow) => void
@@ -103,6 +106,7 @@ export function LeadsTable({
   allSelected,
   busyLeadId,
   esignEnabled,
+  workSummaries = {},
   onToggleAll,
   onToggleSelected,
   onEdit,
@@ -142,7 +146,7 @@ export function LeadsTable({
             <TableHead>Fee / plan</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Progress</TableHead>
-            <TableHead className="text-right">Next step</TableHead>
+            <TableHead>Next action</TableHead>
             <TableHead className="w-10" aria-label="More actions" />
           </TableRow>
         </TableHeader>
@@ -150,6 +154,7 @@ export function LeadsTable({
           {leads.map(lead => {
             const busy = busyLeadId === lead.id
             const step = nextStep(lead, esignEnabled)
+            const work = workSummaries[lead.id]
             const runStep = () => {
               if (step.key === 'send_intake' || step.key === 'remind_intake') onSendIntake(lead)
               else if (step.key === 'send_engagement' || step.key === 'resend_engagement') onSendEngagement(lead)
@@ -194,8 +199,10 @@ export function LeadsTable({
                   {/* How long it has been waiting, or when its meeting is. */}
                   <p className="mt-0.5 text-micro text-muted-foreground">{leadWaitingLabel(lead)}</p>
                 </TableCell>
-                <TableCell className="text-right">
-                  {step.key === 'view_matter' && lead.matter_id ? (
+                <TableCell className="max-w-[18rem]">
+                  {work ? (
+                    <RecordWorkIndicator summary={work} />
+                  ) : step.key === 'view_matter' && lead.matter_id ? (
                     <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" asChild>
                       <Link href={`/admin/matters/${lead.matter_id}`}>{step.label}</Link>
                     </Button>

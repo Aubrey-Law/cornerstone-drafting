@@ -67,19 +67,38 @@ function selectLeads(columns: string, withCount: boolean) {
 
 type LeadQuery = ReturnType<typeof selectLeads>
 
+export interface LeadListWorkOptions {
+  /** Canonical firm-owned Critical/Must do/Soon lead ids, in work-graph order. */
+  attentionIds?: string[]
+}
+
 /**
  * Everything except paging and ordering.
  *
  * Exported so the CSV export reads exactly the selection the reader is looking
  * at: one filter vocabulary, not two that drift apart.
  */
-export function applyLeadListFilters(query: LeadQuery, params: LeadListParams): LeadQuery {
+export function applyLeadListFilters(
+  query: LeadQuery,
+  params: LeadListParams,
+  work: LeadListWorkOptions = {},
+): LeadQuery {
   let next = query
   if (params.status === 'open') next = next.eq('lead_status', 'lead')
   else if (params.status !== 'all') next = next.eq('lead_status', params.status)
 
   // The cards narrow open leads, which is what they count.
-  if (params.card === 'attention') next = next.eq('is_open', true).eq('needs_attention', true)
+  if (params.card === 'attention') {
+    next = next.eq('is_open', true)
+    // Phase 6A makes the card the record projection of the canonical work
+    // graph. The impossible UUID keeps an empty attention set empty without
+    // omitting the filter and accidentally returning the whole pipeline.
+    next = work.attentionIds
+      ? next.in('id', work.attentionIds.length
+          ? work.attentionIds
+          : ['00000000-0000-0000-0000-000000000000'])
+      : next.eq('needs_attention', true)
+  }
   if (params.card === 'agreements') next = next.eq('is_open', true).eq('has_pending_agreement', true)
 
   if (params.practice && params.practice !== 'all') {
@@ -114,11 +133,14 @@ export function applyLeadListFilters(query: LeadQuery, params: LeadListParams): 
   return next
 }
 
-export async function fetchLeadListPage(params: LeadListParams): Promise<LeadListPage> {
+export async function fetchLeadListPage(
+  params: LeadListParams,
+  work: LeadListWorkOptions = {},
+): Promise<LeadListPage> {
   const show = clampShow(params.show)
   const order = SORT_ORDER[params.sort] ?? SORT_ORDER.newest
 
-  const [result, summary] = await Promise.all([applyLeadListFilters(selectLeads(LEAD_SELECT, true), params)
+  const [result, rawSummary] = await Promise.all([applyLeadListFilters(selectLeads(LEAD_SELECT, true), params, work)
     .order(order.column, { ascending: order.ascending, nullsFirst: false })
     // A stable tiebreak, so two leads with the same score or fee do not swap
     // places between one page and the next.
@@ -132,6 +154,9 @@ export async function fetchLeadListPage(params: LeadListParams): Promise<LeadLis
 
   const rows = (data ?? []) as unknown as LeadListRow[]
   const total = count ?? rows.length
+  const summary = work.attentionIds
+    ? { ...rawSummary, attention: work.attentionIds.length }
+    : rawSummary
   return { rows, total, hasMore: total > rows.length, summary, error: null }
 }
 
@@ -169,12 +194,16 @@ const LEAD_EXPORT_SELECT = 'id, display_name, full_name, first_name, last_name, 
 
 export async function fetchLeadExportRows(
   params: LeadListParams,
-  options: { limit?: number } = {},
+  options: { limit?: number; attentionIds?: string[] } = {},
 ): Promise<LeadExportPage> {
   const limit = clampLeadExportLimit(options.limit ?? LEAD_EXPORT_DEFAULT_ROWS)
   const order = SORT_ORDER[params.sort] ?? SORT_ORDER.name_asc
 
-  const { data, error, count } = await applyLeadListFilters(selectLeads(LEAD_EXPORT_SELECT, true), params)
+  const { data, error, count } = await applyLeadListFilters(
+    selectLeads(LEAD_EXPORT_SELECT, true),
+    params,
+    { attentionIds: options.attentionIds },
+  )
     .order(order.column, { ascending: order.ascending, nullsFirst: false })
     .order('id', { ascending: true })
     .range(0, limit - 1)

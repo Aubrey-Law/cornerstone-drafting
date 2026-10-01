@@ -8,8 +8,10 @@ import { fetchEmailTriageQueue, fetchTriageEnabled } from '@/lib/queries/emailTr
 import { listSmsThreads } from '@/lib/queries/smsThreads'
 import { fetchDueTasks } from '@/lib/queries/tasks'
 import { fetchTodayData } from '@/lib/queries/today'
+import { fetchUnreviewedUploadCountsForMatters } from '@/lib/matter/unreviewedUploads'
 import {
   buildWorkGraph,
+  type DocumentReviewSource,
   type FailedAutomationRun,
   type FailedWorkflowJob,
 } from '@/lib/work/buildWorkGraph'
@@ -20,6 +22,32 @@ import {
   type WorkPreferences,
 } from '@/lib/work/types'
 import { addCalendarBusyToToday } from '@/lib/work/calendarBusy'
+
+async function fetchDocumentReviewSources(): Promise<DocumentReviewSource[]> {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('matters')
+    .select('id, name, stage')
+    .eq('relationship_status', 'hired')
+    .neq('status', 'archived')
+
+  if (error) throw error
+  const matters = (data ?? []) as Array<{ id: string; name: string | null; stage: string | null }>
+  // Intake review already has a canonical obligation with the same practical
+  // outcome. Avoid showing two review cards for the same client submission.
+  const eligible = matters.filter(matter => matter.stage !== 'intake_review')
+  const counts = await fetchUnreviewedUploadCountsForMatters(admin, eligible.map(matter => matter.id))
+  return eligible.flatMap(matter => {
+    const count = counts.get(matter.id)
+    if (!count?.total) return []
+    return [{
+      matterId: matter.id,
+      matterName: matter.name?.trim() || 'Matter',
+      intakeCount: count.intake,
+      portalCount: count.portal,
+    }]
+  })
+}
 
 interface WorkPreferencesRow {
   max_must_do: number
@@ -79,7 +107,11 @@ async function optionalSource<T>(
   try {
     return await load()
   } catch (error) {
-    console.error(`work graph ${label} error`, error)
+    // A disconnected or temporarily unavailable calendar is an expected
+    // degraded state. Keep it visible in sourceErrors without tripping the
+    // Next.js error overlay on every surface that consumes the work graph.
+    if (label === 'calendar') console.info(`work graph ${label} unavailable`, error)
+    else console.error(`work graph ${label} error`, error)
     errors.push(label)
     return fallback
   }
@@ -118,7 +150,7 @@ export async function fetchWorkGraphForUser(
     sourceDurationsMs,
   )
 
-  const [today, calendarBusy, futureTasks, overrides, email, sms, failedWorkflowJobs, failedAutomationRuns] = await Promise.all([
+  const [today, calendarBusy, futureTasks, overrides, email, sms, documentReviews, failedWorkflowJobs, failedAutomationRuns] = await Promise.all([
     // The work graph must not synchronously enumerate every visible Google
     // calendar. One freeBusy request below supplies the planner with the same
     // blocking calendars while the database remains the source of obligations.
@@ -138,6 +170,12 @@ export async function fetchWorkGraphForUser(
       (await fetchTriageEnabled()) ? fetchEmailTriageQueue() : [], [], sourceErrors), sourceDurationsMs),
     timedSource('sms', () => optionalSource('sms', async () =>
       isSmsConfigured() ? listSmsThreads({ filter: 'unread', limit: 100 }) : [], [], sourceErrors), sourceDurationsMs),
+    timedSource('document_reviews', () => optionalSource(
+      'document_reviews',
+      fetchDocumentReviewSources,
+      [],
+      sourceErrors,
+    ), sourceDurationsMs),
     timedSource('automation_failures', () => optionalSource('automation_failures', async () => {
       const { data, error } = await getAdminClient()
         .from('workflow_jobs')
@@ -183,6 +221,7 @@ export async function fetchWorkGraphForUser(
       overrides,
       email,
       sms,
+      documentReviews,
       failedWorkflowJobs,
       failedAutomationRuns,
       sourceErrors,

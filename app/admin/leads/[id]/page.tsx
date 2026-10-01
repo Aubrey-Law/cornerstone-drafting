@@ -15,6 +15,8 @@ import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { LeadDetailClient } from './LeadDetailClient'
+import { fetchWorkGraphForUser } from '@/lib/work/server'
+import { buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +93,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     scoreRowResult,
     emailContactResult,
     smsResponseResult,
+    workGraph,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
@@ -107,6 +110,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     admin.from('v_lead_list').select('*').eq('id', id).maybeSingle(),
     admin.from('email_log').select('sent_at, created_at').eq('lead_id', id).eq('status', 'sent').order('created_at', { ascending: false }).limit(1),
     admin.from('sms_messages').select('created_at').eq('lead_id', id).eq('direction', 'inbound').is('deleted_at', null).order('created_at', { ascending: false }).limit(1),
+    fetchWorkGraphForUser(user?.id ?? null),
   ])
 
   const { data: lead, error: leadError } = leadResult
@@ -256,6 +260,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       }}
       smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
       esignDocumentsEnabled={await esignDocumentsEnabled()}
+      workSummary={buildRecordWorkSummaries(workGraph.items, 'lead')[id] ?? null}
     />
   )
 }
