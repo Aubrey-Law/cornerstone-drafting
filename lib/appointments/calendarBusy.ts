@@ -16,6 +16,26 @@ export class AvailabilityUnavailableError extends Error {
   }
 }
 
+async function withinDeadline<T>(promise: Promise<T>, deadlineMs: number | null): Promise<T> {
+  if (deadlineMs === null) return promise
+  const remainingMs = deadlineMs - Date.now()
+  if (remainingMs <= 0) throw new AvailabilityUnavailableError('Google Calendar request timed out')
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new AvailabilityUnavailableError('Google Calendar request timed out')),
+          remainingMs,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 async function googleFetch(input: string, init: RequestInit = {}): Promise<Response> {
   try {
     return await fetch(input, {
@@ -43,7 +63,11 @@ export async function fetchCalendarBusy(
   rangeEnd: Date,
   options: { timeoutMs?: number } = {},
 ): Promise<Interval[]> {
-  const conn = await getGoogleConnectionForUser(null)
+  // `timeoutMs` is an end-to-end adapter budget, not merely an HTTP timeout.
+  // OAuth connection and refresh reads can otherwise consume several seconds
+  // before the bounded freeBusy request even begins.
+  const deadlineMs = options.timeoutMs ? Date.now() + options.timeoutMs : null
+  const conn = await withinDeadline(getGoogleConnectionForUser(null), deadlineMs)
   if (!conn) {
     throw new AvailabilityUnavailableError('Google Calendar is not connected')
   }
@@ -51,10 +75,10 @@ export async function fetchCalendarBusy(
   let token: string
   let blockingCalendarIds: string[]
   try {
-    const [resolvedToken, settings] = await Promise.all([
-      getAccessToken(conn.user_id),
+    const [resolvedToken, settings] = await withinDeadline(Promise.all([
+      getAccessToken(conn.user_id, { connection: conn }),
       getSchedulingSettings(),
-    ])
+    ]), deadlineMs)
     token = resolvedToken
     blockingCalendarIds = settings.blockingCalendarIds
   } catch (err) {
@@ -69,7 +93,7 @@ export async function fetchCalendarBusy(
   const r = await googleFetch(`${CALENDAR_BASE}/freeBusy`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
+    signal: deadlineMs ? AbortSignal.timeout(Math.max(1, deadlineMs - Date.now())) : undefined,
     body: JSON.stringify({
       timeMin: rangeStart.toISOString(),
       timeMax: rangeEnd.toISOString(),

@@ -102,7 +102,12 @@ export async function runWorkGraphReconciliation(input: {
   if (existingError) throw new Error(existingError.message)
   if (existing) {
     const run = rowToRun(existing as unknown as ReconciliationRunRow)
-    return { run, readiness: await getCommandCenterRolloutReadiness(input.userId), reconciliation: null }
+    return {
+      run,
+      readiness: await getCommandCenterRolloutReadiness(input.userId),
+      reconciliation: null,
+      sourceDurationsMs: null,
+    }
   }
 
   const started = performance.now()
@@ -151,7 +156,12 @@ export async function runWorkGraphReconciliation(input: {
       .single()
     if (concurrentError) throw new Error(concurrentError.message)
     const run = rowToRun(concurrent as unknown as ReconciliationRunRow)
-    return { run, readiness: await getCommandCenterRolloutReadiness(input.userId), reconciliation: null }
+    return {
+      run,
+      readiness: await getCommandCenterRolloutReadiness(input.userId),
+      reconciliation: null,
+      sourceDurationsMs: null,
+    }
   }
   if (error) throw new Error(error.message)
   const run = rowToRun(data as unknown as ReconciliationRunRow)
@@ -161,5 +171,6 @@ export async function runWorkGraphReconciliation(input: {
     run,
     readiness: calculateCommandCenterRolloutReadiness(runs.slice(0, 20)),
     reconciliation: snapshot.reconciliation,
+    sourceDurationsMs: graph.sourceDurationsMs ?? {},
   }
 }

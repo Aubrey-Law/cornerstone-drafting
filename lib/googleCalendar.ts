@@ -219,8 +219,14 @@ async function resolveConnection(userId?: string | null): Promise<CalendarConnec
 }
 
 /** Returns a valid Google access token, refreshing if needed. */
-export async function getAccessToken(userId?: string | null): Promise<string> {
-  const conn = await resolveConnection(userId)
+export async function getAccessToken(
+  userId?: string | null,
+  options: { connection?: CalendarConnection } = {},
+): Promise<string> {
+  // Callers that already resolved the connection can pass it through. This
+  // avoids a second sequential database read on latency-sensitive calendar
+  // availability paths while preserving the ordinary lookup API elsewhere.
+  const conn = options.connection ?? await resolveConnection(userId)
   if (!conn) throw new Error('Google Calendar is not connected')
 
   const expiresAt = new Date(conn.expires_at).getTime()

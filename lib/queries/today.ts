@@ -138,7 +138,18 @@ function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter
  * One aggregate read for the attorney's "Today" home page. Reuses the same
  * sources as the sidebar badges but returns actionable rows, not just counts.
  */
-export async function fetchTodayData(options: { includeCalendar?: boolean } = {}): Promise<TodayData> {
+export interface FetchTodayDataOptions {
+  includeCalendar?: boolean
+  /**
+   * Reuse a due-task read already in flight. The command-center graph needs a
+   * five-day task window while legacy Today needs only today's slice; issuing
+   * both database reads duplicated the same task enrichment work on the
+   * latency-critical path.
+   */
+  dueTasks?: TaskRow[] | Promise<TaskRow[]>
+}
+
+export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promise<TodayData> {
   const admin = getAdminClient()
   const todayKey = firmTodayKey()
   // A deliberately wide UTC window around firm-local noon. We filter the
@@ -165,7 +176,7 @@ export async function fetchTodayData(options: { includeCalendar?: boolean } = {}
       .select('matter_id, created_at')
       .eq('sender_role', 'client')
       .is('read_at', null),
-    fetchDueTasks(dueThrough),
+    options.dueTasks ?? fetchDueTasks(dueThrough),
     admin
       .from('appointments')
       .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id, appointment_type_id')

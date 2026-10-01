@@ -28,6 +28,7 @@ interface AuditResponse {
   run: WorkGraphReconciliationRun
   readiness: CommandCenterRolloutReadiness
   reconciliation: WorkGraphReconciliation | null
+  sourceDurationsMs: Record<string, number> | null
   error?: string
 }
 
@@ -73,6 +74,7 @@ export function CommandCenterRolloutClient({
   const [readiness, setReadiness] = useState(initialReadiness)
   const [runs, setRuns] = useState(initialRuns)
   const [detail, setDetail] = useState<WorkGraphReconciliation | null>(null)
+  const [sourceDurations, setSourceDurations] = useState<Record<string, number> | null>(null)
   const [busy, setBusy] = useState<'audit' | 'toggle' | null>(null)
 
   async function runAudit() {
@@ -84,6 +86,7 @@ export function CommandCenterRolloutClient({
       setRuns(current => [body.run, ...current.filter(run => run.id !== body.run.id)].slice(0, 20))
       setReadiness(body.readiness)
       setDetail(body.reconciliation)
+      setSourceDurations(body.sourceDurationsMs)
       toast.success(body.run.readinessPassed ? 'Shadow audit passed' : 'Shadow audit recorded issues to review')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The shadow audit failed')
@@ -222,6 +225,16 @@ export function CommandCenterRolloutClient({
               <p className="text-xs font-medium">Ranking differences</p>
               <p className="mt-1 text-sm text-muted-foreground">{detail.differentlyRanked.length}</p>
             </div>
+            {sourceDurations && (
+              <div>
+                <p className="text-xs font-medium">Adapter timings</p>
+                <ul className="mt-1 space-y-1 font-mono text-micro text-muted-foreground">
+                  {Object.entries(sourceDurations)
+                    .sort((left, right) => right[1] - left[1])
+                    .map(([source, duration]) => <li key={source}>{source}: {duration} ms</li>)}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
