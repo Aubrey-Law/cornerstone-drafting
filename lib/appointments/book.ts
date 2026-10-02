@@ -311,16 +311,6 @@ async function enqueueLawmaticsAfterCommit(appointmentId: string, actorId?: stri
   }
 }
 
-async function enqueueStatularClientAfterCommit(appointmentId: string) {
-  try {
-    const { enqueueStatularClientForAppointment } = await import('@/lib/integrations/statular/jobs')
-    await enqueueStatularClientForAppointment(appointmentId)
-  } catch {
-    // Provider configuration and database causes can contain credentials or PII.
-    console.error('[appointments] statular enqueue failed', appointmentId, 'enqueue_failed')
-  }
-}
-
 /**
  * Book an appointment: verify the slot against fresh busy data, insert the
  * row (the exclusion constraint is the final race guard), create the calendar
@@ -545,7 +535,8 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
 
   // The queue's optional actor is staff-only; portal attribution stays on the booking.
   await enqueueLawmaticsAfterCommit(appointmentId, input.source === 'admin' ? input.bookedByUserId : null)
-  await enqueueStatularClientAfterCommit(appointmentId)
+  // Statular clients are created when the lead is marked a fit, not at booking:
+  // see enqueueStatularClientForFitMatter (sla-anchors PATCH).
   return {
     appointmentId,
     startIso,

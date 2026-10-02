@@ -43,6 +43,14 @@ describe('SLA anchors route', () => {
     expect(source).toContain('patch.fit_decided_at = new Date().toISOString()')
   })
 
+  it('creates the Statular client only when the matter is marked a fit', () => {
+    // Statular cannot delete records, so a not-a-fit lead must never reach it.
+    expect(source).toContain("if (patch.fit_decision === 'fit') {")
+    expect(source).toContain('await enqueueStatularClientForFitMatter(matterId)')
+    // A failed enqueue never undoes the saved decision or logs provider detail.
+    expect(source).toContain("console.error('[sla-anchors] statular enqueue failed', matterId, 'enqueue_failed')")
+  })
+
   it('clears a date without treating the blank as invalid', () => {
     expect(source).toContain("if (raw === null || raw === '')")
   })

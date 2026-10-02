@@ -49,7 +49,18 @@ describe('Statular configuration', () => {
     expect(getStatularConfigStatus()).toEqual({ clientConfigured: true, matterConfigured: true, generationConfigured: true })
   })
 
-  it.each(['STATULAR_CLIENT_WEBHOOK_URL', 'STATULAR_MATTER_WEBHOOK_URL', 'STATULAR_WEBHOOK_GENERATION'])('blocks requests when %s is missing or blank', async variable => {
+  it('creates clients without a matter webhook, but blocks matter creation', async () => {
+    vi.stubEnv('STATULAR_MATTER_WEBHOOK_URL', '')
+    await expect(createStatularClient(client, key)).resolves.toEqual({ id: '12345' })
+    vi.mocked(fetch).mockClear()
+    const error = await createStatularMatter(matter, 'cornerstone:statular:matter:matter-1:v1').catch(e => e)
+    expect(error).toMatchObject({ provider: 'statular', kind: 'attention', code: 'configuration_required' })
+    expectSafe(error)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(getStatularConfigStatus()).toEqual({ clientConfigured: true, matterConfigured: false, generationConfigured: true })
+  })
+
+  it.each(['STATULAR_CLIENT_WEBHOOK_URL', 'STATULAR_WEBHOOK_GENERATION'])('blocks requests when %s is missing or blank', async variable => {
     vi.stubEnv(variable, '   ')
     const error = await createStatularClient(client, key).catch(e => e)
     expect(error).toMatchObject({ provider: 'statular', kind: 'attention', code: 'configuration_required' })

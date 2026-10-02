@@ -59,15 +59,17 @@ Without this key, staff can still paste notes manually in the dialog; Granola li
 | Variable | Purpose |
 |----------|---------|
 | `STATULAR_CLIENT_WEBHOOK_URL` | Server-only secret URL for Statular's create-client webhook. HTTPS required; production host must be `api.statular.com`. |
-| `STATULAR_MATTER_WEBHOOK_URL` | Server-only secret URL for Statular's create-matter webhook, with the same HTTPS/host requirements. |
+| `STATULAR_MATTER_WEBHOOK_URL` | Optional until matter creation ships. Server-only secret URL for Statular's create-matter webhook, with the same HTTPS/host requirements. |
 | `STATULAR_WEBHOOK_GENERATION` | Required nonblank, non-secret generation such as `v1`, used in durable delivery identities. Increment whenever either webhook URL rotates. |
 
 The webhook URLs are credentials: store them only in server environment secrets;
 never use `NEXT_PUBLIC_`, return them to browsers, or put them in logs/errors.
-Readiness responses expose booleans only. Both URLs and the generation are required
-for delivery. Configuration alone does not enable synchronization: keep
+Readiness responses expose booleans only. The client URL and the generation are
+required for client delivery; the matter URL only for matter delivery. Configuration alone does not enable synchronization: keep
 `statular_sync_enabled = false` until the release verification gate passes.
-Statular creates clients and matters independently of Lawmatics and does not update
+A Statular client is created when staff set a lead's **Fit decision** to Fit
+(key dates in the task plan) — not at booking — so not-a-fit leads never reach
+Statular, which cannot delete records. Statular creates clients and matters independently of Lawmatics and does not update
 existing Statular records. Existing Markdown export and drafting are unchanged.
 
 ## Optional — drafting / ops

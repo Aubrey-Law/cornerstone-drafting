@@ -2,7 +2,7 @@ import 'server-only'
 import { z } from 'zod'
 import { IntegrationError } from '@/lib/integrations/errors'
 import type { IntegrationFailureKind } from '@/lib/integrations/types'
-import { getStatularConfig } from './config'
+import { getStatularConfig, requireStatularMatterWebhook } from './config'
 import type { StatularClientPayload, StatularMatterPayload, StatularRecord } from './types'
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -75,6 +75,7 @@ async function createRecord(payload: StatularClientPayload | StatularMatterPaylo
   const cancelled = () => failure('retryable', 'timeout', 'The Statular request timed out or was cancelled.')
   if (signal?.aborted) throw cancelled()
   const config = getStatularConfig()
+  const url = type === 'client' ? config.clientWebhookUrl : requireStatularMatterWebhook(config)
   // Keep durable keys byte-for-byte identical to their HTTP representation:
   // visible ASCII/Latin-1 only, no C0/C1 controls or trimmed edge whitespace.
   if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() !== idempotencyKey || !/^[\x20-\x7e\xa0-\xff]{1,200}$/.test(idempotencyKey)) {
@@ -90,7 +91,7 @@ async function createRecord(payload: StatularClientPayload | StatularMatterPaylo
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
     if (controller.signal.aborted) throw cancelled()
-    const response = await fetch(type === 'client' ? config.clientWebhookUrl : config.matterWebhookUrl, {
+    const response = await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(parsed.data), signal: controller.signal, cache: 'no-store', redirect: 'error',
     })
