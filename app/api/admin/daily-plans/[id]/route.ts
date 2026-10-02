@@ -5,7 +5,9 @@ import { updateDailyPlan, type DailyPlanItemStatus, type DailyPlanStatus } from 
 import { recordCommandCenterUsageSafely, type CommandCenterUsageEvent } from '@/lib/work/usageServer'
 import { executeDailyPlanCalendarSync } from '@/lib/work/dailyPlanCalendarAction'
 
-const PLAN_STATUSES: DailyPlanStatus[] = ['draft', 'committed', 'closed']
+// Closing is a reviewed, audited action. It deliberately has a dedicated
+// endpoint so a generic status PATCH cannot silently seal a day.
+const PLAN_STATUSES: DailyPlanStatus[] = ['draft', 'committed']
 const ITEM_STATUSES: DailyPlanItemStatus[] = ['planned', 'started', 'completed', 'skipped']
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +45,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const plan = await updateDailyPlan({ userId: auth.userId, planId: id, status, order, item })
     const events: Array<{ event: CommandCenterUsageEvent; durationSeconds?: number | null }> = []
     if (status === 'committed') events.push({ event: 'plan_committed', durationSeconds: planningDurationSeconds })
-    if (status === 'closed') events.push({ event: 'plan_closed' })
     if (order?.length) events.push({ event: 'plan_replanned' })
     if (item?.status === 'started') events.push({ event: 'work_started', durationSeconds: choiceDurationSeconds })
     if (item?.status === 'completed') events.push({ event: 'work_completed' })
