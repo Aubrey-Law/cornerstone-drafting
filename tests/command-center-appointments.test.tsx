@@ -68,6 +68,13 @@ describe('Command Center day agenda', () => {
     expect(screen.getByText(/No appointments or focus blocks/)).toBeTruthy()
   })
 
+  it('identifies incomplete calendar coverage where the schedule is shown', () => {
+    render(<DayAgenda appointments={[appointment]} blocks={[]} items={[]} calendarUnavailable />)
+
+    expect(screen.getByRole('status').textContent).toMatch(/Calendar availability could not refresh/)
+    expect(screen.getByRole('status').textContent).toMatch(/external changes may be missing/)
+  })
+
   it('labels external calendar time as a commitment instead of missing preparation', () => {
     render(<DayAgenda
       appointments={[{

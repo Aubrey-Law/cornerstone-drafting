@@ -140,7 +140,8 @@ export function DayAgenda({
   appointments,
   blocks,
   items,
-}: Pick<DailyPlanPreview, 'appointments' | 'blocks'> & { items: WorkItem[] }) {
+  calendarUnavailable = false,
+}: Pick<DailyPlanPreview, 'appointments' | 'blocks'> & { items: WorkItem[]; calendarUnavailable?: boolean }) {
   const agenda = buildDayAgenda({ appointments, blocks, items })
 
   return (
@@ -150,6 +151,11 @@ export function DayAgenda({
         <CardDescription>Appointments and planned work in the order they happen.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
+        {calendarUnavailable && (
+          <p role="status" className="rounded-md border border-amber-border bg-amber-bg px-2.5 py-2 text-xs text-amber-strong">
+            Calendar availability could not refresh. Recorded appointments are shown, but external changes may be missing.
+          </p>
+        )}
         {agenda.length ? agenda.slice(0, 12).map(entry => {
           return (
             <Link
@@ -907,6 +913,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
             appointments={preview.appointments}
             blocks={preview.blocks}
             items={allWorkItems}
+            calendarUnavailable={sourceErrors.includes('calendar')}
           />
 
           <Card>
