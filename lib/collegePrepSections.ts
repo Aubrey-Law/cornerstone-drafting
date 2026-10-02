@@ -125,19 +125,24 @@ export function getCollegePrepStepIssues(stepId: string, data: IntakeRow): Intak
     message,
     severity,
   })
+  // Only contact information blocks submission (see IntakeSectionIssue).
+  const contactIssue = (message: string): IntakeSectionIssue => ({
+    ...issue(message),
+    blocksSubmission: true,
+  })
 
   switch (stepId) {
     case 'cp_student': {
       const issues: IntakeSectionIssue[] = []
-      if (!text(data, 'first_name')) issues.push(issue("Enter the student's first name."))
-      if (!text(data, 'last_name')) issues.push(issue("Enter the student's last name."))
+      if (!text(data, 'first_name')) issues.push(contactIssue("Enter the student's first name."))
+      if (!text(data, 'last_name')) issues.push(contactIssue("Enter the student's last name."))
       const email = text(data, 'email')
-      if (!email) issues.push(issue("Enter the student's email address."))
+      if (!email) issues.push(contactIssue("Enter the student's email address."))
       else {
         const emailError = validateIntakeField('email', email)
-        if (emailError) issues.push(issue(emailError))
+        if (emailError) issues.push(contactIssue(emailError))
       }
-      if (!text(data, 'phone')) issues.push(issue("Enter the student's cell phone number."))
+      if (!text(data, 'phone')) issues.push(contactIssue("Enter the student's cell phone number."))
       if (!streetAddress(data)) issues.push(issue("Enter the student's permanent street address."))
       if (!text(data, 'city')) issues.push(issue('Enter the city.'))
       if (!text(data, 'state')) issues.push(issue('Enter the state.'))
