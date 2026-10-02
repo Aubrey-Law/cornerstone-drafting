@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { TodayAppointment } from '@/lib/queries/today'
 import type { WorkItem } from '@/lib/work/types'
 
@@ -91,5 +91,36 @@ describe('Command Center day agenda', () => {
 
     expect(screen.getByText('Calendar commitment')).toBeTruthy()
     expect(screen.queryByText('No prep task')).toBeNull()
+  })
+
+  it('uses committed rows for the agenda and exposes keyboard-accessible plan controls', () => {
+    const onMove = vi.fn()
+    const onRemove = vi.fn()
+    render(<DayAgenda
+      appointments={[]}
+      blocks={[{ workKey: 'task:uncommitted', startAt: '2026-10-02T13:00:00.000Z', endAt: '2026-10-02T13:30:00.000Z', minutes: 30 }]}
+      items={[preparation, {
+        workKey: 'task:follow-up', sourceType: 'task', sourceIds: ['follow-up'], evidence: [],
+        record: { type: 'matter', id: 'matter-1', name: 'Jordan Client' }, title: 'Call Jordan Client', actionLabel: 'Open',
+        href: '/admin/matters/matter-1?tab=tasks', owner: 'firm', state: 'open', priorityBand: 1, priorityReasons: [], estimateMinutes: 15,
+      }]}
+      plan={{
+        status: 'committed',
+        items: [
+          { work_key: 'task:follow-up', lane: 'must_do', position: 0, status: 'planned', block_start: '2026-10-02T15:00:00.000Z', block_end: '2026-10-02T15:15:00.000Z', estimate_minutes: 15 },
+          { work_key: preparation.workKey, lane: 'suggested', position: 1, status: 'started', block_start: '2026-10-02T16:00:00.000Z', block_end: '2026-10-02T16:20:00.000Z', estimate_minutes: 20 },
+        ],
+      }}
+      onMove={onMove}
+      onRemove={onRemove}
+    />)
+
+    expect(screen.getByText(/Committed agenda/)).toBeTruthy()
+    expect(screen.queryByText('task:uncommitted')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Move Call Jordan Client later' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Move Call Jordan Client later' }))
+    expect(onMove).toHaveBeenCalledWith('task:follow-up', 'later')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Call Jordan Client from today' }))
+    expect(onRemove).toHaveBeenCalledWith('task:follow-up')
   })
 })

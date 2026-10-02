@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDayAgenda } from '@/lib/work/dayAgenda'
+import { buildCommittedDayAgenda, buildDayAgenda } from '@/lib/work/dayAgenda'
 import type { TodayAppointment } from '@/lib/queries/today'
 import type { WorkItem } from '@/lib/work/types'
 
@@ -44,5 +44,23 @@ describe('day agenda', () => {
     })
 
     expect(agenda.map(entry => entry.kind)).toEqual(['appointment', 'work'])
+  })
+
+  it('uses only saved committed blocks, their windows, and their statuses', () => {
+    const laterWork = { ...work, workKey: 'task:later', title: 'Draft review memo' }
+    const newlyRanked = { ...work, workKey: 'task:new', title: 'Newly ranked work' }
+    const agenda = buildCommittedDayAgenda({
+      appointments: [appointment],
+      items: [work, laterWork, newlyRanked],
+      planItems: [
+        { work_key: 'task:later', lane: 'must_do', position: 0, status: 'started', block_start: '2026-10-02T13:00:00.000Z', block_end: '2026-10-02T13:30:00.000Z', estimate_minutes: 30 },
+        { work_key: 'task:follow-up', lane: 'suggested', position: 1, status: 'completed', block_start: '2026-10-02T15:10:00.000Z', block_end: '2026-10-02T15:25:00.000Z', estimate_minutes: 15 },
+        { work_key: 'task:new', lane: 'must_do', position: 2, status: 'skipped', block_start: null, block_end: null, estimate_minutes: 30 },
+      ],
+    })
+
+    expect(agenda.map(entry => entry.title)).toEqual(['Draft review memo', 'Jordan Client', 'Call Jordan Client'])
+    expect(agenda.map(entry => entry.workStatus).filter(Boolean)).toEqual(['started', 'completed'])
+    expect(agenda.some(entry => entry.title === 'Newly ranked work')).toBe(false)
   })
 })

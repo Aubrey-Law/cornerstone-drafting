@@ -5,6 +5,10 @@ export interface CommittedFocusPlanItem {
   lane: PlanLane
   position: number
   status: 'planned' | 'started' | 'completed' | 'skipped'
+  /** Present on persisted plan rows; optional so Focus Mode stays presentation-only. */
+  block_start?: string | null
+  block_end?: string | null
+  estimate_minutes?: number
 }
 
 export interface CommittedFocusPlan {

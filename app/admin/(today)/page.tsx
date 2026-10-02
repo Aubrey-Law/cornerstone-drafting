@@ -199,6 +199,9 @@ export default async function AdminTodayPage({
               lane: item.lane,
               position: item.position,
               status: item.status,
+              block_start: item.block_start,
+              block_end: item.block_end,
+              estimate_minutes: item.estimate_minutes,
             })),
           } : null}
           sourceErrors={graph.sourceErrors}

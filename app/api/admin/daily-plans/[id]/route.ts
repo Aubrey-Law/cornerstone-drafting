@@ -33,6 +33,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!order?.length && !item) {
     return NextResponse.json({ error: 'No valid plan change supplied' }, { status: 400 })
   }
+  if (order?.length && item) {
+    return NextResponse.json({ error: 'Send either a plan order or one item change, not both' }, { status: 400 })
+  }
   try {
     const plan = await updateDailyPlan({ userId: auth.userId, planId: id, order, item })
     const events: Array<{ event: CommandCenterUsageEvent; durationSeconds?: number | null }> = []

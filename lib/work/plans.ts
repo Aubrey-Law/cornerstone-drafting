@@ -213,14 +213,40 @@ export async function updateDailyPlan(input: {
   }
 
   if (input.item) {
-    const { error } = await admin.from('daily_plan_items').update({
+    const patch: Record<string, unknown> = {
       status: input.item.status,
       completed_at: input.item.status === 'completed' ? new Date().toISOString() : null,
-    }).eq('plan_id', input.planId).eq('work_key', input.item.workKey)
+    }
+    // Skipped means "not today", not "complete the source task". Clearing
+    // its saved window also makes a later calendar sync cancel the hold.
+    if (input.item.status === 'skipped') {
+      patch.block_start = null
+      patch.block_end = null
+    }
+    const { error } = await admin.from('daily_plan_items').update(patch)
+      .eq('plan_id', input.planId).eq('work_key', input.item.workKey)
     if (error) throw new Error(error.message)
   }
 
   if (input.order?.length) {
+    const { data: rows, error: rowsError } = await admin.from('daily_plan_items')
+      .select('*').eq('plan_id', input.planId).order('position')
+    if (rowsError) throw new Error(rowsError.message)
+    const existing = (rows ?? []) as unknown as StoredDailyPlanItem[]
+    const existingKeys = new Set(existing.map(row => row.work_key))
+    if (input.order.length !== existing.length || new Set(input.order).size !== existing.length || input.order.some(key => !existingKeys.has(key))) {
+      throw new Error('The daily plan order no longer matches its saved items')
+    }
+
+    // Keep the actual agenda truthful when an item is moved: scheduled,
+    // executable rows exchange the saved windows that calendar sync uses.
+    // Completed and removed rows keep their historical position and window.
+    const scheduled = existing
+      .filter(row => row.block_start && row.block_end && row.status !== 'completed' && row.status !== 'skipped')
+      .toSorted((left, right) => Date.parse(left.block_start!) - Date.parse(right.block_start!))
+    const scheduledSlots = scheduled.map(row => ({ start: row.block_start!, end: row.block_end! }))
+    const scheduledKeysInOrder = input.order.filter(key => scheduled.some(row => row.work_key === key))
+
     // Move away from the unique (plan_id, position) range first so swaps do not
     // conflict halfway through the update.
     for (let index = 0; index < input.order.length; index++) {
@@ -235,6 +261,14 @@ export async function updateDailyPlan(input: {
         .update({ position: index })
         .eq('plan_id', input.planId)
         .eq('work_key', input.order[index])
+      if (error) throw new Error(error.message)
+    }
+    for (let index = 0; index < scheduledKeysInOrder.length; index++) {
+      const slot = scheduledSlots[index]
+      const { error } = await admin.from('daily_plan_items')
+        .update({ block_start: slot.start, block_end: slot.end })
+        .eq('plan_id', input.planId)
+        .eq('work_key', scheduledKeysInOrder[index])
       if (error) throw new Error(error.message)
     }
   }
