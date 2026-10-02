@@ -32,7 +32,6 @@ import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
 import { StatularSettingsSection } from './StatularSettingsSection'
 import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
-import { TemplateCenter } from './TemplateCenter'
 import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
@@ -54,10 +53,8 @@ interface ConnectorRow {
 
 export function StaffSettingsClient({
   isAdministrator = false,
-  currentUserId = '',
 }: {
   isAdministrator?: boolean
-  currentUserId?: string
 }) {
   const token = useAccessToken()
   const router = useRouter()
@@ -696,8 +693,6 @@ export function StaffSettingsClient({
       {tab === 'lawmatics' && <LawmaticsSettingsSection />}
 
       {tab === 'statular' && <StatularSettingsSection />}
-
-      {tab === 'templates' && isAdministrator && <TemplateCenter currentUserId={currentUserId} />}
 
       {tab === 'ai-usage' && <AiUsagePanel />}
 

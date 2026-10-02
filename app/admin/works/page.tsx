@@ -7,5 +7,5 @@ export default async function WorksPage() {
   // document templates" — a 403 dressed up as a load failure.
   const auth = await getCachedClaims()
   const role = auth ? await getCachedUserRole(auth.id) : null
-  return <WorksClient canManageMasters={role === 'admin'} />
+  return <WorksClient canManageMasters={role === 'admin'} currentUserId={auth?.id ?? ''} />
 }

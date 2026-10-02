@@ -16,7 +16,6 @@ export type SettingsTab =
   | 'statular'
   | 'sla'
   | 'ai-usage'
-  | 'templates'
 
 export type SettingsNavItem =
   | { kind: 'tab'; tab: SettingsTab; label: string; description: string; adminOnly?: boolean }
@@ -101,13 +100,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
   {
     label: 'Documents',
     items: [
-      {
-        kind: 'tab',
-        tab: 'templates',
-        label: 'Templates',
-        description: 'Email, e-signature, and clause library templates.',
-        adminOnly: true,
-      },
       { kind: 'route', href: '/admin/settings/style-sets', label: 'Style sets' },
       { kind: 'route', href: '/admin/settings/estate-tax', label: 'Estate tax' },
     ],
@@ -146,8 +138,8 @@ export function settingsTabItem(tab: SettingsTab) {
 }
 
 /**
- * Resolves `?tab=` to a tab the user may open. Unknown values, and Templates for
- * non-administrators, land on the default tab rather than a blank page.
+ * Resolves `?tab=` to a tab the user may open. Unknown values, and admin-only
+ * tabs for everyone else, land on the default tab rather than a blank page.
  */
 export function resolveSettingsTab(raw: string | null | undefined, isAdministrator: boolean): SettingsTab {
   const item = raw ? settingsTabItem(raw as SettingsTab) : null

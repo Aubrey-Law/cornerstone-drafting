@@ -283,7 +283,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
   }
 
   return (
-    <div className="mt-8 border-t border-border pt-6">
+    <div>
       <div className="mb-6 space-y-3 rounded-md border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
