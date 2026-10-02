@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey } from '@/lib/firmDate'
-import { applySlaAnchor } from '@/lib/slaTasks/generate'
+import { applySlaAnchor, applySlaGates } from '@/lib/slaTasks/generate'
 import { syncEngagementSignedDetails } from '@/lib/engagement/signedDate'
 import { isDateKey } from '@/lib/slaTasks/schedule'
 import type { SlaClockAnchor } from '@/lib/slaTasks/types'
@@ -127,6 +127,16 @@ export async function PATCH(req: Request, { params }: Params) {
         continue
       }
       rescheduled += result.updated
+    }
+
+    // The fit decision is a gate, not a date: opening it schedules the
+    // post-discovery sequence from the dates already set, and closing it takes
+    // those dates back off. Without this the choice was saved and nothing on
+    // the plan moved.
+    if (Object.prototype.hasOwnProperty.call(patch, 'fit_decision')) {
+      const result = await applySlaGates(admin, matterId)
+      if (result.ok) rescheduled += result.updated
+      else console.warn('[sla-anchors] gate reschedule skipped', matterId, result.error)
     }
 
     const actorName = (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null

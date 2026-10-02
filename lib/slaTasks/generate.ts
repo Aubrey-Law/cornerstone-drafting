@@ -13,6 +13,7 @@ import {
   isDateKey,
   parseTemplateTasks,
   rescheduleForAnchor,
+  rescheduleForGates,
   templateSwapVerdict,
   type PlanTaskDraft,
 } from './schedule'
@@ -478,8 +479,51 @@ export async function applySlaAnchor(
     return { ok: false, updated: 0, error: e instanceof Error ? e.message : 'Task lookup failed' }
   }
 
+  // The gate decides whether a gated task may be dated at all; see
+  // rescheduleForAnchor. A failed read leaves the previous behaviour.
+  const { data: matter } = await admin
+    .from('matters')
+    .select(MATTER_ANCHOR_COLUMNS)
+    .eq('id', matterId)
+    .maybeSingle()
+  const gatesMet = matter ? gatesFromMatter(matter as MatterAnchorRow) : undefined
+
   const adopted = new Map(plan.map(task => [task.id, task.stage_entered_at !== null]))
-  const updates = rescheduleForAnchor(plan, anchor, anchorDate)
+  const updates = rescheduleForAnchor(plan, anchor, anchorDate, gatesMet)
+  for (const update of updates) {
+    const { error: updateError } = await admin
+      .from('tasks')
+      .update(planDateColumns(update, { adopted: adopted.get(update.id) === true }))
+      .eq('id', update.id)
+    if (updateError) return { ok: false, updated: 0, error: updateError.message }
+  }
+  return { ok: true, updated: updates.length }
+}
+
+/**
+ * Re-date a matter's gated plan tasks after its fit decision changes. The
+ * anchors are read back from the matter, so this is idempotent and safe to
+ * call whether or not the decision actually moved.
+ */
+export async function applySlaGates(admin: SupabaseClient, matterId: string): Promise<ApplyAnchorResult> {
+  const { data: matter, error: matterError } = await admin
+    .from('matters')
+    .select(MATTER_ANCHOR_COLUMNS)
+    .eq('id', matterId)
+    .maybeSingle()
+  if (matterError) return { ok: false, updated: 0, error: matterError.message }
+  if (!matter) return { ok: false, updated: 0, error: 'Matter not found' }
+
+  let plan: PlanTask[]
+  try {
+    plan = await fetchPlanTasks(admin, matterId)
+  } catch (e) {
+    return { ok: false, updated: 0, error: e instanceof Error ? e.message : 'Task lookup failed' }
+  }
+
+  const row = matter as MatterAnchorRow
+  const adopted = new Map(plan.map(task => [task.id, task.stage_entered_at !== null]))
+  const updates = rescheduleForGates(plan, anchorsFromMatter(row), gatesFromMatter(row))
   for (const update of updates) {
     const { error: updateError } = await admin
       .from('tasks')

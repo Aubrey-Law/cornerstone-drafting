@@ -101,12 +101,20 @@ export async function fireEngineStageTask(
   const engineStage = mapMatterStageToEngine(args.matterStage)
   if (!engineStage || !firesAttorneyTask(engineStage)) return
 
-  const { data: matter } = await admin
+  // `matters` has no client_name column. Asking for one failed this read on
+  // every call, and the early return below swallowed it: the engine never
+  // fired a single stage task (production had none). The client's name is on
+  // the pipeline view; the matter's own name is the fallback.
+  const { data: matter, error: matterError } = await admin
     .from('matters')
-    .select('stage_entered_at, client_name, revision_round')
+    .select('stage_entered_at, name, revision_round')
     .eq('id', args.matterId)
     .maybeSingle()
 
+  if (matterError) {
+    console.error('fireEngineStageTask (matter read):', matterError.message)
+    return
+  }
   if (!matter?.stage_entered_at) return
 
   const template = findStageTaskTemplate(engineStage)
@@ -116,7 +124,15 @@ export async function fireEngineStageTask(
   // A template can gate itself: trust funding has nothing to do on a will plan.
   if (!gatePasses(template.gate, context)) return
 
-  const clientName = args.clientName ?? matter.client_name ?? 'Client'
+  let clientName = args.clientName ?? null
+  if (!clientName) {
+    const { data: pipeline } = await admin
+      .from('v_matter_pipeline')
+      .select('client_name')
+      .eq('matter_id', args.matterId)
+      .maybeSingle()
+    clientName = (pipeline?.client_name as string | null) || (matter.name as string | null) || 'Client'
+  }
   const reviewRound = String(args.revisionRound ?? matter.revision_round ?? 1)
   const title = template.task.title
     .replace('{client_name}', clientName)

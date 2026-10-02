@@ -53,12 +53,24 @@ export async function GET(
 
     // The dates the plan hangs off. Returned alongside the tasks because the
     // tab needs both to explain why something is still unscheduled.
-    const { data: matter } = await admin
+    // `matters` has no client_name column. Asking for one failed the whole
+    // read, and the error was dropped: every reload of the plan showed blank
+    // key dates and "Not decided" for a fit decision that had saved, so the
+    // select snapped back the moment the save toast appeared.
+    const { data: matter, error: matterError } = await admin
       .from('matters')
       // One string literal, not a concatenation: PostgREST infers the row type
       // from the literal, and splitting it collapses the result to GenericStringError.
-      .select('id, name, client_name, discovery_call_at, pmps_at, recommendations_sent_at, engagement_signed_at, fit_decision')
+      .select('id, name, discovery_call_at, pmps_at, recommendations_sent_at, engagement_signed_at, fit_decision')
       .eq('id', matterId)
+      .maybeSingle()
+    if (matterError) throw new Error(matterError.message)
+    // The client's name lives on the pipeline view (hired matters only); a
+    // lead's plan falls back to the matter's own name.
+    const { data: pipeline } = await admin
+      .from('v_matter_pipeline')
+      .select('client_name')
+      .eq('matter_id', matterId)
       .maybeSingle()
 
     return NextResponse.json({
@@ -71,7 +83,7 @@ export async function GET(
       matter: {
         id: matterId,
         name:
-          ((matter?.client_name as string | null) || '').trim() ||
+          ((pipeline?.client_name as string | null) || '').trim() ||
           ((matter?.name as string | null) || '').trim() ||
           null,
       },

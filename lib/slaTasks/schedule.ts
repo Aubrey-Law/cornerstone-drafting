@@ -335,7 +335,7 @@ export interface RescheduledTaskDates {
  * re-running after the anchor moves again is idempotent.
  */
 export function rescheduleForAnchor(
-  tasks: Pick<
+  tasks: (Pick<
     PlanScheduleFields,
     | 'id'
     | 'status'
@@ -346,15 +346,69 @@ export function rescheduleForAnchor(
     | 'due_date'
     | 'nudge_date'
     | 'escalation_date'
-  >[],
+  > & { gate?: SlaGate | null })[],
   anchor: SlaClockAnchor,
   anchorDate: string,
+  /**
+   * The gates the matter has opened. When given, a task behind a closed gate
+   * is left undated: setting the discovery-call date must not schedule the
+   * post-discovery sequence before anyone has decided the lead is a fit.
+   * Omitted, every task on the anchor is dated (the previous behaviour).
+   */
+  gatesMet?: readonly SlaGate[],
 ): RescheduledTaskDates[] {
   if (!isDateKey(anchorDate)) return []
   // Day-0 tasks are stored with a null `relative_to`; the other two name theirs.
   const relativeTo = anchor === 'engagement' ? null : anchor
   return tasks.flatMap(task => {
     if (task.relative_to !== relativeTo || !isTaskOpen(task)) return []
+    if (gatesMet && task.gate && !gatesMet.includes(task.gate)) return []
+    const next: RescheduledTaskDates = {
+      id: task.id,
+      due_date: offsetDate(anchorDate, task.due_offset_days),
+      nudge_date: offsetDate(anchorDate, task.nudge_offset_days),
+      escalation_date: offsetDate(anchorDate, task.escalation_offset_days),
+    }
+    const unchanged =
+      next.due_date === task.due_date &&
+      next.nudge_date === task.nudge_date &&
+      next.escalation_date === task.escalation_date
+    return unchanged ? [] : [next]
+  })
+}
+
+/**
+ * Re-date every still-open gated task after the gate itself changes.
+ *
+ * Generation leaves a task behind a closed gate undated ("the firm owes no
+ * date for work that may never start"), but nothing used to revisit it: the
+ * attorney picked "Proceed — good fit" and the post-discovery sequence stayed
+ * undated for good. Opening a gate dates its tasks from whatever anchors the
+ * matter already has (still undated if that anchor is not set yet); closing it
+ * — back to undecided, or not a fit — takes the dates off again.
+ */
+export function rescheduleForGates(
+  tasks: (Pick<
+    PlanScheduleFields,
+    | 'id'
+    | 'status'
+    | 'relative_to'
+    | 'due_offset_days'
+    | 'nudge_offset_days'
+    | 'escalation_offset_days'
+    | 'due_date'
+    | 'nudge_date'
+    | 'escalation_date'
+  > & { gate?: SlaGate | null })[],
+  anchors: SlaAnchorDates,
+  gatesMet: readonly SlaGate[],
+): RescheduledTaskDates[] {
+  return tasks.flatMap(task => {
+    if (!task.gate || !isTaskOpen(task)) return []
+    const open = gatesMet.includes(task.gate)
+    const anchorDate = open
+      ? (task.relative_to === null ? anchors.engagement : anchors[task.relative_to as SlaAnchor]) ?? null
+      : null
     const next: RescheduledTaskDates = {
       id: task.id,
       due_date: offsetDate(anchorDate, task.due_offset_days),
