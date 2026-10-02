@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_REPLY_SLA_HOURS } from '@/lib/comms/thread'
+import { triageLabelName } from '@/lib/emailTriage/labels'
 import type {
   EmailTriageRow,
   TriageClassification,
@@ -214,7 +215,10 @@ export function EmailTriageClient({
     row: EmailTriageRow,
     path: string,
     init: RequestInit,
-    messages: { success: string; failure: string },
+    messages: {
+      success: string | ((body: Record<string, unknown>) => string)
+      failure: string
+    },
   ) => {
     setBusy(row.id)
     try {
@@ -222,14 +226,14 @@ export function EmailTriageClient({
         ...init,
         headers: authHeaders(),
       })
-      const body = await res.json().catch(() => ({})) as { error?: string }
+      const body = await res.json().catch(() => ({})) as Record<string, unknown> & { error?: string }
       if (!res.ok) {
         toast.error(body.error ?? messages.failure)
         await reload()
         return false
       }
       await reload()
-      toast.success(messages.success)
+      toast.success(typeof messages.success === 'function' ? messages.success(body) : messages.success)
       return true
     } finally {
       setBusy(null)
@@ -443,7 +447,14 @@ export function EmailTriageClient({
                     '/approve',
                     { method: 'POST', body: '{}' },
                     {
-                      success: 'Draft created on the original thread — review and send from Gmail',
+                      success: body => {
+                        const base = 'Draft created on the original thread — review and send from Gmail'
+                        if (typeof body.labelError === 'string') {
+                          toast.warning('The Gmail label could not be applied', { description: body.labelError })
+                          return base
+                        }
+                        return typeof body.label === 'string' ? `${base}. Labeled ${body.label}.` : base
+                      },
                       failure: 'Could not create the Gmail draft',
                     },
                   )}
@@ -456,6 +467,15 @@ export function EmailTriageClient({
       )}
     </AdminPageShell>
   )
+}
+
+/**
+ * The Gmail label an approved row's thread carries. A failed labelling leaves
+ * its notice in `draft_error`, so a row carrying one claims no label.
+ */
+function appliedLabel(row: EmailTriageRow): string | null {
+  if (row.status !== 'approved' || row.draft_error) return null
+  return triageLabelName(row.classification)
 }
 
 function ConnectionNotice({ children }: { children: React.ReactNode }) {
@@ -508,7 +528,11 @@ function QueueRow({
           {CLASSIFICATION_LABEL[row.classification]}
         </Badge>
         {row.status === 'drafted' && <Badge variant="outline">Draft ready</Badge>}
-        {row.status === 'approved' && <Badge variant="outline">In Gmail</Badge>}
+        {row.status === 'approved' && (
+          <Badge variant="outline">
+            In Gmail{appliedLabel(row) ? ` · ${appliedLabel(row)}` : ''}
+          </Badge>
+        )}
         {row.status === 'failed' && <Badge variant="destructive">Draft failed</Badge>}
         {row.human_draft_at && (
           // The age is the point, not decoration: it is the difference between
@@ -655,6 +679,7 @@ function DraftPane({
             Open the draft in Gmail
           </a>{' '}
           to review and send it.
+          {appliedLabel(row) && <> Labeled <span className="font-medium">{appliedLabel(row)}</span>.</>}
         </p>
       )}
     </div>
