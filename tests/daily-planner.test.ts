@@ -39,6 +39,51 @@ describe('daily planner', () => {
     expect(preview.overloadMinutes).toBe(48)
   })
 
+  it('reduces capacity and surfaces overload when appointments leave less time than critical work needs', () => {
+    const preview = createDailyPlanPreview({
+      items: [item('critical', 0, 120)],
+      preferences: DEFAULT_WORK_PREFERENCES,
+      now: NOW,
+      appointments: [{
+        id: 'calendar-busy:afternoon', matter_id: null, client_name: null,
+        next_appointment: '2026-09-30T13:00:00.000Z',
+        end_at: '2026-09-30T19:30:00.000Z',
+        next_appointment_type: 'Calendar commitment', href: '/admin/calendar', is_all_day: false,
+      }],
+    })
+
+    // Ninety minutes remain after the appointment; the 20% interruption
+    // buffer leaves 72 usable minutes, so the critical work cannot fit.
+    expect(preview.capacityMinutes).toBe(72)
+    expect(preview.overload).toBe(true)
+    expect(preview.overloadMinutes).toBe(48)
+  })
+
+  it('counts overlapping appointments once when calculating real availability', () => {
+    const preview = createDailyPlanPreview({
+      items: [item('critical', 0, 120)],
+      preferences: DEFAULT_WORK_PREFERENCES,
+      now: NOW,
+      appointments: [
+        {
+          id: 'calendar-busy:one', matter_id: null, client_name: null,
+          next_appointment: '2026-09-30T13:00:00.000Z', end_at: '2026-09-30T17:00:00.000Z',
+          next_appointment_type: 'Calendar commitment', href: '/admin/calendar', is_all_day: false,
+        },
+        {
+          id: 'calendar-busy:two', matter_id: null, client_name: null,
+          next_appointment: '2026-09-30T15:00:00.000Z', end_at: '2026-09-30T19:00:00.000Z',
+          next_appointment_type: 'Calendar commitment', href: '/admin/calendar', is_all_day: false,
+        },
+      ],
+    })
+
+    // The union is six hours, leaving two hours. The focus-capacity cap still
+    // applies before the buffer, so 120 calendar minutes becomes 96 usable.
+    expect(preview.capacityMinutes).toBe(96)
+    expect(preview.overloadMinutes).toBe(24)
+  })
+
   it('groups non-must-do replies into the communication batch', () => {
     const preview = createDailyPlanPreview({
       items: [item('must', 1), item('mail', 2, 10, 'email')],
