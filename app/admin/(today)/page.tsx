@@ -178,14 +178,20 @@ export default async function AdminTodayPage({
           eyebrow="Daily command center"
           title={dateLabel}
           description="One plan across client work, deadlines, communications, calendar, billing, and automation."
-          actions={legacyFallbackAvailable ? (
+          actions={<div className="flex items-center gap-3">
             <Link
+              href="/admin/weekly-review"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Weekly review
+            </Link>
+            {legacyFallbackAvailable ? <Link
               href="/admin?legacy=1"
               className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               View legacy Today
-            </Link>
-          ) : undefined}
+            </Link> : null}
+          </div>}
         />
         <CommandCenter
           initialPreview={preview}
