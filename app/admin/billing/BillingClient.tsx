@@ -374,29 +374,44 @@ export default function BillingClient({
     setChargeOpen(true)
   }
 
-  async function saveCharge(input: AddChargeInput) {
+  async function saveCharge(inputs: AddChargeInput[]) {
     const editing = editingCharge
+    const [first] = inputs
+    if (!first) return
     setChargeSaving(true)
     try {
       if (editing) {
         await send(`/api/admin/billing/items/${editing.id}`, 'PATCH', {
-          kind: input.kind,
-          label: input.label,
-          amountBilled: input.amountBilled,
-          plan: input.plan,
+          kind: first.kind,
+          label: first.label,
+          amountBilled: first.amountBilled,
+          plan: first.plan,
         })
+      } else if (inputs.length === 1) {
+        await request('/api/admin/billing/items', first)
       } else {
-        await request('/api/admin/billing/items', input)
+        // One request so the set saves together or not at all.
+        await request('/api/admin/billing/items/bulk-create', {
+          matterId: first.matterId,
+          charges: inputs.map(({ kind, label, amountBilled, plan }) => ({
+            kind, label, amountBilled, plan,
+          })),
+        })
       }
       setChargeOpen(false)
       setEditingCharge(null)
-      toast.success(editing ? `${input.label} updated` : `${input.label} added`)
+      toast.success(
+        editing ? `${first.label} updated`
+          : inputs.length === 1 ? `${first.label} added`
+            : `${inputs.length} charges added`,
+      )
       router.refresh()
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : editing ? 'Could not update charge' : 'Could not add charge',
+          : editing ? 'Could not update charge'
+            : inputs.length === 1 ? 'Could not add charge' : 'Could not add charges',
       )
     } finally {
       setChargeSaving(false)

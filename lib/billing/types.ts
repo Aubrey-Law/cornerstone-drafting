@@ -180,18 +180,39 @@ export const logBillingPaymentSchema = z.object({
 export const addableBillingKinds = ['flat_fee', 'plan_claim', 'cost'] as const
 export type AddableBillingKind = (typeof addableBillingKinds)[number]
 
+const chargeLineFields = {
+  kind: z.enum(addableBillingKinds),
+  label: z.string().trim().min(1).max(200),
+  amountBilled: z.number().int().positive(),
+  plan: z.enum(billingPlans).nullable().optional(),
+}
+
+const planMatchesKind = (value: { kind: AddableBillingKind; plan?: BillingPlan | null }) =>
+  (value.kind === 'plan_claim') === Boolean(value.plan)
+
+const planMatchesKindIssue = {
+  message: 'A plan claim requires a legal plan, and only a plan claim carries one',
+  path: ['plan'],
+}
+
 export const createBillingItemSchema = z
-  .object({
-    matterId: z.string().uuid(),
-    kind: z.enum(addableBillingKinds),
-    label: z.string().trim().min(1).max(200),
-    amountBilled: z.number().int().positive(),
-    plan: z.enum(billingPlans).nullable().optional(),
-  })
-  .refine(value => (value.kind === 'plan_claim') === Boolean(value.plan), {
-    message: 'A plan claim requires a legal plan, and only a plan claim carries one',
-    path: ['plan'],
-  })
+  .object({ matterId: z.string().uuid(), ...chargeLineFields })
+  .refine(planMatchesKind, planMatchesKindIssue)
+
+/** Most charges the Add charge dialog sends in one save; mirrors create_billing_items. */
+export const MAX_CHARGES_PER_BATCH = 25
+
+/**
+ * Several charges for one matter, saved together by create_billing_items so a
+ * bad line leaves none of the others behind.
+ */
+export const createBillingItemsSchema = z.object({
+  matterId: z.string().uuid(),
+  charges: z
+    .array(z.object(chargeLineFields).refine(planMatchesKind, planMatchesKindIssue))
+    .min(1)
+    .max(MAX_CHARGES_PER_BATCH),
+})
 
 /**
  * The editable face of a charge. Same fields the Add charge dialog collects,
