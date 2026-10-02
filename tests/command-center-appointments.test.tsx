@@ -67,4 +67,22 @@ describe('Command Center day agenda', () => {
     render(<DayAgenda appointments={[]} blocks={[]} items={[]} />)
     expect(screen.getByText(/No appointments or focus blocks/)).toBeTruthy()
   })
+
+  it('labels external calendar time as a commitment instead of missing preparation', () => {
+    render(<DayAgenda
+      appointments={[{
+        ...appointment,
+        id: 'calendar-busy:2026-10-02T13:00:00.000Z:2026-10-02T14:00:00.000Z',
+        matter_id: null,
+        client_name: null,
+        next_appointment_type: 'Calendar commitment',
+        href: '/admin/calendar',
+      }]}
+      blocks={[]}
+      items={[]}
+    />)
+
+    expect(screen.getByText('Calendar commitment')).toBeTruthy()
+    expect(screen.queryByText('No prep task')).toBeNull()
+  })
 })

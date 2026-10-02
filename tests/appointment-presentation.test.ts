@@ -60,4 +60,15 @@ describe('appointment presentation', () => {
     expect(getAppointmentPreparationStatus(appointment, [workItem({ state: 'blocked' })])).toEqual({ label: 'Prep blocked', tone: 'warning' })
     expect(getAppointmentPreparationStatus(appointment, [])).toEqual({ label: 'No prep task', tone: 'muted' })
   })
+
+  it('does not present an ordinary calendar commitment as missing preparation', () => {
+    expect(getAppointmentPreparationStatus({
+      ...appointment,
+      id: 'calendar-busy:2026-10-02T13:00:00.000Z:2026-10-02T14:00:00.000Z',
+      matter_id: null,
+      client_name: null,
+      next_appointment_type: 'Calendar commitment',
+      href: '/admin/calendar',
+    }, [])).toEqual({ label: 'Calendar commitment', tone: 'muted' })
+  })
 })
