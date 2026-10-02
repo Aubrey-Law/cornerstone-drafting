@@ -15,5 +15,18 @@ export function parentageFromIntakeParent(
 
   if (client && value === client) return 'client'
   if (spouse && value === spouse) return 'spouse'
+  // Contacts hydration and older payloads carry the stored literal.
+  if (value === 'client') return 'client'
+  if (value === 'spouse') return 'spouse'
   return null
+}
+
+/**
+ * Apply a Parent pill choice to a children-step entry. Clears any `parentage`
+ * hydrated from contacts so the save maps the new `parent` instead.
+ */
+export function withParentChoice<T extends Record<string, unknown>>(child: T, parent: string): T {
+  const next: Record<string, unknown> = { ...child, parent }
+  delete next.parentage
+  return next as T
 }
