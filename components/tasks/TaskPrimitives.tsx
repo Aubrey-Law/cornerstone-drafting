@@ -155,6 +155,9 @@ interface TaskRowProps {
    *  row the keyboard is pointing at — a selection can be many rows wide and
    *  outlives the cursor moving on. */
   selected?: boolean
+  /** When given, the row leads with a select box for bulk actions. Square and
+   *  set apart from the round complete checkbox so the two never read alike. */
+  onToggleSelected?: () => void
   pending?: boolean
   showRecord?: boolean
   onComplete: () => void
@@ -173,6 +176,7 @@ export function TaskListRow({
   workSummary,
   focused = false,
   selected = false,
+  onToggleSelected,
   pending = false,
   showRecord = true,
   onComplete,
@@ -212,6 +216,15 @@ export function TaskListRow({
           `role="status"`; this is the per-row half of it.
         */}
         {selected && <span className="sr-only">Selected. </span>}
+        {onToggleSelected && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label={`Select ${task.title}`}
+            className="size-3.5 shrink-0 cursor-pointer rounded-sm accent-primary"
+          />
+        )}
         <TaskCheckbox checked={done} disabled={pending} label={task.title} onToggle={onComplete} />
         <TaskPriorityDot priority={task.priority} />
         <span className="flex min-w-0 flex-1 flex-col">

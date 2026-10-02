@@ -279,3 +279,64 @@ describe('getting out', () => {
     await waitFor(() => expect(screen.queryByText(/selected$/)).toBeNull())
   })
 })
+
+describe('selecting by mouse', () => {
+  it('puts a select box on each row that holds the row without completing it', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: `Select ${TASKS[0].title}` }))
+
+    expect(await screen.findByText('1 selected')).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('offers to hold every row on screen', async () => {
+    renderPage()
+    selectFirst()
+    await screen.findByText('1 selected')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all 3' }))
+
+    expect(await screen.findByText('3 selected')).toBeTruthy()
+  })
+})
+
+describe('snoozing the selection', () => {
+  it('sends every held id and the push in one request', async () => {
+    renderPage()
+    selectFirst()
+    press('j')
+    press(' ')
+    press('s')
+
+    fireEvent.click(await screen.findByText('3 days'))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/admin/tasks/bulk'))
+      expect(call![1].method).toBe('PATCH')
+      expect(JSON.parse(call![1].body)).toEqual({ ids: [TASKS[0].id, TASKS[1].id], snooze_days: 3 })
+    })
+    await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull())
+  })
+})
+
+describe('deleting the selection', () => {
+  it('asks before deleting, then sends every held id in one request', async () => {
+    renderPage()
+    selectFirst()
+    await screen.findByText('1 selected')
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ deleted: [TASKS[0].id], missing: [], protected: [] }) })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete task' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/admin/tasks/bulk'))
+      expect(call![1].method).toBe('DELETE')
+      expect(JSON.parse(call![1].body)).toEqual({ ids: [TASKS[0].id] })
+    })
+    await waitFor(() => expect(screen.queryByText(TASKS[0].title)).toBeNull())
+  })
+})

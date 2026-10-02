@@ -10,6 +10,7 @@ import {
   ListTodo,
   PauseCircle,
   Plus,
+  Trash2,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   TASK_SOURCES,
   TASK_SOURCE_LABEL,
@@ -79,6 +90,8 @@ const TODAY_LABEL = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
   timeZone: FIRM_TIMEZONE,
 })
+
+type BulkAction = 'assign' | 'snooze' | 'delete'
 
 const SNOOZE_OPTIONS = [
   { label: 'Tomorrow', days: 1 },
@@ -200,7 +213,9 @@ export function TasksClient({
   const [focusId, setFocusId] = useState<string | null>(() => searchParams?.get('focus') ?? null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
   const [assignMenuOpen, setAssignMenuOpen] = useState(false)
-  const [assigning, setAssigning] = useState(false)
+  const [bulkSnoozeOpen, setBulkSnoozeOpen] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState<BulkAction | null>(null)
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [templateList, setTemplateList] = useState(templates)
@@ -267,7 +282,7 @@ export function TasksClient({
       const ids = [...selectedIds]
       if (ids.length === 0) return
       setAssignMenuOpen(false)
-      setAssigning(true)
+      setBulkBusy('assign')
       try {
         const updated = await actions.assignMany(ids, assigneeId, assigneeName)
         // Only on success: a failed call leaves the selection intact so the
@@ -278,11 +293,50 @@ export function TasksClient({
           clearSelection()
         }
       } finally {
-        setAssigning(false)
+        setBulkBusy(null)
       }
     },
     [actions, applyUpdate, clearSelection, selectedIds, router],
   )
+
+  const snoozeSelection = useCallback(
+    async (days: number, label: string) => {
+      const ids = [...selectedIds]
+      if (ids.length === 0) return
+      setBulkSnoozeOpen(false)
+      setBulkBusy('snooze')
+      try {
+        const updated = await actions.snoozeMany(ids, days, label)
+        if (updated) {
+          updated.forEach(applyUpdate)
+          router.refresh()
+          clearSelection()
+        }
+      } finally {
+        setBulkBusy(null)
+      }
+    },
+    [actions, applyUpdate, clearSelection, selectedIds, router],
+  )
+
+  const deleteSelection = useCallback(async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    setConfirmDeleteOpen(false)
+    setBulkBusy('delete')
+    try {
+      const deleted = await actions.removeMany(ids)
+      if (deleted) {
+        const gone = new Set(deleted)
+        setOpenTasks(prev => prev.filter(task => !gone.has(task.id)))
+        setDoneToday(prev => prev.filter(task => !gone.has(task.id)))
+        router.refresh()
+        clearSelection()
+      }
+    } finally {
+      setBulkBusy(null)
+    }
+  }, [actions, clearSelection, selectedIds, router])
 
   const toggleSubtask = useCallback(
     async (task: TaskRow, index: number, done: boolean) => {
@@ -433,7 +487,10 @@ export function TasksClient({
           }
           break
         case 's': case 'S':
-          if (focused) { event.preventDefault(); setSnoozeMenuId(focused.id) }
+          // Like `a`: a held selection is what the key acts on, otherwise the
+          // focused row.
+          if (selectedIds.size > 0) { event.preventDefault(); setBulkSnoozeOpen(true) }
+          else if (focused) { event.preventDefault(); setSnoozeMenuId(focused.id) }
           break
         case ' ':
           // Selection is deliberately separate from `x`: `x` finishes a task,
@@ -490,6 +547,7 @@ export function TasksClient({
       workSummary={workSummaries[task.id]}
       focused={focusId === task.id}
       selected={selectedIds.has(task.id)}
+      onToggleSelected={() => toggleSelected(task.id)}
       pending={actions.isPending(task.id)}
       onComplete={() => void toggleTask(task)}
       onToggleSubtask={(index, done) => void toggleSubtask(task, index, done)}
@@ -677,6 +735,9 @@ export function TasksClient({
             <span aria-hidden>·</span>
             <kbd className="rounded border border-border bg-muted px-1">A</kbd>
             assign
+            <span aria-hidden>·</span>
+            <kbd className="rounded border border-border bg-muted px-1">S</kbd>
+            snooze
           </span>
         </div>
       </div>
@@ -761,13 +822,42 @@ export function TasksClient({
           count={selectedIds.size}
           assignees={assignees}
           viewerId={viewerId}
-          busy={assigning}
+          visibleCount={focusOrder.length}
+          busy={bulkBusy}
           menuOpen={assignMenuOpen}
           onMenuOpenChange={setAssignMenuOpen}
           onAssign={(id, name) => void assignSelection(id, name)}
+          snoozeMenuOpen={bulkSnoozeOpen}
+          onSnoozeMenuOpenChange={setBulkSnoozeOpen}
+          onSnooze={(days, label) => void snoozeSelection(days, label)}
+          onDelete={() => setConfirmDeleteOpen(true)}
+          onSelectAll={() => setSelectedIds(new Set(focusOrder.map(task => task.id)))}
           onClear={clearSelection}
         />
       )}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} task{selectedIds.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected tasks and their subtasks will be permanently removed. Stage tasks are
+              managed by the stage engine and will be kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void deleteSelection()}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Delete {selectedIds.size === 1 ? 'task' : 'tasks'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <TaskTemplateSheet
         open={templatesOpen}
@@ -810,19 +900,32 @@ function SelectionBar({
   count,
   assignees,
   viewerId,
+  visibleCount,
   busy,
   menuOpen,
   onMenuOpenChange,
   onAssign,
+  snoozeMenuOpen,
+  onSnoozeMenuOpenChange,
+  onSnooze,
+  onDelete,
+  onSelectAll,
   onClear,
 }: {
   count: number
   assignees: Assignee[]
   viewerId: string | null
-  busy: boolean
+  /** Rows on screen right now — what "Select all" would hold. */
+  visibleCount: number
+  busy: BulkAction | null
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
   onAssign: (assigneeId: string | null, assigneeName: string) => void
+  snoozeMenuOpen: boolean
+  onSnoozeMenuOpenChange: (open: boolean) => void
+  onSnooze: (days: number, label: string) => void
+  onDelete: () => void
+  onSelectAll: () => void
   onClear: () => void
 }) {
   const me = assignees.find(person => person.id === viewerId)
@@ -832,15 +935,26 @@ function SelectionBar({
     <div className="sticky bottom-4 z-20 flex justify-center">
       <div
         role="status"
-        className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg"
+        className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-2 shadow-lg"
       >
         <span className="text-sm font-medium">
           {count} selected
         </span>
+        {count < visibleCount && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onSelectAll}
+          >
+            Select all {visibleCount}
+          </Button>
+        )}
         <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm" className="h-7 text-xs" disabled={busy}>
-              {busy ? 'Assigning…' : 'Assign'}
+            <Button type="button" size="sm" className="h-7 text-xs" disabled={busy !== null}>
+              {busy === 'assign' ? 'Assigning…' : 'Assign'}
               <ChevronDown className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -861,6 +975,34 @@ function SelectionBar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <DropdownMenu open={snoozeMenuOpen} onOpenChange={onSnoozeMenuOpenChange}>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null}>
+              <PauseCircle className="size-3.5" aria-hidden />
+              {busy === 'snooze' ? 'Snoozing…' : 'Snooze'}
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" className="w-44">
+            <DropdownMenuLabel className="text-xs">Push {count} due date{count === 1 ? '' : 's'}</DropdownMenuLabel>
+            {SNOOZE_OPTIONS.map(option => (
+              <DropdownMenuItem key={option.label} onSelect={() => onSnooze(option.days, option.label)}>
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs text-destructive hover:text-destructive"
+          disabled={busy !== null}
+          onClick={onDelete}
+        >
+          <Trash2 className="size-3.5" aria-hidden />
+          {busy === 'delete' ? 'Deleting…' : 'Delete'}
+        </Button>
         <Button
           type="button"
           variant="ghost"
