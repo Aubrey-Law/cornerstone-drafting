@@ -200,16 +200,17 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
                 <TableHead className="w-10">#</TableHead>
                 <TableHead>Column</TableHead>
                 <TableHead>Prompt</TableHead>
-                <TableHead className="w-28">Format</TableHead>
+                <TableHead className="w-20">Format</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {columns.map(column => (
                 <TableRow key={column.index}>
-                  <TableCell className="text-muted-foreground">{column.index}</TableCell>
-                  <TableCell className="font-medium">{column.name}</TableCell>
-                  <TableCell className="max-w-md text-xs text-muted-foreground">{column.prompt}</TableCell>
-                  <TableCell className="text-xs">{column.format ?? 'text'}</TableCell>
+                  {/* Table cells default to nowrap; the name and prompt are prose and must wrap. */}
+                  <TableCell className="align-top text-muted-foreground">{column.index}</TableCell>
+                  <TableCell className="whitespace-normal align-top font-medium">{column.name}</TableCell>
+                  <TableCell className="min-w-32 whitespace-normal break-words align-top text-xs leading-5 text-muted-foreground">{column.prompt}</TableCell>
+                  <TableCell className="whitespace-normal align-top text-xs">{(column.format ?? 'text').replaceAll('_', ' ')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
