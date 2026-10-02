@@ -166,7 +166,25 @@ export function overlayRequestContactIntakeData(
   return out
 }
 
-function childContactToIntakeEntry(contact: ContactRow): Record<string, unknown> {
+/**
+ * The children step's Parent pills use 'both' and the client's / spouse's
+ * first names, so hydrate the stored parentage into that same vocabulary.
+ */
+function parentPillValue(
+  parentage: ContactRow['parentage'],
+  clientFirstName: string,
+  spouseFirstName: string,
+): string {
+  if (parentage === 'client') return clientFirstName
+  if (parentage === 'spouse') return spouseFirstName || 'spouse'
+  return 'both'
+}
+
+function childContactToIntakeEntry(
+  contact: ContactRow,
+  clientFirstName: string,
+  spouseFirstName: string,
+): Record<string, unknown> {
   return {
     id: String(contact.id ?? ''),
     contact_id: String(contact.id ?? ''),
@@ -179,7 +197,7 @@ function childContactToIntakeEntry(contact: ContactRow): Record<string, unknown>
     email: contact.email ?? '',
     phone: phone(contact.phone),
     same_address: false,
-    parent: contact.parentage === 'joint' ? 'both' : contact.parentage ?? 'both',
+    parent: parentPillValue(contact.parentage, clientFirstName, spouseFirstName),
     relationship: contact.child_relationship ?? 'biological',
     parentage: contact.parentage ?? null,
     is_minor: contact.is_minor,
@@ -263,9 +281,12 @@ export function applyContactIntakeData(
     }
   }
 
+  // Matches the fallback label StepChildren renders for an unnamed client.
+  const clientFirstName = text(intake.first_name) || 'Client'
+  const spouseFirstName = text(spouse?.first_name)
   const children = contacts
     .filter((contact) => contact.relationship_type === 'child')
-    .map(childContactToIntakeEntry)
+    .map((contact) => childContactToIntakeEntry(contact, clientFirstName, spouseFirstName))
   if (children.length > 0) out._children = children
 
   const fiduciaryMap: Record<string, Array<Record<string, unknown>>> = {}
