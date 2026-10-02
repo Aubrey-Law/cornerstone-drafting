@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useMemo, useState, useSyncExternalStore } fr
 const DAY_MS = 86_400_000
 /** Mirrors MAX_RANGE_DAYS in /api/scheduling/availability. */
 const MAX_RANGE_DAYS = 31
-/** How many months past the current one the client may page to. */
+/** Hard cap on paging ahead, before the firm's booking horizon is known. */
 const MAX_MONTHS_AHEAD = 6
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -14,6 +14,8 @@ interface AvailabilityResponse {
   paused?: boolean
   timezone?: string
   durationMinutes?: number
+  /** How far ahead the firm takes bookings (Settings → Scheduling). */
+  horizonDays?: number
   error?: string
 }
 
@@ -122,12 +124,21 @@ export default function SlotPicker({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [horizonDays, setHorizonDays] = useState<number | null>(null)
+  // Until the client navigates or picks, skip forward past empty months (e.g.
+  // late in a month with nothing left) so the first screen shows openings.
+  const [autoAdvance, setAutoAdvance] = useState(true)
 
   const tz = useBrowserTimeZone()
   const todayKey = dayKey(new Date())
   const currentMonth = startOfMonth(new Date())
   const canGoBack = month.getTime() > currentMonth.getTime()
-  const canGoNext = month.getTime() < addMonths(currentMonth, MAX_MONTHS_AHEAD).getTime()
+  // Next is offered only while the next month starts inside the booking
+  // horizon; past it the server returns nothing, so paging there is a dead end.
+  const lastBookable = horizonDays !== null ? Date.now() + horizonDays * DAY_MS : null
+  const canGoNext =
+    month.getTime() < addMonths(currentMonth, MAX_MONTHS_AHEAD).getTime() &&
+    (lastBookable === null || addMonths(month, 1).getTime() <= lastBookable)
 
   useEffect(() => {
     let ignore = false
@@ -147,6 +158,9 @@ export default function SlotPicker({
         const res = await fetch(`/api/scheduling/availability?${params.toString()}`)
         const json = (await res.json().catch(() => ({}))) as AvailabilityResponse
         if (ignore) return
+        if (typeof json.horizonDays === 'number' && Number.isFinite(json.horizonDays)) {
+          setHorizonDays(json.horizonDays)
+        }
         if (!res.ok) {
           setSlots([])
           setError(json.error ?? 'Could not load availability')
@@ -194,16 +208,32 @@ export default function SlotPicker({
     if (selected && (!first || !slotsByDay.get(first)?.includes(selected))) onSelect(null)
   }, [loading, slotsByDay, selectedDay, selected, onSelect])
 
+  useEffect(() => {
+    if (!autoAdvance || loading || error) return
+    if (slots.length > 0 || !canGoNext) {
+      setAutoAdvance(false)
+      return
+    }
+    setMonth(m => addMonths(m, 1))
+    setSelectedDay(null)
+  }, [autoAdvance, loading, error, slots.length, canGoNext])
+
   function pickDay(key: string) {
+    setAutoAdvance(false)
     if (key === selectedDay) return
     setSelectedDay(key)
     onSelect(null)
   }
 
   function goMonth(delta: number) {
+    setAutoAdvance(false)
     setMonth(m => addMonths(m, delta))
     setSelectedDay(null)
   }
+
+  // Still loading, or about to skip an empty month: show the skeleton, not
+  // a flash of "No open times".
+  const pending = loading || (autoAdvance && !error && slots.length === 0 && canGoNext)
 
   const weeks = useMemo(() => {
     const cells: (Date | null)[] = Array.from({ length: month.getDay() }, () => null)
@@ -235,7 +265,7 @@ export default function SlotPicker({
               type="button"
               className={navButton}
               aria-label="Previous month"
-              disabled={!canGoBack || loading}
+              disabled={!canGoBack || pending}
               onClick={() => goMonth(-1)}
             >
               ‹
@@ -244,7 +274,7 @@ export default function SlotPicker({
               type="button"
               className={navButton}
               aria-label="Next month"
-              disabled={!canGoNext || loading}
+              disabled={!canGoNext || pending}
               onClick={() => goMonth(1)}
             >
               ›
@@ -272,8 +302,8 @@ export default function SlotPicker({
                   if (!date) return <div role="gridcell" key={di} />
                   const key = dayKey(date)
                   const count = slotsByDay.get(key)?.length ?? 0
-                  const available = count > 0 && !loading
-                  const isSelected = key === selectedDay && !loading
+                  const available = count > 0 && !pending
+                  const isSelected = key === selectedDay && !pending
                   const isToday = key === todayKey
                   return (
                     <div role="gridcell" key={di} className="flex justify-center">
@@ -284,7 +314,7 @@ export default function SlotPicker({
                         aria-label={`${fmtLongDay(date)}, ${count > 0 ? plural(count, 'open time') : 'no open times'}`}
                         onClick={() => pickDay(key)}
                         className={`relative grid size-11 place-items-center rounded-full text-base transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 @2xl/picker:size-12 ${
-                          loading
+                          pending
                             ? 'animate-pulse bg-muted text-transparent'
                             : isSelected
                               ? 'bg-brand-teal font-semibold text-white'
@@ -294,7 +324,7 @@ export default function SlotPicker({
                         }`}
                       >
                         {date.getDate()}
-                        {isToday && !loading && (
+                        {isToday && !pending && (
                           <span
                             aria-hidden
                             className={`absolute bottom-1.5 left-1/2 size-1 -translate-x-1/2 rounded-full ${
@@ -327,7 +357,7 @@ export default function SlotPicker({
   )
 
   let timesBody: ReactNode
-  if (loading) {
+  if (pending) {
     timesBody = (
       <div className="grid grid-cols-2 gap-2 @2xl/picker:grid-cols-1">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -339,6 +369,11 @@ export default function SlotPicker({
     timesBody = (
       <div className="py-6 text-center text-base text-muted-foreground @2xl/picker:my-auto">
         <p>No open times this month.</p>
+        {!canGoNext && horizonDays !== null && (
+          <p className="mt-1 text-sm">
+            We take online bookings up to {horizonDays} days ahead. Please call us for a later date.
+          </p>
+        )}
         {canGoNext && (
           <button
             type="button"
