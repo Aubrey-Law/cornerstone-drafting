@@ -46,11 +46,18 @@ export interface GmailSendArgs {
    */
   inReplyTo?: string
   references?: string[]
+  /**
+   * The Gmail thread to send into. Gmail files the message there only when the
+   * reply headers and subject agree with it too, so set all three or none.
+   */
+  threadId?: string
 }
 
 export interface GmailSendResult {
   fromAddress: string | null
   messageId: string | null
+  /** The thread Gmail actually filed the message under. */
+  threadId?: string | null
 }
 
 function base64url(value: Buffer | string): string {
@@ -227,7 +234,10 @@ export async function sendViaGmail(args: GmailSendArgs): Promise<GmailSendResult
     r = await fetch(GMAIL_SEND_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw: base64url(raw) }),
+      body: JSON.stringify({
+        raw: base64url(raw),
+        ...(args.threadId ? { threadId: args.threadId } : {}),
+      }),
       signal: AbortSignal.timeout(GMAIL_TIMEOUT_MS),
     })
   } catch (err) {
@@ -239,6 +249,7 @@ export async function sendViaGmail(args: GmailSendArgs): Promise<GmailSendResult
 
   const json = (await r.json().catch(() => ({}))) as {
     id?: string
+    threadId?: string
     error?: { message?: string; status?: string }
   }
   if (!r.ok) {
@@ -248,5 +259,5 @@ export async function sendViaGmail(args: GmailSendArgs): Promise<GmailSendResult
     throw new GmailSendError('gmail_error', detail)
   }
 
-  return { fromAddress: conn.email, messageId: json.id ?? null }
+  return { fromAddress: conn.email, messageId: json.id ?? null, threadId: json.threadId ?? null }
 }
