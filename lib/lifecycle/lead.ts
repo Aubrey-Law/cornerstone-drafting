@@ -2,8 +2,7 @@ import { leadFieldApplies, leadFieldDefinition } from '@/lib/leads/fieldDefiniti
 import type { NextAction } from '@/lib/leads/nextAction'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 import {
-  LEAD_ENGAGEMENT_REQUIREMENTS,
-  LEAD_WORKFLOW_REQUIREMENTS,
+  ALL_LEAD_REQUIREMENTS,
   LIFECYCLE_REGISTRY_VERSION,
   requirementAppliesToPracticeArea,
   type EvaluatedRequirement,
@@ -68,12 +67,13 @@ export function evaluateLeadRequirements(
 ): EvaluatedRequirement[] {
   const context = { lead, spouse }
   return [
-    ...LEAD_ENGAGEMENT_REQUIREMENTS
+    ...ALL_LEAD_REQUIREMENTS
       .filter(requirement => requirementAppliesToPracticeArea(requirement, lead.practice_area))
-      .map(requirement => evaluateFieldRequirement(requirement, context)),
-    ...LEAD_WORKFLOW_REQUIREMENTS
-      .filter(requirement => requirementAppliesToPracticeArea(requirement, lead.practice_area))
-      .map(requirement => evaluateWorkflowRequirement(requirement, context)),
+      .map(requirement => (
+        leadFieldDefinition(requirement.source.field as never)
+          ? evaluateFieldRequirement(requirement, context)
+          : evaluateWorkflowRequirement(requirement, context)
+      )),
   ].filter((requirement): requirement is EvaluatedRequirement => requirement !== null)
 }
 
@@ -101,7 +101,10 @@ export function leadOperationalBrief(context: LeadLifecycleContext) {
     || ['submitted', 'approved', 'completed'].includes(String(context.lead.status ?? context.lead.intake_status ?? '').toLowerCase())
   const draftFactsNeedConfirmation = !intakeSubmitted
     && String(context.lead.status ?? context.lead.intake_status ?? '').toLowerCase() === 'draft'
-  const fieldRequirementKeys = new Set(LEAD_ENGAGEMENT_REQUIREMENTS.map(requirement => requirement.key))
+  const fieldRequirementKeys = new Set(
+    requirements.filter(requirement => leadFieldDefinition(requirement.source.field as never))
+      .map(requirement => requirement.key),
+  )
   const meetingPreparation = context.nextAppointmentAt
     ? [
         'Review the lead record and recent communications.',
