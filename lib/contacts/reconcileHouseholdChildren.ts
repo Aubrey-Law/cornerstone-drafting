@@ -16,6 +16,16 @@ export async function reconcileHouseholdChildren(
   intakeId: string,
   incoming: Array<Record<string, unknown>>,
 ): Promise<void> {
+  // "Add child" puts a blank row in the wizard before anything is typed, and
+  // leaving the section saves it. An unnamed row is unfinished input, not a
+  // child: drop it here so the writer's all-unnamed guard (which protects
+  // against shape mismatches) never fires on ordinary intake use. If nothing
+  // named remains, leave the stored children alone rather than wiping them.
+  const named = incoming.filter(
+    (c) => `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim().length > 0,
+  )
+  if (incoming.length > 0 && named.length === 0) return
+
   const household = await getHousehold(admin, intakeId)
   const existingByName = new Map(
     household.children.map((c) => [contactKey(c.first_name, c.last_name), c]),
@@ -31,7 +41,7 @@ export async function reconcileHouseholdChildren(
     spouseFirstName: household.spouse?.first_name ?? null,
   }
 
-  const inputs = incoming.map((c) => {
+  const inputs = named.map((c) => {
     const cid = typeof c.contact_id === 'string' ? c.contact_id : null
     const existing =
       (cid ? existingById.get(cid) : undefined) ??
