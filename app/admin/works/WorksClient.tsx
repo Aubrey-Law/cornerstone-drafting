@@ -360,8 +360,8 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
             <div className="mb-4 flex items-start gap-2">
               <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
-                The Word masters behind document generation. Upload a new version, validate it against a matter, then publish —
-                generation always uses the published (or bundled) master.
+                The Word masters behind document generation. An upload stays staged until you publish it; validating it
+                against a matter first is optional. Generation always uses the published (or bundled) master.
               </p>
             </div>
             <TemplateBuilderLauncher skills={skills} />

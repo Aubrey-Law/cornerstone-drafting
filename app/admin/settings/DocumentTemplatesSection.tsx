@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, FileCheck2, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Download, FileCheck2, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Badge } from '@/components/ui/badge'
@@ -289,51 +289,61 @@ export function DocumentTemplatesSection() {
           Apply pending Supabase migrations, including <code>20260713222004_cancel_document_template_uploads.sql</code>, to enable the complete staged-template workflow.
         </div>
       )}
-      {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(category => (
-        <section key={category} className="space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">{CATEGORY_LABELS[category]}</h3>
-            <p className="text-xs text-muted-foreground">Uploads remain staged until they are explicitly published. Validation and preview are available but optional.</p>
-          </div>
-          <div className="space-y-3">
-            {templates.filter(template => template.category === category).map(template => {
+      {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(category => {
+        const inCategory = templates.filter(template => template.category === category)
+        if (inCategory.length === 0) return null
+        return (
+        <section key={category} className="space-y-2">
+          <h3 className="text-sm font-semibold">
+            {CATEGORY_LABELS[category]}{' '}
+            <span className="font-normal text-muted-foreground">· {inCategory.length}</span>
+          </h3>
+          <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+            {inCategory.map(template => {
               const lastUpload = templateLastUpload(template)
+              const staged = template.versions.some(version => version.canCancel)
               return (
-              <details key={template.id} className="rounded-lg border border-border bg-card" open={template.versions.length > 0}>
-                <summary className="cursor-pointer list-none p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{template.label}</span>
-                        <Badge variant={template.activeSource === 'published' ? 'default' : 'outline'}>
-                          {template.activeSource === 'published' ? 'Published override' : 'Bundled'}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 font-mono text-micro text-muted-foreground">{template.bundledPath}</p>
-                      <p className="mt-1 text-micro text-muted-foreground">Used by: {template.packageNames.join(', ')}</p>
-                      <p className="mt-1 text-micro text-muted-foreground">
-                        Last uploaded:{' '}
-                        {lastUpload ? (
-                          <time dateTime={lastUpload.createdAt} title={lastUpload.createdAt}>
-                            {new Date(lastUpload.createdAt).toLocaleString()} (v{lastUpload.versionNumber})
-                          </time>
-                        ) : 'Never — bundled baseline only'}
-                      </p>
-                      {template.publishedAt && (
-                        <p className="mt-1 text-micro text-muted-foreground">
-                          Active version published{' '}
-                          <time dateTime={template.publishedAt} title={template.publishedAt}>
-                            {new Date(template.publishedAt).toLocaleString()}
-                          </time>{' '}
-                          by {template.publishedBy}
+              // Opens by itself only when an upload is waiting on a decision.
+              <details key={template.id} className="group" open={staged}>
+                <summary className="cursor-pointer list-none px-4 py-3 hover:bg-accent [&::-webkit-details-marker]:hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div className="flex min-w-0 flex-1 basis-60 items-start gap-2">
+                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium" title={template.bundledPath}>{template.label}</span>
+                          {template.activeSource === 'published' && <Badge>Published override</Badge>}
+                          {staged && <Badge variant="outline">Upload staged</Badge>}
+                        </div>
+                        {/* One line of facts that differ between templates; the bundled
+                            path lives in the tooltip and the expanded panel. */}
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {template.packageNames.length > 0 && <>Used by {template.packageNames.join(', ')}</>}
+                          {template.publishedAt ? (
+                            <>
+                              {' · '}Active version published{' '}
+                              <time dateTime={template.publishedAt} title={template.publishedAt}>
+                                {new Date(template.publishedAt).toLocaleDateString()}
+                              </time>
+                              {template.publishedBy ? ` by ${template.publishedBy}` : ''}
+                            </>
+                          ) : lastUpload ? (
+                            <>
+                              {' · '}Last uploaded:{' '}
+                              <time dateTime={lastUpload.createdAt} title={lastUpload.createdAt}>
+                                {new Date(lastUpload.createdAt).toLocaleDateString()}
+                              </time>{' '}
+                              (v{lastUpload.versionNumber})
+                            </>
+                          ) : null}
                         </p>
-                      )}
+                      </div>
                     </div>
-                    <div className="flex gap-2" onClick={event => event.stopPropagation()}>
-                      <Button size="sm" variant="outline" onClick={() => void download(template, template.activeVersionId ?? 'bundled')}>
-                        <Download className="h-4 w-4" /> Current
+                    <div className="flex gap-2 pl-6 sm:pl-0" onClick={event => event.stopPropagation()}>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => void download(template, template.activeVersionId ?? 'bundled')}>
+                        <Download className="h-4 w-4" /> Download
                       </Button>
-                      <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-accent">
+                      <Label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-xs font-medium hover:bg-accent">
                         <Upload className="h-4 w-4" /> Upload DOCX
                         <Input
                           type="file"
@@ -350,7 +360,11 @@ export function DocumentTemplatesSection() {
                     </div>
                   </div>
                 </summary>
-                <div className="space-y-3 border-t border-border p-4">
+                <div className="space-y-3 border-t border-border bg-background px-4 py-3 sm:pl-10">
+                  <p className="text-xs text-muted-foreground">
+                    {template.activeSource === 'published' ? 'Overrides the bundled master at ' : 'Bundled master: '}
+                    <code className="break-all font-mono">{template.bundledPath}</code>
+                  </p>
                   <MatterSearchPicker
                     id={`matter-${template.id}`}
                     label="Validation matter"
@@ -467,7 +481,8 @@ export function DocumentTemplatesSection() {
             })}
           </div>
         </section>
-      ))}
+        )
+      })}
     </div>
   )
 }
