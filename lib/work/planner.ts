@@ -50,6 +50,44 @@ function appointmentBusyIntervals(appointments: TodayAppointment[]): Array<{ sta
     .sort((a, b) => a.start - b.start)
 }
 
+function planningWindow(date: string, preferences: WorkPreferences, now: Date) {
+  const wall = parseDateKey(date)
+  const startTime = parseTime(preferences.workdayStart)
+  const endTime = parseTime(preferences.workdayEnd)
+  const configuredStart = zonedTimeToUtcMs({ ...wall, ...startTime }, FIRM_TIMEZONE)
+  const end = zonedTimeToUtcMs({ ...wall, ...endTime }, FIRM_TIMEZONE)
+  const start = date === firmTodayKey(now) ? Math.max(configuredStart, now.getTime()) : configuredStart
+  return { start, end }
+}
+
+function availableWorkMinutes(
+  date: string,
+  appointments: TodayAppointment[],
+  preferences: WorkPreferences,
+  now: Date,
+): number {
+  const window = planningWindow(date, preferences, now)
+  if (window.end <= window.start) return 0
+  const intervals = appointmentBusyIntervals(appointments)
+    .map(interval => ({ start: Math.max(interval.start, window.start), end: Math.min(interval.end, window.end) }))
+    .filter(interval => interval.end > interval.start)
+
+  // Calendar feeds can contain overlapping appointments. Count their union,
+  // not each event separately, so capacity never goes negative.
+  let busyMs = 0
+  let merged: { start: number; end: number } | null = null
+  for (const interval of intervals) {
+    if (!merged || interval.start > merged.end) {
+      if (merged) busyMs += merged.end - merged.start
+      merged = { ...interval }
+    } else {
+      merged.end = Math.max(merged.end, interval.end)
+    }
+  }
+  if (merged) busyMs += merged.end - merged.start
+  return Math.max(0, Math.floor((window.end - window.start - busyMs) / MINUTE_MS))
+}
+
 function scheduleBlocks(
   items: WorkItem[],
   date: string,
@@ -57,12 +95,9 @@ function scheduleBlocks(
   preferences: WorkPreferences,
   now: Date,
 ): SuggestedBlock[] {
-  const wall = parseDateKey(date)
-  const startTime = parseTime(preferences.workdayStart)
-  const endTime = parseTime(preferences.workdayEnd)
-  let cursor = zonedTimeToUtcMs({ ...wall, ...startTime }, FIRM_TIMEZONE)
-  const workdayEnd = zonedTimeToUtcMs({ ...wall, ...endTime }, FIRM_TIMEZONE)
-  if (date === firmTodayKey(now)) cursor = Math.max(cursor, now.getTime())
+  const window = planningWindow(date, preferences, now)
+  let cursor = window.start
+  const workdayEnd = window.end
   // Start on a five-minute boundary so a plan generated at 10:03 is usable.
   cursor = Math.ceil(cursor / (5 * MINUTE_MS)) * 5 * MINUTE_MS
   const busy = appointmentBusyIntervals(appointments)
@@ -114,8 +149,10 @@ export function createDailyPlanPreview(input: {
   const communication = open.filter(item => isCommunication(item) && !mustKeys.has(item.workKey))
   const communicationKeys = new Set(communication.map(item => item.workKey))
 
+  const calendarAvailableMinutes = availableWorkMinutes(date, appointments, input.preferences, now)
+  const capacityBeforeInterruptions = Math.min(input.preferences.focusCapacityMinutes, calendarAvailableMinutes)
   const capacityMinutes = Math.floor(
-    input.preferences.focusCapacityMinutes * (1 - input.preferences.interruptionBufferPercent / 100),
+    capacityBeforeInterruptions * (1 - input.preferences.interruptionBufferPercent / 100),
   )
   const mustMinutes = mustDo.reduce((sum, item) => sum + item.estimateMinutes, 0)
   const communicationMinutes = communication.length
