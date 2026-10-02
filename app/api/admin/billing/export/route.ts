@@ -16,10 +16,10 @@ export async function GET(req: Request) {
   if (end) end.setUTCMonth(end.getUTCMonth() + 1)
   const admin = getAdminClient()
   const [invoices, payments, adjustments, items] = await Promise.all([
-    admin.from('invoices').select('id, matter_id, number, kind, subtotal_cents, status, issue_date'),
+    admin.from('invoices').select('id, matter_id, number, kind, subtotal_cents, status, issue_date, payer'),
     admin.from('billing_payments').select('invoice_id, payment_group_id, amount, method, received_at, processor_fee_cents, external_reference'),
     admin.from('billing_adjustments').select('invoice_id, kind, amount_cents, balance_effect, status, provider, external_reference, created_at'),
-    admin.from('billing_items').select('matter_id, kind, label, amount_billed, status, plan, created_at'),
+    admin.from('billing_items').select('matter_id, kind, label, amount_billed, status, plan, invoice_id, created_at'),
   ])
   const errors = [invoices.error, payments.error, items.error].filter(Boolean)
   if (errors.length) return NextResponse.json({ error: errors[0]!.message }, { status: 500 })
@@ -31,7 +31,11 @@ export async function GET(req: Request) {
   ]]
   for (const invoice of invoices.data ?? []) {
     if (!inMonth(invoice.issue_date)) continue
-    rows.push(['invoice', invoice.issue_date, invoice.matter_id, invoice.number, invoice.kind,
+    // A carrier invoice is revenue billed to the plan, not to the client, and
+    // is labelled so the two never sum together by accident.
+    const carrier = invoice.payer && invoice.payer !== 'client'
+    rows.push([carrier ? 'legal_plan_invoice' : 'invoice', invoice.issue_date, invoice.matter_id,
+      invoice.number, carrier ? `${invoice.kind} · ${invoice.payer}` : invoice.kind,
       (invoice.subtotal_cents / 100).toFixed(2), '', '', '', invoice.status])
   }
   const groups = new Map<string, NonNullable<typeof payments.data>>()
@@ -58,7 +62,9 @@ export async function GET(req: Request) {
       adjustment.external_reference ?? '', adjustment.status])
   }
   for (const item of items.data ?? []) {
-    if (item.kind !== 'plan_claim' || !inMonth(item.created_at)) continue
+    // A claim on a carrier invoice is already counted by that invoice's row;
+    // listing it again would double the plan's billings.
+    if (item.kind !== 'plan_claim' || item.invoice_id || !inMonth(item.created_at)) continue
     rows.push(['legal_plan_claim', item.created_at, item.matter_id, '', item.label,
       (item.amount_billed / 100).toFixed(2), '', '', item.plan ?? '', item.status])
   }

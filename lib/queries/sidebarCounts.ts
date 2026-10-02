@@ -58,6 +58,7 @@ async function fetchOverdueInvoiceCount(): Promise<number> {
   const { data, error } = await admin
     .from('invoices')
     .select('id, subtotal_cents, kind')
+    .eq('payer', 'client')
     .in('status', ['issued', 'partial'])
     .not('due_date', 'is', null)
     .lt('due_date', firmTodayKey())

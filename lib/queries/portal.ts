@@ -231,6 +231,9 @@ export async function fetchPortalAccount(
     .from('invoices')
     .select('id, number, issue_date, due_date, subtotal_cents, payment_link, pdf_document_id, docx_document_id, status, kind')
     .eq('matter_id', matterId)
+    // Carrier invoices record what the plan was billed; the client owes none
+    // of it. invoices_client_select refuses them too.
+    .eq('payer', 'client')
     .not('issued_at', 'is', null)
     .neq('status', 'void')
     .order('issue_date', { ascending: false })

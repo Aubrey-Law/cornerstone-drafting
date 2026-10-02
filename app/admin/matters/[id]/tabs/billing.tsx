@@ -49,6 +49,7 @@ import {
   FeeTypeCard,
   LegalPlanClaimCard,
   MoneyInCard,
+  PlanClaimsCard,
   type SaveDetailField,
 } from './billing-cards'
 
@@ -561,6 +562,17 @@ export function MatterBillingTab({
   const claimsToSubmit = toInvoice.filter(row => row.kind === 'plan_claim')
   const billableCharges = rows.filter(row =>
     row.kind !== 'plan_claim' && !row.invoiceId && row.balance > 0)
+  // Claims not yet on any invoice, for a carrier invoice. Grouped by the first
+  // carrier present; a matter billing two carriers invoices them one at a time.
+  const invoiceableClaims = rows.filter(row =>
+    row.kind === 'plan_claim' && !row.invoiceId && row.balance > 0)
+  const claimPlan = invoiceableClaims[0]?.plan ?? null
+  const claimsInvoiceHref = claimPlan
+    ? `/admin/billing/invoices/new?matterId=${matterId}&items=${invoiceableClaims
+      .filter(row => row.plan === claimPlan)
+      .map(row => row.id)
+      .join(',')}`
+    : null
   const billMatterHref = `/admin/billing/invoices/new?matterId=${matterId}`
     + (billableCharges.length > 0 ? `&items=${billableCharges.map(row => row.id).join(',')}` : '')
 
@@ -628,6 +640,7 @@ export function MatterBillingTab({
               billed={rows.reduce((sum, row) => sum + row.amountBilled, 0)}
               collected={rows.reduce((sum, row) => sum + row.collected, 0)}
             />
+            <PlanClaimsCard rows={rows} invoiceHref={claimsInvoiceHref} />
             <CloseOutCard
               details={details}
               onSaveField={onSaveField}

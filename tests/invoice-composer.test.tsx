@@ -32,6 +32,7 @@ const charges: InvoiceableCharge[] = [
   {
     id: FEE_ID,
     kind: 'flat_fee',
+    plan: null,
     label: 'Flat fee — Joint trust package',
     amountBilled: 200_000,
     createdAt: '2026-06-01T16:00:00.000Z',
@@ -39,6 +40,7 @@ const charges: InvoiceableCharge[] = [
   {
     id: COST_ID,
     kind: 'cost',
+    plan: null,
     label: 'Deed recording fee',
     amountBilled: 45_000,
     createdAt: '2026-06-15T16:00:00.000Z',
@@ -330,10 +332,79 @@ describe('InvoiceComposer', () => {
     expect(navigation.push).not.toHaveBeenCalled()
   })
 
+  describe('billing a legal plan carrier', () => {
+    const claims: InvoiceableCharge[] = [
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        kind: 'plan_claim',
+        plan: 'metlife',
+        label: 'CT 220 — Power of Attorney — Individual',
+        amountBilled: 6_000,
+        createdAt: '2026-06-20T16:00:00.000Z',
+      },
+      {
+        id: '44444444-4444-4444-8444-444444444444',
+        kind: 'plan_claim',
+        plan: 'metlife',
+        label: 'CT 230 — Living Will — Individual',
+        amountBilled: 4_500,
+        createdAt: '2026-06-21T16:00:00.000Z',
+      },
+    ]
+
+    it('turns a plan-only matter into a MetLife invoice that is never emailed', async () => {
+      const user = userEvent.setup()
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ invoice: { id: 'invoice-7' } }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ sent: false, invoice: { number: '2026-0007' } }) })
+      renderComposer({ initialCharges: claims })
+
+      const preview = screen.getByRole('article', { name: 'Invoice preview' })
+      expect(within(preview).getByText('MetLife Legal Plans')).toBeTruthy()
+      expect(within(preview).getAllByText('$105.00').length).toBeGreaterThan(0)
+      expect(screen.getByRole('status').textContent).toContain('not emailed or shown to the client')
+      // Nothing to send to and nothing to pay online.
+      expect(screen.queryByLabelText(/Send to/)).toBeNull()
+      expect(screen.queryByLabelText(/Payment link/)).toBeNull()
+      expect(screen.queryByRole('button', { name: /Issue & send/ })).toBeNull()
+
+      await user.click(screen.getByRole('button', { name: 'Issue invoice' }))
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+        itemIds: claims.map(claim => claim.id),
+        billToName: 'MetLife Legal Plans',
+        billToEmail: null,
+        paymentLink: null,
+      })
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ send: false })
+      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('marked submitted'))
+    })
+
+    it('keeps one payer per invoice when a matter has both', async () => {
+      const user = userEvent.setup()
+      renderComposer({ initialCharges: [...charges, ...claims] })
+
+      // The client's bill is the default; the claims wait for their own invoice.
+      expect(screen.getByText('Billed to the client')).toBeTruthy()
+      expect(screen.getByText('Billed to MetLife Legal Plans')).toBeTruthy()
+      expect((screen.getByLabelText('Deed recording fee') as HTMLButtonElement).getAttribute('data-state')).toBe('checked')
+      expect(screen.getByLabelText('CT 230 — Living Will — Individual').getAttribute('data-state')).toBe('unchecked')
+
+      await user.click(screen.getByLabelText('CT 230 — Living Will — Individual'))
+
+      // Ticking a claim clears the client charges rather than mixing payers.
+      expect(screen.getByLabelText('Deed recording fee').getAttribute('data-state')).toBe('unchecked')
+      expect(screen.getByLabelText('Flat fee — Joint trust package').getAttribute('data-state')).toBe('unchecked')
+      expect(screen.getByLabelText('CT 230 — Living Will — Individual').getAttribute('data-state')).toBe('checked')
+      expect(screen.getByRole('button', { name: 'Issue invoice' })).toBeTruthy()
+    })
+  })
+
   it('explains an empty charge list rather than showing a blank form', () => {
     renderComposer({ initialCharges: [] })
 
-    expect(screen.getByText(/no uninvoiced charges/i)).toBeTruthy()
+    expect(screen.getByText(/already invoiced/i)).toBeTruthy()
   })
 
   it('keeps every control at the 44px touch target', () => {
