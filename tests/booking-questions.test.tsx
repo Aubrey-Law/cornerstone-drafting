@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import BookingWidget, { type BookingWidgetType } from '@/components/scheduling/BookingWidget'
 import { BookingQuestionsEditor } from '@/app/admin/settings/BookingQuestionsEditor'
+import { QuickBookPopover } from '@/app/admin/calendar/QuickBookPopover'
 import {
   type BookingQuestion,
   BookingAnswerValidationError,
@@ -63,6 +64,15 @@ describe('resolveBookingAnswers', () => {
   ])('rejects %j', (answers, message) => {
     expect(() => resolveBookingAnswers(questions, answers)).toThrow(BookingAnswerValidationError)
     expect(() => resolveBookingAnswers(questions, answers)).toThrow(message)
+  })
+
+  it('can skip required questions for staff while still checking choices', () => {
+    expect(resolveBookingAnswers(questions, { kids: 'Yes' }, { enforceRequired: false })).toEqual([
+      { questionId: 'kids', label: 'Kids?', answer: 'Yes' },
+    ])
+    expect(() => resolveBookingAnswers(questions, { heard: 'Billboard' }, { enforceRequired: false })).toThrow(
+      BookingAnswerValidationError,
+    )
   })
 
   it('treats a missing answers object as no answers', () => {
@@ -141,5 +151,43 @@ describe('BookingQuestionsEditor', () => {
     expect(state[0]).toMatchObject({ kind: 'choice', options: ['A', 'B'], required: true })
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[1])
     expect(state.map(q => q.label)).toEqual(['Second?'])
+  })
+})
+
+describe('QuickBookPopover booking questions', () => {
+  it('lets staff answer the type\'s questions and submits them', async () => {
+    const posted: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posted.push(JSON.parse(String(init.body)))
+        return { ok: true, json: async () => ({ ok: true }) }
+      }
+      return { ok: true, json: async () => ({ connected: true, slots: [] }) }
+    }))
+    const slot = new Date(Date.now() + 86_400_000).toISOString()
+    render(
+      <QuickBookPopover
+        open
+        onOpenChange={vi.fn()}
+        prefillIso={slot}
+        authHeaders={() => undefined}
+        onBooked={vi.fn()}
+        types={[{
+          id: 'type-1', label: 'Discovery Call', durationMinutes: 30, locationType: 'phone', locationTypes: ['phone'], active: true,
+          bookingQuestions: [
+            { id: 'reason', label: 'What prompted you to reach out?', kind: 'long_text', required: true, options: [] },
+            { id: 'heard', label: 'How did you hear about us?', kind: 'choice', required: false, options: ['Referral', 'Google'] },
+          ],
+        }]}
+      />,
+    )
+    expect(screen.getByText('(required for clients)')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Mary' } })
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Jones' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'mary@example.com' } })
+    fireEvent.change(screen.getByLabelText(/How did you hear about us/), { target: { value: 'Google' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Book & email confirmation' }))
+    await waitFor(() => expect(posted).toHaveLength(1))
+    expect(posted[0].answers).toEqual({ heard: 'Google' })
   })
 })
