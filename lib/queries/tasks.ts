@@ -6,6 +6,7 @@ import type { GeneratedDatabase, Json } from '@/types/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { parseRecurrence } from '@/lib/tasks/recurrence'
+import { TASK_ASSIGNEE_ROLES } from '@/lib/tasks/assignees'
 import {
   compareTasks,
   isTaskOverdue,
@@ -439,7 +440,7 @@ export async function fetchTaskAssignees() {
   const { data, error } = await admin
     .from('users')
     .select('id, display_name, email')
-    .in('role', ['attorney', 'admin', 'va', 'staff'])
+    .in('role', TASK_ASSIGNEE_ROLES)
     .order('display_name')
 
   if (error) {

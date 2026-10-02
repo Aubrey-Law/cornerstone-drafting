@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
+import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
 
@@ -686,7 +687,7 @@ const definitions: ActionDefinition[] = [
       if (taskResult.error) throw new Error(taskResult.error.message)
       if (userResult.error) throw new Error(userResult.error.message)
       if (!taskResult.data) throw new Error('Task not found')
-      if (!userResult.data || !['admin', 'attorney'].includes(userResult.data.role)) throw new Error('Assignee is not authorized staff')
+      if (!userResult.data || !isTaskAssigneeRole(userResult.data.role)) throw new Error('Assignee is not authorized staff')
       return {
         display: {
           action: 'Delegate task',
@@ -699,7 +700,7 @@ const definitions: ActionDefinition[] = [
     },
     async execute(input, context) {
       const { data: user } = await context.admin.from('users').select('id, role').eq('id', input.assigneeId).maybeSingle()
-      if (!user || !['admin', 'attorney'].includes(user.role)) throw new Error('Assignee is not authorized staff')
+      if (!user || !isTaskAssigneeRole(user.role)) throw new Error('Assignee is not authorized staff')
       const { data, error } = await context.admin.from('tasks').update({ assignee_id: input.assigneeId })
         .eq('id', input.taskId).select('id, assignee_id, updated_at').single()
       if (error) throw new Error(error.message)
