@@ -7864,6 +7864,7 @@ export type Database = {
           hired_at: string | null
           hold_reason: string | null
           id: string
+          imported_at: string | null
           intake_submitted_at: string | null
           li_design_sheet_approved: boolean | null
           li_design_sheet_data: Json | null
@@ -7909,6 +7910,7 @@ export type Database = {
           hired_at?: string | null
           hold_reason?: string | null
           id?: string
+          imported_at?: string | null
           intake_submitted_at?: string | null
           li_design_sheet_approved?: boolean | null
           li_design_sheet_data?: Json | null
@@ -7954,6 +7956,7 @@ export type Database = {
           hired_at?: string | null
           hold_reason?: string | null
           id?: string
+          imported_at?: string | null
           intake_submitted_at?: string | null
           li_design_sheet_approved?: boolean | null
           li_design_sheet_data?: Json | null

@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, ChevronRight, Columns3, Database, Plus, Table2, Trash2 } from 'lucide-react'
+import { Briefcase, ChevronRight, Columns3, Database, History, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -79,6 +79,7 @@ import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
 import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 
 const LawmaticsImportDialog = dynamic(() => import('./LawmaticsImportDialog'), { ssr: false })
+const ImportExistingMatterDialog = dynamic(() => import('./ImportExistingMatterDialog'), { ssr: false })
 
 interface MattersClientProps {
   matters: MatterListRow[]
@@ -143,6 +144,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const createRequestIdRef = useRef<string | null>(null)
   const [clientName, setClientName] = useState('')
@@ -481,6 +483,10 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
             <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
               <Database className="h-3.5 w-3.5" />
               Import from Lawmatics
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <History className="h-3.5 w-3.5" />
+              Existing matter
             </Button>
             <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
@@ -888,6 +894,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
       </Dialog>
 
       <LawmaticsImportDialog open={lawmaticsOpen} onOpenChange={setLawmaticsOpen} />
+      <ImportExistingMatterDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   )
 }
