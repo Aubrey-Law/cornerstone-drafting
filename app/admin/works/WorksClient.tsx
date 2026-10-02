@@ -343,7 +343,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
                 picked, however far down the list it is. */}
             <div
               ref={detailRef}
-              className="scroll-mt-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6.5rem)] lg:overflow-y-auto"
+              className="min-w-0 scroll-mt-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6.5rem)] lg:overflow-y-auto"
             >
               <WorkflowDetail
                 skill={selected}
