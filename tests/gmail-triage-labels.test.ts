@@ -111,11 +111,13 @@ describe('removeTriageLabels', () => {
   })
 })
 
-describe('never this sender', () => {
-  it('cleans up Gmail only for the sender scope', async () => {
+describe('never this sender / domain', () => {
+  it('cleans up Gmail for the sender and domain scopes, not a plain dismiss', async () => {
     const { readFileSync } = await import('node:fs')
     const route = readFileSync('app/api/admin/email-triage/[id]/dismiss/route.ts', 'utf-8')
-    expect(route).toContain("scope === 'sender'\n    ? await cleanUpSenderInGmail(")
+    expect(route).toContain("scope === 'thread'\n    ? null\n    : await cleanUpInGmail(")
+    expect(route).toContain("{ column: 'sender_domain', value: emailDomain(row.sender_email) }")
+    expect(route).toContain(".eq(match.column, match.value)")
     expect(route).toContain('removeTriageLabels')
     expect(route).toContain('deleteGmailDraft')
   })
