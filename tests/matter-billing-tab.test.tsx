@@ -493,6 +493,69 @@ describe('MatterBillingTab', () => {
     })
   })
 
+  it('adds several charges to this matter in one save', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
+    await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
+    await user.type(within(dialog).getByLabelText('Amount'), '155')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add another charge' }))
+    // The new line takes the type above it and gets the focus.
+    expect(within(dialog).getByLabelText('Type, charge 2').textContent).toContain('Cost')
+    expect(document.activeElement).toBe(within(dialog).getByLabelText('Description, charge 2'))
+    await user.type(within(dialog).getByLabelText('Description, charge 2'), 'Certified copies')
+    await user.type(within(dialog).getByLabelText('Amount, charge 2'), '40')
+    expect(within(dialog).getByText('Total $195.00')).toBeTruthy()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add 2 charges' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        call => call[0] === '/api/admin/billing/items/bulk-create',
+      )
+      expect(JSON.parse(post![1].body)).toEqual({
+        matterId: MATTER_ID,
+        charges: [
+          { kind: 'cost', label: 'Deed recording fee', amountBilled: 15_500, plan: null },
+          { kind: 'cost', label: 'Certified copies', amountBilled: 4_000, plan: null },
+        ],
+      })
+    })
+    expect(fetchMock.mock.calls.some(call => call[0] === '/api/admin/billing/items')).toBe(false)
+  })
+
+  it('names the incomplete line and saves nothing', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Description'), 'Trust package')
+    await user.type(within(dialog).getByLabelText('Amount'), '4800')
+    await user.click(within(dialog).getByRole('button', { name: 'Add another charge' }))
+    await user.type(within(dialog).getByLabelText('Description, charge 2'), 'Deed prep')
+    await user.click(within(dialog).getByRole('button', { name: 'Add 2 charges' }))
+
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      'Charge 2: Enter an amount greater than zero.',
+    )
+    expect(
+      fetchMock.mock.calls.some(call => String(call[0]).startsWith('/api/admin/billing/items')),
+    ).toBe(false)
+
+    // Removing the extra line returns to a single charge.
+    await user.click(within(dialog).getByRole('button', { name: 'Remove charge 2' }))
+    expect(within(dialog).getByRole('button', { name: 'Add charge' })).toBeTruthy()
+    expect((within(dialog).getByLabelText('Description') as HTMLInputElement).value).toBe('Trust package')
+  })
+
   it('warns before adding a second legal fee, without blocking it', async () => {
     const user = userEvent.setup()
     respondWith({ rows: [row()] }) // the seeded flat fee
