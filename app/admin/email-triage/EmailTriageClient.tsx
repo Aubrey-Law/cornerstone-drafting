@@ -9,6 +9,7 @@ import {
   MailCheck,
   MailSearch,
   RefreshCw,
+  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useConfirm } from '@/components/useConfirm'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_REPLY_SLA_HOURS } from '@/lib/comms/thread'
 import { triageLabelName } from '@/lib/emailTriage/labels'
@@ -108,6 +110,7 @@ export function EmailTriageClient({
   hasReadScope,
 }: Props) {
   const token = useAccessToken()
+  const { confirm, confirmDialog } = useConfirm()
   const [rows, setRows] = useState(initialRows)
   const [scan, setScan] = useState(initialScan)
   const [selectedId, setSelectedId] = useState<string | null>(initialRows[0]?.id ?? null)
@@ -263,6 +266,46 @@ export function EmailTriageClient({
     )
   }, [act, selected])
 
+  // Sends exactly what the editor shows — the subject and body travel with the
+  // request, so an edit the autosave has not reached yet is the one that goes.
+  const sendSelected = useCallback(async () => {
+    if (!selected) return false
+    const recipient = selected.sender_name
+      ? `${selected.sender_name} <${selected.sender_email}>`
+      : selected.sender_email
+    const confirmed = await confirm({
+      title: `Send this reply to ${recipient}?`,
+      body: 'It goes out now from your Gmail, on the original thread, exactly as shown here. '
+        + 'A sent email cannot be taken back.'
+        + (selected.gmail_draft_id ? ' The Gmail draft created earlier will be removed.' : ''),
+      confirmLabel: 'Send reply',
+    })
+    if (!confirmed) return false
+    return act(
+      selected,
+      '/send',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          draftSubject: selected.draft_subject ?? '',
+          draftBody: selected.draft_body ?? '',
+        }),
+      },
+      {
+        success: body => {
+          // The reply is out and the row has left the queue, so anything that
+          // went wrong afterwards has to be said now or not at all.
+          const notices = Array.isArray(body.notices) ? body.notices : []
+          for (const notice of notices) {
+            if (typeof notice === 'string') toast.warning(notice)
+          }
+          return `Reply sent to ${selected.sender_email}`
+        },
+        failure: 'The reply was not sent',
+      },
+    )
+  }, [act, confirm, selected])
+
   // J/K to move, R to reply, D to dismiss — the same letters the Today queue
   // uses for moving, so working the mailbox needs no mouse. Only the harmless
   // "Dismiss" gets a key: nothing that touches Gmail or the ignore list does.
@@ -336,7 +379,7 @@ export function EmailTriageClient({
           <>
             Client and lead email waiting on a reply
             {mailbox ? <> in <span className="font-medium">{mailbox}</span></> : null}.
-            Approving a draft puts it in Gmail — it is never sent from here.
+            Send a reply from here, or put it in Gmail as a draft to finish there.
           </>
         }
         actions={
@@ -458,6 +501,7 @@ export function EmailTriageClient({
                       failure: 'Could not create the Gmail draft',
                     },
                   )}
+                  onSend={sendSelected}
                   onDismiss={dismissSelected}
                 />
               )
@@ -465,6 +509,7 @@ export function EmailTriageClient({
           </div>
         </div>
       )}
+      {confirmDialog}
     </AdminPageShell>
   )
 }
@@ -555,6 +600,7 @@ function DraftPane({
   onSave,
   onDraft,
   onApprove,
+  onSend,
   onDismiss,
 }: {
   row: EmailTriageRow
@@ -564,6 +610,7 @@ function DraftPane({
   onSave: (patch: { draftSubject: string; draftBody: string }) => Promise<boolean>
   onDraft: () => Promise<boolean>
   onApprove: () => Promise<boolean>
+  onSend: () => Promise<boolean>
   onDismiss: (scope: 'thread' | 'sender' | 'domain') => Promise<boolean>
 }) {
   const href = recordHref(row)
@@ -645,11 +692,17 @@ function DraftPane({
       )}
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {/* Never "Send" and never "Approve" on its own. The most dangerous
-            mistake this page could make is leaving the attorney unsure whether
-            something was sent, so the button says exactly what it does. */}
-        <Button size="sm" onClick={onApprove} disabled={busy || !hasDraft}>
-          {busy ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+        {/* Never a bare "Approve". The most dangerous mistake this page could
+            make is leaving the attorney unsure whether something was sent, so
+            each button says exactly what it does, and the one that sends asks
+            first. */}
+        <Button size="sm" onClick={onSend} disabled={busy || !hasDraft || row.status === 'drafting'}>
+          {busy
+            ? <Loader2 className="mr-2 size-3.5 animate-spin" />
+            : <Send className="mr-1.5 size-3.5" />}
+          Send reply
+        </Button>
+        <Button size="sm" variant="outline" onClick={onApprove} disabled={busy || !hasDraft}>
           Create Gmail draft
         </Button>
         <Button size="sm" variant="outline" onClick={onDraft} disabled={busy}>

@@ -17,8 +17,9 @@ export const dynamic = 'force-dynamic'
 // as a draft on the original thread.
 //
 // A draft, not a send. Nothing here delivers mail to a client: the attorney
-// reviews it in Gmail and sends it himself, which is the whole shape of the
-// feature and the reason a generated reply can never reach a client unread.
+// reviews it in Gmail and sends it from there. Sending from the triage page is
+// a separate route (`../send`), behind its own confirmation, so a generated
+// reply still never reaches a client without a deliberate click on its text.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req)
   if (auth.err || !auth.userId) {

@@ -73,7 +73,12 @@ function injectTestNoticeText(text: string, intendedTo: string): string {
   return `TEST SEND. Original recipient: ${intendedTo}. This email was redirected to the test inbox by the email kill-switch.\n\n${text}`
 }
 
-async function logSend(row: Record<string, unknown>): Promise<string | null> {
+/**
+ * Record a send in `email_log`, so it appears on the record's timeline. Exported
+ * for the one caller that sends through Gmail directly rather than through
+ * `sendEmail` — a triage reply, which has to land on an existing thread.
+ */
+export async function logSend(row: Record<string, unknown>): Promise<string | null> {
   const insertRow = (payload: Record<string, unknown>) =>
     getAdminClient()
       .from('email_log')

@@ -6,8 +6,8 @@ import { GmailSendError, buildMimeMessage } from './gmailSend'
  *
  * A draft rather than a send, and that is the product decision rather than an
  * implementation detail: the model drafts, the attorney sends. Cornerstone
- * never puts a generated reply in front of a client on its own, and the code
- * that could is deliberately not here.
+ * never puts a generated reply in front of a client on its own; the triage
+ * page's confirmed "Send reply" lives in its own route, not here.
  *
  * Separate from `gmailSend.ts` so that module stays about sending, but it
  * shares the MIME builder — a draft and a send are the same message, and two
