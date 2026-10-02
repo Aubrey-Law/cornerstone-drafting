@@ -169,3 +169,61 @@ describe('planFiduciaryEmit', () => {
     expect(planFiduciaryEmit(MATTER, [existing({ id: 'foreign', batchTag: 'something-else' })], []).supersede).toEqual([])
   })
 })
+
+/**
+ * The sweep runs every tick. Before these rules a task anyone had touched —
+ * finished, picked up, deleted — was invisible to the planner, so the same gap
+ * was written again minutes later: production showed 18 gaps written ~12 times
+ * each.
+ */
+describe('planFiduciaryEmit — tasks a person has settled', () => {
+  const rows = () => fiduciaryTaskRows(MATTER, [issue()])
+
+  it.each([
+    ['completed', { status: 'done' }],
+    ['assigned to someone', { assigneeId: 'staff-1' }],
+    ['in progress', { status: 'in_progress' }],
+    ['dismissed (deleted from the queue)', { status: 'archived', closeoutReason: null }],
+    ['archived when the matter closed', { status: 'archived', closeoutReason: 'matter_closed' }],
+  ] as const)('does not write a gap again once its task was %s', (_label, over) => {
+    const plan = planFiduciaryEmit(MATTER, [existing(over)], rows())
+    expect(plan.insert).toEqual([])
+    // Never this sweep's to close: someone else owns where it stands.
+    expect(plan.supersede).toEqual([])
+  })
+
+  it('writes the gap again when the sweep itself retired the earlier task', () => {
+    // The gap was filled, then reopened — that deserves a fresh task.
+    const plan = planFiduciaryEmit(
+      MATTER,
+      [existing({ status: 'archived', closeoutReason: 'fiduciary_superseded' })],
+      rows(),
+    )
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  it('writes the gap when its wording has changed since the person settled it', () => {
+    const plan = planFiduciaryEmit(MATTER, [existing({ status: 'done', title: 'Older wording.' })], rows())
+    expect(plan.insert).toHaveLength(1)
+  })
+
+  it('still keeps the open twin when a settled copy also exists', () => {
+    const plan = planFiduciaryEmit(
+      MATTER,
+      [existing({ id: 'old', status: 'done' }), existing({ id: 'open' })],
+      rows(),
+    )
+    expect(plan.keep).toEqual(['open'])
+    expect(plan.insert).toEqual([])
+    expect(plan.supersede).toEqual([])
+  })
+
+  it('ignores another matter’s settled tasks', () => {
+    const plan = planFiduciaryEmit(
+      MATTER,
+      [existing({ status: 'done', batchTag: 'fiduciary:matter-10#no_successor:trustee:client' })],
+      rows(),
+    )
+    expect(plan.insert).toHaveLength(1)
+  })
+})

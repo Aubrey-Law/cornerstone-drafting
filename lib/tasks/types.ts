@@ -247,7 +247,13 @@ export interface TaskRecordGroup {
  * unlinked work last. Keyed by record id, not name, so two clients who share a
  * name stay in separate sections.
  */
-export function groupTasksByRecord(tasks: TaskRow[]): TaskRecordGroup[] {
+/**
+ * `keepOrder` keeps groups in the order their first task arrives. The paged
+ * Tasks page needs it: the server already ordered matters most-urgent-first
+ * across pages, and re-sorting each page alphabetically would restart A–Z on
+ * every page.
+ */
+export function groupTasksByRecord(tasks: TaskRow[], options: { keepOrder?: boolean } = {}): TaskRecordGroup[] {
   const NO_RECORD = 'none'
   const groups = new Map<string, TaskRecordGroup>()
 
@@ -262,7 +268,7 @@ export function groupTasksByRecord(tasks: TaskRow[]): TaskRecordGroup[] {
   }
 
   const linked = [...groups.values()].filter(group => group.key !== NO_RECORD)
-  linked.sort((a, b) => a.label.localeCompare(b.label))
+  if (!options.keepOrder) linked.sort((a, b) => a.label.localeCompare(b.label))
 
   const unlinked = groups.get(NO_RECORD)
   const ordered = unlinked ? [...linked, unlinked] : linked

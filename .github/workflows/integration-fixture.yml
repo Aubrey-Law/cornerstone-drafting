@@ -47,6 +47,7 @@ on:
       - 'supabase/migrations/20261124000000_working_list_reads.sql'
       - 'supabase/migrations/20261128000000_hide_closed_matters.sql'
       - 'supabase/migrations/20270102090600_canonical_record_attention.sql'
+      - 'supabase/migrations/20270102090800_task_page_group_by_record.sql'
       - '.github/workflows/integration-fixture.yml'
   schedule:
     # 13:00 UTC on Mondays — after the anchor probe at 12:20 and the schema
@@ -131,6 +132,13 @@ jobs:
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20270102090600_canonical_record_attention.sql
+
+      # Redefines firm_task_page_v1 to page by record when grouped by matter.
+      - name: Apply task paging by record
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20270102090800_task_page_group_by_record.sql
 
       # The two loopback markers satisfy the guard in
       # tests/support/verificationEnvironment.ts; nothing here speaks REST.

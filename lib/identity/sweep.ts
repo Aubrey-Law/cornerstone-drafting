@@ -115,7 +115,7 @@ export async function sweepNameAgreement(
 
     const { data: taskRows, error: taskError } = await sb
       .from('tasks')
-      .select('id, source, batch_tag, status, assignee_id, title, priority')
+      .select('id, source, batch_tag, status, assignee_id, title, priority, closeout_reason')
       .eq('matter_id', candidate.matter.id)
       .eq('source', IDENTITY_TASK_SOURCE)
     if (taskError) {
@@ -134,6 +134,7 @@ export async function sweepNameAgreement(
       assigneeId: (row.assignee_id as string | null) ?? null,
       title: String(row.title ?? ''),
       priority: String(row.priority ?? ''),
+      closeoutReason: (row.closeout_reason as string | null) ?? null,
     }))
 
     const plan = planIdentityEmit(candidate.matter.id, existing, desired)

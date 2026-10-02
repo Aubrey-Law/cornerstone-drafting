@@ -454,15 +454,23 @@ export async function fetchTaskAssignees() {
 }
 
 export type TaskPageQuery = PageRequest & TaskPageFilters & { viewerId: string | null; status: 'open' | 'done'; completedOn?: string }
-export type TaskPageResult = PageResult<TaskRow> & { scopeCounts: { mine: number; team: number; unassigned: number } }
+export type TaskPageResult = PageResult<TaskRow> & {
+  scopeCounts: { mine: number; team: number; unassigned: number }
+  /** Pages are not a fixed row count when grouped by matter, so the database
+   *  says how many there are. */
+  pageCount: number
+}
 export async function fetchTaskPage(input: TaskPageQuery): Promise<TaskPageResult> {
   const query = { ...input, ...pageRequest(input) }
   if (query.completedOn && (!/^\d{4}-\d{2}-\d{2}$/.test(query.completedOn) || new Date(query.completedOn).toISOString().slice(0,10) !== query.completedOn)) throw new Error('Invalid completion date')
   const admin = getAdminClient() as unknown as SupabaseClient<GeneratedDatabase>
   const { data, error } = await admin.rpc('firm_task_page_v1', { p_query: query as unknown as Json })
   if (error || !data) throw new Error('Unable to load tasks')
-  const page = data as unknown as TaskPageResult
-  const lastPage = Math.max(1, Math.ceil(page.total / query.pageSize))
+  const raw = data as unknown as Omit<TaskPageResult, 'pageCount'> & { pageCount?: number }
+  // A database still on the previous function body returns no pageCount (and
+  // ignores `group`); fixed-size pages are exactly what it served.
+  const page: TaskPageResult = { ...raw, pageCount: raw.pageCount ?? Math.max(1, Math.ceil(raw.total / query.pageSize)) }
+  const lastPage = page.pageCount
   if (query.page > lastPage) return fetchTaskPage({ ...query, page: lastPage })
   return { ...page, rows: await attachDisplayNames(page.rows.map(normalizeRow)) }
 }

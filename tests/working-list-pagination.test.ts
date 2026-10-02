@@ -11,6 +11,9 @@ describe('working list input validation', () => {
     expect(taskPageParams({ scope:'unassigned',priority:'high',page:'4',done:'1',donePage:'2' })).toMatchObject({ scope:'unassigned', priority:'high', page:4, donePage:2, showDone:true })
     expect(() => taskPageParams({ source:'unknown' })).toThrow()
     expect(() => taskPageParams({ assignee:'x,y' })).toThrow()
+    expect(taskPageParams({}).group).toBe('priority')
+    expect(taskPageParams({ group:'matter' }).group).toBe('matter')
+    expect(() => taskPageParams({ group:'client' })).toThrow()
   })
 })
 

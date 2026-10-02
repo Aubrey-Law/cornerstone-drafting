@@ -14,6 +14,18 @@ describe('groupTasksByRecord', () => {
     expect(groups[1].tasks.map(t => t.id)).toEqual(['a', 'c'])
   })
 
+  it('keeps the order matters arrive in when asked, for server-ordered pages', () => {
+    // The paged Tasks page receives matters most-urgent-first; an A–Z re-sort
+    // would restart the alphabet on every page.
+    const groups = groupTasksByRecord([
+      task({ id: 'a', matter_id: 'm-2', record_name: 'Whitfield, Margaret' }),
+      task({ id: 'loose' }),
+      task({ id: 'b', matter_id: 'm-1', record_name: 'Alvarez, Ruth' }),
+    ], { keepOrder: true })
+
+    expect(groups.map(group => group.label)).toEqual(['Whitfield, Margaret', 'Alvarez, Ruth', 'No related matter'])
+  })
+
   it('puts unlinked tasks last under their own label', () => {
     const groups = groupTasksByRecord([
       task({ id: 'loose' }),

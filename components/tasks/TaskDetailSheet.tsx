@@ -1,5 +1,6 @@
 'use client'
 
+import { dismissesOnDelete } from '@/lib/tasks/dismiss'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Trash2, X } from 'lucide-react'
@@ -388,7 +389,9 @@ export function TaskDetailSheet({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this task?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{currentTask.title}” and its subtasks will be permanently removed.
+              {dismissesOnDelete(currentTask.source)
+                ? `“${currentTask.title}” was created automatically. It will be removed from the queue and won’t be created again for the same issue.`
+                : `“${currentTask.title}” and its subtasks will be permanently removed.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

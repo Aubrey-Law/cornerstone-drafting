@@ -185,6 +185,22 @@ describe('deleting a selection', () => {
     expect(body.deleted).toEqual([A])
   })
 
+  it('dismisses generated tasks instead of deleting them, so their sweep does not write them back', async () => {
+    rows.push({ id: C, status: 'open', source: 'fiduciary', due_at: null, soft_due_at: null })
+
+    const body = await (await send(DELETE, 'DELETE', { ids: [A, C] })).json()
+
+    const del = calls.find(c => c.op === 'delete')
+    expect(del?.filters.find(f => f.op === 'in')?.args[1]).toEqual([A])
+    const dismiss = calls.find(c => c.op === 'update')
+    expect(dismiss?.filters.find(f => f.op === 'in')?.args[1]).toEqual([C])
+    expect(dismiss?.update).toMatchObject({ status: 'archived', closeout_reason: null })
+    expect(dismiss?.update?.skipped_at).toEqual(expect.any(String))
+    // Both are gone from the queue as far as the user is concerned.
+    expect(body.deleted.sort()).toEqual([A, C].sort())
+    expect(body.dismissed).toEqual([C])
+  })
+
   it('does not write at all when only stage tasks are selected', async () => {
     const body = await (await send(DELETE, 'DELETE', { ids: [B] })).json()
 
