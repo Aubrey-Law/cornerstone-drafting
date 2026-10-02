@@ -195,7 +195,7 @@ export function EstateClauseEditor({
             <span className="font-medium">Validation</span>
             <Badge variant={clause.workingDraft.validationStatus === 'valid' ? 'default' : 'destructive'}>{clause.workingDraft.validationStatus}</Badge>
           </div>
-          {report.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{report.map(message => <li key={message}>{message}</li>)}</ul>}
+          {report.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{report.map((message, index) => <li key={`${index}:${message}`}>{message}</li>)}</ul>}
         </div>
       )}
 

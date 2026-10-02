@@ -380,9 +380,8 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="clauses" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EstateClauseLibrarySection currentUserId={currentUserId} />
-          </div>
+          {/* The list and editor are cards of their own; no outer frame. */}
+          <EstateClauseLibrarySection currentUserId={currentUserId} />
         </TabsContent>}
       </Tabs>
 

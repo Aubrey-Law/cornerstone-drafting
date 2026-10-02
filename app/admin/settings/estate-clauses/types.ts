@@ -84,12 +84,29 @@ export const documentTypeLabels: Record<EstateDocumentType, string> = {
   ancillary: 'Ancillary',
 }
 
+/** Import provenance stored beside the findings: a record of where the clause came from, not a problem with it. */
+const PROVENANCE_KEYS = new Set(['source', 'imported'])
+const FINDING_LABELS: Record<string, string> = { errors: 'Error', warnings: 'Warning' }
+
+function describe(value: unknown): string {
+  if (value === null || typeof value !== 'object') return String(value)
+  try { return JSON.stringify(value) } catch { return String(value) }
+}
+
+/**
+ * The findings in a validation report, one line each. Provenance keys are left
+ * out (the bundled import stores the whole source clause under `source`, which
+ * used to print as "source: [object Object]"), and nested values are spelled
+ * out rather than stringified to "[object Object]".
+ */
 export function validationMessages(report: unknown): string[] {
-  if (Array.isArray(report)) return report.map(String)
+  if (Array.isArray(report)) return report.map(describe)
   if (report && typeof report === 'object') {
-    return Object.entries(report).flatMap(([key, value]) => (
-      Array.isArray(value) ? value.map(item => `${key}: ${String(item)}`) : [`${key}: ${String(value)}`]
-    ))
+    return Object.entries(report).flatMap(([key, value]) => {
+      if (PROVENANCE_KEYS.has(key)) return []
+      const label = FINDING_LABELS[key] ?? key
+      return Array.isArray(value) ? value.map(item => `${label}: ${describe(item)}`) : [`${label}: ${describe(value)}`]
+    })
   }
-  return report == null ? [] : [String(report)]
+  return report == null ? [] : [describe(report)]
 }

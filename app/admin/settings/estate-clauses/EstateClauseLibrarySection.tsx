@@ -40,6 +40,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const detailRef = useRef<HTMLElement>(null)
   const [newClause, setNewClause] = useState<{ clauseKey: string; title: string; documentTypes: EstateDocumentType[] }>({ clauseKey: '', title: '', documentTypes: [] })
   const loadRequest = useRef(0)
   const authHeaders = useMemo<Record<string, string>>(() => {
@@ -95,6 +96,14 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
     ? selectedClause.submittedRevisions.find(revision => revision.id === selection.revisionId) ?? null
     : null
 
+  /** Open a clause; on a phone the detail sits below the list, so bring it into view. */
+  const select = (next: Selection) => {
+    setSelection(next)
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+  }
+
   const createClause = async () => {
     setCreating(true); setCreateError(null)
     try {
@@ -114,21 +123,22 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <Label htmlFor="clause-search">Search clauses</Label>
-            <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input id="clause-search" type="search" className="pl-8" value={query} onChange={event => setQuery(event.target.value)} placeholder="Title, stable key, or document type" /></div>
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Labels stay for screen readers; the placeholder and options say the rest on screen. */}
+          <div className="relative min-w-48 flex-1">
+            <Label htmlFor="clause-search" className="sr-only">Search clauses</Label>
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input id="clause-search" type="search" className="pl-8" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by title, stable key, or document type" />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="clause-status">Filter by status</Label>
-            <select id="clause-status" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:w-48" value={filter} onChange={event => setFilter(event.target.value as FilterStatus)}>
+          <div>
+            <Label htmlFor="clause-status" className="sr-only">Filter by status</Label>
+            <select id="clause-status" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-44" value={filter} onChange={event => setFilter(event.target.value as FilterStatus)}>
               {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
           <Button type="button" variant="outline" onClick={() => setShowCreate(value => !value)}><Plus /> New clause</Button>
         </div>
-        {showCreate && <div className="mt-3 space-y-3 border-t border-border pt-3">
+        {showCreate && <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5"><Label htmlFor="new-clause-key">Stable clause key</Label><Input id="new-clause-key" className="font-mono text-xs" value={newClause.clauseKey} onChange={event => setNewClause(current => ({ ...current, clauseKey: event.target.value }))} placeholder="trust.special_distribution" /></div>
             <div className="space-y-1.5"><Label htmlFor="new-clause-title">Clause title</Label><Input id="new-clause-title" value={newClause.title} onChange={event => setNewClause(current => ({ ...current, title: event.target.value }))} /></div>
@@ -141,42 +151,67 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
 
       {error && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"><span>{error}</span><Button size="sm" variant="outline" onClick={() => void load()}>Retry</Button></div>}
       {loading ? <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading clause library…</div> : (
-        <div className="grid min-h-[34rem] gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
           <aside aria-label="Estate clauses" className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <span className="text-xs font-semibold">{visible.length} clauses</span>
               <Badge variant="outline">MA only</Badge>
             </div>
-            <div className="max-h-[46rem] divide-y divide-border overflow-y-auto">
+            <div className="divide-y divide-border">
               {visible.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No clauses match these filters.</p>}
               {visible.map(clause => {
                 const status = statusOf(clause)
-                const review = clause.submittedRevisions.length > 0
-                return <article key={clause.id} className="space-y-2 p-3 hover:bg-accent">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{clause.title}</h4><p className="truncate font-mono text-micro text-muted-foreground">{clause.clauseKey}</p></div>
-                    <Badge variant={status === 'awaiting_review' ? 'default' : 'outline'} className="text-micro">{statusLabel[status]}</Badge>
-                  </div>
-                  <p className="truncate text-micro text-muted-foreground">{clause.documentTypes.map(type => documentTypeLabels[type]).join(' · ')}</p>
-                  {review ? <div className="space-y-1.5">{clause.submittedRevisions.map(revision => (
-                    <Button key={revision.id} size="sm" variant={selection?.mode === 'review' && selection.revisionId === revision.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection({ mode: 'review', clauseId: clause.id, revisionId: revision.id })}>
-                      Review {clause.title}{clause.submittedRevisions.length > 1 ? ` revision ${revision.revisionNumber}` : ''}
-                    </Button>
-                  ))}</div> : (
-                    <Button size="sm" variant={selection?.clauseId === clause.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection({ mode: 'edit', clauseId: clause.id })}>
-                      Edit {clause.title}
-                    </Button>
+                const revisions = clause.submittedRevisions
+                const active = selection?.clauseId === clause.id
+                // The row itself opens the clause. Its accessible name says what opening does
+                // ("Edit …" or "Review …"), so the old full-width button that repeated the title is gone.
+                const single = revisions.length <= 1
+                const rowSelection: Selection = revisions.length
+                  ? { mode: 'review', clauseId: clause.id, revisionId: revisions[0].id }
+                  : { mode: 'edit', clauseId: clause.id }
+                const summary = (
+                  <>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium">{clause.title}</span>
+                      <Badge variant={status === 'awaiting_review' ? 'default' : 'outline'} className="shrink-0 text-micro">{statusLabel[status]}</Badge>
+                    </span>
+                    <span className="mt-0.5 block truncate font-mono text-micro text-muted-foreground">{clause.clauseKey}</span>
+                    <span className="mt-0.5 block truncate text-micro text-muted-foreground">{clause.documentTypes.map(type => documentTypeLabels[type]).join(' · ')}</span>
+                  </>
+                )
+                return <article key={clause.id} className={active ? 'bg-selected' : 'hover:bg-accent'}>
+                  {single ? (
+                    <button
+                      type="button"
+                      aria-label={`${revisions.length ? 'Review' : 'Edit'} ${clause.title}`}
+                      aria-current={active ? 'true' : undefined}
+                      className="block w-full px-3 py-2.5 text-left"
+                      onClick={() => select(rowSelection)}
+                    >
+                      {summary}
+                    </button>
+                  ) : (
+                    <div className="px-3 py-2.5">
+                      {summary}
+                      <div className="mt-2 flex flex-wrap gap-1.5">{revisions.map(revision => (
+                        <Button key={revision.id} size="sm" variant={selection?.mode === 'review' && selection.revisionId === revision.id ? 'default' : 'outline'} className="h-7 text-xs" aria-label={`Review ${clause.title} revision ${revision.revisionNumber}`} onClick={() => select({ mode: 'review', clauseId: clause.id, revisionId: revision.id })}>
+                          Review revision {revision.revisionNumber}
+                        </Button>
+                      ))}</div>
+                    </div>
                   )}
                 </article>
               })}
             </div>
           </aside>
 
-          <main className="min-w-0">
+          {/* A section, not <main>: the admin layout already has the page's main landmark. Sticky on wide
+              screens so the editor stays beside the clause you picked, however far down the list. */}
+          <section ref={detailRef} aria-label="Clause details" className="min-w-0 scroll-mt-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6.5rem)] lg:overflow-y-auto">
             {!selectedClause && <div className="flex min-h-80 flex-col items-center justify-center rounded-lg border border-dashed border-border p-8 text-center"><BookOpenText className="size-8 text-muted-foreground" /><h3 className="mt-3 text-lg font-semibold">Select a clause</h3><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a working draft to edit or a submitted revision to review against the current publication.</p></div>}
             {selectedClause && selection?.mode === 'edit' && <EstateClauseEditor key={selectedClause.id} clause={selectedClause} authHeaders={authHeaders} onRefresh={load} />}
             {selectedClause && selection?.mode === 'review' && selectedRevision && <EstateClauseReviewPanel key={selectedRevision.id} clause={selectedClause} revision={selectedRevision} currentUserId={currentUserId} authHeaders={authHeaders} onRefresh={load} />}
-          </main>
+          </section>
         </div>
       )}
     </div>

@@ -117,7 +117,7 @@ export function EstateClauseReviewPanel({
       </div>
 
       <dl className="grid gap-3 rounded-md border border-border p-3 text-xs sm:grid-cols-2">
-        <div><dt className="text-muted-foreground">Author</dt><dd className="mt-1 font-mono">{revision.authorId}</dd></div>
+        <div><dt className="text-muted-foreground">Author</dt><dd className="mt-1">{selfAuthored ? 'You' : <span className="font-mono" title={revision.authorId}>{revision.authorId.slice(0, 8)}…</span>}</dd></div>
         <div><dt className="text-muted-foreground">Submitted</dt><dd className="mt-1">{new Date(revision.submittedAt).toLocaleString()}</dd></div>
         <div className="sm:col-span-2"><dt className="text-muted-foreground">Mandatory change summary</dt><dd className="mt-1 font-medium">{revision.changeSummary}</dd></div>
       </dl>
@@ -131,7 +131,7 @@ export function EstateClauseReviewPanel({
 
       <div className="rounded-md border border-border p-3 text-xs">
         <div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-primary" /> Validation report</div>
-        {validation.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{validation.map(item => <li key={item}>{item}</li>)}</ul> : <p className="mt-2 text-muted-foreground">No validation findings.</p>}
+        {validation.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{validation.map((item, index) => <li key={`${index}:${item}`}>{item}</li>)}</ul> : <p className="mt-2 text-muted-foreground">No validation findings.</p>}
       </div>
 
       <div className="rounded-md border border-border bg-muted p-3">
