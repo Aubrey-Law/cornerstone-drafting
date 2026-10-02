@@ -159,6 +159,115 @@ async function recordUsage(event: 'work_snoozed' | 'work_blocked') {
   }
 }
 
+type TaskAssignee = { id: string; name: string }
+
+async function executeTodayInternalAction(input: {
+  actionKey: string
+  referencePayload: Record<string, unknown>
+  displaySummary: string
+  item: WorkItem
+}) {
+  const proposed = await fetch('/api/admin/actions/proposals', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      actionKey: input.actionKey,
+      referencePayload: input.referencePayload,
+      displaySummary: input.displaySummary,
+      recordType: input.item.record.type,
+      recordId: input.item.record.id,
+      source: 'today',
+    }),
+  })
+  const proposedBody = await proposed.json().catch(() => ({})) as {
+    proposal?: { id: string }
+    error?: string
+  }
+  if (!proposed.ok || !proposedBody.proposal) throw new Error(proposedBody.error ?? 'The action could not be prepared')
+
+  const executed = await fetch(`/api/admin/actions/proposals/${proposedBody.proposal.id}/execute`, { method: 'POST' })
+  const executedBody = await executed.json().catch(() => ({})) as { error?: string }
+  if (!executed.ok) throw new Error(executedBody.error ?? 'The action could not be completed')
+}
+
+function DelegateTaskButton({ item, onDelegated }: { item: WorkItem; onDelegated: () => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [assignees, setAssignees] = useState<TaskAssignee[] | null>(null)
+  const [assigneeId, setAssigneeId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function changeOpen(next: boolean) {
+    setOpen(next)
+    if (!next || assignees) return
+    setLoading(true)
+    try {
+      const response = await fetch('/api/admin/tasks/assignees', { cache: 'no-store' })
+      const body = await response.json().catch(() => ({})) as { assignees?: TaskAssignee[]; error?: string }
+      if (!response.ok || !body.assignees) throw new Error(body.error ?? 'Staff list could not be loaded')
+      setAssignees(body.assignees)
+      setAssigneeId(current => current || body.assignees?.[0]?.id || '')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Staff list could not be loaded')
+      setOpen(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function delegate() {
+    const assignee = assignees?.find(person => person.id === assigneeId)
+    const taskId = item.sourceIds[0]
+    if (!assignee || !taskId) return
+    setSaving(true)
+    try {
+      await executeTodayInternalAction({
+        actionKey: 'task.delegate',
+        referencePayload: { taskId, assigneeId: assignee.id },
+        displaySummary: `Delegate task: ${item.title} to ${assignee.name}`,
+        item,
+      })
+      await onDelegated()
+      setOpen(false)
+      toast.success(`Delegated to ${assignee.name}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to delegate this task')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost"><Users /> Delegate</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delegate task</DialogTitle>
+          <DialogDescription>Assign “{item.title}” to an authorized staff member. This is an internal, auditable change.</DialogDescription>
+        </DialogHeader>
+        {loading ? <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="animate-spin" /> Loading staff…</div> : (
+          <div className="space-y-2 py-2">
+            <Label htmlFor={`delegate-${item.workKey}`}>Assign to</Label>
+            <NativeSelect id={`delegate-${item.workKey}`} value={assigneeId} onChange={event => setAssigneeId(event.target.value)} disabled={!assignees?.length || saving}>
+              {assignees?.length
+                ? assignees.map(person => <option key={person.id} value={person.id}>{person.name}</option>)
+                : <option value="">No eligible staff members</option>}
+            </NativeSelect>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={delegate} disabled={loading || saving || !assigneeId}>
+            {saving ? <Loader2 className="animate-spin" /> : <Users />} Delegate task
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function WorkCard({
   item,
   primary = false,
@@ -187,42 +296,13 @@ function WorkCard({
     if (!response.ok) throw new Error('The daily plan could not be updated')
   }
 
-  async function executeInternalAction(
-    actionKey: string,
-    referencePayload: Record<string, unknown>,
-    displaySummary: string,
-  ) {
-    const proposed = await fetch('/api/admin/actions/proposals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        actionKey,
-        referencePayload,
-        displaySummary,
-        recordType: item.record.type,
-        recordId: item.record.id,
-        source: 'today',
-      }),
-    })
-    const proposedBody = await proposed.json().catch(() => ({})) as {
-      proposal?: { id: string }
-      error?: string
-    }
-    if (!proposed.ok || !proposedBody.proposal) {
-      throw new Error(proposedBody.error ?? 'The action could not be prepared')
-    }
-    const executed = await fetch(`/api/admin/actions/proposals/${proposedBody.proposal.id}/execute`, {
-      method: 'POST',
-    })
-    const executedBody = await executed.json().catch(() => ({})) as { error?: string }
-    if (!executed.ok) throw new Error(executedBody.error ?? 'The action could not be completed')
-  }
-
   async function start() {
     setBusy('start')
     try {
       if (item.sourceType === 'task') {
-        await executeInternalAction('task.start', { taskId: item.sourceIds[0] }, `Start task: ${item.title}`)
+        await executeTodayInternalAction({
+          actionKey: 'task.start', referencePayload: { taskId: item.sourceIds[0] }, displaySummary: `Start task: ${item.title}`, item,
+        })
       }
       await planStatus('started')
       await onRefresh()
@@ -238,7 +318,9 @@ function WorkCard({
     setBusy('done')
     try {
       if (item.sourceType === 'task') {
-        await executeInternalAction('task.complete', { taskId: item.sourceIds[0] }, `Complete task: ${item.title}`)
+        await executeTodayInternalAction({
+          actionKey: 'task.complete', referencePayload: { taskId: item.sourceIds[0] }, displaySummary: `Complete task: ${item.title}`, item,
+        })
       } else {
         // Non-task items represent external state (an unread message, intake,
         // invoice, etc.). Opening and resolving that source is the only honest
@@ -262,11 +344,12 @@ function WorkCard({
       const snoozedUntil = state === 'snoozed'
         ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
         : null
-      await executeInternalAction(
-        'work.override',
-        { workKey: item.workKey, state, snoozedUntil },
-        `${state === 'snoozed' ? 'Snooze' : 'Block'} work: ${item.title}`,
-      )
+      await executeTodayInternalAction({
+        actionKey: 'work.override',
+        referencePayload: { workKey: item.workKey, state, snoozedUntil },
+        displaySummary: `${state === 'snoozed' ? 'Snooze' : 'Block'} work: ${item.title}`,
+        item,
+      })
       await recordUsage(state === 'snoozed' ? 'work_snoozed' : 'work_blocked')
       await onRefresh()
       toast.success(state === 'snoozed' ? 'Snoozed for one day' : 'Moved to blocked')
@@ -321,9 +404,9 @@ function WorkCard({
         <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('blocked')} disabled={busy !== null}>
           {busy === 'blocked' ? <Loader2 className="animate-spin" /> : <PauseCircle />} Blocked
         </Button>
-        <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
-          <Link href={`${item.href}${item.href.includes('?') ? '&' : '?'}delegate=1`}><Users /> Delegate</Link>
-        </Button>
+        {item.sourceType === 'task'
+          ? <DelegateTaskButton item={item} onDelegated={onRefresh} />
+          : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>}
         <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
           <Link href={assistantHref(item)}><Bot /> Ask Cornerstone</Link>
         </Button>
