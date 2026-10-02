@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { billingFailure } from '@/lib/billing/apiFailure'
-import { invoiceIdSchema, sendInvoiceSchema } from '@/lib/billing/invoices'
+import { invoiceIdSchema, isCarrierInvoice, sendInvoiceSchema } from '@/lib/billing/invoices'
 import { emailInvoice, reloadInvoice, renderAndAttachInvoice } from '@/lib/invoices/issue'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -22,6 +22,12 @@ export async function POST(req: Request, context: Context) {
   }
 
   const invoice = await reloadInvoice(parsedId.data)
+  if (isCarrierInvoice(invoice)) {
+    return NextResponse.json(
+      { error: 'This invoice bills a legal plan carrier and is kept as an internal record; it is not sent to anyone' },
+      { status: 409 },
+    )
+  }
   if (invoice.status === 'draft') {
     return NextResponse.json({ error: 'Issue the invoice before sending it' }, { status: 409 })
   }

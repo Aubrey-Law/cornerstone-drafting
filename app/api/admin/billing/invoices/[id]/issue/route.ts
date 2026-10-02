@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { billingFailure } from '@/lib/billing/apiFailure'
-import { invoiceIdSchema, issueInvoiceSchema } from '@/lib/billing/invoices'
+import { invoiceIdSchema, isCarrierInvoice, issueInvoiceSchema } from '@/lib/billing/invoices'
 import {
   emailInvoice,
   logInvoiceActivity,
@@ -74,7 +74,10 @@ export async function POST(req: Request, context: Context) {
     metadata: { invoice_id: invoice.id, number: invoice.number },
   })
 
-  if (!parsed.data.send) {
+  // A carrier invoice is the firm's record of claims billed to the plan; the
+  // claims themselves go in through the carrier's portal. Nothing is emailed,
+  // whatever the caller asked for.
+  if (!parsed.data.send || isCarrierInvoice(invoice)) {
     return NextResponse.json({
       invoice: await reloadInvoice(parsedId.data),
       sent: false,

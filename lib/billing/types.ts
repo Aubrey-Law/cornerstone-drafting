@@ -158,8 +158,27 @@ export interface BillingSnapshot {
   /** Most recent payments across every matter, newest first. */
   recentPayments: RecentPaymentRow[]
   openClaims: BillingLedgerRow[]
+  /** What each legal plan carrier has been billed and paid. */
+  planBilling: PlanBillingRollup[]
   unpreparedClaims: UnpreparedClaim[]
   nudges: BillingNudge[]
+}
+
+/**
+ * One carrier's claims. "Billed" means submitted: a claim counts from the day
+ * it was marked submitted or went out on a carrier invoice (invoicedAt), not
+ * from when it was entered. Collected follows payment dates.
+ */
+export interface PlanBillingRollup {
+  plan: BillingPlan
+  billedMonth: number
+  billedYtd: number
+  collectedMonth: number
+  collectedYtd: number
+  /** Submitted and not yet fully paid. */
+  outstanding: number
+  /** Entered but not yet submitted to the carrier. */
+  awaitingSubmission: { count: number; amount: number }
 }
 
 export const billingItemIdSchema = z.string().uuid()

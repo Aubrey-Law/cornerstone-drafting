@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { billingMoney } from '@/lib/billing/metrics'
+import {
+  billingPlans as billingPlanList,
+  type BillingLedgerRow,
+  type BillingPlan,
+} from '@/lib/billing/types'
 import {
   MATTER_BILLING_TYPE_OPTIONS,
   isLegalPlanBilling,
@@ -406,6 +412,81 @@ export function CloseOutCard({
           <p className="text-xs text-muted-foreground">
             Resolve every close-out item, including billing, before this matter can close.
           </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const planCarrierNames: Record<BillingPlan, string> = {
+  metlife: 'MetLife',
+  legalease: 'LegalEASE',
+}
+
+/**
+ * This matter's legal plan claims, per carrier: what has been billed to the
+ * plan, what it has paid, and what is still to submit. Kept apart from Money
+ * in, which is about the client's balance as much as the plan's.
+ */
+export function PlanClaimsCard({
+  rows,
+  invoiceHref,
+}: {
+  rows: BillingLedgerRow[]
+  /** Opens the composer with this matter's uninvoiced claims ticked. */
+  invoiceHref: string | null
+}) {
+  const plans = billingPlanList.filter(plan =>
+    rows.some(row => row.kind === 'plan_claim' && row.plan === plan))
+  if (plans.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle className="text-sm">Billed to legal plan</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {plans.map(plan => {
+          const claims = rows.filter(row => row.kind === 'plan_claim' && row.plan === plan)
+          const submitted = claims.filter(row => row.status !== 'to_invoice')
+          const unsubmitted = claims.filter(row => row.status === 'to_invoice')
+          const billed = submitted.reduce((sum, row) => sum + row.amountBilled, 0)
+          const reimbursed = claims.reduce((sum, row) => sum + row.collected, 0)
+          const owed = submitted.reduce((sum, row) => sum + row.balance, 0)
+          return (
+            <dl key={plan} aria-label={planCarrierNames[plan]} className="space-y-2 text-sm">
+              {plans.length > 1 && <p className="font-medium">{planCarrierNames[plan]}</p>}
+              <div className="flex items-baseline justify-between gap-2">
+                <dt className="text-muted-foreground">Billed to {planCarrierNames[plan]}</dt>
+                <dd className="tabular-nums">{billingMoney(billed)}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <dt className="text-muted-foreground">Reimbursed</dt>
+                <dd className="tabular-nums text-green">{billingMoney(reimbursed)}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <dt className="font-medium">Owed by {planCarrierNames[plan]}</dt>
+                <dd className={cn('font-semibold tabular-nums', owed > 0 && 'text-amber')}>
+                  {billingMoney(owed)}
+                </dd>
+              </div>
+              {unsubmitted.length > 0 && (
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-muted-foreground">
+                    Not yet submitted · {unsubmitted.length} claim{unsubmitted.length === 1 ? '' : 's'}
+                  </dt>
+                  <dd className="tabular-nums">
+                    {billingMoney(unsubmitted.reduce((sum, row) => sum + row.amountBilled, 0))}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )
+        })}
+        {invoiceHref && (
+          <Button asChild variant="outline" size="sm" className="min-h-11 w-full">
+            <Link href={invoiceHref}>Invoice claims to the plan</Link>
+          </Button>
         )}
       </CardContent>
     </Card>

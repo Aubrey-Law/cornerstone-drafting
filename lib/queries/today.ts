@@ -468,6 +468,8 @@ async function fetchTodayBilling(
       admin
         .from('invoices')
         .select('id, number, matter_id, subtotal_cents, due_date, status, kind')
+        // Client money only; what a carrier owes is tracked on the plan claims.
+        .eq('payer', 'client')
         .in('status', ['issued', 'partial'])
         .not('due_date', 'is', null)
         .lt('due_date', todayKey),

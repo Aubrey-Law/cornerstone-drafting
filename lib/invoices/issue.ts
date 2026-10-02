@@ -7,7 +7,7 @@ import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { fetchInvoice } from '@/lib/queries/invoices'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import type { InvoiceDetail } from '@/lib/billing/invoices'
+import { isCarrierInvoice, type InvoiceDetail } from '@/lib/billing/invoices'
 import { buildInvoiceEmailHtml, buildInvoiceEmailText } from './emailBody'
 import { buildInvoiceRenderData, generateInvoiceArtifact } from './generate'
 import type { InvoiceRenderData } from './types'
@@ -27,7 +27,8 @@ interface StoredDocument {
  *
  * shared_at is stamped so the client sees it in the portal Documents list
  * through the existing visibility rule — no separate sharing step, and no new
- * document plumbing.
+ * document plumbing. A carrier invoice is filed unshared: it records what was
+ * billed to the plan and is none of the client's business to pay.
  */
 async function storeArtifact(input: {
   matterId: string
@@ -36,6 +37,8 @@ async function storeArtifact(input: {
   bytes: Buffer
   contentType: string
   extension: string
+  /** False for a carrier invoice, which stays off the client's portal. */
+  shareWithClient: boolean
 }): Promise<StoredDocument> {
   const admin = getAdminClient()
   // The uuid suffix keeps a re-render from colliding with the object it
@@ -51,9 +54,9 @@ async function storeArtifact(input: {
       name: input.name,
       size: input.bytes.byteLength,
       content_type: input.contentType,
-      folder: 'client',
+      folder: input.shareWithClient ? 'client' : 'billing',
       source: 'firm',
-      shared_at: new Date().toISOString(),
+      shared_at: input.shareWithClient ? new Date().toISOString() : null,
     })
     .select('id')
     .single()
@@ -87,6 +90,7 @@ export async function renderAndAttachInvoice(
     collected: invoice.collected,
   })
   const artifact = await generateInvoiceArtifact(renderData, invoice.clientName)
+  const shareWithClient = !isCarrierInvoice(invoice)
 
   const docx = await storeArtifact({
     matterId: invoice.matterId,
@@ -95,6 +99,7 @@ export async function renderAndAttachInvoice(
     bytes: artifact.docxBytes,
     contentType: DOCX_MIME,
     extension: 'docx',
+    shareWithClient,
   })
 
   const pdf = artifact.pdfBytes
@@ -105,6 +110,7 @@ export async function renderAndAttachInvoice(
       bytes: artifact.pdfBytes,
       contentType: 'application/pdf',
       extension: 'pdf',
+      shareWithClient,
     })
     : null
 

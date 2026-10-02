@@ -29,11 +29,15 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  chargePayer,
   inferTerm,
+  invoicePayerLabels,
+  invoicePayers,
   invoiceTermLabels,
   invoiceTerms,
   resolveDueDate,
   type InvoiceableCharge,
+  type InvoicePayer,
   type InvoiceTerm,
 } from '@/lib/billing/invoices'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -61,6 +65,20 @@ export interface ComposerDraft {
 }
 
 /**
+ * What a fresh composer ticks: everything one payer is owed. The client's
+ * charges win when a matter has both, since that is the bill that goes out;
+ * a plan-only matter gets its claims.
+ */
+function defaultSelection(charges: InvoiceableCharge[]): Record<string, boolean> {
+  const payer: InvoicePayer | undefined = charges.some(charge => chargePayer(charge) === 'client')
+    ? 'client'
+    : charges[0] && chargePayer(charges[0])
+  return Object.fromEntries(
+    charges.filter(charge => chargePayer(charge) === payer).map(charge => [charge.id, true]),
+  )
+}
+
+/**
  * The invoice composer: pick a matter, tick the charges to bill, and watch the
  * document assemble beside the form.
  *
@@ -71,6 +89,12 @@ export interface ComposerDraft {
  * The same component edits a saved draft (`draft` set): the fields and the
  * rules behind them are identical, only the matter is fixed and the save is a
  * PATCH onto an invoice that already exists.
+ *
+ * An invoice bills one payer. Legal plan claims bill their carrier, so a
+ * MetLife matter's claims become a MetLife invoice — the firm's record of what
+ * was billed to the plan, issued but never emailed or shown to the client.
+ * Ticking a charge for another payer clears the rest rather than letting the
+ * database refuse the mix on save.
  */
 export function InvoiceComposer({
   matters,
@@ -99,12 +123,9 @@ export function InvoiceComposer({
     // Everything outstanding is billed by default: the common case is "bill
     // this matter", not "bill part of this matter". Editing instead restores
     // exactly what the draft holds, even if that is a subset.
-    Object.fromEntries(
-      (draft || preselectedChargeIds.length > 0
-        ? preselectedChargeIds
-        : initialCharges.map(charge => charge.id)
-      ).map(id => [id, true]),
-    ),
+    draft || preselectedChargeIds.length > 0
+      ? Object.fromEntries(preselectedChargeIds.map(id => [id, true]))
+      : defaultSelection(initialCharges),
   )
   const initialIssueDate = draft?.issueDate ?? today
   const [issueDate, setIssueDate] = useState(initialIssueDate)
@@ -121,7 +142,7 @@ export function InvoiceComposer({
   const [paymentLink, setPaymentLink] = useState(draft?.paymentLink ?? '')
   const [notes, setNotes] = useState(draft?.notes ?? '')
   const [terms, setTerms] = useState(draft?.terms ?? '')
-  const [saving, setSaving] = useState<'draft' | 'send' | 'download' | null>(null)
+  const [saving, setSaving] = useState<'draft' | 'issue' | 'send' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // The term drives the due date; it never reads back from it, so a custom due
@@ -143,6 +164,30 @@ export function InvoiceComposer({
     [chosen],
   )
   const matterLabel = matters.find(matter => matter.id === matterId)?.label ?? ''
+  const payer: InvoicePayer = chosen[0] ? chargePayer(chosen[0]) : 'client'
+  const carrier = payer !== 'client'
+  // Grouped only when the matter actually has more than one payer; a plain
+  // list otherwise, as before.
+  const payerGroups = useMemo(
+    () => invoicePayers
+      .map(group => ({ payer: group, charges: charges.filter(charge => chargePayer(charge) === group) }))
+      .filter(group => group.charges.length > 0),
+    [charges],
+  )
+  const clientName = matterLabel.split(' · ')[0] || 'Client'
+  const defaultBillTo = carrier ? invoicePayerLabels[payer] : clientName
+
+  function toggleCharge(charge: InvoiceableCharge, checked: boolean) {
+    setSelected(current => {
+      if (!checked) return { ...current, [charge.id]: false }
+      const group = chargePayer(charge)
+      return Object.fromEntries(
+        charges
+          .filter(other => other.id === charge.id || (current[other.id] && chargePayer(other) === group))
+          .map(other => [other.id, true]),
+      )
+    })
+  }
 
   // Reload the charge list whenever the matter changes, and default the new
   // matter's charges to selected so the preview is never empty on arrival.
@@ -158,7 +203,7 @@ export function InvoiceComposer({
         if (cancelled) return
         const next = json.charges ?? []
         setCharges(next)
-        setSelected(Object.fromEntries(next.map(charge => [charge.id, true])))
+        setSelected(defaultSelection(next))
         if (json.error) setError(json.error)
       })
       .catch(() => {
@@ -181,9 +226,9 @@ export function InvoiceComposer({
       dueDate,
       notes: notes.trim() || null,
       terms: terms.trim() || null,
-      billToName: billToName.trim() || null,
-      billToEmail: billToEmail.trim() || null,
-      paymentLink: paymentLink.trim() || null,
+      billToName: billToName.trim() || (carrier ? invoicePayerLabels[payer] : null),
+      billToEmail: carrier ? null : billToEmail.trim() || null,
+      paymentLink: carrier ? null : paymentLink.trim() || null,
     }
     const response = await fetch(
       draft ? `/api/admin/billing/invoices/${draft.invoiceId}` : '/api/admin/billing/invoices',
@@ -211,7 +256,7 @@ export function InvoiceComposer({
    * for a bill given to the client in person, posted, or sent from the
    * attorney's own mail client.
    */
-  async function submit(mode: 'draft' | 'send' | 'download') {
+  async function submit(mode: 'draft' | 'issue' | 'send' | 'download') {
     if (!matterId) {
       setError('Choose a matter to bill.')
       return
@@ -260,6 +305,7 @@ export function InvoiceComposer({
       }
       if (issuedJson.warning) toast.warning(issuedJson.warning)
       else if (issuedJson.sent) toast.success('Invoice issued and emailed')
+      else if (carrier) toast.success(`Invoice issued to ${invoicePayerLabels[payer]}; its claims are marked submitted`)
       else toast.success('Invoice issued')
 
       if (mode === 'download') {
@@ -353,26 +399,36 @@ export function InvoiceComposer({
           ) : charges.length === 0 ? (
             <p className="rounded-md border border-border bg-muted px-3 py-3 text-sm text-muted-foreground">
               {matterId
-                ? 'This matter has no uninvoiced charges. Add a charge on the Billing page first.'
+                ? 'Everything on this matter is already invoiced. Add a charge to bill something new.'
                 : 'Choose a matter to see what can be billed.'}
             </p>
           ) : (
             <ul className="divide-y divide-border rounded-md border border-border">
-              {charges.map(charge => (
-                <li key={charge.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <Checkbox
-                    id={`charge-${charge.id}`}
-                    checked={Boolean(selected[charge.id])}
-                    onCheckedChange={checked =>
-                      setSelected(current => ({ ...current, [charge.id]: checked === true }))}
-                  />
-                  <Label
-                    htmlFor={`charge-${charge.id}`}
-                    className="min-w-0 flex-1 cursor-pointer font-normal"
-                  >
-                    {charge.label}
-                  </Label>
-                  <span className="tabular-nums text-sm">{moneyExact(charge.amountBilled)}</span>
+              {payerGroups.map(group => (
+                <li key={group.payer} className="divide-y divide-border">
+                  {payerGroups.length > 1 && (
+                    <p className="bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {group.payer === 'client' ? 'Billed to the client' : `Billed to ${invoicePayerLabels[group.payer]}`}
+                    </p>
+                  )}
+                  <ul className="divide-y divide-border">
+                    {group.charges.map(charge => (
+                      <li key={charge.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <Checkbox
+                          id={`charge-${charge.id}`}
+                          checked={Boolean(selected[charge.id])}
+                          onCheckedChange={checked => toggleCharge(charge, checked === true)}
+                        />
+                        <Label
+                          htmlFor={`charge-${charge.id}`}
+                          className="min-w-0 flex-1 cursor-pointer font-normal"
+                        >
+                          {charge.label}
+                        </Label>
+                        <span className="tabular-nums text-sm">{moneyExact(charge.amountBilled)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
               <li className="flex items-center justify-between gap-3 bg-muted px-3 py-2.5">
@@ -383,6 +439,18 @@ export function InvoiceComposer({
               </li>
             </ul>
           )}
+          {payerGroups.length > 1 && (
+            <p className="text-xs text-muted-foreground">
+              An invoice bills one payer. Client charges and legal plan claims go on separate invoices.
+            </p>
+          )}
+          {carrier && (
+            <p role="status" className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Billed to {invoicePayerLabels[payer]}. This invoice is the firm&rsquo;s record of the
+              claims: it is not emailed or shown to the client, and issuing it marks its claims
+              submitted.
+            </p>
+          )}
         </fieldset>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -392,37 +460,41 @@ export function InvoiceComposer({
               id="invoice-bill-to"
               value={billToName}
               onChange={event => setBillToName(event.target.value)}
-              placeholder={matterLabel.split(' · ')[0] || 'Client name'}
+              placeholder={defaultBillTo}
               className="min-h-11"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="invoice-bill-email">Send to (optional)</Label>
-            <Input
-              id="invoice-bill-email"
-              type="email"
-              value={billToEmail}
-              onChange={event => setBillToEmail(event.target.value)}
-              placeholder="Defaults to the client on file"
-              className="min-h-11"
-            />
-          </div>
+          {!carrier && (
+            <div className="space-y-2">
+              <Label htmlFor="invoice-bill-email">Send to (optional)</Label>
+              <Input
+                id="invoice-bill-email"
+                type="email"
+                value={billToEmail}
+                onChange={event => setBillToEmail(event.target.value)}
+                placeholder="Defaults to the client on file"
+                className="min-h-11"
+              />
+            </div>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="invoice-pay-link">Payment link (optional)</Label>
-          <Input
-            id="invoice-pay-link"
-            type="url"
-            value={paymentLink}
-            onChange={event => setPaymentLink(event.target.value)}
-            placeholder="https://…"
-            className="min-h-11"
-          />
-          <p className="text-xs text-muted-foreground">
-            Printed on the invoice and shown as a Pay button in the email.
-          </p>
-        </div>
+        {!carrier && (
+          <div className="space-y-2">
+            <Label htmlFor="invoice-pay-link">Payment link (optional)</Label>
+            <Input
+              id="invoice-pay-link"
+              type="url"
+              value={paymentLink}
+              onChange={event => setPaymentLink(event.target.value)}
+              placeholder="https://…"
+              className="min-h-11"
+            />
+            <p className="text-xs text-muted-foreground">
+              Printed on the invoice and shown as a Pay button in the email.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="invoice-notes">Notes (optional)</Label>
@@ -468,8 +540,8 @@ export function InvoiceComposer({
       data={{
         firmName: firm.name,
         remitTo: firm.remitTo,
-        billToName: billToName.trim() || matterLabel.split(' · ')[0] || 'Client',
-        billToEmail: billToEmail.trim() || null,
+        billToName: billToName.trim() || defaultBillTo,
+        billToEmail: carrier ? null : billToEmail.trim() || null,
         matterNumber: matterLabel.includes(' · ') ? matterLabel.split(' · ')[1] : null,
         number: null,
         issueDate,
@@ -482,7 +554,7 @@ export function InvoiceComposer({
         collectedCents: 0,
         notes: notes.trim() || null,
         terms: terms.trim() || null,
-        paymentLink: paymentLink.trim() || null,
+        paymentLink: carrier ? null : paymentLink.trim() || null,
       }}
     />
   )
@@ -494,7 +566,7 @@ export function InvoiceComposer({
         description={
           draft
             ? 'Change the charges, dates or wording. Nothing has been sent yet.'
-            : 'Group a matter’s open charges into one bill, then issue and email it.'
+            : 'Group a matter’s open charges into one bill — for the client, or for a legal plan carrier — then issue it.'
         }
         actions={
           <>
@@ -524,15 +596,27 @@ export function InvoiceComposer({
               <Download className="size-4" aria-hidden />
               {saving === 'download' ? 'Issuing…' : 'Issue & download'}
             </Button>
-            <Button
-              type="button"
-              className="min-h-11"
-              disabled={saving !== null || chosen.length === 0}
-              onClick={() => void submit('send')}
-            >
-              <Send className="size-4" aria-hidden />
-              {saving === 'send' ? 'Issuing…' : 'Issue & send'}
-            </Button>
+            {carrier ? (
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={saving !== null || chosen.length === 0}
+                onClick={() => void submit('issue')}
+              >
+                <Save className="size-4" aria-hidden />
+                {saving === 'issue' ? 'Issuing…' : 'Issue invoice'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={saving !== null || chosen.length === 0}
+                onClick={() => void submit('send')}
+              >
+                <Send className="size-4" aria-hidden />
+                {saving === 'send' ? 'Issuing…' : 'Issue & send'}
+              </Button>
+            )}
           </>
         }
       />

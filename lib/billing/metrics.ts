@@ -1,4 +1,5 @@
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { billingPlans } from './types'
 import type {
   BillingFilter,
   BillingItem,
@@ -7,6 +8,7 @@ import type {
   BillingPayment,
   BillingSnapshot,
   CollectionsPoint,
+  PlanBillingRollup,
   RecentPaymentRow,
   RevenueCategory,
   RevenueRollup,
@@ -400,6 +402,48 @@ function buildNudges(
   return nudges
 }
 
+/**
+ * Per-carrier totals for plan claims. Exported so the matter Billing tab can
+ * show the same figures for one matter's rows.
+ */
+export function buildPlanBilling(
+  rows: BillingLedgerRow[],
+  selectedMonth: string,
+  today: string,
+): PlanBillingRollup[] {
+  const bounds = monthBounds(selectedMonth)
+  const yearStart = `${dateParts(today)[0]}-01-01`
+  const yearEnd = `${dateParts(today)[0] + 1}-01-01`
+  return billingPlans
+    .map(plan => {
+      const claims = rows.filter(row => row.kind === 'plan_claim' && row.plan === plan)
+      const submitted = claims.filter(row => row.status !== 'to_invoice' && row.invoicedAt)
+      const unsubmitted = claims.filter(row => row.status === 'to_invoice')
+      const payments = claims.flatMap(row => row.payments)
+      const billedIn = (start: string, end: string) => submitted
+        .filter(row => inDateRange(row.invoicedAt!, start, end))
+        .reduce((sum, row) => sum + row.amountBilled, 0)
+      const collectedIn = (start: string, end: string) => payments
+        .filter(payment => inDateRange(payment.receivedAt, start, end))
+        .reduce((sum, payment) => sum + payment.amount, 0)
+      return {
+        plan,
+        billedMonth: billedIn(bounds.start, bounds.end),
+        billedYtd: billedIn(yearStart, yearEnd),
+        collectedMonth: collectedIn(bounds.start, bounds.end),
+        collectedYtd: collectedIn(yearStart, yearEnd),
+        outstanding: submitted.reduce((sum, row) => sum + row.balance, 0),
+        awaitingSubmission: {
+          count: unsubmitted.length,
+          amount: unsubmitted.reduce((sum, row) => sum + row.balance, 0),
+        },
+        hasClaims: claims.length > 0,
+      }
+    })
+    .filter(rollup => rollup.hasClaims)
+    .map(({ hasClaims: _hasClaims, ...rollup }) => rollup)
+}
+
 export function buildBillingSnapshot(input: {
   items: BillingItem[]
   payments: BillingPayment[]
@@ -499,6 +543,7 @@ export function buildBillingSnapshot(input: {
     },
     recentPayments: buildRecentPayments(rows, input.payments),
     openClaims: open.filter(row => row.kind === 'plan_claim'),
+    planBilling: buildPlanBilling(rows, input.selectedMonth, today),
     unpreparedClaims: input.unpreparedClaims,
     nudges: buildNudges(
       rows,

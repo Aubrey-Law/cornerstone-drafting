@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/table'
 import { moneyExact } from '@/app/admin/billing/financeFormat'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import type { InvoiceDetail } from '@/lib/billing/invoices'
+import { invoicePayerLabels, isCarrierInvoice, type InvoiceDetail } from '@/lib/billing/invoices'
 import { downloadInvoiceDocument } from '@/lib/invoices/downloadInvoice'
 import { formatFirmDate, formatFirmDateTime } from '@/lib/format'
 import type { BillingPaymentMethod } from '@/lib/billing/types'
@@ -79,6 +79,9 @@ export default function InvoiceDetailClient({
 
   const isDraft = invoice.status === 'draft'
   const isVoid = invoice.status === 'void'
+  // A carrier invoice is the firm's record of plan claims: never emailed,
+  // reminded or paid by card. Payments arrive from the carrier and are logged.
+  const carrier = isCarrierInvoice(invoice)
   const documentId = invoice.pdfDocumentId ?? invoice.docxDocumentId
 
   function rememberOpener(setter: (open: boolean) => void, ref: typeof paymentOpenerRef) {
@@ -207,8 +210,8 @@ export default function InvoiceDetailClient({
    * own page — the only route to issuing was the composer, which you had
    * already left.
    */
-  async function issue(mode: 'send' | 'download') {
-    setBusy(mode === 'send' ? 'issue-send' : 'issue-download')
+  async function issue(mode: 'send' | 'record' | 'download') {
+    setBusy(mode === 'download' ? 'issue-download' : 'issue-send')
     try {
       const json = await post(
         `/api/admin/billing/invoices/${invoice.id}/issue`,
@@ -226,6 +229,7 @@ export default function InvoiceDetailClient({
 
       if (json.warning) toast.warning(json.warning)
       else if (json.sent) toast.success('Invoice issued and emailed')
+      else if (carrier) toast.success(`Invoice issued to ${invoicePayerLabels[invoice.payer]}; its claims are marked submitted`)
       else toast.success('Invoice issued')
 
       if (mode === 'download') {
@@ -315,6 +319,11 @@ export default function InvoiceDetailClient({
         description={
           <span className="flex flex-wrap items-center gap-2">
             <InvoiceStatusBadge invoice={invoice} overdue={invoice.overdue} />
+            {carrier && (
+              <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium">
+                Billed to {invoicePayerLabels[invoice.payer]}
+              </span>
+            )}
             <Link
               href={`/admin/matters/${invoice.matterId}`}
               className="hover:text-primary hover:underline"
@@ -341,15 +350,15 @@ export default function InvoiceDetailClient({
                 type="button"
                 className="min-h-11"
                 disabled={busy !== null}
-                onClick={() => void issue('send')}
+                onClick={() => void issue(carrier ? 'record' : 'send')}
               >
                 <Send className="size-4" aria-hidden />
-                {busy === 'issue-send' ? 'Issuing…' : 'Issue & send'}
+                {busy === 'issue-send' ? 'Issuing…' : carrier ? 'Issue invoice' : 'Issue & send'}
               </Button>
             )}
             {!isDraft && !isVoid && (
               <>
-                {invoice.overdue && (
+                {invoice.overdue && !carrier && (
                   <Button
                     type="button"
                     className="min-h-11"
@@ -360,7 +369,7 @@ export default function InvoiceDetailClient({
                     Review reminder
                   </Button>
                 )}
-                {invoice.balance > 0 && !invoice.overdue && (
+                {invoice.balance > 0 && (!invoice.overdue || carrier) && (
                   <Button
                     type="button"
                     className="min-h-11"
@@ -417,17 +426,19 @@ export default function InvoiceDetailClient({
                     </>
                   ) : (
                     <>
-                      <DropdownMenuItem onSelect={() => void resend()}>
-                        <Send className="size-4" aria-hidden />
-                        {invoice.sentAt ? 'Resend invoice' : 'Send invoice'}
-                      </DropdownMenuItem>
-                      {paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
+                      {!carrier && (
+                        <DropdownMenuItem onSelect={() => void resend()}>
+                          <Send className="size-4" aria-hidden />
+                          {invoice.sentAt ? 'Resend invoice' : 'Send invoice'}
+                        </DropdownMenuItem>
+                      )}
+                      {!carrier && paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
                         <DropdownMenuItem onSelect={() => void createPayLink()}>
                           <CreditCard className="size-4" aria-hidden />
                           Create pay link
                         </DropdownMenuItem>
                       )}
-                      {invoice.balance > 0 && invoice.overdue && (
+                      {invoice.balance > 0 && invoice.overdue && !carrier && (
                         <DropdownMenuItem onSelect={() => openFromActionsMenu(setPaymentOpen, paymentOpenerRef)}>
                           <Banknote className="size-4" aria-hidden />
                           Record payment

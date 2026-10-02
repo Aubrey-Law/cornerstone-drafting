@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { billingKinds, billingPaymentMethods, type BillingKind } from './types'
+import {
+  billingPaymentMethods,
+  type BillingKind,
+  type BillingPlan,
+} from './types'
 
 /**
  * An invoice is the bill a client receives. A billing_item is a single charge.
@@ -14,6 +18,33 @@ export type InvoiceStatus = (typeof invoiceStatuses)[number]
 
 export const invoiceKinds = ['invoice', 'credit_note'] as const
 export type InvoiceKind = (typeof invoiceKinds)[number]
+
+/**
+ * Who an invoice bills. A plan claim bills its carrier; every other charge
+ * bills the client, and one invoice holds one payer. Derived from the charges
+ * by the database (billing_item_payer), never chosen.
+ *
+ * A carrier invoice is the firm's own record of claims billed to the plan: it
+ * is never emailed, shown in the portal, offered for checkout or reminded.
+ */
+export const invoicePayers = ['client', 'metlife', 'legalease'] as const
+export type InvoicePayer = (typeof invoicePayers)[number]
+
+export const invoicePayerLabels: Record<InvoicePayer, string> = {
+  client: 'Client',
+  metlife: 'MetLife Legal Plans',
+  legalease: 'LegalEASE',
+}
+
+/** Mirrors public.billing_item_payer. */
+export function chargePayer(charge: { kind: BillingKind; plan: BillingPlan | null }): InvoicePayer {
+  return charge.kind === 'plan_claim' && charge.plan ? charge.plan : 'client'
+}
+
+/** A row read before the payer column existed counts as a client invoice. */
+export function isCarrierInvoice(invoice: { payer?: InvoicePayer | null }): boolean {
+  return invoice.payer === 'metlife' || invoice.payer === 'legalease'
+}
 
 /**
  * Payment terms offered in the composer. These are presentation only — the
@@ -81,6 +112,7 @@ export interface Invoice {
   numberYear: number | null
   kind: InvoiceKind
   status: InvoiceStatus
+  payer: InvoicePayer
   subtotalCents: number
   issueDate: string | null
   dueDate: string | null
@@ -118,6 +150,8 @@ export interface InvoiceDetail extends Invoice {
 export interface InvoiceableCharge {
   id: string
   kind: BillingKind
+  /** The carrier a plan claim bills; null for client charges. */
+  plan: BillingPlan | null
   label: string
   amountBilled: number
   createdAt: string
@@ -386,5 +420,3 @@ export type UpdateInvoiceDraftInput = z.infer<typeof updateInvoiceDraftSchema>
 export type IssueInvoiceInput = z.infer<typeof issueInvoiceSchema>
 export type RecordInvoicePaymentInput = z.infer<typeof recordInvoicePaymentSchema>
 
-/** Kinds that can appear on a client invoice. A plan claim bills the carrier. */
-export const invoiceableKinds = billingKinds.filter(kind => kind !== 'plan_claim')

@@ -24,6 +24,9 @@ export async function prepareInvoiceReminderDrafts() {
   const { data, error } = await admin
     .from('invoices')
     .select('id, number, subtotal_cents, due_date, bill_to_email, kind')
+    // A carrier invoice is never chased by email; its claims are followed up
+    // on the carrier's portal.
+    .eq('payer', 'client')
     .in('status', ['issued', 'partial'])
     .not('due_date', 'is', null)
     .lt('due_date', today)

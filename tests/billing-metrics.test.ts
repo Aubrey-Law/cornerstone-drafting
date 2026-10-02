@@ -3,6 +3,8 @@ import {
   billingCsv,
   billingStatusPresentation,
   buildBillingSnapshot,
+  buildPlanBilling,
+  buildRows,
   filterBillingRows,
 } from '@/lib/billing/metrics'
 import type { BillingItem, BillingPayment } from '@/lib/billing/types'
@@ -398,5 +400,61 @@ describe('billing metrics', () => {
       'Client,Matter,Item,Billed,Collected,Balance,Status,Invoice date,Age days\n'
       + '"Chen, Marcus & Lily",2026-EP-Chen-014,Flat fee — Joint trust package,4800.00,1500.00,3300.00,Overdue,2026-06-01,59',
     )
+  })
+})
+
+describe('buildPlanBilling', () => {
+  const claim = (overrides: Partial<BillingItem>): BillingItem => ({
+    ...items[0],
+    id: 'claim',
+    matterId: 'matter-plan',
+    kind: 'plan_claim',
+    plan: 'metlife',
+    label: 'CT 220 — Power of Attorney — Individual',
+    amountBilled: 6_000,
+    status: 'to_invoice',
+    invoicedAt: null,
+    source: 'manual',
+    createdAt: '2026-07-02T16:00:00.000Z',
+    ...overrides,
+  })
+
+  it('counts a claim as billed from submission and reports what the carrier still owes', () => {
+    const today = '2026-07-30'
+    const rows = buildRows(
+      [
+        // Submitted last month, paid this month.
+        claim({ id: 'paid', status: 'paid', invoicedAt: '2026-06-20T16:00:00.000Z' }),
+        // Submitted this month, unpaid.
+        claim({ id: 'owed', status: 'invoiced', invoicedAt: '2026-07-10T16:00:00.000Z', amountBilled: 4_500 }),
+        // Entered, not yet submitted: not billed.
+        claim({ id: 'draft', amountBilled: 15_000 }),
+        // Another carrier, and a client charge, stay out of MetLife's figures.
+        claim({ id: 'legalease', plan: 'legalease', status: 'invoiced', invoicedAt: '2026-07-11T16:00:00.000Z' }),
+        { ...items[2] },
+      ],
+      [{
+        id: 'eft', billingItemId: 'paid', amount: 6_000, method: 'plan_eft', note: null,
+        receivedAt: '2026-07-15T16:00:00.000Z',
+      }],
+      today,
+    )
+
+    const [metlife, legalease] = buildPlanBilling(rows, '2026-07', today)
+
+    expect(metlife).toEqual({
+      plan: 'metlife',
+      billedMonth: 4_500,
+      billedYtd: 10_500,
+      collectedMonth: 6_000,
+      collectedYtd: 6_000,
+      outstanding: 4_500,
+      awaitingSubmission: { count: 1, amount: 15_000 },
+    })
+    expect(legalease).toMatchObject({ plan: 'legalease', billedMonth: 6_000, outstanding: 6_000 })
+  })
+
+  it('leaves out a carrier with no claims at all', () => {
+    expect(buildPlanBilling(buildRows([{ ...items[2] }], [], '2026-07-30'), '2026-07', '2026-07-30')).toEqual([])
   })
 })
