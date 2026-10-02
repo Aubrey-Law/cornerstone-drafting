@@ -67,3 +67,6 @@ grant select on public.v_matter_pipeline,public.matter_details,public.invoices,p
 
 alter table public.invoices add column status text;
 grant select on all tables in schema public to service_role;
+
+-- The task page groups by record (20270102090800_task_page_group_by_record.sql).
+alter table public.tasks add column matter_id uuid, add column lead_id uuid;
