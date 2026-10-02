@@ -14,6 +14,11 @@ const today = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/queries/today', () => today)
 
+const plans = vi.hoisted(() => ({
+  fetchDailyPlan: vi.fn(),
+}))
+vi.mock('@/lib/work/plans', () => plans)
+
 import { adminChatToolset } from '@/lib/adminChat/toolset'
 import { READ_FIRM_TODAY_TOOL_NAME, firmTodaySystemPromptNote, firmTodayToolExecutor } from '@/lib/adminChat/firmTodayTool'
 
@@ -58,6 +63,8 @@ const ctx = () => {
 beforeEach(() => {
   today.fetchTodayData.mockReset()
   today.fetchTodayData.mockResolvedValue(fixture())
+  plans.fetchDailyPlan.mockReset()
+  plans.fetchDailyPlan.mockResolvedValue(null)
 })
 
 describe('the firm-today tool', () => {

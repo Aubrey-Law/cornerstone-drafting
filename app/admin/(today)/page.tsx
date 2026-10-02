@@ -190,7 +190,17 @@ export default async function AdminTodayPage({
         <CommandCenter
           initialPreview={preview}
           preferences={preferences}
-          initialPlan={stored ? { id: stored.id, status: stored.status, calendarStatus } : null}
+          initialPlan={stored ? {
+            id: stored.id,
+            status: stored.status,
+            calendarStatus,
+            items: stored.items.map(item => ({
+              work_key: item.work_key,
+              lane: item.lane,
+              position: item.position,
+              status: item.status,
+            })),
+          } : null}
           sourceErrors={graph.sourceErrors}
         />
       </AdminPageShell>
