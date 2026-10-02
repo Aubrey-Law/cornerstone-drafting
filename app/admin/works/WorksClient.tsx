@@ -356,15 +356,16 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         </TabsContent>
 
         {canManageMasters && <TabsContent value="documents" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-4 flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">
+          {/* No outer frame, like the other template tabs: the lists are cards of their own. */}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <p className="flex max-w-3xl items-start gap-2 text-xs text-muted-foreground">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                 The Word masters behind document generation. An upload stays staged until you publish it; validating it
                 against a matter first is optional. Generation always uses the published (or bundled) master.
               </p>
+              <TemplateBuilderLauncher skills={skills} />
             </div>
-            <TemplateBuilderLauncher skills={skills} />
             <DocumentTemplatesSection />
           </div>
         </TabsContent>}
