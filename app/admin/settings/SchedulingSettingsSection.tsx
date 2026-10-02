@@ -202,13 +202,30 @@ export function SchedulingSettingsSection() {
           <strong>Google Calendar is not connected.</strong> Booking pages will show
           “scheduling temporarily unavailable” until you connect it in the{' '}
           <Link href="/admin/settings?tab=google" className="underline">
-            Google tab
+            Google &amp; Teams settings
           </Link>
           .
         </div>
       )}
 
-      <section className="rounded-lg border border-border p-4">
+      {/* Five long sections; a jump row saves scrolling past the ones you are not editing. */}
+      <nav aria-label="Scheduling sections" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        {[
+          ['scheduling-rules', 'Booking rules'],
+          ['scheduling-overrides', 'Date overrides'],
+          ['scheduling-hours', 'Weekly hours'],
+          ['scheduling-types', 'Appointment types'],
+          ['scheduling-upcoming', 'Upcoming appointments'],
+          ['scheduling-links', 'Booking links'],
+        ].map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="underline-offset-2 hover:text-foreground hover:underline">{label}</a>
+        ))}
+      </nav>
+
+      {/* Everything in here is saved by the one button at its foot, which stays pinned to the
+          bottom of the screen while any of these sections is in view. */}
+      <div className="space-y-6">
+      <section id="scheduling-rules" className="scroll-mt-4 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Booking rules</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -302,7 +319,7 @@ export function SchedulingSettingsSection() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border p-4">
+      <section id="scheduling-overrides" className="scroll-mt-4 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Date overrides</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Close specific dates (vacation, holidays) or set special hours that replace the
@@ -410,7 +427,7 @@ export function SchedulingSettingsSection() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border p-4">
+      <section id="scheduling-hours" className="scroll-mt-4 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Weekly hours</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Bookable windows in {settings.timezone}. Google Calendar busy times are automatically excluded.
@@ -423,7 +440,7 @@ export function SchedulingSettingsSection() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border p-4">
+      <section id="scheduling-types" className="scroll-mt-4 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Appointment types</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Public types are bookable by anyone at /book/&lt;slug&gt;; others require a signed-in
@@ -554,13 +571,15 @@ export function SchedulingSettingsSection() {
         </div>
       </section>
 
-      <div>
+      <div className="sticky bottom-0 z-10 -mx-1 flex items-center gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
         <Button type="button" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save scheduling settings'}
         </Button>
+        <span className="text-xs text-muted-foreground">Saves booking rules, date overrides, weekly hours and appointment types.</span>
+      </div>
       </div>
 
-      <section className="rounded-lg border border-border p-4">
+      <section id="scheduling-upcoming" className="scroll-mt-4 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">Upcoming appointments</h2>
         {appointments.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No upcoming appointments.</p>

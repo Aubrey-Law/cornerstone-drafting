@@ -84,13 +84,17 @@ export function MicrosoftTeamsSection() {
       {!status ? (
         <p className="text-sm text-muted-foreground">Loading&hellip;</p>
       ) : !status.envConfigured ? (
-        <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-          Microsoft Teams is not configured.
-          {status.configIssue ? ` ${status.configIssue}.` : ''} Set MICROSOFT_CLIENT_ID,
-          MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI (pointing at
-          /api/admin/microsoft/callback) and, for a single-tenant app registration,
-          MICROSOFT_TENANT_ID, then redeploy. VERCEL_ENV_CHECKLIST.md has the Entra steps.
-        </p>
+        <div className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+          {/* Say what it means first; the variable names are for whoever deploys. */}
+          <p className="text-sm font-medium text-foreground">Microsoft Teams isn&rsquo;t set up on this server yet</p>
+          <p className="mt-1">Virtual appointments use Google Meet until it is.</p>
+          <p className="mt-2">
+            Setup{status.configIssue ? ` (${status.configIssue})` : ''}: set MICROSOFT_CLIENT_ID,
+            MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI (pointing at /api/admin/microsoft/callback)
+            and, for a single-tenant app registration, MICROSOFT_TENANT_ID, then redeploy. The Entra
+            steps are in VERCEL_ENV_CHECKLIST.md in the repository.
+          </p>
+        </div>
       ) : status.connected ? (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">

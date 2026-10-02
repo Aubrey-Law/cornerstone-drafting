@@ -463,14 +463,14 @@ export function StaffSettingsClient({
       {tab === 'api-keys' && (
         <section className="space-y-4 rounded-lg border border-border p-4">
           <p className="text-xs text-muted-foreground">
-            Keys are encrypted at rest with <code>USER_API_KEYS_ENCRYPTION_SECRET</code>. GET responses
-            never include raw secrets. Resolution order: your key → firm env fallback.
+            Keys are stored encrypted and never shown again after you save them. Your own key is used
+            first; without one, requests use the firm&rsquo;s key.
           </p>
           {keys.map(k => (
             <div key={k.provider} className="space-y-2 rounded-md border border-border p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium capitalize">{k.provider}</p>
+                  <p className="text-sm font-medium">{LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider}</p>
                   <p className="text-micro text-muted-foreground">
                     {k.configured
                       ? `Configured (${k.source}${k.hint ? ` · ${k.hint}` : ''})`
@@ -492,7 +492,8 @@ export function StaffSettingsClient({
               <div className="flex gap-2">
                 <Input
                   type="password"
-                  placeholder={`Paste ${k.provider} API key`}
+                  placeholder={`Paste your ${LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider} API key`}
+                  aria-label={`${LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider} API key`}
                   value={keyDrafts[k.provider] ?? ''}
                   onChange={e =>
                     setKeyDrafts(prev => ({ ...prev, [k.provider]: e.target.value }))
@@ -519,11 +520,12 @@ export function StaffSettingsClient({
       {tab === 'connectors' && (
         <section className="space-y-4 rounded-lg border border-border p-4">
           <p className="text-xs text-muted-foreground">
-            Store MCP server URLs and bearer tokens. Use <strong>Test</strong> to verify initialize +
-            tools/list. Enabled connectors expose tools to the drafting assistant automatically.
+            Add an MCP server by URL (and a bearer token if it needs one). <strong>Test</strong>{' '}checks
+            that it connects and lists its tools; enabled connectors&rsquo; tools are offered to the
+            drafting assistant automatically.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="conn-name">Name</Label>
               <Input
                 id="conn-name"
@@ -531,7 +533,7 @@ export function StaffSettingsClient({
                 onChange={e => setNewConnector(p => ({ ...p, name: e.target.value }))}
               />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="conn-url">Server URL</Label>
               <Input
                 id="conn-url"
@@ -540,7 +542,7 @@ export function StaffSettingsClient({
                 onChange={e => setNewConnector(p => ({ ...p, serverUrl: e.target.value }))}
               />
             </div>
-            <div className="sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="conn-secret">Bearer token (optional)</Label>
               <Input
                 id="conn-secret"
@@ -612,13 +614,16 @@ export function StaffSettingsClient({
           {!google ? (
             <p className="text-sm text-muted-foreground">Loading&hellip;</p>
           ) : !google.envConfigured ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-              Google is not configured.
-              {google.configIssue ? ` ${google.configIssue}` : ''} Set
-              GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET and
-              GOOGLE_CALENDAR_REDIRECT_URI (pointing at /api/admin/google/callback), then
-              redeploy so the new values are visible.
-            </p>
+            <div className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+              {/* Say what it means first; the variable names are for whoever deploys. */}
+              <p className="text-sm font-medium text-foreground">Google isn&rsquo;t set up on this server yet</p>
+              <p className="mt-1">Calendar features stay off and email sends through Resend until it is.</p>
+              <p className="mt-2">
+                Setup{google.configIssue ? ` (${google.configIssue})` : ''}: set GOOGLE_CALENDAR_CLIENT_ID,
+                GOOGLE_CALENDAR_CLIENT_SECRET and GOOGLE_CALENDAR_REDIRECT_URI (pointing at
+                /api/admin/google/callback), then redeploy.
+              </p>
+            </div>
           ) : google.connected ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">

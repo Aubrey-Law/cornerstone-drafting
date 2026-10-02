@@ -70,7 +70,7 @@ export function CalendlyLinksSection() {
   }, [token, urls])
 
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section id="scheduling-links" className="scroll-mt-4 rounded-lg border border-border p-4">
       <h2 className="text-sm font-semibold text-foreground">Booking links</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         Paste each event type&apos;s booking page URL from Calendly, Cal.com, Lawmatics, or

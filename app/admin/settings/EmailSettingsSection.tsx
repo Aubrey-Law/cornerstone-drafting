@@ -290,7 +290,7 @@ export function EmailSettingsSection() {
         <div>
           <h2 className="text-micro font-semibold uppercase tracking-wide text-foreground">Email Sending</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Per-category control over outbound email. Sets to <strong>Off</strong> by default — turn each category on after you&apos;ve verified the flow.
+            Per-category control over outbound email. Sets to <strong>Off</strong>{' '}by default — turn each category on after you&apos;ve verified the flow.
           </p>
         </div>
       </div>
@@ -351,12 +351,12 @@ export function EmailSettingsSection() {
       {data.gmail.missingScope && (
         <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
           <strong>Google account missing the Gmail send permission.</strong>{' '}
-          Reconnect from <Link href="/admin/settings?tab=google" className="underline">Settings → Google</Link> to grant it.
+          Reconnect from <Link href="/admin/settings?tab=google" className="underline">Settings → Google &amp; Teams</Link> to grant it.
         </div>
       )}
       {data.gmail.available && data.gmail.accountEmail && (
         <div className="mb-4 rounded-md border border-green/40 bg-green-bg px-3 py-2 text-xs text-green">
-          <strong>Gmail connected:</strong> categories set to <em>Gmail</em> will send from <code className="font-sans">{data.gmail.accountEmail}</code> and land in that account&rsquo;s Sent Mail.
+          <strong>Gmail connected:</strong> categories set to <em>Gmail</em> will send from <code className="font-sans">{data.gmail.accountEmail}</code>{' '}and land in that account&rsquo;s Sent Mail.
         </div>
       )}
 
@@ -432,7 +432,7 @@ export function EmailSettingsSection() {
                       const tooltip = disabledByGmail
                         ? data.gmail.missingScope
                           ? 'Reconnect Google with the Gmail send permission to enable.'
-                          : 'Connect the firm Google account in Settings → Google to enable.'
+                          : 'Connect the firm Google account in Settings → Google & Teams to enable.'
                         : undefined
                       return (
                         <button

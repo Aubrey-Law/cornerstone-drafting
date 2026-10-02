@@ -38,7 +38,7 @@ export function BlockingCalendarsEditor({
       <div className="space-y-1">
         <p className="text-sm font-medium">Calendars that block booking</p>
         <p className="text-sm text-muted-foreground">
-          Google Calendar is not connected. Connect it from Settings → Google to
+          Google Calendar is not connected. Connect it from Settings → Google &amp; Teams to
           choose which calendars protect your time.
         </p>
       </div>
