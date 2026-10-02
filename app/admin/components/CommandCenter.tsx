@@ -42,7 +42,7 @@ import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
-import { formatAppointmentTime, formatSuggestedBlockTime, getAppointmentPreparationStatus } from '@/lib/work/appointmentPresentation'
+import { buildDayAgenda } from '@/lib/work/dayAgenda'
 
 type CommandCenterPlan = {
   id: string
@@ -136,46 +136,49 @@ function formatMinutes(minutes: number) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`
 }
 
-export function TodayAppointments({ appointments, items }: Pick<DailyPlanPreview, 'appointments'> & { items: WorkItem[] }) {
-  if (!appointments.length) return null
+export function DayAgenda({
+  appointments,
+  blocks,
+  items,
+}: Pick<DailyPlanPreview, 'appointments' | 'blocks'> & { items: WorkItem[] }) {
+  const agenda = buildDayAgenda({ appointments, blocks, items })
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Today&apos;s appointments</CardTitle>
-        <CardDescription>
-          {appointments.length === 1 ? 'One hard commitment shapes the day.' : `${appointments.length} hard commitments shape the day.`}
-        </CardDescription>
+        <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Day agenda</CardTitle>
+        <CardDescription>Appointments and planned work in the order they happen.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {appointments.slice(0, 4).map(appointment => {
-          const preparation = getAppointmentPreparationStatus(appointment, items)
+        {agenda.length ? agenda.slice(0, 12).map(entry => {
           return (
             <Link
-              key={appointment.id}
-              href={appointment.href}
+              key={entry.key}
+              href={entry.href}
               className="block rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="shrink-0 font-medium tabular-nums">{formatAppointmentTime(appointment)}</span>
-                <Badge
-                  variant={preparation.tone === 'urgent' ? 'destructive' : 'secondary'}
-                  className={cn(
-                    'shrink-0 text-micro',
-                    preparation.tone === 'warning' && 'border-amber-border bg-amber-bg text-amber-strong',
-                  )}
-                >
-                  {preparation.label}
-                </Badge>
+                <span className="shrink-0 font-medium tabular-nums">{entry.timeLabel}</span>
+                {entry.kind === 'appointment'
+                  ? <Badge
+                      variant={entry.preparation?.tone === 'urgent' ? 'destructive' : 'secondary'}
+                      className={cn(
+                        'shrink-0 text-micro',
+                        entry.preparation?.tone === 'warning' && 'border-amber-border bg-amber-bg text-amber-strong',
+                      )}
+                    >
+                      {entry.preparation?.label}
+                    </Badge>
+                  : <span className="shrink-0 text-xs text-muted-foreground">{entry.durationLabel}</span>}
               </div>
-              <p className="mt-1 truncate font-medium">{appointment.client_name ?? appointment.next_appointment_type ?? 'Appointment'}</p>
-              {appointment.client_name && appointment.next_appointment_type && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{appointment.next_appointment_type}</p>
+              <p className="mt-1 truncate font-medium">{entry.title}</p>
+              {entry.detail && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.detail}</p>
               )}
             </Link>
           )
-        })}
-        {appointments.length > 4 && <p className="text-xs text-muted-foreground">+ {appointments.length - 4} more on the calendar</p>}
+        }) : <p className="text-sm text-muted-foreground">No appointments or focus blocks fit the remaining workday.</p>}
+        {agenda.length > 12 && <p className="text-xs text-muted-foreground">+ {agenda.length - 12} more on the calendar</p>}
         <Button asChild variant="outline" size="sm" className="w-full">
           <Link href="/admin/calendar">Open calendar <ExternalLink /></Link>
         </Button>
@@ -649,9 +652,14 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
   const [focusMode, setFocusMode] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
 
-  const blockItems = useMemo(() => {
-    const all = [...preview.mustDo, ...preview.suggested, ...preview.communication]
-    return new Map(all.map(item => [item.workKey, item]))
+  const allWorkItems = useMemo(() => {
+    return [
+      ...preview.mustDo,
+      ...preview.suggested,
+      ...preview.communication,
+      ...preview.waiting,
+      ...preview.later,
+    ]
   }, [preview])
   // `now` points at an item in one of the plan lanes. Render that obligation
   // once, as the prominent next action, instead of making an ADHD user decide
@@ -895,45 +903,11 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-4">
-          <TodayAppointments
+          <DayAgenda
             appointments={preview.appointments}
-            items={[
-              ...preview.mustDo,
-              ...preview.suggested,
-              ...preview.communication,
-              ...preview.waiting,
-              ...preview.later,
-            ]}
+            blocks={preview.blocks}
+            items={allWorkItems}
           />
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Suggested day</CardTitle>
-              <CardDescription>
-                {preview.appointments.length
-                  ? 'Focus blocks avoid the appointments above and keep ten-minute transitions.'
-                  : 'Focus blocks avoid recorded appointments and keep ten-minute transitions.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {preview.blocks.length ? preview.blocks.map(block => {
-                const item = blockItems.get(block.workKey)
-                return (
-                  <Link
-                    key={block.workKey}
-                    href={item?.href ?? '/admin/communications'}
-                    className="flex gap-3 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="shrink-0 font-medium tabular-nums">{formatSuggestedBlockTime(block)}</span>
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{item?.title ?? 'Communication batch'}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatMinutes(block.minutes)}</span>
-                  </Link>
-                )
-              }) : <p className="text-sm text-muted-foreground">No focus blocks fit the remaining workday.</p>}
-              <Button asChild variant="outline" size="sm" className="w-full">
-                <Link href="/admin/calendar">Review calendar</Link>
-              </Button>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader className="pb-3">

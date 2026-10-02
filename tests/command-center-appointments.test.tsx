@@ -9,7 +9,7 @@ vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: React.ComponentProps<'a'>) => <a href={href} {...props}>{children}</a>,
 }))
 
-import { TodayAppointments } from '@/app/admin/components/CommandCenter'
+import { DayAgenda } from '@/app/admin/components/CommandCenter'
 
 afterEach(cleanup)
 
@@ -40,20 +40,31 @@ const preparation: WorkItem = {
   estimateMinutes: 20,
 }
 
-describe('Command Center appointment strip', () => {
-  it('shows appointment context, preparation state, and a calendar path', () => {
-    render(<TodayAppointments appointments={[appointment]} items={[preparation]} />)
+describe('Command Center day agenda', () => {
+  it('shows appointment context, preparation state, planned work, and a calendar path', () => {
+    render(<DayAgenda
+      appointments={[appointment]}
+      blocks={[{ workKey: 'task:follow-up', startAt: '2026-10-02T14:10:00.000Z', endAt: '2026-10-02T14:25:00.000Z', minutes: 15 }]}
+      items={[preparation, {
+        workKey: 'task:follow-up', sourceType: 'task', sourceIds: ['follow-up'], evidence: [],
+        record: { type: 'matter', id: 'matter-1', name: 'Jordan Client' }, title: 'Call Jordan Client', actionLabel: 'Open',
+        href: '/admin/matters/matter-1?tab=tasks', owner: 'firm', state: 'open', priorityBand: 1, priorityReasons: [], estimateMinutes: 15,
+      }]}
+    />)
 
-    expect(screen.getByText("Today's appointments")).toBeTruthy()
+    expect(screen.getByText('Day agenda')).toBeTruthy()
     expect(screen.getByText('9:00 AM–10:00 AM')).toBeTruthy()
     expect(screen.getByText('Jordan Client')).toBeTruthy()
     expect(screen.getByText('Initial consultation')).toBeTruthy()
     expect(screen.getByText('Prep due today')).toBeTruthy()
+    expect(screen.getByText('10:10 AM–10:25 AM')).toBeTruthy()
+    expect(screen.getByText('Call Jordan Client')).toBeTruthy()
+    expect(screen.getByText('15 min')).toBeTruthy()
     expect(screen.getByRole('link', { name: /open calendar/i }).getAttribute('href')).toBe('/admin/calendar')
   })
 
-  it('stays out of the way when there are no appointments', () => {
-    const { container } = render(<TodayAppointments appointments={[]} items={[]} />)
-    expect(container.innerHTML).toBe('')
+  it('explains an empty agenda instead of hiding the schedule', () => {
+    render(<DayAgenda appointments={[]} blocks={[]} items={[]} />)
+    expect(screen.getByText(/No appointments or focus blocks/)).toBeTruthy()
   })
 })
