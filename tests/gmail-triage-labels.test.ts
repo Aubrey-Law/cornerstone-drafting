@@ -63,3 +63,14 @@ describe('applyTriageLabel', () => {
     ).rejects.toThrow('nope')
   })
 })
+
+describe('where labels are applied', () => {
+  it('labels a thread the scan finds answered from Gmail', async () => {
+    const { readFileSync } = await import('node:fs')
+    const scan = readFileSync('lib/emailTriage/scan.ts', 'utf-8')
+    const resolve = scan.slice(scan.indexOf("action.kind === 'resolve'"))
+    expect(resolve.slice(0, resolve.indexOf('continue\n', resolve.indexOf('applyTriageLabel')))).toContain(
+      'classification: existing!.classification',
+    )
+  })
+})

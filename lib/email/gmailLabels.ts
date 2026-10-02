@@ -6,7 +6,8 @@ import { GmailSendError } from './gmailSend'
  * File a triaged thread under the firm's Client / Lead labels in Gmail.
  *
  * Applied when the attorney approves a reply, so the thread is sorted in the
- * mailbox by the time the draft is waiting there. Which label a classification
+ * mailbox by the time the draft is waiting there, and by the triage scan when
+ * it finds a thread was answered straight from Gmail. Which label a classification
  * gets is decided in `lib/emailTriage/labels.ts`.
  */
 
