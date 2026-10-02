@@ -14,6 +14,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 
 import { POST as createItem } from '@/app/api/admin/billing/items/route'
 import { DELETE as deleteItem, PATCH as updateItem } from '@/app/api/admin/billing/items/[id]/route'
+import { POST as bulkCreate } from '@/app/api/admin/billing/items/bulk-create/route'
 import { POST as bulkDelete } from '@/app/api/admin/billing/items/bulk-delete/route'
 import { POST as invoice } from '@/app/api/admin/billing/items/[id]/invoice/route'
 import { POST as payment } from '@/app/api/admin/billing/items/[id]/payments/route'
@@ -188,6 +189,65 @@ describe('billing mutation routes', () => {
       p_plan: null,
       p_amount_billed: 480_000,
     }))
+  })
+
+  function bulkCreateRequest(body: unknown) {
+    return new Request('http://app.test/api/admin/billing/items/bulk-create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('adds several charges through one transactional RPC call', async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ id: ITEM_ID }, { id: USER_ID }], error: null })
+
+    const response = await bulkCreate(bulkCreateRequest({
+      matterId: MATTER_ID,
+      charges: [
+        { kind: 'cost', label: ' Recording fee ', amountBilled: 15_500, plan: null },
+        { kind: 'plan_claim', label: 'CT 420 — Deed', amountBilled: 9_000, plan: 'metlife' },
+      ],
+    }))
+
+    expect(response.status).toBe(201)
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).toHaveBeenCalledWith('create_billing_items', {
+      p_matter_id: MATTER_ID,
+      p_items: [
+        { kind: 'cost', label: 'Recording fee', plan: null, amount_billed: 15_500 },
+        { kind: 'plan_claim', label: 'CT 420 — Deed', plan: 'metlife', amount_billed: 9_000 },
+      ],
+      p_actor_id: USER_ID,
+    })
+    expect((await response.json()).items).toHaveLength(2)
+  })
+
+  it('rejects a batch with any invalid line before invoking the database', async () => {
+    for (const charges of [
+      [],
+      [{ kind: 'cost', label: 'Fee', amountBilled: 100 }, { kind: 'cost', label: '', amountBilled: 100 }],
+      [{ kind: 'plan_claim', label: 'Claim', amountBilled: 100 }],
+      Array.from({ length: 26 }, () => ({ kind: 'cost', label: 'Fee', amountBilled: 100 })),
+    ]) {
+      const response = await bulkCreate(bulkCreateRequest({ matterId: MATTER_ID, charges }))
+      expect(response.status).toBe(400)
+    }
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('rejects unauthenticated bulk charge creation', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      err: Response.json({ error: 'Unauthorized' }, { status: 401 }),
+      userId: null,
+      user: null,
+    })
+    const response = await bulkCreate(bulkCreateRequest({
+      matterId: MATTER_ID,
+      charges: [{ kind: 'cost', label: 'Fee', amountBilled: 100 }],
+    }))
+    expect(response.status).toBe(401)
+    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
   it('still rejects an unknown charge type', async () => {
