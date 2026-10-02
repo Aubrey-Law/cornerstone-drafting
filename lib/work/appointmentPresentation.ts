@@ -49,6 +49,12 @@ export function getAppointmentPreparationStatus(
   items: WorkItem[],
 ): AppointmentPreparationStatus {
   const preparation = items.find(item => item.workKey === appointmentPreparationWorkKey(appointment))
+  // Free/busy and externally synced calendar events protect the workday, but
+  // they are not client-record obligations. Do not imply that the attorney
+  // has failed to prepare merely because no preparation work was generated.
+  if (!preparation && appointment.id.startsWith('calendar-')) {
+    return { label: 'Calendar commitment', tone: 'muted' }
+  }
   if (!preparation) return { label: 'No prep task', tone: 'muted' }
   if (preparation.state === 'blocked') return { label: 'Prep blocked', tone: 'warning' }
   if (preparation.state === 'snoozed') return { label: 'Prep snoozed', tone: 'muted' }

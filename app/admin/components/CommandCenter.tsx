@@ -159,7 +159,7 @@ export function DayAgenda({
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="shrink-0 font-medium tabular-nums">{entry.timeLabel}</span>
-                {entry.kind === 'appointment'
+                {entry.kind === 'appointment' && entry.preparation?.label !== 'Calendar commitment'
                   ? <Badge
                       variant={entry.preparation?.tone === 'urgent' ? 'destructive' : 'secondary'}
                       className={cn(
