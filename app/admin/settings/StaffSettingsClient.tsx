@@ -28,6 +28,7 @@ import { EmailSettingsSection } from './EmailSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
 import { CalendlyLinksSection } from './CalendlyLinksSection'
 import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
+import { StatularSettingsSection } from './StatularSettingsSection'
 import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { TemplateCenter } from './TemplateCenter'
@@ -40,6 +41,7 @@ type Tab =
   | 'email'
   | 'scheduling'
   | 'lawmatics'
+  | 'statular'
   | 'sla'
   | 'ai-usage'
   | 'templates'
@@ -115,6 +117,7 @@ export function StaffSettingsClient({
       t === 'email' ||
       t === 'scheduling' ||
       t === 'lawmatics' ||
+      t === 'statular' ||
       t === 'models' ||
       t === 'api-keys' ||
       t === 'connectors' ||
@@ -394,7 +397,7 @@ export function StaffSettingsClient({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Settings"
-        description="Model preferences, API keys, MCP connectors, Google, Lawmatics, firm templates, AI usage, and matter stage SLA."
+        description="Model preferences, API keys, MCP connectors, Google, Lawmatics, Statular, firm templates, AI usage, and matter stage SLA."
       />
 
       <div className="flex flex-wrap gap-1 border-b border-border">
@@ -407,6 +410,7 @@ export function StaffSettingsClient({
             ['email', 'Email'],
             ['scheduling', 'Scheduling'],
             ['lawmatics', 'Lawmatics'],
+            ['statular', 'Statular'],
             ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
@@ -774,6 +778,8 @@ export function StaffSettingsClient({
       )}
 
       {tab === 'lawmatics' && <LawmaticsSettingsSection />}
+
+      {tab === 'statular' && <StatularSettingsSection />}
 
       {tab === 'templates' && isAdministrator && <TemplateCenter currentUserId={currentUserId} />}
 
