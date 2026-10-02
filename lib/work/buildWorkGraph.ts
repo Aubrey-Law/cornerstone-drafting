@@ -219,8 +219,10 @@ function smsItem(row: SmsThread, now: Date): WorkItem {
 export function buildWorkGraph(
   sources: WorkGraphSources,
   now: Date = new Date(),
+  options: { futureBusinessDays?: number } = {},
 ): WorkGraphResult {
   const todayKey = firmTodayKey(now)
+  const futureBusinessDays = options.futureBusinessDays ?? 3
   const items: WorkItem[] = []
   const tasks = [...sources.today.overdueTasks, ...sources.today.tasksDueToday, ...(sources.futureTasks ?? [])]
   const seenTasks = new Set<string>()
@@ -230,7 +232,7 @@ export function buildWorkGraph(
     const group = taskDueGroup(task, now)
     if (group === 'later' && effectiveDueAt(task)) {
       const dueKey = firmDateKey(effectiveDueAt(task)!)
-      if (!dueKey || businessDaysBetween(todayKey, dueKey) > 3) continue
+      if (!dueKey || businessDaysBetween(todayKey, dueKey) > futureBusinessDays) continue
     }
     items.push(taskItem(task, todayKey))
   }

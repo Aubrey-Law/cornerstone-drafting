@@ -133,10 +133,15 @@ async function timedSource<T>(
 export async function fetchWorkGraphForUser(
   userId: string | null | undefined,
   now: Date = new Date(),
+  options: { horizonDays?: number } = {},
 ): Promise<WorkGraphResult> {
   const sourceErrors: string[] = []
   const sourceDurationsMs: Record<string, number> = {}
-  const through = new Date(now.getTime() + 5 * 86_400_000).toISOString()
+  // The daily command center needs a short horizon. Weekly review may opt into
+  // a longer one without changing the sources or ranking rules used by Today.
+  const horizonDays = Math.min(31, Math.max(5, options.horizonDays ?? 5))
+  const futureBusinessDays = options.horizonDays === undefined ? 3 : horizonDays
+  const through = new Date(now.getTime() + horizonDays * 86_400_000).toISOString()
   const todayKey = firmTodayKey(now)
   const firmNoonUtc = Date.parse(`${todayKey}T12:00:00Z`)
   const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000)
@@ -225,7 +230,7 @@ export async function fetchWorkGraphForUser(
       failedWorkflowJobs,
       failedAutomationRuns,
       sourceErrors,
-    }, now),
+    }, now, { futureBusinessDays }),
     sourceDurationsMs,
   }
 }
