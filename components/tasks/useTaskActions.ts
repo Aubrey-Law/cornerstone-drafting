@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
+import { snoozedDueAt } from '@/lib/tasks/snooze'
 import type { TaskRecurrence, TaskRow } from '@/lib/tasks/types'
 
 export interface CreateTaskInput {
@@ -109,10 +110,7 @@ export function useTaskActions(onChanged?: () => void) {
   /** Push a task's due date out by N days, keeping the time of day. */
   const snooze = useCallback(
     async (task: TaskRow, days: number, label: string) => {
-      const base = task.due_at ?? task.soft_due_at ?? new Date().toISOString()
-      const next = new Date(base)
-      next.setDate(next.getDate() + days)
-      const updated = await patch(task.id, { due_at: next.toISOString() })
+      const updated = await patch(task.id, { due_at: snoozedDueAt(task, days) })
       if (updated) toast.success(`“${task.title}” moved to ${label}`)
       return updated
     },
@@ -193,6 +191,68 @@ export function useTaskActions(onChanged?: () => void) {
     [headers, onChanged],
   )
 
+  /** Push every task in a selection out by N days, each from its own date. */
+  const snoozeMany = useCallback(
+    async (ids: string[], days: number, label: string): Promise<TaskRow[] | null> => {
+      if (ids.length === 0) return []
+      const res = await fetch('/api/admin/tasks/bulk', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ ids, snooze_days: days }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error ?? 'Could not snooze those tasks')
+        return null
+      }
+      const updated = json.updated as number
+      toast.success(`${updated} task${updated === 1 ? '' : 's'} moved to ${label}`)
+      const missing = (json.missing ?? []) as string[]
+      const skipped = (json.skipped ?? []) as string[]
+      const failed = (json.failed ?? []) as string[]
+      if (missing.length > 0) toast.warning(`${missing.length} of them no longer exist and were skipped`)
+      if (skipped.length > 0) toast.warning(`${skipped.length} already done and left as is`)
+      if (failed.length > 0) toast.error(`${failed.length} could not be snoozed — try those again`)
+      invalidateSidebarCountsClient()
+      onChanged?.()
+      return (json.tasks ?? []) as TaskRow[]
+    },
+    [headers, onChanged],
+  )
+
+  /** Delete a selection. Resolves to the ids actually removed, or null on failure. */
+  const removeMany = useCallback(
+    async (ids: string[]): Promise<string[] | null> => {
+      if (ids.length === 0) return []
+      const res = await fetch('/api/admin/tasks/bulk', {
+        method: 'DELETE',
+        headers: headers(),
+        body: JSON.stringify({ ids }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error ?? 'Could not delete those tasks')
+        return null
+      }
+      const deleted = (json.deleted ?? []) as string[]
+      if (deleted.length > 0) {
+        toast.success(`Deleted ${deleted.length} task${deleted.length === 1 ? '' : 's'}`)
+      }
+      const protectedIds = (json.protected ?? []) as string[]
+      if (protectedIds.length > 0) {
+        toast.warning(
+          `${protectedIds.length} stage task${protectedIds.length === 1 ? '' : 's'} kept — the stage engine manages those`,
+        )
+      }
+      const missing = (json.missing ?? []) as string[]
+      if (missing.length > 0) toast.warning(`${missing.length} of them were already gone`)
+      invalidateSidebarCountsClient()
+      onChanged?.()
+      return deleted
+    },
+    [headers, onChanged],
+  )
+
   const applyTemplate = useCallback(
     async (templateId: string, record: { matter_id?: string | null; lead_id?: string | null }) => {
       const res = await fetch('/api/admin/task-templates/apply', {
@@ -223,6 +283,8 @@ export function useTaskActions(onChanged?: () => void) {
     toggleChecklistItem,
     snooze,
     assignMany,
+    snoozeMany,
+    removeMany,
     create,
     remove,
     applyTemplate,
