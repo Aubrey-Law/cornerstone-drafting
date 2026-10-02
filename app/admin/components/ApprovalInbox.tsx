@@ -32,11 +32,18 @@ function DisplayValue({ label, value }: { label: string; value: unknown }) {
   )
 }
 
+/**
+ * The single confirmation surface for pending action proposals. It deliberately
+ * fetches a fresh preview before an external action is confirmed, so a draft
+ * cannot be sent from an old card after its recipient or content changes.
+ */
 export function ApprovalInbox({
   initialProposals,
+  emptyMessage = 'No actions are waiting for your approval.',
   onResolved,
 }: {
   initialProposals: ApprovalProposal[]
+  emptyMessage?: string
   onResolved?: () => void | Promise<void>
 }) {
   const [proposals, setProposals] = useState(initialProposals)
@@ -143,7 +150,7 @@ export function ApprovalInbox({
             </div>
           ) : null}
         </div>
-      )) : <p className="text-sm text-muted-foreground">No actions are waiting for your approval.</p>}
+      )) : <p className="text-sm text-muted-foreground">{emptyMessage}</p>}
     </div>
   )
 }
