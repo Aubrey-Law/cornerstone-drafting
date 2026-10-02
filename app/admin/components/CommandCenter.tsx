@@ -5,6 +5,8 @@ import Link from 'next/link'
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   Bot,
   CalendarClock,
   Check,
@@ -18,6 +20,7 @@ import {
   RefreshCw,
   Settings2,
   Users,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -42,7 +45,7 @@ import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
-import { buildDayAgenda } from '@/lib/work/dayAgenda'
+import { buildCommittedDayAgenda, buildDayAgenda } from '@/lib/work/dayAgenda'
 import { capacityAvailabilityLabel } from '@/lib/work/capacityPresentation'
 
 type CommandCenterPlan = {
@@ -142,14 +145,31 @@ export function DayAgenda({
   blocks,
   items,
   calendarUnavailable = false,
-}: Pick<DailyPlanPreview, 'appointments' | 'blocks'> & { items: WorkItem[]; calendarUnavailable?: boolean }) {
-  const agenda = buildDayAgenda({ appointments, blocks, items })
+  plan = null,
+  editingWorkKey = null,
+  onMove,
+  onRemove,
+}: Pick<DailyPlanPreview, 'appointments' | 'blocks'> & {
+  items: WorkItem[]
+  calendarUnavailable?: boolean
+  plan?: Pick<CommandCenterPlan, 'status' | 'items'> | null
+  editingWorkKey?: string | null
+  onMove?: (workKey: string, direction: 'earlier' | 'later') => void
+  onRemove?: (workKey: string) => void
+}) {
+  const committed = plan?.status === 'committed'
+  const agenda = committed
+    ? buildCommittedDayAgenda({ appointments, items, planItems: plan.items })
+    : buildDayAgenda({ appointments, blocks, items })
+  const editableWork = agenda.filter(entry => entry.kind === 'work' && entry.workStatus !== 'completed')
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Day agenda</CardTitle>
-        <CardDescription>Appointments and planned work in the order they happen.</CardDescription>
+        <CardDescription>{committed
+          ? 'Committed agenda — your saved sequence and calendar windows.'
+          : 'Appointments and planned work in the order they happen.'}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {calendarUnavailable && (
@@ -158,31 +178,69 @@ export function DayAgenda({
           </p>
         )}
         {agenda.length ? agenda.slice(0, 12).map(entry => {
+          const workIndex = entry.workKey ? editableWork.findIndex(work => work.workKey === entry.workKey) : -1
+          const editable = committed && workIndex >= 0 && entry.workKey && onMove && onRemove
           return (
-            <Link
-              key={entry.key}
-              href={entry.href}
-              className="block rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="shrink-0 font-medium tabular-nums">{entry.timeLabel}</span>
-                {entry.kind === 'appointment' && entry.preparation?.label !== 'Calendar commitment'
-                  ? <Badge
-                      variant={entry.preparation?.tone === 'urgent' ? 'destructive' : 'secondary'}
-                      className={cn(
-                        'shrink-0 text-micro',
-                        entry.preparation?.tone === 'warning' && 'border-amber-border bg-amber-bg text-amber-strong',
-                      )}
-                    >
-                      {entry.preparation?.label}
-                    </Badge>
-                  : <span className="shrink-0 text-xs text-muted-foreground">{entry.durationLabel}</span>}
-              </div>
-              <p className="mt-1 truncate font-medium">{entry.title}</p>
-              {entry.detail && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.detail}</p>
+            <div key={entry.key} className="rounded-lg border text-sm">
+              <Link
+                href={entry.href}
+                className="block px-3 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="shrink-0 font-medium tabular-nums">{entry.timeLabel}</span>
+                  {entry.kind === 'appointment' && entry.preparation?.label !== 'Calendar commitment'
+                    ? <Badge
+                        variant={entry.preparation?.tone === 'urgent' ? 'destructive' : 'secondary'}
+                        className={cn(
+                          'shrink-0 text-micro',
+                          entry.preparation?.tone === 'warning' && 'border-amber-border bg-amber-bg text-amber-strong',
+                        )}
+                      >
+                        {entry.preparation?.label}
+                      </Badge>
+                    : entry.workStatus === 'started'
+                      ? <Badge variant="secondary" className="shrink-0 text-micro">In progress</Badge>
+                      : entry.workStatus === 'completed'
+                        ? <Badge variant="secondary" className="shrink-0 text-micro">Completed</Badge>
+                        : <span className="shrink-0 text-xs text-muted-foreground">{entry.durationLabel}</span>}
+                </div>
+                <p className="mt-1 truncate font-medium">{entry.title}</p>
+                {entry.detail && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.detail}</p>
+                )}
+              </Link>
+              {editable && (
+                <div className="flex items-center gap-1 border-t px-2 py-1.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={`Move ${entry.title} earlier`}
+                    onClick={() => onMove(entry.workKey!, 'earlier')}
+                    disabled={editingWorkKey !== null || workIndex === 0}
+                  ><ArrowUp /></Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={`Move ${entry.title} later`}
+                    onClick={() => onMove(entry.workKey!, 'later')}
+                    disabled={editingWorkKey !== null || workIndex === editableWork.length - 1}
+                  ><ArrowDown /></Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-7 px-2 text-xs text-muted-foreground"
+                    aria-label={`Remove ${entry.title} from today`}
+                    onClick={() => onRemove(entry.workKey!)}
+                    disabled={editingWorkKey !== null}
+                  ><X /> Remove today</Button>
+                </div>
               )}
-            </Link>
+            </div>
           )
         }) : <p className="text-sm text-muted-foreground">No appointments or focus blocks fit the remaining workday.</p>}
         {agenda.length > 12 && <p className="text-xs text-muted-foreground">+ {agenda.length - 12} more on the calendar</p>}
@@ -659,6 +717,12 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
   const [focusMode, setFocusMode] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
 
+  const removedWorkKeys = useMemo(() => new Set(
+    plan?.status === 'committed'
+      ? plan.items.filter(item => item.status === 'skipped').map(item => item.work_key)
+      : [],
+  ), [plan])
+  const activeItems = (items: WorkItem[]) => items.filter(item => !removedWorkKeys.has(item.workKey))
   const allWorkItems = useMemo(() => {
     return [
       ...preview.mustDo,
@@ -671,11 +735,54 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
   // `now` points at an item in one of the plan lanes. Render that obligation
   // once, as the prominent next action, instead of making an ADHD user decide
   // whether two identical cards represent two separate commitments.
-  const visibleMustDo = itemsExceptNow(preview.mustDo, preview.now)
-  const visibleCommunication = itemsExceptNow(preview.communication, preview.now)
-  const visibleSuggested = itemsExceptNow(preview.suggested, preview.now)
   const focusItem = selectCommittedFocusItem(preview, plan)
   const calendarUnavailable = sourceErrors.includes('calendar')
+  const nowItem = plan?.status === 'committed' ? focusItem : preview.now
+  const visibleMustDo = itemsExceptNow(activeItems(preview.mustDo), nowItem)
+  const visibleCommunication = itemsExceptNow(activeItems(preview.communication), nowItem)
+  const visibleSuggested = itemsExceptNow(activeItems(preview.suggested), nowItem)
+
+  async function updatePlanEditor(change: { order?: string[]; workKey?: string; status?: 'skipped' }) {
+    if (!plan || plan.status !== 'committed') return
+    const busyKey = change.workKey ?? 'order'
+    setBusy(`agenda:${busyKey}`)
+    try {
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(change.order
+          ? { order: change.order }
+          : { item: { workKey: change.workKey, status: change.status } }),
+      })
+      const body = await response.json().catch(() => ({})) as {
+        plan?: Omit<CommandCenterPlan, 'calendarStatus'>
+        error?: string
+      }
+      if (!response.ok || !body.plan) throw new Error(body.error ?? 'The committed agenda could not be updated')
+      // A moved or removed block needs a deliberate calendar reconciliation;
+      // never leave a stale "reserved" confirmation on screen.
+      setPlan({ ...body.plan, calendarStatus: null })
+      toast.success(change.order ? 'Agenda order updated' : 'Removed from today; the source work remains open')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The committed agenda could not be updated')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  function moveAgendaItem(workKey: string, direction: 'earlier' | 'later') {
+    if (!plan) return
+    const ordered = plan.items.toSorted((left, right) => left.position - right.position)
+    const moveable = ordered.filter(item => item.block_start && item.block_end && item.status !== 'completed' && item.status !== 'skipped')
+    const index = moveable.findIndex(item => item.work_key === workKey)
+    const target = moveable[index + (direction === 'earlier' ? -1 : 1)]
+    if (index < 0 || !target) return
+    const currentIndex = ordered.findIndex(item => item.work_key === workKey)
+    const targetIndex = ordered.findIndex(item => item.work_key === target.work_key)
+    const next = [...ordered]
+    ;[next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]]
+    void updatePlanEditor({ order: next.map(item => item.work_key) })
+  }
 
   async function refresh() {
     const [response, storedResponse] = await Promise.all([
@@ -875,8 +982,8 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           <Focus className="h-4 w-4 text-primary" aria-hidden />
           <h2 id="now-heading" className="text-base font-semibold">Now</h2>
         </div>
-        {preview.now
-          ? <WorkCard item={preview.now} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+        {nowItem
+          ? <WorkCard item={nowItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
           : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No firm-owned work needs attention.</CardContent></Card>}
       </section>
 
@@ -922,6 +1029,10 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
             blocks={preview.blocks}
             items={allWorkItems}
             calendarUnavailable={calendarUnavailable}
+            plan={plan}
+            editingWorkKey={busy?.startsWith('agenda:') ? busy.slice('agenda:'.length) : null}
+            onMove={moveAgendaItem}
+            onRemove={workKey => { void updatePlanEditor({ workKey, status: 'skipped' }) }}
           />
 
           <Card>
@@ -930,15 +1041,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               <CardDescription>Visible for context, excluded from Focus Mode.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={preview.waiting.slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
-              {preview.waiting.length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {preview.waiting.length - 8} more</p>}
+              <WorkList items={activeItems(preview.waiting).slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              {activeItems(preview.waiting).length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {activeItems(preview.waiting).length - 8} more</p>}
             </CardContent>
           </Card>
 
           <details className="rounded-xl border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">Later · {preview.later.length}</summary>
             <div className="mt-3">
-              <WorkList items={preview.later} empty="Nothing deferred." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList items={activeItems(preview.later)} empty="Nothing deferred." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
             </div>
           </details>
         </aside>
