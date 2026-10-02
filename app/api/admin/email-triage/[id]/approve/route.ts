@@ -4,6 +4,7 @@ import { consumeRateLimit } from '@/lib/rateLimit'
 import { GmailSendError } from '@/lib/email/gmailSend'
 import { createGmailDraft, deleteGmailDraft } from '@/lib/email/gmailDraft'
 import { applyTriageLabel } from '@/lib/email/gmailLabels'
+import { triageLabelName } from '@/lib/emailTriage/labels'
 import { GmailReadError, getMailboxIdentity, getThread } from '@/lib/email/gmailRead'
 import { buildReplyHeaders } from '@/lib/email/replyHeaders'
 import { replySubject } from '@/lib/emailTriage/prompt'
@@ -91,6 +92,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     } catch (error) {
       labelError = error instanceof Error ? error.message : String(error)
     }
+    // Kept on the row, not only in the response, so the triage page still says
+    // the thread is unlabelled after a reload.
+    const labelNotice = labelError
+      ? `The draft is in Gmail, but the ${triageLabelName(row.classification) ?? ''} label could not be applied: ${labelError}`
+      : null
 
     const now = new Date().toISOString()
     await admin
@@ -101,7 +107,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         gmail_draft_message_id: created.messageId,
         approved_at: now,
         approved_by: auth.userId,
-        draft_error: null,
+        draft_error: labelNotice,
         updated_at: now,
       })
       .eq('id', id)
