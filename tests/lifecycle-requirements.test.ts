@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COLLEGE_PREPARATION_REQUIREMENT_REGISTRY,
   ESTATE_PLANNING_REQUIREMENT_REGISTRY,
   evaluateLeadRequirements,
   evaluateMatterRequirements,
@@ -52,7 +53,7 @@ function lead(overrides: Partial<LeadDetailRecord> = {}): LeadDetailRecord {
 
 describe('versioned lifecycle requirement registry', () => {
   it('declares the source, applicability, severity, ownership, resolution and stage policy', () => {
-    expect(LIFECYCLE_REGISTRY_VERSION).toBe('estate-planning-v2')
+    expect(LIFECYCLE_REGISTRY_VERSION).toBe('practice-areas-v3')
     expect(LEAD_REQUIRED_FIELD_KEYS).toEqual([
       'firstName', 'email', 'address', 'maritalStatus', 'spouse', 'practiceArea', 'fee',
     ])
@@ -105,7 +106,34 @@ describe('versioned lifecycle requirement registry', () => {
 
   it('does not apply the estate-planning registry to an explicit different practice area', () => {
     expect(evaluateMatterRequirements(matter({ practice_area: 'Probate' }))).toEqual([])
-    expect(evaluateLeadRequirements(lead({ practice_area: 'CP' }), null)).toEqual([])
+  })
+
+  it('uses the College Preparation registry without imposing estate-only lead fields', () => {
+    const cpLead = lead({
+      practice_area: 'CP',
+      marital_status: null,
+      address_line1: null,
+      city: null,
+      state: null,
+      zip: null,
+    })
+    const requirements = evaluateLeadRequirements(cpLead, null)
+    expect(COLLEGE_PREPARATION_REQUIREMENT_REGISTRY.lead.map(item => item.key)).toEqual([
+      'lead.firstName', 'lead.email', 'lead.practiceArea', 'lead.fee',
+      'lead.intake_sent', 'lead.intake_complete', 'lead.engagement_started', 'lead.engagement_signed',
+    ])
+    expect(requirements.map(item => item.key)).not.toContain('lead.maritalStatus')
+    expect(requirements.map(item => item.key)).not.toContain('lead.address')
+    expect(requirements.find(item => item.key === 'lead.firstName')?.satisfied).toBe(true)
+  })
+
+  it('applies the same operational stage gates to College Preparation matters', () => {
+    const record = matter({ practice_area: 'CP', stage: 'intake' })
+    const requirements = evaluateMatterRequirements(record)
+    expect(requirements.map(item => item.key)).toContain('matter.intake_sent')
+    expect(matterStageTransitionPreflight(record, 'design').blockers.map(item => item.key)).toEqual([
+      'matter.intake_sent', 'matter.intake_complete',
+    ])
   })
 
   it('keeps ordinary client data gaps out of the conflicts section', () => {

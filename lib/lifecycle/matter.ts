@@ -1,7 +1,7 @@
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import {
+  ALL_MATTER_REQUIREMENTS,
   LIFECYCLE_REGISTRY_VERSION,
-  MATTER_REQUIREMENTS,
   requirementAppliesToPracticeArea,
   type EvaluatedRequirement,
   type RequirementDefinition,
@@ -93,7 +93,7 @@ export function evaluateMatterRequirements(
   options: { targetStage?: MatterStage } = {},
 ): EvaluatedRequirement[] {
   const context = { matter, engagement, reviewFlags, targetStage: options.targetStage }
-  return MATTER_REQUIREMENTS
+  return ALL_MATTER_REQUIREMENTS
     .filter(requirement => requirementApplies(requirement, context))
     .map(requirement => evaluate(requirement, context))
     .filter((requirement): requirement is EvaluatedRequirement => requirement !== null)
