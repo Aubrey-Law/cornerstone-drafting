@@ -5,10 +5,10 @@ import { GmailSendError } from './gmailSend'
  * File a triaged thread under the firm's Client / Lead labels in Gmail.
  *
  * Applied when the attorney approves a reply, so the thread is sorted in the
- * mailbox by the time the draft is waiting there. Only a sender Cornerstone
- * actually matched gets a label: a `possible_lead` is a stranger until someone
- * opens a lead for them, and a `contact` (a CPA, a successor trustee) is
- * neither.
+ * mailbox by the time the draft is waiting there. A `possible_lead` — an
+ * unknown sender the firm is answering — is filed as a Lead too, since that is
+ * how most new inquiries arrive. A `contact` (a CPA, a successor trustee) is
+ * neither and gets no label.
  */
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me'
@@ -17,6 +17,7 @@ const GMAIL_TIMEOUT_MS = 20_000
 const TRIAGE_LABELS: Partial<Record<TriageClassification, string>> = {
   client: 'Client',
   lead: 'Lead',
+  possible_lead: 'Lead',
 }
 
 export function triageLabelName(classification: TriageClassification): string | null {

@@ -8,10 +8,10 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('triageLabelName', () => {
-  it('labels matched clients and leads only', () => {
+  it('labels clients, leads and possible leads', () => {
     expect(triageLabelName('client')).toBe('Client')
     expect(triageLabelName('lead')).toBe('Lead')
-    expect(triageLabelName('possible_lead')).toBeNull()
+    expect(triageLabelName('possible_lead')).toBe('Lead')
     expect(triageLabelName('contact')).toBeNull()
   })
 })
@@ -52,7 +52,7 @@ describe('applyTriageLabel', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    expect(await applyTriageLabel({ token: 't', threadId: 'x', classification: 'possible_lead' })).toBeNull()
+    expect(await applyTriageLabel({ token: 't', threadId: 'x', classification: 'contact' })).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
