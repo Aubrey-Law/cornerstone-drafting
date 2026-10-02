@@ -29,6 +29,9 @@ export interface ExistingFiduciaryTask {
   assigneeId: string | null
   title: string
   priority: string
+  /** Set when a sweep retired the row itself. Optional so callers that only
+   *  ever pass open rows need not supply it. */
+  closeoutReason?: string | null
 }
 
 export interface FiduciaryEmitPlan {
@@ -163,6 +166,26 @@ export function planFiduciaryEmit(
   const insert: FiduciaryTaskRow[] = []
   const matched = new Set<string>()
 
+  // Rows a person has already settled: picked up, finished, or dismissed.
+  // They are not this sweep's to retire (`candidates` excludes them), but they
+  // still say this exact thing — so they must stop it being said again. Before
+  // this, every one of them was invisible here, and the sweep re-inserted the
+  // same task on the next tick after someone completed, assigned or deleted
+  // it. A row the sweep retired itself does not count: if that gap returns,
+  // it deserves a fresh task.
+  const settled = new Set(
+    existing
+      .filter(
+        (task) =>
+          task.source === FIDUCIARY_TASK_SOURCE &&
+          task.batchTag !== null &&
+          task.batchTag.startsWith(prefix) &&
+          task.closeoutReason !== 'fiduciary_superseded' &&
+          !candidates.includes(task),
+      )
+      .map((task) => `${task.batchTag}\u0000${task.title}\u0000${task.priority}`),
+  )
+
   for (const row of desired) {
     const twin = byTag.get(row.batch_tag)
     // Same tag *and* same content: the gap is unchanged, so the row stays
@@ -171,7 +194,7 @@ export function planFiduciaryEmit(
     if (twin && twin.title === row.title && twin.priority === row.priority) {
       matched.add(twin.id)
       keep.push(twin.id)
-    } else {
+    } else if (!settled.has(`${row.batch_tag}\u0000${row.title}\u0000${row.priority}`)) {
       insert.push(row)
     }
   }

@@ -78,7 +78,7 @@ export async function sweepFiduciaryTasks(
     try {
       const { data: existingRows, error: existingError } = await sb
         .from('tasks')
-        .select('id, source, batch_tag, status, assignee_id, title, priority')
+        .select('id, source, batch_tag, status, assignee_id, title, priority, closeout_reason')
         .eq('matter_id', matter.matterId)
         .eq('source', FIDUCIARY_TASK_SOURCE)
       if (existingError) {
@@ -95,6 +95,7 @@ export async function sweepFiduciaryTasks(
         assigneeId: (row.assignee_id as string | null) ?? null,
         title: String(row.title ?? ''),
         priority: String(row.priority ?? ''),
+        closeoutReason: (row.closeout_reason as string | null) ?? null,
       }))
 
       const plan = planFiduciaryEmit(matter.matterId, existing, desired)

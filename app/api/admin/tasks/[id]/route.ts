@@ -13,6 +13,7 @@ import {
   type TaskStatus,
 } from '@/lib/tasks/types'
 import { taskStatusStamps } from '@/lib/tasks/statusMutation'
+import { removeTasks } from '@/lib/tasks/dismiss'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -209,8 +210,19 @@ export async function DELETE(req: Request, { params }: Params) {
   if (!isUuid(id)) return NextResponse.json({ error: 'Invalid task id' }, { status: 400 })
 
   const admin = getAdminClient()
-  const { error } = await admin.from('tasks').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const { data: row, error: loadError } = await admin
+    .from('tasks')
+    .select('id, source')
+    .eq('id', id)
+    .maybeSingle()
+  if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 })
+  // Already gone is the outcome the caller asked for.
+  if (!row) return NextResponse.json({ ok: true, dismissed: false })
 
-  return NextResponse.json({ ok: true })
+  // A generated task is dismissed rather than deleted, or its sweep writes it
+  // straight back — see lib/tasks/dismiss.ts.
+  const { dismissed, error } = await removeTasks(admin, [row as Pick<TaskRow, 'id' | 'source'>])
+  if (error) return NextResponse.json({ error }, { status: 500 })
+
+  return NextResponse.json({ ok: true, dismissed: dismissed.length > 0 })
 }

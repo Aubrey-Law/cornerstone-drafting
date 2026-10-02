@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { TASK_COLUMNS, isUuid } from '@/lib/queries/tasks'
 import { snoozedDueAt } from '@/lib/tasks/snooze'
+import { removeTasks } from '@/lib/tasks/dismiss'
 import type { TaskRow } from '@/lib/tasks/types'
 
 /**
@@ -193,22 +194,17 @@ export async function DELETE(req: Request) {
   // triaging: the engine upserts them back on the next stage fire, and no
   // per-row surface offers to delete one. They are left in place and named.
   const protectedIds = existing.filter(row => row.source === 'stage').map(row => row.id)
-  const deletable = existing.filter(row => row.source !== 'stage').map(row => row.id)
+  const deletable = existing.filter(row => row.source !== 'stage')
 
-  let deleted: string[] = []
-  if (deletable.length > 0) {
-    const { data, error } = await admin
-      .from('tasks')
-      .delete()
-      .in('id', deletable)
-      .select('id')
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    deleted = ((data ?? []) as Array<{ id: string }>).map(row => row.id)
-  }
+  // Generated tasks are dismissed rather than deleted, or their sweep writes
+  // them straight back — see lib/tasks/dismiss.ts. Both leave the queue.
+  const { removed: deleted, dismissed, error } = await removeTasks(admin, deletable)
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   return NextResponse.json({
     deleted,
     deleted_count: deleted.length,
+    dismissed,
     missing: ids.filter(id => !existing.some(row => row.id === id)),
     protected: protectedIds,
     actor_id: userId ?? null,

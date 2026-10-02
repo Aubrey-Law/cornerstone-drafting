@@ -450,3 +450,24 @@ describe('sweepNameAgreement', () => {
     ).rejects.toThrow(/design sheet/i)
   })
 })
+
+describe('planIdentityEmit — tasks a person has settled', () => {
+  it.each([
+    ['completed', { status: 'done' }],
+    ['assigned', { assigneeId: 'staff-1' }],
+    ['dismissed', { status: 'archived', closeoutReason: null }],
+  ] as const)('does not write the disagreement again once its task was %s', (_label, over) => {
+    const plan = planIdentityEmit('m1', [existing(over)], [identityTaskRowFor(ISSUE)])
+    expect(plan.insert).toEqual([])
+    expect(plan.supersede).toEqual([])
+  })
+
+  it('writes it again when the sweep itself resolved the earlier task', () => {
+    const plan = planIdentityEmit(
+      'm1',
+      [existing({ status: 'archived', closeoutReason: 'identity_resolved' })],
+      [identityTaskRowFor(ISSUE)],
+    )
+    expect(plan.insert).toHaveLength(1)
+  })
+})

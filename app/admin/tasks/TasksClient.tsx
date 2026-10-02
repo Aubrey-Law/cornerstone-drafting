@@ -856,8 +856,9 @@ export function TasksClient({
               Delete {selectedIds.size} task{selectedIds.size === 1 ? '' : 's'}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The selected tasks and their subtasks will be permanently removed. Stage tasks are
-              managed by the stage engine and will be kept.
+              The selected tasks and their subtasks will be removed. Tasks created automatically
+              (fiduciary gaps, name checks, plan tasks) are dismissed so they aren’t created again.
+              Stage tasks are managed by the stage engine and will be kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
