@@ -43,6 +43,7 @@ import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay
 import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
 import { buildDayAgenda } from '@/lib/work/dayAgenda'
+import { capacityAvailabilityLabel } from '@/lib/work/capacityPresentation'
 
 type CommandCenterPlan = {
   id: string
@@ -674,6 +675,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
   const visibleCommunication = itemsExceptNow(preview.communication, preview.now)
   const visibleSuggested = itemsExceptNow(preview.suggested, preview.now)
   const focusItem = selectCommittedFocusItem(preview, plan)
+  const calendarUnavailable = sourceErrors.includes('calendar')
 
   async function refresh() {
     const [response, storedResponse] = await Promise.all([
@@ -804,7 +806,13 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <span><strong>{formatMinutes(preview.plannedMinutes)}</strong> planned</span>
-          <span className="text-muted-foreground">{formatMinutes(preview.capacityMinutes)} available after {workPreferences.interruptionBufferPercent}% buffer</span>
+          <span className={cn('text-muted-foreground', calendarUnavailable && 'text-amber-strong')}>
+            {capacityAvailabilityLabel({
+              capacityMinutes: preview.capacityMinutes,
+              interruptionBufferPercent: workPreferences.interruptionBufferPercent,
+              calendarUnavailable,
+            })}
+          </span>
           {plan && <Badge variant="outline" className="capitalize">{plan.status}</Badge>}
           {plan?.status === 'committed' && plan.calendarStatus && plan.calendarStatus.desiredBlocks > 0 && (
             <span className={cn(
@@ -913,7 +921,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
             appointments={preview.appointments}
             blocks={preview.blocks}
             items={allWorkItems}
-            calendarUnavailable={sourceErrors.includes('calendar')}
+            calendarUnavailable={calendarUnavailable}
           />
 
           <Card>
