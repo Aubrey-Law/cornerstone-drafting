@@ -94,6 +94,31 @@ export async function enqueueStatularClientForAppointment(appointmentId: string)
   }
 }
 
+/**
+ * Enqueue the Statular client when staff mark a lead's matter as a fit after
+ * the discovery call. This is the only automatic trigger: Statular cannot
+ * delete records, so nobody is pushed before the firm decides to proceed.
+ * Returns undefined when nothing was enqueued.
+ */
+export async function enqueueStatularClientForFitMatter(matterId: string): Promise<unknown> {
+  try {
+    if (!(await getIntegrationSettings()).statularSyncEnabled) return
+    const { data: matter, error } = await getAdminClient().from('matters')
+      .select('client_intake_id, fit_decision').eq('id', matterId).maybeSingle()
+    if (error || !matter) throw enqueueFailure()
+    if (matter.fit_decision !== 'fit' || !matter.client_intake_id) return
+    const { generation } = getStatularConfig()
+    return await enqueueWorkflowJob({
+      type: 'statular_create_client',
+      dedupeKey: `statular-client:${matter.client_intake_id}:${generation}`,
+      payload: { clientIntakeId: matter.client_intake_id },
+    })
+  } catch {
+    // Never retain provider URLs, PII, database detail, or attached causes.
+    throw enqueueFailure()
+  }
+}
+
 /** Persist a queue preflight outcome without manufacturing provider-attempt evidence. */
 async function recordNonAttemptState(
   ref: ExternalRecordRef,

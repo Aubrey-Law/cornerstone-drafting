@@ -41,6 +41,8 @@ interface MatterDetailHeaderProps {
   /** Creates or updates the client's Lawmatics prospect; hidden without an intake. */
   onPushToLawmatics?: () => void
   pushingToLawmatics?: boolean
+  onPushToStatular?: () => void
+  pushingToStatular?: boolean
   onDelete: () => void
 }
 
@@ -63,6 +65,8 @@ export function MatterDetailHeader({
   onUnlockIntake,
   onPushToLawmatics,
   pushingToLawmatics = false,
+  onPushToStatular,
+  pushingToStatular = false,
   onDelete,
 }: MatterDetailHeaderProps) {
   const clientName = matter.client_name || matter.matter_name || 'Matter'
@@ -163,6 +167,12 @@ export function MatterDetailHeader({
                 {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
               </DropdownMenuItem>
             )}
+            {onPushToStatular && intakeId && (
+              <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+                <CloudUpload className="mr-2 size-3.5" />
+                {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
               <Trash2 className="mr-2 size-3.5" />
               Delete matter
@@ -230,6 +240,12 @@ export function MatterDetailHeader({
             <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
               <CloudUpload className="mr-2 size-3.5" />
               {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+            </DropdownMenuItem>
+          )}
+          {onPushToStatular && intakeId && (
+            <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+              <CloudUpload className="mr-2 size-3.5" />
+              {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={onToggleFactsRail}>

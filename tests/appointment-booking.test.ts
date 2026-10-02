@@ -423,7 +423,7 @@ describe('bookAppointment', () => {
     } finally { log.mockRestore() }
   })
 
-  it('enqueues one Statular client job after committing a linked native booking', async () => {
+  it('does not create a Statular client at booking time; the fit decision does', async () => {
     state.statularEnabled = true
     state.lead = { id: 'lead-9', lead_status: 'lead' }
 
@@ -432,26 +432,8 @@ describe('bookAppointment', () => {
     expect(state.updates).toContainEqual(expect.objectContaining({
       table: 'appointments', values: expect.objectContaining({ linked_lead_id: 'lead-9' }),
     }))
-    expect(state.jobs).toEqual([expect.objectContaining({
-      p_job_type: 'statular_create_client',
-      p_dedupe_key: 'statular-client:lead-9:generation-1',
-      p_payload: { clientIntakeId: 'lead-9' },
-    })])
+    expect(state.jobs).not.toContainEqual(expect.objectContaining({ p_job_type: 'statular_create_client' }))
     expect(result.appointmentId).toBe('appointments-id-1')
-  })
-
-  it.each(['enqueue', 'config', 'read'] as const)('keeps a confirmed booking successful on Statular %s failure without leaking detail', async failure => {
-    state.statularEnabled = true
-    state.lead = { id: 'lead-9', lead_status: 'lead' }
-    state.enqueueError = failure === 'enqueue'
-    state.statularConfigError = failure === 'config'
-    state.statularAppointmentReadError = failure === 'read'
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      await expect(bookAppointment(bookingInput())).resolves.toMatchObject({ appointmentId: 'appointments-id-1' })
-      expect(log).toHaveBeenCalledWith('[appointments] statular enqueue failed', 'appointments-id-1', 'enqueue_failed')
-      expect(JSON.stringify(log.mock.calls)).not.toMatch(/PRIVATE|statular\.test/)
-    } finally { log.mockRestore() }
   })
 
   it.each(['portal', 'public', 'admin'] as const)('uses staff-only job attribution for %s booking', async source => {

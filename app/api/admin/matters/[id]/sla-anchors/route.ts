@@ -119,6 +119,18 @@ export async function PATCH(req: Request, { params }: Params) {
       if (detailsError) throw new Error(detailsError)
     }
 
+    // Marking a fit is the go-ahead to create the Statular client. A failed
+    // enqueue must not undo the saved decision; never log the cause (it can
+    // carry provider configuration or PII).
+    if (patch.fit_decision === 'fit') {
+      try {
+        const { enqueueStatularClientForFitMatter } = await import('@/lib/integrations/statular/jobs')
+        await enqueueStatularClientForFitMatter(matterId)
+      } catch {
+        console.error('[sla-anchors] statular enqueue failed', matterId, 'enqueue_failed')
+      }
+    }
+
     let rescheduled = 0
     for (const { anchor, date } of anchorsToApply) {
       const result = await applySlaAnchor(admin, matterId, anchor, date)

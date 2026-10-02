@@ -15,6 +15,7 @@ vi.mock('@/lib/integrations/statular/clients', () => ({ syncStatularClient: mock
 
 import {
   enqueueStatularClientForAppointment,
+  enqueueStatularClientForFitMatter,
   runStatularClientSyncJob,
 } from '@/lib/integrations/statular/jobs'
 
@@ -220,6 +221,75 @@ describe('Statular client enqueue', () => {
     expect(error.message).toBe('Unable to enqueue Statular client synchronization.')
     expect(error).not.toHaveProperty('cause')
     expect(JSON.stringify(error)).not.toMatch(/PRIVATE|statular\.test/)
+    expect(jobs.size).toBe(0)
+  })
+})
+
+describe('Statular client on fit decision', () => {
+  beforeEach(() => {
+    db.matters[0].fit_decision = 'fit'
+  })
+
+  it('enqueues the client intake once the matter is marked a fit', async () => {
+    await enqueueStatularClientForFitMatter('matter-1')
+    await enqueueStatularClientForFitMatter('matter-1')
+
+    expect(jobs.size).toBe(1)
+    expect([...jobs.values()][0]).toMatchObject({
+      p_job_type: 'statular_create_client',
+      p_dedupe_key: 'statular-client:lead-1:generation-1',
+      p_payload: { clientIntakeId: 'lead-1' },
+      p_actor_id: null,
+    })
+  })
+
+  it('shares the dedupe identity with an appointment-linked enqueue of the same intake', async () => {
+    await enqueueStatularClientForAppointment('appointment-1')
+    await enqueueStatularClientForFitMatter('matter-1')
+
+    expect([...jobs.keys()]).toEqual(['statular-client:lead-1:generation-1'])
+  })
+
+  it.each([['not_a_fit'], [null]])('does not enqueue when the decision is %s', async decision => {
+    db.matters[0].fit_decision = decision
+
+    await expect(enqueueStatularClientForFitMatter('matter-1')).resolves.toBeUndefined()
+
+    expect(jobs.size).toBe(0)
+  })
+
+  it('does not enqueue a matter without a client intake', async () => {
+    db.matters[0].client_intake_id = null
+
+    await expect(enqueueStatularClientForFitMatter('matter-1')).resolves.toBeUndefined()
+
+    expect(jobs.size).toBe(0)
+  })
+
+  it('does nothing while synchronization is disabled', async () => {
+    db.integration_settings[0].statular_sync_enabled = false
+
+    await enqueueStatularClientForFitMatter('matter-1')
+
+    expect(jobs.size).toBe(0)
+    expect(mocks.config).not.toHaveBeenCalled()
+  })
+
+  it.each(['integration_settings', 'matters'])('returns only a safe failure when %s cannot be read', async table => {
+    readFailure = table
+    const error = await enqueueStatularClientForFitMatter('matter-1').catch(reason => reason) as Error
+    expect(error).toBeInstanceOf(IntegrationError)
+    expect(error.message).toBe('Unable to enqueue Statular client synchronization.')
+    expect(error).not.toHaveProperty('cause')
+    expect(JSON.stringify(error)).not.toMatch(/PRIVATE|statular\.test/)
+    expect(jobs.size).toBe(0)
+  })
+
+  it('returns a safe failure when the client webhook is not configured', async () => {
+    mocks.config.mockImplementation(() => { throw new Error('PRIVATE-STATULAR-WEBHOOK-URL') })
+    const error = await enqueueStatularClientForFitMatter('matter-1').catch(reason => reason) as Error
+    expect(error).toBeInstanceOf(IntegrationError)
+    expect(JSON.stringify(error) + String(error.message)).not.toContain('PRIVATE')
     expect(jobs.size).toBe(0)
   })
 })

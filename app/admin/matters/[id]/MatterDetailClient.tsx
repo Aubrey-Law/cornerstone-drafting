@@ -106,6 +106,7 @@ import { SendSchedulingLinkDialog } from '@/components/scheduling/SendScheduling
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
 import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
+import { usePushToStatular } from '@/hooks/usePushToStatular'
 import { MatterFactsPanel } from './facts-panel/MatterFactsPanel'
 import {
   isMobileDetailViewport,
@@ -563,6 +564,7 @@ function MatterDetailClientInner({
   const taskCounts = useRecordTaskCounts(matterId, initialTaskCounts)
 
   const { push: pushToLawmatics, pushing: pushingToLawmatics } = usePushToLawmatics(liveIntakeId)
+  const { push: pushToStatular, pushing: pushingToStatular } = usePushToStatular(liveIntakeId)
 
   const handleUnlockIntake = useCallback(() => {
     if (!liveIntakeId || unlocking) return
@@ -956,6 +958,8 @@ function MatterDetailClientInner({
         onUnlockIntake={() => void handleUnlockIntake()}
         onPushToLawmatics={() => void pushToLawmatics()}
         pushingToLawmatics={pushingToLawmatics}
+        onPushToStatular={() => void pushToStatular()}
+        pushingToStatular={pushingToStatular}
         onDelete={() => setDeleteOpen(true)}
       />
 

@@ -21,16 +21,30 @@ function readConfig() {
   }
 }
 
-/** Server-only credentials. Never serialize this object into UI, logs, or errors. */
+function configurationRequired(safeMessage: string) {
+  return new IntegrationError({
+    provider: 'statular', kind: 'attention', code: 'configuration_required', safeMessage, retryAfterMs: null,
+  })
+}
+
+/**
+ * Server-only credentials. Never serialize this object into UI, logs, or errors.
+ * Client creation needs only the client webhook and generation; the matter
+ * webhook is optional until a caller asks for it (`requireStatularMatterWebhook`).
+ */
 export function getStatularConfig() {
   const { clientWebhookUrl, matterWebhookUrl, generation } = readConfig()
-  if (!clientWebhookUrl || !matterWebhookUrl || !generation) {
-    throw new IntegrationError({
-      provider: 'statular', kind: 'attention', code: 'configuration_required',
-      safeMessage: 'Configure both Statular webhooks and their generation before synchronization.', retryAfterMs: null,
-    })
+  if (!clientWebhookUrl || !generation) {
+    throw configurationRequired('Configure the Statular client webhook and its generation before synchronization.')
   }
   return { clientWebhookUrl, matterWebhookUrl, generation }
+}
+
+export function requireStatularMatterWebhook(config: ReturnType<typeof getStatularConfig>): string {
+  if (!config.matterWebhookUrl) {
+    throw configurationRequired('Configure the Statular matter webhook before creating matters.')
+  }
+  return config.matterWebhookUrl
 }
 
 /** The only configuration shape safe to return to browser consumers. */

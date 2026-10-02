@@ -42,6 +42,9 @@ type Props = {
   /** Creates or updates this lead's Lawmatics prospect. */
   onPushToLawmatics?: () => void
   pushingToLawmatics?: boolean
+  /** Creates this lead's Statular client (create-only; repeats reuse it). */
+  onPushToStatular?: () => void
+  pushingToStatular?: boolean
   onToggleRail: () => void
   railOpen: boolean
   hasEmail: boolean
@@ -67,6 +70,8 @@ export function LeadTopActions({
   onAddNote,
   onPushToLawmatics,
   pushingToLawmatics = false,
+  onPushToStatular,
+  pushingToStatular = false,
   onToggleRail,
   railOpen,
   hasEmail,
@@ -122,6 +127,11 @@ export function LeadTopActions({
             {onPushToLawmatics && (
               <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
                 {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+              </DropdownMenuItem>
+            )}
+            {onPushToStatular && (
+              <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+                {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={onBookForClient}>
@@ -207,6 +217,11 @@ export function LeadTopActions({
           {onPushToLawmatics && (
             <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
               {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+            </DropdownMenuItem>
+          )}
+          {onPushToStatular && (
+            <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+              {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={onBookForClient}>
