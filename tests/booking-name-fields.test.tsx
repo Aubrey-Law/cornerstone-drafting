@@ -21,7 +21,9 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 async function chooseSlot() {
-  fireEvent.click(await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }))
+  // The picker fetches, groups by day and auto-selects a day before times render;
+  // under a loaded CI runner that can exceed findByRole's 1s default.
+  fireEvent.click(await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }, { timeout: 5000 }))
   // Wide and narrow layouts each render a Continue control; CSS shows one.
   fireEvent.click(screen.getAllByRole('button', { name: 'Continue' })[0])
 }
@@ -57,7 +59,7 @@ describe('booking component names', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }))
     expect(await screen.findByText('That time was just booked.')).toBeTruthy()
     expect(screen.queryByLabelText('First name')).toBeNull()
-    const time = await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) })
+    const time = await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }, { timeout: 5000 })
     expect(time.getAttribute('aria-pressed')).toBe('false')
     for (const btn of screen.getAllByRole('button', { name: 'Continue' })) expect((btn as HTMLButtonElement).disabled).toBe(true)
   })
