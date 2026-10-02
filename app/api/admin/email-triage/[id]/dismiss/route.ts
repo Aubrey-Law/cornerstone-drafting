@@ -63,26 +63,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const gmailCleanup = scope === 'sender'
-    ? await cleanUpSenderInGmail(admin, row.sender_email, auth.userId ?? null)
-    : null
+  const gmailCleanup = scope === 'thread'
+    ? null
+    : await cleanUpInGmail(
+      admin,
+      scope === 'domain'
+        ? { column: 'sender_domain', value: emailDomain(row.sender_email) }
+        : { column: 'sender_email', value: row.sender_email },
+      auth.userId ?? null,
+    )
 
   return NextResponse.json({ ok: true, scope, gmailCleanup })
 }
 
 /**
- * "Never this sender" also undoes what triage did in Gmail for them: the
- * Client / Lead label comes off their threads and any reply draft Cornerstone
- * put there is deleted, so nothing is left filed or half-answered.
+ * "Never this sender" and "Never this domain" also undo what triage did in
+ * Gmail for them: the Client / Lead label comes off their threads and any
+ * reply draft Cornerstone put there is deleted, so nothing is left filed or
+ * half-answered.
  *
- * Every row from the sender counts, not only the open ones — an approved row
+ * Every row from the sender or domain counts, not only the open ones — an approved row
  * is exactly the one that carries a label and a draft. Best effort: the
  * dismissal has already been saved, so a Gmail failure is reported back
  * rather than turned into a failed request.
  */
-async function cleanUpSenderInGmail(
+async function cleanUpInGmail(
   admin: ReturnType<typeof getAdminClient>,
-  senderEmail: string,
+  match: { column: 'sender_email' | 'sender_domain'; value: string },
   userId: string | null,
 ): Promise<{ labelsRemoved: number; draftsDeleted: number; error: string | null }> {
   const result = { labelsRemoved: 0, draftsDeleted: 0, error: null as string | null }
@@ -90,7 +97,7 @@ async function cleanUpSenderInGmail(
     const { data, error } = await admin
       .from('email_triage_threads')
       .select('id, gmail_thread_id, gmail_draft_id')
-      .eq('sender_email', senderEmail)
+      .eq(match.column, match.value)
     if (error) throw error
     const rows = (data ?? []) as { id: string; gmail_thread_id: string; gmail_draft_id: string | null }[]
     if (rows.length === 0) return result

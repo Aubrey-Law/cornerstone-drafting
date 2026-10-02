@@ -74,7 +74,7 @@ export async function applyTriageLabel(args: {
 
 /**
  * Take every triage label (Client, Lead) off these threads. Used when the
- * attorney says "never this sender": someone the firm is ignoring should not
+ * attorney says "never this sender" or "never this domain": someone the firm is ignoring should not
  * stay filed as a client or a lead. Labels the mailbox does not have are not
  * created just to be removed, and other labels on the thread are left alone.
  */

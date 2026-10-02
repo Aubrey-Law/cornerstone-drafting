@@ -267,11 +267,8 @@ export function EmailTriageClient({
             toast.warning('Could not finish tidying Gmail for this sender', { description: cleanup.error })
             return 'Dismissed, and added to the ignore list'
           }
-          if (scope === 'sender') {
-            const drafts = cleanup?.draftsDeleted ?? 0
-            return `Dismissed and ignored. Client/Lead labels removed${drafts ? `, ${drafts} Gmail draft${drafts === 1 ? '' : 's'} deleted` : ''}.`
-          }
-          return 'Dismissed, and added to the ignore list'
+          const drafts = cleanup?.draftsDeleted ?? 0
+          return `Dismissed and ignored. Client/Lead labels removed${drafts ? `, ${drafts} Gmail draft${drafts === 1 ? '' : 's'} deleted` : ''}.`
         },
         failure: 'Could not dismiss',
       },
