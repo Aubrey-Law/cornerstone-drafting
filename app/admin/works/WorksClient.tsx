@@ -370,9 +370,8 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="email-templates" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EmailTemplatesSection authHeaders={authHeaders} />
-          </div>
+          {/* Its list and editor are cards of their own; no outer frame. */}
+          <EmailTemplatesSection authHeaders={authHeaders} />
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="esign" className="min-h-0 flex-1">

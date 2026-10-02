@@ -221,7 +221,7 @@ export function RichTextEmailEditor({
 
   return (
     <div className="rounded-md border border-input bg-transparent shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
-      <div className="flex items-center gap-0.5 border-b border-border px-1.5 py-1">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-1.5 py-1">
         <ToolbarButton onClick={() => exec('bold')} disabled={disabled} title="Bold (Cmd+B)">
           <Bold className="h-3.5 w-3.5" />
         </ToolbarButton>
