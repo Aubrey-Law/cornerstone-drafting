@@ -1,13 +1,24 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import SlotPicker, { fmtLongDay, fmtTime, useBrowserTimeZone } from '@/components/scheduling/SlotPicker'
+import SlotPicker, { fmtLongDay, fmtTime } from '@/components/scheduling/SlotPicker'
+import {
+  BookingCard,
+  BrandHeader,
+  EventMeta,
+  FOCUS,
+  fmtRange,
+  LOCATION_LABEL,
+  type LocationType,
+  PRIMARY_BUTTON,
+  ResultPanel,
+  TimeSummary,
+} from '@/components/scheduling/bookingUi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatPhoneInput } from '@/lib/phone'
 
-type LocationType = 'phone' | 'teams' | 'in_person'
 type Step = 'pick' | 'details' | 'done'
 
 export interface BookingWidgetType {
@@ -38,47 +49,8 @@ export interface BookingWidgetProps {
   firmName?: string
 }
 
-const LOCATION_HINT: Record<LocationType, string> = {
-  phone: 'Phone call — we’ll call the number you provide',
-  teams: 'Video call — a Google Meet link will be in your calendar invite',
-  in_person: 'In person at our office',
-}
-
-const LOCATION_LABEL: Record<LocationType, string> = {
-  phone: 'Phone call',
-  teams: 'Virtual meeting',
-  in_person: 'In person',
-}
-
-const EYEBROW = 'text-xs font-semibold tracking-[.07em] uppercase'
-const FOCUS = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 const FIELD = 'h-12 rounded-lg bg-card px-3.5 text-base md:text-base @3xl/booking:h-[46px]'
 const FIELD_LABEL = 'mb-1.5 text-base leading-snug font-medium text-foreground'
-
-function fmtRange(iso: string, durationMinutes: number): string {
-  const end = new Date(Date.parse(iso) + durationMinutes * 60_000).toISOString()
-  return `${fmtTime(iso)} – ${fmtTime(end)}`
-}
-
-function Wordmark({ firmName, compact }: { firmName: string; compact?: boolean }) {
-  const words = firmName.trim().split(/\s+/)
-  const last = words.length > 1 ? words.pop() : null
-  return (
-    <div style={{ fontFamily: 'var(--font-eb-garamond), Georgia, serif' }}>
-      <p
-        className={`flex gap-2.5 leading-none tracking-[.08em] uppercase ${compact ? 'text-xl' : 'text-2xl'}`}
-      >
-        <span className="text-brand-navy dark:text-foreground">{words.join(' ')}</span>
-        {last && <span className="text-brand-teal">{last}</span>}
-      </p>
-      {!compact && (
-        <p className="mt-1.5 text-compact leading-none text-brand-navy italic dark:text-muted-foreground">
-          Your Legacy. Carefully Planned.
-        </p>
-      )}
-    </div>
-  )
-}
 
 export default function BookingWidget({
   type,
@@ -108,7 +80,6 @@ export default function BookingWidget({
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [confirmedStart, setConfirmedStart] = useState<string | null>(null)
-  const tz = useBrowserTimeZone()
   const rootRef = useRef<HTMLDivElement>(null)
 
   const Title = standalone ? 'h1' : 'h2'
@@ -184,20 +155,11 @@ export default function BookingWidget({
   )
 
   return (
-    <div ref={rootRef} className="client-booking @container/booking scroll-mt-4">
-      <div className="overflow-clip bg-background text-foreground @3xl/booking:rounded-[14px] @3xl/booking:border @3xl/booking:border-border @3xl/booking:bg-card @3xl/booking:shadow-[0_1px_2px_rgba(31,45,90,.04),0_12px_32px_-12px_rgba(31,45,90,.12)] @5xl/booking:grid @5xl/booking:min-h-[620px] @5xl/booking:grid-cols-[320px_minmax(0,1fr)]">
-        {/* Event details: a header on narrow layouts, the left panel on wide ones. */}
-        <aside className="flex flex-col gap-3.5 border-b border-border bg-card px-5 pt-7 pb-5 @3xl/booking:px-8 @5xl/booking:gap-7 @5xl/booking:border-r @5xl/booking:border-b-0 @5xl/booking:py-9">
-          {standalone && (
-            <>
-              <div className="@5xl/booking:hidden">
-                <Wordmark firmName={firmName} compact />
-              </div>
-              <div className="hidden @5xl/booking:block">
-                <Wordmark firmName={firmName} />
-              </div>
-            </>
-          )}
+    <BookingCard
+      rootRef={rootRef}
+      aside={
+        <>
+          {standalone && <BrandHeader firmName={firmName} />}
           <div className="flex flex-col gap-2.5">
             <Title className="text-2xl leading-[1.2] font-semibold tracking-[-0.015em] text-primary @5xl/booking:text-3xl">
               {type.label}
@@ -209,29 +171,7 @@ export default function BookingWidget({
             )}
           </div>
 
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground @5xl/booking:hidden">
-            <span>{type.durationMinutes} minutes</span>
-            <span aria-hidden className="text-border">|</span>
-            <span>{LOCATION_LABEL[locationType]}</span>
-            {tz && (
-              <>
-                <span aria-hidden className="text-border">|</span>
-                <span>{tz.name}</span>
-              </>
-            )}
-          </p>
-          <dl className="hidden flex-col gap-3.5 @5xl/booking:flex">
-            {[
-              ['Length', `${type.durationMinutes} minutes`],
-              ['Format', LOCATION_HINT[locationType]],
-              ['Time zone', tz?.name ?? ''],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt className={`${EYEBROW} text-muted-foreground`}>{label}</dt>
-                <dd className="mt-0.5 text-base leading-normal text-foreground">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <EventMeta durationMinutes={type.durationMinutes} locationType={locationType} />
 
           {locationOptions.length > 1 && step !== 'done' && (
             <fieldset>
@@ -263,15 +203,16 @@ export default function BookingWidget({
           )}
 
           {shownTime && (
-            <div className="mt-auto hidden rounded-[10px] border border-brand-teal bg-selected px-4 py-3.5 text-selected-foreground @5xl/booking:block">
-              <p className={EYEBROW}>Your time</p>
-              <p className="mt-1 text-lg font-semibold">{fmtLongDay(new Date(shownTime))}</p>
-              <p className="text-base">{fmtRange(shownTime, type.durationMinutes)}</p>
-            </div>
+            <TimeSummary
+              label="Your time"
+              iso={shownTime}
+              durationMinutes={type.durationMinutes}
+              dayLabel={fmtLongDay(new Date(shownTime))}
+            />
           )}
-        </aside>
-
-        <section className="min-w-0">
+        </>
+      }
+    >
           <div hidden={step !== 'pick'} className="h-full">
             <SlotPicker
               typeSlug={type.slug}
@@ -455,7 +396,7 @@ export default function BookingWidget({
               <button
                 type="submit"
                 disabled={submitting}
-                className={`h-[52px] w-full rounded-lg bg-primary px-7 text-lg font-semibold text-primary-foreground transition-colors hover:bg-[var(--booking-primary-hover)] disabled:pointer-events-none disabled:opacity-60 @3xl/booking:h-[50px] @3xl/booking:w-auto @3xl/booking:self-start @3xl/booking:text-base ${FOCUS}`}
+                className={`${PRIMARY_BUTTON} h-[52px] w-full px-7 text-lg @3xl/booking:h-[50px] @3xl/booking:w-auto @3xl/booking:self-start @3xl/booking:text-base`}
               >
                 {submitting ? 'Booking…' : 'Confirm booking'}
               </button>
@@ -463,19 +404,7 @@ export default function BookingWidget({
           )}
 
           {step === 'done' && confirmedStart && (
-            <div
-              role="status"
-              className="flex h-full max-w-[560px] flex-col items-center justify-center gap-3.5 px-5 py-10 text-center @3xl/booking:p-12 @5xl/booking:items-start @5xl/booking:text-left"
-            >
-              <div
-                aria-hidden
-                className="grid size-14 place-items-center rounded-full bg-selected text-2xl font-semibold text-brand-teal @3xl/booking:size-[52px]"
-              >
-                ✓
-              </div>
-              <h2 className="text-3xl font-semibold text-primary">
-                You&apos;re booked
-              </h2>
+            <ResultPanel icon="✓" title="You're booked">
               <p className="text-lg leading-[1.6] text-foreground">
                 {type.label} — {fmtLongDay(new Date(confirmedStart))} at {fmtTime(confirmedStart)}
               </p>
@@ -484,10 +413,8 @@ export default function BookingWidget({
                 <span className="font-semibold text-foreground">{email}</span>.
                 {locationType === 'phone' && ' We’ll call you at the number you provided.'}
               </p>
-            </div>
+            </ResultPanel>
           )}
-        </section>
-      </div>
-    </div>
+    </BookingCard>
   )
 }

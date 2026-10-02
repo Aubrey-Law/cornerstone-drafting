@@ -12,14 +12,22 @@ export default async function ManageBookingPage({
   const firm = getFirmConfig()
 
   return (
-    <div className="client-root mx-auto max-w-2xl px-4 py-10">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {firm.firmName}
-      </p>
-      <h1 className="mt-1 text-2xl font-semibold text-foreground">Manage your appointment</h1>
-      <div className="mt-8">
-        <ManageBookingClient token={token} />
-      </div>
+    <div className="client-root client-booking min-h-dvh bg-background">
+      <main className="mx-auto flex max-w-[1144px] flex-col items-center md:px-8 md:py-14">
+        <div className="w-full">
+          <ManageBookingClient token={token} firmName={firm.firmName} />
+        </div>
+        <p className="mt-5 mb-8 px-5 text-center text-compact text-muted-foreground">
+          Need help? Call {firm.firmName} at{' '}
+          <a
+            className="font-medium underline-offset-4 hover:underline"
+            href={`tel:${firm.phone.replace(/[^\d+]/g, '')}`}
+          >
+            {firm.phone}
+          </a>{' '}
+          and we&apos;ll take care of it for you.
+        </p>
+      </main>
     </div>
   )
 }
