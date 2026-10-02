@@ -22,17 +22,21 @@ export async function GET(req: Request) {
   const admin = getAdminClient()
 
   const matterFilter = query
-    ? `name.ilike.%${query}%,matter_number.ilike.%${query}%`
+    ? `matter_name.ilike.%${query}%,client_name.ilike.%${query}%,matter_number.ilike.%${query}%`
     : null
   const leadFilter = query
     ? `full_name.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`
     : null
 
   const mattersQuery = admin
-    .from('matters')
-    .select('id, name, client_name, stage, relationship_status')
+    // Client names are derived by the pipeline view from the linked intake;
+    // they are not columns on `matters`. The consolidated view retains the
+    // matter number for a useful search target while this filter keeps the
+    // picker limited to hired matters.
+    .from('v_matter_pipeline_all')
+    .select('matter_id, matter_name, client_name, stage')
     .eq('relationship_status', 'hired')
-    .order('updated_at', { ascending: false })
+    .order('matter_created', { ascending: false })
     .limit(8)
 
   const leadsQuery = admin
@@ -51,10 +55,10 @@ export async function GET(req: Request) {
   if (leads.error) console.error('task records leads:', leads.error.message)
 
   const options: TaskRecordOption[] = [
-    ...((matters.data ?? []) as Array<{ id: string; name: string | null; client_name: string | null; stage: string | null }>)
+    ...((matters.data ?? []) as Array<{ matter_id: string; matter_name: string | null; client_name: string | null; stage: string | null }>)
       .map(m => ({
-        id: m.id,
-        name: m.client_name ?? m.name ?? 'Unnamed matter',
+        id: m.matter_id,
+        name: m.client_name?.trim() || m.matter_name?.trim() || 'Unnamed matter',
         kind: 'matter' as const,
         detail: m.stage,
       })),
