@@ -9,6 +9,7 @@ import {
   parseTemplateTask,
   parseTemplateTasks,
   rescheduleForAnchor,
+  rescheduleForGates,
   shiftDownstreamTasks,
   summarizeSlaProgress,
 } from '@/lib/slaTasks/schedule'
@@ -466,5 +467,57 @@ describe('a lead has no Day 0 yet', () => {
       { id: 'design', due_date: '2026-04-08', nudge_date: null, escalation_date: null },
       { id: 'sign', due_date: '2026-04-29', nudge_date: null, escalation_date: null },
     ])
+  })
+})
+
+/**
+ * The fit decision is a gate. Picking "Proceed — good fit" used to save and
+ * change nothing: generation had left the gated tasks undated and nothing ever
+ * revisited them. And a discovery-call date dated them with no decision made.
+ */
+describe('fit gate', () => {
+  const gated = (overrides: Partial<PlanScheduleFields> = {}) => ({
+    ...planTask({ relative_to: 'discovery_call', due_date: null, due_offset_days: 7, ...overrides }),
+    gate: 'fit_confirmed' as const,
+  })
+
+  it('does not date a gated task from its anchor while the gate is closed', () => {
+    expect(rescheduleForAnchor([gated({ id: 'pmps-link' })], 'discovery_call', '2026-03-02', [])).toEqual([])
+  })
+
+  it('dates it from its anchor once the gate is open', () => {
+    expect(rescheduleForAnchor([gated({ id: 'pmps-link' })], 'discovery_call', '2026-03-02', ['fit_confirmed']))
+      .toEqual([{ id: 'pmps-link', due_date: '2026-03-09', nudge_date: null, escalation_date: null }])
+  })
+
+  it('keeps the previous behaviour when no gates are passed', () => {
+    expect(rescheduleForAnchor([gated({ id: 'pmps-link' })], 'discovery_call', '2026-03-02')).toHaveLength(1)
+  })
+
+  it('schedules the gated tasks when the gate opens, from the dates already set', () => {
+    const updates = rescheduleForGates(
+      [gated({ id: 'email', due_offset_days: 0 }), gated({ id: 'organizer', relative_to: 'pmps', due_offset_days: -1 })],
+      { discovery_call: '2026-03-02', pmps: '2026-03-20' },
+      ['fit_confirmed'],
+    )
+    expect(updates).toEqual([
+      { id: 'email', due_date: '2026-03-02', nudge_date: null, escalation_date: null },
+      { id: 'organizer', due_date: '2026-03-19', nudge_date: null, escalation_date: null },
+    ])
+  })
+
+  it('leaves a gated task undated when its anchor is not set yet', () => {
+    expect(rescheduleForGates([gated({ id: 'organizer', relative_to: 'pmps' })], {}, ['fit_confirmed'])).toEqual([])
+  })
+
+  it('takes the dates back off when the gate closes again', () => {
+    expect(rescheduleForGates([gated({ id: 'email', due_date: '2026-03-02' })], { discovery_call: '2026-03-02' }, []))
+      .toEqual([{ id: 'email', due_date: null, nudge_date: null, escalation_date: null }])
+  })
+
+  it('never touches ungated or finished tasks', () => {
+    const ungated = planTask({ id: 'call', relative_to: 'discovery_call', due_date: null, due_offset_days: 1 })
+    const done = gated({ id: 'sent', status: 'done', due_date: '2026-03-02' })
+    expect(rescheduleForGates([ungated, done], { discovery_call: '2026-03-02' }, [])).toEqual([])
   })
 })

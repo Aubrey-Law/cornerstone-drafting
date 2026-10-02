@@ -546,10 +546,9 @@ export function TaskPlanView({
         const body = await res.json()
         if (!res.ok) throw new Error(body?.error ?? 'Could not save the key dates')
         setAnchors(body.anchors ?? null)
-      setMatter(body.matter ?? null)
         toast.success(
           body.rescheduled > 0
-            ? `Saved — ${body.rescheduled} task${body.rescheduled === 1 ? '' : 's'} scheduled`
+            ? `Saved — ${body.rescheduled} task${body.rescheduled === 1 ? '' : 's'} rescheduled`
             : 'Saved',
         )
         // The dates on every task waiting on that anchor have just changed.

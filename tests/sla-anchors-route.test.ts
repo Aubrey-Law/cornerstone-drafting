@@ -43,6 +43,12 @@ describe('SLA anchors route', () => {
     expect(source).toContain('patch.fit_decided_at = new Date().toISOString()')
   })
 
+  it('re-dates the gated tasks when the fit decision changes', () => {
+    // Saving the decision and moving the plan are one action, like the dates.
+    expect(source).toContain("hasOwnProperty.call(patch, 'fit_decision')")
+    expect(source).toContain('applySlaGates(admin, matterId)')
+  })
+
   it('clears a date without treating the blank as invalid', () => {
     expect(source).toContain("if (raw === null || raw === '')")
   })
