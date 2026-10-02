@@ -134,7 +134,7 @@ describe('ChatPanel as a rail pane', () => {
     pathname.current = '/admin/leads/lead-1'
     renderPanel()
     expect(await screen.findByText('Lead · Lead context loaded')).toBeTruthy()
-    const action = screen.getByRole('button', { name: /Summarize this client's situation/ })
+    const action = await screen.findByRole('button', { name: /Summarize this client's situation/ })
 
     await userEvent.click(action)
 
@@ -151,7 +151,7 @@ describe('ChatPanel as a rail pane', () => {
   it('isolates record turns when switching from a matter to a lead', async () => {
     const view = renderPanel()
     await screen.findByText('Matter · Whitfield Family Trust')
-    await userEvent.click(screen.getByRole('button', { name: /Summarize contacts and fiduciary roles/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Summarize contacts and fiduciary roles/ }))
 
     await waitFor(() => {
       expect(screen.getByText('Summarize contacts and fiduciary roles')).toBeTruthy()
@@ -168,7 +168,7 @@ describe('ChatPanel as a rail pane', () => {
 
     expect(await screen.findByText('Lead · Lead context loaded')).toBeTruthy()
     expect(screen.queryByText('Summarize contacts and fiduciary roles')).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: /Summarize this client's situation/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Summarize this client's situation/ }))
 
     await waitFor(() => {
       const chatCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
@@ -192,7 +192,7 @@ describe('ChatPanel as a rail pane', () => {
     })
     const view = renderPanel()
     await screen.findByText('Lead · Lead context loaded')
-    await userEvent.click(screen.getByRole('button', { name: /Summarize this client's situation/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Summarize this client's situation/ }))
 
     // The turn is persisted to the per-attorney thread store, not sessionStorage.
     await waitFor(() => {
