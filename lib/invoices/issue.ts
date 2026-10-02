@@ -25,6 +25,9 @@ interface StoredDocument {
 /**
  * Puts one rendered artifact in R2 and records it against the matter.
  *
+ * There is no folder: 20260806135231_drop_document_folders removed the column,
+ * and writing it failed every insert, so no invoice ever got its document.
+ *
  * shared_at is stamped so the client sees it in the portal Documents list
  * through the existing visibility rule — no separate sharing step, and no new
  * document plumbing. A carrier invoice is filed unshared: it records what was
@@ -54,7 +57,6 @@ async function storeArtifact(input: {
       name: input.name,
       size: input.bytes.byteLength,
       content_type: input.contentType,
-      folder: input.shareWithClient ? 'client' : 'billing',
       source: 'firm',
       shared_at: input.shareWithClient ? new Date().toISOString() : null,
     })
