@@ -1,6 +1,6 @@
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import type { TodayAppointment } from '@/lib/queries/today'
-import type { WorkItem } from '@/lib/work/types'
+import type { SuggestedBlock, WorkItem } from '@/lib/work/types'
 
 const appointmentTime = new Intl.DateTimeFormat('en-US', {
   hour: 'numeric',
@@ -25,6 +25,18 @@ export function formatAppointmentTime(appointment: TodayAppointment) {
   if (Number.isNaN(startAt)) return 'Scheduled'
 
   const endAt = appointment.end_at ? Date.parse(appointment.end_at) : Number.NaN
+  if (!Number.isNaN(endAt) && endAt > startAt) {
+    return `${appointmentTime.format(new Date(startAt))}\u2013${appointmentTime.format(new Date(endAt))}`
+  }
+
+  return appointmentTime.format(new Date(startAt))
+}
+
+export function formatSuggestedBlockTime(block: Pick<SuggestedBlock, 'startAt' | 'endAt'>) {
+  const startAt = Date.parse(block.startAt)
+  if (Number.isNaN(startAt)) return 'Scheduled'
+
+  const endAt = Date.parse(block.endAt)
   if (!Number.isNaN(endAt) && endAt > startAt) {
     return `${appointmentTime.format(new Date(startAt))}\u2013${appointmentTime.format(new Date(endAt))}`
   }

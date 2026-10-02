@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appointmentPreparationWorkKey,
   formatAppointmentTime,
+  formatSuggestedBlockTime,
   getAppointmentPreparationStatus,
 } from '@/lib/work/appointmentPresentation'
 import type { TodayAppointment } from '@/lib/queries/today'
@@ -41,6 +42,13 @@ describe('appointment presentation', () => {
   it('formats timed and all-day appointments in the firm timezone', () => {
     expect(formatAppointmentTime(appointment)).toBe('9:00 AM–10:00 AM')
     expect(formatAppointmentTime({ ...appointment, is_all_day: true })).toBe('All day')
+  })
+
+  it('formats a suggested block as a real time range', () => {
+    expect(formatSuggestedBlockTime({
+      startAt: '2026-10-02T13:00:00.000Z',
+      endAt: '2026-10-02T13:50:00.000Z',
+    })).toBe('9:00 AM–9:50 AM')
   })
 
   it('uses the canonical appointment preparation key and status', () => {

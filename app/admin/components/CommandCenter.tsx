@@ -42,7 +42,7 @@ import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
-import { formatAppointmentTime, getAppointmentPreparationStatus } from '@/lib/work/appointmentPresentation'
+import { formatAppointmentTime, formatSuggestedBlockTime, getAppointmentPreparationStatus } from '@/lib/work/appointmentPresentation'
 
 type CommandCenterPlan = {
   id: string
@@ -134,10 +134,6 @@ function formatMinutes(minutes: number) {
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
   return rest ? `${hours}h ${rest}m` : `${hours}h`
-}
-
-function formatBlock(iso: string) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 }
 
 export function TodayAppointments({ appointments, items }: Pick<DailyPlanPreview, 'appointments'> & { items: WorkItem[] }) {
@@ -922,10 +918,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
               {preview.blocks.length ? preview.blocks.map(block => {
                 const item = blockItems.get(block.workKey)
                 return (
-                  <div key={block.workKey} className="flex gap-3 rounded-lg border px-3 py-2 text-sm">
-                    <span className="shrink-0 font-medium tabular-nums">{formatBlock(block.startAt)}</span>
-                    <span className="min-w-0 truncate text-muted-foreground">{item?.title ?? 'Communication batch'}</span>
-                  </div>
+                  <Link
+                    key={block.workKey}
+                    href={item?.href ?? '/admin/communications'}
+                    className="flex gap-3 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="shrink-0 font-medium tabular-nums">{formatSuggestedBlockTime(block)}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{item?.title ?? 'Communication batch'}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatMinutes(block.minutes)}</span>
+                  </Link>
                 )
               }) : <p className="text-sm text-muted-foreground">No focus blocks fit the remaining workday.</p>}
               <Button asChild variant="outline" size="sm" className="w-full">
