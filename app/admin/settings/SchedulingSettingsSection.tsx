@@ -7,7 +7,7 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { BookingQuestion } from '@/lib/appointments/bookingQuestions'
+import type { BookingAnswer, BookingQuestion } from '@/lib/appointments/bookingQuestions'
 import type { WeeklyHours } from '@/lib/appointments/types'
 import type { ExternalCalendarRef } from '@/app/admin/calendar/types'
 import { WeeklyHoursEditor } from './WeeklyHoursEditor'
@@ -56,6 +56,8 @@ interface AppointmentListItem {
   calendarSynced: boolean
   linkedMatterId: string | null
   linkedLeadId: string | null
+  notes?: string | null
+  bookingAnswers?: BookingAnswer[]
 }
 
 const LOCATION_OPTIONS = [
@@ -583,6 +585,7 @@ export function SchedulingSettingsSection() {
                       <span className="ml-2 text-amber">⚠ not on Google Calendar</span>
                     )}
                   </p>
+                  <BookingResponses answers={a.bookingAnswers ?? []} notes={a.notes ?? null} />
                 </div>
                 {a.linkedMatterId ? (
                   <Link
@@ -605,5 +608,33 @@ export function SchedulingSettingsSection() {
         )}
       </section>
     </div>
+  )
+}
+
+/** Collapsed so the list stays scannable; answers keep their booking-time labels. */
+function BookingResponses({ answers, notes }: { answers: BookingAnswer[]; notes: string | null }) {
+  const trimmedNotes = notes?.trim()
+  const count = answers.length + (trimmedNotes ? 1 : 0)
+  if (count === 0) return null
+  return (
+    <details className="mt-1 text-xs">
+      <summary className="cursor-pointer text-primary">
+        {answers.length > 0 ? `Client answers (${answers.length})` : 'Notes'}
+      </summary>
+      <dl className="mt-1 space-y-1 border-l-2 border-border pl-2">
+        {answers.map(answer => (
+          <div key={answer.questionId || answer.label}>
+            <dt className="font-medium text-foreground">{answer.label}</dt>
+            <dd className="whitespace-pre-line text-muted-foreground">{answer.answer}</dd>
+          </div>
+        ))}
+        {trimmedNotes && (
+          <div>
+            <dt className="font-medium text-foreground">Notes</dt>
+            <dd className="whitespace-pre-line text-muted-foreground">{trimmedNotes}</dd>
+          </div>
+        )}
+      </dl>
+    </details>
   )
 }

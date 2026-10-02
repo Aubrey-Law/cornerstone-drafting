@@ -40,6 +40,17 @@ const ebGaramond = localFont({
   variable: '--font-eb-garamond',
 })
 
+// The firm wordmark's face (AUBREY LAW on the client booking pages). Static
+// 400 only, and not preloaded: only the booking card uses it, so other pages
+// shouldn't pay for the download.
+const cormorantSc = localFont({
+  src: '../assets/fonts/cormorant-sc-latin-400.woff2',
+  weight: '400',
+  display: 'swap',
+  preload: false,
+  variable: '--font-cormorant-sc',
+})
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -63,7 +74,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${dmSans.variable} ${lora.variable} ${ebGaramond.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${dmSans.variable} ${lora.variable} ${ebGaramond.variable} ${cormorantSc.variable}`} suppressHydrationWarning>
       <head>
         {/* Optional: restores saved light/dark on admin; system mode uses CSS prefers-color-scheme */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
