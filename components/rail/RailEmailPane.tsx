@@ -1082,7 +1082,7 @@ export function ManualEmailComposer({
             />
             Include signature
           </label>
-          {!hasSignature && <span className="text-micro text-muted-foreground">Configure it in Settings → Templates.</span>}
+          {!hasSignature && <span className="text-micro text-muted-foreground">Configure it in Library → Email templates.</span>}
           <Button type="button" variant="outline" size="sm" className="ml-auto h-7 text-xs" disabled={previewing || emailHtmlIsEmpty(bodyHtml)} onClick={() => void preview()}>
             {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
             Preview

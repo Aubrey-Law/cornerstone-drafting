@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { BookOpen, FileText, MessageSquare, Plus, RefreshCw, Search, Table2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -9,6 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DocumentTemplatesSection } from '@/app/admin/settings/DocumentTemplatesSection'
+import { EmailTemplatesSection } from '@/app/admin/settings/EmailTemplatesSection'
+import { EsignTemplateEditor } from '@/app/admin/settings/EsignTemplateEditor'
+import { EstateClauseLibrarySection } from '@/app/admin/settings/estate-clauses/EstateClauseLibrarySection'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { WorkSkill } from '@/components/works/types'
 import { WorkflowDetail } from './components/WorkflowDetail'
 import { TemplateBuilderLauncher } from './components/TemplateBuilderLauncher'
@@ -34,13 +38,43 @@ Review only approved matter facts. Identify missing information as [UNKNOWN]. Dr
 
 const SCOPES = ['all', 'mine', 'shared', 'system', 'inactive'] as const
 
+/**
+ * Library tabs. Everything after Workflows is a firm template and
+ * administrator-only, since every endpoint behind those editors is.
+ */
+const LIBRARY_TABS = [
+  { value: 'workflows', label: 'Workflows', adminOnly: false },
+  { value: 'documents', label: 'Document masters', adminOnly: true },
+  { value: 'email-templates', label: 'Email templates', adminOnly: true },
+  { value: 'esign', label: 'E-signature layout', adminOnly: true },
+  { value: 'clauses', label: 'Clause library', adminOnly: true },
+] as const
+
+type LibraryTab = (typeof LIBRARY_TABS)[number]['value']
+
 interface WorksClientProps {
-  /** Document masters are administrator-only; attorneys see why, not a failure. */
+  /** Firm templates are administrator-only; attorneys see why, not a failure. */
   canManageMasters?: boolean
+  currentUserId?: string
 }
 
-export default function WorksClient({ canManageMasters = false }: WorksClientProps) {
+export default function WorksClient({ canManageMasters = false, currentUserId = '' }: WorksClientProps) {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const token = useAccessToken()
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
+  const visibleTabs = LIBRARY_TABS.filter(t => !t.adminOnly || canManageMasters)
+  const requestedTab = searchParams.get('tab')
+  const tab: LibraryTab = visibleTabs.find(t => t.value === requestedTab)?.value ?? 'workflows'
+  // Kept in the URL so Settings and other pages can link straight to a template editor.
+  const setTab = (next: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next === 'workflows') params.delete('tab')
+    else params.set('tab', next)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
   const [skills, setSkills] = useState<WorkSkill[]>([])
   const [scope, setScope] = useState<(typeof SCOPES)[number]>('all')
   const [type, setType] = useState('')
@@ -144,7 +178,7 @@ export default function WorksClient({ canManageMasters = false }: WorksClientPro
         eyebrow="Attorney tools"
         icon={BookOpen}
         title="Library"
-        description="Reusable workflows for drafting, review, and structured matter work — plus the firm's document masters."
+        description="Reusable workflows for drafting, review, and structured matter work — plus the firm's document, email, e-signature, and clause templates."
         actions={
           <>
             <Button type="button" variant="outline" disabled={syncing} onClick={() => void syncSystemSkills()}>
@@ -157,10 +191,11 @@ export default function WorksClient({ canManageMasters = false }: WorksClientPro
         }
       />
 
-      <Tabs defaultValue="workflows" className="flex min-h-0 flex-1 flex-col gap-4">
-        <TabsList className="w-fit">
-          <TabsTrigger value="workflows">Workflows</TabsTrigger>
-          {canManageMasters && <TabsTrigger value="documents">Document masters</TabsTrigger>}
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-4">
+        <TabsList className="w-fit max-w-full justify-start overflow-x-auto">
+          {visibleTabs.map(t => (
+            <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="workflows" className="flex min-h-0 flex-1 flex-col gap-4">
@@ -270,6 +305,24 @@ export default function WorksClient({ canManageMasters = false }: WorksClientPro
             </div>
             <TemplateBuilderLauncher skills={skills} />
             <DocumentTemplatesSection />
+          </div>
+        </TabsContent>}
+
+        {canManageMasters && <TabsContent value="email-templates" className="min-h-0 flex-1">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <EmailTemplatesSection authHeaders={authHeaders} />
+          </div>
+        </TabsContent>}
+
+        {canManageMasters && <TabsContent value="esign" className="min-h-0 flex-1">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <EsignTemplateEditor />
+          </div>
+        </TabsContent>}
+
+        {canManageMasters && <TabsContent value="clauses" className="min-h-0 flex-1">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <EstateClauseLibrarySection currentUserId={currentUserId} />
           </div>
         </TabsContent>}
       </Tabs>

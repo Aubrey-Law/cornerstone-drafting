@@ -92,22 +92,27 @@ describe('document template workflow', () => {
     expect(migration).toContain('TO service_role')
   })
 
-  it('consolidates email and firma editors into the administrator Template Center', () => {
+  it('keeps the email, firma and clause editors in the administrator-only Library tabs', () => {
+    const library = fs.readFileSync(path.join(root, 'app/admin/works/WorksClient.tsx'), 'utf8')
     const settings = fs.readFileSync(path.join(root, 'app/admin/settings/StaffSettingsClient.tsx'), 'utf8')
-    const center = fs.readFileSync(path.join(root, 'app/admin/settings/TemplateCenter.tsx'), 'utf8')
+    const settingsPage = fs.readFileSync(path.join(root, 'app/admin/settings/page.tsx'), 'utf8')
     const email = fs.readFileSync(path.join(root, 'app/admin/settings/EmailSettingsSection.tsx'), 'utf8')
-    expect(settings).toContain("isAdministrator ? [['templates', 'Templates']")
-    expect(center).toContain('<EmailTemplatesSection')
-    expect(center).toContain('<EsignTemplateEditor')
-    expect(center).toContain('<EstateClauseLibrarySection currentUserId={currentUserId}')
-    expect(center).toContain('Clause library')
-    expect(center).not.toContain('<TabsTrigger value="documents">')
-    expect(center.match(/<TabsList(?:\s|>)/g)).toHaveLength(1)
-    expect(center.match(/<\/TabsList>/g)).toHaveLength(1)
+    expect(fs.existsSync(path.join(root, 'app/admin/settings/TemplateCenter.tsx'))).toBe(false)
+    expect(library).toContain('<EmailTemplatesSection')
+    expect(library).toContain('<EsignTemplateEditor')
+    expect(library).toContain('<EstateClauseLibrarySection currentUserId={currentUserId}')
+    for (const tab of ['documents', 'email-templates', 'esign', 'clauses']) {
+      expect(library).toMatch(new RegExp(`value: '${tab}',[^}]*adminOnly: true`))
+      expect(library).toContain(`{canManageMasters && <TabsContent value="${tab}"`)
+    }
+    expect(library.match(/<TabsList(?:\s|>)/g)).toHaveLength(1)
+    // Old Settings links land on the Library instead of a blank tab.
+    expect(settingsPage).toContain("redirect('/admin/works?tab=email-templates')")
+    expect(settings).not.toContain('TemplateCenter')
     expect(email).not.toContain('<EmailTemplatesSection')
   })
 
-  it('shows upload and active-publication timestamps in the Template Center', () => {
+  it('shows upload and active-publication timestamps on the document masters', () => {
     const documentTemplates = fs.readFileSync(
       path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'),
       'utf8',

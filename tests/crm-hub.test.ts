@@ -23,7 +23,7 @@ describe('unified CRM hub', () => {
 
     // Sync stays in Settings; campaigns are gone entirely.
     expect(fs.existsSync(path.join(process.cwd(), 'app/admin/settings/sync/page.tsx'))).toBe(true)
-    const settings = read('app/admin/settings/StaffSettingsClient.tsx')
+    const settings = read('app/admin/settings/settingsNav.ts')
     expect(settings).toContain('/admin/settings/sync')
     expect(settings).not.toContain('/admin/settings/campaigns')
 
