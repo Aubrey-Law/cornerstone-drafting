@@ -48,6 +48,7 @@ import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/wor
 import { buildCommittedDayAgenda, buildDayAgenda } from '@/lib/work/dayAgenda'
 import { capacityAvailabilityLabel } from '@/lib/work/capacityPresentation'
 import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
+import { getCalendarConfidence } from '@/lib/work/calendarConfidence'
 
 type CommandCenterPlan = {
   id: string
@@ -140,6 +141,29 @@ function formatMinutes(minutes: number) {
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
   return rest ? `${hours}h ${rest}m` : `${hours}h`
+}
+
+function CalendarConfidenceNotice({
+  state,
+  message,
+}: {
+  state: ReturnType<typeof getCalendarConfidence>['state']
+  message: string | null
+}) {
+  if (!message) return null
+  const unavailable = state === 'unavailable'
+  return (
+    <div role={unavailable ? 'alert' : 'status'} className={cn(
+      'flex gap-3 rounded-xl border p-4 text-sm',
+      unavailable ? 'border-amber-border bg-amber-bg text-amber-strong' : 'border-amber-border bg-amber-bg/50 text-amber-strong',
+    )}>
+      <CalendarClock className="mt-0.5 size-5 shrink-0" aria-hidden />
+      <div>
+        <p className="font-semibold text-foreground">{unavailable ? 'Calendar check required' : 'Calendar sync needs attention'}</p>
+        <p className="mt-1">{message}</p>
+      </div>
+    </div>
+  )
 }
 
 export function DayAgenda({
@@ -718,6 +742,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
   const [plan, setPlan] = useState(initialPlan)
   const [focusMode, setFocusMode] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [confirmUnverifiedCommitOpen, setConfirmUnverifiedCommitOpen] = useState(false)
 
   const removedWorkKeys = useMemo(() => new Set(
     plan?.status === 'committed'
@@ -786,6 +811,12 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
     void updatePlanEditor({ order: next.map(item => item.work_key) })
   }
 
+  const calendarConfidence = getCalendarConfidence({
+    calendarUnavailable,
+    planStatus: plan?.status ?? null,
+    calendarStatus: plan?.calendarStatus ?? null,
+  })
+
   async function refresh() {
     const [response, storedResponse] = await Promise.all([
       fetch(`/api/admin/work-items?date=${encodeURIComponent(preview.date)}`, { cache: 'no-store' }),
@@ -830,8 +861,12 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
     }
   }
 
-  async function commit() {
+  async function commit(confirmedWithoutCalendar = false) {
     if (!plan) return
+    if (calendarUnavailable && !confirmedWithoutCalendar) {
+      setConfirmUnverifiedCommitOpen(true)
+      return
+    }
     setBusy('commit')
     try {
       const response = await fetch(`/api/admin/daily-plans/${plan.id}/commit`, {
@@ -944,9 +979,9 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
             {busy === 'generate' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             {plan?.status === 'closed' ? 'Create new draft' : plan ? 'Replan' : 'Create draft plan'}
           </Button>
-          <Button size="sm" onClick={commit} disabled={!plan || plan.status !== 'draft' || busy !== null}>
+          <Button size="sm" onClick={() => void commit()} disabled={!plan || plan.status !== 'draft' || busy !== null}>
             {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />}
-            Commit plan
+            {calendarUnavailable ? 'Commit unverified plan' : 'Commit plan'}
           </Button>
           <EndOfDayClose
             plan={plan}
@@ -963,6 +998,21 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
         </div>
       </div>
 
+      <Dialog open={confirmUnverifiedCommitOpen} onOpenChange={setConfirmUnverifiedCommitOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Calendar availability is unavailable</DialogTitle>
+            <DialogDescription>Cornerstone cannot check for outside conflicts or reserve a trustworthy schedule right now. Your work plan will remain available, but its time blocks are unverified until calendar sync succeeds.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmUnverifiedCommitOpen(false)} disabled={busy === 'commit'}>Keep as draft</Button>
+            <Button onClick={() => { setConfirmUnverifiedCommitOpen(false); void commit(true) }} disabled={busy === 'commit'}>
+              {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />} Commit unverified plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {preview.overload && (
         <div role="alert" className="flex gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
@@ -972,6 +1022,8 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           </div>
         </div>
       )}
+
+      <CalendarConfidenceNotice state={calendarConfidence.state} message={calendarConfidence.message} />
 
       {sourceErrors.length > 0 && (
         <div role="status" className="rounded-lg border border-amber-border bg-amber-bg/50 px-3 py-2 text-xs text-amber-strong">
