@@ -32,6 +32,7 @@ vi.mock('@/lib/invoices/issue', () => ({
 import { POST as createInvoice } from '@/app/api/admin/billing/invoices/route'
 import { DELETE as discardInvoice, PATCH as updateInvoice } from '@/app/api/admin/billing/invoices/[id]/route'
 import { POST as issueInvoice } from '@/app/api/admin/billing/invoices/[id]/issue/route'
+import { POST as sendInvoice } from '@/app/api/admin/billing/invoices/[id]/send/route'
 import { POST as renderInvoiceDocument } from '@/app/api/admin/billing/invoices/[id]/document/route'
 import { maxDuration as issueMaxDuration } from '@/app/api/admin/billing/invoices/[id]/issue/route'
 import { maxDuration as documentMaxDuration } from '@/app/api/admin/billing/invoices/[id]/document/route'
@@ -328,6 +329,40 @@ describe('invoice routes', () => {
 
     expect(response.status).toBe(502)
     expect((await response.json()).error).toContain('convert worker unreachable')
+  })
+
+  it('issues a carrier invoice without emailing anyone, whatever was asked', async () => {
+    mocks.reloadInvoice.mockResolvedValue({
+      id: INVOICE_ID,
+      matterId: MATTER_ID,
+      number: '2026-0006',
+      status: 'issued',
+      payer: 'metlife',
+      subtotalCents: 16_500,
+      dueDate: '2026-10-30',
+      billToEmail: null,
+      clientEmail: 'client@example.com',
+    })
+    mocks.renderAndAttachInvoice.mockResolvedValue({
+      pdf: null, docx: { id: 'doc' }, renderData: {}, pdfUnavailableReason: null,
+    })
+
+    const response = await issueInvoice(post({ send: true }), context)
+
+    expect(response.status).toBe(200)
+    expect(mocks.emailInvoice).not.toHaveBeenCalled()
+    expect((await response.json()).sent).toBe(false)
+  })
+
+  it('refuses to email a carrier invoice after the fact', async () => {
+    mocks.reloadInvoice.mockResolvedValue({
+      id: INVOICE_ID, matterId: MATTER_ID, number: '2026-0006', status: 'issued', payer: 'metlife',
+    })
+
+    const response = await sendInvoice(post({ to: 'claims@example.com' }), context)
+
+    expect(response.status).toBe(409)
+    expect(mocks.emailInvoice).not.toHaveBeenCalled()
   })
 
   it('issues without sending when there is no address on file', async () => {

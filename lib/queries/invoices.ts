@@ -8,10 +8,11 @@ import {
   type InvoiceDetail,
   type InvoiceLine,
   type InvoicePaymentGroup,
+  type InvoicePayer,
   type InvoiceStatus,
   type InvoiceableCharge,
 } from '@/lib/billing/invoices'
-import type { BillingKind, BillingPaymentMethod } from '@/lib/billing/types'
+import type { BillingKind, BillingPaymentMethod, BillingPlan } from '@/lib/billing/types'
 import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -22,6 +23,8 @@ type InvoiceRow = {
   number_year: number | null
   kind: 'invoice' | 'credit_note'
   status: InvoiceStatus
+  /** Absent only before the 20270103090000 migration lands. */
+  payer?: InvoicePayer | null
   subtotal_cents: number
   issue_date: string | null
   due_date: string | null
@@ -80,6 +83,7 @@ function mapInvoice(
     numberYear: row.number_year,
     kind: row.kind,
     status: row.status,
+    payer: row.payer ?? 'client',
     subtotalCents: row.subtotal_cents,
     issueDate: row.issue_date,
     dueDate: row.due_date,
@@ -341,27 +345,37 @@ export async function fetchInvoiceableCharges(
   // Filtered in memory rather than in the query: a matter carries a handful of
   // charges, and "unclaimed or claimed by this one draft" costs an interpolated
   // id in a PostgREST `or` for no meaningful saving.
+  //
+  // Plan claims are included: they go on an invoice billed to their carrier.
+  // The composer keeps one payer per invoice, and so does the database.
   const { data, error } = await admin
     .from('billing_items')
-    .select('id, kind, label, amount_billed, invoice_id, created_at')
+    .select('id, kind, plan, label, amount_billed, status, invoice_id, created_at')
     .eq('matter_id', matterId)
-    .neq('kind', 'plan_claim')
     .order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
 
   return ((data ?? []) as {
     id: string
     kind: BillingKind
+    plan: BillingPlan | null
     label: string
     amount_billed: number
+    status: string
     invoice_id: string | null
     created_at: string
   }[])
     .filter(row => row.invoice_id === null
       || (draftInvoiceId !== undefined && row.invoice_id === draftInvoiceId))
+    // A claim the carrier has already paid through the per-claim path holds
+    // its payment off any invoice; billing it again would show the carrier
+    // owing money it has paid.
+    .filter(row => row.kind !== 'plan_claim' || row.invoice_id !== null
+      || (row.status !== 'paid' && row.status !== 'partial'))
     .map(row => ({
       id: row.id,
       kind: row.kind,
+      plan: row.kind === 'plan_claim' ? row.plan : null,
       label: row.label,
       amountBilled: row.amount_billed,
       createdAt: row.created_at,

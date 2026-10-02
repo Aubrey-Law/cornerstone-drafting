@@ -30,6 +30,7 @@ function invoice(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
     numberYear: null,
     kind: 'invoice',
     status: 'draft',
+    payer: 'client',
     subtotalCents: 245_000,
     issueDate: '2026-08-17',
     dueDate: '2026-09-16',
@@ -100,6 +101,25 @@ describe('issuing from the invoice detail page', () => {
 
   // Before this existed, a saved draft had no action on its own page at all —
   // the only way to issue was the composer you had already left.
+  it('issues a carrier draft without sending it, and offers no email afterwards', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce({
+      ok: true, status: 200, json: async () => ({ sent: false, invoice: { number: '2026-0007' } }),
+    })
+    const { unmount } = renderDetail({ payer: 'metlife', billToName: 'MetLife Legal Plans', billToEmail: null })
+    expect(screen.getByText('Billed to MetLife Legal Plans')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Issue & send/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Issue invoice' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ send: false })
+    unmount()
+
+    renderDetail({ payer: 'metlife', status: 'issued', number: '2026-0007', issuedAt: '2026-10-02T12:00:00Z' })
+    await openInvoiceActions(user)
+    expect(screen.queryByRole('menuitem', { name: /Send invoice|Resend invoice/ })).toBeNull()
+  })
+
   it('offers both issue actions on a draft', async () => {
     const user = userEvent.setup()
     renderDetail()

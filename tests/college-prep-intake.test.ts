@@ -220,9 +220,16 @@ describe('college-prep submission gating', () => {
     expect(messages.some((message) => message.includes('marital status'))).toBe(false)
   })
 
-  it('blocks submission while a required college-prep answer is missing', () => {
+  it('lets the student submit with a college-prep answer still missing', () => {
     const data = completeCollegePrepIntake({ college_dpoa_effective: undefined })
+    expect(getStepErrors('cp_dpoa', data).length).toBeGreaterThan(0)
+    expect(isReadyToReview(data)).toBe(true)
+  })
+
+  it('blocks submission only on the student contact information', () => {
+    const data = completeCollegePrepIntake({ email: '', phone: '' })
     expect(isReadyToReview(data)).toBe(false)
+    expect(getSubmissionErrors(data).map((issue) => issue.sectionId)).toEqual(['cp_student', 'cp_student'])
   })
 })
 

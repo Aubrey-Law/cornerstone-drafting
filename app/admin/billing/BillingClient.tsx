@@ -36,6 +36,7 @@ import { CollectionsTrendCard } from './CollectionsTrendCard'
 import { FinanceHeroCards } from './FinanceHeroCards'
 import { LedgerTable } from './LedgerTable'
 import { ReceivablesSummaryCard } from './ReceivablesSummaryCard'
+import { PlanBillingCard } from './PlanBillingCard'
 import { RecentPaymentsCard } from './RecentPaymentsCard'
 import { RevenueSourcesCard } from './RevenueSourcesCard'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
@@ -660,6 +661,7 @@ export default function BillingClient({
             <RevenueSourcesCard revenue={initialSnapshot.revenue} />
             <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
             <ReceivablesSummaryCard snapshot={initialSnapshot} />
+            <PlanBillingCard snapshot={initialSnapshot} />
             {bankDeposits}
           </div>
         </div>

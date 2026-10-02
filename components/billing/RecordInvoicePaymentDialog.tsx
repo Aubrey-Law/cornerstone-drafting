@@ -67,10 +67,11 @@ export function RecordInvoicePaymentDialog({
     if (!open) return
     // Paying the balance in full is the common case, so it is the default.
     setAmount((invoice.balance / 100).toFixed(2))
-    setMethod('check')
+    // A carrier pays its claims by EFT; a client most often by check.
+    setMethod(invoice.payer === 'client' ? 'check' : 'plan_eft')
     setNote('')
     setError(null)
-  }, [open, invoice.balance])
+  }, [open, invoice.balance, invoice.payer])
 
   const cents = Math.round(Number(amount) * 100)
 

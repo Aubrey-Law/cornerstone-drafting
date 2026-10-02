@@ -808,6 +808,7 @@ const definitions: ActionDefinition[] = [
     async preview(input, context) {
       const today = new Date().toISOString().slice(0, 10)
       const { count, error } = await context.admin.from('invoices').select('id', { count: 'exact', head: true })
+        .eq('payer', 'client')
         .in('status', ['issued', 'partial']).not('due_date', 'is', null).lt('due_date', today)
       if (error) throw new Error(error.message)
       return {

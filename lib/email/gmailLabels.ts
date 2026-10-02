@@ -1,5 +1,5 @@
 import type { TriageClassification } from '@/lib/queries/emailTriage'
-import { triageLabelName } from '@/lib/emailTriage/labels'
+import { TRIAGE_LABEL_NAMES, triageLabelName } from '@/lib/emailTriage/labels'
 import { GmailSendError } from './gmailSend'
 
 /**
@@ -70,4 +70,26 @@ export async function applyTriageLabel(args: {
     body: JSON.stringify({ addLabelIds: [labelId] }),
   })
   return name
+}
+
+/**
+ * Take every triage label (Client, Lead) off these threads. Used when the
+ * attorney says "never this sender" or "never this domain": someone the firm is ignoring should not
+ * stay filed as a client or a lead. Labels the mailbox does not have are not
+ * created just to be removed, and other labels on the thread are left alone.
+ */
+export async function removeTriageLabels(args: { token: string; threadIds: string[] }): Promise<number> {
+  if (args.threadIds.length === 0) return 0
+  const { labels = [] } = await gmailJson<{ labels?: { id: string; name: string }[] }>(args.token, '/labels')
+  const wanted = new Set(TRIAGE_LABEL_NAMES.map(name => name.toLowerCase()))
+  const labelIds = labels.filter(label => wanted.has(label.name.toLowerCase())).map(label => label.id)
+  if (labelIds.length === 0) return 0
+
+  for (const threadId of args.threadIds) {
+    await gmailJson(args.token, `/threads/${encodeURIComponent(threadId)}/modify`, {
+      method: 'POST',
+      body: JSON.stringify({ removeLabelIds: labelIds }),
+    })
+  }
+  return args.threadIds.length
 }

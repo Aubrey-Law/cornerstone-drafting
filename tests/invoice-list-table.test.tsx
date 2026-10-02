@@ -11,6 +11,7 @@ const base: InvoiceListRowView = {
   numberYear: 2026,
   kind: 'invoice',
   status: 'issued',
+  payer: 'client',
   subtotalCents: 250000,
   issueDate: '2026-09-01',
   dueDate: '2026-09-15',

@@ -16,6 +16,7 @@ import {
   PRONOUN_OPTIONS,
   SUFFIX_OPTIONS,
 } from '@/lib/sharedFields'
+import { withParentChoice } from '@/lib/contacts/parentageFromIntake'
 import { cn } from '@/lib/utils'
 
 import type { StepProps } from './IntakeWizard'
@@ -74,6 +75,23 @@ export function StepChildren({ data, update }: StepProps) {
     const updated = [...children]
     updated[index] = { ...updated[index], [field]: value }
     updateChildren(updated)
+  }
+
+  // The pill choice is authoritative, so drop the stored `parentage` the entry
+  // was hydrated with rather than letting it override the new selection.
+  function updateParent(index: number, value: string) {
+    const updated = [...children]
+    updated[index] = withParentChoice(updated[index], value)
+    updateChildren(updated)
+  }
+
+  // Older drafts may hold the stored 'joint' / 'client' / 'spouse' literal.
+  function selectedParent(child: ChildEntry): string {
+    const value = child.parent ?? 'both'
+    if (value === 'joint') return 'both'
+    if (value === 'client') return clientFirstName
+    if (value === 'spouse') return spouseFirstName || value
+    return value
   }
 
   return (
@@ -154,11 +172,11 @@ export function StepChildren({ data, update }: StepProps) {
                   <button
                     key={option}
                     type="button"
-                    onClick={() => updateChild(index, 'parent', option)}
-                    aria-pressed={(child.parent ?? 'both') === option}
+                    onClick={() => updateParent(index, option)}
+                    aria-pressed={selectedParent(child) === option}
                     className={cn(
                       'rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors',
-                      (child.parent ?? 'both') === option
+                      selectedParent(child) === option
                         ? 'border-accent bg-accent text-white'
                         : 'border-border bg-white text-foreground hover:border-input',
                     )}

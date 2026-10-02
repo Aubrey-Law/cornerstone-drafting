@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import { InvoiceStatusBadge } from '@/components/billing/InvoiceStatusBadge'
 import { moneyExact } from '@/app/admin/billing/financeFormat'
-import type { Invoice } from '@/lib/billing/invoices'
+import { invoicePayerLabels, type Invoice } from '@/lib/billing/invoices'
 import { formatFirmDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -43,7 +43,7 @@ function InvoiceNextAction({ invoice }: { invoice: InvoiceListRowView }) {
       </Button>
     )
   }
-  if (invoice.overdue) {
+  if (invoice.overdue && invoice.payer === 'client') {
     return (
       <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
         <Link href={detailHref} aria-label={`Review reminder for ${invoice.clientName}`}>
@@ -134,6 +134,7 @@ export function InvoiceListTable({ invoices }: { invoices: InvoiceListRowView[] 
                 </Link>
                 <p className="text-xs text-muted-foreground">
                   {invoice.matterNumber ?? 'No matter number'}
+                  {invoice.payer !== 'client' && ` · Billed to ${invoicePayerLabels[invoice.payer]}`}
                 </p>
               </TableCell>
               <TableCell className="text-muted-foreground">

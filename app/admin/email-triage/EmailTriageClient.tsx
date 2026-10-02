@@ -260,7 +260,16 @@ export function EmailTriageClient({
       '/dismiss',
       { method: 'POST', body: JSON.stringify({ scope }) },
       {
-        success: scope === 'thread' ? 'Dismissed' : 'Dismissed, and added to the ignore list',
+        success: body => {
+          if (scope === 'thread') return 'Dismissed'
+          const cleanup = body.gmailCleanup as { draftsDeleted?: number; error?: string | null } | null | undefined
+          if (cleanup?.error) {
+            toast.warning('Could not finish tidying Gmail for this sender', { description: cleanup.error })
+            return 'Dismissed, and added to the ignore list'
+          }
+          const drafts = cleanup?.draftsDeleted ?? 0
+          return `Dismissed and ignored. Client/Lead labels removed${drafts ? `, ${drafts} Gmail draft${drafts === 1 ? '' : 's'} deleted` : ''}.`
+        },
         failure: 'Could not dismiss',
       },
     )

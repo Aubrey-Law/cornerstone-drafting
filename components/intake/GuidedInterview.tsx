@@ -400,10 +400,8 @@ export default function GuidedInterview({
           description: formatSubmissionIssueList(submitErrors) || undefined,
         })
         setReviewOpen(false)
-        // Open the first section with an error.
-        const firstErr = sections.find((s) => s.kind === 'step' &&
-          getStepIssues(s.id, dataRef.current as IntakeRow).some((i) => i.severity === 'error'))
-        if (firstErr) setOpenId(firstErr.id)
+        // Open the section holding the first blocking item.
+        setOpenId(submitErrors[0].sectionId)
         setSubmitting(false)
         return
       }

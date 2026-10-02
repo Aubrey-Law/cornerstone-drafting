@@ -151,6 +151,7 @@ const snapshot: BillingSnapshot = {
     },
   ],
   openClaims: [],
+  planBilling: [],
   unpreparedClaims: [],
   nudges: [],
 }

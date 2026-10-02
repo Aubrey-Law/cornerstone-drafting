@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/apiAuth'
 import { billingFailure } from '@/lib/billing/apiFailure'
-import { invoiceIdSchema } from '@/lib/billing/invoices'
+import { invoiceIdSchema, isCarrierInvoice } from '@/lib/billing/invoices'
 import { reloadInvoice } from '@/lib/invoices/issue'
 import { getPaymentProcessor } from '@/lib/payments'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -44,6 +44,12 @@ export async function POST(req: Request, context: Context) {
   }
 
   const invoice = await reloadInvoice(parsedId.data)
+  if (isCarrierInvoice(invoice)) {
+    return NextResponse.json(
+      { error: 'This invoice bills a legal plan carrier and is kept as an internal record; it cannot be paid online' },
+      { status: 409 },
+    )
+  }
   if (invoice.status === 'draft' || invoice.status === 'void') {
     return NextResponse.json({ error: 'Only an issued invoice can be paid online' }, { status: 409 })
   }

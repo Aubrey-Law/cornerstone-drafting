@@ -17,3 +17,6 @@ const TRIAGE_LABELS: Partial<Record<TriageClassification, string>> = {
 export function triageLabelName(classification: TriageClassification): string | null {
   return TRIAGE_LABELS[classification] ?? null
 }
+
+/** Every label triage may have put on a thread, for taking them off again. */
+export const TRIAGE_LABEL_NAMES: string[] = Array.from(new Set(Object.values(TRIAGE_LABELS)))

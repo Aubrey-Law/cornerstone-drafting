@@ -34,12 +34,21 @@ export function mergeChildInput(
     | 'spouse'
     | null
     | undefined
+  // The wizard's Parent pill is authoritative. An entry hydrated from contacts
+  // still carries the stored `parentage`, which must not override a changed
+  // pill. The one exception: an unset (null) parentage renders as the default
+  // 'Both' pill, so an untouched entry must not turn that into 'joint'.
+  const parentageFromParent =
+    raw.parent !== undefined
+      ? parentageFromIntakeParent(raw.parent, context.clientFirstName, context.spouseFirstName)
+      : undefined
+  const parentKeepsUnsetParentage = parentageFromParent === 'joint' && suppliedParentage === null
   const parentageFromWizard =
-    suppliedParentage !== undefined
-      ? suppliedParentage
-      : raw.parent !== undefined
-        ? parentageFromIntakeParent(raw.parent, context.clientFirstName, context.spouseFirstName)
-        : undefined
+    parentageFromParent && !parentKeepsUnsetParentage
+      ? parentageFromParent
+      : suppliedParentage !== undefined
+        ? suppliedParentage
+        : parentageFromParent
 
   return {
     contact_id: cid,

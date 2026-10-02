@@ -314,6 +314,7 @@ async function annualReviewCandidates(now: Date): Promise<AutomationCandidate[]>
 async function invoiceCandidates(now: Date): Promise<AutomationCandidate[]> {
   const today = firmTodayKey(now)
   const { count, error } = await getAdminClient().from('invoices').select('id', { count: 'exact', head: true })
+    .eq('payer', 'client')
     .in('status', ['issued', 'partial']).not('due_date', 'is', null).lt('due_date', today)
   if (error) throw new Error(error.message)
   if (!count) return []

@@ -26,6 +26,12 @@ export interface IntakeSectionIssue {
   sectionTitle: string
   message: string
   severity: IntakeIssueSeverity
+  /**
+   * Only the client's contact information blocks submission. Every other
+   * issue, error or warning, still shows on its section and in the review
+   * checklist, but the client can submit and finish the rest with the firm.
+   */
+  blocksSubmission?: boolean
 }
 
 export const INTAKE_STEPS: IntakeStep[] = [
@@ -180,7 +186,9 @@ export function getSubmissionIssues(data: IntakeRow): IntakeSectionIssue[] {
 }
 
 export function getSubmissionErrors(data: IntakeRow): IntakeSectionIssue[] {
-  return getSubmissionIssues(data).filter((issue) => issue.severity === 'error')
+  return getSubmissionIssues(data).filter(
+    (issue) => issue.severity === 'error' && issue.blocksSubmission === true,
+  )
 }
 
 export function formatSubmissionIssueList(issues: IntakeSectionIssue[]): string {
@@ -201,6 +209,10 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
     message,
     severity,
   })
+  const contactIssue = (message: string): IntakeSectionIssue => ({
+    ...issue(message),
+    blocksSubmission: true,
+  })
 
   switch (stepId) {
     case 'referral': {
@@ -208,15 +220,15 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
     }
     case 'personal': {
       const issues: IntakeSectionIssue[] = []
-      if (!text(data, 'first_name')) issues.push(issue('Enter your first name.'))
-      if (!text(data, 'last_name')) issues.push(issue('Enter your last name.'))
+      if (!text(data, 'first_name')) issues.push(contactIssue('Enter your first name.'))
+      if (!text(data, 'last_name')) issues.push(contactIssue('Enter your last name.'))
       const email = text(data, 'email')
-      if (!email) issues.push(issue('Enter your email address.'))
+      if (!email) issues.push(contactIssue('Enter your email address.'))
       if (email) {
         const emailError = validateIntakeField('email', email)
-        if (emailError) issues.push(issue(emailError))
+        if (emailError) issues.push(contactIssue(emailError))
       }
-      if (!text(data, 'phone')) issues.push(issue('Enter your phone number.'))
+      if (!text(data, 'phone')) issues.push(contactIssue('Enter your phone number.'))
       if (!streetAddress(data)) issues.push(issue('Enter your street address.'))
       if (!text(data, 'city')) issues.push(issue('Enter your city.'))
       if (!text(data, 'state')) issues.push(issue('Enter your state.'))
