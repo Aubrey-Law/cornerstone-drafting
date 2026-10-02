@@ -11,7 +11,12 @@ import {
 import { isMissingColumnError, listAppointmentTypes } from '@/lib/appointments/settings'
 import { BookingNameValidationError, externalSourceLabel, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { parseBookingAnswers } from '@/lib/appointments/bookingQuestions'
+import {
+  type BookingAnswer,
+  BookingAnswerValidationError,
+  parseBookingAnswers,
+  resolveBookingAnswers,
+} from '@/lib/appointments/bookingQuestions'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
 import { addTeamsMeetingToAppointment, TeamsMeetingError } from '@/lib/appointments/teamsMeeting'
 
@@ -148,6 +153,8 @@ interface PostBody {
   secondAttendeeLastName?: unknown
   secondAttendeeEmail?: unknown
   videoProvider?: unknown
+  /** `{ [questionId]: answer }`; required questions are not enforced for staff. */
+  answers?: unknown
 }
 
 /**
@@ -204,6 +211,16 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  let bookingAnswers: BookingAnswer[]
+  try {
+    bookingAnswers = resolveBookingAnswers(type.bookingQuestions, body.answers, { enforceRequired: false })
+  } catch (error) {
+    if (error instanceof BookingAnswerValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    throw error
+  }
+
   try {
     const result = await bookAppointment({
       type,
@@ -212,6 +229,7 @@ export async function POST(req: NextRequest) {
       attendeeEmail,
       attendeePhone: attendeePhone || null,
       notes,
+      bookingAnswers,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
       secondAttendeeEmail: secondAttendeeEmail || null,
       source: 'admin',

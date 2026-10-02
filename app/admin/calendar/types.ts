@@ -1,4 +1,4 @@
-import type { BookingAnswer } from '@/lib/appointments/bookingQuestions'
+import type { BookingAnswer, BookingQuestion } from '@/lib/appointments/bookingQuestions'
 import type { CalendarTodayPlan } from '@/lib/work/calendarPlan'
 
 export type LocationType = 'phone' | 'teams' | 'in_person'
@@ -39,6 +39,8 @@ export interface BookableType {
   locationType: LocationType
   locationTypes: LocationType[]
   active: boolean
+  /** The type's booking questions; staff may answer them when booking. */
+  bookingQuestions?: BookingQuestion[]
 }
 
 export interface ExternalCalendarEvent {

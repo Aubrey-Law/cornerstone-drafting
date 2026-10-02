@@ -102,11 +102,15 @@ export function sanitizeBookingQuestions(value: unknown): BookingQuestion[] {
  * questions and return the snapshot to store, in question order. Unknown ids
  * are ignored; blank optional answers are omitted.
  *
+ * `enforceRequired: false` is for staff booking on a client's behalf, who may
+ * not have every answer yet; choice and yes/no answers are still checked.
+ *
  * @throws BookingAnswerValidationError with a client-facing message.
  */
 export function resolveBookingAnswers(
   questions: BookingQuestion[],
   input: unknown,
+  { enforceRequired = true }: { enforceRequired?: boolean } = {},
 ): BookingAnswer[] {
   const answers =
     input && typeof input === 'object' && !Array.isArray(input)
@@ -123,7 +127,7 @@ export function resolveBookingAnswers(
           )
         : ''
     if (!answer) {
-      if (q.required) throw new BookingAnswerValidationError(`Please answer: ${q.label}`)
+      if (q.required && enforceRequired) throw new BookingAnswerValidationError(`Please answer: ${q.label}`)
       continue
     }
     if (q.kind === 'choice' && !q.options.includes(answer)) {

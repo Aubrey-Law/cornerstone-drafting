@@ -6,6 +6,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Textarea } from '@/components/ui/textarea'
+import { type BookingQuestion, MAX_ANSWER_LENGTH } from '@/lib/appointments/bookingQuestions'
 import { normalizeBookingNames } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -42,6 +45,8 @@ interface Draft {
   secondAttendeeLastName: string
   secondAttendeeEmail: string
   startIso: string
+  /** Answers to the selected type's booking questions, by question id. */
+  answers: Record<string, string>
 }
 
 function initialDraft(types: BookableType[], prefillIso?: string | null): Draft {
@@ -57,6 +62,7 @@ function initialDraft(types: BookableType[], prefillIso?: string | null): Draft 
     secondAttendeeLastName: '',
     secondAttendeeEmail: '',
     startIso: prefillIso ?? '',
+    answers: {},
   }
 }
 
@@ -97,6 +103,7 @@ export function QuickBookPopover({
   const [booking, setBooking] = useState(false)
   const [teamsConnected, setTeamsConnected] = useState(false)
   const selectedType = types.find(type => type.id === draft.typeId)
+  const questions = selectedType?.bookingQuestions ?? []
 
   // Teams is offered only once Microsoft 365 is connected; otherwise the
   // choice would book a Meet anyway and surprise the attorney.
@@ -184,6 +191,7 @@ export function QuickBookPopover({
           secondAttendeeFirstName: draft.secondAttendeeFirstName.trim() || undefined,
           secondAttendeeLastName: draft.secondAttendeeLastName.trim() || undefined,
           secondAttendeeEmail: draft.secondAttendeeEmail.trim() || undefined,
+          answers: draft.answers,
         }),
       })
       const body = await response.json().catch(() => ({}))
@@ -303,6 +311,8 @@ export function QuickBookPopover({
                   onClick={() => setDraft(current => ({
                     ...current,
                     typeId: type.id,
+                    // Answers belong to a type's questions; a different type starts fresh.
+                    answers: type.id === current.typeId ? current.answers : {},
                     locationType: allowedFormats(type).includes(current.locationType)
                       ? current.locationType
                       : allowedFormats(type)[0],
@@ -364,6 +374,24 @@ export function QuickBookPopover({
               </div>
             )}
           </Step>
+
+          {questions.length > 0 && (
+            <Step number="5" title="Client answers">
+              <p className="mb-2 text-micro text-muted-foreground">
+                Optional when booking for a client; anything you fill in is saved with the appointment.
+              </p>
+              <div className="space-y-2.5">
+                {questions.map(question => (
+                  <QuestionField
+                    key={question.id}
+                    question={question}
+                    value={draft.answers[question.id] ?? ''}
+                    onChange={value => setDraft(current => ({ ...current, answers: { ...current.answers, [question.id]: value } }))}
+                  />
+                ))}
+              </div>
+            </Step>
+          )}
         </div>
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
           <span className="text-micro text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString() : 'Choose a verified slot'}</span>
@@ -373,6 +401,48 @@ export function QuickBookPopover({
         </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+function QuestionField({
+  question,
+  value,
+  onChange,
+}: {
+  question: BookingQuestion
+  value: string
+  onChange: (value: string) => void
+}) {
+  const id = `quick-book-question-${question.id}`
+  const label = (
+    <Label htmlFor={id}>
+      {question.label}
+      {question.required && <span className="font-normal text-muted-foreground">(required for clients)</span>}
+    </Label>
+  )
+  if (question.kind === 'choice' || question.kind === 'yes_no') {
+    const options = question.kind === 'yes_no' ? ['Yes', 'No'] : question.options
+    return (
+      <div>
+        {label}
+        <NativeSelect id={id} className="mt-1 h-8" value={value} onChange={event => onChange(event.target.value)}>
+          <option value="">Not answered</option>
+          {options.map(option => <option key={option} value={option}>{option}</option>)}
+        </NativeSelect>
+      </div>
+    )
+  }
+  return (
+    <div>
+      {label}
+      {question.kind === 'long_text' ? (
+        <Textarea id={id} className="mt-1 text-sm" rows={2} maxLength={MAX_ANSWER_LENGTH.long_text}
+          value={value} onChange={event => onChange(event.target.value)} />
+      ) : (
+        <Input id={id} className="mt-1 h-8" maxLength={MAX_ANSWER_LENGTH.short_text}
+          value={value} onChange={event => onChange(event.target.value)} />
+      )}
+    </div>
   )
 }
 

@@ -8,7 +8,7 @@ import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
-import type { BookingAnswer } from './bookingQuestions'
+import { type BookingAnswer, formatBookingAnswers } from './bookingQuestions'
 import { fetchAllBusy, AvailabilityUnavailableError } from './calendarBusy'
 import {
   cancelAppointmentEvent,
@@ -151,9 +151,13 @@ async function recordActivity(input: {
   leadId: string | null
   matterId: string | null
   appointmentId: string
+  /** Booked only: what the client (or staff) entered, kept on the record. */
+  bookingAnswers?: BookingAnswer[]
+  notes?: string | null
 }): Promise<void> {
   const { admin, action, type, startIso, leadId, matterId, appointmentId } = input
   const when = startIso ? ` — ${formatWhen(startIso)}` : ''
+  const responses = bookingResponsesText(input.bookingAnswers ?? [], input.notes ?? null)
 
   if (leadId) {
     try {
@@ -161,7 +165,7 @@ async function recordActivity(input: {
         lead_id: leadId,
         event_type: action === 'Cancelled' ? 'note' : 'consult_scheduled',
         title: `${action}: ${type.label}`,
-        detail: `${action} through the scheduling page${when}`,
+        detail: `${action} through the scheduling page${when}${responses ? `\n\n${responses}` : ''}`,
         actor_id: null,
       })
     } catch (err) {
@@ -202,7 +206,7 @@ async function recordActivity(input: {
       await admin.from('matter_notes').insert({
         matter_id: matterId,
         note_type: 'internal',
-        body: `${body} (appointment ${appointmentId})`,
+        body: `${body} (appointment ${appointmentId})${responses ? `\n\n${responses}` : ''}`,
         author: 'System',
       })
 
@@ -238,6 +242,13 @@ async function recordActivity(input: {
   }
 }
 
+
+/** Plain-text answers + notes for the lead timeline and matter notes. */
+function bookingResponsesText(answers: BookingAnswer[], notes: string | null): string {
+  const parts = answers.length ? [formatBookingAnswers(answers)] : []
+  if (notes?.trim()) parts.push(`Notes\n${notes.trim()}`)
+  return parts.join('\n\n')
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -544,6 +555,8 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     leadId,
     matterId,
     appointmentId,
+    bookingAnswers: input.bookingAnswers,
+    notes: input.notes,
   })
 
   await sendConfirmationEmails({
