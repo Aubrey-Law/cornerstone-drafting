@@ -941,6 +941,32 @@ describe('booking questions', () => {
     expect(alert?.html).not.toContain('<b>&')
   })
 
+  it('keeps the answers and notes on the lead timeline', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    const response = await publicBook(request({ ...base, notes: 'Call after 3', answers: { reason: 'New baby', kids: 'No' } }))
+    expect(response.status).toBe(200)
+    const activity = state.inserts.find(row => row.table === 'lead_activity' && row.values.event_type === 'consult_scheduled')
+    expect(activity?.values.detail).toContain('What prompted you to reach out?\nNew baby')
+    expect(activity?.values.detail).toContain('Do you have minor children?\nNo')
+    expect(activity?.values.detail).toContain('Notes\nCall after 3')
+  })
+
+  it('lets staff book without the required answers but stores what they enter', async () => {
+    const staff = { typeId: TYPE.id, startIso: SLOT_ISO, attendeeFirstName: 'Mary', attendeeLastName: 'Jones', attendeeEmail: 'mary@example.com' }
+    const response = await adminBook(request({ ...staff, answers: { heard: 'Referral' } }))
+    expect(response.status).toBe(200)
+    expect(state.inserts.find(row => row.table === 'appointments')?.values.booking_answers).toEqual([
+      { questionId: 'heard', label: 'How did you hear about us?', answer: 'Referral' },
+    ])
+  })
+
+  it('still rejects a staff answer outside a choice question\'s options', async () => {
+    const staff = { typeId: TYPE.id, startIso: SLOT_ISO, attendeeFirstName: 'Mary', attendeeLastName: 'Jones', attendeeEmail: 'mary@example.com' }
+    const response = await adminBook(request({ ...staff, answers: { heard: 'Billboard' } }))
+    expect(response.status).toBe(400)
+    expect(state.inserts).toHaveLength(0)
+  })
+
   it('omits booking_answers from the insert when there are none', async () => {
     TYPE.bookingQuestions = []
     await publicBook(request(base))
