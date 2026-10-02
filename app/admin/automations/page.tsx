@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { listAutomationRules } from '@/lib/automations/server'
 import { AutomationsClient, type AutomationRuleView } from './AutomationsClient'
-import { ApprovalInbox, type ApprovalProposal } from './ApprovalInbox'
+import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 import { getCachedClaims } from '@/lib/supabaseServer'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,7 @@ export default async function AutomationsPage() {
     listAutomationRules().catch(() => []),
     getAdminClient().from('workflow_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
     getAdminClient().from('action_proposals')
-      .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
+      .select('id, action_key, risk, display_summary, confirmation_policy, created_at, source')
       .eq('actor_id', auth?.id ?? '00000000-0000-0000-0000-000000000000')
       .eq('status', 'pending').order('created_at', { ascending: false }).limit(10),
     getAdminClient().from('action_executions')
@@ -58,7 +58,7 @@ export default async function AutomationsPage() {
       </section>
 
       <section className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card id="pending-approvals">
           <CardHeader>
             <CardTitle className="text-base">Pending approvals</CardTitle>
             <CardDescription>Prepared actions still waiting for an authorized user.</CardDescription>

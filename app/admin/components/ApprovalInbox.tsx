@@ -12,6 +12,7 @@ export interface ApprovalProposal {
   display_summary: string
   confirmation_policy: 'automatic' | 'one_click' | 'explicit' | 'never'
   created_at: string
+  source?: string
 }
 
 interface ProposalPreview {
@@ -31,7 +32,13 @@ function DisplayValue({ label, value }: { label: string; value: unknown }) {
   )
 }
 
-export function ApprovalInbox({ initialProposals }: { initialProposals: ApprovalProposal[] }) {
+export function ApprovalInbox({
+  initialProposals,
+  onResolved,
+}: {
+  initialProposals: ApprovalProposal[]
+  onResolved?: () => void | Promise<void>
+}) {
   const [proposals, setProposals] = useState(initialProposals)
   const [selected, setSelected] = useState<ProposalPreview | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -65,6 +72,7 @@ export function ApprovalInbox({ initialProposals }: { initialProposals: Approval
       setSelected(current => current?.proposal.id === proposal.id ? null : current)
       setMessage('Action completed and recorded in the audit log.')
     })
+    void onResolved?.()
   }
 
   async function reject(proposal: ApprovalProposal) {
@@ -83,6 +91,7 @@ export function ApprovalInbox({ initialProposals }: { initialProposals: Approval
       setProposals(current => current.filter(item => item.id !== proposal.id))
       setSelected(current => current?.proposal.id === proposal.id ? null : current)
     })
+    void onResolved?.()
   }
 
   return (
@@ -95,7 +104,7 @@ export function ApprovalInbox({ initialProposals }: { initialProposals: Approval
           <div className="flex items-start justify-between gap-2">
             <div>
               <strong>{proposal.display_summary}</strong>
-              <p className="mt-1 text-xs text-muted-foreground">{proposal.action_key} · {new Date(proposal.created_at).toLocaleString()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{proposal.action_key} · {new Date(proposal.created_at).toLocaleString()}{proposal.source ? ` · prepared by ${proposal.source}` : ''}</p>
             </div>
             <Badge variant="outline">{proposal.risk.replace('_', ' ')}</Badge>
           </div>

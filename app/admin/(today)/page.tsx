@@ -24,6 +24,7 @@ import { createDailyPlanPreview } from '@/lib/work/planner'
 import { fetchDailyPlan } from '@/lib/work/plans'
 import { getDailyPlanCalendarStatus } from '@/lib/work/dailyPlanCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 
 export const dynamic = 'force-dynamic'
 
@@ -148,9 +149,17 @@ export default async function AdminTodayPage({
   if (!settings.commandCenterV2Enabled || (legacy && legacyFallbackAvailable) || !auth) return <LegacyTodayPage />
 
   const now = new Date()
-  const [graph, preferences] = await Promise.all([
+  const [graph, preferences, pendingApprovalsResult] = await Promise.all([
     fetchWorkGraphForUser(auth.id, now),
     fetchWorkPreferences(auth.id),
+    getAdminClient().from('action_proposals')
+      .select('id, action_key, risk, display_summary, confirmation_policy, created_at, source')
+      .eq('actor_id', auth.id)
+      .eq('status', 'pending')
+      .eq('confirmation_policy', 'explicit')
+      .in('risk', ['external_write', 'legal_financial'])
+      .order('created_at', { ascending: false })
+      .limit(3),
   ])
   const preview = createDailyPlanPreview({
     items: graph.items,
@@ -201,7 +210,11 @@ export default async function AdminTodayPage({
               status: item.status,
             })),
           } : null}
-          sourceErrors={graph.sourceErrors}
+          initialApprovals={(pendingApprovalsResult.data ?? []) as ApprovalProposal[]}
+          sourceErrors={[
+            ...graph.sourceErrors,
+            ...(pendingApprovalsResult.error ? ['approvals'] : []),
+          ]}
         />
       </AdminPageShell>
     </>
