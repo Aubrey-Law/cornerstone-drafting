@@ -360,6 +360,26 @@ function WorkCard({
     }
   }
 
+  async function resume() {
+    setBusy('resume')
+    try {
+      await executeTodayInternalAction({
+        actionKey: 'work.override',
+        referencePayload: { workKey: item.workKey, state: 'open', snoozedUntil: null },
+        displaySummary: `Resume work: ${item.title}`,
+        item,
+      })
+      await onRefresh()
+      toast.success('Returned to active work')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to resume this work')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const hasPersonalDisposition = item.state === 'blocked' || item.state === 'snoozed'
+
   return (
     <article className={cn(
       'rounded-xl border bg-card p-4 shadow-sm',
@@ -392,18 +412,26 @@ function WorkCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/70 pt-3">
-        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null || !planId}>
-          {busy === 'start' ? <Loader2 className="animate-spin" /> : <Play />} Start
-        </Button>
-        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={done} disabled={busy !== null}>
-          {busy === 'done' ? <Loader2 className="animate-spin" /> : <Check />} Done
-        </Button>
-        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('snoozed')} disabled={busy !== null}>
-          {busy === 'snoozed' ? <Loader2 className="animate-spin" /> : <Clock3 />} Snooze
-        </Button>
-        <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('blocked')} disabled={busy !== null}>
-          {busy === 'blocked' ? <Loader2 className="animate-spin" /> : <PauseCircle />} Blocked
-        </Button>
+        {hasPersonalDisposition ? (
+          <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={resume} disabled={busy !== null}>
+            {busy === 'resume' ? <Loader2 className="animate-spin" /> : <RefreshCw />} Resume
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null || !planId}>
+              {busy === 'start' ? <Loader2 className="animate-spin" /> : <Play />} Start
+            </Button>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={done} disabled={busy !== null}>
+              {busy === 'done' ? <Loader2 className="animate-spin" /> : <Check />} Done
+            </Button>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('snoozed')} disabled={busy !== null}>
+              {busy === 'snoozed' ? <Loader2 className="animate-spin" /> : <Clock3 />} Snooze
+            </Button>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={() => override('blocked')} disabled={busy !== null}>
+              {busy === 'blocked' ? <Loader2 className="animate-spin" /> : <PauseCircle />} Blocked
+            </Button>
+          </>
+        )}
         {item.sourceType === 'task'
           ? <DelegateTaskButton item={item} onDelegated={onRefresh} />
           : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>}

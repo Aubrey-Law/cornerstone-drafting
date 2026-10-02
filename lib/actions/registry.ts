@@ -218,10 +218,16 @@ function billingReminderPrepareInput(value: unknown) {
   return { cycleKey }
 }
 
-function overrideInput(value: unknown): { workKey: string; state: 'blocked' | 'snoozed'; snoozedUntil: string | null } {
+function overrideInput(value: unknown): { workKey: string; state: 'open' | 'blocked' | 'snoozed'; snoozedUntil: string | null } {
   const input = objectInput(value)
   const workKey = typeof input.workKey === 'string' ? input.workKey.trim() : ''
-  const state = input.state === 'snoozed' ? 'snoozed' : input.state === 'blocked' ? 'blocked' : null
+  const state = input.state === 'snoozed'
+    ? 'snoozed'
+    : input.state === 'blocked'
+      ? 'blocked'
+      : input.state === 'open'
+        ? 'open'
+        : null
   const snoozedUntil = typeof input.snoozedUntil === 'string' && !Number.isNaN(Date.parse(input.snoozedUntil))
     ? new Date(input.snoozedUntil).toISOString() : null
   if (workKey.length < 3 || workKey.length > 300 || !state) throw new Error('A valid work override is required')
@@ -284,12 +290,33 @@ const definitions: ActionDefinition[] = [
         .eq('user_id', context.actor.id).eq('work_key', input.workKey).maybeSingle()
       if (error) throw new Error(error.message)
       return {
-        display: { action: input.state === 'snoozed' ? 'Snooze work' : 'Block work', workKey: input.workKey, state: input.state, snoozedUntil: input.snoozedUntil },
+        display: {
+          action: input.state === 'open'
+            ? 'Resume work'
+            : input.state === 'snoozed'
+              ? 'Snooze work'
+              : 'Block work',
+          workKey: input.workKey,
+          state: input.state,
+          snoozedUntil: input.snoozedUntil,
+          hasOverride: Boolean(data),
+        },
         auditBefore: data ? { workKey: input.workKey, state: data.state, snoozedUntil: data.snoozed_until, updatedAt: data.updated_at } : null,
-        auditAfter: { workKey: input.workKey, state: input.state, snoozedUntil: input.snoozedUntil },
+        auditAfter: input.state === 'open'
+          ? { workKey: input.workKey, state: 'open', overrideCleared: true }
+          : { workKey: input.workKey, state: input.state, snoozedUntil: input.snoozedUntil },
       }
     },
     async execute(input, context) {
+      // "Open" means remove the personal planning disposition entirely. It
+      // must not change the source task, message, or record: the override is
+      // only the user's decision about what appears in their Focus Mode.
+      if (input.state === 'open') {
+        const { error } = await context.admin.from('work_item_overrides').delete()
+          .eq('user_id', context.actor.id).eq('work_key', input.workKey)
+        if (error) throw new Error(error.message)
+        return { workKey: input.workKey, cleared: true }
+      }
       const { data, error } = await context.admin.from('work_item_overrides').upsert({
         user_id: context.actor.id,
         work_key: input.workKey,
@@ -299,7 +326,13 @@ const definitions: ActionDefinition[] = [
       if (error) throw new Error(error.message)
       return data
     },
-  } as ActionDefinition<{ workKey: string; state: 'blocked' | 'snoozed'; snoozedUntil: string | null }>,
+    auditResult(result) {
+      const value = result as { workKey?: string; cleared?: boolean; state?: string; snoozed_until?: string | null }
+      return value.cleared
+        ? { workKey: value.workKey, state: 'open', overrideCleared: true }
+        : { workKey: value.workKey, state: value.state, snoozedUntil: value.snoozed_until ?? null }
+    },
+  } as ActionDefinition<{ workKey: string; state: 'open' | 'blocked' | 'snoozed'; snoozedUntil: string | null }>,
   {
     key: 'task.create',
     risk: 'internal_write',

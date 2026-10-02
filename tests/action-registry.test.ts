@@ -27,6 +27,9 @@ describe('shared action registry', () => {
   it('validates references before preview or execution', () => {
     expect(() => getActionDefinition('task.complete')?.validate({ taskId: 'not-a-uuid' }, actor)).toThrow('valid task')
     expect(() => getActionDefinition('work.override')?.validate({ workKey: 'task:1', state: 'snoozed' }, actor)).toThrow('wake time')
+    expect(getActionDefinition('work.override')?.validate({ workKey: 'task:1', state: 'open' }, actor)).toEqual({
+      workKey: 'task:1', state: 'open', snoozedUntil: null,
+    })
     expect(() => getActionDefinition('daily_plan.close')?.validate({ planId: 'not-a-uuid' }, actor)).toThrow('valid identifier')
     expect(() => getActionDefinition('daily_plan.commit')?.validate({ planId: 'not-a-uuid' }, actor)).toThrow('valid identifier')
     expect(() => getActionDefinition('email.draft.send')?.validate({ draftId: 'not-a-uuid' }, actor)).toThrow('valid identifier')
