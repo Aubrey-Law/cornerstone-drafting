@@ -69,7 +69,9 @@ required for client delivery; the matter URL only for matter delivery. Configura
 `statular_sync_enabled = false` until the release verification gate passes.
 A Statular client is created when staff set a lead's **Fit decision** to Fit
 (key dates in the task plan) — not at booking — so not-a-fit leads never reach
-Statular, which cannot delete records. Statular creates clients and matters independently of Lawmatics and does not update
+Statular, which cannot delete records. Staff can also create it on demand with
+**Push to Statular** in the lead or matter actions menu; that needs the client
+webhook configured but not the sync toggle, and a repeat push reuses the stored client. Statular creates clients and matters independently of Lawmatics and does not update
 existing Statular records. Existing Markdown export and drafting are unchanged.
 
 ## Optional — drafting / ops

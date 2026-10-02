@@ -82,6 +82,7 @@ import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTabContent } from '@/app/admin/matters/[id]/MatterPeopleTab'
 import { useConfirm } from '@/components/useConfirm'
 import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
+import { usePushToStatular } from '@/hooks/usePushToStatular'
 import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
@@ -360,6 +361,10 @@ export function LeadDetailClient({
   }
 
   const { push: pushToLawmatics, pushing: pushingToLawmatics } = usePushToLawmatics(
+    lead.id,
+    () => void refreshActivityBestEffort(),
+  )
+  const { push: pushToStatular, pushing: pushingToStatular } = usePushToStatular(
     lead.id,
     () => void refreshActivityBestEffort(),
   )
@@ -856,6 +861,8 @@ export function LeadDetailClient({
             onAddNote={addQuickNote}
             onPushToLawmatics={() => void pushToLawmatics()}
             pushingToLawmatics={pushingToLawmatics}
+            onPushToStatular={() => void pushToStatular()}
+            pushingToStatular={pushingToStatular}
             onToggleRail={() => { setRailOpen(current => !current); if (railOpen) setActiveField(null) }}
             railOpen={railOpen}
             hasEmail={Boolean(lead.email?.trim())}
