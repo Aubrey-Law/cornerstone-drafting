@@ -1,5 +1,6 @@
 'use client'
 
+import { revealOnNarrowScreen } from '@/lib/revealOnNarrowScreen'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -99,9 +100,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
   // On a phone the preview sits below the whole list; bring it into view.
   const selectSkill = (id: string) => {
     setSelectedId(id)
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-    }
+    revealOnNarrowScreen(() => detailRef.current)
   }
 
   const loadSkills = useCallback(async () => {

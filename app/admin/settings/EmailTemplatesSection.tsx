@@ -1,5 +1,6 @@
 'use client'
 
+import { revealOnNarrowScreen } from '@/lib/revealOnNarrowScreen'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Eye, EyeOff, PenLine, Plus, Save, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -141,9 +142,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
 
   /** On a phone the editor sits below the list; bring it into view after a pick. */
   function revealEditor() {
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-    }
+    revealOnNarrowScreen(() => editorRef.current)
   }
 
   function startNewTemplate() {

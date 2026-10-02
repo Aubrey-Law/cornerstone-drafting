@@ -1,5 +1,6 @@
 'use client'
 
+import { revealOnNarrowScreen } from '@/lib/revealOnNarrowScreen'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpenText, Loader2, Plus, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -99,9 +100,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
   /** Open a clause; on a phone the detail sits below the list, so bring it into view. */
   const select = (next: Selection) => {
     setSelection(next)
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-    }
+    revealOnNarrowScreen(() => detailRef.current)
   }
 
   const createClause = async () => {
