@@ -59,11 +59,11 @@ import {
   type TaskWorkSummaries,
 } from '@/lib/work/taskSummary'
 
-import type { TaskPageParams } from '@/lib/tasks/pageParams'
+import type { TaskPageGroup, TaskPageParams } from '@/lib/tasks/pageParams'
 
 type ScopeKey = 'mine' | 'team' | 'unassigned'
 
-type GroupKey = 'priority' | 'due' | 'matter'
+type GroupKey = TaskPageGroup
 
 type PriorityGroupKey = 'critical' | 'today' | 'soon' | 'planned' | 'waiting'
 
@@ -81,7 +81,7 @@ interface TasksClientProps {
   templates: TaskTemplate[]
   viewerId: string | null
   workSummaries?: TaskWorkSummaries
-  pagination?: { params: TaskPageParams; total: number; doneTotal: number; scopeCounts: Record<ScopeKey, number> }
+  pagination?: { params: TaskPageParams; total: number; pageCount?: number; doneTotal: number; scopeCounts: Record<ScopeKey, number> }
 }
 
 const TODAY_LABEL = new Intl.DateTimeFormat('en-US', {
@@ -200,9 +200,20 @@ export function TasksClient({
   // Embedded/test consumers that do not provide canonical summaries retain
   // the legacy due-date queue. The real page always provides them and opens in
   // the shared priority order.
-  const [groupBy, setGroupBy] = useState<GroupKey>(() =>
+  const [localGroupBy, setLocalGroupBy] = useState<GroupKey>(() =>
     workSummaries === EMPTY_WORK_SUMMARIES ? 'due' : 'priority',
   )
+  // On the paged page the grouping lives in the URL, because the server pages
+  // differently for it: grouped by matter, a page holds whole matters, so one
+  // matter's tasks are never split across two pages.
+  const groupBy = pagination?.params.group ?? localGroupBy
+  const setGroupBy = (group: GroupKey) => {
+    if (pagination) navigate({ group })
+    else setLocalGroupBy(group)
+  }
+  const pageCount = pagination
+    ? pagination.pageCount ?? Math.max(1, Math.ceil(pagination.total / pagination.params.pageSize))
+    : 1
   const [laterOpen, setLaterOpen] = useState(false)
   const [waitingOpen, setWaitingOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
@@ -402,8 +413,10 @@ export function TasksClient({
   }, [scoped, workSummaries])
 
   const recordGroups = useMemo(
-    () => (groupBy === 'matter' ? groupTasksByRecord(scoped) : []),
-    [groupBy, scoped],
+    // Paged, the server has already ordered matters most-urgent-first across
+    // pages; re-sorting each page A–Z would restart the alphabet on every page.
+    () => (groupBy === 'matter' ? groupTasksByRecord(scoped, { keepOrder: Boolean(pagination) }) : []),
+    [groupBy, scoped, pagination],
   )
 
   const doneTodayScoped = useMemo(
@@ -617,9 +630,9 @@ export function TasksClient({
       />
 
       {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
-        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {Math.max(1, Math.ceil(pagination.total / pagination.params.pageSize))}. Groups below show this page.</span>
+        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : 'Groups below show this page.'}</span>
         <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
-        <Button variant="outline" size="sm" disabled={pagination.params.page * pagination.params.pageSize >= pagination.total} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
+        <Button variant="outline" size="sm" disabled={pagination.params.page >= pageCount} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
         {pagination.params.showDone && <div className="flex items-center gap-2">
           <span>{pagination.doneTotal} completed today · page {pagination.params.donePage}</span>
           <Button variant="outline" size="sm" disabled={pagination.params.donePage <= 1} onClick={() => navigate({ donePage: String(pagination.params.donePage - 1), page: String(pagination.params.page) })}>Previous completed</Button>

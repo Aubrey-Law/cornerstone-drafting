@@ -26,5 +26,5 @@ export default async function AdminTasksPage({ searchParams }: { searchParams: P
   return <TasksClient initialOpenTasks={open.rows} initialDoneToday={done?.rows ?? []}
     assignees={assignees} templates={templates} viewerId={user.id}
     workSummaries={workSummaries}
-    pagination={{ params: { ...params, page: open.page, donePage: done?.page ?? params.donePage }, total: open.total, doneTotal: done?.total ?? 0, scopeCounts: open.scopeCounts }} />
+    pagination={{ params: { ...params, page: open.page, donePage: done?.page ?? params.donePage }, total: open.total, pageCount: open.pageCount, doneTotal: done?.total ?? 0, scopeCounts: open.scopeCounts }} />
 }
