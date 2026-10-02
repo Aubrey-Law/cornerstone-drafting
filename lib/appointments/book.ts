@@ -243,6 +243,21 @@ async function recordActivity(input: {
 }
 
 
+/** The appointment's calendar day in the firm's zone, as the calendar's `?date=` expects. */
+function firmDayKey(iso: string, timezone: string): string {
+  try {
+    // en-CA formats as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(iso))
+  } catch {
+    return iso.slice(0, 10)
+  }
+}
+
 /** Plain-text answers + notes for the lead timeline and matter notes. */
 function bookingResponsesText(answers: BookingAnswer[], notes: string | null): string {
   const parts = answers.length ? [formatBookingAnswers(answers)] : []
@@ -334,7 +349,7 @@ async function sendConfirmationEmails(input: {
         <p><strong>${input.attendeeName}</strong> (${input.attendeeEmail})</p>
         <p>${input.type.label} — ${when}</p>
         ${alertDetailsHtml(input.bookingAnswers ?? [], input.notes ?? null)}
-        <p><a href="${appUrl('/admin/settings?tab=scheduling')}" style="color:#1a6b72">View appointments →</a></p>
+        <p><a href="${appUrl(`/admin/calendar?date=${firmDayKey(input.startIso, input.timezone)}`)}" style="color:#1a6b72">View on the calendar →</a></p>
       </div>`,
     })
   } catch (err) {
