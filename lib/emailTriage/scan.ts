@@ -6,8 +6,10 @@ import {
   listTriageThreadIds,
   GmailReadError,
 } from '@/lib/email/gmailRead'
+import { applyTriageLabel } from '@/lib/email/gmailLabels'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import type { TriageClassification } from '@/lib/queries/emailTriage'
 import {
   classifySender,
   collectThreadParticipants,
@@ -201,6 +203,7 @@ export interface ExistingTriageRow {
   gmail_message_id: string
   gmail_draft_message_id: string | null
   status: string
+  classification: TriageClassification
 }
 
 /**
@@ -219,7 +222,7 @@ export interface ExistingTriageRow {
 async function loadExistingRows(connectionEmail: string): Promise<ExistingTriageRow[]> {
   const { data, error } = await getAdminClient()
     .from('email_triage_threads')
-    .select('id, gmail_thread_id, gmail_message_id, gmail_draft_message_id, status')
+    .select('id, gmail_thread_id, gmail_message_id, gmail_draft_message_id, status, classification')
     .eq('connection_email', connectionEmail)
   if (error) throw error
   return (data ?? []) as ExistingTriageRow[]
@@ -412,6 +415,14 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           .update({ status: 'replied', replied_at: now, last_scanned_at: now, updated_at: now })
           .eq('id', existing!.id)
         counts.resolved += 1
+        // File it under Client / Lead the same way an approved reply is. Best
+        // effort: the reply already went out, and a labelling failure is not a
+        // reason to fail the scan or leave the row open.
+        await applyTriageLabel({
+          token: identity.token,
+          threadId: thread.id,
+          classification: existing!.classification,
+        }).catch(() => {})
         continue
       }
 
