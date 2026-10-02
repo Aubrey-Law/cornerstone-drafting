@@ -1,3 +1,4 @@
+import type { BookingAnswer } from './bookingQuestions'
 import type { AppointmentType } from './types'
 
 /**
@@ -17,6 +18,8 @@ export interface CreateEventInput {
   secondAttendeeName?: string | null
   secondAttendeeEmail?: string | null
   notes?: string | null
+  /** Answers to the type's booking questions, shown in the event description. */
+  bookingAnswers?: BookingAnswer[]
   /** In-person location line (office address) when locationType = in_person. */
   officeAddress?: string | null
   /**

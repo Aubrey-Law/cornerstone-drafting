@@ -48,6 +48,7 @@ interface PutBody {
     public?: unknown
     sort?: unknown
     customWeeklyHours?: unknown
+    bookingQuestions?: unknown
   }>
 }
 
@@ -118,6 +119,8 @@ export async function PUT(req: NextRequest) {
         // Absent key = leave unchanged; null or an hours object = set/clear
         // (updateAppointmentType sanitizes, mapping empty/invalid to null).
         customWeeklyHours: 'customWeeklyHours' in t ? t.customWeeklyHours : undefined,
+        // Full replacement when sent as an array (sanitized in updateAppointmentType).
+        bookingQuestions: Array.isArray(t.bookingQuestions) ? t.bookingQuestions : undefined,
       })
     }
   }

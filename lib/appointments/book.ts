@@ -8,6 +8,7 @@ import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
+import type { BookingAnswer } from './bookingQuestions'
 import { fetchAllBusy, AvailabilityUnavailableError } from './calendarBusy'
 import {
   cancelAppointmentEvent,
@@ -61,6 +62,8 @@ export interface BookAppointmentInput {
   attendeeEmail: string
   attendeePhone?: string | null
   notes?: string | null
+  /** Answers to the type's booking questions, already validated. */
+  bookingAnswers?: BookingAnswer[]
   /** Chosen meeting format; must be in type.locationTypes (else the default is used). */
   locationType?: string | null
   /** Optional spouse/partner — invited to the event and cc'd on emails. */
@@ -236,6 +239,29 @@ async function recordActivity(input: {
 }
 
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/** The client's answers and notes for the firm alert; client-supplied, so escaped. */
+function alertDetailsHtml(answers: BookingAnswer[], notes: string | null): string {
+  const rows = answers.map(
+    a =>
+      `<p style="margin:8px 0 0"><strong>${escapeHtml(a.label)}</strong><br>${escapeHtml(a.answer).replace(/\r?\n/g, '<br>')}</p>`,
+  )
+  if (notes) {
+    rows.push(
+      `<p style="margin:8px 0 0"><strong>Notes from client</strong><br>${escapeHtml(notes).replace(/\r?\n/g, '<br>')}</p>`,
+    )
+  }
+  return rows.length ? `<div style="margin:12px 0">${rows.join('')}</div>` : ''
+}
+
 async function sendConfirmationEmails(input: {
   type: AppointmentType
   startIso: string
@@ -250,6 +276,9 @@ async function sendConfirmationEmails(input: {
   ccEmail?: string | null
   /** Staff booked it themselves — no point alerting them about it. */
   skipInternalAlert?: boolean
+  /** Shown to staff in the internal alert. */
+  bookingAnswers?: BookingAnswer[]
+  notes?: string | null
 }): Promise<void> {
   const firm = await loadFirmSettings()
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
@@ -293,6 +322,7 @@ async function sendConfirmationEmails(input: {
         <h2 style="margin:0 0 12px">Appointment ${verb}</h2>
         <p><strong>${input.attendeeName}</strong> (${input.attendeeEmail})</p>
         <p>${input.type.label} — ${when}</p>
+        ${alertDetailsHtml(input.bookingAnswers ?? [], input.notes ?? null)}
         <p><a href="${appUrl('/admin/settings?tab=scheduling')}" style="color:#1a6b72">View appointments →</a></p>
       </div>`,
     })
@@ -382,6 +412,9 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
       attendee_email: input.attendeeEmail,
       attendee_phone: input.attendeePhone ?? null,
       notes: input.notes ?? null,
+      // Only sent when there are answers: a type has no questions to answer
+      // until the column exists, so this never races the migration.
+      ...(input.bookingAnswers?.length ? { booking_answers: input.bookingAnswers } : {}),
       location_type: locationType,
       second_attendee_name: input.secondAttendeeName?.trim() || null,
       second_attendee_first_name: input.secondAttendeeFirstName,
@@ -481,6 +514,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
       secondAttendeeName: input.secondAttendeeName,
       secondAttendeeEmail: input.secondAttendeeEmail,
       notes: input.notes,
+      bookingAnswers: input.bookingAnswers,
       officeAddress: office || null,
       teamsJoinUrl: teams?.joinUrl ?? null,
     })
@@ -524,6 +558,8 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     timezone: settings.timezone,
     action: 'Booked',
     skipInternalAlert: input.source === 'admin',
+    bookingAnswers: input.bookingAnswers,
+    notes: input.notes,
   })
 
   await runPostBookingAutomation({

@@ -1,3 +1,5 @@
+import { type BookingQuestion, sanitizeBookingQuestions } from '@/lib/appointments/bookingQuestions'
+
 export type AppointmentLocationType = 'phone' | 'teams' | 'in_person'
 
 export const APPOINTMENT_LOCATION_TYPES: readonly AppointmentLocationType[] = [
@@ -87,6 +89,8 @@ export interface AppointmentType {
   sort: number
   /** When set, this type is only bookable inside these windows (firm TZ). */
   customWeeklyHours: WeeklyHours | null
+  /** Extra questions the client answers when booking (in display order). */
+  bookingQuestions: BookingQuestion[]
 }
 
 export interface AppointmentTypeRow {
@@ -102,6 +106,7 @@ export interface AppointmentTypeRow {
   public: boolean
   sort: number
   custom_weekly_hours: unknown
+  booking_questions?: unknown
 }
 
 export interface AppointmentRow {
@@ -191,6 +196,7 @@ export function appointmentTypeFromRow(row: AppointmentTypeRow): AppointmentType
     public: row.public,
     sort: row.sort,
     customWeeklyHours: sanitizeCustomWeeklyHours(row.custom_weekly_hours),
+    bookingQuestions: sanitizeBookingQuestions(row.booking_questions),
   }
 }
 

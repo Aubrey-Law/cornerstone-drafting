@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
   inserts: [] as Array<{ table: string; values: Record<string, unknown> }>,
   updates: [] as Array<{ table: string; values: Record<string, unknown> }>,
   insertError: null as { code?: string; message?: string } | null,
-  emails: [] as Array<{ category: string; to: string; subject: string }>,
+  emails: [] as Array<{ category: string; to: string; subject: string; html?: string }>,
   createdEvents: [] as Array<Record<string, unknown>>,
   cancelledEvents: [] as string[],
   busy: [] as Array<{ start: number; end: number }>,
@@ -138,8 +138,8 @@ vi.mock('@/lib/calcom/link', () => ({
 }))
 
 vi.mock('@/lib/email/send', () => ({
-  sendEmail: vi.fn(async (args: { category: string; to: string; subject: string }) => {
-    state.emails.push({ category: args.category, to: args.to, subject: args.subject })
+  sendEmail: vi.fn(async (args: { category: string; to: string; subject: string; html?: string }) => {
+    state.emails.push({ category: args.category, to: args.to, subject: args.subject, html: args.html })
     return { ok: true, status: 'sent', providerMessageId: null, logId: null }
   }),
 }))
@@ -273,6 +273,7 @@ const TYPE: AppointmentType = {
   public: true,
   sort: 1,
   customWeeklyHours: null,
+  bookingQuestions: [],
 }
 
 // Monday 2026-08-10 10:00 ET = 14:00 UTC — inside mon 09:00–17:00.
@@ -894,5 +895,55 @@ describe('rescheduleAppointment', () => {
     expect(state.pmpsAnchors).toEqual([
       { leadId: 'lead-9', matterId: 'matter-7', startIso: MOVED_ISO },
     ])
+  })
+})
+
+describe('booking questions', () => {
+  const questions: AppointmentType['bookingQuestions'] = [
+    { id: 'reason', label: 'What prompted you to reach out?', kind: 'long_text', required: true, options: [] },
+    { id: 'kids', label: 'Do you have minor children?', kind: 'yes_no', required: false, options: [] },
+    { id: 'heard', label: 'How did you hear about us?', kind: 'choice', required: false, options: ['Referral', 'Google'] },
+  ]
+  function request(body: Record<string, unknown>) {
+    return new NextRequest('http://localhost/api/scheduling/book', { method: 'POST', body: JSON.stringify(body) })
+  }
+  const base = { typeKey: 'discovery_call', startTime: SLOT_ISO, firstName: 'Mary', lastName: 'Jones', email: 'pat@example.com' }
+
+  beforeEach(() => { TYPE.bookingQuestions = questions })
+  afterEach(() => { TYPE.bookingQuestions = [] })
+
+  it('rejects a booking that skips a required question', async () => {
+    const response = await publicBook(request({ ...base, answers: { kids: 'Yes' } }))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe('Please answer: What prompted you to reach out?')
+    expect(state.inserts).toHaveLength(0)
+  })
+
+  it('rejects an answer outside a choice question\'s options', async () => {
+    const response = await publicBook(request({ ...base, answers: { reason: 'Planning', heard: 'Billboard' } }))
+    expect(response.status).toBe(400)
+    expect(state.inserts).toHaveLength(0)
+  })
+
+  it('stores answers with their labels and shows them, escaped, to staff', async () => {
+    const response = await publicBook(request({
+      ...base,
+      answers: { reason: 'New baby <b>& a house</b>', kids: 'Yes', heard: '', bogus: 'ignored' },
+    }))
+    expect(response.status).toBe(200)
+    expect(state.inserts.find(row => row.table === 'appointments')?.values.booking_answers).toEqual([
+      { questionId: 'reason', label: 'What prompted you to reach out?', answer: 'New baby <b>& a house</b>' },
+      { questionId: 'kids', label: 'Do you have minor children?', answer: 'Yes' },
+    ])
+    expect(state.createdEvents[0]?.bookingAnswers).toHaveLength(2)
+    const alert = state.emails.find(e => e.category === 'appointment_booked_alert')
+    expect(alert?.html).toContain('New baby &lt;b&gt;&amp; a house&lt;/b&gt;')
+    expect(alert?.html).not.toContain('<b>&')
+  })
+
+  it('omits booking_answers from the insert when there are none', async () => {
+    TYPE.bookingQuestions = []
+    await publicBook(request(base))
+    expect(state.inserts.find(row => row.table === 'appointments')?.values).not.toHaveProperty('booking_answers')
   })
 })

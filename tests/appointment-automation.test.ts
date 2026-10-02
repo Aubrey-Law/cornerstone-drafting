@@ -101,6 +101,7 @@ function type(key: string): AppointmentType {
     public: true,
     sort: 1,
     customWeeklyHours: null,
+    bookingQuestions: [],
   }
 }
 

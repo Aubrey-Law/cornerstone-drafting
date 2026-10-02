@@ -1,3 +1,4 @@
+import type { BookingAnswer } from '@/lib/appointments/bookingQuestions'
 import type { CalendarTodayPlan } from '@/lib/work/calendarPlan'
 
 export type LocationType = 'phone' | 'teams' | 'in_person'
@@ -16,6 +17,8 @@ export interface CalendarAppointment {
   attendeeEmail: string
   attendeePhone: string | null
   notes: string | null
+  /** Client answers to the type's booking questions (label snapshotted). */
+  bookingAnswers?: BookingAnswer[]
   typeLabel: string
   source: string
   calendarSynced: boolean

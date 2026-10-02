@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { revalidateTag } from 'next/cache'
 import { getAccessToken, getGoogleConnectionForUser } from '@/lib/googleCalendar'
+import { formatBookingAnswers } from './bookingQuestions'
 import { visibleCalendars } from './calendarSelection'
 import { getSchedulingSettings } from './settings'
 import type {
@@ -82,6 +83,9 @@ function eventDescription(input: CreateEventInput): string {
   }
   if (input.teamsJoinUrl) {
     lines.push('', teamsDescriptionBlock(input.teamsJoinUrl))
+  }
+  if (input.bookingAnswers && input.bookingAnswers.length > 0) {
+    lines.push('', formatBookingAnswers(input.bookingAnswers))
   }
   if (input.notes) {
     lines.push('', 'Notes from client:', input.notes)

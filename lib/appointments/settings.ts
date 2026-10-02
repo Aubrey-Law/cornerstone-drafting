@@ -1,6 +1,7 @@
 import 'server-only'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { sanitizeCalendlyUrls } from '@/lib/calendly/links'
+import { sanitizeBookingQuestions } from './bookingQuestions'
 import { sanitizeCalendarIds } from './calendarSelection'
 import {
   appointmentTypeFromRow,
@@ -138,15 +139,24 @@ export async function updateSchedulingSettings(
   settingsCache = null
 }
 
+/** Postgres undefined_column, or PostgREST's schema-cache miss for a column. */
+export function isMissingColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204'
+}
+
 export async function listAppointmentTypes(): Promise<AppointmentType[]> {
   if (typesCache && Date.now() - typesCache.at < TTL_MS) return typesCache.value
 
-  const { data } = await getAdminClient()
-    .from('appointment_types')
-    .select('id, key, slug, label, description, duration_minutes, location_type, location_types, active, public, sort, custom_weekly_hours')
-    .order('sort', { ascending: true })
+  const base =
+    'id, key, slug, label, description, duration_minutes, location_type, location_types, active, public, sort, custom_weekly_hours'
+  const query = (columns: string) =>
+    getAdminClient().from('appointment_types').select(columns).order('sort', { ascending: true })
+  const first = await query(`${base}, booking_questions`)
+  // Code and migrations deploy in no guaranteed order: until booking_questions
+  // exists, read without it rather than taking every booking page down.
+  const { data } = first.error && isMissingColumnError(first.error) ? await query(base) : first
 
-  const value = ((data ?? []) as AppointmentTypeRow[]).map(appointmentTypeFromRow)
+  const value = ((data ?? []) as unknown as AppointmentTypeRow[]).map(appointmentTypeFromRow)
   typesCache = { value, at: Date.now() }
   return value
 }
@@ -174,6 +184,8 @@ export interface UpdateAppointmentTypeInput {
   sort?: number
   /** null clears the override (use general hours); an object limits the type to those windows. */
   customWeeklyHours?: unknown
+  /** Full replacement list; sanitized (invalid questions are dropped). */
+  bookingQuestions?: unknown
 }
 
 export async function updateAppointmentType(input: UpdateAppointmentTypeInput): Promise<void> {
@@ -198,12 +210,20 @@ export async function updateAppointmentType(input: UpdateAppointmentTypeInput): 
   if (input.customWeeklyHours !== undefined) {
     patch.custom_weekly_hours = sanitizeCustomWeeklyHours(input.customWeeklyHours)
   }
+  if (input.bookingQuestions !== undefined) {
+    patch.booking_questions = sanitizeBookingQuestions(input.bookingQuestions)
+  }
   if (Object.keys(patch).length === 0) return
 
-  const { error } = await getAdminClient()
-    .from('appointment_types')
-    .update(patch)
-    .eq('id', input.id)
+  const update = (values: Record<string, unknown>) =>
+    getAdminClient().from('appointment_types').update(values).eq('id', input.id)
+  let { error } = await update(patch)
+  // Same deploy-order guard as listAppointmentTypes: save everything else
+  // while booking_questions doesn't exist yet.
+  if (error && isMissingColumnError(error) && 'booking_questions' in patch) {
+    const { booking_questions: _pending, ...rest } = patch
+    ;({ error } = Object.keys(rest).length > 0 ? await update(rest) : { error: null })
+  }
   if (error) throw error
   typesCache = null
 }

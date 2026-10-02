@@ -264,6 +264,7 @@ export type Database = {
       appointment_types: {
         Row: {
           active: boolean
+          booking_questions: Json
           created_at: string
           custom_weekly_hours: Json | null
           description: string
@@ -280,6 +281,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          booking_questions?: Json
           created_at?: string
           custom_weekly_hours?: Json | null
           description?: string
@@ -296,6 +298,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          booking_questions?: Json
           created_at?: string
           custom_weekly_hours?: Json | null
           description?: string
@@ -321,6 +324,7 @@ export type Database = {
           attendee_name: string
           attendee_phone: string | null
           booked_by_user_id: string | null
+          booking_answers: Json
           created_at: string
           end_time: string
           external_booking_uid: string | null
@@ -354,6 +358,7 @@ export type Database = {
           attendee_name: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
+          booking_answers?: Json
           created_at?: string
           end_time: string
           external_booking_uid?: string | null
@@ -387,6 +392,7 @@ export type Database = {
           attendee_name?: string
           attendee_phone?: string | null
           booked_by_user_id?: string | null
+          booking_answers?: Json
           created_at?: string
           end_time?: string
           external_booking_uid?: string | null
