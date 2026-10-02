@@ -33,6 +33,8 @@ export interface SlotPickerProps {
   onContinue?: () => void
   /** Message shown above the times list (e.g. a slot_taken error). */
   notice?: string | null
+  /** Rendered at the top of the calendar column (e.g. a back link). */
+  header?: ReactNode
 }
 
 /** Local calendar-day key, `YYYY-MM-DD`. */
@@ -113,6 +115,7 @@ export default function SlotPicker({
   refreshKey = 0,
   onContinue,
   notice,
+  header,
 }: SlotPickerProps) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [slots, setSlots] = useState<string[]>([])
@@ -220,6 +223,7 @@ export default function SlotPicker({
 
   const calendar = (
     <div className="flex flex-col gap-4 @2xl/picker:gap-5 @2xl/picker:px-9 @2xl/picker:pt-9 @2xl/picker:pb-8">
+      {header}
       <h2 className="hidden text-xl font-semibold text-foreground @2xl/picker:block">
         Choose a day
       </h2>
