@@ -533,11 +533,10 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
     if (!plan) return
     setBusy('commit')
     try {
-      const response = await fetch(`/api/admin/daily-plans/${plan.id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/admin/daily-plans/${plan.id}/commit`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          status: 'committed',
           planningDurationSeconds: Math.round((Date.now() - openedAtMs.current) / 1000),
         }),
       })
@@ -636,9 +635,9 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           </Button>
           <Button variant="outline" size="sm" onClick={generate} disabled={busy !== null}>
             {busy === 'generate' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            {plan ? 'Replan' : 'Create draft plan'}
+            {plan?.status === 'closed' ? 'Create new draft' : plan ? 'Replan' : 'Create draft plan'}
           </Button>
-          <Button size="sm" onClick={commit} disabled={!plan || plan.status === 'committed' || busy !== null}>
+          <Button size="sm" onClick={commit} disabled={!plan || plan.status !== 'draft' || busy !== null}>
             {busy === 'commit' ? <Loader2 className="animate-spin" /> : <Check />}
             Commit plan
           </Button>

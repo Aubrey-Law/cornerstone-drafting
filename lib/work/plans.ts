@@ -45,6 +45,13 @@ export interface StoredDailyPlan {
   items: StoredDailyPlanItem[]
 }
 
+/** Only the action registry may advance a daily plan through these states. */
+export function validateDailyPlanTransition(from: DailyPlanStatus, to: DailyPlanStatus): void {
+  if (from === 'draft' && to === 'committed') return
+  if (from === 'committed' && to === 'closed') return
+  throw new Error(`Cannot change a ${from} daily plan to ${to}`)
+}
+
 function laneRows(preview: DailyPlanPreview): Array<{ lane: PlanLane; item: WorkItem }> {
   return [
     ...preview.mustDo.map(item => ({ lane: 'must_do' as const, item })),
@@ -188,7 +195,7 @@ export async function updateDailyPlan(input: {
   const admin = getAdminClient()
   const { data: owned, error: ownedError } = await admin
     .from('daily_plans')
-    .select('id, plan_date')
+    .select('id, plan_date, status')
     .eq('id', input.planId)
     .eq('user_id', input.userId)
     .maybeSingle()
@@ -196,6 +203,7 @@ export async function updateDailyPlan(input: {
   if (!owned) throw new Error('Daily plan not found')
 
   if (input.status) {
+    validateDailyPlanTransition(owned.status as DailyPlanStatus, input.status)
     const now = new Date().toISOString()
     const patch: Record<string, unknown> = { status: input.status }
     if (input.status === 'committed') patch.committed_at = now

@@ -110,6 +110,13 @@ function dailyPlanCloseInput(value: unknown) {
   return { planId }
 }
 
+function dailyPlanCommitInput(value: unknown) {
+  const input = objectInput(value)
+  const planId = optionalUuid(input, 'planId')
+  if (!planId) throw new Error('A valid daily plan is required')
+  return { planId }
+}
+
 function noteCreateInput(value: unknown) {
   const input = objectInput(value)
   const recordType = input.recordType === 'lead' ? 'lead' : input.recordType === 'matter' ? 'matter' : null
@@ -486,6 +493,41 @@ const definitions: ActionDefinition[] = [
       return { planId: plan.id, status: plan.status, closedAt: plan.closed_at ?? null }
     },
   } as ActionDefinition<ReturnType<typeof dailyPlanCloseInput>>,
+  {
+    key: 'daily_plan.commit',
+    risk: 'internal_write',
+    validate: dailyPlanCommitInput,
+    async preview(input, context) {
+      const { fetchDailyPlanById } = await import('@/lib/work/plans')
+      const plan = await fetchDailyPlanById(context.actor.id, input.planId)
+      if (!plan) throw new Error('Daily plan not found')
+      if (plan.status !== 'draft') throw new Error('Only a draft daily plan can be committed')
+      const blockCount = plan.items.filter(item => item.block_start && item.block_end
+        && item.lane !== 'later' && item.status !== 'skipped').length
+      return {
+        display: {
+          action: 'Commit daily plan',
+          planDate: plan.plan_date,
+          generatedAt: plan.generated_at,
+          plannedMinutes: plan.planned_minutes,
+          blockCount,
+        },
+        auditBefore: { planId: plan.id, status: plan.status, generatedAt: plan.generated_at, blockCount },
+        auditAfter: { planId: plan.id, status: 'committed', blockCount },
+      }
+    },
+    async execute(input, context) {
+      const { fetchDailyPlanById, updateDailyPlan } = await import('@/lib/work/plans')
+      const plan = await fetchDailyPlanById(context.actor.id, input.planId)
+      if (!plan) throw new Error('Daily plan not found')
+      if (plan.status !== 'draft') throw new Error('Only a draft daily plan can be committed')
+      return updateDailyPlan({ userId: context.actor.id, planId: input.planId, status: 'committed' })
+    },
+    auditResult(result) {
+      const plan = result as { id?: string; status?: string; committed_at?: string | null }
+      return { planId: plan.id, status: plan.status, committedAt: plan.committed_at ?? null }
+    },
+  } as ActionDefinition<ReturnType<typeof dailyPlanCommitInput>>,
   {
     key: 'note.create',
     risk: 'internal_write',
