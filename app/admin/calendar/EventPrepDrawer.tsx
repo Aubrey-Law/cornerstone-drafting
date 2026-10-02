@@ -146,6 +146,7 @@ export function EventPrepDrawer({
             </SheetHeader>
 
             <div className="space-y-4 p-5">
+              <ClientResponses appointment={appointment} />
               {!detail ? <p className="text-sm text-muted-foreground">Loading meeting context…</p> : (
                 <>
                   <DrawerSection title="Matter summary">
@@ -207,6 +208,36 @@ export function EventPrepDrawer({
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+/**
+ * What the client told us when booking: answers to the type's booking
+ * questions (label as it read at booking time) and the free-text notes.
+ * Comes with the appointment itself, so it renders before the context fetch.
+ */
+function ClientResponses({ appointment }: { appointment: CalendarAppointment }) {
+  const answers = appointment.bookingAnswers ?? []
+  const notes = appointment.notes?.trim()
+  if (answers.length === 0 && !notes) return null
+  return (
+    // Staff-booked appointments carry the booker's notes, not the client's.
+    <DrawerSection title={appointment.source === 'admin' ? 'Booking notes' : 'From the client'}>
+      <dl className="space-y-2 text-xs">
+        {answers.map(answer => (
+          <div key={answer.questionId || answer.label}>
+            <dt className="font-medium text-foreground">{answer.label}</dt>
+            <dd className="mt-0.5 whitespace-pre-line text-muted-foreground">{answer.answer}</dd>
+          </div>
+        ))}
+        {notes && (
+          <div>
+            <dt className="font-medium text-foreground">Notes</dt>
+            <dd className="mt-0.5 whitespace-pre-line text-muted-foreground">{notes}</dd>
+          </div>
+        )}
+      </dl>
+    </DrawerSection>
   )
 }
 
