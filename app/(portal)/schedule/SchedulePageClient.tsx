@@ -68,11 +68,7 @@ export default function SchedulePageClient({
           ← All appointment types
         </Button>
       )}
-      <h2 className="text-lg font-semibold text-foreground">{selectedType.label}</h2>
-      {selectedType.description && (
-        <p className="mt-1 text-sm text-muted-foreground">{selectedType.description}</p>
-      )}
-      <div className="mt-4">
+      <div>
         <BookingWidget
           type={selectedType}
           defaultFirstName={defaultFirstName ?? defaultName ?? ''}

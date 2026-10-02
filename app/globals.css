@@ -171,6 +171,38 @@
   --selected-border: var(--brand-teal);
 }
 
+/* ── Client booking (/book/[slug], portal Schedule, manage-booking) ─────────
+   The split-card booking page uses the same client palette as the interview
+   freeze above, plus a few surfaces of its own: the times-column tint, the
+   disabled-day grey, and the navy hover. Dark mode keeps the app theme and
+   derives those extras from it. */
+.client-booking {
+  --booking-panel: var(--muted);
+  --booking-disabled: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  --booking-primary-hover: color-mix(in oklab, var(--primary) 85%, black);
+}
+:root:not(.dark) .client-booking,
+.light .client-booking {
+  --radius: 0.625rem;
+  --background: #EDF1F7;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --primary: var(--brand-navy);
+  --primary-foreground: #ffffff;
+  --muted: #E7EBF2;
+  --muted-foreground: #4D5763;
+  --border: #C9D3E0;
+  --input: #7486A2;
+  --ring: var(--brand-teal);
+  --selected: #e2efef;
+  --selected-foreground: #14444a;
+  --selected-border: var(--brand-teal);
+  --booking-panel: #F7F9FC;
+  --booking-disabled: #8E99A8;
+  --booking-primary-hover: #17224a;
+}
+
 /* ── Guided zinc re-skin (attorney-facing design sheet / drafting steps) ────
    Remaps guided.css's --gi-* tokens onto the app theme so these admin surfaces
    follow the zinc retheme in both modes, while keeping guided.css's structural

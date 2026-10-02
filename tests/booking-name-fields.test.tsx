@@ -21,7 +21,11 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 async function chooseSlot() {
-  fireEvent.click(await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }))
+  // The picker fetches, groups by day and auto-selects a day before times render;
+  // under a loaded CI runner that can exceed findByRole's 1s default.
+  fireEvent.click(await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }, { timeout: 5000 }))
+  // Wide and narrow layouts each render a Continue control; CSS shows one.
+  fireEvent.click(screen.getAllByRole('button', { name: 'Continue' })[0])
 }
 function fill(label: string, value: string) { fireEvent.change(screen.getByLabelText(label), { target: { value } }) }
 
@@ -36,10 +40,28 @@ describe('booking component names', () => {
     fill('Spouse/partner first name', 'Jo Ann'); fill('Spouse/partner last name', 'de la Cruz')
     fill('Spouse/partner email', 'jo@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }))
-    await screen.findByText("You're booked!")
+    await screen.findByText("You're booked")
     expect(submitted[0]).toMatchObject({ firstName: 'Mary Jane', lastName: 'van Buren', secondAttendeeFirstName: 'Jo Ann', secondAttendeeLastName: 'de la Cruz' })
     expect(submitted[0]).not.toHaveProperty('name')
     expect(submitted[0]).not.toHaveProperty('secondAttendeeName')
+  })
+
+  it('returns to the calendar with the time cleared when the slot was taken', async () => {
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        return { ok: false, json: async () => ({ ok: false, code: 'slot_taken', error: 'That time was just booked.' }) } as Response
+      }
+      return { ok: true, json: async () => ({ slots: [slot] }) } as Response
+    })
+    render(<BookingWidget type={type} />)
+    await chooseSlot()
+    fill('First name', 'Mary'); fill('Last name', 'Jones'); fill('Email', 'mary@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }))
+    expect(await screen.findByText('That time was just booked.')).toBeTruthy()
+    expect(screen.queryByLabelText('First name')).toBeNull()
+    const time = await screen.findByRole('button', { name: new Date(slot).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }, { timeout: 5000 })
+    expect(time.getAttribute('aria-pressed')).toBe('false')
+    for (const btn of screen.getAllByRole('button', { name: 'Continue' })) expect((btn as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('keeps historical portal display names intact and requires last-name confirmation', async () => {
