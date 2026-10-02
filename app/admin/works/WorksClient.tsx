@@ -323,13 +323,14 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{skill.name}</span>
-                          {skill.is_system && <Badge variant="secondary" className="text-micro">System</Badge>}
+                          {/* System is the default; mark the firm's own instead. */}
+                          {!skill.is_system && <Badge variant="secondary" className="text-micro">Custom</Badge>}
                           {skill.is_shared && <Badge variant="secondary" className="text-micro">Shared</Badge>}
                           {!skill.is_active && <Badge variant="destructive" className="text-micro">Inactive</Badge>}
                         </span>
                         <span className="mt-1 line-clamp-2 text-sm text-muted-foreground">{skill.description}</span>
                         <span className="mt-1.5 block text-xs text-muted-foreground">
-                          {skill.practice ?? 'General'} · {skill.execution_mode} · v{skill.version}
+                          {skill.practice ?? 'General'} · {skill.execution_mode === 'run' ? 'Dedicated run' : 'Assistant'} · v{skill.version}
                         </span>
                       </span>
                     </button>

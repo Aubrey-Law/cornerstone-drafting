@@ -178,46 +178,20 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
           <h2 className="text-lg font-semibold">{skill.name}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
         </div>
-        <Badge variant="outline">{skill.skill_type}</Badge>
+        <Badge variant="outline">{skill.skill_type === 'tabular' ? 'Tabular' : 'Assistant'}</Badge>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span>{skill.practice ?? 'General'}</span>
-        {skill.jurisdictions.map(jurisdiction => <span key={jurisdiction}>· {jurisdiction}</span>)}
-        <span>· {skill.execution_mode}</span>
-        <span>· v{skill.version}</span>
-      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {[
+          skill.practice ?? 'General',
+          ...skill.jurisdictions,
+          skill.execution_mode === 'run' ? 'Runs as a dedicated run' : 'Runs in the assistant',
+          `v${skill.version}`,
+        ].join(' · ')}
+      </p>
 
-      <div className="mt-4 max-h-80 overflow-y-auto rounded-md border border-border bg-muted p-4 text-sm">
-        <ChatMarkdown content={skillBody(skill.skill_md)} />
-      </div>
-
-      {columns.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Column</TableHead>
-                <TableHead>Prompt</TableHead>
-                <TableHead className="w-20">Format</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {columns.map(column => (
-                <TableRow key={column.index}>
-                  {/* Table cells default to nowrap; the name and prompt are prose and must wrap. */}
-                  <TableCell className="align-top text-muted-foreground">{column.index}</TableCell>
-                  <TableCell className="whitespace-normal align-top font-medium">{column.name}</TableCell>
-                  <TableCell className="min-w-32 whitespace-normal break-words align-top text-xs leading-5 text-muted-foreground">{column.prompt}</TableCell>
-                  <TableCell className="whitespace-normal align-top text-xs">{(column.format ?? 'text').replaceAll('_', ' ')}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
+      {/* Actions, and the run form or output they open, come before the long
+          instructions so they never sit below the fold. */}
       <div className="mt-4 flex flex-wrap gap-2">
         {skill.skill_type === 'assistant' && skill.execution_mode === 'chat' && (
           <Button
@@ -370,6 +344,42 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
           )}
         </div>
       )}
+
+      <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instructions</h3>
+      {/* No height cap of its own: the preview pane already scrolls, and two nested scrollbars hid the end of the text. */}
+      <div className="mt-2 rounded-md border border-border bg-muted p-4 text-sm">
+        <ChatMarkdown content={skillBody(skill.skill_md)} />
+      </div>
+
+      {columns.length > 0 && (
+        <>
+        <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Columns</h3>
+        <div className="mt-2 overflow-x-auto rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Column</TableHead>
+                <TableHead>Prompt</TableHead>
+                <TableHead className="w-20">Format</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {columns.map(column => (
+                <TableRow key={column.index}>
+                  {/* Table cells default to nowrap; the name and prompt are prose and must wrap. */}
+                  <TableCell className="align-top text-muted-foreground">{column.index}</TableCell>
+                  <TableCell className="whitespace-normal align-top font-medium">{column.name}</TableCell>
+                  <TableCell className="min-w-32 whitespace-normal break-words align-top text-xs leading-5 text-muted-foreground">{column.prompt}</TableCell>
+                  <TableCell className="whitespace-normal align-top text-xs">{(column.format ?? 'text').replaceAll('_', ' ')}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        </>
+      )}
+
     </div>
   )
 }
