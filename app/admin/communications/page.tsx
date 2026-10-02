@@ -39,7 +39,7 @@ export default async function CommunicationsPage() {
         description="One attention list for email, text, and secure client messages. Reply in the specialist view without losing the firm-wide queue."
       />
 
-      <Card id="send-approvals" className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/10">
+      <Card id="send-approvals" className="border-amber-border bg-amber-bg">
         <CardHeader>
           <CardTitle className="text-base">Ready to send</CardTitle>
           <CardDescription>Review the exact recipient, channel, and content here before an external message goes out. A changed draft must be reviewed again.</CardDescription>
