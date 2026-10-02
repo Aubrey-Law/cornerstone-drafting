@@ -64,6 +64,7 @@ describe('the triage routes', () => {
     'app/api/admin/email-triage/[id]/route.ts',
     'app/api/admin/email-triage/[id]/draft/route.ts',
     'app/api/admin/email-triage/[id]/approve/route.ts',
+    'app/api/admin/email-triage/[id]/send/route.ts',
     'app/api/admin/email-triage/[id]/dismiss/route.ts',
     'app/api/admin/email-triage/[id]/message/route.ts',
   ]
@@ -77,6 +78,7 @@ describe('the triage routes', () => {
       'app/api/admin/email-triage/scan/route.ts',
       'app/api/admin/email-triage/[id]/draft/route.ts',
       'app/api/admin/email-triage/[id]/approve/route.ts',
+      'app/api/admin/email-triage/[id]/send/route.ts',
       'app/api/admin/email-triage/[id]/message/route.ts',
     ]) {
       expect(source(route)).toContain('consumeRateLimit')
@@ -92,9 +94,9 @@ describe('the triage routes', () => {
     }
   })
 
-  it('creates a Gmail draft and never sends', () => {
-    // The product guarantee. Nothing in this feature may deliver mail to a
-    // client: the attorney reviews in Gmail and sends it himself.
+  it('approving creates a Gmail draft and never sends', () => {
+    // Approve is the "finish it in Gmail" path. Sending is its own route,
+    // behind its own confirmation, so the two can never be confused.
     const approve = source('app/api/admin/email-triage/[id]/approve/route.ts')
     expect(approve).toContain('createGmailDraft')
     expect(approve).not.toContain('sendViaGmail')
