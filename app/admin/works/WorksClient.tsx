@@ -223,7 +223,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
               ))}
             </div>
             {section === 'templates' && (
-              <TabsList className="w-fit max-w-full justify-start overflow-x-auto">
+              <TabsList className="h-auto w-fit max-w-full flex-wrap justify-start">
                 {TEMPLATE_TABS.map(t => (
                   <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
                 ))}
@@ -375,9 +375,8 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="esign" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EsignTemplateEditor />
-          </div>
+          {/* No outer frame: the embedded editor needs the full width. */}
+          <EsignTemplateEditor />
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="clauses" className="min-h-0 flex-1">

@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { Button } from '@/components/ui/button'
+import { ThemeContext } from '@/lib/theme/ThemeProvider'
 
 const EDITOR_SCRIPT_SRC =
   'https://api.firma.dev/functions/v1/embed-proxy/template-editor.js'
@@ -52,6 +54,15 @@ export function EsignTemplateEditor() {
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<FirmaTemplateEditorInstance | null>(null)
+  // Bumped by "Try again" to re-request the token after a failure.
+  const [attempt, setAttempt] = useState(0)
+  // Read at creation only: rebuilding the editor on a theme switch would
+  // discard unsaved edits, so a later switch applies the next time it loads.
+  const resolvedTheme = useContext(ThemeContext)?.resolvedTheme ?? 'light'
+  const themeRef = useRef(resolvedTheme)
+  useEffect(() => {
+    themeRef.current = resolvedTheme
+  }, [resolvedTheme])
 
   // Fetch the per-template JWT once we have an auth token.
   useEffect(() => {
@@ -83,7 +94,7 @@ export function EsignTemplateEditor() {
     return () => {
       cancelled = true
     }
-  }, [authToken])
+  }, [authToken, attempt])
 
   // Load the firma editor library — only once we have a token to render (avoid
   // reaching out to api.firma.dev when e-sign is unconfigured).
@@ -105,8 +116,11 @@ export function EsignTemplateEditor() {
     script.src = EDITOR_SCRIPT_SRC
     script.async = true
     script.onload = () => setScriptLoaded(true)
-    script.onerror = () =>
+    script.onerror = () => {
+      // Drop the dead tag, or "Try again" would wait on a load that never comes.
+      script.remove()
       setStatus({ kind: 'error', message: 'Failed to load the firma.dev editor script.' })
+    }
     document.body.appendChild(script)
   }, [status.kind])
 
@@ -121,8 +135,7 @@ export function EsignTemplateEditor() {
       container,
       jwt: status.token,
       templateId: status.templateId,
-      // Default to light; can be wired to the app theme later if desired.
-      theme: 'light',
+      theme: themeRef.current,
       width: '100%',
       height: '80vh',
       onSave: () => toast.success('Template saved'),
@@ -139,33 +152,36 @@ export function EsignTemplateEditor() {
   }, [status, scriptLoaded])
 
   return (
-    <section className="space-y-4 rounded-lg border border-border p-4">
+    <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold">Engagement agreement template</h2>
+        <h2 className="text-sm font-semibold">Engagement agreement</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Edit the firma.dev engagement-agreement template — the document and where the
-          signature and date fields sit — without leaving Cornerstone. Changes save
-          directly to firma.dev and apply to future engagement sends.
+          The document sent for e-signature through firma.dev, and where its signature and date
+          fields sit. Changes save to firma.dev and apply to future engagement sends.
         </p>
       </div>
 
       {status.kind === 'loading' && (
-        <div className="flex items-center gap-2 px-3 py-8 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-md border border-border px-3 py-8 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading editor…
         </div>
       )}
 
       {status.kind === 'unconfigured' && (
-        <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-          {status.message} Set <code>FIRMA_API_KEY</code> and{' '}
-          <code>FIRMA_ENGAGEMENT_TEMPLATE_ID</code> to enable in-app template editing.
-        </p>
+        // The route's message already names what is missing; say what it means once.
+        <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm">
+          <p className="font-medium">E-signature isn&rsquo;t set up yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">{status.message}</p>
+        </div>
       )}
 
       {status.kind === 'error' && (
-        <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-amber">
-          {status.message}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-border bg-amber-bg px-3 py-3">
+          <p className="text-xs text-amber">{status.message}</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAttempt(n => n + 1)}>
+            <RefreshCw className="h-3.5 w-3.5" /> Try again
+          </Button>
+        </div>
       )}
 
       <div
