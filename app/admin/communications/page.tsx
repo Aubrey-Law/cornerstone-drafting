@@ -1,17 +1,30 @@
 import Link from 'next/link'
 import { Mail, MessageSquareText, MessagesSquare } from 'lucide-react'
 import { getCachedClaims } from '@/lib/supabaseServer'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchWorkGraphForUser } from '@/lib/work/server'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CommunicationsPage() {
   const auth = await getCachedClaims()
-  const graph = auth ? await fetchWorkGraphForUser(auth.id) : null
+  const [graph, pendingResult] = await Promise.all([
+    auth ? fetchWorkGraphForUser(auth.id) : Promise.resolve(null),
+    auth
+      ? getAdminClient().from('action_proposals')
+        .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
+        .eq('actor_id', auth.id)
+        .eq('status', 'pending')
+        .eq('risk', 'external_write')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      : Promise.resolve({ data: [] }),
+  ])
   const communication = graph?.items.filter(item =>
     item.sourceType === 'email' || item.sourceType === 'sms' || item.sourceType === 'portal_message',
   ) ?? []
@@ -25,6 +38,19 @@ export default async function CommunicationsPage() {
         title="Communications"
         description="One attention list for email, text, and secure client messages. Reply in the specialist view without losing the firm-wide queue."
       />
+
+      <Card id="send-approvals" className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/10">
+        <CardHeader>
+          <CardTitle className="text-base">Ready to send</CardTitle>
+          <CardDescription>Review the exact recipient, channel, and content here before an external message goes out. A changed draft must be reviewed again.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ApprovalInbox
+            initialProposals={(pendingResult.data ?? []) as ApprovalProposal[]}
+            emptyMessage="No prepared external messages are waiting for approval."
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-3 md:grid-cols-3">
         {[
