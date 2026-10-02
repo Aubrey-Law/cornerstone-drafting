@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { consumeRateLimit } from '@/lib/rateLimit'
 import { GmailSendError } from '@/lib/email/gmailSend'
 import { createGmailDraft, deleteGmailDraft } from '@/lib/email/gmailDraft'
+import { applyTriageLabel } from '@/lib/email/gmailLabels'
 import { GmailReadError, getMailboxIdentity, getThread } from '@/lib/email/gmailRead'
 import { buildReplyHeaders } from '@/lib/email/replyHeaders'
 import { replySubject } from '@/lib/emailTriage/prompt'
@@ -76,6 +77,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       userId: auth.userId,
     })
 
+    // File the thread under Client / Lead. The draft is already in Gmail, which
+    // is what the attorney asked for, so a labelling failure is reported back
+    // rather than turned into a failed approval.
+    let label: string | null = null
+    let labelError: string | null = null
+    try {
+      label = await applyTriageLabel({
+        token: identity.token,
+        threadId: row.gmail_thread_id,
+        classification: row.classification,
+      })
+    } catch (error) {
+      labelError = error instanceof Error ? error.message : String(error)
+    }
+
     const now = new Date().toISOString()
     await admin
       .from('email_triage_threads')
@@ -94,6 +110,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       row: await fetchEmailTriageRow(id),
       draftId: created.draftId,
       messageId: created.messageId,
+      label,
+      labelError,
     })
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
