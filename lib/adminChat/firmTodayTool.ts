@@ -3,6 +3,9 @@ import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
 import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
 import { createDailyPlanPreview } from '@/lib/work/planner'
 import { DEFAULT_WORK_PREFERENCES, type WorkItem } from '@/lib/work/types'
+import { fetchDailyPlan } from '@/lib/work/plans'
+import { selectCommittedFocusItem } from '@/lib/work/committedFocus'
+import { firmTodayKey } from '@/lib/firmDate'
 
 export const READ_FIRM_TODAY_TOOL_NAME = 'read_firm_today'
 
@@ -43,19 +46,26 @@ export const firmTodayToolExecutor: AdminChatToolExecutor = {
   tool: READ_FIRM_TODAY_TOOL,
   execute: async (_input, { toolUseId, emit, userId }) => {
     try {
-      const [graph, preferences] = await Promise.all([
+      const now = new Date()
+      const date = firmTodayKey(now)
+      const [graph, preferences, stored] = await Promise.all([
         fetchWorkGraphForUser(userId),
         userId ? fetchWorkPreferences(userId) : Promise.resolve(DEFAULT_WORK_PREFERENCES),
+        userId ? fetchDailyPlan(userId, date) : Promise.resolve(null),
       ])
       const plan = createDailyPlanPreview({
         items: graph.items,
         appointments: graph.appointments,
         preferences,
+        date,
+        now,
       })
+      const focusItem = selectCommittedFocusItem(plan, stored)
       const result = {
         ok: true,
         generated_at: graph.generatedAt,
-        now: plan.now ? compact(plan.now) : null,
+        plan_status: stored?.status ?? 'uncommitted',
+        now: focusItem ? compact(focusItem) : null,
         must_do: plan.mustDo.slice(0, ROW_LIMIT).map(compact),
         communication_batch: plan.communication.slice(0, ROW_LIMIT).map(compact),
         suggested: plan.suggested.slice(0, ROW_LIMIT).map(compact),
@@ -76,6 +86,7 @@ export const firmTodayToolExecutor: AdminChatToolExecutor = {
           communication_count: plan.communication.length,
           waiting_count: plan.waiting.length,
           overload: plan.overload,
+          plan_status: stored?.status ?? 'uncommitted',
         },
       })
       return { content: JSON.stringify(result) }

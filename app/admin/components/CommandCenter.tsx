@@ -41,11 +41,19 @@ import type { DailyPlanStatus } from '@/lib/work/plans'
 import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib/work/dailyPlanCalendar'
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
+import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
+
+type CommandCenterPlan = {
+  id: string
+  status: DailyPlanStatus
+  calendarStatus: DailyPlanCalendarStatus | null
+  items: CommittedFocusPlanItem[]
+}
 
 interface Props {
   initialPreview: DailyPlanPreview
   preferences: WorkPreferences
-  initialPlan: { id: string; status: DailyPlanStatus; calendarStatus: DailyPlanCalendarStatus | null } | null
+  initialPlan: CommandCenterPlan | null
   sourceErrors: string[]
 }
 
@@ -495,13 +503,25 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
   const visibleMustDo = itemsExceptNow(preview.mustDo, preview.now)
   const visibleCommunication = itemsExceptNow(preview.communication, preview.now)
   const visibleSuggested = itemsExceptNow(preview.suggested, preview.now)
+  const focusItem = selectCommittedFocusItem(preview, plan)
 
   async function refresh() {
-    const response = await fetch(`/api/admin/work-items?date=${encodeURIComponent(preview.date)}`, { cache: 'no-store' })
-    const body = await response.json().catch(() => ({})) as { plan?: DailyPlanPreview; preferences?: WorkPreferences; error?: string }
+    const [response, storedResponse] = await Promise.all([
+      fetch(`/api/admin/work-items?date=${encodeURIComponent(preview.date)}`, { cache: 'no-store' }),
+      fetch(`/api/admin/daily-plans/current?date=${encodeURIComponent(preview.date)}`, { cache: 'no-store' }),
+    ])
+    const [body, storedBody] = await Promise.all([
+      response.json().catch(() => ({})) as Promise<{ plan?: DailyPlanPreview; preferences?: WorkPreferences; error?: string }>,
+      storedResponse.json().catch(() => ({})) as Promise<{ plan?: Omit<CommandCenterPlan, 'calendarStatus'>; error?: string }>,
+    ])
     if (!response.ok || !body.plan) throw new Error(body.error ?? 'The command center could not refresh')
     setPreview(body.plan)
     if (body.preferences) setWorkPreferences(body.preferences)
+    if (storedResponse.ok) {
+      setPlan(current => storedBody.plan
+        ? { ...storedBody.plan, calendarStatus: current?.id === storedBody.plan.id ? current.calendarStatus : null }
+        : null)
+    }
   }
 
   async function generate() {
@@ -513,13 +533,13 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
         body: JSON.stringify({ date: preview.date }),
       })
       const body = await response.json().catch(() => ({})) as {
-        plan?: { id: string; status: DailyPlanStatus }
+        plan?: Omit<CommandCenterPlan, 'calendarStatus'>
         preview?: DailyPlanPreview
         calendarStatus?: DailyPlanCalendarStatus
         error?: string
       }
       if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
-      setPlan({ id: body.plan.id, status: body.plan.status, calendarStatus: body.calendarStatus ?? null })
+      setPlan({ ...body.plan, calendarStatus: body.calendarStatus ?? null })
       setPreview(body.preview)
       toast.success('Draft day created')
     } catch (error) {
@@ -591,7 +611,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
     }
   }
 
-  if (focusMode && preview.now) {
+  if (focusMode && focusItem) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 py-4">
         <div className="flex items-center justify-between gap-3">
@@ -601,7 +621,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
           </div>
           <Button variant="outline" onClick={() => setFocusMode(false)}>View full plan</Button>
         </div>
-        <WorkCard item={preview.now} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+        <WorkCard item={focusItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
         <p className="text-center text-xs text-muted-foreground">
           The rest of the queue is still safe. Finish, snooze, or block this item to reveal the next one.
         </p>
@@ -630,7 +650,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
         </div>
         <div className="flex flex-wrap gap-2">
           <PlanningPreferences value={workPreferences} onSaved={async next => { setWorkPreferences(next); await refresh() }} />
-          <Button variant="outline" size="sm" onClick={() => setFocusMode(true)} disabled={!preview.now}>
+          <Button variant="outline" size="sm" onClick={() => setFocusMode(true)} disabled={!focusItem}>
             <Focus /> Focus now
           </Button>
           <Button variant="outline" size="sm" onClick={generate} disabled={busy !== null}>
