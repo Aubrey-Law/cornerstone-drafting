@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -32,31 +33,7 @@ import { StatularSettingsSection } from './StatularSettingsSection'
 import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { TemplateCenter } from './TemplateCenter'
-
-type Tab =
-  | 'models'
-  | 'api-keys'
-  | 'connectors'
-  | 'google'
-  | 'email'
-  | 'scheduling'
-  | 'lawmatics'
-  | 'statular'
-  | 'sla'
-  | 'ai-usage'
-  | 'templates'
-
-/**
- * Settings surfaces that are real routes rather than tabs. They render server-side
- * with their own data fetching, so they cannot live in this client component's tab
- * switch — but they belong to Settings, so the tab strip links to them.
- */
-const SETTINGS_SUBROUTES = [
-  { href: '/admin/settings/command-center', label: 'Command center' },
-  { href: '/admin/settings/estate-tax', label: 'Estate tax' },
-  { href: '/admin/settings/style-sets', label: 'Style sets' },
-  { href: '/admin/settings/sync', label: 'Sync' },
-] as const
+import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
   provider: string
@@ -76,16 +53,19 @@ interface ConnectorRow {
 }
 
 export function StaffSettingsClient({
-  initialTab = 'models',
   isAdministrator = false,
   currentUserId = '',
 }: {
-  initialTab?: Tab
   isAdministrator?: boolean
   currentUserId?: string
 }) {
   const token = useAccessToken()
-  const [tab, setTab] = useState<Tab>(initialTab)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // The side menu (SettingsNav) links to `?tab=…`, so the URL is the only tab state.
+  const tab = resolveSettingsTab(searchParams.get('tab'), isAdministrator)
+  const setTab = (next: SettingsTab) => router.push(settingsTabHref(next))
+  const tabItem = settingsTabItem(tab)
   const [prefs, setPrefs] = useState<UserPreferences>({})
   const [keys, setKeys] = useState<ApiKeyStatus[]>([])
   const [connectors, setConnectors] = useState<ConnectorRow[]>([])
@@ -111,22 +91,6 @@ export function StaffSettingsClient({
   useEffect(() => {
     if (typeof window === 'undefined') return
     const sp = new URLSearchParams(window.location.search)
-    const t = sp.get('tab')
-    if (
-      t === 'google' ||
-      t === 'email' ||
-      t === 'scheduling' ||
-      t === 'lawmatics' ||
-      t === 'statular' ||
-      t === 'models' ||
-      t === 'api-keys' ||
-      t === 'connectors' ||
-      t === 'sla' ||
-      t === 'ai-usage' ||
-      (t === 'templates' && isAdministrator)
-    ) {
-      setTab(t)
-    }
     const err = sp.get('mscal_error')
     if (err) toast.error(err)
     if (sp.get('gcal_connected') === '1') {
@@ -137,7 +101,7 @@ export function StaffSettingsClient({
     // match, a consent that returned no refresh token) and the whole message is
     // the instruction, so it is not truncated.
     if (gerr) toast.error(gerr)
-  }, [isAdministrator])
+  }, [])
 
   useEffect(() => {
     if (!token) return
@@ -394,56 +358,8 @@ export function StaffSettingsClient({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeader
-        title="Settings"
-        description="Model preferences, API keys, MCP connectors, Google, Lawmatics, Statular, firm templates, AI usage, and matter stage SLA."
-      />
-
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {(
-          [
-            ['models', 'Models'],
-            ['api-keys', 'API Keys'],
-            ['connectors', 'Connectors'],
-            ['google', 'Google & Teams'],
-            ['email', 'Email'],
-            ['scheduling', 'Scheduling'],
-            ['lawmatics', 'Lawmatics'],
-            ['statular', 'Statular'],
-            ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
-            ['ai-usage', 'AI Usage'],
-            ['sla', 'Stage SLA'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`border-b-2 px-3 py-2 text-sm ${
-              tab === id
-                ? 'border-foreground font-medium text-foreground'
-                : 'border-transparent text-muted-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-        {/*
-          Style sets and Sync are their own routes rather than tabs — they are server
-          components with their own data fetching. They sit in the strip so they stay
-          discoverable, but they navigate instead of setting tab state.
-        */}
-        {SETTINGS_SUBROUTES.map(({ href, label }) => (
-          <Link
-            key={href}
-            href={href}
-            className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Settings" title={tabItem?.label ?? 'Settings'} description={tabItem?.description} />
 
       {tab === 'models' && (
         <section className="space-y-5 rounded-lg border border-border p-4">

@@ -32,9 +32,13 @@ describe('email settings and templates', () => {
       path.join(process.cwd(), 'app/admin/settings/StaffSettingsClient.tsx'),
       'utf8',
     )
+    const nav = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/settings/settingsNav.ts'),
+      'utf8',
+    )
     expect(route).toContain("from('email_settings')")
     expect(route).toContain('emailLogoHeader')
-    expect(settings).toContain("['email', 'Email']")
+    expect(nav).toContain("tab: 'email'")
     expect(settings).toContain('EmailSettingsSection')
   })
 
