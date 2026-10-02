@@ -3,6 +3,7 @@ import type { SmsThread } from '@/lib/queries/smsThreads'
 import type { TodayData, TodayQueueRow } from '@/lib/queries/today'
 import { effectiveDueAt, taskDueGroup, type TaskRow } from '@/lib/tasks/types'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { appointmentPreparationWorkKey } from '@/lib/work/appointmentPresentation'
 import { businessDaysBetween, dedupeWorkItems, applyWorkOverrides } from '@/lib/work/ranking'
 import type {
   PriorityBand,
@@ -341,7 +342,7 @@ export function buildWorkGraph(
     const hours = (starts - now.getTime()) / 3_600_000
     const sourceId = appointment.id.replace(/^appointment:/, '')
     items.push({
-      workKey: `appointment:${appointment.id}:prepare`,
+      workKey: appointmentPreparationWorkKey(appointment),
       sourceType: 'appointment_prep',
       sourceIds: [sourceId],
       evidence: evidence('appointment_prep', sourceId, appointment.href),

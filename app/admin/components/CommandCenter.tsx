@@ -42,6 +42,7 @@ import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
 import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
+import { formatAppointmentTime, getAppointmentPreparationStatus } from '@/lib/work/appointmentPresentation'
 
 type CommandCenterPlan = {
   id: string
@@ -137,6 +138,54 @@ function formatMinutes(minutes: number) {
 
 function formatBlock(iso: string) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
+}
+
+export function TodayAppointments({ appointments, items }: Pick<DailyPlanPreview, 'appointments'> & { items: WorkItem[] }) {
+  if (!appointments.length) return null
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Today&apos;s appointments</CardTitle>
+        <CardDescription>
+          {appointments.length === 1 ? 'One hard commitment shapes the day.' : `${appointments.length} hard commitments shape the day.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {appointments.slice(0, 4).map(appointment => {
+          const preparation = getAppointmentPreparationStatus(appointment, items)
+          return (
+            <Link
+              key={appointment.id}
+              href={appointment.href}
+              className="block rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="shrink-0 font-medium tabular-nums">{formatAppointmentTime(appointment)}</span>
+                <Badge
+                  variant={preparation.tone === 'urgent' ? 'destructive' : 'secondary'}
+                  className={cn(
+                    'shrink-0 text-micro',
+                    preparation.tone === 'warning' && 'border-amber-border bg-amber-bg text-amber-strong',
+                  )}
+                >
+                  {preparation.label}
+                </Badge>
+              </div>
+              <p className="mt-1 truncate font-medium">{appointment.client_name ?? appointment.next_appointment_type ?? 'Appointment'}</p>
+              {appointment.client_name && appointment.next_appointment_type && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{appointment.next_appointment_type}</p>
+              )}
+            </Link>
+          )
+        })}
+        {appointments.length > 4 && <p className="text-xs text-muted-foreground">+ {appointments.length - 4} more on the calendar</p>}
+        <Button asChild variant="outline" size="sm" className="w-full">
+          <Link href="/admin/calendar">Open calendar <ExternalLink /></Link>
+        </Button>
+      </CardContent>
+    </Card>
+  )
 }
 
 function assistantHref(item: WorkItem) {
@@ -850,10 +899,24 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-4">
+          <TodayAppointments
+            appointments={preview.appointments}
+            items={[
+              ...preview.mustDo,
+              ...preview.suggested,
+              ...preview.communication,
+              ...preview.waiting,
+              ...preview.later,
+            ]}
+          />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="h-4 w-4" /> Suggested day</CardTitle>
-              <CardDescription>Focus blocks avoid recorded appointments and keep ten-minute transitions.</CardDescription>
+              <CardDescription>
+                {preview.appointments.length
+                  ? 'Focus blocks avoid the appointments above and keep ten-minute transitions.'
+                  : 'Focus blocks avoid recorded appointments and keep ten-minute transitions.'}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {preview.blocks.length ? preview.blocks.map(block => {
