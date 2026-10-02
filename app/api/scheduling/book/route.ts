@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import {
+  type BookingAnswer,
+  BookingAnswerValidationError,
+  resolveBookingAnswers,
+} from '@/lib/appointments/bookingQuestions'
+import {
   AvailabilityUnavailableError,
   bookAppointment,
   BookingPausedError,
@@ -27,6 +32,8 @@ interface BookBody {
   secondAttendeeFirstName?: unknown
   secondAttendeeLastName?: unknown
   secondAttendeeEmail?: unknown
+  /** `{ [questionId]: answer }` for the type's booking questions. */
+  answers?: unknown
 }
 
 function str(value: unknown, max: number): string | null {
@@ -93,6 +100,16 @@ export async function POST(req: Request) {
     )
   }
 
+  let bookingAnswers: BookingAnswer[]
+  try {
+    bookingAnswers = resolveBookingAnswers(type.bookingQuestions, body.answers)
+  } catch (error) {
+    if (error instanceof BookingAnswerValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    throw error
+  }
+
   // Signed-in bookings are attributed to the session; the session email is
   // authoritative so a portal client can't book on someone else's behalf.
   const email = claims?.email ?? emailRaw
@@ -105,6 +122,7 @@ export async function POST(req: Request) {
       attendeeEmail: email,
       attendeePhone: phone,
       notes,
+      bookingAnswers,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
       secondAttendeeEmail,
       source: claims ? 'portal' : 'public',

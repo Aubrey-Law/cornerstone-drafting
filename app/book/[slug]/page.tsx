@@ -38,6 +38,7 @@ export default async function PublicBookingPage({
               durationMinutes: type.durationMinutes,
               locationType: type.locationType,
               locationTypes: type.locationTypes,
+              bookingQuestions: type.bookingQuestions,
             }}
           />
         </div>

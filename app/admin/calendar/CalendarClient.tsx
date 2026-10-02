@@ -612,6 +612,16 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                             <span className="ml-2 text-amber">⚠ not on the calendar</span>
                           )}
                         </p>
+                        {a.bookingAnswers && a.bookingAnswers.length > 0 && (
+                          <dl className="mt-1 space-y-0.5 text-xs">
+                            {a.bookingAnswers.map(ans => (
+                              <div key={ans.questionId || ans.label}>
+                                <dt className="inline font-medium text-foreground">{ans.label}: </dt>
+                                <dd className="inline whitespace-pre-line text-muted-foreground">{ans.answer}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
                         {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
                       </div>
                       {a.linkedMatterId ? (

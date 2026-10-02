@@ -7,10 +7,12 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import type { BookingQuestion } from '@/lib/appointments/bookingQuestions'
 import type { WeeklyHours } from '@/lib/appointments/types'
 import type { ExternalCalendarRef } from '@/app/admin/calendar/types'
 import { WeeklyHoursEditor } from './WeeklyHoursEditor'
 import { BlockingCalendarsEditor } from './BlockingCalendarsEditor'
+import { BookingQuestionsEditor } from './BookingQuestionsEditor'
 
 interface SettingsShape {
   timezone: string
@@ -40,6 +42,7 @@ interface TypeShape {
   public: boolean
   sort: number
   customWeeklyHours: WeeklyHours | null
+  bookingQuestions: BookingQuestion[]
 }
 
 interface AppointmentListItem {
@@ -534,6 +537,17 @@ export function SchedulingSettingsSection() {
                     />
                   </div>
                 )}
+              </div>
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-foreground">Booking questions</p>
+                <p className="mt-0.5 mb-3 text-xs text-muted-foreground">
+                  Asked on the details step when a client books {t.label}. Answers appear on the
+                  appointment, in the booking alert email, and in the calendar event.
+                </p>
+                <BookingQuestionsEditor
+                  value={t.bookingQuestions ?? []}
+                  onChange={bookingQuestions => updateType(t.id, { bookingQuestions })}
+                />
               </div>
             </div>
           ))}

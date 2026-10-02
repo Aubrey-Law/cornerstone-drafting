@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import BookingQuestionFields from '@/components/scheduling/BookingQuestionFields'
 import SlotPicker, { fmtLongDay, fmtTime } from '@/components/scheduling/SlotPicker'
 import {
   BookingCard,
@@ -17,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import type { BookingQuestion } from '@/lib/appointments/bookingQuestions'
 import { formatPhoneInput } from '@/lib/phone'
 
 type Step = 'pick' | 'details' | 'done'
@@ -30,6 +32,8 @@ export interface BookingWidgetType {
   locationType: LocationType
   /** Formats the client may choose from, in display order. */
   locationTypes?: LocationType[]
+  /** Extra questions asked on the details step (Settings → Scheduling). */
+  bookingQuestions?: BookingQuestion[]
 }
 
 export interface BookingWidgetProps {
@@ -76,6 +80,7 @@ export default function BookingWidget({
   const [spouseLastName, setSpouseLastName] = useState('')
   const [spouseEmail, setSpouseEmail] = useState('')
   const [notes, setNotes] = useState('')
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -108,6 +113,7 @@ export default function BookingWidget({
           email,
           phone: phone || undefined,
           notes: notes || undefined,
+          answers,
           locationType,
           secondAttendeeFirstName: includeSpouse ? spouseFirstName || undefined : undefined,
           secondAttendeeLastName: includeSpouse ? spouseLastName || undefined : undefined,
@@ -376,6 +382,12 @@ export default function BookingWidget({
                     </div>
                   </>
                 )}
+
+                <BookingQuestionFields
+                  questions={type.bookingQuestions ?? []}
+                  answers={answers}
+                  onChange={(id, answer) => setAnswers(a => ({ ...a, [id]: answer }))}
+                />
 
                 <div className="@3xl/booking:col-span-2">
                   <Label htmlFor="booking-notes" className={FIELD_LABEL}>

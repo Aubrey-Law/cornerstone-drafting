@@ -8,9 +8,10 @@ import {
   rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
-import { listAppointmentTypes } from '@/lib/appointments/settings'
+import { isMissingColumnError, listAppointmentTypes } from '@/lib/appointments/settings'
 import { BookingNameValidationError, externalSourceLabel, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { parseBookingAnswers } from '@/lib/appointments/bookingQuestions'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
 import { addTeamsMeetingToAppointment, TeamsMeetingError } from '@/lib/appointments/teamsMeeting'
 
@@ -26,30 +27,30 @@ export async function GET(req: NextRequest) {
   const to = params.get('to') ? Date.parse(params.get('to')!) : NaN
   const hasRange = Number.isFinite(from) && Number.isFinite(to) && to > from
 
-  let query = getAdminClient()
-    .from('appointments')
-    .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, google_event_id, online_meeting_url, online_meeting_provider, source, created_at, raw',
-    )
-
-  if (hasRange) {
-    // Calendar mode: everything in [from, to), oldest first.
-    query = query
-      .gte('start_time', new Date(from).toISOString())
-      .lt('start_time', new Date(to).toISOString())
-      .order('start_time', { ascending: true })
-      .limit(500)
-  } else {
+  const baseColumns =
+    'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, google_event_id, online_meeting_url, online_meeting_provider, source, created_at, raw'
+  const run = (columns: string) => {
+    const query = getAdminClient().from('appointments').select(columns)
+    if (hasRange) {
+      // Calendar mode: everything in [from, to), oldest first.
+      return query
+        .gte('start_time', new Date(from).toISOString())
+        .lt('start_time', new Date(to).toISOString())
+        .order('start_time', { ascending: true })
+        .limit(500)
+    }
     const scope = params.get('scope') === 'past' ? 'past' : 'upcoming'
     const nowIso = new Date().toISOString()
-    query = (
+    return (
       scope === 'past'
         ? query.lt('start_time', nowIso).order('start_time', { ascending: false })
         : query.gte('start_time', nowIso).order('start_time', { ascending: true })
     ).limit(100)
   }
 
-  const { data, error } = await query
+  let { data, error } = await run(`${baseColumns}, booking_answers`)
+  // Until the booking_answers migration lands, read without it.
+  if (error && isMissingColumnError(error)) ({ data, error } = await run(baseColumns))
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
   const typeById = new Map(types.map(t => [t.id, t]))
 
   // Matter numbers for the chip shown on calendar events.
-  const rows = (data ?? []) as (AppointmentRow & { raw?: unknown })[]
+  const rows = (data ?? []) as unknown as (AppointmentRow & { raw?: unknown; booking_answers?: unknown })[]
 
   const linkedMatterIds = Array.from(
     new Set(rows.map(row => row.linked_matter_id).filter((id): id is string => Boolean(id))),
@@ -103,6 +104,7 @@ export async function GET(req: NextRequest) {
       attendeeEmail: row.attendee_email,
       attendeePhone: row.attendee_phone,
       notes: row.notes,
+      bookingAnswers: parseBookingAnswers(row.booking_answers),
       linkedLeadId: row.linked_lead_id,
       linkedMatterId: row.linked_matter_id,
       linkedMatterNumber: row.linked_matter_id
