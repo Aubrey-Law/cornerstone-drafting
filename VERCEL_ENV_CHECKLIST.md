@@ -65,8 +65,8 @@ Without this key, staff can still paste notes manually in the dialog; Granola li
 The webhook URLs are credentials: store them only in server environment secrets;
 never use `NEXT_PUBLIC_`, return them to browsers, or put them in logs/errors.
 Readiness responses expose booleans only. The client URL and the generation are
-required for client delivery; the matter URL only for matter delivery. Configuration alone does not enable synchronization: keep
-`statular_sync_enabled = false` until the release verification gate passes.
+required for client delivery; the matter URL only for matter delivery. Configuration alone does not enable the automatic push: turn it on in
+**Settings → Statular** ("Create Statular client when a lead is marked a fit").
 A Statular client is created when staff set a lead's **Fit decision** to Fit
 (key dates in the task plan) — not at booking — so not-a-fit leads never reach
 Statular, which cannot delete records. Staff can also create it on demand with
