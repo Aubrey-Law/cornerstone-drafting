@@ -74,3 +74,49 @@ describe('where labels are applied', () => {
     )
   })
 })
+
+describe('removeTriageLabels', () => {
+  it('removes only the triage labels the mailbox has, on every thread', async () => {
+    const { removeTriageLabels } = await import('@/lib/email/gmailLabels')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        labels: [
+          { id: 'Label_C', name: 'Client' },
+          { id: 'Label_L', name: 'lead' },
+          { id: 'Label_X', name: 'Billing' },
+        ],
+      }))
+      .mockResolvedValue(jsonResponse({}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await removeTriageLabels({ token: 't', threadIds: ['a', 'b'] })).toBe(2)
+
+    const modifies = fetchMock.mock.calls.slice(1)
+    expect(modifies.map(([url]) => url)).toEqual([
+      expect.stringContaining('/threads/a/modify'),
+      expect.stringContaining('/threads/b/modify'),
+    ])
+    for (const [, init] of modifies) {
+      expect(JSON.parse(init.body)).toEqual({ removeLabelIds: ['Label_C', 'Label_L'] })
+    }
+  })
+
+  it('makes no changes when the mailbox has no triage labels', async () => {
+    const { removeTriageLabels } = await import('@/lib/email/gmailLabels')
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ labels: [{ id: 'INBOX', name: 'INBOX' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await removeTriageLabels({ token: 't', threadIds: ['a'] })).toBe(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('never this sender', () => {
+  it('cleans up Gmail only for the sender scope', async () => {
+    const { readFileSync } = await import('node:fs')
+    const route = readFileSync('app/api/admin/email-triage/[id]/dismiss/route.ts', 'utf-8')
+    expect(route).toContain("scope === 'sender'\n    ? await cleanUpSenderInGmail(")
+    expect(route).toContain('removeTriageLabels')
+    expect(route).toContain('deleteGmailDraft')
+  })
+})
