@@ -47,6 +47,7 @@ import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
 import { buildCommittedDayAgenda, buildDayAgenda } from '@/lib/work/dayAgenda'
 import { capacityAvailabilityLabel } from '@/lib/work/capacityPresentation'
+import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 
 type CommandCenterPlan = {
   id: string
@@ -59,6 +60,7 @@ interface Props {
   initialPreview: DailyPlanPreview
   preferences: WorkPreferences
   initialPlan: CommandCenterPlan | null
+  initialApprovals: ApprovalProposal[]
   sourceErrors: string[]
 }
 
@@ -709,7 +711,7 @@ function EndOfDayClose({
   )
 }
 
-export function CommandCenter({ initialPreview, preferences, initialPlan, sourceErrors }: Props) {
+export function CommandCenter({ initialPreview, preferences, initialPlan, initialApprovals, sourceErrors }: Props) {
   const openedAtMs = useRef(Date.now())
   const [preview, setPreview] = useState(initialPreview)
   const [workPreferences, setWorkPreferences] = useState(preferences)
@@ -975,6 +977,28 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, source
         <div role="status" className="rounded-lg border border-amber-border bg-amber-bg/50 px-3 py-2 text-xs text-amber-strong">
           Some sources could not be refreshed: {sourceErrors.join(', ')}. Visible work is still usable, but the plan may be incomplete.
         </div>
+      )}
+
+      {initialApprovals.length > 0 && (
+        <section aria-labelledby="approval-lane-heading">
+          <Card className="border-amber-border bg-amber-bg/30">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle id="approval-lane-heading" className="text-base">Approval lane</CardTitle>
+                  <CardDescription className="mt-1">Cornerstone prepared {initialApprovals.length} external or consequential action{initialApprovals.length === 1 ? '' : 's'}. Review the exact result before confirming.</CardDescription>
+                </div>
+                <Badge variant="outline" className="shrink-0">{initialApprovals.length} waiting</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ApprovalInbox initialProposals={initialApprovals} onResolved={() => refresh()} />
+              <Button asChild variant="link" size="sm" className="mt-2 px-0">
+                <Link href="/admin/automations#pending-approvals">Review all approvals <ExternalLink /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       <section aria-labelledby="now-heading">

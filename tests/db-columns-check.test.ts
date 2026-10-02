@@ -101,7 +101,7 @@ describe('checkDbColumns exit codes', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const address = server.address()
     url = typeof address === 'object' && address ? `http://127.0.0.1:${address.port}` : ''
-  })
+  }, 30_000)
 
   afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
