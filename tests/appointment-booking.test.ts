@@ -967,6 +967,14 @@ describe('booking questions', () => {
     expect(state.inserts).toHaveLength(0)
   })
 
+  it('links the firm alert to the booked day on the calendar', async () => {
+    // 14:00 UTC on Aug 10 is the same day in America/New_York (10am).
+    await publicBook(request({ ...base, answers: { reason: 'Planning' } }))
+    const alert = state.emails.find(e => e.category === 'appointment_booked_alert')
+    expect(alert?.html).toContain('/admin/calendar?date=2026-08-10')
+    expect(alert?.html).toContain('View on the calendar')
+  })
+
   it('omits booking_answers from the insert when there are none', async () => {
     TYPE.bookingQuestions = []
     await publicBook(request(base))

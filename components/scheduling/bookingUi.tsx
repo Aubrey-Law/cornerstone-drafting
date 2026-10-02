@@ -45,6 +45,7 @@ function Wordmark({ firmName, compact }: { firmName: string; compact?: boolean }
     <div style={{ fontFamily: 'var(--font-eb-garamond), Georgia, serif' }}>
       <p
         className={`flex gap-2.5 leading-none tracking-[.08em] uppercase ${compact ? 'text-xl' : 'text-2xl'}`}
+        style={{ fontFamily: 'var(--font-cormorant-sc), var(--font-eb-garamond), Georgia, serif' }}
       >
         <span className="text-brand-navy dark:text-foreground">{words.join(' ')}</span>
         {last && <span className="text-brand-teal">{last}</span>}

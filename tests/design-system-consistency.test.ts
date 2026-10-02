@@ -14,12 +14,13 @@ describe('vendored fonts', () => {
       'assets/fonts/dm-sans-latin-var.woff2',
       'assets/fonts/lora-latin-var.woff2',
       'assets/fonts/eb-garamond-latin-var.woff2',
+      'assets/fonts/cormorant-sc-latin-400.woff2',
     ]) {
       expect(existsSync(path.join(root, file)), `${file} missing`).toBe(true)
       expect(layout).toContain(file.replace('assets/', '../assets/'))
     }
     // The CSS variable contract other styles depend on must survive the swap.
-    for (const variable of ['--font-sans', '--font-lora', '--font-eb-garamond']) {
+    for (const variable of ['--font-sans', '--font-lora', '--font-eb-garamond', '--font-cormorant-sc']) {
       expect(layout).toContain(variable)
     }
   })
