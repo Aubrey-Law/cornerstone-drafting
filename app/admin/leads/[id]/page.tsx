@@ -219,8 +219,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   // wins, because the query above only returns one that is ahead.
   const nextAppointmentAt = (appointment?.start_time as string | undefined)
     ?? scoringAppointmentAt(anchorRow?.discovery_call_at, anchorRow?.pmps_at)
+  // An agreement with no revision is a create that failed partway; the
+  // workspace cannot open it, so it must not become the lead's "Open" link.
   const { data: agreement } = lead.matter_id
-    ? await admin.from('engagement_agreements').select('id, status').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed', 'sending', 'sent', 'viewed', 'partially_signed', 'completed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    ? await admin.from('engagement_agreements').select('id, status').eq('matter_id', lead.matter_id).not('active_revision_id', 'is', null).in('status', ['draft', 'ready', 'failed', 'sending', 'sent', 'viewed', 'partially_signed', 'completed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
 
   if (scoreRowResult.error) console.error('Could not load canonical lead score', { leadId: id, error: scoreRowResult.error })

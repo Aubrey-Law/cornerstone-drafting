@@ -208,6 +208,20 @@ describe('engagement draft seeding', () => {
       .toMatchObject({ ok: true, decedentName: null })
   })
 
+  it('keeps a couple who share one email a couple, with the spouse email left for staff', () => {
+    // Each signer is a separate e-signature recipient keyed by email; seeding
+    // the shared address twice made the draft fail on the recipients insert.
+    const seed = engagementSeedDefinition({
+      practiceArea: 'EP-LP', billingType: 'metlife', spouseEmail: 'Family@Example.com', primaryEmail: 'family@example.com',
+    })
+    expect(seed).toEqual({
+      ok: true,
+      definition: { practiceArea: 'EP-LP', clientMode: 'couple', scopeKey: 'standard', legalPlan: 'metlife' },
+      spouseEmail: '',
+      decedentName: null,
+    })
+  })
+
   it('refuses a practice area with no master', () => {
     expect(engagementSeedDefinition({ practiceArea: 'CP', billingType: 'flat_fee', ...spouse }).ok).toBe(false)
   })
