@@ -17,6 +17,7 @@ import {
   type IgnoreRules,
 } from './classifySender'
 import { generateTriageDraft } from './draft'
+import { delegateTriageReply } from './delegate'
 import { describeError } from './describeError'
 import { evaluateNeedsReply } from './needsReply'
 
@@ -117,6 +118,10 @@ export interface TriageScanResult {
   skippedAutomated: number
   skippedInternal: number
   draftsGenerated: number
+  /** Drafts the delegation dial sent on its own this run. */
+  repliesSent: number
+  /** Drafts the dial recorded as "would have sent" without sending. */
+  repliesObserved: number
   /** Listed inside the window but not reached before the metadata budget ran out. */
   threadsDeferred: number
   /** The listing hit `TRIAGE_LISTING_CEILING` and may be incomplete. */
@@ -137,6 +142,8 @@ function emptyResult(reason: TriageScanResult['reason'], durationMs = 0): Triage
     skippedAutomated: 0,
     skippedInternal: 0,
     draftsGenerated: 0,
+    repliesSent: 0,
+    repliesObserved: 0,
     threadsDeferred: 0,
     listingTruncated: false,
     remainingNeedsDraft: 0,
@@ -320,6 +327,8 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     skippedAutomated: 0,
     skippedInternal: 0,
     draftsGenerated: 0,
+    repliesSent: 0,
+    repliesObserved: 0,
     threadsDeferred: 0,
   }
   let listingTruncated = false
@@ -511,14 +520,20 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       counts.queued += 1
     }
 
-    counts.draftsGenerated = await draftPending({
+    const drafting = await draftPending({
       connectionEmail: identity.address,
       token: identity.token,
       userId: opts.userId ?? null,
+      // The dial sends as the person whose Gmail this is: the clicker on a
+      // manual refresh, the mailbox owner on a cron run.
+      actorId: opts.actorId ?? identity.userId ?? null,
       route: opts.trigger === 'cron' ? 'cron/email-triage' : 'admin/email-triage',
       maxDrafts,
       deadline: startedAt + budgetMs,
     })
+    counts.draftsGenerated = drafting.drafted
+    counts.repliesSent = drafting.sent
+    counts.repliesObserved = drafting.observed
   } catch (err) {
     failure = describeError(err)
   }
@@ -567,10 +582,12 @@ async function draftPending(args: {
   connectionEmail: string
   token: string
   userId: string | null
+  /** Who a delegated send runs as; null means the dial is not consulted. */
+  actorId: string | null
   route: 'admin/email-triage' | 'cron/email-triage'
   maxDrafts: number
   deadline: number
-}): Promise<number> {
+}): Promise<{ drafted: number; sent: number; observed: number }> {
   const admin = getAdminClient()
   const { data, error } = await admin
     .from('email_triage_threads')
@@ -585,6 +602,8 @@ async function draftPending(args: {
   if (error) throw error
 
   let drafted = 0
+  let sent = 0
+  let observed = 0
   for (const row of (data ?? []) as Record<string, string | null>[]) {
     if (Date.now() > args.deadline) break
 
@@ -635,6 +654,25 @@ async function draftPending(args: {
         })
         .eq('id', row.id as string)
       drafted += 1
+
+      // The draft is on the page. Whether it also goes out is the delegation
+      // dial's call; a failure there leaves the draft where it is, with the
+      // reason attached, and never undoes the drafting above.
+      const delegated = await delegateTriageReply({
+        actorId: args.actorId,
+        row: {
+          id: row.id as string,
+          gmail_message_id: row.gmail_message_id as string,
+          classification: row.classification as 'client' | 'lead' | 'contact' | 'possible_lead',
+          sender_email: row.sender_email as string,
+          sender_name: row.sender_name,
+          subject: row.subject,
+          matter_id: row.matter_id,
+          client_intake_id: row.client_intake_id,
+        },
+      })
+      if (delegated === 'sent') sent += 1
+      else if (delegated === 'observed') observed += 1
     } catch (err) {
       // A failed draft keeps its place in the queue with a Retry button. The
       // thread still needs a reply; only the drafting of one went wrong.
@@ -648,5 +686,5 @@ async function draftPending(args: {
         .eq('id', row.id as string)
     }
   }
-  return drafted
+  return { drafted, sent, observed }
 }

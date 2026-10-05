@@ -120,6 +120,7 @@ export const ACTION_CATALOG: Record<string, { label: string; description: string
   'sms.thread.link': { label: 'Link a text conversation', description: 'Attach a phone number’s thread to a lead, matter or contact.', group: 'records' },
   'email.draft.prepare': { label: 'Prepare an email draft', description: 'Write a draft for a lead; nothing is sent.', group: 'communications' },
   'email.draft.send': { label: 'Send an email draft', description: 'Send a prepared draft from the firm mailbox.', group: 'communications' },
+  'email.triage.reply.send': { label: 'Send a triage reply', description: 'Send the drafted reply to an email from a client or lead, on its Gmail thread. Senders not matched to a client or lead always wait on the triage page.', group: 'communications' },
   'matter.stage.transition': { label: 'Change a matter stage', description: 'Move a matter to another pipeline stage.', group: 'matters' },
   'workflow.enqueue': { label: 'Queue a workflow', description: 'Seed a design sheet, SLA plan, stage task or annual review job.', group: 'matters' },
   'billing.reminders.prepare': { label: 'Prepare invoice reminders', description: 'Draft reminders for overdue client invoices; nothing is sent.', group: 'billing' },

@@ -236,6 +236,12 @@ function overrideInput(value: unknown): { workKey: string; state: 'open' | 'bloc
   return { workKey, state, snoozedUntil }
 }
 
+function triageReplyInput(value: unknown): { triageId: string } {
+  const input = objectInput(value)
+  if (typeof input.triageId !== 'string' || !isUuid(input.triageId)) throw new Error('A valid triage thread identifier is required')
+  return { triageId: input.triageId }
+}
+
 const definitions: ActionDefinition[] = [
   {
     key: 'task.start',
@@ -774,6 +780,60 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, draftId: send.draftId, attachmentCount: send.attachmentCount }
     },
   } as ActionDefinition<ReturnType<typeof emailDraftInput>>,
+  {
+    key: 'email.triage.reply.send',
+    risk: 'external_write',
+    validate: triageReplyInput,
+    async preview(input) {
+      const { fetchEmailTriageRow } = await import('@/lib/queries/emailTriage')
+      const { replySubject } = await import('@/lib/emailTriage/prompt')
+      const { isSendableStatus, unsendableReason } = await import('@/lib/emailTriage/sendReply')
+      const row = await fetchEmailTriageRow(input.triageId)
+      if (!row) throw new Error('Triage thread not found')
+      if (!isSendableStatus(row.status)) throw new Error(unsendableReason(row.status))
+      if (!row.draft_body?.trim()) throw new Error('There is no drafted reply to send')
+      // The exact text that would go out belongs in the preview, so a stale
+      // draft fails the digest check; the audit keeps only references.
+      return {
+        display: {
+          action: 'Send triage reply',
+          recipient: row.sender_email,
+          recipientName: row.sender_name,
+          subject: replySubject(row.draft_subject ?? row.subject),
+          content: row.draft_body,
+          classification: row.classification,
+          inReplyTo: row.subject,
+        },
+        auditBefore: { triageId: row.id, status: row.status, gmailMessageId: row.gmail_message_id },
+        auditAfter: {
+          triageId: row.id,
+          channel: 'email',
+          classification: row.classification,
+          matterId: row.matter_id,
+          leadId: row.client_intake_id,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { fetchEmailTriageRow } = await import('@/lib/queries/emailTriage')
+      const { sendTriageReply } = await import('@/lib/emailTriage/sendReply')
+      const row = await fetchEmailTriageRow(input.triageId)
+      if (!row) throw new Error('Triage thread not found')
+      const outcome = await sendTriageReply({
+        admin: context.admin,
+        row,
+        subject: row.draft_subject ?? '',
+        text: row.draft_body ?? '',
+        userId: context.actor.id,
+      })
+      if (!outcome.ok) throw new Error(outcome.refusal)
+      return { sent: true, triageId: row.id, messageId: outcome.messageId, label: outcome.label, notices: outcome.notices }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; triageId?: string; label?: string | null; notices?: string[] }
+      return { sent: send.sent, triageId: send.triageId, label: send.label ?? null, noticeCount: send.notices?.length ?? 0 }
+    },
+  } as ActionDefinition<{ triageId: string }>,
   {
     key: 'task.delegate',
     risk: 'internal_write',
