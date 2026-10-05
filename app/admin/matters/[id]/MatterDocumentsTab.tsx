@@ -307,9 +307,12 @@ export function MatterDocumentsTab({
     return [...docs].sort((a, b) => {
       if (sortKey === 'size') return direction * ((a.size || 0) - (b.size || 0))
       if (sortKey === 'date') return direction * (a.created_at ?? '').localeCompare(b.created_at ?? '')
-      return direction * a.name.localeCompare(b.name)
+      // Rows show the tidied title ("Pour Over Will"), not the raw filename
+      // ("Jordan Client Pour-Over Will.docx"); sorting the raw name put them
+      // in an order the list could not explain.
+      return direction * documentDisplayTitle(a.name, clientName).localeCompare(documentDisplayTitle(b.name, clientName))
     })
-  }, [sortAscending, sortKey])
+  }, [clientName, sortAscending, sortKey])
 
   const searching = query.trim().length > 0 || scope === 'unreviewed'
 
@@ -698,7 +701,7 @@ export function MatterDocumentsTab({
               {recordLabel === 'lead' ? 'Lead documents' : 'Matter documents'}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Everything filed to this {recordLabel}. Drag files anywhere onto this panel, or use Upload. Flip the switch to show a document in the client portal.
+              Drag files onto this panel or use Upload. Turn on Portal to share a file with the client.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1019,7 +1022,10 @@ export function MatterDocumentsTab({
                     aria-label={`Select ${doc.name}`}
                   />
                   <DocumentTypeIcon name={doc.name} />
-                  <div className="min-w-0 flex-1">
+                  {/* The floor keeps the name readable on a phone: below it the
+                      row's controls wrap to a second line instead of squeezing
+                      the title down to three letters. */}
+                  <div className="min-w-[12rem] flex-1">
                     <p
                       className="truncate text-sm font-medium"
                       title={doc.name}
@@ -1072,15 +1078,21 @@ export function MatterDocumentsTab({
                   <span className="hidden w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
                     {formatDocumentSize(doc.size)}
                   </span>
-                  <Badge variant="outline" className="shrink-0 text-micro">
-                    {doc.source === 'client' ? 'Client' : 'Firm'}
-                  </Badge>
-                  <Switch
-                    checked={isDocumentShared(doc)}
-                    disabled={busy === 'share' || busy === 'unshare'}
-                    onCheckedChange={checked => void handleShare([doc], checked)}
-                    aria-label={`Share ${doc.name} with the client`}
-                  />
+                  {/* Firm files are the default; only a client upload is worth a badge. */}
+                  {doc.source === 'client' && (
+                    <Badge variant="outline" className="ml-auto shrink-0 text-micro sm:ml-0">
+                      Client
+                    </Badge>
+                  )}
+                  <label className={cn('flex shrink-0 items-center gap-1.5 text-micro text-muted-foreground', doc.source !== 'client' && 'ml-auto sm:ml-0')}>
+                    <Switch
+                      checked={isDocumentShared(doc)}
+                      disabled={busy === 'share' || busy === 'unshare'}
+                      onCheckedChange={checked => void handleShare([doc], checked)}
+                      aria-label={`Share ${doc.name} with the client`}
+                    />
+                    Portal
+                  </label>
 
                   <div className="flex shrink-0 items-center gap-1">
                     <Button

@@ -12,6 +12,12 @@ interface MatterBlockerBannerProps {
   unreadPortalCount: number
   draftingHref: string
   onReviewIntakeUploads?: () => void
+  /**
+   * The tab on screen. A shortcut to the tab you are already on only repeats
+   * what that tab shows: Documents has its own "uploads need review" bar and
+   * Messages its own unread list.
+   */
+  activeTab?: string
 }
 
 /** Review flags are advisory; unread correspondence is not a drafting gate. */
@@ -22,8 +28,11 @@ export function MatterBlockerBanner({
   unreadPortalCount,
   draftingHref,
   onReviewIntakeUploads,
+  activeTab,
 }: MatterBlockerBannerProps) {
-  if (!reviewFlags.length && !uploads.total && !unreadPortalCount) return null
+  const portalUploads = activeTab === 'documents' ? 0 : uploads.portal
+  const unread = activeTab === 'communications' ? 0 : unreadPortalCount
+  if (!reviewFlags.length && !uploads.intake && !portalUploads && !unread) return null
   return (
     <section aria-label="Matter attention items" className="space-y-2 border-b border-border bg-card px-4 py-3">
       {reviewFlags.length > 0 && (
@@ -60,14 +69,14 @@ export function MatterBlockerBanner({
             <Link href={`/admin/matters/${matterId}#matter-intake-actions`}>{uploads.intake} intake uploads to review</Link>
           </Button>
         ))}
-        {uploads.portal > 0 && (
+        {portalUploads > 0 && (
           <Button size="sm" variant="outline" asChild>
             <Link href={`/admin/matters/${matterId}?tab=documents&scope=unreviewed`}>
               {uploads.portal} portal upload{uploads.portal === 1 ? '' : 's'} to review
             </Link>
           </Button>
         )}
-        {unreadPortalCount > 0 && (
+        {unread > 0 && (
           <Button size="sm" variant="outline" asChild>
             <Link href={`/admin/matters/${matterId}?tab=communications&channel=portal`}>
               {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}

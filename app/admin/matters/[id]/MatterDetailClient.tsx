@@ -1041,6 +1041,7 @@ function MatterDetailClientInner({
             unreadPortalCount={unreadPortalCount}
             draftingHref={draftingHref}
             onReviewIntakeUploads={() => void openIntakeSheet()}
+            activeTab={activeTab}
           />
 
           <div className="flex-1 px-4 py-4">

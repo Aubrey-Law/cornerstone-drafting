@@ -199,6 +199,25 @@ describe('documents tab file manager', () => {
     expect(names()).toEqual([...ascending].reverse())
   })
 
+  it('sorts by the title the row shows, not the raw filename', () => {
+    renderTab({
+      clientName: 'Jordan Client',
+      documents: [
+        doc({ id: 'w', name: 'Jordan Client Will.pdf' }),
+        doc({ id: 'p', name: 'Power of Attorney.pdf' }),
+        doc({ id: 'a', name: 'Advance Directive.pdf' }),
+      ],
+    })
+
+    // Raw names sort Advance, Jordan…Will, Power; the rows read Advance, Power, Will.
+    const order = screen.getAllByRole('switch').map(node => node.getAttribute('aria-label'))
+    expect(order).toEqual([
+      'Share Advance Directive.pdf with the client',
+      'Share Power of Attorney.pdf with the client',
+      'Share Jordan Client Will.pdf with the client',
+    ])
+  })
+
   it('keeps the search across folders and reports an empty result', async () => {
     const user = userEvent.setup()
     renderTab()
