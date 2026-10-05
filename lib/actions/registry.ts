@@ -3,6 +3,7 @@ import { setTaskStatus } from '@/lib/tasks/statusMutation'
 import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
 import { getDesignSheetImportFieldMeta, buildDesignSheetImportPreview } from '@/lib/designSheetImport/shared'
 import { sanitizeEmailHtml } from '@/lib/email/templateShared'
+import { coerceFiduciaryProposals } from '@/lib/designSheet/fiduciaryProposal'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
@@ -307,8 +308,13 @@ function designSheetProposalInput(value: unknown) {
   for (const [field, fieldValue] of Object.entries(raw).slice(0, 80)) {
     if (getDesignSheetImportFieldMeta(field) && fieldValue !== undefined) fields[field] = fieldValue
   }
-  if (!Object.keys(fields).length) throw new Error('At least one known design-sheet field is required')
-  return { matterId, fields }
+  // Appointments are people, not strings, so they ride beside the field map and
+  // are matched to the matter's contacts when previewed and again when applied.
+  const fiduciaries = coerceFiduciaryProposals(input.fiduciaries)
+  if (!Object.keys(fields).length && !fiduciaries.length) {
+    throw new Error('At least one known design-sheet field or fiduciary appointment is required')
+  }
+  return { matterId, fields, fiduciaries }
 }
 
 function emailComposeInput(value: unknown) {
@@ -1109,11 +1115,12 @@ const definitions: ActionDefinition[] = [
     risk: 'legal_financial',
     validate: designSheetProposalInput,
     async preview(input) {
-      const { loadCurrentDesignSheet } = await import('@/lib/designSheetImport/server')
-      const sheet = await loadCurrentDesignSheet(input.matterId) as (Record<string, unknown> & { id?: string; updated_at?: string }) | null
-      if (!sheet) throw new Error('This matter has no design sheet yet')
+      const { loadFiduciaryResolutionContext, resolveChangingFiduciaryProposals, describeFiduciaryChange } = await import('@/lib/designSheet/fiduciaryProposalServer')
+      const context = await loadFiduciaryResolutionContext(input.matterId)
+      const sheet = context.sheet as unknown as Record<string, unknown> & { id?: string; updated_at?: string }
       const rows = buildDesignSheetImportPreview({ currentSheet: sheet, proposed: input.fields })
-      if (!rows.length) throw new Error('None of the proposed fields would change the design sheet')
+      const appointments = resolveChangingFiduciaryProposals(context, input.fiduciaries)
+      if (!rows.length && !appointments.length) throw new Error('None of the proposed decisions would change the design sheet')
       // The current values ride in the preview on purpose: if the sheet moves
       // before this is accepted, the digest no longer matches and the card
       // asks for a fresh look rather than writing over the newer answer.
@@ -1121,21 +1128,29 @@ const definitions: ActionDefinition[] = [
         display: {
           action: 'Apply design sheet decisions',
           matterId: input.matterId,
-          changes: rows.map(row => `${row.section} · ${row.label}: ${row.currentDisplay || '(empty)'} → ${row.proposedDisplay}`),
+          changes: [
+            ...rows.map(row => `${row.section} · ${row.label}: ${row.currentDisplay || '(empty)'} → ${row.proposedDisplay}`),
+            ...appointments.map(describeFiduciaryChange),
+          ],
         },
         auditBefore: { matterId: input.matterId, sheetId: sheet.id ?? null, updatedAt: sheet.updated_at ?? null },
-        auditAfter: { matterId: input.matterId, fields: rows.map(row => row.field) },
+        auditAfter: { matterId: input.matterId, fields: rows.map(row => row.field), fiduciaries: appointments.map(row => row.id) },
       }
     },
     async execute(input) {
+      const { loadFiduciaryResolutionContext, resolveChangingFiduciaryProposals } = await import('@/lib/designSheet/fiduciaryProposalServer')
       const { applyDesignSheetProposal } = await import('@/lib/designSheet/applyProposal')
-      const result = await applyDesignSheetProposal({ matterId: input.matterId, fields: input.fields, fiduciaries: [] })
+      // Resolved afresh so a contact added since the proposal is reused, not duplicated.
+      const fiduciaries = input.fiduciaries.length
+        ? resolveChangingFiduciaryProposals(await loadFiduciaryResolutionContext(input.matterId), input.fiduciaries)
+        : []
+      const result = await applyDesignSheetProposal({ matterId: input.matterId, fields: input.fields, fiduciaries })
       if (!result.ok) throw new Error(result.error)
-      return { sheetId: result.id, updatedAt: result.updatedAt, appliedFields: result.appliedFields }
+      return { sheetId: result.id, updatedAt: result.updatedAt, appliedFields: result.appliedFields, appliedFiduciaries: result.appliedFiduciaries }
     },
     auditResult(result) {
-      const applied = result as { sheetId?: string; updatedAt?: string; appliedFields?: number }
-      return { sheetId: applied.sheetId, updatedAt: applied.updatedAt, appliedFields: applied.appliedFields ?? 0 }
+      const applied = result as { sheetId?: string; updatedAt?: string; appliedFields?: number; appliedFiduciaries?: number }
+      return { sheetId: applied.sheetId, updatedAt: applied.updatedAt, appliedFields: applied.appliedFields ?? 0, appliedFiduciaries: applied.appliedFiduciaries ?? 0 }
     },
   } as ActionDefinition<ReturnType<typeof designSheetProposalInput>>,
   {

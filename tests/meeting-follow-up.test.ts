@@ -18,12 +18,21 @@ import {
   type MeetingExtraction,
 } from '@/lib/meetings/followUp'
 import { getActionDefinition } from '@/lib/actions/registry'
+import {
+  coerceFiduciaryProposals,
+  fiduciaryProposalChangesSheet,
+  resolveFiduciaryProposals,
+  type FiduciaryProposal,
+} from '@/lib/designSheet/fiduciaryProposal'
+import { describeFiduciaryChange, resolveChangingFiduciaryProposals } from '@/lib/designSheet/fiduciaryProposalServer'
+import type { DesignSheet } from '@/types/database'
 import { ACTION_CATALOG, autonomyCeilingForRisk, defaultAutonomyForAction } from '@/lib/actions/autonomy'
 
 const NOW = Date.parse('2026-10-05T12:00:00Z')
 const MATTER = '00000000-0000-0000-0000-000000000060'
 const LEAD = '00000000-0000-0000-0000-000000000050'
 const recipient = { email: 'pat@example.com', name: 'Pat Client' }
+const trustee: FiduciaryProposal = { role: 'trustee', party: 'client', priority: 1, is_co: false, first_name: 'Mary', last_name: 'Okafor', relationship: 'sister' }
 
 const extraction: MeetingExtraction = {
   summary: 'Decided on a joint revocable trust.',
@@ -81,8 +90,17 @@ describe('what a meeting proposes', () => {
       ['email.draft.compose', 'email'],
     ])
     expect(plan[0].summary).toBe('Apply 2 design decisions from "Design meeting"')
-    expect(plan[0].payload).toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust', trust_name: 'The Client Family Trust' } })
+    expect(plan[0].payload).toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust', trust_name: 'The Client Family Trust' }, fiduciaries: [] })
     expect(plan.every(item => item.recordType === 'matter' && item.recordId === MATTER)).toBe(true)
+  })
+
+  it('counts appointments as decisions and carries them in the same batch, with or without fields', () => {
+    const withBoth = planMeetingActions({ ...base, matterId: MATTER, leadId: null, designFields: { plan_type: 'joint_trust' }, designFiduciaries: [trustee] })
+    expect(withBoth[0].summary).toBe('Apply 2 design decisions from "Design meeting"')
+    expect(withBoth[0].payload).toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust' }, fiduciaries: [trustee] })
+    const onlyPeople = planMeetingActions({ ...base, matterId: MATTER, leadId: null, designFields: null, designFiduciaries: [trustee] })
+    expect(onlyPeople[0]).toMatchObject({ actionKey: 'design_sheet.proposal.apply', slot: 'design', summary: 'Apply 1 design decision from "Design meeting"' })
+    expect(onlyPeople[0].payload).toEqual({ matterId: MATTER, fields: {}, fiduciaries: [trustee] })
   })
 
   it('dates each task from the notes, or a week out, and says which meeting it came from', () => {
@@ -100,8 +118,8 @@ describe('what a meeting proposes', () => {
     expect(tasks[1].payload.description).toBe('From the meeting "Design meeting" on 2026-10-05.')
   })
 
-  it('on a lead: never a design-sheet batch, even when fields were offered', () => {
-    const plan = planMeetingActions({ ...base, matterId: null, leadId: LEAD, designFields: { plan_type: 'joint_trust' } })
+  it('on a lead: never a design-sheet batch, even when fields or appointments were offered', () => {
+    const plan = planMeetingActions({ ...base, matterId: null, leadId: LEAD, designFields: { plan_type: 'joint_trust' }, designFiduciaries: [trustee] })
     expect(plan.map(item => item.actionKey)).toEqual(['task.create', 'task.create', 'email.draft.compose'])
     expect(plan[0].payload).toMatchObject({ matter_id: null, lead_id: LEAD })
     expect(plan.every(item => item.recordType === 'lead' && item.recordId === LEAD)).toBe(true)
@@ -142,11 +160,14 @@ describe('the design-sheet and compose actions', () => {
     expect(ACTION_CATALOG['email.draft.compose']).toBeDefined()
   })
 
-  it('only let known design-sheet fields through', () => {
+  it('only let known design-sheet fields and well-formed appointments through', () => {
     const definition = getActionDefinition('design_sheet.proposal.apply')!
     expect(definition.validate({ matterId: MATTER, fields: { plan_type: 'joint_trust', made_up: 'x', __proto__: { a: 1 } } }, { id: 'u' }))
-      .toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust' } })
-    expect(() => definition.validate({ matterId: MATTER, fields: { made_up: 'x' } }, { id: 'u' })).toThrow('known design-sheet field')
+      .toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust' }, fiduciaries: [] })
+    expect(definition.validate({ matterId: MATTER, fiduciaries: [trustee, { role: 'king', first_name: 'A', last_name: 'B' }] }, { id: 'u' }))
+      .toEqual({ matterId: MATTER, fields: {}, fiduciaries: [trustee] })
+    expect(() => definition.validate({ matterId: MATTER, fields: { made_up: 'x' } }, { id: 'u' })).toThrow('known design-sheet field or fiduciary appointment')
+    expect(() => definition.validate({ matterId: MATTER, fiduciaries: [{ role: 'trustee', first_name: 'Only' }] }, { id: 'u' })).toThrow('known design-sheet field or fiduciary appointment')
     expect(() => definition.validate({ fields: { plan_type: 'joint_trust' } }, { id: 'u' })).toThrow('matter identifier')
   })
 
@@ -172,6 +193,52 @@ describe('the design-sheet and compose actions', () => {
     expect(block).toContain('Keep the email draft already in the composer')
     expect(block).toContain('if (existing) return { id: existing.id, prepared: false, preservedExisting: true }')
     expect(block).toContain("if (record.afterState?.prepared !== true) return { draftId, removed: false }")
+  })
+})
+
+describe('reading appointments from the notes', () => {
+  const emptySheet = {
+    trustee_slots: [], executor_slots: [], poa_slots: [], hcp_slots: [],
+    guardian_slots: [], temporary_guardian_slots: [],
+    spouse_trustee_slots: [], spouse_executor_slots: [], spouse_poa_slots: [], spouse_hcp_slots: [],
+  } as unknown as DesignSheet
+  const mary = { id: 'c-mary', first_name: 'Mary', last_name: 'Okafor' }
+
+  it('keeps only well-formed appointments: a known role, a full name, a priority up to second alternate', () => {
+    expect(coerceFiduciaryProposals([
+      { role: 'trustee', party: 'spouse', priority: 2, is_co: true, first_name: ' Mary ', last_name: 'Okafor', relationship: ' sister ' },
+      { role: 'trustee', first_name: 'Dropped', last_name: 'Priority', priority: 3 },
+      { role: 'trustee', first_name: 'No', last_name: '' },
+      { role: 'banker', first_name: 'Not', last_name: 'ARole' },
+      'nonsense',
+      { role: 'hcp', first_name: 'Default', last_name: 'Values', priority: 1.5, is_co: 'yes', relationship: 7 },
+    ])).toEqual([
+      { role: 'trustee', party: 'spouse', priority: 2, is_co: true, first_name: 'Mary', last_name: 'Okafor', relationship: 'sister' },
+      { role: 'hcp', party: 'client', priority: 0, is_co: false, first_name: 'Default', last_name: 'Values', relationship: null },
+    ])
+    expect(coerceFiduciaryProposals(null)).toEqual([])
+    expect(coerceFiduciaryProposals({ role: 'trustee' })).toEqual([])
+  })
+
+  it('proposes an appointment only when it would change the sheet', () => {
+    const occupied = { ...emptySheet, trustee_slots: [{ id: 't0', contact_id: 'c-mary', is_co: false, order: 0 }] } as unknown as DesignSheet
+    const [sameMary] = resolveFiduciaryProposals({ sheet: occupied, contacts: [mary], proposals: [{ ...trustee, priority: 0 }] })
+    expect(fiduciaryProposalChangesSheet(sameMary)).toBe(false)
+    const [replacing] = resolveFiduciaryProposals({ sheet: occupied, contacts: [mary], proposals: [{ ...trustee, priority: 0, first_name: 'David' }] })
+    expect(fiduciaryProposalChangesSheet(replacing)).toBe(true)
+    const [filling] = resolveFiduciaryProposals({ sheet: emptySheet, contacts: [mary], proposals: [trustee] })
+    expect(fiduciaryProposalChangesSheet(filling)).toBe(true)
+
+    const rows = resolveChangingFiduciaryProposals({ sheet: occupied, contacts: [mary] as never }, [{ ...trustee, priority: 0 }, trustee])
+    expect(rows.map(row => row.id)).toEqual(['client:trustee:1:seq'])
+  })
+
+  it('describes each appointment with who holds the slot and whether a contact would be created', () => {
+    const occupied = { ...emptySheet, trustee_slots: [{ id: 't0', contact_id: 'c-mary', is_co: false, order: 0 }] } as unknown as DesignSheet
+    const [replacing] = resolveFiduciaryProposals({ sheet: occupied, contacts: [mary], proposals: [{ ...trustee, priority: 0, first_name: 'David' }] })
+    expect(describeFiduciaryChange(replacing)).toBe('Fiduciaries · Trustee — primary: Mary Okafor → David Okafor (new contact)')
+    const [filling] = resolveFiduciaryProposals({ sheet: emptySheet, contacts: [mary], proposals: [trustee] })
+    expect(describeFiduciaryChange(filling)).toBe('Fiduciaries · Trustee — alternate: (empty) → Mary Okafor')
   })
 })
 
@@ -204,6 +271,10 @@ describe('where the follow-up runs', () => {
     expect(source).toContain("actionKey: 'email.draft.send'")
     expect(source).not.toContain("from('tasks').insert")
     expect(source).not.toContain("from('design_sheets')")
+    expect(source).not.toContain("from('contacts')")
+    // Appointments go through the sheet's own fiduciary prompt and are matched to the matter's people first.
+    expect(source).toContain('proposeFiduciaries({ config: llm.config, facts })')
+    expect(source).toContain('resolveChangingFiduciaryProposals(context, proposals)')
     // Only fields the notes would change are offered; a sheet already saying the same thing is left alone.
     expect(source).toContain('row.currentDisplay !== row.proposedDisplay')
   })

@@ -237,7 +237,8 @@ Return one JSON object with only the fields you can support from the facts above
   return parseJsonObject(response.text.trim())
 }
 
-async function proposeFiduciaries(args: {
+/** Who the material names for each role, as raw proposals; resolve them against a sheet before showing them. */
+export async function proposeFiduciaries(args: {
   config: LlmConfig
   facts: string
 }): Promise<FiduciaryProposal[]> {
