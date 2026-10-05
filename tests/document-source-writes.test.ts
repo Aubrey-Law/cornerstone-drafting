@@ -12,6 +12,8 @@ const WRITERS: Array<{ file: string; source: string }> = [
   // which both the webhook and in-process signing go through.
   { file: 'lib/esign/completion.ts', source: "source: 'firm'" },
   { file: 'app/api/admin/meeting-notes/route.ts', source: "source: 'meeting-notes'" },
+  // Executed originals scanned in after the signing.
+  { file: 'lib/signing/scanIn.ts', source: "source: 'firm'" },
   { file: 'lib/drafting/persistGeneratedDocument.ts', source: "source: 'firm'" },
   { file: 'lib/intake/promoteIntakeDocuments.ts', source: "source: 'client'" },
   { file: 'lib/works/artifacts.ts', source: "source: 'client'" },

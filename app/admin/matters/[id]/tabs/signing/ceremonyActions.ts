@@ -38,6 +38,7 @@ export async function recordCeremony(
     ceremonyId: text(form, 'ceremonyId'),
     scheduledFor: text(form, 'scheduledFor'),
     location: text(form, 'location'),
+    originalsLocation: text(form, 'originalsLocation'),
     notaryName: text(form, 'notaryName'),
     witnessOneName: text(form, 'witnessOneName'),
     witnessTwoName: text(form, 'witnessTwoName'),

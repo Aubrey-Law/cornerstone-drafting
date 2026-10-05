@@ -9,6 +9,7 @@ import type { Ceremony } from '@/lib/ceremony/repository'
 import type { DocumentKind } from '@/lib/execution/requirements'
 import { CeremonyRecord } from './CeremonyRecord'
 import { ExecutionChecklist } from './ExecutionChecklist'
+import { ScanInExecuted } from './ScanInExecuted'
 
 interface SigningView {
   kinds: DocumentKind[]
@@ -81,6 +82,7 @@ export function MatterSigningPanel({ matterId }: { matterId: string }) {
         detected={view.kinds}
         unmatched={view.unmatched}
       />
+      <ScanInExecuted matterId={matterId} onSaved={() => void load()} />
       <CeremonyRecord matterId={matterId} ceremony={view.ceremony} kinds={view.kinds} onSaved={() => void load()} />
     </div>
   )
