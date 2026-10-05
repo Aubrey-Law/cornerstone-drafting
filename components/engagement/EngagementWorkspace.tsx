@@ -107,10 +107,13 @@ function previewFromActiveRevision(agreement: Agreement): PreviewPayload | null 
 export default function EngagementWorkspace({
   agreement,
   editableDocument = null,
+  recordedEngagement = null,
 }: {
   agreement: Agreement
   /** The agreement's editable Word document, once a generate has created it. */
   editableDocument?: EngagementDocumentState | null
+  /** The engagement as the matter records it, including a send outside the app. */
+  recordedEngagement?: { sentAt: string | null; signed: boolean } | null
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -132,6 +135,37 @@ export default function EngagementWorkspace({
   const [isUsingDocument, setIsUsingDocument] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
   const { confirm, confirmDialog } = useConfirm()
+  const [isMarkingSent, setIsMarkingSent] = useState(false)
+
+  /**
+   * Record that the agreement went to the client outside the app (emailed, or
+   * another e-sign service). The matter-details route owns this status and
+   * mirrors it onto the lead; the agreement itself stays a draft, so it can
+   * still be sent from here later.
+   */
+  async function markSentOutside(sent: boolean) {
+    if (!agreement.matter_id) return
+    setIsMarkingSent(true)
+    setMessage('')
+    try {
+      const response = await fetch('/api/admin/matter-details', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matterId: agreement.matter_id, field: 'engagement_status', value: sent ? 'sent' : 'draft' }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setMessage(body.error ?? 'Could not update the engagement status.')
+        return
+      }
+      setMessage(sent ? 'Recorded as sent outside the app.' : 'No longer recorded as sent.')
+      router.refresh()
+    } catch {
+      setMessage('Could not update the engagement status.')
+    } finally {
+      setIsMarkingSent(false)
+    }
+  }
 
   // Edits made in the viewer or in Word save new versions of the document; the
   // signing PDF only follows them once staff rebuild it from the document.
@@ -419,6 +453,9 @@ export default function EngagementWorkspace({
               onDownloadDocument={downloadEditableDocument}
               onUseDocument={useEditedDocument}
               onDocumentMutated={() => router.refresh()}
+              recordedEngagement={recordedEngagement}
+              isMarkingSent={isMarkingSent}
+              onMarkSentOutside={agreement.matter_id ? markSentOutside : undefined}
             />
           )}
           {message && <p className="rounded-md border border-border bg-card p-3 text-sm">{message}</p>}
@@ -567,6 +604,9 @@ function ReviewStep({
   onDownloadDocument,
   onUseDocument,
   onDocumentMutated,
+  recordedEngagement,
+  isMarkingSent,
+  onMarkSentOutside,
 }: {
   agreement: Agreement
   input: EngagementInput
@@ -602,8 +642,14 @@ function ReviewStep({
   onDownloadDocument: () => void
   onUseDocument: () => void
   onDocumentMutated: () => void
+  recordedEngagement: { sentAt: string | null; signed: boolean } | null
+  isMarkingSent: boolean
+  onMarkSentOutside?: (sent: boolean) => void
 }) {
   const confirmId = useId()
+  const sentOutsideId = useId()
+  // Sent by the app, the status panel tracks it; this records the other sends.
+  const showSentOutside = Boolean(onMarkSentOutside) && !locked && !recordedEngagement?.signed
   return (
     <section className="rounded-lg border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
@@ -671,6 +717,24 @@ function ReviewStep({
           <Button className="mt-3" disabled={!canSend || isSending} onClick={onSend}>
             {isSending ? 'Sending...' : 'Send for signature'}
           </Button>
+          {showSentOutside && (
+            <div className="mt-4 border-t border-border pt-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={sentOutsideId}
+                  checked={Boolean(recordedEngagement?.sentAt)}
+                  disabled={isMarkingSent}
+                  onCheckedChange={checked => onMarkSentOutside?.(checked === true)}
+                />
+                <Label htmlFor={sentOutsideId} className="text-sm font-normal">Already sent to the client outside the app</Label>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {recordedEngagement?.sentAt
+                  ? `Recorded as sent ${new Date(recordedEngagement.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}. The matter and lead show it as sent.`
+                  : 'For an agreement emailed or signed through another service. The matter and lead will show it as sent.'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>

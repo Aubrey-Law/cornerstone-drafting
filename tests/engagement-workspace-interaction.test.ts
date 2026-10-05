@@ -84,6 +84,26 @@ describe('EngagementWorkspace interactions',()=>{
     expect(fetchMock.mock.calls.some(([url])=>String(url).endsWith('/preview'))).toBe(false)
   })
 
+  it('records an agreement sent outside the app on the matter',async()=>{
+    step='review'; const user=userEvent.setup(); const fetchMock=vi.mocked(fetch)
+    render(React.createElement(EngagementWorkspace,{agreement,recordedEngagement:{sentAt:null,signed:false}}))
+    fetchMock.mockClear(); fetchMock.mockResolvedValue({ok:true,json:async()=>({row:{}})} as Response)
+    await user.click(screen.getByLabelText('Already sent to the client outside the app'))
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/matter-details',expect.objectContaining({method:'PATCH'}))
+    const body=JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    expect(body).toEqual({matterId:'m1',field:'engagement_status',value:'sent'})
+    expect(await screen.findByText('Recorded as sent outside the app.')).toBeTruthy()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('hides the outside-the-app control once the engagement is signed or the app has sent it',()=>{
+    step='review'
+    const view=render(React.createElement(EngagementWorkspace,{agreement,recordedEngagement:{sentAt:'2026-10-01T00:00:00Z',signed:true}}))
+    expect(screen.queryByLabelText('Already sent to the client outside the app')).toBeNull()
+    view.rerender(React.createElement(EngagementWorkspace,{agreement:{...agreement,status:'sent'},recordedEngagement:{sentAt:null,signed:false}}))
+    expect(screen.queryByLabelText('Already sent to the client outside the app')).toBeNull()
+  })
+
   it('disables signing-relevant edits after sending and preserves URL navigation',async()=>{
     const user=userEvent.setup(); render(React.createElement(EngagementWorkspace,{agreement:{...agreement,status:'sent'}}))
     expect((screen.getByLabelText('Primary name') as HTMLInputElement).disabled).toBe(true)
