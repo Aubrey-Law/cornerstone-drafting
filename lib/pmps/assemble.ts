@@ -1,5 +1,14 @@
+import type { OptionalService } from '@/lib/billing/optionalServices'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import { PMPS_ARTIFACT_KINDS, type PmpsAssemblyResult, type PmpsPlanStructure, type PmpsRunInput } from '@/lib/pmps/types'
+
+/** Billing facts the matter record holds, read by the run route from matter_details. */
+export interface PmpsBillingDetails {
+  legalPlan?: string | null
+  flatFee?: number | null
+  feeQuotedDate?: string | null
+  optionalServices?: OptionalService[] | null
+}
 
 function cleanFilenamePart(value: string) {
   return value.normalize('NFKD').replace(/[^a-zA-Z0-9-]/g, '') || 'Client'
@@ -9,7 +18,7 @@ function validStructure(value: unknown): value is PmpsPlanStructure {
   return ['joint_outright', 'joint_disclaimer', 'separate_clayton', 'individual_single'].includes(String(value))
 }
 
-export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}, details?: { legalPlan?: string | null; flatFee?: number | null }): PmpsAssemblyResult {
+export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}, details?: PmpsBillingDetails): PmpsAssemblyResult {
   const preflight: PmpsAssemblyResult['preflight'] = []
   const isCouple = Boolean(payload.spouse)
   const hasLegalPlan = typeof input.hasLegalPlan === 'boolean'
@@ -74,6 +83,8 @@ export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}
       hasLegalPlan,
       legalPlanName: input.legalPlanName?.trim() || details?.legalPlan || null,
       flatFee,
+      feeQuotedDate: details?.feeQuotedDate ?? null,
+      optionalServices: details?.optionalServices ?? null,
       planStructure,
     },
   }

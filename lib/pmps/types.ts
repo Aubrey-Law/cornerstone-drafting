@@ -1,3 +1,4 @@
+import type { OptionalService } from '@/lib/billing/optionalServices'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 
 export const PMPS_ARTIFACT_KINDS = ['agenda', 'proposal', 'tax_worksheet', 'one_page_summary'] as const
@@ -42,6 +43,10 @@ export interface PmpsData {
   hasLegalPlan: boolean
   legalPlanName: string | null
   flatFee: number | null
+  /** When a fee was quoted to the client; null = not yet quoted. */
+  feeQuotedDate: string | null
+  /** This matter's add-ons; null = the firm's standard list. */
+  optionalServices: OptionalService[] | null
   planStructure: PmpsPlanStructure
 }
 

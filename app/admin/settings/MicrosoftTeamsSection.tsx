@@ -12,6 +12,7 @@ interface TeamsStatus {
   connected: boolean
   email: string | null
   hasTeamsScope: boolean
+  hasTranscriptScope?: boolean
   canRefresh: boolean
   ownConnection: boolean
 }
@@ -122,6 +123,13 @@ export function MicrosoftTeamsSection() {
             <p className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
               This connection was not granted OnlineMeetings.ReadWrite, so Teams meetings cannot be
               created. Reconnect, and have a Microsoft 365 admin grant consent if prompted.
+            </p>
+          )}
+          {status.hasTeamsScope && status.hasTranscriptScope === false && (
+            <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+              This connection predates transcript reading (OnlineMeetingTranscript.Read.All), so Teams
+              meeting transcripts are not pulled onto matters yet. Reconnect to add it, and have a
+              Microsoft 365 admin grant consent if prompted.
             </p>
           )}
         </div>

@@ -50,7 +50,7 @@ Run `node scripts/validateOAuth.mjs` after changing provider settings.
 
 | Variable | Purpose |
 |----------|---------|
-| `GRANOLA_API_KEY` | Personal API key from Granola desktop → Settings → API (starts with `grn_`). Powers **Add meeting notes** on matter detail — lists recent meetings and pulls AI summaries into internal `meeting-notes` documents. |
+| `GRANOLA_API_KEY` | Personal API key from Granola desktop → Settings → API (starts with `grn_`). Powers **Add meeting notes** on matter detail — lists recent meetings and pulls AI summaries into internal `meeting-notes` documents — and the half-hourly meeting-transcripts sweep (`/api/cron/meeting-transcripts`), which lands new notes on their matter or lead by itself and starts the meeting follow-up. |
 
 Without this key, staff can still paste notes manually in the dialog; Granola list/fetch returns a clear configuration error.
 
@@ -314,8 +314,12 @@ Administrator):
    which Microsoft rejects with `AADSTS7000215`. Secrets expire (24 months at
    most), so note the date: Teams creation stops when it lapses.
 4. **API permissions → Add a permission → Microsoft Graph → Delegated:**
-   `OnlineMeetings.ReadWrite`, `offline_access`, `openid`, `email` (plus the
-   default `User.Read`), then **Grant admin consent**.
+   `OnlineMeetings.ReadWrite`, `OnlineMeetingTranscript.Read.All`,
+   `offline_access`, `openid`, `email` (plus the default `User.Read`), then
+   **Grant admin consent**. The transcript permission lets the half-hourly
+   meeting-transcripts sweep read a finished Teams meeting's transcript onto
+   its matter or lead; a connection made without it keeps creating meetings
+   and Settings asks for a reconnect.
 5. Redeploy so the variables take effect, then connect from Settings with the
    work account that will host the meetings.
 
