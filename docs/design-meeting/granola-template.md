@@ -4,6 +4,8 @@
 
 Paste the sections below into Granola's template editor. They mirror the worksheet, so a
 note taken against this template already carries the labels the design sheet reads.
+After the meeting, run the recipe in `granola-recipe.md` to tidy the note and
+list what is still missing.
 
 Two ways the note reaches the sheet:
 
@@ -45,7 +47,7 @@ Confirm what intake already captured. Correct anything that has changed.
 
 Children by full legal name. Guardians matter only where a child is a minor.
 
-- Excluded guardian:
+- Excluded guardian (yes / no):
 - Excluded guardian name:
 - Children (full legal name, date of birth, minor or adult):
 - Anyone deliberately left out, and why:
@@ -55,17 +57,17 @@ Children by full legal name. Guardians matter only where a child is a minor.
 The shape of the plan. Everything downstream follows from this.
 
 - Plan type (pour_over / outright_will / testamentary_trust):
-- Joint plan:
+- Joint plan (yes / no):
 - Trust name:
 - Spouse trust name:
-- Restatement:
+- Restatement (yes / no):
 
 ### Fiduciaries
 
 Full legal names, and relationship where it is not obvious.
 
-- PR same as trustee:
-- DPOA same as trustee:
+- PR same as trustee (yes / no):
+- DPOA same as trustee (yes / no):
 - Trustee — primary:
 - Trustee — alternate:
 - Trustee — second alternate:
