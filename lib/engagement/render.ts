@@ -47,7 +47,7 @@ async function ensurePdfCanvasRuntime(): Promise<void> {
   }
 }
 
-async function validatePdf(pdfBytes: Buffer, anchors: string[]): Promise<void> {
+export async function validateEngagementPdf(pdfBytes: Buffer, anchors: string[]): Promise<void> {
   if (pdfBytes.length === 0) throw new Error('Engagement PDF conversion returned an empty PDF')
   await ensurePdfCanvasRuntime()
   const { PDFParse } = await import('pdf-parse')
@@ -134,7 +134,7 @@ export async function renderEngagementAgreement(input: unknown, dependencies: En
   const pdfBytes = await convert(docxBytes, `${template.masterKey}-v${resolvedVersion}.docx`)
   // Derived from the master's own signer count rather than listed, so this
   // cannot drift from what the signing route stamps — see lib/engagement/anchors.ts.
-  await validatePdf(pdfBytes, allEngagementAnchorMarkers(template.recipientCount))
+  await validateEngagementPdf(pdfBytes, allEngagementAnchorMarkers(template.recipientCount))
 
   return {
     docxBytes,

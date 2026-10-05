@@ -92,6 +92,13 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // Builds a signing revision from the agreement's edited Word document, and
+    // holds that PDF to the same Letter/anchor checks a generated one gets.
+    '/api/admin/engagement-agreements/[id]/from-document': [
+      './assets/engagement-agreements/**',
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+    ],
     // The native engine locates signature anchors by reading the rendered
     // PDF's text layer, so every route that approves, sends or seals an
     // agreement needs pdf.js and its fonts in its own bundle. `send` and

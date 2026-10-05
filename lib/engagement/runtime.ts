@@ -2,6 +2,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createFirmaEsignProvider } from '@/lib/esign/firma'
 import { createNativeEsignProvider, esignNativeEnabled } from '@/lib/esign/native'
 import { issueRevisionApproval, verifyRevisionApproval } from './approval'
+import { recordEngagementDocx, type EngagementDocumentLink } from './editableDocument'
 import { renderEngagementAgreement } from './render'
 import * as repository from './repository'
 import { createEngagementService } from './service'
@@ -79,7 +80,23 @@ export async function engagementService() {
           recipients: (row.recipients ?? []).map(r => ({ key: r.role, name: r.name, email: r.email, order: r.recipient_order, externalId: r.external_recipient_id ?? r.firma_recipient_id })),
         }
       },
-      createRevision: (id, rendered) => repository.createAgreementRevision(client, id, rendered),
+      createRevision: async (id, rendered) => {
+        // The generated DOCX also becomes the next version of the agreement's
+        // editable document (viewer and Word add-in). Best-effort: without R2
+        // the agreement still generates and sends; it just has nothing to edit.
+        let documentLink: Partial<EngagementDocumentLink> = {}
+        if (rendered.docx) {
+          try {
+            documentLink = await recordEngagementDocx(client, { agreementId: id, docx: rendered.docx })
+          } catch (e) {
+            console.error('[engagement] could not save the editable document', e)
+          }
+        }
+        return repository.createAgreementRevision(client, id, {
+          ...rendered,
+          renderSnapshot: { ...rendered.renderSnapshot, ...documentLink },
+        })
+      },
       markReady: input => repository.markAgreementReady(client, input),
       claimSend: input => repository.claimAgreementSend(client, input),
       claimResume: input => repository.claimAgreementResume(client, input),

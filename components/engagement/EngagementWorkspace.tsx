@@ -1,8 +1,9 @@
 'use client'
 
 import { cloneElement, useEffect, useId, useMemo, useState, type ReactElement } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, FilePenLine, FileText, ListChecks, Pencil, Save, Send } from 'lucide-react'
+import { CheckCircle2, Download, FilePenLine, FileText, ListChecks, Pencil, RefreshCw, Save, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -18,6 +19,9 @@ import { OPTIONAL_SERVICES } from '@/lib/engagement/definitions'
 import { engagementTemplateFor, type EngagementTemplate } from '@/lib/engagement/templates'
 import { engagementLegalPlanLabel } from '@/lib/engagement/types'
 import type { EngagementWorkspaceAgreement as Agreement } from '@/lib/engagement/http'
+import type { EngagementDocumentState } from '@/lib/engagement/editableDocument'
+import { getDocumentUrl } from '@/lib/documents'
+import { useConfirm } from '@/components/useConfirm'
 import type { EngagementInput } from '@/lib/engagement/types'
 
 type Step = typeof ENGAGEMENT_STEPS[number]
@@ -28,6 +32,12 @@ type PreviewPayload = {
   pdfBase64: string
 }
 type PreviewUrls = { docx: string; pdf: string }
+
+// The same viewer estate-planning drafts are reviewed and redlined in.
+const DocxViewerPanel = dynamic(
+  () => import('@/components/documents/DocxViewerPanel').then(m => ({ default: m.DocxViewerPanel })),
+  { ssr: false },
+)
 
 const STEP_META: Record<Step, { label: string; description: string; icon: typeof FileText }> = {
   design: { label: 'Design', description: 'Client, fee, scope, and clauses', icon: FileText },
@@ -94,7 +104,14 @@ function previewFromActiveRevision(agreement: Agreement): PreviewPayload | null 
   }
 }
 
-export default function EngagementWorkspace({ agreement }: { agreement: Agreement }) {
+export default function EngagementWorkspace({
+  agreement,
+  editableDocument = null,
+}: {
+  agreement: Agreement
+  /** The agreement's editable Word document, once a generate has created it. */
+  editableDocument?: EngagementDocumentState | null
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const step = engagementStep(searchParams.get('step'))
@@ -112,6 +129,17 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   const [approvalToken, setApprovalToken] = useState('')
   const [confirmExactRevision, setConfirmExactRevision] = useState(false)
   const [message, setMessage] = useState('')
+  const [isUsingDocument, setIsUsingDocument] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const { confirm, confirmDialog } = useConfirm()
+
+  // Edits made in the viewer or in Word save new versions of the document; the
+  // signing PDF only follows them once staff rebuild it from the document.
+  const documentEditsPending = Boolean(
+    !locked
+    && editableDocument?.currentVersionId
+    && editableDocument.currentVersionId !== (agreement.active_revision.render_snapshot?.documentVersionId ?? null),
+  )
 
   const revision = preview?.revision?.id ?? agreement.active_revision.id
   const sha = preview?.sha256 ?? agreement.active_revision.render_sha256
@@ -172,6 +200,12 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   }
 
   async function generate() {
+    if (documentEditsPending && !(await confirm({
+      title: 'Replace the Word edits?',
+      body: 'The Word document has edits that are not in the signing PDF. Regenerating from the form replaces them; they stay in the document\'s version history.',
+      confirmLabel: 'Regenerate from the form',
+      destructive: true,
+    }))) return false
     setIsGenerating(true)
     setMessage('')
     try {
@@ -190,12 +224,45 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
       setConfirmExactRevision(false)
       setMessage('Engagement agreement generated. Review the exact PDF before sending.')
       setStep('review')
+      router.refresh()
       return true
     } catch {
       setMessage('Engagement agreement generation failed.')
       return false
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  async function useEditedDocument() {
+    setIsUsingDocument(true)
+    setMessage('')
+    try {
+      const response = await fetch(`/api/admin/engagement-agreements/${agreement.id}/from-document`, { method: 'POST' })
+      const body = await response.json()
+      if (!response.ok) {
+        setMessage(body.error ?? 'Could not build the signing PDF from the edited document.')
+        return
+      }
+      setPreview(body)
+      setApprovalToken('')
+      setConfirmExactRevision(false)
+      setViewerOpen(false)
+      setMessage('Signing PDF rebuilt from the edited Word document. Review it before approving.')
+      router.refresh()
+    } catch {
+      setMessage('Could not build the signing PDF from the edited document.')
+    } finally {
+      setIsUsingDocument(false)
+    }
+  }
+
+  async function downloadEditableDocument() {
+    if (!editableDocument) return
+    try {
+      download(await getDocumentUrl(editableDocument.documentId, 'download'), editableDocument.name)
+    } catch {
+      setMessage('Could not download the Word document.')
     }
   }
 
@@ -344,9 +411,18 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
               onSaveRevision={saveReviewRevision}
               onSend={send}
               onToggleEdit={() => setIsReviewEditing(value => !value)}
+              editableDocument={editableDocument}
+              documentEditsPending={documentEditsPending}
+              isUsingDocument={isUsingDocument}
+              viewerOpen={viewerOpen}
+              onToggleViewer={() => setViewerOpen(value => !value)}
+              onDownloadDocument={downloadEditableDocument}
+              onUseDocument={useEditedDocument}
+              onDocumentMutated={() => router.refresh()}
             />
           )}
           {message && <p className="rounded-md border border-border bg-card p-3 text-sm">{message}</p>}
+          {confirmDialog}
         </div>
       </main>
     </div>
@@ -483,6 +559,14 @@ function ReviewStep({
   onSaveRevision,
   onSend,
   onToggleEdit,
+  editableDocument,
+  documentEditsPending,
+  isUsingDocument,
+  viewerOpen,
+  onToggleViewer,
+  onDownloadDocument,
+  onUseDocument,
+  onDocumentMutated,
 }: {
   agreement: Agreement
   input: EngagementInput
@@ -510,6 +594,14 @@ function ReviewStep({
   onSaveRevision: () => void
   onSend: () => void
   onToggleEdit: () => void
+  editableDocument: EngagementDocumentState | null
+  documentEditsPending: boolean
+  isUsingDocument: boolean
+  viewerOpen: boolean
+  onToggleViewer: () => void
+  onDownloadDocument: () => void
+  onUseDocument: () => void
+  onDocumentMutated: () => void
 }) {
   const confirmId = useId()
   return (
@@ -528,9 +620,11 @@ function ReviewStep({
           <Button variant="outline" onClick={onGenerate}>{hasPreview ? 'Regenerate' : 'Go to Generate'}</Button>
           <Button variant={isEditing ? 'secondary' : 'outline'} disabled={locked} onClick={onToggleEdit}>
             <Pencil className="mr-2 h-4 w-4" />
-            {isEditing ? 'Close in-app editor' : 'Edit in app'}
+            {isEditing ? 'Close field editor' : 'Edit fields'}
           </Button>
-          <Button variant="outline" disabled={!previewUrls} onClick={() => previewUrls && onDownload(previewUrls.docx, 'engagement.docx')}>Download editable DOCX</Button>
+          {!editableDocument && (
+            <Button variant="outline" disabled={!previewUrls} onClick={() => previewUrls && onDownload(previewUrls.docx, 'engagement.docx')}>Download DOCX</Button>
+          )}
           <Button variant="outline" disabled={!previewUrls} onClick={() => previewUrls && onDownload(previewUrls.pdf, 'engagement.pdf')}>Download signing PDF</Button>
           <Button disabled={!hasPreview || isApproving} onClick={onApprove}>{isApproving ? 'Approving...' : approvalToken ? 'Re-approve revision' : 'Approve revision'}</Button>
         </div>
@@ -545,6 +639,19 @@ function ReviewStep({
             onPrimary={onPrimary}
             onSpouse={onSpouse}
             onSaveRevision={onSaveRevision}
+          />
+        )}
+        {hasPreview && (
+          <WordDocumentPanel
+            doc={editableDocument}
+            locked={locked}
+            editsPending={documentEditsPending}
+            isUsingDocument={isUsingDocument}
+            viewerOpen={viewerOpen}
+            onToggleViewer={onToggleViewer}
+            onDownload={onDownloadDocument}
+            onUseDocument={onUseDocument}
+            onMutated={onDocumentMutated}
           />
         )}
         <p className="font-mono text-xs text-muted-foreground">Revision {revision} / PDF SHA-256 {sha}</p>
@@ -567,6 +674,89 @@ function ReviewStep({
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * The agreement as a Word document: redline it in the app's viewer, or edit it
+ * in Word through the Cornerstone add-in — the same two ways estate-planning
+ * drafts are edited — then rebuild the signing PDF from it.
+ */
+function WordDocumentPanel({
+  doc,
+  locked,
+  editsPending,
+  isUsingDocument,
+  viewerOpen,
+  onToggleViewer,
+  onDownload,
+  onUseDocument,
+  onMutated,
+}: {
+  doc: EngagementDocumentState | null
+  locked: boolean
+  editsPending: boolean
+  isUsingDocument: boolean
+  viewerOpen: boolean
+  onToggleViewer: () => void
+  onDownload: () => void
+  onUseDocument: () => void
+  onMutated: () => void
+}) {
+  if (!doc) {
+    return (
+      <p className="rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+        Regenerate the agreement to create its editable Word document.
+      </p>
+    )
+  }
+  return (
+    <div className="rounded-md border border-border bg-background p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <FileText className="h-4 w-4" />
+            Edit in Word
+          </h3>
+          <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+            Edit the agreement text in the app, or download it and open it in Word with the Cornerstone add-in:
+            choose this client and &ldquo;{doc.name}&rdquo; in the add-in&apos;s Versions tab, then save it as a new
+            version. Keep the signature and date lines intact.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant={viewerOpen ? 'secondary' : 'outline'} size="sm" onClick={onToggleViewer}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {viewerOpen ? 'Close document' : 'Review in app'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDownload}>
+            <Download className="mr-2 h-4 w-4" />
+            Download for Word
+          </Button>
+        </div>
+      </div>
+      {editsPending && (
+        <div className="mt-3 flex flex-col gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm md:flex-row md:items-center md:justify-between">
+          <span>The Word document has edits that are not in the signing PDF yet.</span>
+          <Button size="sm" disabled={locked || isUsingDocument} onClick={onUseDocument}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {isUsingDocument ? 'Building signing PDF...' : 'Use edited document'}
+          </Button>
+        </div>
+      )}
+      {viewerOpen && (
+        <div className="mt-3 flex h-[min(78vh,920px)] min-h-[520px] flex-col overflow-hidden rounded-md border border-border">
+          <DocxViewerPanel
+            documentId={doc.documentId}
+            key={`${doc.documentId}:${doc.currentVersionId ?? ''}`}
+            documentName={doc.name}
+            readOnly={locked}
+            onClose={onToggleViewer}
+            onMutated={onMutated}
+          />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -595,9 +785,9 @@ function ReviewEditor({
     <div className="rounded-md border border-primary/30 bg-primary/5 p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <h3 className="text-sm font-semibold">In-app DOCX editor</h3>
+          <h3 className="text-sm font-semibold">Edit fields</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Edit the generated agreement sections, then save a new exact DOCX/PDF revision before approval.
+            Change the agreement&apos;s fields, then save to regenerate the Word document and signing PDF from them.
           </p>
         </div>
         <Button disabled={locked || blockers.length > 0 || isGenerating} onClick={onSaveRevision}>
