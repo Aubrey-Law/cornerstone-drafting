@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import { assemblePmpsData } from '@/lib/pmps/assemble'
-import { generatePmpsArtifacts } from '@/lib/pmps/generate'
+import { generatePmpsArtifacts, toPmpsTemplateData } from '@/lib/pmps/generate'
+import { FIRM_OPTIONAL_SERVICES } from '@/lib/billing/optionalServices'
+import PizZip from 'pizzip'
 import { computeMATax } from '@/lib/pmps/templates/pmps-tax-calc'
 
 function payload(overrides: Partial<DraftPayload> = {}): DraftPayload {
@@ -65,5 +67,46 @@ describe('PMPS assembly and generation', () => {
     expect(assembled.data).toBeNull()
     const valid = assemblePmpsData(payload(), { hasLegalPlan: false, flatFee: 3_500, planStructure: 'joint_outright', documentKinds: ['proposal'] })
     expect(valid.selectedKinds).toEqual(['proposal'])
+  })
+})
+
+function docxText(bytes: Buffer): string {
+  return new PizZip(bytes).file('word/document.xml')!.asText().replace(/<[^>]+>/g, '')
+}
+
+describe('PMPS billing from the matter', () => {
+  const legalPlanRun = { hasLegalPlan: true, legalPlanName: 'MetLife', planStructure: 'separate_clayton' } as const
+
+  it('prints the firm standard add-ons when the matter has recorded none', () => {
+    const data = assemblePmpsData(payload(), legalPlanRun, { optionalServices: null }).data!
+    const rows = toPmpsTemplateData(data).optionalServices
+    expect(rows.map(row => row.name)).toEqual(FIRM_OPTIONAL_SERVICES.map(row => row.service))
+  })
+
+  it('prints the matter\'s own add-ons, and none when none were offered', async () => {
+    const custom = assemblePmpsData(payload(), { ...legalPlanRun, documentKinds: ['proposal'] }, {
+      optionalServices: [{ service: 'Pet Trust', description: 'Care for Biscuit', fee: 400, status: 'Recommended' }],
+    }).data!
+    expect(toPmpsTemplateData(custom).optionalServices).toEqual([
+      { name: 'Pet Trust', description: 'Care for Biscuit', fee: '$400', status: 'Recommended' },
+    ])
+    const [proposal] = await generatePmpsArtifacts(custom, ['proposal'])
+    const text = docxText(proposal.bytes)
+    expect(text).toContain('Pet Trust')
+    expect(text).not.toContain('Attorney-Supervised Signing')
+
+    const none = assemblePmpsData(payload(), legalPlanRun, { optionalServices: [] }).data!
+    const [emptyProposal] = await generatePmpsArtifacts(none, ['proposal'])
+    expect(docxText(emptyProposal.bytes)).not.toContain('Optional Services')
+  })
+
+  it('tells the attorney on the agenda whether a fee has been quoted', async () => {
+    const unquoted = assemblePmpsData(payload(), legalPlanRun).data!
+    const [agenda] = await generatePmpsArtifacts(unquoted, ['agenda'])
+    expect(docxText(agenda.bytes)).toContain('No fee has been quoted yet')
+
+    const quoted = assemblePmpsData(payload(), legalPlanRun, { feeQuotedDate: '2026-10-01' }).data!
+    const [quotedAgenda] = await generatePmpsArtifacts(quoted, ['agenda'])
+    expect(docxText(quotedAgenda.bytes)).toContain('Fee quoted to the client on')
   })
 })

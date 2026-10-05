@@ -1,3 +1,4 @@
+import { FIRM_OPTIONAL_SERVICES, optionalServicesForProposal } from '@/lib/billing/optionalServices'
 import generateAgenda from '@/lib/pmps/templates/pmps-agenda'
 import generateProposal from '@/lib/pmps/templates/pmps-proposal'
 import generateTaxWorksheet from '@/lib/pmps/templates/pmps-tax-worksheet'
@@ -128,6 +129,10 @@ export function toPmpsTemplateData(data: PmpsData) {
     hasLegalPlan: data.hasLegalPlan,
     legalPlan,
     flatFee: data.flatFee ? money(data.flatFee) : null,
+    // Null means nothing recorded for this matter, so the firm's standard
+    // add-ons; an empty list means none were offered, and the table is dropped.
+    optionalServices: optionalServicesForProposal(data.optionalServices ?? [...FIRM_OPTIONAL_SERVICES]),
+    feeQuoted: data.feeQuotedDate ? displayDate(data.feeQuotedDate) : null,
     hasTrust: data.documents.include_trust,
     hasCreditShelter: data.planStructure === 'joint_disclaimer' || data.planStructure === 'separate_clayton',
     hasRealEstate,
