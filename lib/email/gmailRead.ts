@@ -377,7 +377,7 @@ export function parseThread(raw: { id?: string; messages?: RawMessage[] }): Gmai
  */
 export async function getMailboxIdentity(
   userId?: string | null,
-): Promise<{ token: string; address: string }> {
+): Promise<{ token: string; address: string; userId: string | null }> {
   const conn = await getGoogleConnectionForUser(userId)
   if (!conn) {
     throw new GmailReadError('no_connection', 'Google account is not connected')
@@ -408,7 +408,7 @@ export async function getMailboxIdentity(
   if (!address) {
     throw new GmailReadError('no_connection', 'Google connection has no mailbox address')
   }
-  return { token, address }
+  return { token, address, userId: conn.user_id ?? null }
 }
 
 async function gmailGet(path: string, token: string): Promise<Record<string, unknown>> {
