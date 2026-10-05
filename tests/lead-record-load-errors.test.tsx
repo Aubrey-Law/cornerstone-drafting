@@ -72,3 +72,19 @@ it('retains loaded tasks when a token refresh triggers a failed reload', async (
   expect(screen.getByText('Existing task')).toBeInTheDocument()
   expect(screen.getByRole('alert')).toHaveTextContent('Showing previously loaded tasks.')
 })
+
+it('clips a long task title inside its row and keeps empty side cards out of the stacked layout', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.includes('?status=all')) return { ok: true, json: async () => ({ tasks: [{ id: 'task-1', title: 'Call client to confirm guardian choice for minor children', status: 'open', source: 'manual', stage_key: null, checklist: [], priority: 'normal', recurrence: null }] }) }
+    return { ok: true, json: async () => ({ templates: [], assignees: [] }) }
+  }))
+  render(<RecordTasksTab recordId="lead-1" recordKind="lead" recordName="Jane" />)
+  const title = await screen.findByText('Call client to confirm guardian choice for minor children')
+  // `truncate` on a flex container never clips its text; it has to sit on the text's own box.
+  expect(title.tagName).toBe('SPAN')
+  expect(title.className).toContain('truncate')
+  expect(title.closest('button')?.className).toContain('min-w-0')
+  for (const heading of ['Follow-up cadence', 'Applied templates', 'Recently completed']) {
+    expect(screen.getByRole('heading', { name: heading }).closest('section')?.className).toContain('hidden @min-[960px]:block')
+  }
+})
