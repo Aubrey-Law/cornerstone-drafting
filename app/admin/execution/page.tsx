@@ -7,8 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { loadCeremonyStatuses, type CeremonyStatus } from '@/lib/ceremony/repository'
-import { detectKinds } from '@/lib/execution/detect'
-import { loadExecutionMatters } from '@/lib/execution/repository'
+import { executionKinds, loadExecutionMatters } from '@/lib/execution/repository'
 import { requireStaffPage, reviewClient } from '@/lib/review/staff'
 import { TONE_BADGE, type Tone } from '@/lib/ui/tone'
 import { cn } from '@/lib/utils'
@@ -36,7 +35,7 @@ export default async function ExecutionPage() {
   const matters = drafted
     .map(matter => ({
       ...matter,
-      detected: detectKinds(matter.documentNames),
+      detected: executionKinds(matter),
       signing: statuses.get(matter.matterId) ?? null,
     }))
     .sort((a, b) => Number(a.signing === 'completed') - Number(b.signing === 'completed') || a.title.localeCompare(b.title))

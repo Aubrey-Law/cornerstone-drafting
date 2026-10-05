@@ -1,6 +1,7 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getR2Client, r2Bucket } from '@/lib/r2'
+import type { StoredDocumentKind } from '@/lib/execution/documentKind'
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -64,6 +65,8 @@ export interface RegisterDraftDocumentRowArgs {
   missingCount: number
   templateId?: string | null
   templateVersionId?: string | null
+  /** What the document is, from the template that rendered it; null when the caller cannot say. */
+  documentKind?: StoredDocumentKind | null
   contentType?: string
 }
 
@@ -92,6 +95,7 @@ export async function registerDraftDocumentRow(
     missing_count: args.missingCount,
     template_id: args.templateId ?? null,
     template_version_id: args.templateVersionId ?? null,
+    document_kind: args.documentKind ?? null,
   }).select('id').single()
 
   if (data?.id) {

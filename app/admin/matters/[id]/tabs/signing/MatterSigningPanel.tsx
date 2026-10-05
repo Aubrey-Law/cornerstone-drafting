@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Signature } from 'lucide-react'
+import { Printer, Signature } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import type { Ceremony } from '@/lib/ceremony/repository'
 import type { DocumentKind } from '@/lib/execution/requirements'
@@ -66,6 +67,14 @@ export function MatterSigningPanel({ matterId }: { matterId: string }) {
 
   return (
     <div className="space-y-4" data-testid="matter-signing">
+      <div className="flex justify-end">
+        <Button asChild size="sm" variant="outline">
+          <a href={`/admin/matters/${encodeURIComponent(matterId)}/signing-kit`} target="_blank" rel="noreferrer">
+            <Printer className="size-4" aria-hidden />
+            Print signing-day kit
+          </a>
+        </Button>
+      </div>
       {/* Keyed on the documents it was read from, so the ticks reset when the drafts change. */}
       <ExecutionChecklist
         key={[...view.kinds, ...view.unmatched].join('|')}

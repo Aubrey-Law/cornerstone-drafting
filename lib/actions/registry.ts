@@ -317,6 +317,19 @@ function designSheetProposalInput(value: unknown) {
   return { matterId, fields, fiduciaries }
 }
 
+function signingKitInput(value: unknown) {
+  const input = objectInput(value)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!matterId) throw new Error('A valid matter identifier is required')
+  let scheduledFor: string | null = null
+  if (typeof input.scheduledFor === 'string' && input.scheduledFor.trim()) {
+    const parsed = new Date(input.scheduledFor)
+    if (Number.isNaN(parsed.getTime())) throw new Error('scheduledFor must be a valid date')
+    scheduledFor = parsed.toISOString()
+  }
+  return { matterId, scheduledFor }
+}
+
 function emailComposeInput(value: unknown) {
   const input = objectInput(value)
   const contextType = input.contextType === 'matter' || input.contextType === 'lead' ? input.contextType : null
@@ -1153,6 +1166,112 @@ const definitions: ActionDefinition[] = [
       return { sheetId: applied.sheetId, updatedAt: applied.updatedAt, appliedFields: applied.appliedFields ?? 0, appliedFiduciaries: applied.appliedFiduciaries ?? 0 }
     },
   } as ActionDefinition<ReturnType<typeof designSheetProposalInput>>,
+  {
+    key: 'signing.kit.prepare',
+    risk: 'prepare',
+    validate: signingKitInput,
+    async preview(input) {
+      const { loadSigningKit } = await import('@/lib/signing/loadKit')
+      const { summariseSigningKit } = await import('@/lib/signing/kit')
+      const loaded = await loadSigningKit(input.matterId)
+      if (!loaded) throw new Error('This matter has no drafted documents to sign yet')
+      const existing = loaded.ceremony && loaded.ceremony.status === 'scheduled' ? loaded.ceremony : null
+      return {
+        display: {
+          action: existing ? 'Add a task to print the signing-day kit' : 'Open the signing record and add a task to print the kit',
+          matterId: input.matterId,
+          scheduledFor: input.scheduledFor ?? loaded.appointment?.startIso ?? null,
+          needs: summariseSigningKit(loaded.kit),
+          documents: loaded.kit.documents.map(document => `${document.order}. ${document.label}`),
+          unmatched: loaded.kit.unmatchedDocuments,
+        },
+        auditBefore: { matterId: input.matterId, ceremonyId: existing?.id ?? null },
+        auditAfter: { matterId: input.matterId, kinds: loaded.kinds, taskPlanned: true },
+      }
+    },
+    async execute(input, context) {
+      const { loadSigningKit } = await import('@/lib/signing/loadKit')
+      const { summariseSigningKit } = await import('@/lib/signing/kit')
+      const { saveCeremony, saveCeremonyDocument } = await import('@/lib/ceremony/repository')
+      const { reviewClient } = await import('@/lib/review/staff')
+      const loaded = await loadSigningKit(input.matterId)
+      if (!loaded) throw new Error('This matter has no drafted documents to sign yet')
+      const client = reviewClient()
+      const scheduledFor = input.scheduledFor ?? loaded.appointment?.startIso ?? null
+
+      // The firm's record of the appointment is opened once; a record already
+      // open for this signing is kept exactly as the attorney left it.
+      let ceremonyId = loaded.ceremony?.status === 'scheduled' ? loaded.ceremony.id : null
+      let createdCeremony = false
+      if (!ceremonyId) {
+        const saved = await saveCeremony(client, {
+          matterId: input.matterId,
+          ceremonyId: null,
+          scheduledFor,
+          location: loaded.appointment?.location ?? null,
+          notaryName: null,
+          witnessOneName: null,
+          witnessTwoName: null,
+          healthCareAgentName: null,
+          status: 'scheduled',
+          note: 'Opened by the signing-day kit when the appointment was booked.',
+          userId: context.actor.id,
+        })
+        if (!saved.ok) throw new Error(saved.message)
+        ceremonyId = saved.ceremonyId
+        createdCeremony = true
+        for (const kind of loaded.kinds) {
+          const row = await saveCeremonyDocument(client, {
+            matterId: input.matterId, ceremonyId, documentKind: kind, executed: false, signedOn: null,
+            witnessCount: 0, notarized: false, recordedOn: null, recordingReference: null, note: null,
+          })
+          if (!row.ok) throw new Error(row.message)
+        }
+      }
+
+      const { acceptTaskProposal } = await import('@/lib/adminChat/calendarTools')
+      const dueAt = scheduledFor
+        ? new Date(Math.max(Date.now() + 60 * 60 * 1000, new Date(scheduledFor).getTime() - 24 * 60 * 60 * 1000)).toISOString()
+        : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      const task = await acceptTaskProposal({
+        title: `Print the signing-day kit: ${loaded.kit.matterName}`,
+        description: `${summariseSigningKit(loaded.kit)}. Tab the originals as the kit lists and bring it to the table.
+/admin/matters/${input.matterId}/signing-kit`,
+        priority: 'high',
+        source: 'automation',
+        task_type: 'single',
+        matter_id: input.matterId,
+        lead_id: null,
+        due_at: dueAt,
+        estimate_minutes: 20,
+      }, context.actor) as { id?: string }
+      return { ceremonyId, createdCeremony, taskId: task?.id ?? null, needs: summariseSigningKit(loaded.kit) }
+    },
+    auditResult(result) {
+      const value = result as { ceremonyId?: string; createdCeremony?: boolean; taskId?: string | null; needs?: string }
+      return { ceremonyId: value.ceremonyId, createdCeremony: value.createdCeremony, taskId: value.taskId ?? null, needs: value.needs }
+    },
+    async undo(_input, record, context) {
+      const taskId = typeof record.afterState?.taskId === 'string' ? record.afterState.taskId : null
+      if (taskId) {
+        const { error } = await context.admin.from('tasks').delete().eq('id', taskId)
+        if (error) throw new Error(error.message)
+      }
+      // The record is removed only if this action opened it and nothing has
+      // been recorded as signed since; the attorney's own record is never undone.
+      const ceremonyId = typeof record.afterState?.ceremonyId === 'string' ? record.afterState.ceremonyId : null
+      let removedCeremony = false
+      if (ceremonyId && record.afterState?.createdCeremony === true) {
+        const { data: executed } = await context.admin.from('ceremony_documents').select('id').eq('ceremony_id', ceremonyId).eq('executed', true).limit(1)
+        if (!executed?.length) {
+          const { error } = await context.admin.from('signing_ceremonies').delete().eq('id', ceremonyId).eq('status', 'scheduled')
+          if (error) throw new Error(error.message)
+          removedCeremony = true
+        }
+      }
+      return { taskId, removedTask: Boolean(taskId), removedCeremony }
+    },
+  } as ActionDefinition<ReturnType<typeof signingKitInput>>,
   {
     key: 'email.draft.compose',
     risk: 'prepare',
