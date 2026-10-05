@@ -133,5 +133,6 @@ What the client was quoted and what happens next.
       **Complete sheet → Word document**.
 - [ ] Review and accept, then use **Create follow-up task** in the same dialog to turn what
       the sheet still lacks into a checklist task on the matter.
-- [ ] Billing (legal plan, fee quoted) has no design-sheet field. Record it on the matter;
-      the import carries it only as drafting notes.
+- [ ] Record billing on the matter's **Billing** tab: legal plan and member ID, flat fee,
+      the date a fee was quoted, and the optional services offered (**Proposal pricing**).
+      The PMPS package reads them from there; the meeting import does not write billing.

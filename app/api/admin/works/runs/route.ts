@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { parseOptionalServices } from '@/lib/billing/optionalServices'
 import { requireAdmin } from '@/lib/apiAuth'
 import { callAnthropic, PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
 import { consumeRateLimit } from '@/lib/rateLimit'
@@ -104,10 +105,12 @@ export async function POST(req: Request) {
     if (skill.slug === 'prepare-pmps-package') {
       if (!matterId) throw new Error('A matter is required to prepare a PMPS package.')
       const payload = await buildDraftPayload(matterId)
-      const { data: details } = await db.from('matter_details').select('legal_plan, flat_fee_amount').eq('client_id', matterId).maybeSingle()
+      const { data: details } = await db.from('matter_details').select('legal_plan, flat_fee_amount, fee_quoted_date, optional_services').eq('client_id', matterId).maybeSingle()
       const assembly = assemblePmpsData(payload, (requestedInput ?? {}) as PmpsRunInput, {
         legalPlan: typeof details?.legal_plan === 'string' ? details.legal_plan : null,
         flatFee: typeof details?.flat_fee_amount === 'number' ? details.flat_fee_amount : Number(details?.flat_fee_amount) || null,
+        feeQuotedDate: typeof details?.fee_quoted_date === 'string' ? details.fee_quoted_date : null,
+        optionalServices: parseOptionalServices(details?.optional_services),
       })
       if (!assembly.data) {
         const message = assembly.preflight.map(issue => issue.message).join('\n')

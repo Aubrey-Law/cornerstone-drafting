@@ -31,7 +31,7 @@ carry them by hand.
 
 | Captured at | Answer | Where it goes today | Why it matters |
 |---|---|---|---|
-| PMPS | Legal plan, member ID, fee quoted, optional services | Drafting notes | The PMPS proposal cannot be generated without them; they belong on the matter |
+| PMPS | Legal plan, member ID, fee quoted, optional services | Entered by hand on the matter's **Billing** tab (the import leaves them in drafting notes) | The PMPS package reads them from the matter, but nothing carries them there from the meeting note |
 | PMPS | Child from a prior relationship, special needs, deceased child with descendants | Drafting notes | Each changes the plan; the PMPS preflight flags them as non-schema |
 | PMPS | Mortgage balance, values per spouse vs combined, prior taxable gifts, anticipated inheritance | Asset notes / drafting notes | Each moves the Massachusetts estate-tax figure |
 | PMPS | First name each client goes by | Nowhere | Used in the proposal's salutation |
@@ -47,9 +47,13 @@ carry them by hand.
       and on the design-meeting form. County must be a Massachusetts county; the date is
       normalized to YYYY-MM-DD (anything else is shown as not applied), and accepting it
       also sets the signing month and year the documents print.
-- [ ] **Give billing a home the import can write.** Map legal plan, flat fee and fee-quoted to
-      the matter's billing fields (or a `decisions` namespace) so the PMPS package stops
-      depending on drafting notes.
+- [x] **Give PMPS billing a home on the matter.** Legal plan, member ID and flat fee were
+      already on `matter_details`; `fee_quoted_date` and `optional_services` join them, are
+      edited in the Billing tab's **Proposal pricing** card, and feed the PMPS package (the
+      proposal's Optional Services table and the agenda's fee-quoted note).
+- [ ] **Let the meeting import propose billing.** Have *Paste notes* / *Fill what is
+      missing* propose the legal plan, member ID, flat fee and quote date onto the matter,
+      with the same field-by-field review the design sheet uses.
 - [ ] **Add child circumstance flags.** Prior relationship, special needs, deceased with
       descendants — per child, on `DesignSheetChild`.
 - [ ] **Add estate-tax inputs.** Mortgage balance per real-property asset, a per-spouse /
