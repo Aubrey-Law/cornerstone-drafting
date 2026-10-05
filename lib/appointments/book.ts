@@ -1,4 +1,5 @@
 import 'server-only'
+import { firmOfficeAddress } from './officeAddress'
 import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { findLeadByEmail, findMatterIdByEmail } from '@/lib/calcom/link'
 import { sendEmail } from '@/lib/email/send'
@@ -16,7 +17,9 @@ import {
   rescheduleAppointmentEvent,
 } from './calendarSync'
 import { runPostBookingAutomation } from './automation'
-import { formatWhen, locationLine } from './emailFormat'
+import { formatWhen } from './emailFormat'
+import { buildAppointmentConfirmationEmail, officeAddressLine } from './confirmationEmail'
+import { delegateAppointmentConfirmation } from './delegateConfirmation'
 import { createManageToken } from './manageTokens'
 import type { OnlineMeetingProvider } from './calendarTypes'
 import {
@@ -289,6 +292,7 @@ function alertDetailsHtml(answers: BookingAnswer[], notes: string | null): strin
 }
 
 async function sendConfirmationEmails(input: {
+  appointmentId: string
   type: AppointmentType
   startIso: string
   attendeeName: string
@@ -305,35 +309,54 @@ async function sendConfirmationEmails(input: {
   /** Shown to staff in the internal alert. */
   bookingAnswers?: BookingAnswer[]
   notes?: string | null
+  leadId?: string | null
+  matterId?: string | null
+  /** Staff who booked it; the dial sends as them. */
+  actorId?: string | null
 }): Promise<void> {
   const firm = await loadFirmSettings()
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
+  const office = officeAddressLine(firm)
   const when = formatWhen(input.startIso, input.timezone)
-  const manageHtml = input.manageToken
-    ? `<p style="margin-top:16px">Need to make a change?
-        <a href="${portalUrl(`/book/manage/${input.manageToken}`)}" style="color:#1a6b72">Reschedule or cancel</a></p>`
-    : ''
   const verb = input.action === 'Rescheduled' ? 'rescheduled' : 'confirmed'
 
-  try {
-    await sendEmail({
-      category: 'appointment_confirmation',
-      to: input.attendeeEmail,
-      cc: input.ccEmail ?? undefined,
-      subject: `Appointment ${verb}: ${input.type.label} — ${when}`,
-      html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
-        <h2 style="margin:0 0 12px">Your appointment is ${verb}</h2>
-        <p><strong>${input.type.label}</strong></p>
-        <p>${when}</p>
-        <p>${locationLine(input.type, office || null, input.meetingUrl, input.meetingProvider ?? null)}</p>
-        <p>A calendar invitation is on its way to your inbox.</p>
-        ${manageHtml}
-      </div>`,
-    })
-  } catch (err) {
-    console.error('[appointments] confirmation email failed', err)
+  // The client-facing confirmation goes through the delegation dial, whose
+  // default for this action is to send at once and report. Only when the dial
+  // cannot be reached at all does the booking send directly, as it always did.
+  const delegated = await delegateAppointmentConfirmation({
+    appointmentId: input.appointmentId,
+    event: input.action === 'Rescheduled' ? 'rescheduled' : 'booked',
+    manageToken: input.manageToken,
+    attendeeName: input.attendeeName,
+    typeLabel: input.type.label,
+    when,
+    leadId: input.leadId ?? null,
+    matterId: input.matterId ?? null,
+    actorId: input.actorId ?? null,
+  })
+  if (delegated === 'fallback') {
+    try {
+      const email = buildAppointmentConfirmationEmail({
+        type: input.type,
+        startIso: input.startIso,
+        timezone: input.timezone,
+        officeAddress: office,
+        meetingUrl: input.meetingUrl,
+        meetingProvider: input.meetingProvider ?? null,
+        manageToken: input.manageToken,
+        event: input.action === 'Rescheduled' ? 'rescheduled' : 'booked',
+      })
+      await sendEmail({
+        category: 'appointment_confirmation',
+        to: input.attendeeEmail,
+        cc: input.ccEmail ?? undefined,
+        subject: email.subject,
+        html: email.html,
+        leadId: input.leadId ?? null,
+        matterId: input.matterId ?? null,
+      })
+    } catch (err) {
+      console.error('[appointments] confirmation email failed', err)
+    }
   }
 
   if (input.skipInternalAlert) return
@@ -497,9 +520,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   // Create the Google Calendar event. Failure keeps the booking, flagged in
   // admin by the event id being null.
   const firm = await loadFirmSettings()
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
+  const office = firmOfficeAddress(firm)
   // A Teams meeting is created before the event so its link can go on the
   // invite in place of Meet. If Microsoft refuses, the booking still gets a
   // Meet link rather than no way to join, and the caller is told.
@@ -575,6 +596,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   })
 
   await sendConfirmationEmails({
+    appointmentId,
     type: effectiveType,
     startIso,
     attendeeName: input.attendeeName,
@@ -588,6 +610,9 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     skipInternalAlert: input.source === 'admin',
     bookingAnswers: input.bookingAnswers,
     notes: input.notes,
+    leadId,
+    matterId,
+    actorId: input.source === 'admin' ? input.bookedByUserId ?? null : null,
   })
 
   await runPostBookingAutomation({
@@ -817,6 +842,7 @@ export async function rescheduleAppointment(
   })
 
   await sendConfirmationEmails({
+    appointmentId: appointment.id,
     // Honor the format chosen at booking time (stored on the row).
     type: { ...type, locationType: resolveLocationType(appointment.location_type, type) },
     startIso,
@@ -829,6 +855,8 @@ export async function rescheduleAppointment(
     meetingProvider: appointment.online_meeting_provider ?? null,
     timezone: settings.timezone,
     action: 'Rescheduled',
+    leadId: appointment.linked_lead_id,
+    matterId: appointment.linked_matter_id,
   })
 
   return { startIso, endIso }

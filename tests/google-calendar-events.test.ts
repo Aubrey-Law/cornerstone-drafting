@@ -13,6 +13,7 @@ vi.mock('@/lib/googleCalendar', () => ({
 }))
 
 import {
+  attachGoogleMeetToCalendarEvent,
   attachTeamsMeetingToCalendarEvent,
   cancelCalendarEvent,
   createCalendarEvent,
@@ -240,5 +241,44 @@ describe('Teams meetings on Google events', () => {
     await attachTeamsMeetingToCalendarEvent('evt-1', teamsUrl)
 
     expect(sentBody().description).toBe(`Microsoft Teams meeting\nJoin: ${teamsUrl}\n\nConsult with Jane.`)
+  })
+})
+
+describe('switching an event to Google Meet', () => {
+  const teamsUrl = 'https://teams.microsoft.com/l/meetup-join/abc'
+
+  it('requests a Meet, drops the Teams block and location, and returns the link', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        description: `Microsoft Teams meeting\nJoin: ${teamsUrl}\n\nConsult with Jane.`,
+        location: teamsUrl,
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ hangoutLink: 'https://meet.google.com/abc-defg-hij' }), { status: 200 }))
+
+    await expect(attachGoogleMeetToCalendarEvent('evt-1')).resolves.toBe('https://meet.google.com/abc-defg-hij')
+
+    expect(lastCall().init.method).toBe('PATCH')
+    expect(lastCall().url).toContain('sendUpdates=all')
+    expect(lastCall().url).toContain('conferenceDataVersion=1')
+    const body = sentBody()
+    expect(body.description).toBe('Consult with Jane.')
+    expect(body.location).toBe('')
+    expect(body.conferenceData).toMatchObject({ createRequest: { conferenceSolutionKey: { type: 'hangoutsMeet' } } })
+  })
+
+  it('keeps a non-Teams location such as the office address', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ description: 'Consult.', location: '1329 Highland Avenue' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ conferenceData: { entryPoints: [{ entryPointType: 'video', uri: 'https://meet.google.com/x' }] } }), { status: 200 }))
+
+    await expect(attachGoogleMeetToCalendarEvent('evt-1')).resolves.toBe('https://meet.google.com/x')
+    expect(sentBody().location).toBe('1329 Highland Avenue')
+  })
+
+  it('fails loudly when Google returns no Meet link', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ description: '' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+    await expect(attachGoogleMeetToCalendarEvent('evt-1')).rejects.toThrow(/Meet link/)
   })
 })

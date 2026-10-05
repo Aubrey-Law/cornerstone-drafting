@@ -6,6 +6,7 @@ import {
   type RetellCallRowInsert,
 } from '@/lib/retell/normalize'
 import { notifyRetellCallAnalyzed, retellRowToNotifyInput } from '@/lib/retell/notify'
+import { runReceptionistFollowUp } from '@/lib/retell/followUp'
 import type { RetellWebhookPayload } from '@/lib/retell/types'
 import { verifyRetellSignature } from '@/lib/retell/verify'
 
@@ -14,6 +15,7 @@ export const dynamic = 'force-dynamic'
 
 type ExistingCall = RetellCallRowInsert & {
   id?: string
+  matter_id?: string | null
 }
 
 // The former mergeCallRow() lived here. It is now public.upsert_retell_call in
@@ -88,15 +90,32 @@ export async function POST(req: Request) {
     const { data: mergedRow } = await admin
       .from('calls')
       .select(
-        'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload',
+        'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload, matter_id',
       )
       .eq('external_call_id', row.external_call_id)
       .maybeSingle()
 
+    const merged = (mergedRow as ExistingCall | null) ?? row
     await notifyRetellCallAnalyzed(
-      retellRowToNotifyInput((mergedRow as ExistingCall | null) ?? row),
+      retellRowToNotifyInput(merged),
       { previousSummary: result.previous_summary ?? null },
     )
+
+    // The receptionist's follow-up: match the caller, then hand the next
+    // steps (callback task, new lead, booked call, scheduling link) to the
+    // delegation dial. Only once per analysed summary, and never allowed to
+    // fail the webhook: Retell would retry, and the summary email already
+    // went out.
+    if (result.previous_summary?.trim() !== merged.summary?.trim()) {
+      try {
+        await runReceptionistFollowUp({ call: { ...merged, matter_id: (merged as ExistingCall).matter_id ?? null } })
+      } catch (error) {
+        console.error('[retell] receptionist follow-up failed', {
+          callId: row.external_call_id,
+          cause: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
   }
 
   return NextResponse.json({ ok: true })

@@ -49,44 +49,50 @@ export function EventPrepDrawer({
   onBookNext: (appointment: CalendarAppointment) => void
 }) {
   const [detail, setDetail] = useState<EventDetail | null>(null)
-  const [addingTeams, setAddingTeams] = useState(false)
+  const [switchingTo, setSwitchingTo] = useState<VideoProvider | null>(null)
   const hasTeamsMeeting = appointment?.onlineMeetingProvider === 'microsoft_teams' && Boolean(appointment.onlineMeetingUrl)
-  const canAddTeams = Boolean(
+  const hasGoogleMeet = Boolean(appointment?.onlineMeetingUrl) && !hasTeamsMeeting
+  // Staff, not the client, pick the video service for a booked appointment;
+  // switching updates the Google invite and emails the attendees.
+  const canChangeVideo = Boolean(
     appointment &&
       appointment.status === 'scheduled' &&
-      !hasTeamsMeeting &&
       !isExternallyManagedSource(appointment.source) &&
       Date.parse(appointment.endTime) > Date.now(),
   )
 
-  async function addTeamsMeeting() {
+  async function setVideoProvider(provider: VideoProvider) {
     if (!appointment) return
-    setAddingTeams(true)
+    const label = provider === 'microsoft_teams' ? 'Teams meeting' : 'Google Meet'
+    setSwitchingTo(provider)
     try {
       const response = await fetch('/api/admin/scheduling/appointments', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ appointmentId: appointment.id, action: 'add_teams_meeting' }),
+        body: JSON.stringify({
+          appointmentId: appointment.id,
+          action: provider === 'microsoft_teams' ? 'add_teams_meeting' : 'use_google_meet',
+        }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) {
-        toast.error(body.error ?? 'Could not add a Teams meeting')
+        toast.error(body.error ?? `Could not add a ${label}`)
         return
       }
       onAppointmentChanged?.({
         ...appointment,
         onlineMeetingUrl: body.onlineMeetingUrl ?? null,
-        onlineMeetingProvider: 'microsoft_teams',
+        onlineMeetingProvider: provider,
       })
       if (body.calendarUpdated === false) {
-        toast.warning('Teams meeting created, but the Google Calendar invite could not be updated. Share the join link with the client.')
+        toast.warning(`${label} created, but the Google Calendar invite could not be updated. Share the join link with the client.`)
       } else {
-        toast.success('Teams meeting added. Attendees were sent the updated invite.')
+        toast.success(`${label} added. Attendees were sent the updated invite.`)
       }
     } catch {
-      toast.error('Could not add a Teams meeting')
+      toast.error(`Could not add a ${label}`)
     } finally {
-      setAddingTeams(false)
+      setSwitchingTo(null)
     }
   }
   useEffect(() => {
@@ -127,11 +133,17 @@ export function EventPrepDrawer({
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
-                {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />{hasTeamsMeeting ? 'Join Teams' : 'Join'}</a></Button>}
-                {canAddTeams && (
-                  <Button size="sm" variant="outline" disabled={addingTeams} onClick={() => void addTeamsMeeting()}>
+                {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />{hasTeamsMeeting ? 'Join Teams' : 'Join Meet'}</a></Button>}
+                {canChangeVideo && !hasGoogleMeet && (
+                  <Button size="sm" variant="outline" disabled={switchingTo !== null} onClick={() => void setVideoProvider('google_meet')}>
                     <Video className="mr-1 h-3.5 w-3.5" />
-                    {addingTeams ? 'Adding Teams…' : appointment.onlineMeetingUrl ? 'Switch to Teams' : 'Add Teams meeting'}
+                    {switchingTo === 'google_meet' ? 'Adding Meet…' : hasTeamsMeeting ? 'Switch to Google Meet' : 'Add Google Meet'}
+                  </Button>
+                )}
+                {canChangeVideo && !hasTeamsMeeting && (
+                  <Button size="sm" variant="outline" disabled={switchingTo !== null} onClick={() => void setVideoProvider('microsoft_teams')}>
+                    <Video className="mr-1 h-3.5 w-3.5" />
+                    {switchingTo === 'microsoft_teams' ? 'Adding Teams…' : hasGoogleMeet ? 'Switch to Teams' : 'Add Teams meeting'}
                   </Button>
                 )}
                 {isExternallyManagedSource(appointment.source) ? (
@@ -240,6 +252,8 @@ function ClientResponses({ appointment }: { appointment: CalendarAppointment }) 
     </DrawerSection>
   )
 }
+
+type VideoProvider = 'google_meet' | 'microsoft_teams'
 
 function DrawerSection({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="rounded-lg border border-border bg-card p-3"><h2 className="mb-2 text-sm font-semibold text-foreground">{title}</h2>{children}</section>

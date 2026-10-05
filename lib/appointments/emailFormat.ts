@@ -38,7 +38,7 @@ export function locationLine(
     case 'teams':
       return meetingUrl
         ? `Google Meet — <a href="${meetingUrl}" style="color:#1a6b72">Join the meeting</a>`
-        : 'Google Meet (join link is in your calendar invite)'
+        : 'Video call — meeting link will be provided in your calendar invite'
     case 'in_person':
       return officeAddress ? `In person at ${officeAddress}` : 'In person at our office'
     default:
