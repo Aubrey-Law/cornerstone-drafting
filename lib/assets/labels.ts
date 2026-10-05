@@ -11,8 +11,10 @@ export function buildOwnershipLabels(
   spouseName?: string | null,
 ): OwnershipLabels {
   return {
-    client: clientName?.trim() ? clientName.trim() : 'Settlor 1',
-    spouse: spouseName?.trim() ? spouseName.trim() : 'Settlor 2',
+    // "Settlor 1/2" is the drafting software's vocabulary, not the firm's;
+    // on a matter page an unnamed spouse is just "Spouse".
+    client: clientName?.trim() ? clientName.trim() : 'Client',
+    spouse: spouseName?.trim() ? spouseName.trim() : 'Spouse',
     joint: 'Joint',
   }
 }
