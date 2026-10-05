@@ -10,6 +10,7 @@ import { fetchDailyPlan } from '@/lib/work/plans'
 import { buildMorningBrief } from '@/lib/work/morningBrief'
 import { firmTodayKey } from '@/lib/firmDate'
 import { runSystemAutomation } from '@/lib/automations/control'
+import { listDelegatedActivity } from '@/lib/actions/delegation'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +43,11 @@ async function handle(req: Request) {
   })
   const brief = buildMorningBrief(plan, stored)
   const actionable = [...brief.mustDo, ...brief.communication, ...brief.suggested]
-  if (actionable.length === 0) {
+  // What the delegation dial did on its own since the last digest. The digest
+  // is where "act and report" reports, so it goes out even on an empty plan.
+  const delegated = await listDelegatedActivity({ since: new Date(Date.now() - 24 * 3_600_000) })
+    .catch(() => ({ done: [], observed: [] }))
+  if (actionable.length === 0 && delegated.done.length === 0 && delegated.observed.length === 0) {
     return NextResponse.json({ ok: true, sent: false, reason: 'nothing waiting' })
   }
 
@@ -51,7 +56,12 @@ async function handle(req: Request) {
     brief.mustDo.length ? `${brief.mustDo.length} must do` : null,
     brief.communication.length ? `${brief.communication.length} repl${brief.communication.length === 1 ? 'y' : 'ies'}` : null,
     plan.overload ? `${plan.overloadMinutes} minutes over capacity` : null,
+    delegated.done.length ? `${delegated.done.length} done for you` : null,
   ].filter(Boolean).join(', ')
+  const delegatedRows = delegated.done.slice(0, 10).map(item =>
+    `<li><strong>${escapeHtml(item.label)}.</strong> ${escapeHtml(item.summary)}${item.status === 'failed' ? ' <em>(failed)</em>' : item.status === 'undone' ? ' <em>(undone)</em>' : ''}</li>`).join('')
+  const observedRows = delegated.observed.slice(0, 5).map(item =>
+    `<li><strong>${escapeHtml(item.label)}.</strong> ${escapeHtml(item.summary)}</li>`).join('')
   const detailRows = actionable.slice(0, 8).map(item => {
     const reasons = item.priorityReasons.slice(0, 2).map(reason => reason.label).join(' · ')
     return `<li><strong>${escapeHtml(item.title)}</strong> — ${escapeHtml(item.record.name)}${reasons ? ` (${escapeHtml(reasons)})` : ''}</li>`
@@ -66,7 +76,9 @@ async function handle(req: Request) {
       <p><strong>${escapeHtml(headline || `${actionable.length} actionable items`)}</strong></p>
       ${brief.now ? `<p><strong>Start with:</strong> ${escapeHtml(brief.now.title)} — ${escapeHtml(brief.now.record.name)}</p>` : ''}
       ${plan.overload ? `<p style="color:#991b1b">Critical work exceeds available capacity. Defer, delegate, or reschedule specific work in Today.</p>` : ''}
-      <h3 style="margin:16px 0 8px;font-size:14px">Top items</h3><ol>${detailRows}</ol>
+      ${detailRows ? `<h3 style="margin:16px 0 8px;font-size:14px">Top items</h3><ol>${detailRows}</ol>` : ''}
+      ${delegatedRows ? `<h3 style="margin:16px 0 8px;font-size:14px">Done for you since yesterday</h3><ul>${delegatedRows}</ul><p style="font-size:12px;color:#555">Undo any of these from Today.</p>` : ''}
+      ${observedRows ? `<h3 style="margin:16px 0 8px;font-size:14px">Would have done (observe)</h3><ul>${observedRows}</ul>` : ''}
       ${graph.sourceErrors.length ? `<p>Some sources need a refresh: ${escapeHtml(graph.sourceErrors.join(', '))}.</p>` : ''}
       <p><a href="${appUrl('/admin')}" style="color:#1a6b72">Open the Daily Command Center →</a></p>
     </div>`,
@@ -78,6 +90,8 @@ async function handle(req: Request) {
     mustDo: brief.mustDo.length,
     communication: brief.communication.length,
     overload: plan.overload,
+    delegated: delegated.done.length,
+    observed: delegated.observed.length,
   })
 }
 

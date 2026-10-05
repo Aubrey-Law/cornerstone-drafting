@@ -15,6 +15,7 @@ export type SettingsTab =
   | 'lawmatics'
   | 'statular'
   | 'sla'
+  | 'delegation'
   | 'ai-usage'
 
 export type SettingsNavItem =
@@ -112,6 +113,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         tab: 'sla',
         label: 'Stage SLA',
         description: 'How long a matter may sit in each pipeline stage before it is flagged.',
+      },
+      {
+        kind: 'tab',
+        tab: 'delegation',
+        label: 'Delegation',
+        description: 'How far the assistant may act on its own, for each kind of action.',
       },
       { kind: 'route', href: '/admin/settings/command-center', label: 'Command center' },
     ],

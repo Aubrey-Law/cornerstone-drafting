@@ -32,6 +32,7 @@ import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
 import { StatularSettingsSection } from './StatularSettingsSection'
 import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
+import { DelegationSettingsSection } from './DelegationSettingsSection'
 import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
@@ -702,6 +703,8 @@ export function StaffSettingsClient({
       {tab === 'ai-usage' && <AiUsagePanel />}
 
       {tab === 'sla' && <PipelineSlaSettings />}
+
+      {tab === 'delegation' && <DelegationSettingsSection isAdministrator={isAdministrator} />}
       {confirmDialog}
     </div>
   )

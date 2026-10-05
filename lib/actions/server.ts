@@ -3,13 +3,24 @@ import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getActionDefinition } from '@/lib/actions/registry'
+import { ActionServiceError } from '@/lib/actions/errors'
+import {
+  confirmationPolicyForAutonomy,
+  confirmationPolicyForRisk,
+  isActingAutonomy,
+  parseActionAutonomy,
+} from '@/lib/actions/autonomy'
+import { resolveActionAutonomy } from '@/lib/actions/delegation'
 import type {
   ActionActor,
+  ActionAutonomy,
   ActionConfirmationPolicy,
   ActionExecutionRequest,
   ActionProposalRequest,
-  ActionRisk,
 } from '@/lib/actions/types'
+
+export { ActionServiceError } from '@/lib/actions/errors'
+export { confirmationPolicyForRisk } from '@/lib/actions/autonomy'
 
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stableValue)
@@ -23,20 +34,6 @@ function stableValue(value: unknown): unknown {
 
 export function actionDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex')
-}
-
-export function confirmationPolicyForRisk(risk: ActionRisk): ActionConfirmationPolicy {
-  if (risk === 'read' || risk === 'prepare') return 'automatic'
-  if (risk === 'internal_write') return 'one_click'
-  if (risk === 'external_write' || risk === 'legal_financial') return 'explicit'
-  return 'never'
-}
-
-export class ActionServiceError extends Error {
-  constructor(message: string, readonly code: string, readonly status: number = 409) {
-    super(message)
-    this.name = 'ActionServiceError'
-  }
 }
 
 function publicProposal(row: Record<string, unknown>) {
@@ -70,7 +67,14 @@ export async function createActionProposal(request: ActionProposalRequest, actor
   const context = executionContext(actor, request.source, idempotencyKey)
   const preview = await definition.preview(input, context)
   const previewDigest = actionDigest(preview.display)
-  const confirmationPolicy = confirmationPolicyForRisk(definition.risk)
+  // The delegation dial speaks only for unattended callers. A proposal a
+  // person is about to click keeps the confirmation its risk level demands.
+  const autonomy: ActionAutonomy = request.applyAutonomy
+    ? await resolveActionAutonomy(definition.key, definition.risk, request.autonomyCeiling)
+    : 'propose'
+  const confirmationPolicy = request.applyAutonomy
+    ? confirmationPolicyForAutonomy(autonomy, definition.risk)
+    : confirmationPolicyForRisk(definition.risk)
   const expiresAt = request.expiresAt && Number.isFinite(Date.parse(request.expiresAt))
     ? new Date(request.expiresAt).toISOString()
     : undefined
@@ -78,7 +82,7 @@ export async function createActionProposal(request: ActionProposalRequest, actor
     actor_id: actor.id,
     action_key: definition.key,
     risk: definition.risk,
-    status: 'pending',
+    status: autonomy === 'observe' ? 'observed' : 'pending',
     record_type: request.recordType ?? 'firm',
     record_id: request.recordId ?? null,
     reference_payload: input,
@@ -87,6 +91,7 @@ export async function createActionProposal(request: ActionProposalRequest, actor
     source: request.source ?? 'api',
     preview_digest: previewDigest,
     confirmation_policy: confirmationPolicy,
+    autonomy,
     automation_run_id: request.automationRunId ?? null,
     ...(expiresAt ? { expires_at: expiresAt } : {}),
   }).select('*').single()
@@ -106,21 +111,57 @@ export async function createActionProposal(request: ActionProposalRequest, actor
         if (existing.status === 'pending' && existing.preview_digest !== previewDigest) {
           throw new ActionServiceError('Existing action proposal is stale. Prepare a new proposal.', 'stale_preview')
         }
-        return {
+        const duplicate = {
           proposal: publicProposal(existing),
           preview,
           confirmation: { policy: existing.confirmation_policy, digest: existing.preview_digest },
+          autonomy: parseActionAutonomy(existing.autonomy) ?? 'propose',
+          execution: null as Record<string, unknown> | null,
+          result: undefined as unknown,
           duplicate: true,
         }
+        // A retried unattended run may find the proposal its failed earlier
+        // attempt left pending. The dial as it stands now decides whether to
+        // act on it; a card that needs an exact confirmation stays a card.
+        if (
+          request.applyAutonomy
+          && existing.status === 'pending'
+          && isActingAutonomy(autonomy)
+          && existing.confirmation_policy !== 'explicit'
+          && existing.confirmation_policy !== 'never'
+        ) {
+          const executed = await executeActionProposal(String(existing.id), actor)
+          return {
+            ...duplicate,
+            proposal: executed.proposal,
+            execution: (executed.execution ?? null) as Record<string, unknown> | null,
+            result: executed.result,
+          }
+        }
+        return duplicate
       }
     }
     throw new Error(error.message)
   }
-  return {
+  const created = {
     proposal: publicProposal(data),
     preview,
     confirmation: { policy: confirmationPolicy, digest: previewDigest },
+    autonomy,
+    execution: null as Record<string, unknown> | null,
+    result: undefined as unknown,
     duplicate: false,
+  }
+  if (!isActingAutonomy(autonomy)) return created
+  // An acting position was granted in Settings for this action's risk level,
+  // so the same gate that would wait for a click runs the action now. The
+  // execution still re-reads state, claims idempotency, and writes the audit.
+  const executed = await executeActionProposal(String(data.id), actor)
+  return {
+    ...created,
+    proposal: executed.proposal,
+    execution: (executed.execution ?? null) as Record<string, unknown> | null,
+    result: executed.result,
   }
 }
 

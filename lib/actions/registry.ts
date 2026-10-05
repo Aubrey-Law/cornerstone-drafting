@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
+import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
@@ -257,6 +258,15 @@ const definitions: ActionDefinition[] = [
       const value = result as { task?: { id?: string; status?: string }; nextTask?: { id?: string } | null }
       return { taskId: value.task?.id, status: value.task?.status, nextTaskId: value.nextTask?.id ?? null }
     },
+    async undo(input, record, context) {
+      // Restore exactly what was recorded before the change; a guess at the
+      // "usual" prior status would silently rewrite history.
+      const before = typeof record.beforeState?.status === 'string' ? record.beforeState.status : null
+      if (!before || !(TASK_STATUSES as readonly string[]).includes(before)) {
+        throw new Error('The task\u2019s earlier status was not recorded, so it cannot be restored')
+      }
+      return setTaskStatus(context.admin, { taskId: input.taskId, status: before as TaskStatus, actor: context.actor })
+    },
   } as ActionDefinition<{ taskId: string }>,
   {
     key: 'task.complete',
@@ -278,6 +288,15 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const value = result as { task?: { id?: string; status?: string }; nextTask?: { id?: string } | null }
       return { taskId: value.task?.id, status: value.task?.status, nextTaskId: value.nextTask?.id ?? null }
+    },
+    async undo(input, record, context) {
+      // Restore exactly what was recorded before the change; a guess at the
+      // "usual" prior status would silently rewrite history.
+      const before = typeof record.beforeState?.status === 'string' ? record.beforeState.status : null
+      if (!before || !(TASK_STATUSES as readonly string[]).includes(before)) {
+        throw new Error('The task\u2019s earlier status was not recorded, so it cannot be restored')
+      }
+      return setTaskStatus(context.admin, { taskId: input.taskId, status: before as TaskStatus, actor: context.actor })
     },
   } as ActionDefinition<{ taskId: string }>,
   {
@@ -364,6 +383,30 @@ const definitions: ActionDefinition[] = [
       const task = result as { id?: string; matter_id?: string | null; lead_id?: string | null; status?: string }
       return { taskId: task.id, matterId: task.matter_id ?? null, leadId: task.lead_id ?? null, status: task.status ?? 'open' }
     },
+    async undo(_input, record, context) {
+      const taskId = typeof record.afterState?.taskId === 'string' ? record.afterState.taskId : null
+      if (!taskId) throw new Error('The created task was not recorded, so it cannot be removed')
+      // A task created with a calendar block owns one planning hold; take the
+      // hold off the calendar before the task row goes.
+      const { data: hold, error: holdError } = await context.admin.from('appointments')
+        .select('id, google_event_id')
+        .eq('status', 'scheduled')
+        .contains('raw', { source: 'task_calendar_hold', taskId })
+        .limit(1)
+        .maybeSingle()
+      if (holdError) throw new Error(holdError.message)
+      if (hold) {
+        if (hold.google_event_id) {
+          const { cancelCalendarEvent } = await import('@/lib/appointments/googleEvents')
+          await cancelCalendarEvent(String(hold.google_event_id))
+        }
+        const { error: cancelError } = await context.admin.from('appointments').update({ status: 'cancelled' }).eq('id', hold.id)
+        if (cancelError) throw new Error(cancelError.message)
+      }
+      const { error } = await context.admin.from('tasks').delete().eq('id', taskId)
+      if (error) throw new Error(error.message)
+      return { taskId, deleted: true, holdCancelled: Boolean(hold) }
+    },
   } as ActionDefinition<Record<string, unknown>>,
   {
     key: 'lead.create',
@@ -410,6 +453,13 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const event = result as { eventId?: string }
       return { eventId: event.eventId }
+    },
+    async undo(_input, record) {
+      const eventId = typeof record.afterState?.eventId === 'string' ? record.afterState.eventId : null
+      if (!eventId) throw new Error('The calendar hold was not recorded, so it cannot be removed')
+      const { cancelCalendarEvent } = await import('@/lib/appointments/googleEvents')
+      await cancelCalendarEvent(eventId)
+      return { eventId, cancelled: true }
     },
   } as ActionDefinition<ReturnType<typeof calendarHoldInput>>,
   {
@@ -601,6 +651,22 @@ const definitions: ActionDefinition[] = [
       const note = result as { id?: string; lead_id?: string; matter_id?: string; note_type?: string }
       return { noteId: note.id, recordId: note.lead_id ?? note.matter_id, noteType: note.note_type }
     },
+    async undo(input, record, context) {
+      const noteId = typeof record.afterState?.noteId === 'string' ? record.afterState.noteId : null
+      if (!noteId) throw new Error('The created note was not recorded, so it cannot be removed')
+      if (input.recordType === 'lead') {
+        const { error } = await context.admin.rpc('delete_lead_note_with_activity', {
+          p_lead_id: input.recordId,
+          p_note_id: noteId,
+          p_actor_id: context.actor.id,
+        })
+        if (error) throw new Error(error.message)
+        return { noteId, deleted: true }
+      }
+      const { error } = await context.admin.from('matter_notes').delete().eq('id', noteId).eq('matter_id', input.recordId)
+      if (error) throw new Error(error.message)
+      return { noteId, deleted: true }
+    },
   } as ActionDefinition<ReturnType<typeof noteCreateInput>>,
   {
     key: 'sms.thread.link',
@@ -742,6 +808,14 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const task = result as { id?: string; assignee_id?: string; updated_at?: string }
       return { taskId: task.id, assigneeId: task.assignee_id, updatedAt: task.updated_at }
+    },
+    async undo(input, record, context) {
+      const before = record.beforeState?.assigneeId
+      if (before !== null && typeof before !== 'string') throw new Error('The earlier assignee was not recorded, so it cannot be restored')
+      const { data, error } = await context.admin.from('tasks').update({ assignee_id: before ?? null })
+        .eq('id', input.taskId).select('id, assignee_id, updated_at').single()
+      if (error) throw new Error(error.message)
+      return data
     },
   } as ActionDefinition<ReturnType<typeof taskDelegateInput>>,
   {

@@ -22,6 +22,13 @@ export const AUTOMATION_ACTION_KEYS = [
 export type AutomationTriggerKey = (typeof AUTOMATION_TRIGGER_KEYS)[number]
 export type AutomationActionKey = (typeof AUTOMATION_ACTION_KEYS)[number]
 
+/**
+ * How a rule's proposals meet the delegation dial (Settings → Delegation).
+ * `automatic` defers to the dial: the action's firm-wide position decides
+ * whether it waits, runs, or is only recorded. `required` narrows it: the
+ * proposal never passes "propose", so a person always clicks. `prohibited`
+ * never runs live.
+ */
 export type AutomationApprovalPolicy = 'automatic' | 'required' | 'prohibited'
 
 export const AUTOMATION_TEMPLATES: Array<{
