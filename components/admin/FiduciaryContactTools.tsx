@@ -102,7 +102,7 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Add Contact
+          Add contact
         </Button>
         <Button
           type="button"

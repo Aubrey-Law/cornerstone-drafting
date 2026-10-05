@@ -66,8 +66,11 @@ export function MatterAdditionalContactsTab({
       ])
       if (contactsRes.ok) {
         const json = await contactsRes.json() as { contacts: Array<Record<string, unknown>> }
+        // Family, above, already lists the client, spouse and children; this
+        // list is everyone else. Leaving `self` in put the client under
+        // "Other contacts" a second time, tagged "(self)".
         const rows = (json.contacts ?? []).filter(
-          c => c.relationship_type !== 'spouse' && c.relationship_type !== 'child',
+          c => c.relationship_type !== 'self' && c.relationship_type !== 'spouse' && c.relationship_type !== 'child',
         )
         setContacts(rows.map(c => ({
           id: c.id as string,
@@ -275,7 +278,7 @@ export function MatterAdditionalContactsTab({
       {!embedded && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">Additional Contacts</h3>
+            <h3 className="text-sm font-semibold">Additional contacts</h3>
             <p className="text-xs text-muted-foreground">
               Fiduciaries, beneficiaries, and other contacts. Import from text or upload a document.
             </p>
@@ -314,6 +317,11 @@ export function MatterAdditionalContactsTab({
         </section>
       )}
 
+      {/* Two empty headings, each saying "none yet", read as more missing than
+          there is; one line covers both until either list has someone. */}
+      {fiduciaryContacts.length === 0 && beneficiaryContacts.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No fiduciaries or beneficiaries added yet.</p>
+      ) : (<>
       <section id="fiduciaries" className="scroll-mt-24 space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fiduciaries</h4>
         {fiduciaryContacts.length === 0 ? (
@@ -364,10 +372,11 @@ export function MatterAdditionalContactsTab({
           </PersonContactCardGrid>
         )}
       </section>
+      </>)}
 
       {otherContacts.length > 0 && (
         <section id="other-contacts" className="scroll-mt-24 space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Other Contacts</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Other contacts</h4>
           <PersonContactCardGrid>
             {otherContacts.map(contact => (
               <PersonContactCard

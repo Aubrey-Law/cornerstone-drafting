@@ -166,6 +166,7 @@ export function EmailTriageClient({
         reason?: string
         queued?: number
         draftsGenerated?: number
+        repliesSent?: number
         remainingNeedsDraft?: number
         error?: string
       }
@@ -188,6 +189,7 @@ export function EmailTriageClient({
       await reload()
       toast.success(
         `${body.queued ?? 0} waiting, ${body.draftsGenerated ?? 0} drafted`
+        + (body.repliesSent ? ` · ${body.repliesSent} sent for you` : '')
         + (body.remainingNeedsDraft ? ` · ${body.remainingNeedsDraft} still to draft` : ''),
       )
     } finally {

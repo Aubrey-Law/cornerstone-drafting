@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { randomUUID } from 'node:crypto'
-import { createActionProposal, executeActionProposal } from '@/lib/actions/server'
+import { createActionProposal } from '@/lib/actions/server'
 import type { ActionActor } from '@/lib/actions/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
@@ -335,20 +335,22 @@ export async function runAutomationRule(ruleId: string, options: {
     const candidates = await evaluateAutomationRule(rule, now)
     for (const candidate of candidates) {
       for (const action of candidate.actions) {
+        // The delegation dial decides whether this waits, runs, or is only
+        // recorded. A rule that requires approval can only narrow the dial:
+        // its proposals never pass "propose", whatever Settings grants.
         const created = await createActionProposal({
           ...action,
           idempotencyKey: `automation:${rule.id}:${action.eventKey}:${action.actionKey}`,
           source: 'automation',
           automationRunId: claim.run_id,
+          applyAutonomy: true,
+          autonomyCeiling: rule.approval_policy === 'required' ? 'propose' : undefined,
         }, actor)
         proposedCount += 1
         proposedActionKeys.push(action.actionKey)
-        if (rule.approval_policy === 'automatic' && created.confirmation.policy !== 'explicit' && created.confirmation.policy !== 'never') {
-          const executed = await executeActionProposal(created.proposal.id as string, actor)
-          if (executed.execution?.status === 'succeeded') {
-            executedCount += 1
-            executedActionKeys.push(action.actionKey)
-          }
+        if (created.execution?.status === 'succeeded') {
+          executedCount += 1
+          executedActionKeys.push(action.actionKey)
         }
       }
     }

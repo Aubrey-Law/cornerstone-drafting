@@ -10,6 +10,7 @@ import { DailyBriefCard } from '@/app/admin/components/DailyBriefCard'
 import { TodayQueue, type TodayMatterItem } from '@/app/admin/components/TodayQueue'
 import { TodayBillingCard } from '@/app/admin/components/TodayBillingCard'
 import { TodayClearedCard } from '@/app/admin/components/TodayClearedCard'
+import { DelegatedActivityCard } from '@/app/admin/components/DelegatedActivityCard'
 import { fetchTodayData } from '@/lib/queries/today'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/database'
@@ -110,6 +111,7 @@ async function LegacyTodayPage() {
               )}
 
               <TodayClearedCard />
+              <DelegatedActivityCard />
             </div>
           </LazyPlanning>
         </div>
@@ -225,6 +227,9 @@ export default async function AdminTodayPage({
             ...(pendingApprovalsResult.error ? ['approvals'] : []),
           ]}
         />
+        <div className="mt-4">
+          <DelegatedActivityCard />
+        </div>
       </AdminPageShell>
     </>
   )

@@ -189,7 +189,9 @@ describe('the matter’s fiduciaries card', () => {
       ),
     )
     const { unmount } = render(<MatterFiduciaryCard matterId={LEAD} planMirror={EMPTY_PLAN_MIRROR} />)
-    await waitFor(() => expect(screen.getByText(/No appointments are recorded/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/No fiduciaries named yet/)).toBeTruthy())
+    // One empty line, not two saying the same thing.
+    expect(screen.queryByText(/No appointments are recorded/)).toBeNull()
     unmount()
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Matter not found' }), { status: 404 })))

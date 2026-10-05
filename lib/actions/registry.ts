@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
+import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
@@ -235,6 +236,18 @@ function overrideInput(value: unknown): { workKey: string; state: 'open' | 'bloc
   return { workKey, state, snoozedUntil }
 }
 
+function triageReplyInput(value: unknown): { triageId: string } {
+  const input = objectInput(value)
+  if (typeof input.triageId !== 'string' || !isUuid(input.triageId)) throw new Error('A valid triage thread identifier is required')
+  return { triageId: input.triageId }
+}
+
+function reminderSendInput(value: unknown): { reminderId: string } {
+  const input = objectInput(value)
+  if (typeof input.reminderId !== 'string' || !isUuid(input.reminderId)) throw new Error('A valid reminder identifier is required')
+  return { reminderId: input.reminderId }
+}
+
 const definitions: ActionDefinition[] = [
   {
     key: 'task.start',
@@ -257,6 +270,15 @@ const definitions: ActionDefinition[] = [
       const value = result as { task?: { id?: string; status?: string }; nextTask?: { id?: string } | null }
       return { taskId: value.task?.id, status: value.task?.status, nextTaskId: value.nextTask?.id ?? null }
     },
+    async undo(input, record, context) {
+      // Restore exactly what was recorded before the change; a guess at the
+      // "usual" prior status would silently rewrite history.
+      const before = typeof record.beforeState?.status === 'string' ? record.beforeState.status : null
+      if (!before || !(TASK_STATUSES as readonly string[]).includes(before)) {
+        throw new Error('The task\u2019s earlier status was not recorded, so it cannot be restored')
+      }
+      return setTaskStatus(context.admin, { taskId: input.taskId, status: before as TaskStatus, actor: context.actor })
+    },
   } as ActionDefinition<{ taskId: string }>,
   {
     key: 'task.complete',
@@ -278,6 +300,15 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const value = result as { task?: { id?: string; status?: string }; nextTask?: { id?: string } | null }
       return { taskId: value.task?.id, status: value.task?.status, nextTaskId: value.nextTask?.id ?? null }
+    },
+    async undo(input, record, context) {
+      // Restore exactly what was recorded before the change; a guess at the
+      // "usual" prior status would silently rewrite history.
+      const before = typeof record.beforeState?.status === 'string' ? record.beforeState.status : null
+      if (!before || !(TASK_STATUSES as readonly string[]).includes(before)) {
+        throw new Error('The task\u2019s earlier status was not recorded, so it cannot be restored')
+      }
+      return setTaskStatus(context.admin, { taskId: input.taskId, status: before as TaskStatus, actor: context.actor })
     },
   } as ActionDefinition<{ taskId: string }>,
   {
@@ -364,6 +395,30 @@ const definitions: ActionDefinition[] = [
       const task = result as { id?: string; matter_id?: string | null; lead_id?: string | null; status?: string }
       return { taskId: task.id, matterId: task.matter_id ?? null, leadId: task.lead_id ?? null, status: task.status ?? 'open' }
     },
+    async undo(_input, record, context) {
+      const taskId = typeof record.afterState?.taskId === 'string' ? record.afterState.taskId : null
+      if (!taskId) throw new Error('The created task was not recorded, so it cannot be removed')
+      // A task created with a calendar block owns one planning hold; take the
+      // hold off the calendar before the task row goes.
+      const { data: hold, error: holdError } = await context.admin.from('appointments')
+        .select('id, google_event_id')
+        .eq('status', 'scheduled')
+        .contains('raw', { source: 'task_calendar_hold', taskId })
+        .limit(1)
+        .maybeSingle()
+      if (holdError) throw new Error(holdError.message)
+      if (hold) {
+        if (hold.google_event_id) {
+          const { cancelCalendarEvent } = await import('@/lib/appointments/googleEvents')
+          await cancelCalendarEvent(String(hold.google_event_id))
+        }
+        const { error: cancelError } = await context.admin.from('appointments').update({ status: 'cancelled' }).eq('id', hold.id)
+        if (cancelError) throw new Error(cancelError.message)
+      }
+      const { error } = await context.admin.from('tasks').delete().eq('id', taskId)
+      if (error) throw new Error(error.message)
+      return { taskId, deleted: true, holdCancelled: Boolean(hold) }
+    },
   } as ActionDefinition<Record<string, unknown>>,
   {
     key: 'lead.create',
@@ -410,6 +465,13 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const event = result as { eventId?: string }
       return { eventId: event.eventId }
+    },
+    async undo(_input, record) {
+      const eventId = typeof record.afterState?.eventId === 'string' ? record.afterState.eventId : null
+      if (!eventId) throw new Error('The calendar hold was not recorded, so it cannot be removed')
+      const { cancelCalendarEvent } = await import('@/lib/appointments/googleEvents')
+      await cancelCalendarEvent(eventId)
+      return { eventId, cancelled: true }
     },
   } as ActionDefinition<ReturnType<typeof calendarHoldInput>>,
   {
@@ -601,6 +663,22 @@ const definitions: ActionDefinition[] = [
       const note = result as { id?: string; lead_id?: string; matter_id?: string; note_type?: string }
       return { noteId: note.id, recordId: note.lead_id ?? note.matter_id, noteType: note.note_type }
     },
+    async undo(input, record, context) {
+      const noteId = typeof record.afterState?.noteId === 'string' ? record.afterState.noteId : null
+      if (!noteId) throw new Error('The created note was not recorded, so it cannot be removed')
+      if (input.recordType === 'lead') {
+        const { error } = await context.admin.rpc('delete_lead_note_with_activity', {
+          p_lead_id: input.recordId,
+          p_note_id: noteId,
+          p_actor_id: context.actor.id,
+        })
+        if (error) throw new Error(error.message)
+        return { noteId, deleted: true }
+      }
+      const { error } = await context.admin.from('matter_notes').delete().eq('id', noteId).eq('matter_id', input.recordId)
+      if (error) throw new Error(error.message)
+      return { noteId, deleted: true }
+    },
   } as ActionDefinition<ReturnType<typeof noteCreateInput>>,
   {
     key: 'sms.thread.link',
@@ -709,6 +787,104 @@ const definitions: ActionDefinition[] = [
     },
   } as ActionDefinition<ReturnType<typeof emailDraftInput>>,
   {
+    key: 'email.triage.reply.send',
+    risk: 'external_write',
+    validate: triageReplyInput,
+    async preview(input) {
+      const { fetchEmailTriageRow } = await import('@/lib/queries/emailTriage')
+      const { replySubject } = await import('@/lib/emailTriage/prompt')
+      const { isSendableStatus, unsendableReason } = await import('@/lib/emailTriage/sendReply')
+      const row = await fetchEmailTriageRow(input.triageId)
+      if (!row) throw new Error('Triage thread not found')
+      if (!isSendableStatus(row.status)) throw new Error(unsendableReason(row.status))
+      if (!row.draft_body?.trim()) throw new Error('There is no drafted reply to send')
+      // The exact text that would go out belongs in the preview, so a stale
+      // draft fails the digest check; the audit keeps only references.
+      return {
+        display: {
+          action: 'Send triage reply',
+          recipient: row.sender_email,
+          recipientName: row.sender_name,
+          subject: replySubject(row.draft_subject ?? row.subject),
+          content: row.draft_body,
+          classification: row.classification,
+          inReplyTo: row.subject,
+        },
+        auditBefore: { triageId: row.id, status: row.status, gmailMessageId: row.gmail_message_id },
+        auditAfter: {
+          triageId: row.id,
+          channel: 'email',
+          classification: row.classification,
+          matterId: row.matter_id,
+          leadId: row.client_intake_id,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { fetchEmailTriageRow } = await import('@/lib/queries/emailTriage')
+      const { sendTriageReply } = await import('@/lib/emailTriage/sendReply')
+      const row = await fetchEmailTriageRow(input.triageId)
+      if (!row) throw new Error('Triage thread not found')
+      const outcome = await sendTriageReply({
+        admin: context.admin,
+        row,
+        subject: row.draft_subject ?? '',
+        text: row.draft_body ?? '',
+        userId: context.actor.id,
+      })
+      if (!outcome.ok) throw new Error(outcome.refusal)
+      return { sent: true, triageId: row.id, messageId: outcome.messageId, label: outcome.label, notices: outcome.notices }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; triageId?: string; label?: string | null; notices?: string[] }
+      return { sent: send.sent, triageId: send.triageId, label: send.label ?? null, noticeCount: send.notices?.length ?? 0 }
+    },
+  } as ActionDefinition<{ triageId: string }>,
+  {
+    key: 'billing.reminder.send',
+    risk: 'external_write',
+    validate: reminderSendInput,
+    async preview(input, context) {
+      const { fetchInvoiceReminder } = await import('@/lib/billing/sendInvoiceReminder')
+      const { reloadInvoice } = await import('@/lib/invoices/issue')
+      const reminder = await fetchInvoiceReminder(context.admin, input.reminderId)
+      if (!reminder) throw new Error('Reminder not found')
+      if (reminder.status !== 'draft') throw new Error('This reminder has already been sent or set aside')
+      const invoice = await reloadInvoice(reminder.invoice_id)
+      // The message the client would read belongs in the preview; the audit
+      // keeps references and the escalation level only.
+      return {
+        display: {
+          action: 'Send invoice reminder',
+          recipient: reminder.recipient_email,
+          clientName: invoice.clientName,
+          invoiceNumber: invoice.number,
+          escalation: reminder.escalation_level,
+          balanceDueCents: invoice.balance,
+          daysPastDue: invoice.daysPastDue,
+          subject: reminder.subject,
+          content: reminder.body,
+        },
+        auditBefore: { reminderId: reminder.id, status: reminder.status, invoiceId: invoice.id, lastRemindedAt: invoice.lastRemindedAt },
+        auditAfter: {
+          reminderId: reminder.id,
+          invoiceId: invoice.id,
+          channel: 'email',
+          escalation: reminder.escalation_level,
+          matterId: invoice.matterId,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { sendInvoiceReminder } = await import('@/lib/billing/sendInvoiceReminder')
+      return sendInvoiceReminder({ admin: context.admin, reminderId: input.reminderId, actorId: context.actor.id })
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; reminderId?: string; invoiceId?: string; invoiceNumber?: string | null }
+      return { sent: send.sent, reminderId: send.reminderId, invoiceId: send.invoiceId, invoiceNumber: send.invoiceNumber ?? null }
+    },
+  } as ActionDefinition<{ reminderId: string }>,
+  {
     key: 'task.delegate',
     risk: 'internal_write',
     validate: taskDelegateInput,
@@ -742,6 +918,14 @@ const definitions: ActionDefinition[] = [
     auditResult(result) {
       const task = result as { id?: string; assignee_id?: string; updated_at?: string }
       return { taskId: task.id, assigneeId: task.assignee_id, updatedAt: task.updated_at }
+    },
+    async undo(input, record, context) {
+      const before = record.beforeState?.assigneeId
+      if (before !== null && typeof before !== 'string') throw new Error('The earlier assignee was not recorded, so it cannot be restored')
+      const { data, error } = await context.admin.from('tasks').update({ assignee_id: before ?? null })
+        .eq('id', input.taskId).select('id, assignee_id, updated_at').single()
+      if (error) throw new Error(error.message)
+      return data
     },
   } as ActionDefinition<ReturnType<typeof taskDelegateInput>>,
   {
@@ -817,13 +1001,13 @@ const definitions: ActionDefinition[] = [
         auditAfter: { cycleKey: input.cycleKey, overdueInvoiceCount: count ?? 0 },
       }
     },
-    async execute() {
+    async execute(_input, context) {
       const { prepareInvoiceReminderDrafts } = await import('@/lib/billing/prepareInvoiceReminders')
-      return prepareInvoiceReminderDrafts()
+      return prepareInvoiceReminderDrafts({ actorId: context.actor.id })
     },
     auditResult(result) {
-      const value = result as { drafted?: number; unavailable?: boolean }
-      return { drafted: value.drafted ?? 0, unavailable: value.unavailable === true }
+      const value = result as { drafted?: number; unavailable?: boolean; sent?: number; observed?: number }
+      return { drafted: value.drafted ?? 0, unavailable: value.unavailable === true, sent: value.sent ?? 0, observed: value.observed ?? 0 }
     },
   } as ActionDefinition<ReturnType<typeof billingReminderPrepareInput>>,
 ]
