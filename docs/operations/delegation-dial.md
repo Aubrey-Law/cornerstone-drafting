@@ -58,8 +58,27 @@ confirmation is never lost to plumbing. The manage link's raw token rides in the
 payload because only its hash is stored; the sent email's own log already holds the same link.
 Cancellation notices are not yet routed.
 
-Future unattended flows (receptionist bookings) opt in the same way as they move onto the
-registry.
+**Receptionist bookings** (`lib/retell/followUp.ts`) run when Retell reports a call analysed.
+The call's facts come from the agent's `custom_analysis_data` when it is configured to extract
+`caller_name`, `caller_email`, `caller_phone`, `reason`, `wants_appointment`, `requested_time`
+and `existing_client`; otherwise the light model reads the summary and transcript. The caller is
+matched to a matter (the calls table's own phone match), a lead or a contact, and each next step
+is its own proposal through the dial, keyed to the call:
+
+| Caller | Proposed |
+| --- | --- |
+| Existing client (matter matched) | `task.create`: return the call |
+| Lead or stranger who named a time, with a full name and email | `appointment.book`: a discovery call at that time, which creates or links the lead and sends the confirmation |
+| Lead or stranger who wants an appointment but named no time | `scheduling.link.send` (and `lead.create` for a stranger with a name and email) |
+| Stranger with a name and email | `lead.create` |
+| Lead with nothing bookable | `task.create`: return the call |
+| Stranger with no email | nothing beyond the summary email the receptionist already sends |
+
+All of these start at Propose and wait as cards in the "Waiting for you" section of Today's
+"Done for you" card. The summary email to the firm is unchanged.
+
+Every unattended flow in the app now consults the dial; the next ones to add should opt in the
+same way as they move onto the registry.
 
 ## Undo
 

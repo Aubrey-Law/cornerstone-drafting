@@ -142,6 +142,16 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
     group: 'communications',
     defaultAutonomy: 'act_report',
   },
+  'appointment.book': {
+    label: 'Book an appointment',
+    description: 'Book a discovery call or other appointment on a caller\u2019s behalf at the time they asked for. The slot is checked at booking time; the client gets the usual confirmation.',
+    group: 'communications',
+  },
+  'scheduling.link.send': {
+    label: 'Send a scheduling link',
+    description: 'Email a lead or client the booking link for a meeting type.',
+    group: 'communications',
+  },
   'billing.reminder.send': { label: 'Send an invoice reminder', description: 'Send a drafted overdue-invoice reminder with the invoice attached. Final notices always wait for you.', group: 'billing' },
   'template.register': { label: 'Register a template', description: 'Add an uploaded Word template to the firm library.', group: 'templates' },
 }

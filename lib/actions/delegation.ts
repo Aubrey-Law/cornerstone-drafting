@@ -241,6 +241,33 @@ export async function listDelegatedActivity(options: { since: Date; limit?: numb
   return { done, observed }
 }
 
+/**
+ * Proposals an unattended run left waiting for a person: the "Propose"
+ * position's output. Scoped to the actor the run acted as, which is who the
+ * approval API will let execute them.
+ */
+export async function listPendingDelegatedProposals(actorId: string, options: { includeExplicit?: boolean; limit?: number } = {}) {
+  let query = getAdminClient().from('action_proposals')
+    .select('id, action_key, risk, display_summary, confirmation_policy, created_at, source')
+    .eq('actor_id', actorId)
+    .eq('status', 'pending')
+    .eq('source', 'automation')
+    .order('created_at', { ascending: false })
+    .limit(options.limit ?? 20)
+  if (!options.includeExplicit) query = query.neq('confirmation_policy', 'explicit')
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Array<{
+    id: string
+    action_key: string
+    risk: string
+    display_summary: string
+    confirmation_policy: 'automatic' | 'one_click' | 'explicit' | 'never'
+    created_at: string
+    source: string
+  }>
+}
+
 async function assertStaffActor(actor: ActionActor) {
   const { data, error } = await getAdminClient().from('users').select('role').eq('id', actor.id).maybeSingle()
   if (error) throw new Error(error.message)

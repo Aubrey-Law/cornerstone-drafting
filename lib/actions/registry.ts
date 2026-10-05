@@ -258,6 +258,40 @@ function confirmationSendInput(value: unknown): { appointmentId: string; event: 
   return { appointmentId: input.appointmentId, event: input.event, manageToken }
 }
 
+function appointmentBookInput(value: unknown) {
+  const input = objectInput(value)
+  const typeKey = requiredText(input, 'typeKey', 60)
+  const start = typeof input.startIso === 'string' ? Date.parse(input.startIso) : Number.NaN
+  if (!Number.isFinite(start) || start <= Date.now()) throw new Error('A future start time is required')
+  const email = requiredText(input, 'email', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid attendee email is required')
+  const firstName = requiredText(input, 'firstName', 80)
+  const lastName = requiredText(input, 'lastName', 80)
+  return {
+    typeKey,
+    startIso: new Date(start).toISOString(),
+    firstName,
+    lastName,
+    email,
+    phone: typeof input.phone === 'string' ? input.phone.trim().slice(0, 40) || null : null,
+    notes: typeof input.notes === 'string' ? input.notes.trim().slice(0, 2000) || null : null,
+    leadId: optionalUuid(input, 'leadId'),
+  }
+}
+
+function schedulingLinkInput(value: unknown) {
+  const input = objectInput(value)
+  const email = requiredText(input, 'email', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid recipient email is required')
+  return {
+    email,
+    name: typeof input.name === 'string' ? input.name.trim().slice(0, 200) || null : null,
+    meetingTypeKey: requiredText(input, 'meetingTypeKey', 60),
+    leadId: optionalUuid(input, 'leadId'),
+    matterId: optionalUuid(input, 'matterId'),
+  }
+}
+
 const definitions: ActionDefinition[] = [
   {
     key: 'task.start',
@@ -948,6 +982,95 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, appointmentId: send.appointmentId, event: send.event }
     },
   } as ActionDefinition<ReturnType<typeof confirmationSendInput>>,
+  {
+    key: 'appointment.book',
+    risk: 'external_write',
+    validate: appointmentBookInput,
+    async preview(input) {
+      const { getAppointmentTypeByKey, getSchedulingSettings } = await import('@/lib/appointments/settings')
+      const { formatWhen } = await import('@/lib/appointments/emailFormat')
+      const [type, settings] = await Promise.all([getAppointmentTypeByKey(input.typeKey), getSchedulingSettings()])
+      if (!type || !type.active) throw new Error('Unknown appointment type')
+      return {
+        display: {
+          action: 'Book appointment',
+          appointmentType: type.label,
+          when: formatWhen(input.startIso, settings.timezone),
+          attendee: `${input.firstName} ${input.lastName}`,
+          email: input.email,
+          phone: input.phone,
+          notes: input.notes,
+          availabilityNote: 'The slot is checked against the calendar at booking time.',
+        },
+        auditBefore: null,
+        auditAfter: { typeKey: input.typeKey, startIso: input.startIso, leadId: input.leadId },
+      }
+    },
+    async execute(input) {
+      const { getAppointmentTypeByKey } = await import('@/lib/appointments/settings')
+      const { bookAppointment } = await import('@/lib/appointments/book')
+      const type = await getAppointmentTypeByKey(input.typeKey)
+      if (!type || !type.active) throw new Error('Unknown appointment type')
+      // Booked on the caller's behalf: a public booking creates or links the
+      // lead, alerts the firm, and sends the confirmation through the dial.
+      const result = await bookAppointment({
+        type,
+        startIso: input.startIso,
+        attendeeFirstName: input.firstName,
+        attendeeLastName: input.lastName,
+        attendeeEmail: input.email,
+        attendeePhone: input.phone,
+        notes: input.notes,
+        source: 'public',
+        bookedByUserId: null,
+      })
+      return { appointmentId: result.appointmentId, startIso: result.startIso, endIso: result.endIso }
+    },
+    auditResult(result) {
+      const booked = result as { appointmentId?: string; startIso?: string }
+      return { appointmentId: booked.appointmentId, startIso: booked.startIso }
+    },
+  } as ActionDefinition<ReturnType<typeof appointmentBookInput>>,
+  {
+    key: 'scheduling.link.send',
+    risk: 'external_write',
+    validate: schedulingLinkInput,
+    async preview(input) {
+      const { resolveBookingLink, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
+      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const firstName = input.name?.split(/\s+/)[0] ?? null
+      const message = schedulingLinkMessage(firstName, link.label, link.url)
+      return {
+        display: { action: 'Send scheduling link', recipient: input.email, recipientName: input.name, subject: `Schedule your ${link.label}`, content: message },
+        auditBefore: null,
+        auditAfter: { channel: 'email', meetingTypeKey: input.meetingTypeKey, leadId: input.leadId, matterId: input.matterId, provider: link.provider },
+      }
+    },
+    async execute(input, context) {
+      const { resolveBookingLink, schedulingLinkHtml, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
+      const { sendEmail } = await import('@/lib/email/send')
+      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const firstName = input.name?.split(/\s+/)[0] ?? null
+      const message = schedulingLinkMessage(firstName, link.label, link.url)
+      const result = await sendEmail({
+        category: 'scheduling_link',
+        to: input.email,
+        subject: `Schedule your ${link.label}`,
+        text: message,
+        html: schedulingLinkHtml(message, link.url),
+        useStoredTemplate: false,
+        userId: context.actor.id,
+        leadId: input.leadId,
+        matterId: input.matterId,
+      })
+      if (!result.ok) throw new Error(result.error || 'Scheduling link could not be sent')
+      return { sent: result.status === 'sent', status: result.status, to: input.email, meetingTypeKey: input.meetingTypeKey }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; meetingTypeKey?: string }
+      return { sent: send.sent, status: send.status, meetingTypeKey: send.meetingTypeKey }
+    },
+  } as ActionDefinition<ReturnType<typeof schedulingLinkInput>>,
   {
     key: 'task.delegate',
     risk: 'internal_write',
