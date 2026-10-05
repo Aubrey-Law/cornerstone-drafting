@@ -11,7 +11,9 @@ const WRITERS: Array<{ file: string; source: string }> = [
   // Signed engagement agreements are written by the shared completion module,
   // which both the webhook and in-process signing go through.
   { file: 'lib/esign/completion.ts', source: "source: 'firm'" },
-  { file: 'app/api/admin/meeting-notes/route.ts', source: "source: 'meeting-notes'" },
+  // Meeting notes are written by the shared module, which the matter dialog's
+  // route and the meeting-transcripts sweep both go through.
+  { file: 'lib/meetings/saveMatterMeetingNote.ts', source: "source: 'meeting-notes'" },
   { file: 'lib/drafting/persistGeneratedDocument.ts', source: "source: 'firm'" },
   { file: 'lib/intake/promoteIntakeDocuments.ts', source: "source: 'client'" },
   { file: 'lib/works/artifacts.ts', source: "source: 'client'" },

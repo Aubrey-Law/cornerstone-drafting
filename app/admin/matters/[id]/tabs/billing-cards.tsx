@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { billingMoney } from '@/lib/billing/metrics'
+import {
+  FIRM_OPTIONAL_SERVICES,
+  OPTIONAL_SERVICE_STATUSES,
+  parseOptionalServices,
+  type OptionalService,
+  type OptionalServiceStatus,
+} from '@/lib/billing/optionalServices'
 import {
   billingPlans as billingPlanList,
   type BillingLedgerRow,
@@ -113,6 +121,173 @@ export function FeeTypeCard({
             )}
           />
         </label>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * What the PMPS proposal prints about price, beyond the fee type above: whether
+ * the client has been quoted a fee yet, and the optional services offered.
+ *
+ * Optional services start on the firm's standard list and stay there until
+ * someone customizes them; "None offered" is a recorded answer (an empty list),
+ * distinct from never having looked (null), so the proposal can tell the two
+ * apart.
+ */
+export function ProposalPricingCard({
+  details,
+  onSaveField,
+}: {
+  details: MatterDetailsRow | null
+  onSaveField: SaveDetailField
+}) {
+  const stored = parseOptionalServices(details?.optional_services)
+  const [draft, setDraft] = useState<OptionalService[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const editing = draft !== null
+
+  const save = async (next: OptionalService[] | null) => {
+    setSaving(true)
+    try {
+      await onSaveField('optional_services', next)
+      setDraft(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const update = (index: number, patch: Partial<OptionalService>) =>
+    setDraft(current => current?.map((row, i) => (i === index ? { ...row, ...patch } : row)) ?? current)
+
+  const shown = stored ?? [...FIRM_OPTIONAL_SERVICES]
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle className="text-sm">Proposal pricing</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DateField label="Fee quoted to client on" field="fee_quoted_date" details={details} onSaveField={onSaveField} />
+          <p className="self-end text-xs text-muted-foreground">
+            {details?.fee_quoted_date
+              ? 'The PMPS agenda notes when the fee was quoted.'
+              : 'Not quoted yet — the proposal will be the first written figure the client sees.'}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <FieldLabel>
+              Optional services
+              {stored === null ? ' — firm standard list' : stored.length === 0 ? ' — none offered' : ''}
+            </FieldLabel>
+            {!editing && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setDraft(shown.map(row => ({ ...row })))}>
+                  Edit
+                </Button>
+                {stored?.length !== 0 && (
+                  <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => void save([])}>
+                    None offered
+                  </Button>
+                )}
+                {stored !== null && (
+                  <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => void save(null)}>
+                    Use firm standard
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {editing ? (
+            <div className="space-y-2">
+              {draft.map((row, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_7rem_8rem_auto]">
+                  <Input
+                    aria-label="Service"
+                    placeholder="Service"
+                    className="h-9"
+                    value={row.service}
+                    onChange={event => update(index, { service: event.target.value })}
+                  />
+                  <Input
+                    aria-label="Description"
+                    placeholder="Description"
+                    className="h-9"
+                    value={row.description}
+                    onChange={event => update(index, { description: event.target.value })}
+                  />
+                  <Input
+                    aria-label="Fee"
+                    type="number"
+                    min={0}
+                    step="1"
+                    placeholder="Fee"
+                    className="h-9 text-right tabular-nums"
+                    value={row.fee ?? ''}
+                    onChange={event => update(index, { fee: event.target.value === '' ? null : Number(event.target.value) })}
+                  />
+                  <Select
+                    value={row.status}
+                    onValueChange={value => update(index, { status: value as OptionalServiceStatus })}
+                  >
+                    <SelectTrigger className="h-9" aria-label="Status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {OPTIONAL_SERVICE_STATUSES.map(status => (
+                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove ${row.service || 'service'}`}
+                    onClick={() => setDraft(current => current?.filter((_, i) => i !== index) ?? current)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDraft(current => [...(current ?? []), { service: '', description: '', fee: null, status: 'Optional' }])}
+                >
+                  Add service
+                </Button>
+                <Button type="button" size="sm" disabled={saving} onClick={() => void save(parseOptionalServices(draft) ?? [])}>
+                  Save services
+                </Button>
+                <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setDraft(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : shown.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No optional services — the proposal leaves the table out.</p>
+          ) : (
+            <ul className="divide-y rounded-md border text-sm">
+              {shown.map(row => (
+                <li key={row.service} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="font-medium">{row.service}</span>
+                    {row.description && <span className="block text-xs text-muted-foreground">{row.description}</span>}
+                  </span>
+                  <span className="shrink-0 tabular-nums">
+                    {row.fee === null ? 'Fee not set' : billingMoney(Math.round(row.fee * 100))}
+                    <span className="ml-2 text-xs text-muted-foreground">{row.status}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
