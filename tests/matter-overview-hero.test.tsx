@@ -43,4 +43,28 @@ describe('MatterOverviewHero', () => {
     expect(document.body.textContent).not.toContain('margaret@example.com')
     expect(document.body.textContent).not.toContain('thomas@example.com')
   })
+
+  it('drops its own title and button when the next-action strip above already shows them', () => {
+    render(
+      <MatterOverviewHero
+        matter={{ matter_id: 'matter-1', stage: 'intake' } as PipelineMatter}
+        nextAction={{
+          kind: 'send-intake',
+          title: 'Send intake questionnaire',
+          detail: 'Email the client a secure link to complete their intake before drafting.',
+          href: '/admin/matters/matter-1',
+          cta: 'Send intake',
+          tone: 'warning',
+        }}
+        unreadPortalCount={0}
+        reviewFlags={[]}
+        lastPortalMessage={null}
+        actionShownAbove
+      />,
+    )
+
+    expect(screen.queryByRole('heading', { name: 'Send intake questionnaire' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Send intake/ })).toBeNull()
+    expect(document.body.textContent).toContain('Email the client a secure link')
+  })
 })

@@ -58,3 +58,11 @@ it('retains a failed date and avoids saving it again on blur before retry', asyn
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
   expect(save.mock.calls.map(call => call[0])).toEqual(['2026-10-05','2026-10-05'])
 })
+
+it('reads the formatted display but edits the raw value', async () => {
+  const user = userEvent.setup()
+  render(<InlineText label="Flat fee" value="4500" display="$4,500" onSave={vi.fn()} />)
+  expect(screen.getByRole('button', { name: /Flat fee.*\$4,500/ })).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: /Flat fee/ }))
+  expect((screen.getByRole('textbox', { name: 'Flat fee' }) as HTMLInputElement).value).toBe('4500')
+})

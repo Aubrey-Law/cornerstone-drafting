@@ -184,7 +184,7 @@ export function MatterFactsPanel({
   onOpenTab,
 }: MatterFactsPanelProps) {
   const token = useAccessToken()
-  const { open, toggle, collapseAll, restored } = useSectionState()
+  const { open, toggle, collapseAll } = useSectionState()
   const { showEmpty, toggleShowEmpty } = useShowEmptyFields()
   // Passed to every optional row: an empty one disappears until the operator
   // asks to see it. Rows the rail is built around (address, target signing)
@@ -357,6 +357,8 @@ export function MatterFactsPanel({
     { label: 'Pets', on: details?.ep_has_pets ?? planMirror.hasPets, field: 'ep_has_pets' },
   ]
 
+  const flatFee = details?.flat_fee_amount ?? matter.fee_amount ?? null
+
   const saveStatus = savingField
     ? 'Saving…'
     : error
@@ -397,7 +399,7 @@ export function MatterFactsPanel({
                 aria-label="Marital status"
                 value={maritalStatus}
                 onChange={event => void saveClientField('marital_status', event.target.value || null).catch(() => {})}
-                className="h-5.5 rounded border border-transparent bg-transparent px-1 text-micro text-muted-foreground hover:border-input hover:bg-background focus:border-ring focus:outline-none"
+                className="field-sizing-content h-5.5 rounded border border-transparent bg-transparent px-1 text-micro text-muted-foreground hover:border-input hover:bg-background focus:border-ring focus:outline-none"
               >
                 {MARITAL_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -413,7 +415,7 @@ export function MatterFactsPanel({
             aria-label="Urgency"
             value={details?.urgency ?? 'normal'}
             onChange={event => void onSaveField('urgency', event.target.value)}
-            className="h-5.5 rounded-full border border-amber-border bg-amber-bg px-1.5 text-micro font-semibold text-amber focus:outline-none"
+            className="field-sizing-content h-5.5 rounded-full border border-amber-border bg-amber-bg px-1.5 text-micro font-semibold text-amber focus:outline-none"
           >
             {URGENCY_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -423,7 +425,7 @@ export function MatterFactsPanel({
             aria-label="Fee status"
             value={details?.fee_payment_status ?? (details?.fee_collected ? 'paid_in_full' : 'unpaid')}
             onChange={event => void onSaveField('fee_payment_status', event.target.value)}
-            className="h-5.5 rounded-full border border-transparent bg-muted px-1.5 text-micro font-semibold text-foreground focus:outline-none"
+            className="field-sizing-content h-5.5 rounded-full border border-transparent bg-muted px-1.5 text-micro font-semibold text-foreground focus:outline-none"
           >
             {FEE_STATUS_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -436,7 +438,7 @@ export function MatterFactsPanel({
               'ep_ma_estate_taxable',
               event.target.value === 'not-reviewed' ? null : event.target.value === 'tax-sensitive',
             )}
-            className="h-5.5 rounded-full border border-transparent bg-primary/10 px-1.5 text-micro font-semibold text-primary focus:outline-none"
+            className="field-sizing-content h-5.5 rounded-full border border-transparent bg-primary/10 px-1.5 text-micro font-semibold text-primary focus:outline-none"
           >
             {TAX_DECISION_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -444,9 +446,10 @@ export function MatterFactsPanel({
           </select>
         </div>
 
-        <div className="mt-2 flex items-center justify-between gap-2.5 text-micro text-muted-foreground">
-          <span>{restored ? 'Sections restored' : 'Sections remember their state'}</span>
-          <span className="flex items-center gap-2.5">
+        {/* The sections keep their open/closed state on their own; saying so
+            took a third of this row and squeezed both buttons onto two lines. */}
+        <div className="mt-2 flex items-center justify-end gap-3 whitespace-nowrap text-micro">
+          <span className="flex items-center gap-3">
             <button
               type="button"
               aria-pressed={showEmpty}
@@ -729,11 +732,8 @@ export function MatterFactsPanel({
             label="Flat fee"
             tabular
             hideWhenEmpty={hideWhenEmpty}
-            value={
-              details?.flat_fee_amount == null
-                ? matter.fee_amount == null ? '' : String(matter.fee_amount)
-                : String(details.flat_fee_amount)
-            }
+            value={flatFee == null ? '' : String(flatFee)}
+            display={flatFee == null ? undefined : formatAssetCurrency(flatFee)}
             onSave={next => onSaveField('flat_fee_amount', next ? Number(next.replace(/[^0-9.]/g, '')) : null)}
           />
         </div>

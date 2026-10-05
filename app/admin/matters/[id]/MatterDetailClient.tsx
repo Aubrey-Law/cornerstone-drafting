@@ -141,6 +141,12 @@ const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'activity', label: 'Activity' },
 ]
 
+/** Whether the work-graph strip and the overview's next action name the same thing. */
+function sameActionTitle(a: string | null | undefined, b: string | null | undefined): boolean {
+  const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+  return Boolean(normalize(a)) && normalize(a) === normalize(b)
+}
+
 type StageLifecyclePreflight = {
   stage: MatterStage
   version: string
@@ -1106,6 +1112,7 @@ function MatterDetailClientInner({
                   onUnreadClick={() => setActiveTab('communications', undefined, 'portal')}
                   onReviewFlagsClick={scrollToIntakeActions}
                   onReviewUploads={handleReviewUploads}
+                  actionShownAbove={sameActionTitle(workSummary?.title, nextAction.title)}
                   quickPrompts={
                     <MatterAssistantQuickPrompts
                       className="flex flex-wrap gap-2"

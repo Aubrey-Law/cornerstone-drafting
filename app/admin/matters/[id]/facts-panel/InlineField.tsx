@@ -56,12 +56,15 @@ export function InlineText({
   label,
   value,
   placeholder = '—',
+  display,
   tabular = false,
   hideWhenEmpty = false,
   onSave,
 }: {
   label: string
   value: string
+  /** How the value reads when not being edited ("$4,500" for a stored 4500). */
+  display?: string
   placeholder?: string
   tabular?: boolean
   /** Skip the row entirely while it has no value (the rail's "hide empty" mode). */
@@ -125,7 +128,7 @@ export function InlineText({
       >
         <span className={LABEL}>{label}</span>
         <span className={cn(VALUE, 'flex min-w-0 items-center gap-1.5', tabular && 'tabular-nums')}>
-          <span className="truncate">{value || placeholder}</span>
+          <span className="truncate">{(value && display) || value || placeholder}</span>
           {saved && <span role="status" className="text-micro text-muted-foreground">Saved</span>}
           <Pencil
             className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
