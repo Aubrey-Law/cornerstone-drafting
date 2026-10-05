@@ -82,8 +82,8 @@ export function MatterFiduciaryCard({ matterId, planMirror }: MatterFiduciaryCar
       <CardHeader className="border-b">
         <CardTitle className="text-sm">Fiduciaries</CardTitle>
         <CardDescription className="text-xs">
-          The design sheet&apos;s appointments beside the roles recorded on this matter&apos;s people, which the
-          fiduciary check reads.
+          Who the design sheet appoints, beside the roles recorded on this matter&apos;s people. The fiduciary
+          check compares the two.
         </CardDescription>
         <CardAction>
           <Button asChild variant="outline" size="sm">
@@ -96,7 +96,7 @@ export function MatterFiduciaryCard({ matterId, planMirror }: MatterFiduciaryCar
           <p className="text-sm text-destructive">{error}</p>
         ) : view === null ? (
           <p className="text-sm text-muted-foreground">Loading the fiduciary check…</p>
-        ) : view.chains.length === 0 ? (
+        ) : view.chains.length === 0 && shown.length === 0 ? null : view.chains.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             No appointments are recorded on this matter&apos;s people yet. Add a fiduciary, or give someone in the
             household a role, and the check runs on it.
@@ -118,11 +118,14 @@ export function MatterFiduciaryCard({ matterId, planMirror }: MatterFiduciaryCar
 
         {shown.length === 0 ? (
           <p className="text-xs text-muted-foreground">
+            {/* With nothing on the sheet and nothing recorded, this one line says
+                it all; the "no appointments recorded" note above stays out of
+                the way rather than saying the same thing twice. */}
             No fiduciaries named yet.{' '}
             <Link href={designHref} className="font-medium text-primary hover:underline">
               Open the design sheet
             </Link>{' '}
-            to appoint them.
+            to appoint them, or add one under Additional contacts.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">
