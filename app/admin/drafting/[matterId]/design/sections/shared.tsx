@@ -245,7 +245,7 @@ export function SlotStateToggle({ slotKey: _slotKey, state, onChange }: {
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              'rounded px-2 py-0.5 transition-all text-micro leading-tight font-medium',
+              'rounded px-2 py-0.5 transition-[color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none text-micro leading-tight font-medium',
               isActive && opt.value === 'filled' && 'bg-card text-foreground shadow-sm',
               isActive && opt.value === 'pending_client' && 'bg-amber-bg text-amber shadow-sm',
               isActive && opt.value === 'optional' && 'bg-blue-bg text-blue shadow-sm',

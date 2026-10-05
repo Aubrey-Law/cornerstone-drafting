@@ -632,7 +632,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
                   onClick={() => setDeliveryMode(opt.value)}
                   disabled={busy !== null}
                   className={cn(
-                    'rounded-md px-3 py-2 text-xs transition-all',
+                    'rounded-md px-3 py-2 text-xs transition-[color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none',
                     deliveryMode === opt.value
                       ? 'bg-card font-semibold text-primary shadow-sm'
                       : 'text-foreground hover:text-foreground',
