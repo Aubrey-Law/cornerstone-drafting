@@ -20,11 +20,72 @@ import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/databas
 /** Matter notes are the meeting record; ten is what the assistant chat also reads. */
 const MATTER_NOTE_LIMIT = 10
 
+/**
+ * PMPS notes are usually taken while the client is still a lead, so they live in
+ * lead_meeting_notes and never become matter notes. Five matches what the
+ * assistant chat reads for a lead; with the matter notes the cap is fifteen.
+ */
+const LEAD_MEETING_NOTE_LIMIT = 5
+
+export const LEAD_MEETING_NOTE_TYPE = 'lead meeting note'
+
 export interface CompletionMatterNote {
   id: string
   note_type: string | null
   body: string | null
   created_at: string | null
+}
+
+interface LeadMeetingNoteRow {
+  id: string
+  title: string | null
+  body: string | null
+  meeting_date: string | null
+}
+
+type SupabaseMaybeError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined
+
+/** Same test as the matter page: a missing table or column is not a failure. */
+function isOptionalHistorySchemaError(error: SupabaseMaybeError) {
+  if (!error) return false
+  const text = `${error.code ?? ''} ${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase()
+  return (
+    text.includes('lead_meeting_notes') ||
+    text.includes('schema cache') ||
+    text.includes('could not find') ||
+    text.includes('does not exist')
+  )
+}
+
+async function loadLeadMeetingNotes(
+  admin: ReturnType<typeof getAdminClient>,
+  clientIntakeId: string | null | undefined,
+): Promise<CompletionMatterNote[]> {
+  if (!clientIntakeId) return []
+
+  const { data, error } = await admin
+    .from('lead_meeting_notes')
+    .select('id, title, body, meeting_date')
+    .eq('lead_id', clientIntakeId)
+    .order('meeting_date', { ascending: false })
+    .limit(LEAD_MEETING_NOTE_LIMIT)
+
+  if (error) {
+    // Supplementary material: autofill still runs from the matter notes alone.
+    if (isOptionalHistorySchemaError(error)) {
+      console.warn('Lead meeting notes schema unavailable; autofill continues without them:', error.message)
+    } else {
+      console.warn('Lead meeting notes unavailable; autofill continues without them:', error.message)
+    }
+    return []
+  }
+
+  return ((data ?? []) as LeadMeetingNoteRow[]).map(row => ({
+    id: row.id,
+    note_type: LEAD_MEETING_NOTE_TYPE,
+    body: [row.title?.trim(), row.body?.trim()].filter(Boolean).join('\n') || null,
+    created_at: row.meeting_date,
+  }))
 }
 
 export interface CompletionAssetRow {
@@ -78,13 +139,17 @@ export async function buildCompletionContext(matterId: string): Promise<DesignSh
   // asset_intake keys off the intake row, and IntakeSnapshot is a projection that
   // does not carry its id — take it from the matter's FK instead.
   const clientIntakeId = matterRow.data?.client_intake_id as string | null | undefined
-  const assetsRes = clientIntakeId
-    ? await admin
-        .from('asset_intake')
-        .select('category, description, value, ownership')
-        .eq('client_intake_id', clientIntakeId)
-        .order('category')
-    : { data: [] as CompletionAssetRow[] }
+  // The lead id is the intake id too, so the PMPS notes hang off the same FK.
+  const [assetsRes, leadMeetingNotes] = await Promise.all([
+    clientIntakeId
+      ? admin
+          .from('asset_intake')
+          .select('category, description, value, ownership')
+          .eq('client_intake_id', clientIntakeId)
+          .order('category')
+      : Promise.resolve({ data: [] as CompletionAssetRow[] }),
+    loadLeadMeetingNotes(admin, clientIntakeId),
+  ])
 
   const practiceArea = detailsRow.data?.practice_area ?? matter.practice_area ?? null
   const isLP = normalizePracticeArea(practiceArea) === 'EP-LP'
@@ -108,7 +173,7 @@ export async function buildCompletionContext(matterId: string): Promise<DesignSh
     sheet,
     contacts,
     intake,
-    notes: (notesRes.data ?? []) as CompletionMatterNote[],
+    notes: [...((notesRes.data ?? []) as CompletionMatterNote[]), ...leadMeetingNotes],
     assets: (assetsRes.data ?? []) as CompletionAssetRow[],
     blocking: readiness.blocking,
     optional: readiness.optional,
