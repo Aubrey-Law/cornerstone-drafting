@@ -24,9 +24,30 @@ export function matterTitle(matter: MatterListRow): string {
   return matter.client_name || matter.matter_name || 'Untitled'
 }
 
-/** Matter number and practice area, the two things that identify a matter at a glance. */
+/**
+ * The matter's own name, when it says more than the client's name does.
+ *
+ * New matters are named "Client — Practice area", which repeats what the title
+ * and the practice area already show, so that default reads as no name at all.
+ * A renamed matter ("Chen Family Trust") is what tells a client's two matters
+ * apart, and is worth the space.
+ */
+export function matterCustomName(matter: MatterListRow): string | null {
+  const name = matter.matter_name?.trim()
+  if (!name) return null
+  const client = matter.client_name?.trim()
+  // With no client name the title already falls back to the matter name.
+  if (!client) return null
+  const normalize = (value: string) => value.toLowerCase().replace(/\s*[—–-]\s*/g, ' - ').replace(/\s+/g, ' ')
+  const defaults = [client, `${client} — ${practiceAreaLabel(matter.practice_area)}`].map(normalize)
+  return defaults.includes(normalize(name)) ? null : name
+}
+
+/** A renamed matter's name, its number and practice area: what identifies it at a glance. */
 export function matterSubtitle(matter: MatterListRow): string {
-  return [matter.matter_number, practiceAreaLabel(matter.practice_area)].filter(Boolean).join(' · ')
+  return [matterCustomName(matter), matter.matter_number, practiceAreaLabel(matter.practice_area)]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 export type MatterBadgeTone = 'success' | 'warning' | 'muted'

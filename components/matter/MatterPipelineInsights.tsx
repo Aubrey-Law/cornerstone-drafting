@@ -111,7 +111,7 @@ export function MatterPipelineInsights({
   ]
 
   return (
-    <section aria-label="Matter insights" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Matter insights" className="grid grid-cols-2 gap-2 xl:grid-cols-4">
       {insights.map(({ label, value, detail, icon: Icon, filter }) => {
         const clickable = Boolean(filter && onToggleFilter)
         const active = filter !== null && filter === activeFilter

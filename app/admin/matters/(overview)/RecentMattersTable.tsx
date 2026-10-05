@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,16 +40,18 @@ export function RecentMattersTable({
 }) {
   return (
     <Card className="min-w-0 gap-0 py-0">
-      <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
+      <CardHeader className="border-b border-border py-3">
         <div>
           <CardTitle className="text-sm">Recently active</CardTitle>
           <p className="text-xs text-muted-foreground">
             Matters by their most recent milestone
           </p>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-8">
-          <Link href="/admin/matters/list">All matters</Link>
-        </Button>
+        <CardAction>
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link href="/admin/matters/list">All matters</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="px-0">
         {matters.length === 0 ? (

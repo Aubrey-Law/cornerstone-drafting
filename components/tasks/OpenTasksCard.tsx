@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { CheckCircle2, Plus } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   TASK_PRIORITY_LABEL,
   effectiveDueAt,
@@ -22,17 +22,16 @@ const PRIORITY_TONE: Record<string, string> = {
 export function OpenTasksCard({ tasks, error = null }: { tasks: TaskRow[]; error?: string | null }) {
   return (
     <Card className="min-w-0 gap-0 py-0">
-      <CardHeader className="flex-row items-start justify-between border-b border-border py-3">
+      <CardHeader className="border-b border-border py-3">
         <div>
           <CardTitle className="text-sm">Tasks</CardTitle>
           <p className="text-xs text-muted-foreground">Open work across leads and matters</p>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
-          <Link href="/admin/tasks">
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            All tasks
-          </Link>
-        </Button>
+        <CardAction>
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link href="/admin/tasks">All tasks</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="space-y-2 px-4 py-4">
         {error ? (

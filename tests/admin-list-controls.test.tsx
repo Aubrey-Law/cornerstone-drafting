@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeadsClient, type LeadRow } from '@/app/admin/leads/LeadsClient'
@@ -214,8 +214,13 @@ const matterRows: MatterListRow[] = [
   },
 ]
 
-function visibleMatterNames(): string[] {
-  return screen.getAllByRole('link')
+/**
+ * Names in the desktop table. Phones get the same rows as a stacked list, and
+ * jsdom applies no media queries, so both are in the DOM; read one of them.
+ */
+function visibleMatterNames(list: 'table' | 'phone' = 'table'): string[] {
+  const container = list === 'table' ? screen.getByRole('table') : screen.getByRole('list', { name: 'Matters' })
+  return within(container).getAllByRole('link')
     .filter(link => link.getAttribute('href')?.startsWith('/admin/matters/'))
     .map(link => link.textContent ?? '')
     .filter(Boolean)
@@ -228,6 +233,9 @@ describe('matter list controls', () => {
 
     await selectOption(user, 'Sort matters by', 'Client Z-A')
     expect(visibleMatterNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
+    // The phone list shows the same rows in the same order, without a link inside a link.
+    expect(visibleMatterNames('phone')).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
+    expect(document.querySelector('a a')).toBeNull()
   })
 
   it('keeps closed matters out of the list until the Closed chip is pressed', async () => {
@@ -240,7 +248,7 @@ describe('matter list controls', () => {
     expect(visibleMatterNames()).not.toContain('Cora Closed')
     expect(visibleMatterNames()).not.toContain('Dana Done')
 
-    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+    await user.click(screen.getByRole('button', { name: 'Include closed' }))
 
     expect(visibleMatterNames()).toContain('Cora Closed')
     expect(visibleMatterNames()).toContain('Dana Done')
@@ -253,7 +261,7 @@ describe('matter list controls', () => {
 
     expect(visibleMatterNames()).not.toContain('Eli Archived')
 
-    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+    await user.click(screen.getByRole('button', { name: 'Include closed' }))
 
     expect(visibleMatterNames()).toContain('Eli Archived')
   })
@@ -278,7 +286,7 @@ describe('matter list controls', () => {
     const user = userEvent.setup()
     render(<MattersClient matters={matterRows} pagination={serverPaged(matterRows)} />)
 
-    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+    await user.click(screen.getByRole('button', { name: 'Include closed' }))
 
     expect(String(push.mock.calls.at(-1)?.[0])).toContain('closed=1')
   })
@@ -291,7 +299,7 @@ describe('matter list controls', () => {
 
     expect(visibleMatterNames()).toContain('Cora Closed')
 
-    await user.click(screen.getByRole('button', { name: 'Show closed matters' }))
+    await user.click(screen.getByRole('button', { name: 'Include closed' }))
 
     expect(String(push.mock.calls.at(-1)?.[0])).not.toContain('closed=1')
   })
