@@ -73,9 +73,11 @@ function TimeCard({
 export default function ManageBookingClient({
   token,
   firmName = 'Aubrey Law',
+  officeAddress,
 }: {
   token: string
   firmName?: string
+  officeAddress?: string
 }) {
   const [appointment, setAppointment] = useState<ManagedAppointment | null>(null)
   const [loading, setLoading] = useState(true)
@@ -207,7 +209,7 @@ export default function ManageBookingClient({
       <h1 className="text-2xl leading-[1.2] font-semibold tracking-[-0.015em] text-primary @5xl/booking:text-3xl">
         {label}
       </h1>
-      <EventMeta durationMinutes={duration} locationType={locationType} />
+      <EventMeta durationMinutes={duration} locationType={locationType} officeAddress={officeAddress} />
       {appointment.status === 'scheduled' && (mode === 'pick' || mode === 'moved') && (
         <TimeSummary
           label={mode === 'moved' ? 'Your new time' : 'Your appointment'}

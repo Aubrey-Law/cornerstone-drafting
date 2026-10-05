@@ -634,7 +634,7 @@ describe('bookAppointment', () => {
     state.matterId = 'matter-7'
     await bookAppointment({
       ...bookingInput(),
-      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+      type: { ...TYPE, key: 'pmps', slug: 'pmps', label: 'PMPS' },
     })
     expect(state.pmpsAnchors).toEqual([
       { leadId: null, matterId: 'matter-7', startIso: SLOT_ISO },
@@ -654,7 +654,7 @@ describe('bookAppointment', () => {
     state.matterId = null
     await bookAppointment({
       ...bookingInput(),
-      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+      type: { ...TYPE, key: 'pmps', slug: 'pmps', label: 'PMPS' },
     })
     expect(state.pmpsAnchors).toEqual([
       { leadId: 'lead-9', matterId: null, startIso: SLOT_ISO },
@@ -787,7 +787,7 @@ describe('cancelAppointment', () => {
   // `intake_completed` either way. The cancellation is recorded as activity
   // instead, and the common next step — a rebook — re-stamps the date.
 
-  const PMPS_TYPE: AppointmentType = { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' }
+  const PMPS_TYPE: AppointmentType = { ...TYPE, key: 'pmps', slug: 'pmps', label: 'PMPS' }
   const HIRED = { ...ROW, linked_matter_id: 'matter-7' }
 
   it('leaves pmps_at standing when the planning session is cancelled', async () => {
@@ -889,7 +889,7 @@ describe('rescheduleAppointment', () => {
   it('re-stamps the pmps anchor at the new day', async () => {
     await rescheduleAppointment({
       appointment: ROW,
-      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+      type: { ...TYPE, key: 'pmps', slug: 'pmps', label: 'PMPS' },
       newStartIso: MOVED_ISO,
     })
     expect(state.pmpsAnchors).toEqual([

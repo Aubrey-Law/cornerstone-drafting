@@ -12,6 +12,7 @@ export interface SchedulePageClientProps {
   defaultLastName?: string
   defaultEmail: string
   defaultPhone: string
+  officeAddress?: string
 }
 
 export default function SchedulePageClient({
@@ -21,6 +22,7 @@ export default function SchedulePageClient({
   defaultLastName,
   defaultEmail,
   defaultPhone,
+  officeAddress,
 }: SchedulePageClientProps) {
   const [selectedType, setSelectedType] = useState<BookingWidgetType | null>(
     types.length === 1 ? types[0] : null,
@@ -75,6 +77,7 @@ export default function SchedulePageClient({
           defaultLastName={defaultLastName ?? ''}
           defaultEmail={defaultEmail}
           defaultPhone={defaultPhone}
+          officeAddress={officeAddress}
           emailLocked
         />
       </div>

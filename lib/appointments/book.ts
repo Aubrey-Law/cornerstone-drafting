@@ -1,4 +1,5 @@
 import 'server-only'
+import { firmOfficeAddress } from './officeAddress'
 import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { findLeadByEmail, findMatterIdByEmail } from '@/lib/calcom/link'
 import { sendEmail } from '@/lib/email/send'
@@ -307,9 +308,7 @@ async function sendConfirmationEmails(input: {
   notes?: string | null
 }): Promise<void> {
   const firm = await loadFirmSettings()
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
+  const office = firmOfficeAddress(firm)
   const when = formatWhen(input.startIso, input.timezone)
   const manageHtml = input.manageToken
     ? `<p style="margin-top:16px">Need to make a change?
@@ -497,9 +496,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   // Create the Google Calendar event. Failure keeps the booking, flagged in
   // admin by the event id being null.
   const firm = await loadFirmSettings()
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
+  const office = firmOfficeAddress(firm)
   // A Teams meeting is created before the event so its link can go on the
   // invite in place of Meet. If Microsoft refuses, the booking still gets a
   // Meet link rather than no way to join, and the caller is told.

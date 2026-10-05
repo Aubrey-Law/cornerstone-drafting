@@ -6,7 +6,7 @@ import {
   rescheduleTeamsMeeting,
   type TeamsMeeting,
 } from '@/lib/microsoftTeams'
-import { attachTeamsMeetingToAppointmentEvent } from './calendarSync'
+import { attachGoogleMeetToAppointmentEvent, attachTeamsMeetingToAppointmentEvent } from './calendarSync'
 import type { AppointmentRow, AppointmentType } from './types'
 
 /**
@@ -90,6 +90,32 @@ export async function addTeamsMeetingToAppointment(
     console.error('[appointments] attaching Teams link to calendar event failed for', appointment.id, err)
   }
   return { joinUrl: meeting.joinUrl, calendarUpdated }
+}
+
+/**
+ * Switch an appointment's video link to Google Meet (from Teams, or add one).
+ *
+ * Unlike the Teams path, the Meet link only exists once Google creates it on
+ * the event, so the event is updated first and the row second. The Teams
+ * meeting is deleted last, best-effort: by then nothing points at it.
+ */
+export async function switchAppointmentToGoogleMeet(
+  appointment: AppointmentRow,
+): Promise<{ joinUrl: string }> {
+  if (appointment.online_meeting_provider === 'google_meet' && appointment.online_meeting_url) {
+    return { joinUrl: appointment.online_meeting_url }
+  }
+  const joinUrl = await attachGoogleMeetToAppointmentEvent(appointment)
+  if (!joinUrl) {
+    throw new TeamsMeetingError('This appointment is not on Google Calendar, so a Meet cannot be added.')
+  }
+  const { error } = await getAdminClient()
+    .from('appointments')
+    .update({ online_meeting_url: joinUrl, online_meeting_provider: 'google_meet', teams_meeting_id: null })
+    .eq('id', appointment.id)
+  if (error) throw error
+  await cancelAppointmentTeamsMeeting(appointment)
+  return { joinUrl }
 }
 
 /** Keep a Teams meeting's own times in step with a reschedule. Best-effort. */

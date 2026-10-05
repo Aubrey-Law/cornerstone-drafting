@@ -1,4 +1,5 @@
 import 'server-only'
+import { firmOfficeAddress } from './officeAddress'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
@@ -67,9 +68,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   const [types, firm] = await Promise.all([listAppointmentTypes(), loadFirmSettings()])
   const typeById = new Map(types.map(t => [t.id, t]))
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
+  const office = firmOfficeAddress(firm)
 
   let sent = 0
   let skipped = 0
