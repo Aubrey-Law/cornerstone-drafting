@@ -14,3 +14,11 @@ it('gives each review flag its own resolution link',()=>{
   expect(screen.getByRole('link',{name:'County'}).getAttribute('href')).toContain('focus=')
   expect(screen.queryByRole('link',{name:'Draft anyway'})).toBeNull()
 })
+it('leaves out the shortcut to the tab already on screen',()=>{
+  render(<MatterBlockerBanner matterId="m1" reviewFlags={[]} unreviewedUploadCounts={{intake:0,portal:2,total:2}} unreadPortalCount={3} draftingHref="/admin/drafting/m1" activeTab="documents" />)
+  expect(screen.queryByRole('link',{name:/portal uploads/})).toBeNull()
+  expect(screen.getByRole('link',{name:/3 unread messages/})).toBeTruthy()
+  cleanup()
+  const {container}=render(<MatterBlockerBanner matterId="m1" reviewFlags={[]} unreviewedUploadCounts={{intake:0,portal:0,total:0}} unreadPortalCount={3} draftingHref="/admin/drafting/m1" activeTab="communications" />)
+  expect(container.textContent).toBe('')
+})
