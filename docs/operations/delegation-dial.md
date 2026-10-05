@@ -47,8 +47,19 @@ approve route: the approve RPC is the claim, the branded invoice is attached, an
 puts the row back to draft. The hourly cron sends as the firm's attorney
 (`resolveUnattendedActor`); a rule running `billing.reminders.prepare` sends as the rule's owner.
 
-Future unattended flows (appointment confirmations, receptionist bookings) opt in the same way
-as they move onto the registry.
+**Appointment confirmations** (`lib/appointments/delegateConfirmation.ts`) are the one action
+whose default position is Act and report rather than Propose (`defaultAutonomy` in the action
+catalog): a client who just booked expects the confirmation at once, so by default it still
+goes out immediately and now shows in the digest and on Today. Propose holds confirmations for
+a click in Today's approvals; Observe records them without sending. Staff bookings send as the
+staff member; client bookings send as the firm's attorney. When no staff user can be resolved
+or the action service is unreachable, the booking sends directly as it always did, so a
+confirmation is never lost to plumbing. The manage link's raw token rides in the proposal
+payload because only its hash is stored; the sent email's own log already holds the same link.
+Cancellation notices are not yet routed.
+
+Future unattended flows (receptionist bookings) opt in the same way as they move onto the
+registry.
 
 ## Undo
 

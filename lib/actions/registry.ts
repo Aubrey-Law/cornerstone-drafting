@@ -248,6 +248,16 @@ function reminderSendInput(value: unknown): { reminderId: string } {
   return { reminderId: input.reminderId }
 }
 
+function confirmationSendInput(value: unknown): { appointmentId: string; event: 'booked' | 'rescheduled'; manageToken: string | null } {
+  const input = objectInput(value)
+  if (typeof input.appointmentId !== 'string' || !isUuid(input.appointmentId)) throw new Error('A valid appointment identifier is required')
+  if (input.event !== 'booked' && input.event !== 'rescheduled') throw new Error('event must be booked or rescheduled')
+  const manageToken = typeof input.manageToken === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(input.manageToken)
+    ? input.manageToken
+    : null
+  return { appointmentId: input.appointmentId, event: input.event, manageToken }
+}
+
 const definitions: ActionDefinition[] = [
   {
     key: 'task.start',
@@ -884,6 +894,60 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, reminderId: send.reminderId, invoiceId: send.invoiceId, invoiceNumber: send.invoiceNumber ?? null }
     },
   } as ActionDefinition<{ reminderId: string }>,
+  {
+    key: 'appointment.confirmation.send',
+    risk: 'external_write',
+    validate: confirmationSendInput,
+    async preview(input, context) {
+      const { loadConfirmationContext } = await import('@/lib/appointments/confirmationContext')
+      const { buildAppointmentConfirmationEmail } = await import('@/lib/appointments/confirmationEmail')
+      const ctx = await loadConfirmationContext(context.admin, input.appointmentId)
+      const email = buildAppointmentConfirmationEmail({ ...ctx.email, manageToken: input.manageToken, event: input.event })
+      return {
+        display: {
+          action: 'Send appointment confirmation',
+          recipient: ctx.appointment.attendee_email,
+          cc: ctx.appointment.second_attendee_email,
+          attendee: ctx.appointment.attendee_name,
+          appointmentType: ctx.type.label,
+          when: email.when,
+          subject: email.subject,
+          content: email.html,
+        },
+        auditBefore: { appointmentId: ctx.appointment.id, status: ctx.appointment.status, startTime: ctx.appointment.start_time },
+        auditAfter: {
+          appointmentId: ctx.appointment.id,
+          channel: 'email',
+          event: input.event,
+          leadId: ctx.appointment.linked_lead_id,
+          matterId: ctx.appointment.linked_matter_id,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { loadConfirmationContext } = await import('@/lib/appointments/confirmationContext')
+      const { buildAppointmentConfirmationEmail } = await import('@/lib/appointments/confirmationEmail')
+      const { sendEmail } = await import('@/lib/email/send')
+      const ctx = await loadConfirmationContext(context.admin, input.appointmentId)
+      if (ctx.appointment.status !== 'scheduled') throw new Error('This appointment is no longer scheduled, so no confirmation was sent')
+      const email = buildAppointmentConfirmationEmail({ ...ctx.email, manageToken: input.manageToken, event: input.event })
+      const result = await sendEmail({
+        category: 'appointment_confirmation',
+        to: ctx.appointment.attendee_email,
+        cc: ctx.appointment.second_attendee_email ?? undefined,
+        subject: email.subject,
+        html: email.html,
+        leadId: ctx.appointment.linked_lead_id,
+        matterId: ctx.appointment.linked_matter_id,
+      })
+      if (!result.ok) throw new Error(result.error || 'Confirmation email could not be sent')
+      return { sent: result.status === 'sent', status: result.status, appointmentId: ctx.appointment.id, event: input.event }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; appointmentId?: string; event?: string }
+      return { sent: send.sent, status: send.status, appointmentId: send.appointmentId, event: send.event }
+    },
+  } as ActionDefinition<ReturnType<typeof confirmationSendInput>>,
   {
     key: 'task.delegate',
     risk: 'internal_write',
