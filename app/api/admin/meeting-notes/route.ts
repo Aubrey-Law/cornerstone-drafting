@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { MAX_UPLOAD_BYTES, putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
+import { scheduleMeetingFollowUp } from '@/lib/meetings/schedule'
 
 interface MeetingNotesPayload {
   matterId: string
@@ -136,7 +137,12 @@ export async function POST(req: Request) {
     actor_id: userId,
   })
 
+  // The note is saved; what the firm does about it is proposed through the
+  // delegation dial once the response is on its way.
+  scheduleMeetingFollowUp({ matterId, title, meetingDate, content, actorId: userId, sourceKey: data.id })
+
   return NextResponse.json({ document: data })
 }
 
 export const runtime = 'nodejs'
+export const maxDuration = 60

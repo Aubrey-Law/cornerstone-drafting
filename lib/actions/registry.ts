@@ -1,6 +1,8 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
 import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
+import { getDesignSheetImportFieldMeta, buildDesignSheetImportPreview } from '@/lib/designSheetImport/shared'
+import { sanitizeEmailHtml } from '@/lib/email/templateShared'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
@@ -290,6 +292,37 @@ function schedulingLinkInput(value: unknown) {
     leadId: optionalUuid(input, 'leadId'),
     matterId: optionalUuid(input, 'matterId'),
   }
+}
+
+function designSheetProposalInput(value: unknown) {
+  const input = objectInput(value)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!matterId) throw new Error('A valid matter identifier is required')
+  const raw = input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields)
+    ? input.fields as Record<string, unknown>
+    : {}
+  // Only fields the import knows survive; anything else a model or a person
+  // slipped in is dropped before it can reach the sheet.
+  const fields: Record<string, unknown> = {}
+  for (const [field, fieldValue] of Object.entries(raw).slice(0, 80)) {
+    if (getDesignSheetImportFieldMeta(field) && fieldValue !== undefined) fields[field] = fieldValue
+  }
+  if (!Object.keys(fields).length) throw new Error('At least one known design-sheet field is required')
+  return { matterId, fields }
+}
+
+function emailComposeInput(value: unknown) {
+  const input = objectInput(value)
+  const contextType = input.contextType === 'matter' || input.contextType === 'lead' ? input.contextType : null
+  if (!contextType) throw new Error('contextType must be matter or lead')
+  const contextId = optionalUuid(input, 'contextId')
+  if (!contextId) throw new Error('A valid record identifier is required')
+  const to = requiredText(input, 'to', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new Error('A valid recipient email is required')
+  const subject = requiredText(input, 'subject', 300)
+  const bodyHtml = sanitizeEmailHtml(requiredText(input, 'bodyHtml', 20_000))
+  if (!bodyHtml.trim()) throw new Error('The email body is empty after sanitizing')
+  return { contextType, contextId, to, subject, bodyHtml }
 }
 
 const definitions: ActionDefinition[] = [
@@ -1071,6 +1104,104 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, meetingTypeKey: send.meetingTypeKey }
     },
   } as ActionDefinition<ReturnType<typeof schedulingLinkInput>>,
+  {
+    key: 'design_sheet.proposal.apply',
+    risk: 'legal_financial',
+    validate: designSheetProposalInput,
+    async preview(input) {
+      const { loadCurrentDesignSheet } = await import('@/lib/designSheetImport/server')
+      const sheet = await loadCurrentDesignSheet(input.matterId) as (Record<string, unknown> & { id?: string; updated_at?: string }) | null
+      if (!sheet) throw new Error('This matter has no design sheet yet')
+      const rows = buildDesignSheetImportPreview({ currentSheet: sheet, proposed: input.fields })
+      if (!rows.length) throw new Error('None of the proposed fields would change the design sheet')
+      // The current values ride in the preview on purpose: if the sheet moves
+      // before this is accepted, the digest no longer matches and the card
+      // asks for a fresh look rather than writing over the newer answer.
+      return {
+        display: {
+          action: 'Apply design sheet decisions',
+          matterId: input.matterId,
+          changes: rows.map(row => `${row.section} · ${row.label}: ${row.currentDisplay || '(empty)'} → ${row.proposedDisplay}`),
+        },
+        auditBefore: { matterId: input.matterId, sheetId: sheet.id ?? null, updatedAt: sheet.updated_at ?? null },
+        auditAfter: { matterId: input.matterId, fields: rows.map(row => row.field) },
+      }
+    },
+    async execute(input) {
+      const { applyDesignSheetProposal } = await import('@/lib/designSheet/applyProposal')
+      const result = await applyDesignSheetProposal({ matterId: input.matterId, fields: input.fields, fiduciaries: [] })
+      if (!result.ok) throw new Error(result.error)
+      return { sheetId: result.id, updatedAt: result.updatedAt, appliedFields: result.appliedFields }
+    },
+    auditResult(result) {
+      const applied = result as { sheetId?: string; updatedAt?: string; appliedFields?: number }
+      return { sheetId: applied.sheetId, updatedAt: applied.updatedAt, appliedFields: applied.appliedFields ?? 0 }
+    },
+  } as ActionDefinition<ReturnType<typeof designSheetProposalInput>>,
+  {
+    key: 'email.draft.compose',
+    risk: 'prepare',
+    validate: emailComposeInput,
+    async preview(input, context) {
+      const { data: existing, error } = await context.admin.from('email_drafts')
+        .select('id, subject, updated_at')
+        .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      return {
+        display: {
+          action: existing ? 'Keep the email draft already in the composer' : 'Prepare email draft',
+          recipient: input.to,
+          subject: existing ? existing.subject : input.subject,
+          content: existing ? '(an existing draft is kept as it stands)' : input.bodyHtml,
+        },
+        auditBefore: { contextType: input.contextType, contextId: input.contextId, existingDraftId: existing?.id ?? null },
+        auditAfter: { contextType: input.contextType, contextId: input.contextId, channel: 'email' },
+      }
+    },
+    async execute(input, context) {
+      const { data: existing } = await context.admin.from('email_drafts').select('id')
+        .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId)
+        .maybeSingle()
+      // Never replace work a person already has open in the composer.
+      if (existing) return { id: existing.id, prepared: false, preservedExisting: true }
+      const { data, error } = await context.admin.from('email_drafts').insert({
+        user_id: context.actor.id,
+        context_type: input.contextType,
+        context_id: input.contextId,
+        to_email: input.to,
+        cc: [],
+        bcc: [],
+        subject: input.subject,
+        body_html: input.bodyHtml,
+        document_ids: [],
+        include_signature: true,
+      }).select('id').single()
+      if (error) {
+        if (error.code === '23505') {
+          const { data: raced } = await context.admin.from('email_drafts').select('id')
+            .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId).maybeSingle()
+          if (raced) return { id: raced.id, prepared: false, preservedExisting: true }
+        }
+        throw new Error(error.message)
+      }
+      return { id: data.id, prepared: true, preservedExisting: false }
+    },
+    auditResult(result) {
+      const value = result as { id?: string; prepared?: boolean; preservedExisting?: boolean }
+      return { draftId: value.id, prepared: value.prepared, preservedExisting: value.preservedExisting }
+    },
+    async undo(_input, record, context) {
+      const draftId = typeof record.afterState?.draftId === 'string' ? record.afterState.draftId : null
+      if (!draftId) throw new Error('The prepared draft was not recorded, so it cannot be removed')
+      // Only a draft this action created is removed; one it preserved was a
+      // person's work and stays.
+      if (record.afterState?.prepared !== true) return { draftId, removed: false }
+      const { error } = await context.admin.from('email_drafts').delete().eq('id', draftId).eq('user_id', context.actor.id)
+      if (error) throw new Error(error.message)
+      return { draftId, removed: true }
+    },
+  } as ActionDefinition<ReturnType<typeof emailComposeInput>>,
   {
     key: 'task.delegate',
     risk: 'internal_write',
