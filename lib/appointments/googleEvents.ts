@@ -213,6 +213,55 @@ export async function attachTeamsMeetingToCalendarEvent(
   invalidateTodayCalendar()
 }
 
+/**
+ * Put a Google Meet on an existing event, replacing any Teams link.
+ *
+ * The mirror of attachTeamsMeetingToCalendarEvent: the Teams block and the
+ * Teams location are removed so the invite carries one join link, and Google
+ * creates the Meet (conferenceDataVersion=1). `sendUpdates=all` emails the
+ * attendees the updated invite. Returns the new Meet link.
+ */
+export async function attachGoogleMeetToCalendarEvent(eventId: string): Promise<string> {
+  const token = await connectedToken()
+  const url = `${CALENDAR_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`
+
+  const current = await googleFetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!current.ok) throw await failure(current, 'event lookup')
+  const event = (await current.json().catch(() => ({}))) as { description?: string; location?: string }
+
+  const description = (event.description ?? '')
+    .split(/\n{2,}/)
+    .filter(block => !block.startsWith(TEAMS_BLOCK_HEADING))
+    .join('\n\n')
+    .trim()
+  // The Teams join URL was the location; anything else (an office address) stays.
+  const location = event.location && /teams\.microsoft\.com/i.test(event.location) ? '' : event.location
+
+  const r = await googleFetch(`${url}?${SEND_UPDATES}&conferenceDataVersion=1`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description,
+      ...(location !== undefined ? { location } : {}),
+      conferenceData: {
+        createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } },
+      },
+    }),
+  })
+  if (!r.ok) throw await failure(r, 'event update')
+  invalidateTodayCalendar()
+
+  const updated = (await r.json().catch(() => ({}))) as {
+    hangoutLink?: string
+    conferenceData?: { entryPoints?: Array<{ entryPointType?: string; uri?: string }> }
+  }
+  const link =
+    updated.hangoutLink ??
+    updated.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video')?.uri
+  if (!link) throw new Error('Google Calendar did not return a Meet link')
+  return link
+}
+
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
   const token = await connectedToken()
 

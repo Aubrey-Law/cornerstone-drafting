@@ -54,6 +54,8 @@ describe('ApprovalInbox', () => {
 
     await waitFor(() => expect(onResolved).toHaveBeenCalledTimes(1))
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/actions/proposals/proposal-1', expect.objectContaining({ method: 'PATCH' }))
-    expect(screen.getByText(/No actions are waiting/)).toBeTruthy()
+    // The inbox removes the row inside a transition after calling onResolved,
+    // so the empty state can land a tick later than the callback.
+    expect(await screen.findByText(/No actions are waiting/)).toBeTruthy()
   })
 })

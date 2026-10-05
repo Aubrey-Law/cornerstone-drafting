@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import BookingWidget from '@/components/scheduling/BookingWidget'
 import { getAppointmentTypeBySlug } from '@/lib/appointments/settings'
 import { getFirmConfig } from '@/lib/firmConfig'
+import { loadFirmSettings } from '@/lib/firmSettings'
+import { firmOfficeAddress } from '@/lib/appointments/officeAddress'
 import { getCachedClaims } from '@/lib/supabaseServer'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +24,7 @@ export default async function PublicBookingPage({
   }
 
   const firm = getFirmConfig()
+  const officeAddress = firmOfficeAddress(await loadFirmSettings())
 
   return (
     <div className="client-root client-booking min-h-dvh bg-background">
@@ -30,6 +33,7 @@ export default async function PublicBookingPage({
           <BookingWidget
             standalone
             firmName={firm.firmName}
+            officeAddress={officeAddress}
             type={{
               key: type.key,
               slug: type.slug,

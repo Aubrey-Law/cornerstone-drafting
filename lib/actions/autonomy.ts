@@ -104,8 +104,20 @@ export const ACTION_CATALOG_GROUPS: Record<ActionCatalogGroup, string> = {
   templates: 'Templates',
 }
 
+export interface ActionCatalogEntry {
+  label: string
+  description: string
+  group: ActionCatalogGroup
+  /**
+   * The position that applies before the firm has set one. Almost every
+   * action starts at Propose; a transactional send the client themselves
+   * triggered starts at Act and report so it keeps going out at once.
+   */
+  defaultAutonomy?: ActionAutonomy
+}
+
 /** Plain words for each registry action, for the settings page and the digest. */
-export const ACTION_CATALOG: Record<string, { label: string; description: string; group: ActionCatalogGroup }> = {
+export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
   'task.create': { label: 'Create a task', description: 'Add a task to a lead or matter, optionally with a calendar block.', group: 'tasks' },
   'task.start': { label: 'Start a task', description: 'Move a task to in progress.', group: 'tasks' },
   'task.complete': { label: 'Complete a task', description: 'Mark a task done and queue its next occurrence.', group: 'tasks' },
@@ -119,15 +131,47 @@ export const ACTION_CATALOG: Record<string, { label: string; description: string
   'note.create': { label: 'Add an internal note', description: 'Write a note on a lead or matter.', group: 'records' },
   'sms.thread.link': { label: 'Link a text conversation', description: 'Attach a phone number’s thread to a lead, matter or contact.', group: 'records' },
   'email.draft.prepare': { label: 'Prepare an email draft', description: 'Write a draft for a lead; nothing is sent.', group: 'communications' },
+  'email.draft.compose': {
+    label: 'Prepare a client email draft',
+    description: 'Write a draft into your composer for a lead or matter. Nothing is sent until you or the dial sends it, and a draft you already have open is never replaced.',
+    group: 'communications',
+    defaultAutonomy: 'act_report',
+  },
   'email.draft.send': { label: 'Send an email draft', description: 'Send a prepared draft from the firm mailbox.', group: 'communications' },
   'email.triage.reply.send': { label: 'Send a triage reply', description: 'Send the drafted reply to an email from a client or lead, on its Gmail thread. Senders not matched to a client or lead always wait on the triage page.', group: 'communications' },
+  'design_sheet.proposal.apply': {
+    label: 'Apply design sheet decisions',
+    description: 'Write proposed design-sheet fields from meeting notes or imported text. Legal judgment, so it is always reviewed field by field before anything is written.',
+    group: 'matters',
+  },
   'matter.stage.transition': { label: 'Change a matter stage', description: 'Move a matter to another pipeline stage.', group: 'matters' },
   'workflow.enqueue': { label: 'Queue a workflow', description: 'Seed a design sheet, SLA plan, stage task or annual review job.', group: 'matters' },
   'billing.reminders.prepare': { label: 'Prepare invoice reminders', description: 'Draft reminders for overdue client invoices; nothing is sent.', group: 'billing' },
+  'appointment.confirmation.send': {
+    label: 'Send an appointment confirmation',
+    description: 'Email the client their booking or reschedule confirmation with the meeting details and manage link. Starts at Act and report so confirmations keep going out at once.',
+    group: 'communications',
+    defaultAutonomy: 'act_report',
+  },
+  'appointment.book': {
+    label: 'Book an appointment',
+    description: 'Book a discovery call or other appointment on a caller\u2019s behalf at the time they asked for. The slot is checked at booking time; the client gets the usual confirmation.',
+    group: 'communications',
+  },
+  'scheduling.link.send': {
+    label: 'Send a scheduling link',
+    description: 'Email a lead or client the booking link for a meeting type.',
+    group: 'communications',
+  },
   'billing.reminder.send': { label: 'Send an invoice reminder', description: 'Send a drafted overdue-invoice reminder with the invoice attached. Final notices always wait for you.', group: 'billing' },
   'template.register': { label: 'Register a template', description: 'Add an uploaded Word template to the firm library.', group: 'templates' },
 }
 
 export function actionLabel(actionKey: string): string {
   return ACTION_CATALOG[actionKey]?.label ?? actionKey
+}
+
+/** The position an action holds before the firm sets one. */
+export function defaultAutonomyForAction(actionKey: string): ActionAutonomy {
+  return ACTION_CATALOG[actionKey]?.defaultAutonomy ?? DEFAULT_ACTION_AUTONOMY
 }

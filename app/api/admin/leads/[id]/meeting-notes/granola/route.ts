@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/apiAuth'
 import { fetchGranolaNote, GranolaError, isGranolaNoteId } from '@/lib/granola'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { scheduleMeetingFollowUp } from '@/lib/meetings/schedule'
 
 interface LeadMeetingNoteRow {
   id: string
@@ -45,6 +46,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     const result = data?.[0]
     if (!result?.meeting_note) return Response.json({ error: 'Granola import returned no note' }, { status: 500 })
+    // Only a fresh import is read; re-importing the same Granola note is a no-op
+    // here as it is in the database.
+    if (result.imported && userId) {
+      scheduleMeetingFollowUp({
+        leadId: id, title: note.title, meetingDate: note.meetingDate.slice(0, 10), content: note.notesMarkdown,
+        actorId: userId, sourceKey: result.meeting_note.id,
+      })
+    }
     return Response.json({ meetingNote: dto(result.meeting_note), imported: result.imported })
   } catch (error) {
     if (error instanceof GranolaError) {
@@ -55,3 +64,4 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export const runtime = 'nodejs'
+export const maxDuration = 60

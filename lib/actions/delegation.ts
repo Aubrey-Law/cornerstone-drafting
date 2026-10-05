@@ -5,11 +5,11 @@ import { getActionDefinition, listActionDefinitions } from '@/lib/actions/regist
 import { ActionServiceError } from '@/lib/actions/errors'
 import {
   ACTION_CATALOG,
-  DEFAULT_ACTION_AUTONOMY,
   actionLabel,
   autonomyCeilingForRisk,
   clampAutonomy,
   compareAutonomy,
+  defaultAutonomyForAction,
   minAutonomy,
   parseActionAutonomy,
 } from '@/lib/actions/autonomy'
@@ -40,15 +40,16 @@ export async function resolveActionAutonomy(
   risk: ActionRisk,
   ceiling?: ActionAutonomy,
 ): Promise<ActionAutonomy> {
-  let stored: ActionAutonomy = DEFAULT_ACTION_AUTONOMY
+  const fallback = defaultAutonomyForAction(actionKey)
+  let stored: ActionAutonomy = fallback
   try {
-    stored = (await loadActionAutonomySettings())[actionKey] ?? DEFAULT_ACTION_AUTONOMY
+    stored = (await loadActionAutonomySettings())[actionKey] ?? fallback
   } catch (error) {
-    console.error('delegation settings unavailable; holding the action for a person', {
+    console.error('delegation settings unavailable; using the action\u2019s default position', {
       actionKey,
       cause: error instanceof Error ? error.message : String(error),
     })
-    stored = DEFAULT_ACTION_AUTONOMY
+    stored = fallback
   }
   const level = clampAutonomy(stored, risk)
   return ceiling ? minAutonomy(level, ceiling) : level
@@ -94,7 +95,7 @@ export async function listDelegationSettings(): Promise<DelegationSetting[]> {
         label: catalog?.label ?? key,
         description: catalog?.description ?? '',
         group: catalog?.group ?? 'records',
-        autonomy: clampAutonomy(stored[key] ?? DEFAULT_ACTION_AUTONOMY, risk),
+        autonomy: clampAutonomy(stored[key] ?? defaultAutonomyForAction(key), risk),
         ceiling: autonomyCeilingForRisk(risk),
         undoable: Boolean(getActionDefinition(key)?.undo),
       }
@@ -238,6 +239,33 @@ export async function listDelegatedActivity(options: { since: Date; limit?: numb
   })
 
   return { done, observed }
+}
+
+/**
+ * Proposals an unattended run left waiting for a person: the "Propose"
+ * position's output. Scoped to the actor the run acted as, which is who the
+ * approval API will let execute them.
+ */
+export async function listPendingDelegatedProposals(actorId: string, options: { includeExplicit?: boolean; limit?: number } = {}) {
+  let query = getAdminClient().from('action_proposals')
+    .select('id, action_key, risk, display_summary, confirmation_policy, created_at, source')
+    .eq('actor_id', actorId)
+    .eq('status', 'pending')
+    .eq('source', 'automation')
+    .order('created_at', { ascending: false })
+    .limit(options.limit ?? 20)
+  if (!options.includeExplicit) query = query.neq('confirmation_policy', 'explicit')
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Array<{
+    id: string
+    action_key: string
+    risk: string
+    display_summary: string
+    confirmation_policy: 'automatic' | 'one_click' | 'explicit' | 'never'
+    created_at: string
+    source: string
+  }>
 }
 
 async function assertStaffActor(actor: ActionActor) {

@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { getAppointmentTypesForPortal } from '@/lib/appointments/portalTypes'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
+import { loadFirmSettings } from '@/lib/firmSettings'
+import { firmOfficeAddress } from '@/lib/appointments/officeAddress'
 import SchedulePageClient from './SchedulePageClient'
 import { PortalPageHeader } from '../PortalPageHeader'
 
@@ -20,6 +22,7 @@ export default async function PortalSchedulePage() {
   const historicalName = typeof intake?.full_name === 'string' ? intake.full_name : ''
 
   const types = await getAppointmentTypesForPortal()
+  const officeAddress = firmOfficeAddress(await loadFirmSettings())
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -33,6 +36,7 @@ export default async function PortalSchedulePage() {
         defaultLastName={lastName}
         defaultEmail={auth.email ?? ''}
         defaultPhone={phone}
+        officeAddress={officeAddress}
       />
     </div>
   )

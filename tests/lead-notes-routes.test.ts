@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 
-const {requireAdmin,rpc}=vi.hoisted(()=>({requireAdmin:vi.fn(),rpc:vi.fn()}))
+const {requireAdmin,rpc,scheduleMeetingFollowUp}=vi.hoisted(()=>({requireAdmin:vi.fn(),rpc:vi.fn(),scheduleMeetingFollowUp:vi.fn()}))
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
+vi.mock('@/lib/meetings/schedule', () => ({ scheduleMeetingFollowUp }))
 
 import { POST as createNote } from '@/app/api/admin/leads/[id]/notes/route'
 import { PATCH, DELETE } from '@/app/api/admin/leads/[id]/notes/[noteId]/route'
@@ -68,5 +69,6 @@ describe('lead note handlers',()=>{
   for(const meetingDate of [undefined,3,{},'2026-02-30','not-a-date']){const res=await createMeeting(req({title:'Call',body:'Notes',meetingDate,attendees:['Jane']}),{params:Promise.resolve({id:'l1'})});expect(res.status).toBe(400)}
   expect((await createMeeting(req({title:'Call',body:'Notes',meetingDate:'2026-07-01',attendees:'Jane'}),{params:Promise.resolve({id:'l1'})})).status).toBe(400)
   rpc.mockResolvedValueOnce({data:{...note,title:'Call',meeting_date:'2026-07-01T00:00:00Z',attendees:['Jane'],source:'manual',granola_note_id:null},error:null});const res=await createMeeting(req({title:'Call',body:'Notes',meetingDate:'2026-07-01',attendees:[' Jane '],source:'granola',granolaNoteId:'spoof'}),{params:Promise.resolve({id:'l1'})});const json=await res.json();expect(json.meetingNote).toMatchObject({date:'2026-07-01T00:00:00Z',source:'manual',granolaNoteId:null});expect(json.meetingNote).not.toHaveProperty('meetingDate');expect(rpc).toHaveBeenCalledWith('create_lead_meeting_note_with_activity',expect.objectContaining({p_attendees:['Jane'],p_actor_id:'u1'}))
+  expect(scheduleMeetingFollowUp).toHaveBeenCalledTimes(1);expect(scheduleMeetingFollowUp).toHaveBeenCalledWith({leadId:'l1',title:'Call',meetingDate:'2026-07-01',content:'Notes',actorId:'u1',sourceKey:'n1'})
  })
 })

@@ -6,17 +6,26 @@ import {
   GRANOLA_PATH,
   WORKSHEET_PATH,
   buildDesignMeetingArtifacts,
+  meetingArtifactPaths,
   worksheetLine,
 } from '../scripts/generate-design-meeting-forms'
 import {
   DESIGN_MEETING_SECTIONS,
+  MEETING_SPECS,
+  PMPS_SECTIONS,
   designMeetingFieldNames,
+  meetingFieldNames,
 } from '@/lib/designMeeting/formSpec'
 import {
   coerceDesignSheetImport,
   getDesignSheetImportFieldMeta,
   matchDesignSheetImportOption,
 } from '@/lib/designSheetImport/shared'
+
+/** Every field either meeting's form names. */
+function allMeetingFieldNames(): string[] {
+  return [...new Set(MEETING_SPECS.flatMap(spec => meetingFieldNames(spec.sections)))]
+}
 
 function checkedIn(rel: string): Buffer {
   return fs.readFileSync(path.join(process.cwd(), rel))
@@ -31,13 +40,13 @@ function checkedIn(rel: string): Buffer {
  */
 describe('the worksheet prints values the importer accepts', () => {
   it('names only fields that still exist', () => {
-    for (const field of designMeetingFieldNames()) {
+    for (const field of allMeetingFieldNames()) {
       expect(getDesignSheetImportFieldMeta(field), field).not.toBeNull()
     }
   })
 
   it('prints option tokens that still validate', () => {
-    for (const field of designMeetingFieldNames()) {
+    for (const field of allMeetingFieldNames()) {
       const meta = getDesignSheetImportFieldMeta(field)!
       if (!meta.options) continue
 
@@ -48,7 +57,7 @@ describe('the worksheet prints values the importer accepts', () => {
   })
 
   it('offers every choice a choice field accepts, so no valid answer is unprintable', () => {
-    for (const field of designMeetingFieldNames()) {
+    for (const field of allMeetingFieldNames()) {
       const meta = getDesignSheetImportFieldMeta(field)!
       if (!meta.options) continue
 
@@ -63,7 +72,7 @@ describe('the worksheet prints values the importer accepts', () => {
     // The upload path is mammoth.extractRawText, which breaks only after
     // paragraphs. A label separated from its answer — as a table row would be —
     // leaves the extractor pairing them positionally down a 40-row form.
-    for (const field of designMeetingFieldNames()) {
+    for (const field of allMeetingFieldNames()) {
       const line = worksheetLine(field)
       expect(line, field).not.toContain('\n')
       expect(line, field).toContain(`${getDesignSheetImportFieldMeta(field)!.label}:`)
@@ -81,11 +90,13 @@ describe('a filled worksheet coerces cleanly', () => {
   it('accepts every answer the form invites, and rejects none', () => {
     const filled: Record<string, unknown> = {}
 
-    for (const field of designMeetingFieldNames()) {
+    for (const field of allMeetingFieldNames()) {
       const meta = getDesignSheetImportFieldMeta(field)!
       if (meta.options) filled[field] = meta.options[0]
       else if (meta.kind === 'boolean') filled[field] = 'yes'
       else if (meta.kind === 'number') filled[field] = '30'
+      // The one string field validated as a date: a real answer is a date.
+      else if (field === 'signing_date') filled[field] = '2026-11-03'
       else if (meta.kind === 'string') filled[field] = 'Sample answer'
     }
 
@@ -105,23 +116,29 @@ describe('a filled worksheet coerces cleanly', () => {
   })
 })
 
-describe('the meeting spec', () => {
+describe.each(MEETING_SPECS)('the $title spec', spec => {
   it('names no field twice', () => {
-    const names = designMeetingFieldNames()
+    const names = meetingFieldNames(spec.sections)
     expect(names).toEqual([...new Set(names)])
   })
 
   it('stays short enough to work through at a table', () => {
     // The full proposable set is ~195. A meeting form that size comes back
     // mostly blank; this is the guard on scope creep back toward it.
-    expect(designMeetingFieldNames().length).toBeLessThanOrEqual(60)
+    expect(meetingFieldNames(spec.sections).length).toBeLessThanOrEqual(60)
   })
 
   it('gives every section something to capture', () => {
-    for (const section of DESIGN_MEETING_SECTIONS) {
+    for (const section of spec.sections) {
       expect(section.fields.length + (section.prompts?.length ?? 0), section.title).toBeGreaterThan(0)
       expect(section.intro, section.title).not.toBe('')
     }
+  })
+})
+
+describe('the design meeting spec', () => {
+  it('keeps its field list', () => {
+    expect(designMeetingFieldNames()).toEqual(DESIGN_MEETING_SECTIONS.flatMap(section => section.fields))
   })
 
   it('asks for fiduciaries as names rather than as fields', () => {
@@ -134,14 +151,56 @@ describe('the meeting spec', () => {
   })
 })
 
+describe('the PMPS spec', () => {
+  it('captures what the estate-tax worksheet cannot be computed without', () => {
+    const names = meetingFieldNames(PMPS_SECTIONS)
+    for (const field of ['assets', 'children', 'client_citizenship', 'county', 'settlor_facts.disabled_veteran']) {
+      expect(names, field).toContain(field)
+    }
+  })
+
+  it('asks who owns each life-insurance policy', () => {
+    // Policy ownership is the one people skip and the one that decides
+    // whether the death benefit is in the taxable estate.
+    const prompts = PMPS_SECTIONS.flatMap(section => section.prompts ?? [])
+    expect(prompts.some(prompt => /life insurance/i.test(prompt) && /owns/i.test(prompt))).toBe(true)
+  })
+})
+
+describe('the Granola recipes', () => {
+  it.each(MEETING_SPECS)('$title recipe carries every template label and asks for missing information', async spec => {
+    const built = await buildDesignMeetingArtifacts()
+    const paths = meetingArtifactPaths(spec)
+    const recipe = built.markdown[paths.recipe]
+    const template = built.markdown[paths.granola]
+
+    // The recipe's recap has to land on the same labels the template prints,
+    // or a note run through it stops matching what the importer was given.
+    const labels = template.split('\n').filter(line => line.startsWith('- ') && line.endsWith(':'))
+    expect(labels.length).toBeGreaterThan(0)
+    for (const label of labels) expect(recipe, label).toContain(label)
+
+    expect(recipe).toContain('## Missing information')
+    expect(recipe).toContain('## Follow-up tasks')
+  })
+})
+
 describe('checked-in artifacts are fresh', () => {
   it('match a rebuild — regenerate with `npm run design:forms`', async () => {
     const built = await buildDesignMeetingArtifacts()
 
-    expect(checkedIn(CHECKLIST_PATH).toString('utf8')).toBe(built.markdown[CHECKLIST_PATH])
-    expect(checkedIn(GRANOLA_PATH).toString('utf8')).toBe(built.markdown[GRANOLA_PATH])
+    // The design meeting's original paths stay where earlier links point.
+    expect(built.markdown).toHaveProperty([CHECKLIST_PATH])
+    expect(built.markdown).toHaveProperty([GRANOLA_PATH])
+    expect(built.worksheets).toHaveProperty([WORKSHEET_PATH])
+
+    for (const [relative, content] of Object.entries(built.markdown)) {
+      expect(checkedIn(relative).toString('utf8'), relative).toBe(content)
+    }
     // The generator strips zip timestamps and sorts entries, so the .docx is
     // byte-stable and can be compared directly rather than by proxy.
-    expect(checkedIn(WORKSHEET_PATH).equals(built.worksheet)).toBe(true)
+    for (const [relative, content] of Object.entries(built.worksheets)) {
+      expect(checkedIn(relative).equals(content), relative).toBe(true)
+    }
   })
 })

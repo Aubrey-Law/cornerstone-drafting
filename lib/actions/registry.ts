@@ -1,6 +1,9 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
 import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
+import { getDesignSheetImportFieldMeta, buildDesignSheetImportPreview } from '@/lib/designSheetImport/shared'
+import { sanitizeEmailHtml } from '@/lib/email/templateShared'
+import { coerceFiduciaryProposals } from '@/lib/designSheet/fiduciaryProposal'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
@@ -246,6 +249,86 @@ function reminderSendInput(value: unknown): { reminderId: string } {
   const input = objectInput(value)
   if (typeof input.reminderId !== 'string' || !isUuid(input.reminderId)) throw new Error('A valid reminder identifier is required')
   return { reminderId: input.reminderId }
+}
+
+function confirmationSendInput(value: unknown): { appointmentId: string; event: 'booked' | 'rescheduled'; manageToken: string | null } {
+  const input = objectInput(value)
+  if (typeof input.appointmentId !== 'string' || !isUuid(input.appointmentId)) throw new Error('A valid appointment identifier is required')
+  if (input.event !== 'booked' && input.event !== 'rescheduled') throw new Error('event must be booked or rescheduled')
+  const manageToken = typeof input.manageToken === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(input.manageToken)
+    ? input.manageToken
+    : null
+  return { appointmentId: input.appointmentId, event: input.event, manageToken }
+}
+
+function appointmentBookInput(value: unknown) {
+  const input = objectInput(value)
+  const typeKey = requiredText(input, 'typeKey', 60)
+  const start = typeof input.startIso === 'string' ? Date.parse(input.startIso) : Number.NaN
+  if (!Number.isFinite(start) || start <= Date.now()) throw new Error('A future start time is required')
+  const email = requiredText(input, 'email', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid attendee email is required')
+  const firstName = requiredText(input, 'firstName', 80)
+  const lastName = requiredText(input, 'lastName', 80)
+  return {
+    typeKey,
+    startIso: new Date(start).toISOString(),
+    firstName,
+    lastName,
+    email,
+    phone: typeof input.phone === 'string' ? input.phone.trim().slice(0, 40) || null : null,
+    notes: typeof input.notes === 'string' ? input.notes.trim().slice(0, 2000) || null : null,
+    leadId: optionalUuid(input, 'leadId'),
+  }
+}
+
+function schedulingLinkInput(value: unknown) {
+  const input = objectInput(value)
+  const email = requiredText(input, 'email', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid recipient email is required')
+  return {
+    email,
+    name: typeof input.name === 'string' ? input.name.trim().slice(0, 200) || null : null,
+    meetingTypeKey: requiredText(input, 'meetingTypeKey', 60),
+    leadId: optionalUuid(input, 'leadId'),
+    matterId: optionalUuid(input, 'matterId'),
+  }
+}
+
+function designSheetProposalInput(value: unknown) {
+  const input = objectInput(value)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!matterId) throw new Error('A valid matter identifier is required')
+  const raw = input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields)
+    ? input.fields as Record<string, unknown>
+    : {}
+  // Only fields the import knows survive; anything else a model or a person
+  // slipped in is dropped before it can reach the sheet.
+  const fields: Record<string, unknown> = {}
+  for (const [field, fieldValue] of Object.entries(raw).slice(0, 80)) {
+    if (getDesignSheetImportFieldMeta(field) && fieldValue !== undefined) fields[field] = fieldValue
+  }
+  // Appointments are people, not strings, so they ride beside the field map and
+  // are matched to the matter's contacts when previewed and again when applied.
+  const fiduciaries = coerceFiduciaryProposals(input.fiduciaries)
+  if (!Object.keys(fields).length && !fiduciaries.length) {
+    throw new Error('At least one known design-sheet field or fiduciary appointment is required')
+  }
+  return { matterId, fields, fiduciaries }
+}
+
+function emailComposeInput(value: unknown) {
+  const input = objectInput(value)
+  const contextType = input.contextType === 'matter' || input.contextType === 'lead' ? input.contextType : null
+  if (!contextType) throw new Error('contextType must be matter or lead')
+  const contextId = optionalUuid(input, 'contextId')
+  if (!contextId) throw new Error('A valid record identifier is required')
+  const to = requiredText(input, 'to', 320).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new Error('A valid recipient email is required')
+  const subject = requiredText(input, 'subject', 300)
+  const bodyHtml = sanitizeEmailHtml(requiredText(input, 'bodyHtml', 20_000))
+  if (!bodyHtml.trim()) throw new Error('The email body is empty after sanitizing')
+  return { contextType, contextId, to, subject, bodyHtml }
 }
 
 const definitions: ActionDefinition[] = [
@@ -884,6 +967,256 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, reminderId: send.reminderId, invoiceId: send.invoiceId, invoiceNumber: send.invoiceNumber ?? null }
     },
   } as ActionDefinition<{ reminderId: string }>,
+  {
+    key: 'appointment.confirmation.send',
+    risk: 'external_write',
+    validate: confirmationSendInput,
+    async preview(input, context) {
+      const { loadConfirmationContext } = await import('@/lib/appointments/confirmationContext')
+      const { buildAppointmentConfirmationEmail } = await import('@/lib/appointments/confirmationEmail')
+      const ctx = await loadConfirmationContext(context.admin, input.appointmentId)
+      const email = buildAppointmentConfirmationEmail({ ...ctx.email, manageToken: input.manageToken, event: input.event })
+      return {
+        display: {
+          action: 'Send appointment confirmation',
+          recipient: ctx.appointment.attendee_email,
+          cc: ctx.appointment.second_attendee_email,
+          attendee: ctx.appointment.attendee_name,
+          appointmentType: ctx.type.label,
+          when: email.when,
+          subject: email.subject,
+          content: email.html,
+        },
+        auditBefore: { appointmentId: ctx.appointment.id, status: ctx.appointment.status, startTime: ctx.appointment.start_time },
+        auditAfter: {
+          appointmentId: ctx.appointment.id,
+          channel: 'email',
+          event: input.event,
+          leadId: ctx.appointment.linked_lead_id,
+          matterId: ctx.appointment.linked_matter_id,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { loadConfirmationContext } = await import('@/lib/appointments/confirmationContext')
+      const { buildAppointmentConfirmationEmail } = await import('@/lib/appointments/confirmationEmail')
+      const { sendEmail } = await import('@/lib/email/send')
+      const ctx = await loadConfirmationContext(context.admin, input.appointmentId)
+      if (ctx.appointment.status !== 'scheduled') throw new Error('This appointment is no longer scheduled, so no confirmation was sent')
+      const email = buildAppointmentConfirmationEmail({ ...ctx.email, manageToken: input.manageToken, event: input.event })
+      const result = await sendEmail({
+        category: 'appointment_confirmation',
+        to: ctx.appointment.attendee_email,
+        cc: ctx.appointment.second_attendee_email ?? undefined,
+        subject: email.subject,
+        html: email.html,
+        leadId: ctx.appointment.linked_lead_id,
+        matterId: ctx.appointment.linked_matter_id,
+      })
+      if (!result.ok) throw new Error(result.error || 'Confirmation email could not be sent')
+      return { sent: result.status === 'sent', status: result.status, appointmentId: ctx.appointment.id, event: input.event }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; appointmentId?: string; event?: string }
+      return { sent: send.sent, status: send.status, appointmentId: send.appointmentId, event: send.event }
+    },
+  } as ActionDefinition<ReturnType<typeof confirmationSendInput>>,
+  {
+    key: 'appointment.book',
+    risk: 'external_write',
+    validate: appointmentBookInput,
+    async preview(input) {
+      const { getAppointmentTypeByKey, getSchedulingSettings } = await import('@/lib/appointments/settings')
+      const { formatWhen } = await import('@/lib/appointments/emailFormat')
+      const [type, settings] = await Promise.all([getAppointmentTypeByKey(input.typeKey), getSchedulingSettings()])
+      if (!type || !type.active) throw new Error('Unknown appointment type')
+      return {
+        display: {
+          action: 'Book appointment',
+          appointmentType: type.label,
+          when: formatWhen(input.startIso, settings.timezone),
+          attendee: `${input.firstName} ${input.lastName}`,
+          email: input.email,
+          phone: input.phone,
+          notes: input.notes,
+          availabilityNote: 'The slot is checked against the calendar at booking time.',
+        },
+        auditBefore: null,
+        auditAfter: { typeKey: input.typeKey, startIso: input.startIso, leadId: input.leadId },
+      }
+    },
+    async execute(input) {
+      const { getAppointmentTypeByKey } = await import('@/lib/appointments/settings')
+      const { bookAppointment } = await import('@/lib/appointments/book')
+      const type = await getAppointmentTypeByKey(input.typeKey)
+      if (!type || !type.active) throw new Error('Unknown appointment type')
+      // Booked on the caller's behalf: a public booking creates or links the
+      // lead, alerts the firm, and sends the confirmation through the dial.
+      const result = await bookAppointment({
+        type,
+        startIso: input.startIso,
+        attendeeFirstName: input.firstName,
+        attendeeLastName: input.lastName,
+        attendeeEmail: input.email,
+        attendeePhone: input.phone,
+        notes: input.notes,
+        source: 'public',
+        bookedByUserId: null,
+      })
+      return { appointmentId: result.appointmentId, startIso: result.startIso, endIso: result.endIso }
+    },
+    auditResult(result) {
+      const booked = result as { appointmentId?: string; startIso?: string }
+      return { appointmentId: booked.appointmentId, startIso: booked.startIso }
+    },
+  } as ActionDefinition<ReturnType<typeof appointmentBookInput>>,
+  {
+    key: 'scheduling.link.send',
+    risk: 'external_write',
+    validate: schedulingLinkInput,
+    async preview(input) {
+      const { resolveBookingLink, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
+      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const firstName = input.name?.split(/\s+/)[0] ?? null
+      const message = schedulingLinkMessage(firstName, link.label, link.url)
+      return {
+        display: { action: 'Send scheduling link', recipient: input.email, recipientName: input.name, subject: `Schedule your ${link.label}`, content: message },
+        auditBefore: null,
+        auditAfter: { channel: 'email', meetingTypeKey: input.meetingTypeKey, leadId: input.leadId, matterId: input.matterId, provider: link.provider },
+      }
+    },
+    async execute(input, context) {
+      const { resolveBookingLink, schedulingLinkHtml, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
+      const { sendEmail } = await import('@/lib/email/send')
+      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const firstName = input.name?.split(/\s+/)[0] ?? null
+      const message = schedulingLinkMessage(firstName, link.label, link.url)
+      const result = await sendEmail({
+        category: 'scheduling_link',
+        to: input.email,
+        subject: `Schedule your ${link.label}`,
+        text: message,
+        html: schedulingLinkHtml(message, link.url),
+        useStoredTemplate: false,
+        userId: context.actor.id,
+        leadId: input.leadId,
+        matterId: input.matterId,
+      })
+      if (!result.ok) throw new Error(result.error || 'Scheduling link could not be sent')
+      return { sent: result.status === 'sent', status: result.status, to: input.email, meetingTypeKey: input.meetingTypeKey }
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; meetingTypeKey?: string }
+      return { sent: send.sent, status: send.status, meetingTypeKey: send.meetingTypeKey }
+    },
+  } as ActionDefinition<ReturnType<typeof schedulingLinkInput>>,
+  {
+    key: 'design_sheet.proposal.apply',
+    risk: 'legal_financial',
+    validate: designSheetProposalInput,
+    async preview(input) {
+      const { loadFiduciaryResolutionContext, resolveChangingFiduciaryProposals, describeFiduciaryChange } = await import('@/lib/designSheet/fiduciaryProposalServer')
+      const context = await loadFiduciaryResolutionContext(input.matterId)
+      const sheet = context.sheet as unknown as Record<string, unknown> & { id?: string; updated_at?: string }
+      const rows = buildDesignSheetImportPreview({ currentSheet: sheet, proposed: input.fields })
+      const appointments = resolveChangingFiduciaryProposals(context, input.fiduciaries)
+      if (!rows.length && !appointments.length) throw new Error('None of the proposed decisions would change the design sheet')
+      // The current values ride in the preview on purpose: if the sheet moves
+      // before this is accepted, the digest no longer matches and the card
+      // asks for a fresh look rather than writing over the newer answer.
+      return {
+        display: {
+          action: 'Apply design sheet decisions',
+          matterId: input.matterId,
+          changes: [
+            ...rows.map(row => `${row.section} · ${row.label}: ${row.currentDisplay || '(empty)'} → ${row.proposedDisplay}`),
+            ...appointments.map(describeFiduciaryChange),
+          ],
+        },
+        auditBefore: { matterId: input.matterId, sheetId: sheet.id ?? null, updatedAt: sheet.updated_at ?? null },
+        auditAfter: { matterId: input.matterId, fields: rows.map(row => row.field), fiduciaries: appointments.map(row => row.id) },
+      }
+    },
+    async execute(input) {
+      const { loadFiduciaryResolutionContext, resolveChangingFiduciaryProposals } = await import('@/lib/designSheet/fiduciaryProposalServer')
+      const { applyDesignSheetProposal } = await import('@/lib/designSheet/applyProposal')
+      // Resolved afresh so a contact added since the proposal is reused, not duplicated.
+      const fiduciaries = input.fiduciaries.length
+        ? resolveChangingFiduciaryProposals(await loadFiduciaryResolutionContext(input.matterId), input.fiduciaries)
+        : []
+      const result = await applyDesignSheetProposal({ matterId: input.matterId, fields: input.fields, fiduciaries })
+      if (!result.ok) throw new Error(result.error)
+      return { sheetId: result.id, updatedAt: result.updatedAt, appliedFields: result.appliedFields, appliedFiduciaries: result.appliedFiduciaries }
+    },
+    auditResult(result) {
+      const applied = result as { sheetId?: string; updatedAt?: string; appliedFields?: number; appliedFiduciaries?: number }
+      return { sheetId: applied.sheetId, updatedAt: applied.updatedAt, appliedFields: applied.appliedFields ?? 0, appliedFiduciaries: applied.appliedFiduciaries ?? 0 }
+    },
+  } as ActionDefinition<ReturnType<typeof designSheetProposalInput>>,
+  {
+    key: 'email.draft.compose',
+    risk: 'prepare',
+    validate: emailComposeInput,
+    async preview(input, context) {
+      const { data: existing, error } = await context.admin.from('email_drafts')
+        .select('id, subject, updated_at')
+        .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      return {
+        display: {
+          action: existing ? 'Keep the email draft already in the composer' : 'Prepare email draft',
+          recipient: input.to,
+          subject: existing ? existing.subject : input.subject,
+          content: existing ? '(an existing draft is kept as it stands)' : input.bodyHtml,
+        },
+        auditBefore: { contextType: input.contextType, contextId: input.contextId, existingDraftId: existing?.id ?? null },
+        auditAfter: { contextType: input.contextType, contextId: input.contextId, channel: 'email' },
+      }
+    },
+    async execute(input, context) {
+      const { data: existing } = await context.admin.from('email_drafts').select('id')
+        .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId)
+        .maybeSingle()
+      // Never replace work a person already has open in the composer.
+      if (existing) return { id: existing.id, prepared: false, preservedExisting: true }
+      const { data, error } = await context.admin.from('email_drafts').insert({
+        user_id: context.actor.id,
+        context_type: input.contextType,
+        context_id: input.contextId,
+        to_email: input.to,
+        cc: [],
+        bcc: [],
+        subject: input.subject,
+        body_html: input.bodyHtml,
+        document_ids: [],
+        include_signature: true,
+      }).select('id').single()
+      if (error) {
+        if (error.code === '23505') {
+          const { data: raced } = await context.admin.from('email_drafts').select('id')
+            .eq('user_id', context.actor.id).eq('context_type', input.contextType).eq('context_id', input.contextId).maybeSingle()
+          if (raced) return { id: raced.id, prepared: false, preservedExisting: true }
+        }
+        throw new Error(error.message)
+      }
+      return { id: data.id, prepared: true, preservedExisting: false }
+    },
+    auditResult(result) {
+      const value = result as { id?: string; prepared?: boolean; preservedExisting?: boolean }
+      return { draftId: value.id, prepared: value.prepared, preservedExisting: value.preservedExisting }
+    },
+    async undo(_input, record, context) {
+      const draftId = typeof record.afterState?.draftId === 'string' ? record.afterState.draftId : null
+      if (!draftId) throw new Error('The prepared draft was not recorded, so it cannot be removed')
+      // Only a draft this action created is removed; one it preserved was a
+      // person's work and stays.
+      if (record.afterState?.prepared !== true) return { draftId, removed: false }
+      const { error } = await context.admin.from('email_drafts').delete().eq('id', draftId).eq('user_id', context.actor.id)
+      if (error) throw new Error(error.message)
+      return { draftId, removed: true }
+    },
+  } as ActionDefinition<ReturnType<typeof emailComposeInput>>,
   {
     key: 'task.delegate',
     risk: 'internal_write',

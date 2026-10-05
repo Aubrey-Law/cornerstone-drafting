@@ -228,7 +228,7 @@ export default async function AdminTodayPage({
           ]}
         />
         <div className="mt-4">
-          <DelegatedActivityCard />
+          <DelegatedActivityCard includeExplicitApprovals={false} />
         </div>
       </AdminPageShell>
     </>

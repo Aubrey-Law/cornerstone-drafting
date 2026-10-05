@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SlotPicker from '@/components/scheduling/SlotPicker'
 import { EventPrepDrawer } from '@/app/admin/calendar/EventPrepDrawer'
@@ -132,5 +132,60 @@ describe('EventPrepDrawer client responses', () => {
   it('omits the section when there is nothing from the booking', () => {
     renderDrawer({ ...appointment, notes: null, bookingAnswers: [] })
     expect(screen.queryByRole('heading', { name: 'From the client' })).toBeNull()
+  })
+})
+
+describe('EventPrepDrawer video service', () => {
+  const future = new Date(Date.now() + 3 * 86_400_000)
+  const base: CalendarAppointment = {
+    id: 'appt-2', startTime: future.toISOString(), endTime: new Date(future.getTime() + 3_600_000).toISOString(),
+    status: 'scheduled', locationType: 'teams', secondAttendeeName: null, secondAttendeeEmail: null,
+    attendeeName: 'Mary Jones', attendeeEmail: 'mary@example.com', attendeePhone: null, notes: null,
+    typeLabel: 'Design Meeting', source: 'public', calendarSynced: true, onlineMeetingUrl: null,
+    linkedMatterId: null, linkedMatterNumber: null, linkedMatterStage: null, linkedMatterPlanType: null, linkedLeadId: null,
+  }
+
+  function renderWith(a: CalendarAppointment, patchResponse: Record<string, unknown> = {}) {
+    const patches: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        patches.push(JSON.parse(String(init.body)))
+        return { ok: true, json: async () => ({ ok: true, calendarUpdated: true, ...patchResponse }) }
+      }
+      return new Promise(() => {})
+    }))
+    const changed = vi.fn()
+    render(<EventPrepDrawer appointment={a} open onOpenChange={() => {}} authHeaders={() => undefined}
+      onReschedule={() => {}} onBookNext={() => {}} onAppointmentChanged={changed} />)
+    return { patches, changed }
+  }
+
+  it('offers both services when no meeting link exists yet', () => {
+    renderWith(base)
+    expect(screen.getByRole('button', { name: 'Add Google Meet' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add Teams meeting' })).toBeTruthy()
+  })
+
+  it('switches a Teams appointment to Google Meet', async () => {
+    const { patches, changed } = renderWith(
+      { ...base, onlineMeetingUrl: 'https://teams.microsoft.com/l/x', onlineMeetingProvider: 'microsoft_teams' },
+      { onlineMeetingUrl: 'https://meet.google.com/abc' },
+    )
+    expect(screen.queryByRole('button', { name: 'Switch to Teams' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Google Meet' }))
+    await waitFor(() => expect(changed).toHaveBeenCalled())
+    expect(patches[0]).toEqual({ appointmentId: 'appt-2', action: 'use_google_meet' })
+    expect(changed.mock.calls[0][0]).toMatchObject({ onlineMeetingUrl: 'https://meet.google.com/abc', onlineMeetingProvider: 'google_meet' })
+  })
+
+  it('offers Teams instead when the appointment already has a Meet', () => {
+    renderWith({ ...base, onlineMeetingUrl: 'https://meet.google.com/abc', onlineMeetingProvider: 'google_meet' })
+    expect(screen.getByRole('button', { name: 'Switch to Teams' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Google Meet/ })).toBeNull()
+  })
+
+  it('offers no switch for a past appointment', () => {
+    renderWith({ ...base, startTime: '2020-01-01T10:00:00.000Z', endTime: '2020-01-01T11:00:00.000Z' })
+    expect(screen.queryByRole('button', { name: /Google Meet|Teams/ })).toBeNull()
   })
 })

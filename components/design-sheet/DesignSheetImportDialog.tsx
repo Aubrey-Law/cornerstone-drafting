@@ -9,7 +9,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import { FileText, Loader2, Upload, Users, WandSparkles, X } from 'lucide-react'
+import { FileText, ListChecks, Loader2, Upload, Users, WandSparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -67,6 +67,13 @@ type ImportDocxResponse = {
 type AutofillResponse = ImportDocxResponse & {
   fiduciaries?: ResolvedFiduciaryProposal[]
   blocking_count?: number
+}
+
+type FollowUpTaskResponse = {
+  error?: string
+  status?: 'created' | 'updated' | 'nothing_missing'
+  taskId?: string | null
+  openCount?: number
 }
 
 type ApplyProposalResponse = {
@@ -294,6 +301,36 @@ export function DesignSheetImportDialog({
       setSubmitting(false)
     }
   }, [matterId, pastedText, sourceMode])
+
+  /**
+   * Put what the sheet still lacks on the matter as one checklist task. Reads
+   * the stored sheet, so it reflects whatever was last accepted — not the rows
+   * under review — and is offered only before a proposal is on screen.
+   */
+  const handleCreateFollowUpTask = useCallback(async () => {
+    setSubmitting(true)
+    try {
+      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet/follow-up-task`, {
+        method: 'POST',
+      })
+      const result = await response.json().catch(() => ({})) as FollowUpTaskResponse
+      if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`)
+
+      if (result.status === 'nothing_missing') {
+        toast.info('Nothing is missing from the design sheet — no task needed.')
+      } else {
+        const items = result.openCount === 1 ? '1 open item' : `${result.openCount ?? 0} open items`
+        toast.success(result.status === 'updated'
+          ? `Follow-up task refreshed — ${items}`
+          : `Follow-up task created — ${items}`)
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Could not create the follow-up task')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [matterId])
 
   const handleAccept = useCallback(async () => {
     const acceptedFields: Record<string, unknown> = {}
@@ -612,7 +649,19 @@ export function DesignSheetImportDialog({
                 Accept selected
               </Button>
             </>
-          ) : sourceMode === 'upload' ? (
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCreateFollowUpTask}
+              disabled={submitting}
+              title="Add what the design sheet still lacks to this matter's tasks"
+            >
+              <ListChecks className="h-4 w-4" />
+              Create follow-up task
+            </Button>
+          )}
+          {hasPreview ? null : sourceMode === 'upload' ? (
             <Button
               type="button"
               onClick={handleImport}

@@ -5,11 +5,12 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { requireAdmin, fetchGranolaNote, isGranolaNoteId, rpc } = vi.hoisted(() => ({
+const { requireAdmin, fetchGranolaNote, isGranolaNoteId, rpc, scheduleMeetingFollowUp } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   fetchGranolaNote: vi.fn(),
   isGranolaNoteId: vi.fn(),
   rpc: vi.fn(),
+  scheduleMeetingFollowUp: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
@@ -20,6 +21,7 @@ vi.mock('@/lib/granola', async importOriginal => ({
   isGranolaNoteId,
 }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
+vi.mock('@/lib/meetings/schedule', () => ({ scheduleMeetingFollowUp }))
 
 import { AddMeetingNotesDialog } from '@/components/meeting-notes/AddMeetingNotesDialog'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
@@ -123,10 +125,13 @@ describe('lead Granola notes', () => {
     expect(rpc).toHaveBeenCalledWith('import_lead_granola_note_with_activity', expect.objectContaining({
       p_lead_id: 'lead-1', p_granola_note_id: granolaDoc.id, p_actor_id: 'user-1',
     }))
+    expect(scheduleMeetingFollowUp).toHaveBeenCalledTimes(1)
+    expect(scheduleMeetingFollowUp).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'lead-1', content: granolaDoc.notesMarkdown, actorId: 'user-1', sourceKey: row.id }))
 
     rpc.mockResolvedValueOnce({ data: [{ meeting_note: row, imported: false }], error: null })
     const duplicate = await POST(new Request('http://localhost', { method: 'POST', body: JSON.stringify({ noteId: granolaDoc.id }) }), { params: Promise.resolve({ id: 'lead-1' }) })
     expect(await duplicate.json()).toMatchObject({ imported: false, meetingNote: { id: row.id } })
+    expect(scheduleMeetingFollowUp).toHaveBeenCalledTimes(1)
     expect(rpc).toHaveBeenCalledTimes(2)
     expect(fetchGranolaNote).toHaveBeenCalledWith(granolaDoc.id)
 
