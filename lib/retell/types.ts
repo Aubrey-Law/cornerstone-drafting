@@ -10,6 +10,13 @@ export interface RetellCallAnalysis {
   in_voicemail?: boolean | null
   user_sentiment?: string | null
   call_successful?: boolean | null
+  /**
+   * Fields the Retell agent is configured to extract after the call. The
+   * receptionist follow-up reads caller_name, caller_email, caller_phone,
+   * reason, wants_appointment and requested_time when present, and falls
+   * back to the light model over the summary and transcript when not.
+   */
+  custom_analysis_data?: Record<string, unknown> | null
 }
 
 export interface RetellCall {
