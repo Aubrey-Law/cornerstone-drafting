@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Download, FileCheck2, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Download, FileCheck2, Loader2, RotateCcw, Search, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Badge } from '@/components/ui/badge'
@@ -78,6 +78,15 @@ export function DocumentTemplatesSection() {
   const [migrationRequired, setMigrationRequired] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const matching = useMemo(
+    () => needle
+      ? templates.filter(template =>
+        `${template.label} ${template.packageNames.join(' ')} ${template.bundledPath}`.toLowerCase().includes(needle))
+      : templates,
+    [templates, needle],
+  )
   const [matterIds, setMatterIds] = useState<Record<string, string>>({})
   const [variablesByTemplate, setVariablesByTemplate] = useState<Record<string, TemplateVariablesReport | 'loading'>>({})
 
@@ -289,8 +298,23 @@ export function DocumentTemplatesSection() {
           Apply pending Supabase migrations, including <code>20260713222004_cancel_document_template_uploads.sql</code>, to enable the complete staged-template workflow.
         </div>
       )}
+      <div className="relative max-w-md">
+        <Label htmlFor="document-master-search" className="sr-only">Search document masters</Label>
+        <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input
+          id="document-master-search"
+          type="search"
+          className="pl-8"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search by name, package, or file"
+        />
+      </div>
+      {needle && matching.length === 0 && (
+        <p className="text-sm text-muted-foreground">No document masters match &ldquo;{query.trim()}&rdquo;.</p>
+      )}
       {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(category => {
-        const inCategory = templates.filter(template => template.category === category)
+        const inCategory = matching.filter(template => template.category === category)
         if (inCategory.length === 0) return null
         return (
         <section key={category} className="space-y-2">

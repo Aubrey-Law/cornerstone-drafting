@@ -1378,7 +1378,7 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
           </p>
           <p className="font-medium text-foreground">Which role does the heavy lifting?</p>
           <ul className="ml-4 list-disc space-y-1">
-            <li><span className="font-medium text-foreground">Trust-Based Plan:</span> Both roles are necessary, but the Trustee typically carries more long-term responsibility, managing assets according to your Trust&apos;s instructions.</li>
+            <li><span className="font-medium text-foreground">Trust-Based Plan:</span>{' '}Both roles are necessary, but the Trustee typically carries more long-term responsibility, managing assets according to your Trust&apos;s instructions.</li>
             <li><span className="font-medium text-foreground">Will-Based Plan:</span> There is no Trustee. The Personal Representative handles all administrative work to close the estate through probate.</li>
           </ul>
         </ExpandableHelp>

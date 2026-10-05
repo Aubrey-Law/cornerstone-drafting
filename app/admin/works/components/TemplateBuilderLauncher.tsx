@@ -1,26 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Sparkles, Upload } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { WorkSkill } from '@/components/works/types'
 
 /**
- * Library entry point for the Template Builder workflow: upload a DOCX, then
- * open the assistant with the Template Builder skill attached and the upload
- * referenced in the first message.
+ * Library entry point for the Template Builder workflow: pick a DOCX, upload
+ * it, then open the assistant with the Template Builder skill attached and the
+ * upload referenced in the first message. Picking the file starts it — there is
+ * no separate "start" step.
  */
 export function TemplateBuilderLauncher({ skills }: { skills: WorkSkill[] }) {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
   const builderSkill = skills.find(skill => skill.slug === 'template-builder' && skill.is_active)
 
-  const launch = async () => {
-    if (!file) return
+  const launch = async (file: File) => {
     setBusy(true)
     try {
       const form = new FormData()
@@ -45,35 +45,35 @@ export function TemplateBuilderLauncher({ skills }: { skills: WorkSkill[] }) {
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-border bg-muted p-4">
-      <div className="flex items-start gap-2">
-        <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Build a template with the assistant</p>
-          <p className="text-xs text-muted-foreground">
-            Upload a Word document — a firm form, a filled example, or a draft template — and the
-            assistant will ask what should become merge fields, rewrite it, verify it, and register
-            it (or stage it as a new master version).
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
-              type="file"
-              accept=".docx"
-              className="text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-xs"
-              onChange={event => setFile(event.target.files?.[0] ?? null)}
-            />
-            <Button size="sm" disabled={!file || busy} onClick={() => void launch()}>
-              {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
-              Start building
-            </Button>
-            {!builderSkill && (
-              <span className="text-micro text-muted-foreground">
-                Tip: run &quot;Sync&quot; on the Workflows tab so the Template Builder workflow attaches automatically.
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-col items-start gap-1 sm:items-end">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".docx"
+        className="hidden"
+        aria-label="Word document to build a template from"
+        onChange={event => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) void launch(file)
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        title="Upload a firm form, a filled example, or a draft template. The assistant asks what should become merge fields, rewrites and verifies it, then registers it or stages it as a new master version."
+        onClick={() => inputRef.current?.click()}
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        {busy ? 'Uploading…' : 'Build with the assistant'}
+      </Button>
+      {!builderSkill && (
+        <span className="text-micro text-muted-foreground">
+          Run &quot;Sync system skills&quot; on Workflows so the Template Builder attaches automatically.
+        </span>
+      )}
     </div>
   )
 }

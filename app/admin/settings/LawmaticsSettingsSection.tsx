@@ -185,7 +185,7 @@ export function LawmaticsSettingsSection() {
                         Not a custom field ID. Use the number from its merge field, e.g.{' '}
                         <span className="font-mono">930886</span> from{' '}
                         <span className="font-mono">{'{{custom_field_930886}}'}</span>. Built-in fields like{' '}
-                        <span className="font-mono">{'{{practice_area}}'}</span> can&apos;t be mapped here.
+                        <span className="font-mono">{'{{practice_area}}'}</span>{' '}can&apos;t be mapped here.
                       </p>
                     )}
                   </TableCell>

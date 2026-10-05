@@ -1,5 +1,6 @@
 'use client'
 
+import { revealOnNarrowScreen } from '@/lib/revealOnNarrowScreen'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -99,9 +100,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
   // On a phone the preview sits below the whole list; bring it into view.
   const selectSkill = (id: string) => {
     setSelectedId(id)
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-    }
+    revealOnNarrowScreen(() => detailRef.current)
   }
 
   const loadSkills = useCallback(async () => {
@@ -223,7 +222,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
               ))}
             </div>
             {section === 'templates' && (
-              <TabsList className="w-fit max-w-full justify-start overflow-x-auto">
+              <TabsList className="h-auto w-fit max-w-full flex-wrap justify-start">
                 {TEMPLATE_TABS.map(t => (
                   <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
                 ))}
@@ -324,13 +323,14 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{skill.name}</span>
-                          {skill.is_system && <Badge variant="secondary" className="text-micro">System</Badge>}
+                          {/* System is the default; mark the firm's own instead. */}
+                          {!skill.is_system && <Badge variant="secondary" className="text-micro">Custom</Badge>}
                           {skill.is_shared && <Badge variant="secondary" className="text-micro">Shared</Badge>}
                           {!skill.is_active && <Badge variant="destructive" className="text-micro">Inactive</Badge>}
                         </span>
                         <span className="mt-1 line-clamp-2 text-sm text-muted-foreground">{skill.description}</span>
                         <span className="mt-1.5 block text-xs text-muted-foreground">
-                          {skill.practice ?? 'General'} · {skill.execution_mode} · v{skill.version}
+                          {skill.practice ?? 'General'} · {skill.execution_mode === 'run' ? 'Dedicated run' : 'Assistant'} · v{skill.version}
                         </span>
                       </span>
                     </button>
@@ -356,35 +356,33 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         </TabsContent>
 
         {canManageMasters && <TabsContent value="documents" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-4 flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">
+          {/* No outer frame, like the other template tabs: the lists are cards of their own. */}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <p className="flex max-w-3xl items-start gap-2 text-xs text-muted-foreground">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                 The Word masters behind document generation. An upload stays staged until you publish it; validating it
                 against a matter first is optional. Generation always uses the published (or bundled) master.
               </p>
+              <TemplateBuilderLauncher skills={skills} />
             </div>
-            <TemplateBuilderLauncher skills={skills} />
             <DocumentTemplatesSection />
           </div>
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="email-templates" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EmailTemplatesSection authHeaders={authHeaders} />
-          </div>
+          {/* Its list and editor are cards of their own; no outer frame. */}
+          <EmailTemplatesSection authHeaders={authHeaders} />
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="esign" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EsignTemplateEditor />
-          </div>
+          {/* No outer frame: the embedded editor needs the full width. */}
+          <EsignTemplateEditor />
         </TabsContent>}
 
         {canManageMasters && <TabsContent value="clauses" className="min-h-0 flex-1">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EstateClauseLibrarySection currentUserId={currentUserId} />
-          </div>
+          {/* The list and editor are cards of their own; no outer frame. */}
+          <EstateClauseLibrarySection currentUserId={currentUserId} />
         </TabsContent>}
       </Tabs>
 
