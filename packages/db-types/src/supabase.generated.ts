@@ -7118,6 +7118,7 @@ export type Database = {
       matter_documents: {
         Row: {
           content_type: string
+          document_kind: string | null
           created_at: string
           current_version_id: string | null
           draft_run_output: string | null
@@ -7142,6 +7143,7 @@ export type Database = {
         }
         Insert: {
           content_type?: string
+          document_kind?: string | null
           created_at?: string
           current_version_id?: string | null
           draft_run_output?: string | null
@@ -7166,6 +7168,7 @@ export type Database = {
         }
         Update: {
           content_type?: string
+          document_kind?: string | null
           created_at?: string
           current_version_id?: string | null
           draft_run_output?: string | null

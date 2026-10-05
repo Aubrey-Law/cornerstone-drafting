@@ -3,6 +3,11 @@ import type { GeneratedDatabase } from '@/types/supabase'
 import { isStoredDocumentKind, resolveDocumentKinds, type KindedDocument } from '@/lib/execution/documentKind'
 import type { DocumentKind } from '@/lib/execution/requirements'
 
+/** Postgres undefined_column, or PostgREST's schema-cache miss for a column. */
+function isMissingColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204'
+}
+
 export interface ExecutionMatter {
   matterId: string
   title: string
@@ -38,13 +43,14 @@ export async function loadExecutionMatters(
   if (matterError) throw new Error(`Could not load matters: ${matterError.message}`)
   if (!matters || matters.length === 0) return []
 
-  // `document_kind` arrived with 20270108090000 and is read loosely until the
-  // generated types catch up with the deployed schema.
-  const documentResult = await sb
-    .from('matter_documents')
-    .select('matter_id, name, document_kind')
-    .in('matter_id', matters.map((m) => String(m.id)))
-    .is('superseded_at', null)
+  // `document_kind` arrived with 20270108090000. Code and migrations deploy
+  // in no guaranteed order, so until the column exists the documents are read
+  // without it and every kind falls back to the filename, as before.
+  const matterIds = matters.map((m) => String(m.id))
+  const documentQuery = (columns: string) =>
+    sb.from('matter_documents').select(columns).in('matter_id', matterIds).is('superseded_at', null)
+  const first = await documentQuery('matter_id, name, document_kind')
+  const documentResult = first.error && isMissingColumnError(first.error) ? await documentQuery('matter_id, name') : first
   const documentError = documentResult.error
   const documents = (documentResult.data ?? []) as unknown as Array<{ matter_id: string; name: string; document_kind?: string | null }>
 

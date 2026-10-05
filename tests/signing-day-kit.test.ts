@@ -158,6 +158,12 @@ describe('the kit through the dial', () => {
     expect(page).toContain('loadSigningKit(id)')
     const persist = fs.readFileSync('lib/drafting/persistGeneratedDocument.ts', 'utf8')
     expect(persist).toContain('document_kind: args.documentKind ?? null')
+    // Code and migrations deploy in no guaranteed order: both the write and the read tolerate the column not existing yet.
+    expect(persist).toContain("error?.code === '42703' || error?.code === 'PGRST204'")
+    const repository = fs.readFileSync('lib/execution/repository.ts', 'utf8')
+    expect(repository).toContain("documentQuery('matter_id, name')")
+    const generated = fs.readFileSync('packages/db-types/src/supabase.generated.ts', 'utf8')
+    expect(generated).toContain('document_kind: string | null')
     const draft = fs.readFileSync('app/api/admin/matters/[id]/draft/route.ts', 'utf8')
     expect(draft).toContain('documentKind: documentKindForOutputSlug(file.filename)')
     expect(draft).toContain("update({ document_kind: documentKind })")
