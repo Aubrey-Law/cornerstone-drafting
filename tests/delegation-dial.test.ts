@@ -128,7 +128,7 @@ describe('delegation dial: where it is applied', () => {
     expect(read('app/admin/settings/settingsNav.ts')).toContain("tab: 'delegation'")
     expect(read('app/admin/settings/StaffSettingsClient.tsx')).toContain("tab === 'delegation' && <DelegationSettingsSection")
     const today = read('app/admin/(today)/page.tsx')
-    expect(today.split('<DelegatedActivityCard />').length - 1).toBe(2)
+    expect(today.split('<DelegatedActivityCard').length - 1).toBe(2)
     const digest = read('app/api/cron/daily-digest/route.ts')
     expect(digest).toContain('listDelegatedActivity')
     expect(digest).toContain('Done for you since yesterday')
