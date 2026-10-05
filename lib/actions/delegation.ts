@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getAdminClient } from '@/lib/supabaseAdmin'
+import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { getActionDefinition, listActionDefinitions } from '@/lib/actions/registry'
 import { ActionServiceError } from '@/lib/actions/errors'
 import {
@@ -52,6 +52,23 @@ export async function resolveActionAutonomy(
   }
   const level = clampAutonomy(stored, risk)
   return ceiling ? minAutonomy(level, ceiling) : level
+}
+
+/**
+ * The staff user an unattended run acts as when nothing else names one: the
+ * firm's attorney, else any administrator. Null when the firm has no staff
+ * user at all, in which case nothing delegated can run.
+ */
+export async function resolveUnattendedActor(): Promise<ActionActor | null> {
+  const admin = getAdminClient()
+  const { data: primary, error } = await admin.from('users').select('id, email')
+    .eq('email', ADMIN_EMAIL).in('role', ['admin', 'attorney']).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (primary) return { id: primary.id, email: primary.email }
+  const { data: fallback, error: fallbackError } = await admin.from('users').select('id, email')
+    .eq('role', 'admin').order('created_at', { ascending: true }).limit(1).maybeSingle()
+  if (fallbackError) throw new Error(fallbackError.message)
+  return fallback ? { id: fallback.id, email: fallback.email } : null
 }
 
 export interface DelegationSetting {

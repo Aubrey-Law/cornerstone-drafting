@@ -124,6 +124,7 @@ export const ACTION_CATALOG: Record<string, { label: string; description: string
   'matter.stage.transition': { label: 'Change a matter stage', description: 'Move a matter to another pipeline stage.', group: 'matters' },
   'workflow.enqueue': { label: 'Queue a workflow', description: 'Seed a design sheet, SLA plan, stage task or annual review job.', group: 'matters' },
   'billing.reminders.prepare': { label: 'Prepare invoice reminders', description: 'Draft reminders for overdue client invoices; nothing is sent.', group: 'billing' },
+  'billing.reminder.send': { label: 'Send an invoice reminder', description: 'Send a drafted overdue-invoice reminder with the invoice attached. Final notices always wait for you.', group: 'billing' },
   'template.register': { label: 'Register a template', description: 'Add an uploaded Word template to the firm library.', group: 'templates' },
 }
 
