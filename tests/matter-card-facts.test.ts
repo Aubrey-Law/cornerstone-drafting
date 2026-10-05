@@ -3,6 +3,7 @@ import {
   formatLastMilestone,
   matterDaysSince,
   matterDeadlineTone,
+  matterCustomName,
   matterIntakeBadge,
   matterMetaFacts,
   matterQuietDays,
@@ -50,6 +51,27 @@ describe('matter card facts', () => {
     it('joins the matter number and practice area, dropping a missing number', () => {
       expect(matterSubtitle(matter())).toContain('EP-1042')
       expect(matterSubtitle(matter({ matter_number: null })).startsWith(' · ')).toBe(false)
+    })
+
+    it('leads with a renamed matter\'s own name', () => {
+      expect(matterSubtitle(matter())).toBe('Smith Estate Plan · EP-1042 · Estate Planning')
+    })
+  })
+
+  describe('custom name', () => {
+    it('treats the default "Client — Practice area" name as no name', () => {
+      expect(matterCustomName(matter({ matter_name: 'Jane Smith — Estate Planning' }))).toBeNull()
+      expect(matterCustomName(matter({ matter_name: 'jane smith - estate planning' }))).toBeNull()
+      expect(matterCustomName(matter({ matter_name: 'Jane Smith' }))).toBeNull()
+      expect(matterCustomName(matter({ matter_name: '  ' }))).toBeNull()
+    })
+
+    it('keeps a name that says more than the client does', () => {
+      expect(matterCustomName(matter({ matter_name: 'Smith Family Trust' }))).toBe('Smith Family Trust')
+    })
+
+    it('stays out of the way when the title already falls back to the matter name', () => {
+      expect(matterCustomName(matter({ client_name: null }))).toBeNull()
     })
   })
 

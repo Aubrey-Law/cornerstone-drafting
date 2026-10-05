@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -30,11 +30,13 @@ function lifecycleLabel(value: string | null): string {
 export function RecentPeopleTable({ people }: { people: CrmPeopleRow[] }) {
   return (
     <Card className="min-w-0 gap-0 py-0">
-      <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
+      <CardHeader className="border-b border-border py-3">
         <CardTitle className="text-sm">Newest people</CardTitle>
-        <Button asChild variant="outline" size="sm" className="h-8">
-          <Link href="/admin/crm/people">Open directory</Link>
-        </Button>
+        <CardAction>
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link href="/admin/crm/people">Open directory</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="px-0">
         {people.length === 0 ? (

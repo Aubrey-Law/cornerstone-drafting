@@ -25,6 +25,12 @@ interface MatterOverviewHeroProps {
   reviewFlags: IntakeReadinessFlag[]
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
   quickPrompts?: React.ReactNode
+  /**
+   * The canonical next-action strip above the tabs already shows this action
+   * with its own button. Repeating it here put the same title and the same
+   * button twice on one screen, so the hero keeps only what the strip lacks.
+   */
+  actionShownAbove?: boolean
   onIntakeActionClick?: () => void
   onEngagementActionClick?: () => void
   onUnreadClick?: () => void
@@ -41,6 +47,7 @@ export function MatterOverviewHero({
   reviewFlags,
   lastPortalMessage,
   quickPrompts,
+  actionShownAbove = false,
   onIntakeActionClick,
   onEngagementActionClick,
   onUnreadClick,
@@ -103,11 +110,15 @@ export function MatterOverviewHero({
               </Badge>
             )}
           </div>
-          <div>
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Next action</p>
-            <h2 className="text-sm font-semibold text-foreground">{nextAction.title}</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">{nextAction.detail}</p>
-          </div>
+          {actionShownAbove ? (
+            <p className="text-sm text-muted-foreground">{nextAction.detail}</p>
+          ) : (
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Next action</p>
+              <h2 className="text-sm font-semibold text-foreground">{nextAction.title}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">{nextAction.detail}</p>
+            </div>
+          )}
           {currentTask && (
             <p className="text-sm">
               <Link className="text-primary underline underline-offset-2" href={`/admin/matters/${matter.matter_id}?tab=tasks`}>
@@ -152,7 +163,7 @@ export function MatterOverviewHero({
           )}
           {quickPrompts && <div className="mt-1">{quickPrompts}</div>}
         </div>
-        <div className="shrink-0">
+        {!actionShownAbove && <div className="shrink-0">
           {isIntakeAction || isEngagementAction ? (
             <Button
               type="button"
@@ -171,7 +182,7 @@ export function MatterOverviewHero({
               </Link>
             </Button>
           )}
-        </div>
+        </div>}
       </div>
     </section>
   )

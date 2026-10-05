@@ -32,8 +32,8 @@ function List({ items, empty }: { items: string[]; empty: string }) {
 
 export function OperationalBrief({ brief }: { brief: OperationalBriefView }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="gap-3">
+      <CardHeader>
         <CardTitle className="text-sm">Operational brief</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

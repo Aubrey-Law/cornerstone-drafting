@@ -33,9 +33,9 @@ function StatCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">{label}</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums">{NUMBER.format(value)}</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">{NUMBER.format(value)}</p>
             </div>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+            <span className="hidden size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted sm:flex">
               <Icon className="size-4 text-muted-foreground" aria-hidden />
             </span>
           </div>
@@ -67,7 +67,7 @@ export function MatterStatCards({
   aging: MatterAgingTiles
 }) {
   return (
-    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
       <StatCard
         icon={Briefcase}
         label="Open matters"
@@ -94,7 +94,7 @@ export function MatterStatCards({
         label="Signing soon"
         value={snapshot.signingSoon}
         caption="Signing date within 30 days"
-        href="/admin/matters/list"
+        href="/admin/matters/list?card=signing"
       />
     </div>
   )

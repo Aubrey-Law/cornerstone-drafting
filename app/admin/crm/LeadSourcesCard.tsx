@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CrmSlice } from '@/lib/crm/dashboard'
 
 const PALETTE = [
@@ -29,11 +29,13 @@ export function LeadSourcesCard({ sources }: { sources: CrmSlice[] }) {
 
   return (
     <Card className="min-w-0 gap-0 py-0">
-      <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
+      <CardHeader className="border-b border-border py-3">
         <CardTitle className="text-sm">Leads by source</CardTitle>
-        <Button asChild variant="outline" size="sm" className="h-8">
-          <Link href="/admin/crm/people">View people</Link>
-        </Button>
+        <CardAction>
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link href="/admin/crm/people">View people</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="px-4 py-4">
         {total === 0 ? (

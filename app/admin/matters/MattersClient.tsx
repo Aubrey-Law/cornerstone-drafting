@@ -36,6 +36,7 @@ import type { MatterListRow } from '@/lib/queries/matters'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
 import {
   formatLastMilestone,
+  matterCustomName,
   matterIntakeBadge,
   matterLastMilestoneAt,
   matterMetaFacts,
@@ -527,11 +528,10 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
             nothing waiting on it — and this is the way back to one.
           */}
           <FilterChip
-            aria-label="Show closed matters"
             onClick={() => updateFilter('includeClosed', !filters.includeClosed)}
             selected={filters.includeClosed}
           >
-            Closed
+            Include closed
           </FilterChip>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <div
@@ -646,7 +646,53 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
             label="Matters pipeline board"
           />
         ) : (
-          <div className="rounded-lg border border-border bg-card">
+          <>
+          {/*
+            Below md the eight-column table only fits by scrolling sideways,
+            which leaves the client and practice area on screen and pushes the
+            stage and the next action out of view. Phones get the same rows as
+            a stacked list instead; bulk selection stays a desktop affordance.
+          */}
+          <ul aria-label="Matters" className="divide-y divide-border rounded-lg border border-border bg-card md:hidden">
+            {filtered.map(m => {
+              const groupColor = GROUP_COLORS[stageInfo(m.stage).group]
+              const subtitle = matterSubtitle(m)
+              return (
+                // The whole row opens the matter through the title link's
+                // overlay; the work indicator carries links of its own, so it
+                // sits above that overlay rather than inside a second <a>.
+                <li key={m.matter_id} className="relative space-y-1.5 px-3 py-3 hover:bg-accent">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/matters/${m.matter_id}`}
+                        className="block truncate text-sm font-medium text-foreground after:absolute after:inset-0"
+                      >
+                        {matterTitle(m)}
+                      </Link>
+                      {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
+                    </div>
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-micro font-medium"
+                      style={{ background: groupColor.bg, color: groupColor.text }}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: groupColor.dot }} />
+                      {stageLabel(m.stage)}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="relative z-10 min-w-0">
+                      <RecordWorkIndicator summary={workSummaries[m.matter_id]} />
+                    </div>
+                    <span className="shrink-0 text-micro text-muted-foreground">
+                      {formatLastMilestone(matterLastMilestoneAt(m))}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="hidden rounded-lg border border-border bg-card md:block">
             <Table className="min-w-[56rem]">
               <TableHeader>
                 <TableRow>
@@ -671,6 +717,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                   const group = stageInfo(m.stage).group
                   const groupColor = GROUP_COLORS[group]
                   const activity = matterLastMilestoneAt(m)
+                  const customName = matterCustomName(m)
                   return (
                     <TableRow key={m.matter_id}>
                       <TableCell>
@@ -685,11 +732,11 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                           href={`/admin/matters/${m.matter_id}`}
                           className="font-medium text-foreground hover:underline"
                         >
-                          {m.client_name || m.matter_name || 'Untitled'}
+                          {matterTitle(m)}
                         </Link>
-                        {m.matter_number && (
-                          <span className="ml-1.5 text-micro text-muted-foreground">
-                            {m.matter_number}
+                        {(customName || m.matter_number) && (
+                          <span className="block text-xs text-muted-foreground">
+                            {[customName, m.matter_number].filter(Boolean).join(' · ')}
                           </span>
                         )}
                       </TableCell>
@@ -741,6 +788,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </div>
 

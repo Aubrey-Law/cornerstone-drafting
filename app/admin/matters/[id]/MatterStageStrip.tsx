@@ -68,7 +68,15 @@ export function MatterStageStrip({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <ol aria-label="Matter progress" className="flex flex-wrap items-center gap-1">
+        {/*
+          Thirteen stages wrap to four rows on a phone. There the strip scrolls
+          sideways instead; the current stage sits right after the "+N earlier"
+          roll-up, so it is on screen without scrolling.
+        */}
+        <ol
+          aria-label="Matter progress"
+          className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:px-0 [&>li]:shrink-0"
+        >
         {collapsed.length > 0 && (
           <li>
             <Tooltip>

@@ -30,6 +30,9 @@ describe('chatContextForPath', () => {
   it('falls back to general elsewhere, including the drafting hub', () => {
     expect(chatContextForPath('/admin/drafting')).toEqual({ type: 'general' })
     expect(chatContextForPath('/admin/matters')).toEqual({ type: 'general' })
+    expect(chatContextForPath('/admin/matters/list')).toEqual({ type: 'general' })
+    expect(chatContextForPath('/admin/matters/list?stage=early')).toEqual({ type: 'general' })
+    expect(chatContextForPath('/admin/drafting/real-estate-transfer')).toEqual({ type: 'general' })
     expect(chatContextForPath('/admin/settings')).toEqual({ type: 'general' })
   })
 })
