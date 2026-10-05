@@ -36,7 +36,6 @@ carry them by hand.
 | PMPS | Mortgage balance, values per spouse vs combined, prior taxable gifts, anticipated inheritance | Asset notes / drafting notes | Each moves the Massachusetts estate-tax figure |
 | PMPS | First name each client goes by | Nowhere | Used in the proposal's salutation |
 | PMPS | Discretionary standard (HEMS, college), contingent chain, asset-protection wishes | Drafting notes | The proposal's Key Trust Provisions render boilerplate unless these reach the trust document's description |
-| Design meeting | Signing county, target signing date | Drafting notes | Readiness lists `signing_county` / `signing_date` as open, but neither is importable, so the follow-up task keeps listing them until set on the sheet by hand |
 
 ## Task list
 
@@ -44,9 +43,10 @@ carry them by hand.
       now also reads the five most recent `lead_meeting_notes` for the matter's
       `client_intake_id`, so a PMPS note taken on the lead reaches the sheet after hire with
       no pasting.
-- [ ] **Make signing county and signing date importable.** Add `signing_county` (Massachusetts
-      county options) and `signing_date` to the import registry so the design meeting's
-      signing answers land instead of staying open.
+- [x] **Make signing county and signing date importable.** Both are in the import registry
+      and on the design-meeting form. County must be a Massachusetts county; the date is
+      normalized to YYYY-MM-DD (anything else is shown as not applied), and accepting it
+      also sets the signing month and year the documents print.
 - [ ] **Give billing a home the import can write.** Map legal plan, flat fee and fee-quoted to
       the matter's billing fields (or a `decisions` namespace) so the PMPS package stops
       depending on drafting notes.

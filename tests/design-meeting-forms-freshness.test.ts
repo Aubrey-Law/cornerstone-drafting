@@ -95,6 +95,8 @@ describe('a filled worksheet coerces cleanly', () => {
       if (meta.options) filled[field] = meta.options[0]
       else if (meta.kind === 'boolean') filled[field] = 'yes'
       else if (meta.kind === 'number') filled[field] = '30'
+      // The one string field validated as a date: a real answer is a date.
+      else if (field === 'signing_date') filled[field] = '2026-11-03'
       else if (meta.kind === 'string') filled[field] = 'Sample answer'
     }
 

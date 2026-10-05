@@ -149,15 +149,13 @@ export const DESIGN_MEETING_SECTIONS: DesignMeetingSection[] = [
   },
   {
     title: 'Signing & Notes',
-    intro: 'Close the meeting here. Anything unresolved belongs in concerns, not in a guess.',
+    intro: 'Close the meeting here. Signing county is usually Norfolk (Needham office). Anything unresolved belongs in concerns, not in a guess.',
     fields: [
+      'signing_county',
+      'signing_date',
       'goals_notes',
       'concerns',
       'drafting_notes',
-    ],
-    prompts: [
-      'Signing county (defaults to Norfolk — Needham office)',
-      'Target signing date',
     ],
   },
 ]
