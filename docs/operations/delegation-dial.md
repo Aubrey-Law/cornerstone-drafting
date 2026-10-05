@@ -39,8 +39,16 @@ Act and report sends through the registry action, which shares its send path wit
 are ever answered unattended; contacts and possible leads always wait on the page. A cron run
 sends as the mailbox owner; a manual refresh sends as the person who clicked.
 
-Future unattended flows (invoice reminders, appointment confirmations, receptionist bookings)
-opt in the same way as they move onto the registry.
+**Invoice reminders** (`lib/billing/delegateReminders.ts`) consult the dial for
+`billing.reminder.send` as soon as `prepareInvoiceReminderDrafts` writes a new draft. A draft
+already waiting from an earlier run is not offered again. Final notices never send unattended;
+friendly and firm reminders may. The send shares `lib/billing/sendInvoiceReminder.ts` with the
+approve route: the approve RPC is the claim, the branded invoice is attached, and a failed send
+puts the row back to draft. The hourly cron sends as the firm's attorney
+(`resolveUnattendedActor`); a rule running `billing.reminders.prepare` sends as the rule's owner.
+
+Future unattended flows (appointment confirmations, receptionist bookings) opt in the same way
+as they move onto the registry.
 
 ## Undo
 

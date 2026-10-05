@@ -242,6 +242,12 @@ function triageReplyInput(value: unknown): { triageId: string } {
   return { triageId: input.triageId }
 }
 
+function reminderSendInput(value: unknown): { reminderId: string } {
+  const input = objectInput(value)
+  if (typeof input.reminderId !== 'string' || !isUuid(input.reminderId)) throw new Error('A valid reminder identifier is required')
+  return { reminderId: input.reminderId }
+}
+
 const definitions: ActionDefinition[] = [
   {
     key: 'task.start',
@@ -835,6 +841,50 @@ const definitions: ActionDefinition[] = [
     },
   } as ActionDefinition<{ triageId: string }>,
   {
+    key: 'billing.reminder.send',
+    risk: 'external_write',
+    validate: reminderSendInput,
+    async preview(input, context) {
+      const { fetchInvoiceReminder } = await import('@/lib/billing/sendInvoiceReminder')
+      const { reloadInvoice } = await import('@/lib/invoices/issue')
+      const reminder = await fetchInvoiceReminder(context.admin, input.reminderId)
+      if (!reminder) throw new Error('Reminder not found')
+      if (reminder.status !== 'draft') throw new Error('This reminder has already been sent or set aside')
+      const invoice = await reloadInvoice(reminder.invoice_id)
+      // The message the client would read belongs in the preview; the audit
+      // keeps references and the escalation level only.
+      return {
+        display: {
+          action: 'Send invoice reminder',
+          recipient: reminder.recipient_email,
+          clientName: invoice.clientName,
+          invoiceNumber: invoice.number,
+          escalation: reminder.escalation_level,
+          balanceDueCents: invoice.balance,
+          daysPastDue: invoice.daysPastDue,
+          subject: reminder.subject,
+          content: reminder.body,
+        },
+        auditBefore: { reminderId: reminder.id, status: reminder.status, invoiceId: invoice.id, lastRemindedAt: invoice.lastRemindedAt },
+        auditAfter: {
+          reminderId: reminder.id,
+          invoiceId: invoice.id,
+          channel: 'email',
+          escalation: reminder.escalation_level,
+          matterId: invoice.matterId,
+        },
+      }
+    },
+    async execute(input, context) {
+      const { sendInvoiceReminder } = await import('@/lib/billing/sendInvoiceReminder')
+      return sendInvoiceReminder({ admin: context.admin, reminderId: input.reminderId, actorId: context.actor.id })
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; reminderId?: string; invoiceId?: string; invoiceNumber?: string | null }
+      return { sent: send.sent, reminderId: send.reminderId, invoiceId: send.invoiceId, invoiceNumber: send.invoiceNumber ?? null }
+    },
+  } as ActionDefinition<{ reminderId: string }>,
+  {
     key: 'task.delegate',
     risk: 'internal_write',
     validate: taskDelegateInput,
@@ -951,13 +1001,13 @@ const definitions: ActionDefinition[] = [
         auditAfter: { cycleKey: input.cycleKey, overdueInvoiceCount: count ?? 0 },
       }
     },
-    async execute() {
+    async execute(_input, context) {
       const { prepareInvoiceReminderDrafts } = await import('@/lib/billing/prepareInvoiceReminders')
-      return prepareInvoiceReminderDrafts()
+      return prepareInvoiceReminderDrafts({ actorId: context.actor.id })
     },
     auditResult(result) {
-      const value = result as { drafted?: number; unavailable?: boolean }
-      return { drafted: value.drafted ?? 0, unavailable: value.unavailable === true }
+      const value = result as { drafted?: number; unavailable?: boolean; sent?: number; observed?: number }
+      return { drafted: value.drafted ?? 0, unavailable: value.unavailable === true, sent: value.sent ?? 0, observed: value.observed ?? 0 }
     },
   } as ActionDefinition<ReturnType<typeof billingReminderPrepareInput>>,
 ]
