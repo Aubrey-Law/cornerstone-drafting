@@ -123,11 +123,15 @@ Close the meeting here. Anything unresolved belongs in concerns, not in a guess.
 ## After the meeting
 
 - [ ] Upload the worksheet: **Complete sheet → Word document → Read document**.
+      From Granola instead: run the design-meeting recipe and paste its recap into
+      **Complete sheet → Paste notes**.
 - [ ] Review the proposed rows. Anything in the **rejected** panel is a value the field
       cannot hold — set it on the sheet directly rather than rewording the worksheet.
 - [ ] Check the **People** group before accepting: a row badged *Creates a new contact*
       will mint a contact record, so confirm it is not someone already on the matter under
       a different spelling.
 - [ ] Accept, then confirm the **Complete sheet** count dropped.
+- [ ] Use **Create follow-up task** to put whatever is still open on the matter as a
+      checklist task, split into client questions and attorney decisions.
 - [ ] Anything left undecided stays a client question — it belongs in Concerns, not in a
       value nobody chose.
