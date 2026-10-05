@@ -18,7 +18,7 @@ import {
   resolveBookingAnswers,
 } from '@/lib/appointments/bookingQuestions'
 import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
-import { addTeamsMeetingToAppointment, TeamsMeetingError } from '@/lib/appointments/teamsMeeting'
+import { addTeamsMeetingToAppointment, switchAppointmentToGoogleMeet, TeamsMeetingError } from '@/lib/appointments/teamsMeeting'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -267,7 +267,7 @@ interface PatchBody {
   sendFollowUp?: unknown
 }
 
-const PATCH_ACTIONS = ['cancel', 'reschedule', 'no_show', 'add_teams_meeting'] as const
+const PATCH_ACTIONS = ['cancel', 'reschedule', 'no_show', 'add_teams_meeting', 'use_google_meet'] as const
 type PatchAction = (typeof PATCH_ACTIONS)[number]
 
 function isPatchAction(value: unknown): value is PatchAction {
@@ -289,7 +289,7 @@ export async function PATCH(req: NextRequest) {
   const action = body.action
   if (!appointmentId || !isPatchAction(action)) {
     return NextResponse.json(
-      { error: 'appointmentId and a valid action (cancel | reschedule | no_show | add_teams_meeting) are required' },
+      { error: 'appointmentId and a valid action (cancel | reschedule | no_show | add_teams_meeting | use_google_meet) are required' },
       { status: 400 },
     )
   }
@@ -362,6 +362,29 @@ export async function PATCH(req: NextRequest) {
           )
         }
         throw e
+      }
+    }
+
+    if (action === 'use_google_meet') {
+      if (appointment.status !== 'scheduled') {
+        return NextResponse.json({ error: 'Only scheduled appointments can get a Google Meet' }, { status: 409 })
+      }
+      if (Date.parse(appointment.end_time) < Date.now()) {
+        return NextResponse.json({ error: 'This appointment has already ended' }, { status: 409 })
+      }
+      try {
+        const result = await switchAppointmentToGoogleMeet(appointment)
+        return NextResponse.json({
+          ok: true,
+          status: appointment.status,
+          onlineMeetingUrl: result.joinUrl,
+          onlineMeetingProvider: 'google_meet',
+          calendarUpdated: true,
+        })
+      } catch (e) {
+        if (e instanceof TeamsMeetingError) return NextResponse.json({ error: e.message }, { status: 409 })
+        console.error('[appointments] switching to Google Meet failed', e)
+        return NextResponse.json({ error: 'Could not add a Google Meet. Check the Google Calendar connection.' }, { status: 502 })
       }
     }
 

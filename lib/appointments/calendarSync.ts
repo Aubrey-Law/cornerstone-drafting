@@ -67,6 +67,15 @@ export async function attachTeamsMeetingToAppointmentEvent(
   await google.attachTeamsMeetingToCalendarEvent(eventId, joinUrl)
 }
 
+/** Replace the event's Teams link with a Google Meet; returns the Meet link, or null with no event. */
+export async function attachGoogleMeetToAppointmentEvent(
+  appointment: AppointmentEventIds,
+): Promise<string | null> {
+  const eventId = eventIdForAppointment(appointment)
+  if (!eventId) return null
+  return google.attachGoogleMeetToCalendarEvent(eventId)
+}
+
 /** RSVP state for an appointment's event. */
 export async function appointmentEventAttendees(
   appointment: AppointmentEventIds,

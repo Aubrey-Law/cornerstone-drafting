@@ -2,6 +2,7 @@
 
 import type { ReactNode, Ref } from 'react'
 import { fmtTime, useBrowserTimeZone } from '@/components/scheduling/SlotPicker'
+import { DEFAULT_OFFICE_ADDRESS } from '@/lib/appointments/officeAddress'
 
 /**
  * The split-card shell shared by the client booking surfaces (/book/[slug],
@@ -13,15 +14,24 @@ import { fmtTime, useBrowserTimeZone } from '@/components/scheduling/SlotPicker'
 
 export type LocationType = 'phone' | 'teams' | 'in_person'
 
-export const LOCATION_HINT: Record<LocationType, string> = {
-  phone: 'Phone call — we’ll call the number you provide',
-  teams: 'Video call — a Google Meet link will be in your calendar invite',
-  in_person: 'In person at our office',
+/**
+ * What the client is told about the format. The video service (Google Meet or
+ * Teams) is the firm's choice after booking, so the copy doesn't name one.
+ */
+export function locationHint(locationType: LocationType, officeAddress: string = DEFAULT_OFFICE_ADDRESS): string {
+  switch (locationType) {
+    case 'phone':
+      return 'Phone call — we’ll call the number you provide'
+    case 'teams':
+      return 'Video call — meeting link will be provided in your calendar invite'
+    case 'in_person':
+      return `In person at our office (${officeAddress})`
+  }
 }
 
 export const LOCATION_LABEL: Record<LocationType, string> = {
   phone: 'Phone call',
-  teams: 'Virtual meeting',
+  teams: 'Video call',
   in_person: 'In person',
 }
 
@@ -80,10 +90,13 @@ export function BrandHeader({ firmName }: { firmName: string }) {
 export function EventMeta({
   durationMinutes,
   locationType,
+  officeAddress,
   extra = [],
 }: {
   durationMinutes: number
   locationType: LocationType | null
+  /** Shown for in-person appointments; defaults to the Needham office. */
+  officeAddress?: string
   extra?: [string, string][]
 }) {
   const tz = useBrowserTimeZone()
@@ -95,7 +108,7 @@ export function EventMeta({
   const rows: [string, string][] = [
     ...extra,
     ['Length', `${durationMinutes} minutes`],
-    ...(locationType ? [['Format', LOCATION_HINT[locationType]] as [string, string]] : []),
+    ...(locationType ? [['Format', locationHint(locationType, officeAddress)] as [string, string]] : []),
     ...(tz ? [['Time zone', tz.name] as [string, string]] : []),
   ]
   return (

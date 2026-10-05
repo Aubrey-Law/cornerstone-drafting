@@ -51,6 +51,8 @@ export interface BookingWidgetProps {
    */
   standalone?: boolean
   firmName?: string
+  /** The office for in-person appointments (from firm settings). */
+  officeAddress?: string
 }
 
 const FIELD = 'h-12 rounded-lg bg-card px-3.5 text-base md:text-base @3xl/booking:h-[46px]'
@@ -65,6 +67,7 @@ export default function BookingWidget({
   emailLocked = false,
   standalone = false,
   firmName = 'Aubrey Law',
+  officeAddress,
 }: BookingWidgetProps) {
   const locationOptions: LocationType[] =
     type.locationTypes && type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
@@ -177,7 +180,7 @@ export default function BookingWidget({
             )}
           </div>
 
-          <EventMeta durationMinutes={type.durationMinutes} locationType={locationType} />
+          <EventMeta durationMinutes={type.durationMinutes} locationType={locationType} officeAddress={officeAddress} />
 
           {locationOptions.length > 1 && step !== 'done' && (
             <fieldset>

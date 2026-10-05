@@ -2,6 +2,7 @@ import { portalUrl } from '@/lib/urls'
 import type { OnlineMeetingProvider } from './calendarTypes'
 import { formatWhen, locationLine } from './emailFormat'
 import type { AppointmentType } from './types'
+import { firmOfficeAddress } from './officeAddress'
 
 /**
  * The client-facing confirmation, built the same way whether it is sent from
@@ -47,8 +48,6 @@ export function buildAppointmentConfirmationEmail(input: ConfirmationEmailInput)
 
 /** Office line for the location sentence, from firm settings. */
 export function officeAddressLine(firm: { street?: string | null; city?: string | null; state?: string | null; zip?: string | null }): string | null {
-  const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
-    .filter(Boolean)
-    .join(', ')
-  return office || null
+  // One office address for every surface; see lib/appointments/officeAddress.ts.
+  return firmOfficeAddress(firm)
 }
