@@ -115,6 +115,20 @@ it created. A draft the attorney already had open on that record is kept untouch
 is a separate external write: at Propose it waits as a card in "Waiting for you"; at Act it
 goes. A Granola re-import of the same note, or a note under forty characters, proposes nothing.
 
+**Signing day** (`lib/signing/delegateKit.ts`) runs when a signing appointment is booked for a
+matter. The dial decides whether `signing.kit.prepare` opens the matter's signing record
+(`signing_ceremonies`, one row per document to be signed) and adds a task to print the
+signing-day kit the day before; a record the attorney already opened for this signing is kept
+as it stands. The kit itself (`/admin/matters/[id]/signing-kit`, "Print signing-day kit" on the
+Signing view) is always available: who must be in the room, the signing order with a tab for
+every signer, witness and acknowledgment, what the witnesses and the notary are told, and what
+happens after the pens go down, all drawn from the execution rules in
+`lib/execution/requirements.ts`. The documents come from the kind the generator records at
+generation (`matter_documents.document_kind`), with the filename guess only for documents
+that arrived some other way. The action is a preparation with an undo (the task, and the record
+only if it opened it and nothing has been recorded as signed), keyed to the matter and the
+signing day.
+
 Every unattended flow in the app now consults the dial; the next ones to add should opt in the
 same way as they move onto the registry.
 

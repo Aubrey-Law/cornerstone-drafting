@@ -17,6 +17,10 @@ export interface AfterBookedInput {
   matterId: string | null
   /** Auto-send the intake invite for lead discovery calls (settings toggle). */
   autoIntakeInvite: boolean
+  /** When the appointment starts; the signing-day kit is keyed to the day. */
+  startIso?: string | null
+  /** The staff member who booked, when a person did; the kit proposal is theirs. */
+  bookedByUserId?: string | null
 }
 
 export async function runPostBookingAutomation(input: AfterBookedInput): Promise<void> {
@@ -34,6 +38,17 @@ export async function runPostBookingAutomation(input: AfterBookedInput): Promise
     }
   } catch (err) {
     console.error('[appointments] stage automation failed', err)
+  }
+
+  // A signing on the calendar is the moment the kit becomes work: the dial
+  // decides whether the record is opened and the print task created unasked.
+  try {
+    if (input.matterId && input.type.key === 'signing_appointment') {
+      const { delegateSigningKit } = await import('@/lib/signing/delegateKit')
+      await delegateSigningKit({ matterId: input.matterId, scheduledFor: input.startIso ?? null, actorId: input.bookedByUserId ?? null })
+    }
+  } catch (err) {
+    console.error('[appointments] signing kit automation failed', err)
   }
 }
 

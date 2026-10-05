@@ -1,8 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadCeremonyStatuses } from '@/lib/ceremony/repository'
-import { detectKinds } from '@/lib/execution/detect'
-import { loadExecutionMatters } from '@/lib/execution/repository'
+import { executionKinds, loadExecutionMatters } from '@/lib/execution/repository'
 import { loadFiduciaryOverview } from '@/lib/fiduciary/view'
 import { loadFundingRows } from '@/lib/funding/repository'
 import { summariseMatters } from '@/lib/funding/rollup'
@@ -56,7 +55,7 @@ export async function loadMatterCloseoutSummary(
       const toSign = matters.filter(matter => completed.get(matter.matterId) !== 'completed')
       return {
         mattersToSign: toSign.length,
-        documentsToConfirm: toSign.reduce((sum, matter) => sum + detectKinds(matter.documentNames).unmatched.length, 0),
+        documentsToConfirm: toSign.reduce((sum, matter) => sum + executionKinds(matter).unmatched.length, 0),
       }
     }),
     orNull(async () => ({ matters: (await loadUnresolvedBlockers(client)).length })),

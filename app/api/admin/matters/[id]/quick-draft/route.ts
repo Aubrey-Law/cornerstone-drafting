@@ -9,6 +9,7 @@ import {
   renderSingleTemplateForMatter,
 } from '@/lib/drafting/quickDraft'
 import { persistDraftDocument, DOCX_CONTENT_TYPE } from '@/lib/drafting/persistGeneratedDocument'
+import { documentKindForTemplate } from '@/lib/execution/documentKind'
 import { scanDocxBufferForMarkers } from '@/lib/drafting/markerScan'
 import { buildDraftDocumentName } from '@/lib/estateGenerator/draftDocumentName'
 import { getDocumentTemplateRegistry } from '@/lib/documentTemplates/registry'
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       generationEngine: 'quick-draft',
       markerCount: scan.markerCount,
       missingCount: scan.missingFields.length,
+      documentKind: documentKindForTemplate({ templateId, title: rendered.title ?? null }),
       templateId,
       templateVersionId: rendered.templateVersionId,
     })

@@ -144,6 +144,11 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
     description: 'Write proposed design-sheet fields from meeting notes or imported text. Legal judgment, so it is always reviewed field by field before anything is written.',
     group: 'matters',
   },
+  'signing.kit.prepare': {
+    label: 'Prepare the signing-day kit',
+    description: 'When a signing appointment is booked, open the matter’s signing record with the documents to be signed and add a task to print the kit. The kit page itself is always available from the Signing view.',
+    group: 'matters',
+  },
   'matter.stage.transition': { label: 'Change a matter stage', description: 'Move a matter to another pipeline stage.', group: 'matters' },
   'workflow.enqueue': { label: 'Queue a workflow', description: 'Seed a design sheet, SLA plan, stage task or annual review job.', group: 'matters' },
   'billing.reminders.prepare': { label: 'Prepare invoice reminders', description: 'Draft reminders for overdue client invoices; nothing is sent.', group: 'billing' },
