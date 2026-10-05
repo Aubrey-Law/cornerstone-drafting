@@ -114,6 +114,48 @@ export function fiduciaryProposalId(proposal: Pick<FiduciaryProposal, 'role' | '
   return `${proposal.party}:${proposal.role}:${proposal.priority}:${proposal.is_co ? 'co' : 'seq'}`
 }
 
+const MAX_PROPOSAL_PRIORITY = 2
+const MAX_PROPOSALS = 40
+
+/**
+ * Read a list of appointments from an untrusted source (a model's answer, an
+ * action payload) into well-formed proposals. Anything malformed is dropped,
+ * never repaired: an appointment the source did not state clearly is not one
+ * to put in front of the attorney.
+ */
+export function coerceFiduciaryProposals(value: unknown): FiduciaryProposal[] {
+  if (!Array.isArray(value)) return []
+  const out: FiduciaryProposal[] = []
+  for (const entry of value) {
+    if (out.length >= MAX_PROPOSALS) break
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const row = entry as Record<string, unknown>
+    if (!FIDUCIARY_PROPOSAL_ROLES.includes(row.role as FiduciaryProposalRole)) continue
+    const first = typeof row.first_name === 'string' ? row.first_name.trim().slice(0, 100) : ''
+    const last = typeof row.last_name === 'string' ? row.last_name.trim().slice(0, 100) : ''
+    if (!first || !last) continue
+    const priority = typeof row.priority === 'number' && Number.isInteger(row.priority) ? row.priority : 0
+    if (priority < 0 || priority > MAX_PROPOSAL_PRIORITY) continue
+    out.push({
+      role: row.role as FiduciaryProposalRole,
+      party: row.party === 'spouse' ? 'spouse' : 'client',
+      priority,
+      is_co: row.is_co === true,
+      first_name: first,
+      last_name: last,
+      relationship: typeof row.relationship === 'string' && row.relationship.trim()
+        ? row.relationship.trim().slice(0, 100)
+        : null,
+    })
+  }
+  return out
+}
+
+/** Would accepting this row change the sheet? A slot already held by the same person is left alone. */
+export function fiduciaryProposalChangesSheet(row: Pick<ResolvedFiduciaryProposal, 'replacement' | 'currentDisplay'>): boolean {
+  return row.replacement || row.currentDisplay === '-'
+}
+
 function nameKey(first: unknown, last: unknown): string {
   return `${String(first ?? '').trim().toLowerCase()}|${String(last ?? '').trim().toLowerCase()}`
 }

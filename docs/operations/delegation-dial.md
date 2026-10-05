@@ -77,6 +77,32 @@ is its own proposal through the dial, keyed to the call:
 All of these start at Propose and wait as cards in the "Waiting for you" section of Today's
 "Done for you" card. The summary email to the firm is unchanged.
 
+**Meeting follow-up** (`lib/meetings/followUp.ts`) runs when a meeting note is saved on a hired
+matter (`/api/admin/meeting-notes`) or on a lead (the manual and Granola lead meeting-note
+routes). The route queues it behind its response (`lib/meetings/schedule.ts`, Next's `after`),
+so saving stays quick and nothing in the follow-up can fail the save. The note is read twice:
+the design-sheet import's own extraction (`parseDesignSheetImportText`) for field decisions
+and the sheet's fiduciary prompt (`proposeFiduciaries`) for appointments, both on a matter only,
+and the light model for the attorney's to-dos, what the client agreed to send, and a
+plain-language recap. Each becomes its own proposal through the dial, keyed to the note's id so
+a re-save proposes nothing twice:
+
+| From the notes | Proposed |
+| --- | --- |
+| Design decisions that would change the sheet (matter only): field values and fiduciary appointments | `design_sheet.proposal.apply`: one batch, shown line by line as current → proposed. An appointment names who holds the slot now and whether accepting would create a contact. Legal and financial, so it is capped at Propose and always waits for a click. |
+| Each thing the attorney agreed to do | `task.create`, dated from the notes or a week out |
+| The recap, when the client has an email | `email.draft.compose`: a draft in that record's composer, then `email.draft.send` for the same draft |
+
+Appointments are matched to the people already on the matter when proposed and again when
+applied, so a name the matter knows resolves to that contact and a person added in between is
+reused rather than created twice. A slot already held by the same person is not proposed.
+
+The compose action is a preparation that defaults to Act and report (`defaultAutonomy`), so
+the recap is in the composer by the time the attorney looks, and its undo removes only a draft
+it created. A draft the attorney already had open on that record is kept untouched. The send
+is a separate external write: at Propose it waits as a card in "Waiting for you"; at Act it
+goes. A Granola re-import of the same note, or a note under forty characters, proposes nothing.
+
 Every unattended flow in the app now consults the dial; the next ones to add should opt in the
 same way as they move onto the registry.
 
