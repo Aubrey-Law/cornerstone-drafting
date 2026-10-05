@@ -347,9 +347,12 @@ export function RecordTasksTab({
                   <button
                     type="button"
                     onClick={() => setSelectedTask(task)}
-                    className={cn('flex items-center gap-1.5 truncate text-left text-sm text-foreground hover:underline', task.status === 'done' && 'text-muted-foreground line-through')}
+                    // `truncate` on the flex button itself never clipped the
+                    // title: the text overflowed under the source pill and the
+                    // due date on a narrow screen. The span inside clips instead.
+                    className={cn('flex w-full min-w-0 items-center gap-1.5 text-left text-sm text-foreground hover:underline', task.status === 'done' && 'text-muted-foreground line-through')}
                   >
-                    {task.title}
+                    <span className="truncate">{task.title}</span>
                     {task.recurrence && <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Repeats" />}
                   </button>
                   {task.description && (
@@ -373,7 +376,7 @@ export function RecordTasksTab({
                     </ul>
                   )}
                 </span>
-                <TaskSourcePill source={task.source} />
+                <TaskSourcePill source={task.source} className="hidden sm:inline-flex" />
                 {task.assignee_name && (
                   <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                     {initialsFor(task.assignee_name)}
@@ -416,7 +419,7 @@ export function RecordTasksTab({
       </div>
 
       {(!loadError || tasks.length > 0) && <aside className="space-y-3">
-        <RailCard title="Follow-up cadence">
+        <RailCard title="Follow-up cadence" empty={cadences.length === 0}>
           {cadences.length === 0 ? (
             <p className="text-xs text-muted-foreground">No repeating follow-ups on this record.</p>
           ) : (
@@ -454,7 +457,7 @@ export function RecordTasksTab({
           )}
         </RailCard>
 
-        <RailCard title="Applied templates">
+        <RailCard title="Applied templates" empty={appliedTemplates.length === 0}>
           {appliedTemplates.length === 0 ? (
             <p className="text-xs text-muted-foreground">No templates applied yet.</p>
           ) : (
@@ -471,7 +474,7 @@ export function RecordTasksTab({
           )}
         </RailCard>
 
-        <RailCard title="Recently completed">
+        <RailCard title="Recently completed" empty={done.length === 0}>
           {done.length === 0 ? (
             <p className="text-xs text-muted-foreground">Nothing completed yet.</p>
           ) : (
@@ -522,9 +525,14 @@ export const TASK_VIEW_OPTIONS: readonly ViewSwitchOption<TaskView>[] = [
   { value: 'plan', label: 'Plan', icon: CalendarRange },
 ]
 
-function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * `empty` cards stay out of the stacked (narrow) layout: there they sit under
+ * the list, and three "nothing here" cards in a row pushed real content off a
+ * phone screen. Beside the list on a wide layout they keep their place.
+ */
+function RailCard({ title, empty = false, children }: { title: string; empty?: boolean; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card">
+    <section className={cn('rounded-lg border border-border bg-card', empty && 'hidden @min-[960px]:block')}>
       <h3 className="border-b border-border px-3 py-2 text-xs font-semibold">
         {title}
       </h3>
