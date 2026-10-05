@@ -90,6 +90,14 @@ describe('validateEngagementInput', () => {
     })).toMatchObject({ ok: false, errors: expect.arrayContaining(['spouse.name', 'spouse.email']) })
   })
 
+  it('refuses a spouse who would sign from the primary signer\'s email', () => {
+    expect(validateEngagementInput({
+      ...base,
+      clientMode: 'couple',
+      spouse: { name: 'Sam Client', email: 'ALEX@example.com' },
+    })).toMatchObject({ ok: false, errors: expect.arrayContaining(['spouse.email']) })
+  })
+
   it('requires null spouse for individuals', () => {
     expect(validateEngagementInput({ ...base, spouse: { name: 'Sam', email: 'sam@example.com' } })).toMatchObject({
       ok: false,

@@ -3,6 +3,7 @@ import { createAgreementDraft } from '@/lib/engagement/repository'
 import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { engagementSeedDefinition } from '@/lib/engagement/seed'
+import { findResumableEngagementDraft } from '@/lib/engagement/resumableDraft'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { err, userId } = await requireAdmin(req)
@@ -10,14 +11,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { id: matterId } = await params
   const admin = getAdminClient()
-  const { data: existing } = await admin
-    .from('engagement_agreements')
-    .select('id')
-    .eq('matter_id', matterId)
-    .in('status', ['draft', 'ready', 'failed'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const existing = await findResumableEngagementDraft(admin, matterId)
   if (existing) {
     await markEngagementDraftStatus(admin, { matterId })
     return Response.json({ agreementId: existing.id })
@@ -44,27 +38,34 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     practiceArea: matter.practice_area,
     billingType: details?.billing_type,
     spouseEmail: matter.spouse_email,
+    primaryEmail: matter.client_email,
     decedentName: details?.pb_decedent_name,
   })
   if (!seed.ok) return Response.json({ error: seed.error }, { status: 400 })
 
-  const result = await createAgreementDraft(admin, {
-    matterId,
-    preparedBy: userId,
-    inputSnapshot: {
-      ...seed.definition,
-      agreementDate: new Date().toISOString().slice(0, 10),
-      primary: { name: matter.client_name || 'Client', email: matter.client_email || '' },
-      spouse: seed.spouseEmail ? { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail } : null,
-      decedentName: seed.decedentName,
-      fee: { amount: Number(matter.fee_amount) || 0, paymentTerms: '' },
-      optionalClauseKeys: [],
-      emailMessage: 'Please review and sign the enclosed engagement agreement.',
-      expirationHours: 168,
-    },
-    renderSha256: 'unrendered',
-    masterVersion: '0',
-  })
+  let result: Awaited<ReturnType<typeof createAgreementDraft>>
+  try {
+    result = await createAgreementDraft(admin, {
+      matterId,
+      preparedBy: userId,
+      inputSnapshot: {
+        ...seed.definition,
+        agreementDate: new Date().toISOString().slice(0, 10),
+        primary: { name: matter.client_name || 'Client', email: matter.client_email || '' },
+        spouse: seed.definition.clientMode === 'couple' ? { name: matter.spouse_name || 'Spouse', email: seed.spouseEmail ?? '' } : null,
+        decedentName: seed.decedentName,
+        fee: { amount: Number(matter.fee_amount) || 0, paymentTerms: '' },
+        optionalClauseKeys: [],
+        emailMessage: 'Please review and sign the enclosed engagement agreement.',
+        expirationHours: 168,
+      },
+      renderSha256: 'unrendered',
+      masterVersion: '0',
+    })
+  } catch (error) {
+    console.error('Could not create matter engagement draft', { matterId, error })
+    return Response.json({ error: 'Could not create the engagement draft. Check the client and spouse names and emails, then try again.' }, { status: 500 })
+  }
 
   await markEngagementDraftStatus(admin, { matterId })
   await admin.from('matter_activity').insert({

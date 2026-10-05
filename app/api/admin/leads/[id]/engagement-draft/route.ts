@@ -3,25 +3,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createAgreementDraft } from '@/lib/engagement/repository'
 import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { engagementSeedDefinition } from '@/lib/engagement/seed'
-import { isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
+import { findResumableEngagementDraft } from '@/lib/engagement/resumableDraft'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
-
-type ExistingAgreement = {
-  id: string
-  matter_id: string | null
-  lead_id: string | null
-  active_revision_id: string | null
-  active_revision?: { input_snapshot?: Record<string, unknown> | null } | null
-}
-
-function canOpenWorkspace(agreement: ExistingAgreement | null): agreement is ExistingAgreement {
-  const snapshot = agreement?.active_revision?.input_snapshot
-  return Boolean(snapshot && isSupportedWorkspaceDefinition({
-    matterId: agreement?.matter_id,
-    leadId: agreement?.lead_id,
-    ...snapshot,
-  }))
-}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { err, userId } = await requireAdmin(req)
@@ -49,65 +32,62 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ error: 'Reactivate the opportunity before drafting an engagement.' }, { status: 409 })
   }
 
-  const { data: existing } = await admin
-    .from('engagement_agreements')
-    .select('id, matter_id, lead_id, active_revision_id')
-    .eq('matter_id', opportunity.id)
-    .in('status', ['draft', 'ready', 'failed'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const existingAgreement = existing as ExistingAgreement | null
-  if (existingAgreement?.active_revision_id) {
-    const { data: activeRevision } = await admin
-      .from('engagement_agreement_revisions')
-      .select('input_snapshot')
-      .eq('agreement_id', existingAgreement.id)
-      .eq('id', existingAgreement.active_revision_id)
-      .maybeSingle()
-    existingAgreement.active_revision = activeRevision
-  }
-
-  if (canOpenWorkspace(existingAgreement)) {
+  const existing = await findResumableEngagementDraft(admin, opportunity.id)
+  if (existing) {
     await markEngagementDraftStatus(admin, { matterId: opportunity.id, leadId: id })
-    return Response.json({ agreementId: existingAgreement.id })
+    return Response.json({ agreementId: existing.id })
   }
 
   // Read through the join (step 3 of docs/matter-contacts-migration.md); the
   // opportunity resolved above is the matter.
   const spouse = await loadSpouseContact(admin, opportunity.id as string, '*')
+  // A probate lead names its decedent on the intake sheet (probate_details);
+  // the opportunity's matter_details copy is the fallback once staff edit it there.
+  const { data: details } = await admin
+    .from('matter_details')
+    .select('pb_decedent_name')
+    .eq('client_id', opportunity.id)
+    .maybeSingle()
+  const probate = (lead.probate_details ?? {}) as { decedent_name?: unknown }
+  const primaryEmail = (lead.email || '') as string
   const seed = engagementSeedDefinition({
     practiceArea: lead.practice_area,
     billingType: lead.billing_type,
     spouseEmail: spouse?.email,
+    primaryEmail,
+    decedentName: (typeof probate.decedent_name === 'string' && probate.decedent_name.trim())
+      || details?.pb_decedent_name,
   })
   if (!seed.ok) return Response.json({ error: seed.error }, { status: 400 })
 
-  const result = await createAgreementDraft(admin, {
-    matterId: opportunity.id,
-    preparedBy: userId,
-    inputSnapshot: {
-      ...seed.definition,
-      agreementDate: new Date().toISOString().slice(0, 10),
-      primary: {
-        name: lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' '),
-        email: lead.email || '',
+  let result: Awaited<ReturnType<typeof createAgreementDraft>>
+  try {
+    result = await createAgreementDraft(admin, {
+      matterId: opportunity.id,
+      preparedBy: userId,
+      inputSnapshot: {
+        ...seed.definition,
+        agreementDate: new Date().toISOString().slice(0, 10),
+        primary: {
+          name: lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' '),
+          email: primaryEmail,
+        },
+        spouse: seed.definition.clientMode === 'couple'
+          ? { name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' '), email: seed.spouseEmail ?? '' }
+          : null,
+        decedentName: seed.decedentName,
+        fee: { amount: Number(lead.engagement_fee_quoted) || 0, paymentTerms: '' },
+        optionalClauseKeys: [],
+        emailMessage: 'Please review and sign the enclosed engagement agreement.',
+        expirationHours: 168,
       },
-      spouse: seed.spouseEmail
-        ? { name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' '), email: seed.spouseEmail }
-        : null,
-      // A lead record carries no decedent; a probate agreement seeded from one
-      // is refused above rather than drafted with the estate unnamed.
-      decedentName: seed.decedentName,
-      fee: { amount: Number(lead.engagement_fee_quoted) || 0, paymentTerms: '' },
-      optionalClauseKeys: [],
-      emailMessage: 'Please review and sign the enclosed engagement agreement.',
-      expirationHours: 168,
-    },
-    renderSha256: 'unrendered',
-    masterVersion: '0',
-  })
+      renderSha256: 'unrendered',
+      masterVersion: '0',
+    })
+  } catch (error) {
+    console.error('Could not create lead engagement draft', { leadId: id, error })
+    return Response.json({ error: 'Could not create the engagement draft. Check the client and spouse names and emails, then try again.' }, { status: 500 })
+  }
 
   await markEngagementDraftStatus(admin, { matterId: opportunity.id, leadId: id })
   await admin.from('lead_activity').insert({

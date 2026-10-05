@@ -89,6 +89,9 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
     else {
       if (!value.spouse.name) errors.push('spouse.name')
       if (!EMAIL_PATTERN.test(value.spouse.email)) errors.push('spouse.email')
+      // Each signer is a separate e-signature recipient keyed by email, so a
+      // couple sharing one inbox cannot both sign from it.
+      else if (value.spouse.email === value.primary.email) errors.push('spouse.email')
     }
   } else if (value.spouse !== null) {
     errors.push('spouse')

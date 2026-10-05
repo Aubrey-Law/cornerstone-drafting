@@ -23,6 +23,13 @@ export interface EngagementSeedRecord {
   practiceArea: unknown
   billingType: unknown
   spouseEmail: string | null | undefined
+  /**
+   * The primary signer's email. A couple who share one inbox is still a
+   * couple, but each signer needs an address of their own (the e-signature
+   * request — and the recipients table — key on it), so a spouse email equal
+   * to this one is seeded blank for staff to fill in.
+   */
+  primaryEmail?: string | null
   /** The estate's decedent, for a probate record. */
   decedentName?: string | null
 }
@@ -37,7 +44,9 @@ export interface EngagementSeedDefinition {
 export type EngagementSeedResult =
   /**
    * `spouseEmail` is the checked one, so the caller does not re-check it. It is
-   * null for a solo client, whose agreement has no second signer.
+   * null for a solo client, whose agreement has no second signer, and '' for a
+   * couple whose spouse shares the primary's email — so callers decide the
+   * spouse signer from `definition.clientMode`, not from this value's truthiness.
    *
    * `decedentName` is null unless the chosen master names one, so a caller can
    * put it straight into the draft without asking which practice area this is.
@@ -70,8 +79,11 @@ export function engagementSeedDefinition(record: EngagementSeedRecord): Engageme
   // master is the table's answer, not a second rule here — and probate is
   // always the personal representative alone, which is why the spouse on a
   // probate record (a surviving spouse is common) does not make it a couple.
-  const spouseEmail = practiceArea === 'Probate' ? null : record.spouseEmail || null
-  const clientMode: EngagementClientMode = spouseEmail ? 'couple' : 'individual'
+  const recordSpouseEmail = practiceArea === 'Probate' ? null : (record.spouseEmail || '').trim() || null
+  const clientMode: EngagementClientMode = recordSpouseEmail ? 'couple' : 'individual'
+  const sharesPrimaryEmail = Boolean(recordSpouseEmail && record.primaryEmail
+    && recordSpouseEmail.toLowerCase() === record.primaryEmail.trim().toLowerCase())
+  const spouseEmail = sharesPrimaryEmail ? '' : recordSpouseEmail
   const definition = { practiceArea, clientMode, scopeKey: 'standard' as const, legalPlan }
   // Every combination the practice areas above allow has a master today, so
   // this guard is what keeps `ok: true` meaning "a master exists" if one is

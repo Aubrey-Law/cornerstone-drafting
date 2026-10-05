@@ -73,7 +73,7 @@ describe('matter-owned lead lifecycle', () => {
   })
 
   it('uses matter-owned agreements from lead and matter routes', () => {
-    expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('.eq(\'matter_id\', opportunity.id)')
+    expect(read('lib/engagement/resumableDraft.ts')).toContain('.eq(\'matter_id\', matterId)')
     expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('matterId: opportunity.id')
     expect(read('app/api/admin/matters/[id]/engagement-draft/route.ts')).toContain('matterId,')
   })

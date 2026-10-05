@@ -39,9 +39,18 @@ export async function createAgreementDraft(client: SupabaseClient, input: Agreem
       ? [{ agreement_id: agreementId, recipient_order: 2, role: 'spouse', ...input.inputSnapshot.spouse, email: input.inputSnapshot.spouse.email.toLowerCase() }]
       : []),
   ]
-  const { error: recipientError } = await client.from('engagement_agreement_recipients').insert(recipients)
-  if (recipientError) throw new Error(recipientError.message)
-  return createAgreementRevision(client, agreementId, input)
+  try {
+    const { error: recipientError } = await client.from('engagement_agreement_recipients').insert(recipients)
+    if (recipientError) throw new Error(recipientError.message)
+    return await createAgreementRevision(client, agreementId, input)
+  } catch (error) {
+    // An agreement with no revision cannot open in the workspace, yet it still
+    // counts as the record's open draft — the lead page offered an "Open" link
+    // to a 404 and every retry stacked another one. Nothing has been sent, so
+    // the half-made row goes (recipients and revisions cascade).
+    await client.from('engagement_agreements').delete().eq('id', agreementId)
+    throw error
+  }
 }
 
 export async function createAgreementRevision(

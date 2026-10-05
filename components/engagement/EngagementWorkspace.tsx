@@ -125,6 +125,9 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
       !input.primary?.email && 'Primary signer email',
       input.clientMode === 'couple' && !input.spouse?.name && 'Spouse name',
       input.clientMode === 'couple' && !input.spouse?.email && 'Spouse email',
+      input.clientMode === 'couple' && input.spouse?.email && input.primary?.email
+        && input.spouse.email.trim().toLowerCase() === input.primary.email.trim().toLowerCase()
+        && 'Spouse email different from the primary signer\'s',
       template?.namesDecedent && !input.decedentName && 'Decedent name',
       !input.agreementDate && 'Agreement date',
       firmFee !== 'none' && !(input.fee?.amount > 0) && 'Flat fee',
