@@ -26,8 +26,15 @@ const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 const MICROSOFT_TIMEOUT_MS = 15_000
 
 export const REQUIRED_TEAMS_SCOPE = 'OnlineMeetings.ReadWrite'
+/**
+ * Reading a meeting's transcript after the fact, so the meeting follow-up can
+ * run from it. Added later than the meeting scope, so a connection made
+ * before it lacks it until the attorney reconnects; the sweep says so rather
+ * than failing.
+ */
+export const REQUIRED_TRANSCRIPT_SCOPE = 'OnlineMeetingTranscript.Read.All'
 
-const SCOPES = ['openid', 'email', 'offline_access', 'User.Read', REQUIRED_TEAMS_SCOPE] as const
+const SCOPES = ['openid', 'email', 'offline_access', 'User.Read', REQUIRED_TEAMS_SCOPE, REQUIRED_TRANSCRIPT_SCOPE] as const
 
 function tenant(): string {
   return process.env.MICROSOFT_TENANT_ID?.trim() || 'organizations'
@@ -66,12 +73,21 @@ export function isMicrosoftConfigured(): boolean {
   return getMicrosoftConfigIssue() === null
 }
 
-export function hasTeamsScope(scope: string | null | undefined): boolean {
+function hasScope(scope: string | null | undefined, required: string): boolean {
   if (!scope) return false
+  const wanted = required.toLowerCase()
   return scope
     .toLowerCase()
     .split(/[\s,]+/)
-    .some(s => s === REQUIRED_TEAMS_SCOPE.toLowerCase() || s.endsWith(`/${REQUIRED_TEAMS_SCOPE.toLowerCase()}`))
+    .some(s => s === wanted || s.endsWith(`/${wanted}`))
+}
+
+export function hasTeamsScope(scope: string | null | undefined): boolean {
+  return hasScope(scope, REQUIRED_TEAMS_SCOPE)
+}
+
+export function hasTranscriptScope(scope: string | null | undefined): boolean {
+  return hasScope(scope, REQUIRED_TRANSCRIPT_SCOPE)
 }
 
 export function toMicrosoftDisplayError(error: string): string {
@@ -279,4 +295,36 @@ export async function deleteTeamsMeeting(meetingId: string): Promise<void> {
   })
   // 404 means it is already gone, which is what a delete asks for.
   if (!r.ok && r.status !== 404) throw await graphFailure(r, 'meeting delete')
+}
+
+export interface TeamsTranscriptSummary {
+  id: string
+  createdAt: string | null
+}
+
+/** The transcripts Teams has produced for a meeting, newest first. Empty until the meeting ends and Teams finishes. */
+export async function listTeamsMeetingTranscripts(meetingId: string): Promise<TeamsTranscriptSummary[]> {
+  const token = await getMicrosoftAccessToken()
+  const r = await microsoftFetch(`${GRAPH_BASE}/me/onlineMeetings/${encodeURIComponent(meetingId)}/transcripts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  // A meeting Graph no longer knows has no transcript to read.
+  if (r.status === 404) return []
+  if (!r.ok) throw await graphFailure(r, 'transcript list')
+  const json = (await r.json().catch(() => ({}))) as { value?: Array<{ id?: string; createdDateTime?: string }> }
+  return (json.value ?? [])
+    .filter((row): row is { id: string; createdDateTime?: string } => typeof row.id === 'string')
+    .map(row => ({ id: row.id, createdAt: row.createdDateTime ?? null }))
+    .sort((a, b) => ((a.createdAt ?? '') < (b.createdAt ?? '') ? 1 : -1))
+}
+
+/** One transcript's content as WebVTT text. */
+export async function fetchTeamsTranscriptVtt(meetingId: string, transcriptId: string): Promise<string> {
+  const token = await getMicrosoftAccessToken()
+  const r = await microsoftFetch(
+    `${GRAPH_BASE}/me/onlineMeetings/${encodeURIComponent(meetingId)}/transcripts/${encodeURIComponent(transcriptId)}/content?$format=text/vtt`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: 'text/vtt' } },
+  )
+  if (!r.ok) throw await graphFailure(r, 'transcript content')
+  return r.text()
 }

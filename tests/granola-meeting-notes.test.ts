@@ -32,10 +32,15 @@ describe('granola meeting notes integration', () => {
       path.join(process.cwd(), 'app/api/admin/meeting-notes/route.ts'),
       'utf8',
     )
-    expect(route).toContain("source: 'meeting-notes'")
-    expect(route).toContain('meeting-notes/')
+    const writer = fs.readFileSync(
+      path.join(process.cwd(), 'lib/meetings/saveMatterMeetingNote.ts'),
+      'utf8',
+    )
+    expect(route).toContain('saveMatterMeetingNote({')
     expect(route).not.toContain('lead')
-    expect(route).toContain('matter_activity')
+    expect(writer).toContain("source: 'meeting-notes'")
+    expect(writer).toContain('meeting-notes/')
+    expect(writer).toContain('matter_activity')
   })
 
   it('wires meeting notes card and dialog on matter detail', () => {

@@ -65,6 +65,10 @@
     {
       "path": "/api/cron/automation-rules",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/meeting-transcripts",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

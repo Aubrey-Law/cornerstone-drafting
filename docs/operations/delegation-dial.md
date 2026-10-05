@@ -97,6 +97,18 @@ Appointments are matched to the people already on the matter when proposed and a
 applied, so a name the matter knows resolves to that contact and a person added in between is
 reused rather than created twice. A slot already held by the same person is not proposed.
 
+**Transcripts land on their own.** The meeting-transcripts sweep (`lib/meetings/transcriptSync.ts`,
+`/api/cron/meeting-transcripts`, every half hour) reads new Granola notes and the transcripts of
+Teams meetings booked through the app, saves each on the matter or lead the meeting belonged to,
+and runs the same follow-up as a manual save. The record is taken from the appointment on the
+calendar at that time when it is linked to one, else from exactly one open matter or exactly one
+active lead whose email was in the meeting; two candidates or none means the note is recorded as
+skipped and left for the "Add meeting notes" dialog. Every transcript the sweep looks at is written
+to `meeting_transcript_imports`, so nothing is read twice. The sweep acts as the firm's attorney
+(`resolveUnattendedActor`) and saves at most five notes a run. Teams transcripts need the
+`OnlineMeetingTranscript.Read.All` scope; a connection made before it reports `reconnect_needed`
+until the attorney reconnects from Settings. Granola needs `GRANOLA_API_KEY`.
+
 The compose action is a preparation that defaults to Act and report (`defaultAutonomy`), so
 the recap is in the composer by the time the attorney looks, and its undo removes only a draft
 it created. A draft the attorney already had open on that record is kept untouched. The send
