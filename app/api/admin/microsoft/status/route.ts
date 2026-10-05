@@ -5,6 +5,7 @@ import {
   getMicrosoftConfigIssue,
   getMicrosoftConnection,
   hasTeamsScope,
+  hasTranscriptScope,
   isMicrosoftConfigured,
 } from '@/lib/microsoftTeams'
 
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
     connected: Boolean(conn),
     email: conn?.email ?? null,
     hasTeamsScope: hasTeamsScope(conn?.scopes),
+    hasTranscriptScope: hasTranscriptScope(conn?.scopes),
     canRefresh: Boolean(conn?.refresh_token),
     ownConnection: Boolean(conn && conn.user_id === userId),
   })

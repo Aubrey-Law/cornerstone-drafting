@@ -173,6 +173,51 @@ export async function fetchGranolaNote(noteId: string): Promise<GranolaDocument>
   return toGranolaDocument(raw)
 }
 
+export interface GranolaNoteDetail extends GranolaNoteSummary {
+  /** When the meeting was scheduled to start, when Granola knows it. */
+  startIso: string | null
+  attendeeEmails: string[]
+  sourceUrl: string
+}
+
+function attendeeEmails(raw: RawNote): string[] {
+  const list = [...(raw.attendees ?? []), ...(raw.calendar_event?.invitees ?? [])]
+  const out = new Set<string>()
+  for (const person of list) {
+    const email = person.email?.trim().toLowerCase()
+    if (email) out.add(email)
+  }
+  return [...out]
+}
+
+/**
+ * Recent notes with who was in the meeting and when, for the transcript
+ * sweep to match against the firm's records. The list does not say whether a
+ * note's summary is ready; `fetchGranolaNote` answers that with a 409.
+ */
+export async function listRecentNoteDetails(sinceDays = 7): Promise<GranolaNoteDetail[]> {
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString()
+  const params = new URLSearchParams({ created_after: since, page_size: String(LIST_PAGE_SIZE) })
+  const body = await granolaGet<ListNotesResponse>(`/notes?${params.toString()}`)
+  return (body.notes ?? [])
+    .filter((n): n is RawNote & { id: string; created_at: string } =>
+      typeof n.id === 'string' && typeof n.created_at === 'string',
+    )
+    .map((n) => ({
+      id: n.id,
+      title: n.title?.trim() || n.calendar_event?.event_title?.trim() || 'Untitled meeting',
+      createdAt: n.created_at,
+      startIso: n.calendar_event?.scheduled_start_time ?? n.created_at,
+      attendeeEmails: attendeeEmails(n),
+      sourceUrl: n.web_url ?? 'https://notes.granola.ai/',
+    }))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+}
+
+export function isGranolaConfigured(): boolean {
+  return Boolean(process.env.GRANOLA_API_KEY?.startsWith('grn_'))
+}
+
 export async function listRecentNotes(sinceDays = 14): Promise<GranolaNoteSummary[]> {
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString()
   const params = new URLSearchParams({
