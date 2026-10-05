@@ -7,11 +7,15 @@ import {
   type DesignSheetDecisionField,
 } from '@/lib/designSheetImport/decisionFields'
 import { CITIZENSHIP_VALUES, MA_COUNTY_OPTIONS, MARITAL_STATUS_VALUES } from '@/lib/sharedFields'
+import { normalizeSigningDate } from '@/lib/designSheet/signingDate'
 import type { AssetItem, DesignSheet, DesignSheetChild, DesignSheetUpdate } from '@/types/database'
 
 const DESIGN_PLAN_TYPE_VALUES = DESIGN_PLAN_TYPE_OPTIONS.map(option => option.value)
 const MA_COUNTY_VALUES = MA_COUNTY_OPTIONS.map(option => option.value)
 const REMOTE_BENEFICIARY_VALUES = ['heirs_at_law', 'half_heirs_spouse', 'named']
+
+/** What a rejected signing date is told it should have been. */
+const SIGNING_DATE_FORMAT = ['a calendar date (YYYY-MM-DD)'] as const
 
 export const MIN_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 20
 export const MAX_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 60_000
@@ -182,6 +186,12 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   age_distribution_schedule: { section: 'Will', label: 'Age distribution schedule', kind: 'string', options: ['outright_25', 'outright_30', 'outright_35', 'staggered_25_30_35'] satisfies readonly NonNullable<DesignSheet['age_distribution_schedule']>[] },
   trust_protector_name: { section: 'Trust', label: 'Trust protector name', kind: 'string' },
   disinheritances: { section: 'Family', label: 'Disinherited heirs', kind: 'json' },
+
+  // A design meeting settles where and when the client signs. Month and year are
+  // derived from the date when it is applied (lib/designSheet/applyProposal.ts),
+  // and the notary commission is the notary's fact, so neither is proposable.
+  signing_date: { section: 'Signing and Execution', label: 'Signing date', kind: 'string' },
+  signing_county: { section: 'Signing and Execution', label: 'Signing county', kind: 'string', options: MA_COUNTY_VALUES },
 
   goals_notes: { section: 'Goals & Notes', label: 'Goals notes', kind: 'string' },
   concerns: { section: 'Goals & Notes', label: 'Concerns', kind: 'string' },
@@ -404,6 +414,17 @@ export function coerceDesignSheetImport(parsed: unknown): {
     if (meta.kind === 'json') value = coerceJson(rawValue)
 
     if (isEmptyValue(value)) continue
+
+    // A signing date is printed on every executed document, so a value that is
+    // not a real date ("next spring", "TBD") is surfaced rather than stored.
+    if (field === 'signing_date' && typeof value === 'string') {
+      const date = normalizeSigningDate(value)
+      if (!date) {
+        rejected.push({ field, label: meta.label, section: meta.section, value, options: SIGNING_DATE_FORMAT })
+        continue
+      }
+      value = date
+    }
 
     if (meta.options && typeof value === 'string') {
       const matched = matchDesignSheetImportOption(value, meta.options)

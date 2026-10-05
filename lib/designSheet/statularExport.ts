@@ -64,16 +64,16 @@ const FALLBACK_SECTION_ORDER = [
 
 /**
  * Columns Statular's Signing Information page asks for that the import registry
- * does not name. Their absence there is deliberate — the document importer must
- * not propose an execution date or a notary commission — but exporting them is
- * the opposite direction and perfectly safe. The map places them; this list is
- * what lets `formatValue` and the fallback know they exist.
+ * does not name. Signing date and county are in the registry — a design meeting
+ * settles both — but the month and year are derived from the date when it is
+ * applied, and the notary commission is the notary's fact rather than the
+ * client's, so none of those three is proposable. Exporting them is the opposite
+ * direction and perfectly safe. The map places them; this list is what lets
+ * `formatValue` and the fallback know they exist.
  */
 const EXTRA_COLUMNS: Record<string, string> = {
-  signing_date: 'Signing date',
   signing_month: 'Signing month',
   signing_year: 'Signing year',
-  signing_county: 'Signing county',
   notary_commission_expiration: 'Notary commission expiration',
 }
 

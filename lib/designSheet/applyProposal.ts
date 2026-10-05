@@ -1,4 +1,5 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { signingDateParts } from '@/lib/designSheet/signingDate'
 import { buildDesignSheetSavePayload, inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { updatedAtMatches } from '@/lib/designSheet/updatedAt'
 import { attachContactToMatter } from '@/lib/contacts/attachContactToMatter'
@@ -49,6 +50,16 @@ export function partitionImportableFields(
     else refused.push(field)
   }
   return { fields, refused }
+}
+
+/**
+ * The month and year columns an accepted signing date implies. The documents
+ * print them beside the date, so they are set from it exactly as the sheet's
+ * own date picker does; nothing else may propose them.
+ */
+export function withDerivedSigningParts(columnFields: Record<string, unknown>): Record<string, unknown> {
+  if (typeof columnFields.signing_date !== 'string') return {}
+  return signingDateParts(columnFields.signing_date)
 }
 
 export interface ApplyDesignSheetProposalArgs {
@@ -134,6 +145,7 @@ export async function applyDesignSheetProposal(
     if (isDesignSheetDecisionField(field)) decisionFields[field] = value
     else columnFields[field] = value
   }
+  Object.assign(columnFields, withDerivedSigningParts(columnFields))
 
   const contactIdByProposalId = await resolveProposalContacts({
     admin,

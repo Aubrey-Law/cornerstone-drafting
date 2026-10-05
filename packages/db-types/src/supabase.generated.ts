@@ -6698,6 +6698,7 @@ export type Database = {
           fee_collected: boolean | null
           fee_collected_date: string | null
           fee_payment_status: string
+          fee_quoted_date: string | null
           flat_fee_amount: number | null
           hired_date: string | null
           id: string
@@ -6719,6 +6720,7 @@ export type Database = {
           matter_type: string | null
           next_action_date: string | null
           open_date: string | null
+          optional_services: Json | null
           paralegal_assigned: string | null
           payment_link_sent_at: string | null
           pb_706_due_date: string | null
@@ -6832,6 +6834,7 @@ export type Database = {
           fee_collected?: boolean | null
           fee_collected_date?: string | null
           fee_payment_status?: string
+          fee_quoted_date?: string | null
           flat_fee_amount?: number | null
           hired_date?: string | null
           id?: string
@@ -6853,6 +6856,7 @@ export type Database = {
           matter_type?: string | null
           next_action_date?: string | null
           open_date?: string | null
+          optional_services?: Json | null
           paralegal_assigned?: string | null
           payment_link_sent_at?: string | null
           pb_706_due_date?: string | null
@@ -6966,6 +6970,7 @@ export type Database = {
           fee_collected?: boolean | null
           fee_collected_date?: string | null
           fee_payment_status?: string
+          fee_quoted_date?: string | null
           flat_fee_amount?: number | null
           hired_date?: string | null
           id?: string
@@ -6987,6 +6992,7 @@ export type Database = {
           matter_type?: string | null
           next_action_date?: string | null
           open_date?: string | null
+          optional_services?: Json | null
           paralegal_assigned?: string | null
           payment_link_sent_at?: string | null
           pb_706_due_date?: string | null

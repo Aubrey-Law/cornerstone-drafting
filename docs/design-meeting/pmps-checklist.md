@@ -127,10 +127,12 @@ What the client was quoted and what happens next.
       **Add meeting notes**.
 - [ ] Work the recipe's **Missing information** list into the follow-up email — every
       asset line still without a number, and every policy without an owner.
-- [ ] Once the matter is hired, open `/admin/drafting/<matterId>` and paste the recap
-      above **Missing information** into **Complete sheet → Paste notes**, or upload the
-      worksheet through **Complete sheet → Word document**.
+- [ ] Once the matter is hired, open `/admin/drafting/<matterId>` and run
+      **Complete sheet → Fill what is missing**: it reads the lead's meeting notes, so the
+      PMPS recap is picked up without pasting. A paper worksheet goes in through
+      **Complete sheet → Word document**.
 - [ ] Review and accept, then use **Create follow-up task** in the same dialog to turn what
       the sheet still lacks into a checklist task on the matter.
-- [ ] Billing (legal plan, fee quoted) has no design-sheet field. Record it on the matter;
-      the import carries it only as drafting notes.
+- [ ] Record billing on the matter's **Billing** tab: legal plan and member ID, flat fee,
+      the date a fee was quoted, and the optional services offered (**Proposal pricing**).
+      The PMPS package reads them from there; the meeting import does not write billing.

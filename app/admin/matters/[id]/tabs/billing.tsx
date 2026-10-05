@@ -47,6 +47,7 @@ import type { MatterDetailsRow } from '@/types/matter-details'
 import {
   CloseOutCard,
   FeeTypeCard,
+  ProposalPricingCard,
   LegalPlanClaimCard,
   MoneyInCard,
   PlanClaimsCard,
@@ -604,6 +605,7 @@ export function MatterBillingTab({
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-4">
             <FeeTypeCard details={details} onSaveField={onSaveField} />
+            <ProposalPricingCard details={details} onSaveField={onSaveField} />
             <LegalPlanClaimCard
               details={details}
               onSaveField={onSaveField}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { toDateInputValue } from '@/lib/dob'
+import { signingDateParts } from '@/lib/designSheet/signingDate'
 import {
   getEstatePlanDesignSetup,
   setEstatePlanDesignSetup,
@@ -61,9 +62,9 @@ export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
       return
     }
     onChange('signing_date', value)
-    const date = new Date(`${value}T12:00:00`)
-    onChange('signing_month', date.toLocaleString('en-US', { month: 'long' }))
-    onChange('signing_year', String(date.getFullYear()))
+    const { signing_month, signing_year } = signingDateParts(value)
+    onChange('signing_month', signing_month)
+    onChange('signing_year', signing_year)
   }
 
   return (

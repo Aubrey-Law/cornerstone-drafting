@@ -74,6 +74,7 @@ export const SYSTEM_AUTOMATIONS: readonly SystemAutomationDefinition[] = [
   { key: 'esign-reconcile', name: 'E-sign reconciliation', scheduleLabel: 'Every 10 minutes', schedules: ['*/10 * * * *'], path: '/api/cron/esign-reconcile', expectedIntervalMinutes: 10 },
   { key: 'lawmatics-calendar', name: 'Lawmatics calendar sync', scheduleLabel: 'Every 10 minutes', schedules: ['*/10 * * * *'], path: '/api/cron/lawmatics-calendar', expectedIntervalMinutes: 10 },
   { key: 'automation-rules', name: 'Rule automation runner', scheduleLabel: 'Every 5 minutes', schedules: ['*/5 * * * *'], path: '/api/cron/automation-rules', expectedIntervalMinutes: 5 },
+  { key: 'meeting-transcripts', name: 'Meeting transcripts', scheduleLabel: 'Every 30 minutes', schedules: ['*/30 * * * *'], path: '/api/cron/meeting-transcripts', expectedIntervalMinutes: 30 },
 ] as const
 
 export function getSystemAutomation(key: string): SystemAutomationDefinition | null {

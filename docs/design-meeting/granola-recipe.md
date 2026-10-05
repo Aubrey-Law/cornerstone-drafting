@@ -136,13 +136,13 @@ The client’s own elections. Never presumed from the firm’s standards.
 
 #### Signing & Notes
 
-Close the meeting here. Anything unresolved belongs in concerns, not in a guess.
+Close the meeting here. Signing county is usually Norfolk (Needham office). Anything unresolved belongs in concerns, not in a guess.
 
+- Signing county (Barnstable / Berkshire / Bristol / Dukes / Essex / Franklin / Hampden / Hampshire / Middlesex / Nantucket / Norfolk / Plymouth / Suffolk / Worcester):
+- Signing date:
 - Goals notes:
 - Concerns:
 - Drafting notes:
-- Signing county (defaults to Norfolk — Needham office):
-- Target signing date:
 
 ## Missing information
 

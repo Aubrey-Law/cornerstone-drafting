@@ -245,8 +245,8 @@ describe('reading appointments from the notes', () => {
 describe('where the follow-up runs', () => {
   it('is queued behind the response from each meeting-note route, keyed to the saved note', () => {
     const matter = fs.readFileSync('app/api/admin/meeting-notes/route.ts', 'utf8')
-    expect(matter.indexOf("from('matter_activity').insert")).toBeLessThan(matter.indexOf('scheduleMeetingFollowUp({'))
-    expect(matter).toContain('sourceKey: data.id')
+    expect(matter.indexOf('await saveMatterMeetingNote({')).toBeLessThan(matter.indexOf('scheduleMeetingFollowUp({'))
+    expect(matter).toContain('sourceKey: document.id')
     expect(matter).toContain('export const maxDuration = 60')
 
     const manual = fs.readFileSync('app/api/admin/leads/[id]/meeting-notes/route.ts', 'utf8')

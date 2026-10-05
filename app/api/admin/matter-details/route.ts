@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { parseOptionalServices } from '@/lib/billing/optionalServices'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
@@ -59,6 +60,8 @@ const WRITABLE_FIELDS = new Set([
   'conflict_cleared', 'engagement_signed', 'engagement_status', 'engagement_signed_at',
   'fee_collected', 'fee_collected_date',
   'fee_payment_status',
+  // PMPS proposal billing
+  'fee_quoted_date', 'optional_services',
   // V2 — EP Document Tracking
   'ep_living_will_status', 'ep_hipaa_auth_status',
   'ep_signing_method', 'ep_witness_required', 'ep_funding_complete_date',
@@ -164,6 +167,15 @@ export async function PATCH(req: Request) {
     if (!normalizedValue) {
       return NextResponse.json({ error: 'Invalid target signing date' }, { status: 400 })
     }
+  }
+
+  if (field === 'optional_services' && normalizedValue !== null) {
+    // The proposal prints this column as a table; store only rows it can print.
+    const services = parseOptionalServices(normalizedValue)
+    if (!services) {
+      return NextResponse.json({ error: 'Optional services must be a list' }, { status: 400 })
+    }
+    normalizedValue = services
   }
 
   if (field === 'engagement_status') {

@@ -110,6 +110,10 @@ export interface MatterDetailsRow {
   fee_collected?: boolean | null
   fee_collected_date?: string | null
   fee_payment_status?: 'unpaid' | 'deposit' | 'paid_in_full' | null
+  /** When a fee was quoted to the client; null = not yet quoted. */
+  fee_quoted_date?: string | null
+  /** PMPS add-ons; see lib/billing/optionalServices.ts. Null = firm defaults. */
+  optional_services?: unknown
 
   // ── V2 — EP Document Tracking ──
   ep_living_will_status?: string | null
