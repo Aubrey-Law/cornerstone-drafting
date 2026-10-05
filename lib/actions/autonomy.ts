@@ -149,6 +149,11 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
     description: 'When a signing appointment is booked, open the matter’s signing record with the documents to be signed and add a task to print the kit. The kit page itself is always available from the Signing view.',
     group: 'matters',
   },
+  'signing.record.executed': {
+    label: 'Record an executed document',
+    description: 'Record what a scanned, executed original shows (signed when, how many witnesses, notarised) on the matter’s signing record. A claim about validity, so it is always confirmed by you from the reading.',
+    group: 'matters',
+  },
   'matter.stage.transition': { label: 'Change a matter stage', description: 'Move a matter to another pipeline stage.', group: 'matters' },
   'workflow.enqueue': { label: 'Queue a workflow', description: 'Seed a design sheet, SLA plan, stage task or annual review job.', group: 'matters' },
   'billing.reminders.prepare': { label: 'Prepare invoice reminders', description: 'Draft reminders for overdue client invoices; nothing is sent.', group: 'billing' },

@@ -129,6 +129,18 @@ that arrived some other way. The action is a preparation with an undo (the task,
 only if it opened it and nothing has been recorded as signed), keyed to the matter and the
 signing day.
 
+After the signing, the executed originals are scanned in from the same view
+(`lib/signing/scanIn.ts`, `POST /api/admin/matters/[id]/signing/scan-in`). Each scan is read by
+the model (what document, signed when, how many witnesses signed, notarised or not, what looks
+blank), filed to the matter at once as an executed original with its kind recorded, and what
+the paper shows is proposed as `signing.record.executed` for the attorney to confirm card by
+card. Recording an execution is a claim that a document is valid, so the action is legal and
+financial and never writes itself: at confirmation it marks the document executed on the
+signing record, links the filed scan (`ceremony_documents.executed_document_id`), fills in the
+witness and notary names only where the record does not yet say, and notes where the originals
+are kept (`signing_ceremonies.originals_location`). It has no undo, like every other record of
+a legal fact.
+
 Every unattended flow in the app now consults the dial; the next ones to add should opt in the
 same way as they move onto the registry.
 

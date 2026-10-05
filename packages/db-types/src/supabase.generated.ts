@@ -1411,6 +1411,7 @@ export type Database = {
           created_at: string
           document_kind: string
           executed: boolean
+          executed_document_id: string | null
           id: string
           notarized: boolean
           note: string | null
@@ -1425,6 +1426,7 @@ export type Database = {
           created_at?: string
           document_kind: string
           executed?: boolean
+          executed_document_id?: string | null
           id?: string
           notarized?: boolean
           note?: string | null
@@ -1439,6 +1441,7 @@ export type Database = {
           created_at?: string
           document_kind?: string
           executed?: boolean
+          executed_document_id?: string | null
           id?: string
           notarized?: boolean
           note?: string | null
@@ -8866,6 +8869,7 @@ export type Database = {
           matter_id: string
           notary_name: string | null
           note: string | null
+          originals_location: string | null
           scheduled_for: string | null
           status: string
           updated_at: string
@@ -8882,6 +8886,7 @@ export type Database = {
           matter_id: string
           notary_name?: string | null
           note?: string | null
+          originals_location?: string | null
           scheduled_for?: string | null
           status?: string
           updated_at?: string
@@ -8898,6 +8903,7 @@ export type Database = {
           matter_id?: string
           notary_name?: string | null
           note?: string | null
+          originals_location?: string | null
           scheduled_for?: string | null
           status?: string
           updated_at?: string
