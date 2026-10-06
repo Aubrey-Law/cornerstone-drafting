@@ -7,16 +7,7 @@ import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_FILE_CLOSING_SETTINGS, formatDateKey, type FileClosingSettings, type RetentionCandidate } from '@/lib/fileClosing/model'
 import type { RetentionOverview } from '@/lib/fileClosing/server'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { usePrompt } from '@/components/useConfirm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,8 +27,9 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [busyMatter, setBusyMatter] = useState<string | null>(null)
-  const [destroyTarget, setDestroyTarget] = useState<RetentionCandidate | null>(null)
-  const [destroyConfirmText, setDestroyConfirmText] = useState('')
+  // The app's own dialogs: a reason for a hold, and type-to-confirm before a
+  // file is destroyed. Never the browser's, which can be silenced.
+  const { prompt, promptDialog } = usePrompt()
 
   const headers = useCallback((json = false) => ({
     Authorization: `Bearer ${token}`,
@@ -83,10 +75,21 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
 
   async function setHold(candidate: RetentionCandidate, hold: boolean) {
     if (!token) return
+    let reason: string | null = null
+    if (hold) {
+      reason = await prompt({
+        title: 'Hold this file',
+        body: `${candidate.clientName ?? candidate.matterName} stays out of the destruction list until the hold is removed.`,
+        label: 'Reason (optional)',
+        placeholder: 'A dispute, a client request, an open estate…',
+        confirmLabel: 'Place on hold',
+      })
+      // null is Cancel; '' is an optional reason left blank.
+      if (reason === null) return
+    }
     setBusyMatter(candidate.matterId)
     try {
-      const reason = hold ? window.prompt('Why is this file being held? (optional)', candidate.holdReason ?? '') : null
-      for (const [field, value] of [['retention_hold', hold], ['retention_hold_reason', hold ? (reason?.trim() || null) : null]] as const) {
+      for (const [field, value] of [['retention_hold', hold], ['retention_hold_reason', hold ? (reason || null) : null]] as const) {
         const res = await fetch('/api/admin/matter-details', {
           method: 'PATCH',
           headers: headers(true),
@@ -106,6 +109,16 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
 
   async function destroy(candidate: RetentionCandidate) {
     if (!token) return
+    const typed = await prompt({
+      title: 'Destroy this file?',
+      body: `${candidate.clientName ?? candidate.matterName}: the matter, its documents, and the client's portal copies are permanently removed. The deletion is logged with who did it and why. This cannot be undone.`,
+      label: 'Type DESTROY to confirm',
+      placeholder: 'DESTROY',
+      requireExact: 'DESTROY',
+      confirmLabel: 'Destroy file',
+      destructive: true,
+    })
+    if (typed === null) return
     setBusyMatter(candidate.matterId)
     try {
       const res = await fetch(`/api/admin/matters/${candidate.matterId}`, {
@@ -116,8 +129,6 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
       const body = await res.json().catch(() => ({})) as { error?: string }
       if (!res.ok) throw new Error(body.error ?? 'Could not destroy the file')
       toast.success(`${candidate.clientName ?? candidate.matterName}: file destroyed and logged`)
-      setDestroyTarget(null)
-      setDestroyConfirmText('')
       void load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not destroy the file')
@@ -162,7 +173,7 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
               />
             </label>
             {!candidate.hold && isAdministrator && (
-              <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => { setDestroyConfirmText(''); setDestroyTarget(candidate) }}>
+              <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => void destroy(candidate)}>
                 Destroy file
               </Button>
             )}
@@ -295,37 +306,7 @@ export function FileClosingSettingsSection({ isAdministrator }: { isAdministrato
         </>
       )}
 
-      <AlertDialog open={destroyTarget !== null} onOpenChange={open => { if (!open) { setDestroyTarget(null); setDestroyConfirmText('') } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Destroy this file?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {destroyTarget ? `${destroyTarget.clientName ?? destroyTarget.matterName}: the matter, its documents, and the client's portal copies are permanently removed. The deletion is logged with who did it and why. This cannot be undone.` : ''}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <label className="block space-y-1.5 text-sm">
-            <span className="text-xs text-muted-foreground">Type <span className="font-semibold text-foreground">DESTROY</span> to confirm.</span>
-            <Input
-              aria-label="Type DESTROY to confirm"
-              value={destroyConfirmText}
-              onChange={e => setDestroyConfirmText(e.target.value)}
-              placeholder="DESTROY"
-            />
-          </label>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busyMatter !== null}>Keep the file</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busyMatter !== null || destroyConfirmText.trim() !== 'DESTROY'}
-              onClick={event => {
-                event.preventDefault()
-                if (destroyTarget) void destroy(destroyTarget)
-              }}
-            >
-              {busyMatter ? 'Destroying…' : 'Destroy file'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {promptDialog}
     </div>
   )
 }

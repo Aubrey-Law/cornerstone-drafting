@@ -269,7 +269,9 @@ describe('the weekly review', () => {
     expect(read('app/admin/matters/[id]/tabs/billing-cards.tsx')).toContain("onSaveField('retention_hold', checked)")
     const section = read('app/admin/settings/FileClosingSettingsSection.tsx')
     expect(section).toContain("method: 'DELETE'")
-    expect(section).toContain("destroyConfirmText.trim() !== 'DESTROY'")
+    // Type-to-confirm through the app's own dialog, never the browser's.
+    expect(section).toContain("requireExact: 'DESTROY'")
+    expect(section).not.toMatch(/window\.(alert|confirm|prompt)\(/)
     expect(section).toContain('Retention period ended')
   })
 })
