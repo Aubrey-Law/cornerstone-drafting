@@ -56,8 +56,10 @@ export function MatterReadinessDial({
     : Math.round(((items.length - blockers.length) / items.length) * 100)
 
   const ring = blocked ? 'var(--amber)' : 'var(--green)'
+  // The labels name the goal ("Intake complete"), so a bare list read as if
+  // those things were done; say they are still needed.
   const subtitle = blocked
-    ? blockers.slice(0, 3).map(item => item.label).join(' · ')
+    ? `Still needed: ${blockers.slice(0, 3).map(item => item.label).join(' · ')}${blockers.length > 3 ? ` · +${blockers.length - 3} more` : ''}`
     : 'No open blockers'
 
   return (
@@ -85,9 +87,8 @@ export function MatterReadinessDial({
       </div>
       <div className="min-w-0">
         <p className="text-xs font-semibold">Drafting readiness</p>
-        <p className="truncate text-micro text-muted-foreground" title={subtitle}>
+        <p className="line-clamp-2 text-micro text-muted-foreground" title={subtitle}>
           {subtitle}
-          {blockers.length > 3 && ` · +${blockers.length - 3} more`}
         </p>
       </div>
     </div>
