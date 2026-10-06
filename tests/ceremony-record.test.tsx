@@ -26,6 +26,7 @@ const ceremony = (over: Partial<Ceremony> = {}): Ceremony => ({
   matterId: 'm-1',
   scheduledFor: null,
   location: null,
+  originalsLocation: null,
   notaryName: 'Alex Cho',
   witnessOneName: 'Dana Reed',
   witnessTwoName: 'Sam Patel',
@@ -46,6 +47,7 @@ const executedWill = (over = {}) => ({
   recordedOn: null,
   recordingReference: null,
   note: null,
+  executedDocumentId: null,
   ...over,
 })
 
@@ -86,7 +88,7 @@ describe('CeremonyRecord', () => {
         matterId="m-1"
         ceremony={ceremony({
           documents: [
-            { documentKind: 'deed', executed: true, signedOn: '2026-09-01', witnessCount: 0, notarized: true, recordedOn: null, recordingReference: null, note: null },
+            { documentKind: 'deed', executed: true, signedOn: '2026-09-01', witnessCount: 0, notarized: true, recordedOn: null, recordingReference: null, note: null, executedDocumentId: null },
           ],
         })}
         kinds={['deed']}
@@ -117,7 +119,7 @@ describe('CeremonyRecord', () => {
         matterId="m-1"
         ceremony={ceremony({
           documents: [
-            { documentKind: 'health_care_proxy', executed: true, signedOn: '2026-09-01', witnessCount: 2, notarized: false, recordedOn: null, recordingReference: null, note: null },
+            { documentKind: 'health_care_proxy', executed: true, signedOn: '2026-09-01', witnessCount: 2, notarized: false, recordedOn: null, recordingReference: null, note: null, executedDocumentId: null },
           ],
         })}
         kinds={['health_care_proxy']}
@@ -133,7 +135,7 @@ describe('CeremonyRecord', () => {
     render(
       <CeremonyRecord
         matterId="m-1"
-        ceremony={ceremony({ documents: [executedWill(), { documentKind: 'deed', executed: true, signedOn: '2026-09-01', witnessCount: 0, notarized: true, recordedOn: null, recordingReference: null, note: null }] })}
+        ceremony={ceremony({ documents: [executedWill(), { documentKind: 'deed', executed: true, signedOn: '2026-09-01', witnessCount: 0, notarized: true, recordedOn: null, recordingReference: null, note: null, executedDocumentId: null }] })}
         kinds={['will', 'deed']}
       />,
     )

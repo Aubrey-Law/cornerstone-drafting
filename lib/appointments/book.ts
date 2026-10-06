@@ -620,6 +620,8 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     leadId,
     matterId,
     autoIntakeInvite: settings.autoIntakeInvite,
+    startIso,
+    bookedByUserId: input.source === 'admin' ? input.bookedByUserId ?? null : null,
   })
 
   // The queue's optional actor is staff-only; portal attribution stays on the booking.

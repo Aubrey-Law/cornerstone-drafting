@@ -95,9 +95,17 @@ function MatterAssetsTabImpl({
     }))),
     [assets],
   )
+  const allGroups = useMemo(() => groupAssetsByCategory(assets, null), [assets])
+  const filterOptions = useMemo(
+    () => allGroups.map(group => ({ key: group.key, label: group.label, count: group.assets.length })),
+    [allGroups],
+  )
+  // A filter whose last asset was deleted would leave an empty table behind a
+  // chip that no longer exists; fall back to everything.
+  const activeFilter = filter === 'all' || filterOptions.some(option => option.key === filter) ? filter : 'all'
   const groups = useMemo(
-    () => groupAssetsByCategory(assets, filter === 'all' ? null : filter),
-    [assets, filter],
+    () => (activeFilter === 'all' ? allGroups : allGroups.filter(group => group.key === activeFilter)),
+    [allGroups, activeFilter],
   )
 
   const selectedCount = selectedIds.size
@@ -330,9 +338,12 @@ function MatterAssetsTabImpl({
             <AssetDonutChart title="Ownership split" segments={ownershipSegments} />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <AssetCategoryFilters value={filter} onChange={setFilter} />
+          {/* The chips take the room they need and wrap inside their own box,
+              so Export stays on the first line at the right instead of being
+              pushed onto a line of its own. */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              <AssetCategoryFilters value={activeFilter} onChange={setFilter} options={filterOptions} />
               {selectedCount > 0 && (
                 <>
                   <span className="text-sm text-muted-foreground">
@@ -361,8 +372,8 @@ function MatterAssetsTabImpl({
                 </>
               )}
             </div>
-            <Button type="button" variant="link" className="h-auto px-0 text-sm" onClick={() => void exportReport()}>
-              Export Asset Report
+            <Button type="button" variant="link" className="h-auto shrink-0 px-0 py-1 text-sm" onClick={() => void exportReport()}>
+              Export asset report
             </Button>
           </div>
 

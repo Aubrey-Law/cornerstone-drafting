@@ -14,6 +14,8 @@ const WRITERS: Array<{ file: string; source: string }> = [
   // Meeting notes are written by the shared module, which the matter dialog's
   // route and the meeting-transcripts sweep both go through.
   { file: 'lib/meetings/saveMatterMeetingNote.ts', source: "source: 'meeting-notes'" },
+  // Executed originals scanned in after the signing.
+  { file: 'lib/signing/scanIn.ts', source: "source: 'firm'" },
   { file: 'lib/drafting/persistGeneratedDocument.ts', source: "source: 'firm'" },
   { file: 'lib/intake/promoteIntakeDocuments.ts', source: "source: 'client'" },
   { file: 'lib/works/artifacts.ts', source: "source: 'client'" },

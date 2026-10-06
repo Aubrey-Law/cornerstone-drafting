@@ -10,10 +10,12 @@ export interface Ceremony extends CeremonyRoles {
   matterId: string
   scheduledFor: string | null
   location: string | null
+  /** Where the signed originals are kept, so the file can answer years later. */
+  originalsLocation: string | null
   status: CeremonyStatus
   completedAt: string | null
   note: string | null
-  documents: Array<DocumentRecord & { recordingReference: string | null; note: string | null }>
+  documents: Array<DocumentRecord & { recordingReference: string | null; note: string | null; executedDocumentId: string | null }>
 }
 
 export async function loadCeremony(
@@ -47,6 +49,7 @@ export async function loadCeremony(
     matterId: String(row.matter_id),
     scheduledFor: (row.scheduled_for as string | null) ?? null,
     location: (row.location as string | null) ?? null,
+    originalsLocation: ((row as Record<string, unknown>).originals_location as string | null) ?? null,
     notaryName: (row.notary_name as string | null) ?? null,
     witnessOneName: (row.witness_one_name as string | null) ?? null,
     witnessTwoName: (row.witness_two_name as string | null) ?? null,
@@ -63,6 +66,7 @@ export async function loadCeremony(
       recordedOn: (doc.recorded_on as string | null) ?? null,
       recordingReference: (doc.recording_reference as string | null) ?? null,
       note: (doc.note as string | null) ?? null,
+      executedDocumentId: ((doc as Record<string, unknown>).executed_document_id as string | null) ?? null,
     })),
   }
 }
@@ -102,6 +106,8 @@ export interface SaveCeremonyInput extends CeremonyRoles {
   ceremonyId: string | null
   scheduledFor: string | null
   location: string | null
+  /** Omit to leave the stored value alone; null clears it. */
+  originalsLocation?: string | null
   status: CeremonyStatus
   note: string | null
   userId: string
@@ -126,6 +132,7 @@ export async function saveCeremony(
     completed_at: input.status === 'completed' ? new Date().toISOString() : null,
     note: input.note,
     updated_at: new Date().toISOString(),
+    ...(input.originalsLocation !== undefined ? { originals_location: input.originalsLocation } : {}),
   }
 
   const query = input.ceremonyId
@@ -158,6 +165,8 @@ export interface SaveDocumentInput {
   recordedOn: string | null
   recordingReference: string | null
   note: string | null
+  /** The filed scan this record describes; omit to leave the stored link alone. */
+  executedDocumentId?: string | null
 }
 
 export async function saveCeremonyDocument(
@@ -192,6 +201,7 @@ export async function saveCeremonyDocument(
         recording_reference: input.recordingReference,
         note: input.note,
         updated_at: new Date().toISOString(),
+        ...(input.executedDocumentId !== undefined ? { executed_document_id: input.executedDocumentId } : {}),
       },
       { onConflict: 'ceremony_id,document_kind' },
     )

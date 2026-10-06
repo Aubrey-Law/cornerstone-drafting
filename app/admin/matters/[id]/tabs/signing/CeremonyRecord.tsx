@@ -161,6 +161,15 @@ export function CeremonyRecord({
               <option value="cancelled">Cancelled</option>
             </NativeSelect>
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="originalsLocation">Originals kept at</Label>
+            <Input
+              id="originalsLocation"
+              name="originalsLocation"
+              placeholder="Firm vault, client, bank box…"
+              defaultValue={ceremony?.originalsLocation ?? ''}
+            />
+          </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="note">Note</Label>
             <Input id="note" name="note" defaultValue={ceremony?.note ?? ''} />

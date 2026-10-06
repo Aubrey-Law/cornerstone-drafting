@@ -22,6 +22,7 @@ import {
 } from '@/lib/drafting/buildDraftDownloadZip'
 import { selectSupersededDraftIds } from '@/lib/drafting/supersede'
 import { registerDraftDocumentRow } from '@/lib/drafting/persistGeneratedDocument'
+import { documentKindForOutputSlug } from '@/lib/execution/documentKind'
 import {
   llmDraftFallbackEnabled,
   llmFallbackEngineLabel,
@@ -665,6 +666,12 @@ export async function POST(req: NextRequest, { params }: Params) {
             },
             manifest: file.clauseManifest ?? [],
           })
+          // The provenance RPC inserts the row; the kind is recorded beside it so
+          // the signing checklist never has to guess this document's name.
+          const documentKind = documentKindForOutputSlug(file.filename)
+          if (documentKind) {
+            await admin.from('matter_documents').update({ document_kind: documentKind }).eq('id', persisted.documentId)
+          }
           documentRefs.push({ id: persisted.documentId, name: documentName })
         } catch (persistenceError) {
           // The transaction may have committed despite a lost response. Retain
@@ -687,6 +694,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           missingCount: scan.missingFields.length,
           templateId: file.templateId ?? null,
           templateVersionId: file.templateVersionId ?? null,
+          documentKind: documentKindForOutputSlug(file.filename),
         })
 
         if (insertErr) {

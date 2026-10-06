@@ -1,9 +1,15 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getR2Client, r2Bucket } from '@/lib/r2'
+import type { StoredDocumentKind } from '@/lib/execution/documentKind'
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+/** Postgres undefined_column, or PostgREST's schema-cache miss for a column. */
+function isMissingColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204'
+}
 
 // Structural admin-client shape so both the typed and untyped Supabase admin
 // clients used across routes are accepted.
@@ -11,7 +17,7 @@ type AdminClient = {
   from: (table: string) => {
     insert: (values: Record<string, unknown>) => {
       select: (columns: string) => {
-        single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }>
+        single: () => Promise<{ data: { id: string } | null; error: { message: string; code?: string } | null }>
       }
     }
   }
@@ -64,6 +70,8 @@ export interface RegisterDraftDocumentRowArgs {
   missingCount: number
   templateId?: string | null
   templateVersionId?: string | null
+  /** What the document is, from the template that rendered it; null when the caller cannot say. */
+  documentKind?: StoredDocumentKind | null
   contentType?: string
 }
 
@@ -77,7 +85,7 @@ export async function registerDraftDocumentRow(
 ): Promise<{ data: { id: string } | null; error: { message: string } | null }> {
   const contentType = args.contentType ?? DOCX_CONTENT_TYPE
   const admin = args.admin as AdminClient
-  const { data, error } = await admin.from('matter_documents').insert({
+  const row = {
     matter_id: args.matterId,
     r2_key: args.r2Key,
     name: args.documentName,
@@ -92,7 +100,13 @@ export async function registerDraftDocumentRow(
     missing_count: args.missingCount,
     template_id: args.templateId ?? null,
     template_version_id: args.templateVersionId ?? null,
-  }).select('id').single()
+  }
+  // `document_kind` arrived with 20270108090000. Until the column exists the
+  // row is written without it rather than failing the generation.
+  const first = await admin.from('matter_documents').insert({ ...row, document_kind: args.documentKind ?? null }).select('id').single()
+  const { data, error } = first.error && isMissingColumnError(first.error)
+    ? await admin.from('matter_documents').insert(row).select('id').single()
+    : first
 
   if (data?.id) {
     try {

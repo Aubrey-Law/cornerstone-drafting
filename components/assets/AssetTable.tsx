@@ -12,7 +12,6 @@ import {
 import { formatAssetCurrency } from '@/lib/assets/format'
 import type { OwnershipLabels } from '@/lib/assets/labels'
 import { ownershipLabel } from '@/lib/assets/labels'
-import { CATEGORY_DETAILS } from '@/lib/estateTax'
 import type { AssetIntakeRow } from '@/types/assetIntake'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -37,8 +36,15 @@ function assetDisplayName(asset: AssetIntakeRow): string {
   return asset.description || 'Unnamed asset'
 }
 
-function assetTypeLabel(asset: AssetIntakeRow): string {
-  return categoryLabel(asset.category)
+/**
+ * The description, when it says more than the name above it. Without an
+ * institution the name *is* the description, and the old separate column
+ * printed the same words twice on every row.
+ */
+function assetSecondaryLine(asset: AssetIntakeRow): string | null {
+  const description = asset.description?.trim()
+  if (!description || description === assetDisplayName(asset)) return null
+  return description
 }
 
 export function AssetTable({
@@ -72,7 +78,7 @@ export function AssetTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[820px] text-left text-sm">
         <thead>
           <tr className="border-b border-border bg-muted text-micro font-semibold uppercase tracking-wide text-muted-foreground">
             <th className="w-10 px-3 py-3">
@@ -82,8 +88,7 @@ export function AssetTable({
                 aria-label="Select all visible assets"
               />
             </th>
-            <th className="px-4 py-3">Asset</th>
-            <th className="px-4 py-3">Description</th>
+            <th className="min-w-[14rem] px-4 py-3">Asset</th>
             <th className="px-4 py-3">Type</th>
             <th className="px-4 py-3">Owner</th>
             <th className="px-4 py-3 text-right">Value</th>
@@ -102,7 +107,7 @@ export function AssetTable({
                   key={`group-${group.key}`}
                   className="border-b border-border bg-muted font-medium"
                 >
-                  <td className="px-4 py-2.5" colSpan={9}>
+                  <td className="px-4 py-2.5" colSpan={8}>
                     <button
                       type="button"
                       className="flex items-center gap-2 text-left text-sm"
@@ -122,7 +127,7 @@ export function AssetTable({
                   group.assets.map(asset => {
                     const debt = assetDebt(asset)
                     const docCount = assetDocumentCount(asset)
-                    const config = CATEGORY_DETAILS[asset.category]
+                    const secondary = assetSecondaryLine(asset)
                     return (
                       <tr
                         key={asset.id}
@@ -138,13 +143,11 @@ export function AssetTable({
                             aria-label={`Select ${asset.description || 'asset'}`}
                           />
                         </td>
-                        <td className="px-4 py-2.5 pl-4 font-medium">{assetDisplayName(asset)}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">
-                          {asset.description || '—'}
+                        <td className="px-4 py-2.5 pl-4">
+                          <span className="font-medium">{assetDisplayName(asset)}</span>
+                          {secondary && <span className="block text-xs text-muted-foreground">{secondary}</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-muted-foreground">
-                          {config?.descriptionLabel ? assetTypeLabel(asset) : assetTypeLabel(asset)}
-                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">{categoryLabel(asset.category)}</td>
                         <td className="px-4 py-2.5">
                           {ownershipLabel(asset.ownership, ownershipLabels)}
                         </td>
@@ -189,7 +192,7 @@ export function AssetTable({
                   })}
                 {!isCollapsed && (
                   <tr className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
-                    <td className="px-4 py-2 pl-10" colSpan={5}>
+                    <td className="px-4 py-2 pl-10" colSpan={4}>
                       {group.label} subtotal
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{formatAssetCurrency(group.total)}</td>
@@ -205,7 +208,7 @@ export function AssetTable({
           })}
           <tr className={cn('bg-muted font-semibold')}>
             <td className="px-3 py-3" />
-            <td className="px-4 py-3" colSpan={4}>
+            <td className="px-4 py-3" colSpan={3}>
               Total
             </td>
             <td className="px-4 py-3 text-right tabular-nums">{formatAssetCurrency(grandTotal)}</td>

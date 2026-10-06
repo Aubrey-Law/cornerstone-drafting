@@ -1,11 +1,25 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GeneratedDatabase } from '@/types/supabase'
+import { isStoredDocumentKind, resolveDocumentKinds, type KindedDocument } from '@/lib/execution/documentKind'
+import type { DocumentKind } from '@/lib/execution/requirements'
+
+/** Postgres undefined_column, or PostgREST's schema-cache miss for a column. */
+function isMissingColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204'
+}
 
 export interface ExecutionMatter {
   matterId: string
   title: string
   stage: string | null
   documentNames: string[]
+  /** Each current document with the kind the generator recorded, when it did. */
+  documents: KindedDocument[]
+}
+
+/** The kinds a matter's documents are: the recorded kind first, the filename guess for the rest. */
+export function executionKinds(matter: Pick<ExecutionMatter, 'documents'>): { kinds: DocumentKind[]; unmatched: string[] } {
+  return resolveDocumentKinds(matter.documents)
 }
 
 /**
@@ -29,11 +43,16 @@ export async function loadExecutionMatters(
   if (matterError) throw new Error(`Could not load matters: ${matterError.message}`)
   if (!matters || matters.length === 0) return []
 
-  const { data: documents, error: documentError } = await sb
-    .from('matter_documents')
-    .select('matter_id, name')
-    .in('matter_id', matters.map((m) => String(m.id)))
-    .is('superseded_at', null)
+  // `document_kind` arrived with 20270108090000. Code and migrations deploy
+  // in no guaranteed order, so until the column exists the documents are read
+  // without it and every kind falls back to the filename, as before.
+  const matterIds = matters.map((m) => String(m.id))
+  const documentQuery = (columns: string) =>
+    sb.from('matter_documents').select(columns).in('matter_id', matterIds).is('superseded_at', null)
+  const first = await documentQuery('matter_id, name, document_kind')
+  const documentResult = first.error && isMissingColumnError(first.error) ? await documentQuery('matter_id, name') : first
+  const documentError = documentResult.error
+  const documents = (documentResult.data ?? []) as unknown as Array<{ matter_id: string; name: string; document_kind?: string | null }>
 
   if (documentError) throw new Error(`Could not load documents: ${documentError.message}`)
 
@@ -41,8 +60,14 @@ export async function loadExecutionMatters(
     matterId: String(matter.id),
     title: (matter.name as string | null) ?? 'Untitled matter',
     stage: (matter.stage as string | null) ?? null,
-    documentNames: (documents ?? [])
+    documentNames: documents
       .filter((d) => String(d.matter_id) === String(matter.id))
       .map((d) => String(d.name)),
+    documents: documents
+      .filter((d) => String(d.matter_id) === String(matter.id))
+      .map((d) => ({
+        name: String(d.name),
+        kind: isStoredDocumentKind(d.document_kind) ? d.document_kind : null,
+      })),
   }))
 }
