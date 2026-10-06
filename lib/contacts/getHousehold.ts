@@ -157,3 +157,55 @@ export async function getHousehold(admin: AdminClient, matterId: string): Promis
 
   return { matterId, self, spouse, children, others }
 }
+
+/**
+ * The household for an intake id. `getHousehold` is keyed on the matter, and
+ * an intake id is not a matter id: passing one finds no join rows and throws
+ * "no primary client", which is what failed every intake children save.
+ *
+ * Resolves the intake's matter and reads through it. A lead filling out the
+ * questionnaire before they are hired has no matter yet, so their household is
+ * read from the contacts the intake owns instead.
+ */
+export async function getHouseholdForIntake(admin: AdminClient, intakeId: string): Promise<Household> {
+  const { data: matter, error: matterErr } = await admin
+    .from('matters')
+    .select('id')
+    .eq('client_intake_id', intakeId)
+    .maybeSingle()
+  if (matterErr) throw new Error(matterErr.message)
+  const matterId = (matter as { id?: string } | null)?.id
+  if (matterId) return getHousehold(admin, matterId)
+
+  const [{ data: contactRows, error: contactsErr }, { data: intakeRow, error: intakeErr }] =
+    await Promise.all([
+      admin.from('contacts').select('*').eq('client_intake_id', intakeId),
+      admin.from('client_intake').select('first_name, last_name').eq('id', intakeId).maybeSingle(),
+    ])
+  if (contactsErr) throw new Error(contactsErr.message)
+  if (intakeErr) throw new Error(intakeErr.message)
+
+  let self: HouseholdPerson | null = null
+  let spouse: HouseholdPerson | null = null
+  const children: HouseholdPerson[] = []
+  const others: HouseholdPerson[] = []
+
+  for (const row of (contactRows ?? []) as Array<Record<string, unknown>>) {
+    const id = String(row.id)
+    const rt = String(row.relationship_type ?? 'other')
+    if (rt === 'self') self = pickPerson(row, 'self', id, [])
+    else if (rt === 'spouse') spouse = pickPerson(row, 'spouse', id, [])
+    else if (rt === 'child') {
+      const p = pickPerson(row, 'child', id, [])
+      const override = row.is_minor as boolean | null | undefined
+      p.is_minor = typeof override === 'boolean' ? override : isMinorFromDob(p.date_of_birth)
+      children.push(p)
+    }
+    else others.push(pickPerson(row, 'other', id, []))
+  }
+
+  // No contacts row for the client yet: the intake row still names them.
+  self ??= pickPerson((intakeRow ?? {}) as Record<string, unknown>, 'self', '', [])
+
+  return { matterId: '', self, spouse, children, others }
+}

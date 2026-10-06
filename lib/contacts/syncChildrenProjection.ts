@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import { getHousehold } from './getHousehold'
+import { getHouseholdForIntake } from './getHousehold'
 import { saveHouseholdChildren } from './saveHouseholdChildren'
 
 type AdminClient = SupabaseClient<Database>
@@ -8,7 +8,7 @@ type AdminClient = SupabaseClient<Database>
 /** Rebuild design_sheets.children from the authoritative contacts child set.
  *  Call after any path that inserts/updates a child contact outside saveHouseholdChildren. */
 export async function syncChildrenProjection(admin: AdminClient, intakeId: string): Promise<void> {
-  const household = await getHousehold(admin, intakeId)
+  const household = await getHouseholdForIntake(admin, intakeId)
   if (household.children.length === 0) return
 
   await saveHouseholdChildren(

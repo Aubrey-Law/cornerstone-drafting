@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import { getHousehold } from './getHousehold'
+import { getHouseholdForIntake } from './getHousehold'
 import { mergeChildInput } from './mergeChildInput'
 import { saveHouseholdChildren } from './saveHouseholdChildren'
 
@@ -26,7 +26,7 @@ export async function reconcileHouseholdChildren(
   )
   if (incoming.length > 0 && named.length === 0) return
 
-  const household = await getHousehold(admin, intakeId)
+  const household = await getHouseholdForIntake(admin, intakeId)
   const existingByName = new Map(
     household.children.map((c) => [contactKey(c.first_name, c.last_name), c]),
   )
