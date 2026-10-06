@@ -18,6 +18,7 @@ const archive = vi.hoisted(() => vi.fn(async () => 3))
 const restore = vi.hoisted(() => vi.fn(async () => 3))
 const fireEngineStageTask = vi.hoisted(() => vi.fn(async () => {}))
 const loadMatterLifecycleContext = vi.hoisted(() => vi.fn())
+const finishMatterClose = vi.hoisted(() => vi.fn(async () => ({ closedOn: '2026-10-06', retentionUntil: '2032-10-06', noticeOffered: true })))
 
 const lifecycleQuery = () => ({
   select: () => ({
@@ -36,6 +37,7 @@ vi.mock('@/lib/tasks/closeout', () => ({
   archiveTasksForClosedRecord: archive,
   restoreTasksForReopenedRecord: restore,
 }))
+vi.mock('@/lib/fileClosing/server', () => ({ finishMatterClose }))
 
 import { PATCH } from '@/app/api/admin/matters/[id]/stage/route'
 import { LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/registry'
@@ -74,6 +76,7 @@ beforeEach(() => {
   restore.mockClear()
   fireEngineStageTask.mockClear()
   loadMatterLifecycleContext.mockReset()
+  finishMatterClose.mockClear()
 })
 
 describe('closing a matter', () => {
@@ -88,6 +91,47 @@ describe('closing a matter', () => {
       expect.objectContaining({ id: VIEWER }),
     )
     expect(restore).not.toHaveBeenCalled()
+  })
+
+  it('closes the status axis first, so the billing check runs before the stage moves', async () => {
+    await moveTo('closed', {})
+
+    const calls = rpc.mock.calls.map(call => call[0])
+    expect(calls).toEqual(['transition_matter_status_with_closeout', 'transition_matter_stage_with_jobs'])
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_matter_id: MATTER, p_status: 'closed', p_actor_id: VIEWER })
+    // The closed date, the retention date and the client's closing notice.
+    expect(finishMatterClose).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matterId: MATTER, actor: expect.objectContaining({ id: VIEWER }) }))
+  })
+
+  it('refuses the close when billing is unresolved, before anything moves', async () => {
+    loadMatterLifecycleContext.mockResolvedValue({
+      matter: {
+        matter_id: MATTER, stage: 'funding', intake_status: 'completed', intake_submitted_at: '2026-01-01T00:00:00.000Z',
+        design_status: 'ready', drafts_sent_at: '2026-01-02T00:00:00.000Z', signing_date: '2026-01-03', documents_executed_at: '2026-01-04T00:00:00.000Z',
+      },
+      engagement: { signed: true, sentAt: '2026-01-01T00:00:00.000Z', status: 'signed' },
+      reviewFlags: [],
+    })
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'Resolve billing before close-out: balance 330000, open claims 0, ready milestones 0, payment exceptions 0' } })
+
+    const res = await PATCH(
+      new Request(`http://localhost/api/admin/matters/${MATTER}/stage`, { method: 'PATCH', body: JSON.stringify({ stage: 'closed' }) }),
+      { params: Promise.resolve({ id: MATTER }) },
+    )
+
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toContain('Resolve billing before close-out')
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(archive).not.toHaveBeenCalled()
+    expect(finishMatterClose).not.toHaveBeenCalled()
+  })
+
+  it('reopens the status axis when the matter leaves closed by stage', async () => {
+    await moveTo('funding', { previousStage: 'closed' })
+
+    const reopen = rpc.mock.calls.find(call => call[0] === 'transition_matter_status_with_closeout')
+    expect(reopen?.[1]).toMatchObject({ p_matter_id: MATTER, p_status: 'active' })
+    expect(finishMatterClose).not.toHaveBeenCalled()
   })
 
   it('leaves every other stage move alone', async () => {

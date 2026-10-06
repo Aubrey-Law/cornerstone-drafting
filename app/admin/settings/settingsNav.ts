@@ -17,6 +17,7 @@ export type SettingsTab =
   | 'sla'
   | 'delegation'
   | 'annual-review'
+  | 'file-closing'
   | 'ai-usage'
 
 export type SettingsNavItem =
@@ -126,6 +127,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         tab: 'annual-review',
         label: 'Annual reviews',
         description: 'When clients with a signed plan are invited to a review call, and who is due next.',
+      },
+      {
+        kind: 'tab',
+        tab: 'file-closing',
+        label: 'File closing',
+        description: 'How long closed files are kept, which are due for review, and the closing notice to the client.',
       },
       { kind: 'route', href: '/admin/settings/command-center', label: 'Command center' },
     ],

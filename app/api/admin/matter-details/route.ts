@@ -85,6 +85,8 @@ const WRITABLE_FIELDS = new Set([
   'legal_plan_member_id', 'claim_submitted_date',
   'reimbursement_received_date', 'payment_link_sent_at',
   'work_started_date', 'work_finished_date', 'closing_package_sent_date',
+  // File retention (lib/fileClosing)
+  'retention_until', 'retention_hold', 'retention_hold_reason',
   'next_action_date',
 ])
 

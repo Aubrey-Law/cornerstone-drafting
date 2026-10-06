@@ -5840,6 +5840,7 @@ export type Database = {
           billing_milestones_enabled: boolean
           calendar_daily_target_minutes: number
           city: string | null
+          closing_notice_enabled: boolean
           command_center_cutover_at: string | null
           command_center_cutover_by: string | null
           command_center_v2_enabled: boolean
@@ -5855,6 +5856,7 @@ export type Database = {
           esign_documents_enabled: boolean
           esign_native_enabled: boolean
           estate_tax_schedules: Json
+          file_retention_years: number
           firm_name: string | null
           id: number
           phone: string | null
@@ -5880,6 +5882,7 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          closing_notice_enabled?: boolean
           command_center_cutover_at?: string | null
           command_center_cutover_by?: string | null
           command_center_v2_enabled?: boolean
@@ -5895,6 +5898,7 @@ export type Database = {
           esign_documents_enabled?: boolean
           esign_native_enabled?: boolean
           estate_tax_schedules?: Json
+          file_retention_years?: number
           firm_name?: string | null
           id?: number
           phone?: string | null
@@ -5920,6 +5924,7 @@ export type Database = {
           billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          closing_notice_enabled?: boolean
           command_center_cutover_at?: string | null
           command_center_cutover_by?: string | null
           command_center_v2_enabled?: boolean
@@ -5935,6 +5940,7 @@ export type Database = {
           esign_documents_enabled?: boolean
           esign_native_enabled?: boolean
           estate_tax_schedules?: Json
+          file_retention_years?: number
           firm_name?: string | null
           id?: number
           phone?: string | null
@@ -7147,6 +7153,9 @@ export type Database = {
           referral_source_other: string | null
           reimbursement_received_date: string | null
           responsible_attorney: string | null
+          retention_hold: boolean
+          retention_hold_reason: string | null
+          retention_until: string | null
           revisions_sent_date: string | null
           scheduled_signing_date: string | null
           signing_date: string | null
@@ -7284,6 +7293,9 @@ export type Database = {
           referral_source_other?: string | null
           reimbursement_received_date?: string | null
           responsible_attorney?: string | null
+          retention_hold?: boolean
+          retention_hold_reason?: string | null
+          retention_until?: string | null
           revisions_sent_date?: string | null
           scheduled_signing_date?: string | null
           signing_date?: string | null
@@ -7421,6 +7433,9 @@ export type Database = {
           referral_source_other?: string | null
           reimbursement_received_date?: string | null
           responsible_attorney?: string | null
+          retention_hold?: boolean
+          retention_hold_reason?: string | null
+          retention_until?: string | null
           revisions_sent_date?: string | null
           scheduled_signing_date?: string | null
           signing_date?: string | null

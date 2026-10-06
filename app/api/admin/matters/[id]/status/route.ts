@@ -7,6 +7,7 @@ import {
   archiveTasksForClosedRecord,
   restoreTasksForReopenedRecord,
 } from '@/lib/tasks/closeout'
+import { finishMatterClose } from '@/lib/fileClosing/server'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -65,6 +66,10 @@ export async function PATCH(req: Request, { params }: Params) {
     const actor = { id: userId, email: user?.email ?? null, name: actorName }
     if (status === 'closed' || status === 'archived') {
       await archiveTasksForClosedRecord(admin, { matterId }, 'matter_closed', actor)
+      // Same finish as the Close-out card: closed date, retention date, and
+      // the client's closing notice through the dial. Archiving is a
+      // visibility change and tells the client nothing.
+      if (status === 'closed') await finishMatterClose(admin, { matterId, actor })
     } else if (status === 'active') {
       await restoreTasksForReopenedRecord(admin, { matterId }, actor)
     }

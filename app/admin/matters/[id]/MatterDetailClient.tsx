@@ -756,21 +756,19 @@ function MatterDetailClientInner({
 
   const [closingMatter, setClosingMatter] = useState(false)
   /**
-   * Close-out stamps the date and moves the stage in one action, so a matter
-   * can never sit at `closed` with no closed_date (or the reverse).
+   * Close-out is one server action: the stage route runs the billing check,
+   * moves both axes, stamps the closed and retention dates, and offers the
+   * client a closing notice (lib/fileClosing). Nothing is saved from here.
    */
   const handleCloseMatter = useCallback(async () => {
     if (closingMatter) return
     setClosingMatter(true)
     try {
-      const advanced = await handleStageChange('closed')
-      if (advanced) {
-        await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
-      }
+      await handleStageChange('closed')
     } finally {
       setClosingMatter(false)
     }
-  }, [closingMatter, handleSaveMatterDetailField, handleStageChange])
+  }, [closingMatter, handleStageChange])
 
   const handleSendIntake = async () => {
     if (!token) {
@@ -1583,10 +1581,6 @@ function MatterDetailClientInner({
                   void handleStageChange(preflight.stage, {
                     version: preflight.version,
                     blockerKeys: preflight.blockers.map(blocker => blocker.key),
-                  }).then(async advanced => {
-                    if (advanced && preflight.stage === 'closed') {
-                      await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
-                    }
                   })
                 }
               }}
