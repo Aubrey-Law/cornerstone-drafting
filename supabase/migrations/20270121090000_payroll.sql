@@ -1,3 +1,9 @@
+-- Renumbered from 20270120090000. That version was also taken by
+-- 20270120090000_mercury_deposit_payments.sql, which deployed first, so the
+-- database recorded the version as applied and this file's SQL never ran: the
+-- payroll tables did not exist after #717 merged. Every statement below is
+-- idempotent (if not exists / drop policy if exists), so it runs cleanly here.
+--
 -- Payroll for the firm's one owner-employee (S corp, Massachusetts).
 --
 -- Payroll ran from a spreadsheet: a Setup tab of rates, a Register row per pay
