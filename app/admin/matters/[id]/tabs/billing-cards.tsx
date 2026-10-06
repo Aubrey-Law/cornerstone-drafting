@@ -62,8 +62,10 @@ function DateField({
   onSaveField: SaveDetailField
 }) {
   const value = dateValue(details?.[field] as string | null | undefined)
+  // Block, not the default inline: a space-y parent's margin never reached an
+  // inline label, so the close-out date sat flush against the row below it.
   return (
-    <label className="space-y-1.5">
+    <label className="block space-y-1.5">
       <FieldLabel>{label}</FieldLabel>
       <Input
         type="date"
@@ -276,7 +278,7 @@ export function ProposalPricingCard({
           ) : (
             <ul className="divide-y rounded-md border text-sm">
               {shown.map(row => (
-                <li key={row.service} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2">
+                <li key={row.service} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 px-3 py-2">
                   <span className="min-w-0">
                     <span className="font-medium">{row.service}</span>
                     {row.description && <span className="block text-xs text-muted-foreground">{row.description}</span>}
