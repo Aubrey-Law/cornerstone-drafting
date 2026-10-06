@@ -8,6 +8,7 @@ import { DOCUMENT_KINDS as EXECUTION_DOCUMENT_KINDS, type DocumentKind as Execut
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
+import { parseTimeEntryInput, formatHours } from '@/lib/timeEntries/model'
 
 function objectInput(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Action input must be an object')
@@ -1092,6 +1093,47 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, matterId: send.matterId, portalMessage: Boolean(send.messageId) }
     },
   } as ActionDefinition<{ matterId: string }>,
+  {
+    // Record time on a matter. The daily suggestion pass offers one per matter
+    // from the activity log; the dial decides whether it waits on Today or
+    // lands straight away. Time is internal, so nothing leaves the firm.
+    key: 'billing.time_entry.create',
+    risk: 'internal_write',
+    validate: parseTimeEntryInput,
+    async preview(input, context) {
+      const { matterLabel } = await import('@/lib/timeEntries/server')
+      const matter = await matterLabel(context.admin, input.matterId)
+      return {
+        display: {
+          action: 'Log time',
+          matter,
+          date: input.workDate,
+          time: formatHours(input.minutes),
+          description: input.description,
+          source: input.source,
+        },
+        auditBefore: null,
+        auditAfter: { matterId: input.matterId, workDate: input.workDate, minutes: input.minutes, source: input.source },
+      }
+    },
+    async execute(input, context) {
+      const { insertTimeEntry } = await import('@/lib/timeEntries/server')
+      const { entry, reused } = await insertTimeEntry(context.admin, input, context.actor.id)
+      return { ...entry, reused }
+    },
+    auditResult(result) {
+      const value = result as { id?: string; matterId?: string; minutes?: number; reused?: boolean }
+      return { entryId: value.id, matterId: value.matterId, minutes: value.minutes, reused: value.reused === true }
+    },
+    async undo(input, record, context) {
+      const entryId = typeof record.afterState?.entryId === 'string' ? record.afterState.entryId : null
+      if (!entryId) throw new Error('The time entry was not recorded, so it cannot be removed')
+      if (record.afterState?.reused === true) return { entryId, deleted: false, reason: 'the entry already existed' }
+      const { deleteTimeEntry } = await import('@/lib/timeEntries/server')
+      const deleted = await deleteTimeEntry(context.admin, { matterId: input.matterId, entryId })
+      return { entryId, deleted }
+    },
+  } as ActionDefinition<ReturnType<typeof parseTimeEntryInput>>,
   {
     key: 'billing.reminder.send',
     risk: 'external_write',

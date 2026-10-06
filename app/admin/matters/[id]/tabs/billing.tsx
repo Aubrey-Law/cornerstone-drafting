@@ -53,6 +53,7 @@ import {
   PlanClaimsCard,
   type SaveDetailField,
 } from './billing-cards'
+import { TimeEntriesCard } from './TimeEntriesCard'
 
 interface MatterBillingTabProps {
   matterId: string
@@ -705,6 +706,7 @@ export function MatterBillingTab({
           </div>
 
           <div className="space-y-4 lg:col-start-2 lg:row-start-2">
+            <TimeEntriesCard matterId={matterId} />
             <PlanClaimsCard rows={rows} invoiceHref={claimsInvoiceHref} />
             <CloseOutCard
               details={details}
