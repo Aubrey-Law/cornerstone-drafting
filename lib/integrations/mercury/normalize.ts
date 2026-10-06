@@ -15,5 +15,6 @@ export function toDeposit(transaction: MercuryTransaction): MercuryDeposit {
     bankDescription: transaction.bankDescription ?? null,
     kind: transaction.kind,
     status: transaction.status,
+    memo: [transaction.externalMemo, transaction.note].map(value => value?.trim()).filter(Boolean).join(' ') || null,
   }
 }

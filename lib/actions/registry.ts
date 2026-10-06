@@ -9,6 +9,7 @@ import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
 import { parseTimeEntryInput, formatHours } from '@/lib/timeEntries/model'
+import { formatCents, parseDepositPaymentInput } from '@/lib/integrations/mercury/autoApply'
 
 function objectInput(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Action input must be an object')
@@ -1093,6 +1094,42 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, matterId: send.matterId, portalMessage: Boolean(send.messageId) }
     },
   } as ActionDefinition<{ matterId: string }>,
+  {
+    // Record a Mercury deposit as a payment on an invoice. The daily deposit
+    // run offers these: an exact match (amount equals the balance and the memo
+    // names the invoice) may run up to Act and report; anything less waits on
+    // Today. Recording re-reads the deposit and the invoice first.
+    key: 'billing.payment.record',
+    risk: 'internal_write',
+    validate: parseDepositPaymentInput,
+    async preview(input, context) {
+      const { loadInvoiceForPayment } = await import('@/lib/integrations/mercury/autoApplyServer')
+      const invoice = await loadInvoiceForPayment(context.admin, input.invoiceId)
+      return {
+        display: {
+          action: 'Record a payment from a Mercury deposit',
+          invoice: invoice.number,
+          amount: formatCents(input.amountCents),
+          invoiceBalance: formatCents(invoice.balanceCents),
+          received: input.receivedAt ? input.receivedAt.slice(0, 10) : null,
+          method: input.method === 'check' ? 'Check' : 'Bank transfer',
+          match: input.tier === 'exact' ? 'Exact: the memo names this invoice' : 'Likely: not confirmed by the memo',
+          basis: input.basis || null,
+          note: input.note,
+        },
+        auditBefore: { invoiceId: invoice.id, status: invoice.status, balanceCents: invoice.balanceCents },
+        auditAfter: { invoiceId: invoice.id, amountCents: input.amountCents, reference: input.externalReference },
+      }
+    },
+    async execute(input, context) {
+      const { recordDepositPayment } = await import('@/lib/integrations/mercury/autoApplyServer')
+      return recordDepositPayment(context.admin, input, context.actor.id)
+    },
+    auditResult(result) {
+      const value = result as { invoiceId?: string; invoiceStatus?: string; amountCents?: number; reference?: string; reused?: boolean }
+      return { invoiceId: value.invoiceId, invoiceStatus: value.invoiceStatus, amountCents: value.amountCents, reference: value.reference, reused: value.reused === true }
+    },
+  } as ActionDefinition<ReturnType<typeof parseDepositPaymentInput>>,
   {
     // Record time on a matter. The daily suggestion pass offers one per matter
     // from the activity log; the dial decides whether it waits on Today or

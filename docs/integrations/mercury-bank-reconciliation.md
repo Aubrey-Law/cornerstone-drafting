@@ -1,12 +1,15 @@
 # Mercury bank integration
 
-## Status: Phase 1 shipped; Phase 3 blocked on a static egress IP
+## Status: Phase 1 and 1b shipped; Phase 3 blocked on a static egress IP
 
 Phase 1 — the read-only deposit worklist — merged in
 [#538](https://github.com/Aubrey-Law/cornerstone-drafting/pull/538) and is dark until
-`MERCURY_API_TOKEN` is set. Phase 1b (applying a proposal) and Phase 3 (pushing invoices to
-Mercury) are specified here but not built; Phase 3 cannot start until the egress problem in
-Phase 2 is funded.
+`MERCURY_API_TOKEN` is set. Phase 1b (applying a proposal) is built as a daily run that offers
+each matched deposit through the delegation dial rather than as a button on the card; see
+`docs/operations/mercury-deposit-payments.md`. It keeps "propose, human confirms" as the
+default and lets the firm raise exact, memo-confirmed matches to Act and report. Phase 3
+(pushing invoices to Mercury) is specified here but not built; it cannot start until the egress
+problem in Phase 2 is funded.
 
 ## Context
 

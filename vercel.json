@@ -85,6 +85,10 @@
     {
       "path": "/api/cron/time-entry-suggestions",
       "schedule": "50 12 * * *"
+    },
+    {
+      "path": "/api/cron/mercury-deposits",
+      "schedule": "35 11 * * *"
     }
   ]
 }

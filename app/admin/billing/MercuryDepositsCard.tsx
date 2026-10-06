@@ -107,9 +107,19 @@ export function MercuryDepositsCard({ view }: { view: {
         {actionable === 0 && (
           <p className="px-4 py-3 text-xs text-muted-foreground">No client deposits to review.</p>
         )}
+        {view.summary.proposed > 0 && (
+          <p className="px-4 py-2 text-xs text-muted-foreground">
+            Each morning these are offered on Today to record against the invoice. One whose memo names the invoice can record on its own once the dial allows it.
+          </p>
+        )}
         <Section title="Likely payments" proposals={by('proposed')} />
         <Section title="Needs a decision" proposals={by('ambiguous')} showAllCandidates />
         <Section title="No matching invoice" proposals={by('unmatched')} />
+        {view.summary.alreadyApplied > 0 && (
+          <p className="px-4 py-3 text-xs text-muted-foreground" data-testid="mercury-deposits-recorded">
+            {view.summary.alreadyApplied} {view.summary.alreadyApplied === 1 ? 'deposit' : 'deposits'} already recorded as payments
+          </p>
+        )}
         {ignored.length > 0 && (
           <details className="px-4 py-3">
             <summary className="cursor-pointer text-xs text-muted-foreground">

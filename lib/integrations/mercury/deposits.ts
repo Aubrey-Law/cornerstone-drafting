@@ -90,6 +90,16 @@ export function isMercuryConfigured(): boolean {
 export async function loadMercuryDepositProposals(
   options: { days?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<MercuryDepositsView> {
+  return (await loadMercuryDepositMatching(options)).view
+}
+
+/**
+ * The proposals together with the open invoices they were matched against, for
+ * the daily run, which needs every open invoice number to read a memo.
+ */
+export async function loadMercuryDepositMatching(
+  options: { days?: number; limit?: number; signal?: AbortSignal } = {},
+): Promise<{ view: MercuryDepositsView; invoices: OpenInvoice[] }> {
   const { incomeAccountIds } = getMercuryConfig()
   const days = options.days ?? 30
   const now = new Date()
@@ -109,7 +119,7 @@ export async function loadMercuryDepositProposals(
     appliedReferences,
   })
 
-  return {
+  const view: MercuryDepositsView = {
     generatedAt: now.toISOString(),
     window,
     summary: {
@@ -122,6 +132,7 @@ export async function loadMercuryDepositProposals(
     },
     proposals,
   }
+  return { view, invoices }
 }
 
 export { mercuryReference }
