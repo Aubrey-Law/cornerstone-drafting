@@ -7908,6 +7908,67 @@ export type Database = {
         }
         Relationships: []
       }
+      matter_status_updates: {
+        Row: {
+          body: string
+          created_at: string
+          facts: Json
+          id: string
+          matter_id: string
+          message_id: string | null
+          published_at: string
+          published_by: string | null
+          source: string
+          stage: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          facts?: Json
+          id?: string
+          matter_id: string
+          message_id?: string | null
+          published_at?: string
+          published_by?: string | null
+          source?: string
+          stage: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          facts?: Json
+          id?: string
+          matter_id?: string
+          message_id?: string | null
+          published_at?: string
+          published_by?: string | null
+          source?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_status_updates_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_status_updates_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_status_updates_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matter_tasks: {
         Row: {
           assignee: string

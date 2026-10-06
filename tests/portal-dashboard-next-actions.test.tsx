@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   fetchUnreadCount: vi.fn(),
   fetchAppointment: vi.fn(),
   fetchAccount: vi.fn(),
+  fetchLatestPlanStatus: vi.fn(),
+  loadPlanStatusFacts: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -43,6 +45,11 @@ vi.mock('@/lib/queries/portal', () => ({
   fetchOpenPortalDocumentRequests: async () => [],
 }))
 
+vi.mock('@/lib/portal/planStatusServer', () => ({
+  fetchLatestPlanStatus: mocks.fetchLatestPlanStatus,
+  loadPlanStatusFacts: mocks.loadPlanStatusFacts,
+}))
+
 import PortalDashboardPage from '@/app/(portal)/dashboard/page'
 
 describe('portal dashboard recorded next actions', () => {
@@ -56,6 +63,8 @@ describe('portal dashboard recorded next actions', () => {
     mocks.fetchUnreadCount.mockResolvedValue(0)
     mocks.fetchAppointment.mockResolvedValue(null)
     mocks.fetchAccount.mockResolvedValue({ invoices: [], balanceCents: 0, nextDueDate: null })
+    mocks.fetchLatestPlanStatus.mockResolvedValue(null)
+    mocks.loadPlanStatusFacts.mockResolvedValue(null)
   })
 
   afterEach(() => {

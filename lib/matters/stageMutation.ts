@@ -68,5 +68,10 @@ export async function transitionMatterStage(
       console.error('[stage-action] fireEngineStageTask failed', error)
     }
   }
+  // The same moment the stage route uses to offer the client an update.
+  if (!result.unchanged && input.stage !== 'closed') {
+    const { schedulePlanStatusUpdate } = await import('@/lib/portal/delegatePlanStatus')
+    schedulePlanStatusUpdate({ matterId: input.matterId, actorId: input.actor.id })
+  }
   return { ...result, lifecycle }
 }

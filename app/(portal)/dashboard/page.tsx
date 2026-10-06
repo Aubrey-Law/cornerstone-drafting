@@ -22,6 +22,8 @@ import {
 import type { DocumentRequest } from '@/lib/documentRequests/model'
 import { progressFromMatterDetails } from '@/lib/portal/progress'
 import { computePortalNextAction } from '@/lib/portal/nextActions'
+import { describePlanStatus } from '@/lib/portal/planStatus'
+import { fetchLatestPlanStatus, loadPlanStatusFacts } from '@/lib/portal/planStatusServer'
 import type { MatterDocument } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -99,7 +101,7 @@ export default async function PortalDashboardPage() {
     }
   }
 
-  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult] = matter
+  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult, planStatusResult] = matter
     ? await Promise.all([
         settled(fetchPortalMatterMeta(matter.id), null),
         settled(fetchRecentPortalDocuments(matter.id, auth.id, 2), [] as MatterDocument[]),
@@ -109,6 +111,7 @@ export default async function PortalDashboardPage() {
         settled(fetchNextAppointment(matter.id), null),
         settled(fetchPortalAccount(matter.id), null),
         settled(fetchOpenPortalDocumentRequests(matter.id), [] as DocumentRequest[]),
+        settled(fetchLatestPlanStatus(matter.id), null),
       ])
     : [
         { value: null, available: true },
@@ -119,7 +122,21 @@ export default async function PortalDashboardPage() {
         { value: null, available: true },
         { value: null, available: true },
         { value: [] as DocumentRequest[], available: true },
+        { value: null, available: true },
       ]
+
+  // "Where is my plan?" The last update the firm published, when there is
+  // one; otherwise the plain sentences written from the record itself, so
+  // the client always has an answer, never a blank card.
+  const publishedStatus = planStatusResult.value
+  const plainStatus = matter && !publishedStatus
+    ? (await settled(loadPlanStatusFacts(matter.id), null)).value
+    : null
+  const planStatus = publishedStatus
+    ? { body: publishedStatus.body, publishedAt: publishedStatus.publishedAt }
+    : plainStatus
+      ? { body: describePlanStatus(plainStatus.facts), publishedAt: null }
+      : null
 
   const meta = metaResult.value
   const documents = documentsResult.value
@@ -210,6 +227,19 @@ export default async function PortalDashboardPage() {
           <p className="mt-4 text-sm text-muted-foreground">The firm will share progress updates through Messages.</p>
         )}
       </section>
+
+      {/* ── where your plan stands ── */}
+      {planStatus && (
+        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="plan-status">
+          <h2 className="text-sm font-semibold text-foreground">Where your plan stands</h2>
+          <p className="mt-2 text-sm leading-relaxed text-foreground">{planStatus.body}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {planStatus.publishedAt
+              ? `From ${firm.attorneyShortName} · ${relativeDay(planStatus.publishedAt)}`
+              : 'Drawn from your matter record'}
+          </p>
+        </section>
+      )}
 
       {/* ── what's next ── */}
       <section
