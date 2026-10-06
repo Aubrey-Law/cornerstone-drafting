@@ -12,7 +12,7 @@ import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { cn, formatDateTime } from '@/lib/utils'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 import type { LinkedMatterNote } from './noteLinks'
-export { mapMatterNoteRows, mergeLinkedNotes } from './noteLinks'
+export { linkLiveMatterNotes, mapMatterNoteRows, mergeLinkedNotes } from './noteLinks'
 export type { LinkedMatterNote } from './noteLinks'
 
 type EditableNoteType = 'Internal' | 'Client comm.'
@@ -41,6 +41,31 @@ interface MatterNotesTabProps {
   handleDeleteLeadNote?: (note: LinkedMatterNote) => Promise<void>
   handleUpdateLeadNote?: (note: LinkedMatterNote) => Promise<void>
   startEditingNote: (note: MatterNoteListItem) => void
+}
+
+function NoteTypeToggle({ value, onChange }: { value: EditableNoteType; onChange: (type: EditableNoteType) => void }) {
+  return (
+    <div role="group" aria-label="Note type" className="flex gap-1">
+      {(['Internal', 'Client comm.'] as const).map(type => (
+        <button
+          key={type}
+          type="button"
+          aria-pressed={value === type}
+          onClick={() => onChange(type)}
+          className={cn(
+            'rounded-full px-3 py-1 text-micro font-medium',
+            value === type
+              ? type === 'Internal'
+                ? 'bg-brand-navy text-white'
+                : 'bg-primary text-primary-foreground'
+              : 'bg-page-bg text-text-tertiary hover:bg-border'
+          )}
+        >
+          {type}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function MatterNotesTabImpl(props: MatterNotesTabProps) {
@@ -77,7 +102,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
 
       <div className="rounded-lg border border-border bg-card p-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-micro font-medium text-muted-foreground">AI assistant</p>
+          <p className="text-micro font-medium text-muted-foreground">Draft with AI</p>
           <AssistantNotePromptButton />
         </div>
         <FormattedNoteEditor
@@ -94,25 +119,8 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
             }
           }}
         />
-        <div className="flex gap-1">
-          {(['Internal', 'Client comm.'] as const).map(type => (
-            <button
-              key={type}
-              onClick={() => setNoteType(type)}
-              className={cn(
-                'rounded-full px-3 py-1 text-micro font-medium',
-                noteType === type
-                  ? type === 'Internal'
-                    ? 'bg-brand-navy text-white'
-                    : 'bg-primary text-primary-foreground'
-                  : 'bg-page-bg text-text-tertiary hover:bg-border'
-              )}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <NoteTypeToggle value={noteType} onChange={setNoteType} />
           <Button
             type="button"
             size="sm"
@@ -143,9 +151,11 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
             const isLead = note.origin === 'lead'
             const isEditing = editingNoteId === note.sourceId
             const isMutating = noteMutatingId === note.sourceId
+            // Merged ids read "matter:opt-…", so the optimistic marker is on sourceId.
+            const isPending = note.sourceId.startsWith('opt-')
             const displayContent = note.body ?? ''
             return (
-              <div key={note.id} className={cn('rounded-lg border bg-card p-4', isSystem ? 'border-border/60 bg-surface-1' : 'border-border', note.sourceId.startsWith('opt-') && 'opacity-60')}>
+              <div key={note.id} className={cn('rounded-lg border bg-card p-4', isSystem ? 'border-border/60 bg-surface-1' : 'border-border', isPending && 'opacity-60')}>
                 <div className="mb-1.5 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {isSystem ? (
@@ -162,7 +172,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                     </span>
                     {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-micro font-semibold text-muted-foreground">From lead</span>}
                   </div>
-                  {isEditable && !note.id.startsWith('opt-') && (
+                  {isEditable && !isPending && (
                     <div className="flex shrink-0 items-center gap-1">
                       {isEditing ? (
                         <>
@@ -194,24 +204,8 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                 </div>
                 {isEditing ? (
                   <div className="space-y-2">
-                    <div className="flex gap-1">
-                      {(['Internal', 'Client comm.'] as const).map(type => (
-                        <button
-                          key={type}
-                          onClick={() => setEditingNoteType(type)}
-                          className={cn(
-                            'rounded-full px-3 py-1 text-micro font-medium',
-                            editingNoteType === type
-                              ? type === 'Internal'
-                                ? 'bg-brand-navy text-white'
-                                : 'bg-primary text-primary-foreground'
-                              : 'bg-page-bg text-text-tertiary hover:bg-border'
-                          )}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
+                    {/* A lead note's PATCH saves the body only, so a type toggle there would be ignored. */}
+                    {!isLead && <NoteTypeToggle value={editingNoteType} onChange={setEditingNoteType} />}
                     <FormattedNoteEditor
                       ariaLabel="Edit note body"
                       value={editingNoteText}

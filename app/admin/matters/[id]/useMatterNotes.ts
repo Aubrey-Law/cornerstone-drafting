@@ -42,9 +42,22 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
     setNotes(prev => [optimistic, ...prev])
     setNoteText('')
     setNoteSaving(true)
+    let saved: MatterNoteRow
     try {
-      const saved = await addMatterNote(matterId, text, dbType)
-      setNotes(prev => prev.map(note => note.id === optimistic.id ? saved : note))
+      saved = await addMatterNote(matterId, text, dbType)
+    } catch (error) {
+      // Put the words back rather than dropping them with the optimistic row,
+      // unless something new has been typed since.
+      setNotes(prev => prev.filter(note => note.id !== optimistic.id))
+      setNoteText(current => (current.trim() ? current : text))
+      toast.error(error instanceof Error ? error.message : 'Could not save note')
+      setNoteSaving(false)
+      return
+    }
+    setNotes(prev => prev.map(note => note.id === optimistic.id ? saved : note))
+    setNoteSaving(false)
+    // The note is saved; a failed activity entry must not take it off the list.
+    try {
       const activity = await logMatterActivity(
         matterId,
         'note_added',
@@ -53,9 +66,7 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
       )
       if (activity) onActivityLogged?.(activity)
     } catch {
-      setNotes(prev => prev.filter(note => note.id !== optimistic.id))
-    } finally {
-      setNoteSaving(false)
+      // Activity is best-effort.
     }
   }
 
