@@ -17,6 +17,7 @@ const ADMIN_REDIRECT_EXACT: string[] = []
 const CLIENT_REDIRECT_ALLOWLIST = [
   '/dashboard',
   '/documents',
+  '/assets',
   '/messages',
   '/intake',
 ]

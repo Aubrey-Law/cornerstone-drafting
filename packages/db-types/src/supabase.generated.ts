@@ -466,6 +466,9 @@ export type Database = {
       asset_funding: {
         Row: {
           asset_intake_id: string
+          client_note: string | null
+          client_reported_at: string | null
+          confirmation_document_id: string | null
           confirmed_on: string | null
           created_at: string
           id: string
@@ -478,6 +481,9 @@ export type Database = {
         }
         Insert: {
           asset_intake_id: string
+          client_note?: string | null
+          client_reported_at?: string | null
+          confirmation_document_id?: string | null
           confirmed_on?: string | null
           created_at?: string
           id?: string
@@ -490,6 +496,9 @@ export type Database = {
         }
         Update: {
           asset_intake_id?: string
+          client_note?: string | null
+          client_reported_at?: string | null
+          confirmation_document_id?: string | null
           confirmed_on?: string | null
           created_at?: string
           id?: string
@@ -501,6 +510,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "asset_funding_confirmation_document_id_fkey"
+            columns: ["confirmation_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "asset_funding_asset_intake_id_fkey"
             columns: ["asset_intake_id"]
@@ -547,6 +563,7 @@ export type Database = {
           details: Json
           id: string
           ownership: string
+          source: string
           updated_at: string
           value: number
         }
@@ -558,6 +575,7 @@ export type Database = {
           details?: Json
           id?: string
           ownership?: string
+          source?: string
           updated_at?: string
           value?: number
         }
@@ -569,6 +587,7 @@ export type Database = {
           details?: Json
           id?: string
           ownership?: string
+          source?: string
           updated_at?: string
           value?: number
         }

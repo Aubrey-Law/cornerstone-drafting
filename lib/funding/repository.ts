@@ -4,7 +4,36 @@ import type { FundingMethod, FundingStatus } from './model'
 import { methodIsPermitted } from './model'
 import type { FundingJoinRow } from './rollup'
 
-const ASSET_SELECT = 'id, category, description, ownership, value, client_intake_id'
+// The portal columns (asset source, the client's confirmation) arrive with
+// migration 20270114090000. Code deploys before the migration runs, so each
+// read is tried with them and falls back to the older list when the database
+// does not have them yet.
+const ASSET_SELECT = 'id, category, description, ownership, value, client_intake_id, source'
+const LEGACY_ASSET_SELECT = 'id, category, description, ownership, value, client_intake_id'
+const FUNDING_SELECT = 'matter_id, asset_intake_id, method, status, confirmed_on, note, confirmation_document_id, client_reported_at, client_note'
+const LEGACY_FUNDING_SELECT = 'matter_id, asset_intake_id, method, status, confirmed_on, note'
+
+type Loose = Record<string, unknown>
+
+function isMissingColumn(error: { code?: string | null; message?: string | null } | null): boolean {
+  if (!error) return false
+  if (error.code === '42703' || error.code === 'PGRST204') return true
+  return /column .* does not exist|could not find the .* column/i.test(error.message ?? '')
+}
+
+async function selectWithFallback(
+  run: (select: string) => PromiseLike<{ data: unknown; error: { code?: string | null; message?: string | null } | null }>,
+  select: string,
+  legacySelect: string,
+  what: string,
+): Promise<Loose[]> {
+  const first = await run(select)
+  if (!first.error) return (first.data as Loose[] | null) ?? []
+  if (!isMissingColumn(first.error)) throw new Error(`Could not load ${what}: ${first.error.message}`)
+  const second = await run(legacySelect)
+  if (second.error) throw new Error(`Could not load ${what}: ${second.error.message}`)
+  return (second.data as Loose[] | null) ?? []
+}
 
 /**
  * Every asset on every open matter, with whatever funding has been recorded.
@@ -33,25 +62,24 @@ export async function loadFundingRows(
   const intakeIds = [...new Set(matters.map((m) => m.client_intake_id as string))]
   const matterIds = matters.map((m) => m.id as string)
 
-  const [{ data: assets, error: assetError }, { data: funding, error: fundingError }] =
-    await Promise.all([
-      sb.from('asset_intake').select(ASSET_SELECT).in('client_intake_id', intakeIds),
-      sb
-        .from('asset_funding')
-        .select('matter_id, asset_intake_id, method, status, confirmed_on, note')
-        .in('matter_id', matterIds),
-    ])
-
-  if (assetError) throw new Error(`Could not load assets: ${assetError.message}`)
-  if (fundingError) throw new Error(`Could not load funding: ${fundingError.message}`)
+  const [assets, funding] = await Promise.all([
+    selectWithFallback(
+      select => sb.from('asset_intake').select(select).in('client_intake_id', intakeIds),
+      ASSET_SELECT, LEGACY_ASSET_SELECT, 'assets',
+    ),
+    selectWithFallback(
+      select => sb.from('asset_funding').select(select).in('matter_id', matterIds),
+      FUNDING_SELECT, LEGACY_FUNDING_SELECT, 'funding',
+    ),
+  ])
 
   const fundingByKey = new Map(
-    (funding ?? []).map((f) => [`${f.matter_id}:${f.asset_intake_id}`, f]),
+    funding.map((f) => [`${f.matter_id}:${f.asset_intake_id}`, f]),
   )
 
   const rows: FundingJoinRow[] = []
   for (const matter of matters) {
-    for (const asset of assets ?? []) {
+    for (const asset of assets) {
       if (asset.client_intake_id !== matter.client_intake_id) continue
       const recorded = fundingByKey.get(`${matter.id}:${asset.id}`)
       rows.push({
@@ -67,6 +95,10 @@ export async function loadFundingRows(
         status: (recorded?.status as string | null) ?? null,
         confirmed_on: (recorded?.confirmed_on as string | null) ?? null,
         note: (recorded?.note as string | null) ?? null,
+        source: (asset.source as string | null) ?? null,
+        confirmation_document_id: (recorded?.confirmation_document_id as string | null) ?? null,
+        client_reported_at: (recorded?.client_reported_at as string | null) ?? null,
+        client_note: (recorded?.client_note as string | null) ?? null,
       })
     }
   }

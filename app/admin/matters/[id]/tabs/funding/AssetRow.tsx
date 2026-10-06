@@ -35,6 +35,16 @@ const money = (value: number | string | null) => {
   return typeof amount === 'number' && Number.isFinite(amount) ? formatMoney(amount) : '—'
 }
 
+/** Open the client's uploaded confirmation in a new tab, through the usual signed URL. */
+async function openConfirmation(documentId: string) {
+  try {
+    const { getDocumentUrl } = await import('@/lib/documents')
+    window.open(await getDocumentUrl(documentId, 'view'), '_blank', 'noopener')
+  } catch (error) {
+    console.error('[funding] could not open the confirmation', error)
+  }
+}
+
 export function AssetRow({
   matterId,
   asset,
@@ -73,7 +83,29 @@ export function AssetRow({
             {categoryLabel(asset.category)}
             {asset.ownership ? ` · ${asset.ownership}` : ''} · {FUNDING_METHOD_LABELS[asset.method]}
             {asset.isRecorded ? '' : ' (suggested)'}
+            {asset.source === 'client' ? ' · added by the client' : ''}
           </p>
+          {/* What the client reported from the portal. Sent is still not funded:
+              the badge stays on awaiting confirmation until someone here reads
+              the institution's paper and records the date. */}
+          {asset.clientReportedAt ? (
+            <p className="mt-0.5 text-xs text-foreground/80" data-testid={`client-report-${asset.assetId}`}>
+              Client reported this done on {formatDate(asset.clientReportedAt.slice(0, 10))}
+              {asset.confirmationDocumentId ? (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2"
+                    onClick={() => void openConfirmation(asset.confirmationDocumentId as string)}
+                  >
+                    View the confirmation
+                  </button>
+                </>
+              ) : ' · no confirmation attached yet'}
+              {asset.clientNote ? ` · “${asset.clientNote}”` : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm tabular-nums">{money(asset.value)}</span>

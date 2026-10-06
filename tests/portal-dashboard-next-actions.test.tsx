@@ -54,6 +54,10 @@ vi.mock('@/lib/portal/signaturesServer', () => ({
   fetchPortalSignatures: async () => [],
 }))
 
+vi.mock('@/lib/funding/portalServer', () => ({
+  fetchPortalAssets: async () => [],
+}))
+
 import PortalDashboardPage from '@/app/(portal)/dashboard/page'
 
 describe('portal dashboard recorded next actions', () => {

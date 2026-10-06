@@ -5,6 +5,7 @@ export type PortalNextActionKind =
   | 'sign'
   | 'review'
   | 'requests'
+  | 'funding'
   | 'message'
   | 'appointment'
   | 'account'
@@ -35,8 +36,13 @@ export interface PortalNextActionFacts {
   pendingSignatureCount?: number
   /** Where "Review and sign" goes: the one item, or the list on Documents. */
   pendingSignatureHref?: string | null
+  /** Assets whose funding step is the client's to do (retitle, beneficiary) and not yet reported. Optional during rollout. */
+  fundingTodoCount?: number
   factsAvailable: boolean
 }
+
+/** The stages in which a plan is signed and funding is the work at hand. */
+const FUNDING_STAGES = new Set<MatterStage>(['signing_complete', 'post_execution', 'funding'])
 
 export function computePortalNextAction(facts: PortalNextActionFacts): PortalNextAction {
   const closed = facts.matterStatus === 'closed' || facts.matterStatus === 'archived' || facts.matterStage === 'closed'
@@ -92,6 +98,21 @@ export function computePortalNextAction(facts: PortalNextActionFacts): PortalNex
         : `The firm has asked you for ${owed} documents. Upload them from Documents as you gather them.`,
       label: 'See what we need',
       href: '/documents#requests',
+    }
+  }
+
+  // Once the plan is signed, the accounts only the client can retitle are
+  // the step that keeps the trust from being funded; ahead of messages, since
+  // a message is often about exactly this.
+  const todo = facts.fundingTodoCount ?? 0
+  if (!closed && todo > 0 && facts.matterStage !== null && FUNDING_STAGES.has(facts.matterStage)) {
+    return {
+      kind: 'funding',
+      message: todo === 1
+        ? 'One account still needs to be moved into your plan. See what to do and send us the confirmation when it is done.'
+        : `${todo} accounts still need to be moved into your plan. See what to do for each and send us the confirmations.`,
+      label: 'See your assets',
+      href: '/assets',
     }
   }
 

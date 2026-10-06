@@ -11,7 +11,7 @@ const ADMIN_ROLES = ['attorney', 'admin']
 const CLIENT_ROLE = 'client'
 
 const ADMIN_PREFIXES = ['/admin', '/api/admin', '/api/drafting']
-const PORTAL_PATHS = ['/dashboard', '/documents', '/messages', '/intake', '/schedule']
+const PORTAL_PATHS = ['/dashboard', '/documents', '/assets', '/messages', '/intake', '/schedule']
 /** Public client onboarding — must not require an existing session. */
 const PUBLIC_AUTH_PATHS = [
   '/intake/auth',
@@ -227,6 +227,7 @@ export const config = {
     '/auth/login',
     '/dashboard/:path*',
     '/documents/:path*',
+    '/assets/:path*',
     '/messages/:path*',
     '/intake/:path*',
     '/api/documents/:path*',

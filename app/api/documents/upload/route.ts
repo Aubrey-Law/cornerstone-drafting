@@ -31,6 +31,9 @@ export async function POST(req: Request) {
   // A portal upload against one of the firm's requests: the request is marked
   // received and the document linked to it once the file is stored.
   const requestId = String(form.get('requestId') ?? '').trim() || null
+  // A portal upload of an institution's confirmation for one of the client's
+  // assets: the asset moves to awaiting confirmation with the document linked.
+  const assetId = String(form.get('assetId') ?? '').trim() || null
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Missing file' }, { status: 400 })
@@ -116,7 +119,21 @@ export async function POST(req: Request) {
       })
   }
 
-  return NextResponse.json({ document: data, request })
+  let asset: { ok: boolean; message?: string } | null = null
+  if (assetId && isUuid(assetId) && !isAdmin) {
+    // Scoped to the matter the upload was authorised for; an asset already
+    // confirmed, or one the firm handles itself, leaves the document filed and
+    // says why nothing else changed.
+    const { recordClientRetitling } = await import('@/lib/funding/portalServer')
+    asset = await recordClientRetitling({ matterId, assetId, documentId: String(data.id), note: null, actorId: user.id })
+      .then(result => result.ok ? { ok: true } : { ok: false, message: result.message })
+      .catch(caught => {
+        console.error('[documents] could not record the asset confirmation', { assetId, cause: caught instanceof Error ? caught.message : String(caught) })
+        return { ok: false, message: 'The document was filed, but we could not update the asset' }
+      })
+  }
+
+  return NextResponse.json({ document: data, request, asset })
 }
 
 export const runtime = 'nodejs'
