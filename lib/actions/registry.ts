@@ -6,7 +6,7 @@ import { sanitizeEmailHtml } from '@/lib/email/templateShared'
 import { coerceFiduciaryProposals } from '@/lib/designSheet/fiduciaryProposal'
 import { DOCUMENT_KINDS as EXECUTION_DOCUMENT_KINDS, type DocumentKind as ExecutionDocumentKind } from '@/lib/execution/requirements'
 import { isTaskAssigneeRole } from '@/lib/tasks/assignees'
-import { STAGES, type MatterStage } from '@/types/database'
+import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 import type { ActionDefinition, ActionExecutionContext } from '@/lib/actions/types'
 
 function objectInput(value: unknown): Record<string, unknown> {
@@ -55,6 +55,27 @@ function documentRequestCreateInput(value: unknown): {
   if (dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(dueOn)) throw new Error('dueOn must be a YYYY-MM-DD date')
   const source = input.source === 'meeting_notes' || input.source === 'automation' ? input.source : 'staff'
   return { matterId, title, description, dueOn, source }
+}
+
+function planStatusPublishInput(value: unknown): {
+  matterId: string
+  stage: MatterStage
+  body: string
+  facts: Record<string, unknown>
+} {
+  const input = objectInput(value)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!matterId) throw new Error('A plan status update needs a matter')
+  const stage = input.stage
+  if (typeof stage !== 'string' || !STAGES.some(entry => entry.key === stage)) {
+    throw new Error('stage must be a known matter stage')
+  }
+  const body = requiredText(input, 'body', 1_200)
+  if (body.length < 40) throw new Error('body must say something: at least 40 characters')
+  const facts = input.facts && typeof input.facts === 'object' && !Array.isArray(input.facts)
+    ? input.facts as Record<string, unknown>
+    : {}
+  return { matterId, stage: stage as MatterStage, body, facts }
 }
 
 function taskCreateInput(value: unknown): Record<string, unknown> {
@@ -1381,6 +1402,42 @@ const definitions: ActionDefinition[] = [
       return { requestId, deleted: true }
     },
   } as ActionDefinition<ReturnType<typeof documentRequestCreateInput>>,
+  {
+    // Tell the client where their plan stands: a plain-language update drafted
+    // from the record, posted to their portal conversation and kept on the
+    // matter. Client-facing, so it never runs silently; the dial defaults it
+    // to Propose and the attorney reads the words before they go.
+    key: 'portal.status.publish',
+    risk: 'external_write',
+    validate: planStatusPublishInput,
+    async preview(input) {
+      return {
+        display: {
+          action: 'Post a plan update to the client',
+          stage: stageLabel(input.stage),
+          body: input.body,
+          facts: input.facts,
+        },
+        auditBefore: null,
+        auditAfter: { matterId: input.matterId, stage: input.stage, bodyLength: input.body.length },
+      }
+    },
+    async execute(input, context) {
+      const { publishPlanStatus } = await import('@/lib/portal/planStatusServer')
+      return publishPlanStatus({
+        matterId: input.matterId,
+        stage: input.stage,
+        body: input.body,
+        facts: input.facts,
+        actorId: context.actor.id,
+        source: context.source === 'automation' ? 'automation' : 'staff',
+      }, context.admin)
+    },
+    auditResult(result) {
+      const value = result as { updateId?: string; messageId?: string | null }
+      return { updateId: value.updateId, messageId: value.messageId ?? null }
+    },
+  } as ActionDefinition<ReturnType<typeof planStatusPublishInput>>,
   {
     key: 'signing.kit.prepare',
     risk: 'prepare',

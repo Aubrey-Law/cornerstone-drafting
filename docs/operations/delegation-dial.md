@@ -162,6 +162,21 @@ files the document to the matter and marks the request received, and staff then 
 waive it, or ask again. Only a request nothing has arrived against can be removed. The
 portal's "What's next" line points at outstanding requests ahead of unread messages.
 
+**Where is my plan** (`lib/portal/delegatePlanStatus.ts`) runs when a matter changes stage,
+from the stage route and from `transitionMatterStage` alike, for every stage but closed. The
+facts behind the answer (the stage, the portal's milestones, the next appointment, how funding
+stands once the plan is signed, and what the lifecycle registry says the client still owes) are
+assembled in `lib/portal/planStatusServer.ts`; `lib/portal/planStatus.ts` writes them into plain
+sentences with no model involved, and the light model may reword that draft but is held to its
+facts and its length. The dial decides whether `portal.status.publish` waits as a card on Today
+for the attorney to read the words, or goes to the client at once and is listed in the digest.
+Publishing writes a `matter_status_updates` row and posts the same words to the client's portal
+conversation, which sends the usual message notice. The client's dashboard shows the newest
+published update under "Where your plan stands", and the plain sentences from the record when
+none has been published yet, so the question always has an answer. The proposal is keyed to the
+matter and a fingerprint of what it would say, so a stage change that tells the client nothing
+new is not offered twice. Client-facing, so it is never silent and has no undo.
+
 Every unattended flow in the app now consults the dial; the next ones to add should opt in the
 same way as they move onto the registry.
 

@@ -6,6 +6,7 @@ import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 import { LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/registry'
 import { matterStageTransitionPreflight } from '@/lib/lifecycle/matter'
 import { loadMatterLifecycleContext } from '@/lib/lifecycle/server'
+import { schedulePlanStatusUpdate } from '@/lib/portal/delegatePlanStatus'
 
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import {
@@ -135,6 +136,11 @@ export async function PATCH(req: Request, { params }: Params) {
       } catch (fireErr) {
         console.error('[stage] fireEngineStageTask failed:', fireErr)
       }
+    }
+    // A stage the client would notice is a moment to tell them where things
+    // stand; the dial decides whether the update waits for a click or goes.
+    if (!result.unchanged && stage !== 'closed') {
+      schedulePlanStatusUpdate({ matterId, actorId: userId })
     }
     return NextResponse.json({
       ...result,
