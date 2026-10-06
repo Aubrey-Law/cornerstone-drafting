@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { cn, formatDate } from '@/lib/utils'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { STAGES, stageGroupColor, type MatterStage } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
 
 /** Visible pill budget, counting the `+N earlier` roll-up as one. */
 const MAX_PILLS = 7
@@ -25,6 +26,31 @@ interface MatterStageStripProps {
   agingSummary: MatterAgingSummary | null
   stageSaving: boolean
   onStageChange: (stage: MatterStage) => void
+  /** Recorded stage history, to tell a stage passed through from one skipped. */
+  history?: Pick<MatterStageHistoryEntry, 'stage' | 'enteredAt'>[]
+}
+
+/**
+ * Earlier stages the history shows the matter never entered — Revision when
+ * the client approved first, or any stage jumped over. Only stages after the
+ * first recorded one count: before it, the record says nothing either way.
+ */
+export function skippedStages(
+  history: Pick<MatterStageHistoryEntry, 'stage' | 'enteredAt'>[],
+  currentIndex: number,
+  alsoVisited: Iterable<string> = [],
+): Set<MatterStage> {
+  // Lead stages (new_lead…) can open the record; start at the first one the
+  // strip shows.
+  const first = [...history]
+    .filter(entry => STAGES.some(s => s.key === entry.stage))
+    .sort((a, b) => Date.parse(a.enteredAt) - Date.parse(b.enteredAt))[0]
+  if (!first) return new Set()
+  const firstIndex = STAGES.findIndex(s => s.key === first.stage)
+  const visited = new Set<string>([...history.map(entry => entry.stage), ...alsoVisited])
+  return new Set(
+    STAGES.filter((s, index) => index > firstIndex && index < currentIndex && !visited.has(s.key)).map(s => s.key),
+  )
 }
 
 function Dot({ className, style }: { className?: string; style?: React.CSSProperties }) {
@@ -41,6 +67,7 @@ export function MatterStageStrip({
   agingSummary,
   stageSaving,
   onStageChange,
+  history = [],
 }: MatterStageStripProps) {
   const [changeOpen, setChangeOpen] = useState(false)
   const [selectedStage, setSelectedStage] = useState<MatterStage>(stage)
@@ -53,6 +80,13 @@ export function MatterStageStrip({
   const visible = STAGES.slice(collapseCount)
   const targetSigning = details?.scheduled_signing_date ?? null
   const editableStages = STAGES.filter(entry => entry.key !== 'closed')
+  // Stages entered on this visit, until the refreshed history includes them.
+  const [seenStages, setSeenStages] = useState<MatterStage[]>([stage])
+  useEffect(() => {
+    setSeenStages(current => (current.includes(stage) ? current : [...current, stage]))
+  }, [stage])
+  const skipped = skippedStages(history, currentIndex, seenStages)
+  const collapsedSkipped = collapsed.filter(s => skipped.has(s.key)).length
 
   function setDialogOpen(open: boolean) {
     setChangeOpen(open)
@@ -69,13 +103,14 @@ export function MatterStageStrip({
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         {/*
-          Thirteen stages wrap to four rows on a phone. There the strip scrolls
+          Twelve stages wrapped to four rows on a phone, three beside the facts
+          rail at 820px and two at 1440px. The strip is one row that scrolls
           sideways instead; the current stage sits right after the "+N earlier"
           roll-up, so it is on screen without scrolling.
         */}
         <ol
           aria-label="Matter progress"
-          className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:px-0 [&>li]:shrink-0"
+          className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 [&>li]:shrink-0"
         >
         {collapsed.length > 0 && (
           <li>
@@ -87,26 +122,32 @@ export function MatterStageStrip({
                 >
                   <Dot className="bg-green" />
                   +{collapsed.length} earlier
+                  {collapsedSkipped > 0 && ` · ${collapsedSkipped} skipped`}
                 </span>
               </TooltipTrigger>
-              <TooltipContent>{collapsed.map(s => s.label).join(' · ')}</TooltipContent>
+              <TooltipContent>
+                {collapsed.map(s => (skipped.has(s.key) ? `${s.label} (skipped)` : s.label)).join(' · ')}
+              </TooltipContent>
             </Tooltip>
           </li>
         )}
         {visible.map(entry => {
           const index = STAGES.findIndex(s => s.key === entry.key)
           const isCurrent = index === currentIndex
-          const isComplete = index < currentIndex
+          const isSkipped = skipped.has(entry.key)
+          const isComplete = index < currentIndex && !isSkipped
           const colors = stageGroupColor(entry.key)
 
           return (
             <li key={entry.key}>
               <span
                 aria-current={isCurrent ? 'step' : undefined}
+                title={isSkipped ? 'Skipped' : undefined}
                 className={cn(
                   PILL_CLASS,
                   isComplete && 'bg-green-bg text-green',
                   !isComplete && !isCurrent && 'bg-muted text-muted-foreground',
+                  isSkipped && 'line-through decoration-muted-foreground/60',
                 )}
                 style={isCurrent ? { background: colors.bg, color: colors.text } : undefined}
               >
@@ -118,6 +159,8 @@ export function MatterStageStrip({
                   style={isCurrent ? { background: colors.dot } : undefined}
                 />
                 {entry.label}
+                {isComplete && <span className="sr-only"> (done)</span>}
+                {isSkipped && <span className="sr-only"> (skipped)</span>}
               </span>
             </li>
           )
