@@ -64,6 +64,13 @@ export function ResponsiveDetailRail({
         <SheetContent
           side="left"
           className={cn('w-[min(22rem,100vw)] gap-0 p-0 sm:max-w-none', mobileClassName)}
+          // Focus the sheet itself, not its first field: on the matter facts
+          // that is the client's name, which then opened selected for editing
+          // and raised the phone keyboard over the panel.
+          onOpenAutoFocus={event => {
+            event.preventDefault()
+            ;(event.currentTarget as HTMLElement | null)?.focus()
+          }}
         >
           <SheetTitle className="sr-only">{label}</SheetTitle>
           {children}
