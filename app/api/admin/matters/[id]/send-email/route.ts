@@ -71,6 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     replyTo,
     useStoredTemplate: false,
     userId,
+    matterId,
     includeSignature: body.includeSignature === true,
   })
 

@@ -31,7 +31,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
 }) {
   const identity = useRef(matterId)
   useEffect(() => { identity.current = matterId }, [matterId])
-  const [history, setHistory] = useState<{ id: string; portal: PortalMessage[]; sms: SmsMessage[] }>({ id: matterId, portal: [], sms: [] })
+  const [history, setHistory] = useState<{ id: string; portal: PortalMessage[]; sms: SmsMessage[]; email: CommunicationItem[] }>({ id: matterId, portal: [], sms: [], email: [] })
   const [summary, setSummary] = useState<{ id: string; latest: PortalMessage | null; unread: number } | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
@@ -49,6 +49,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
   const historyGeneration = useRef(0)
   const portalMessages = useMemo(() => history.id === matterId ? history.portal : [], [history, matterId])
   const smsMessages = useMemo(() => history.id === matterId ? history.sms : [], [history, matterId])
+  const emailItems = useMemo(() => history.id === matterId ? history.email : [], [history, matterId])
 
   useEffect(() => {
     setEmailTo(initialEmailTo)
@@ -79,16 +80,20 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
     const generation = ++historyGeneration.current
     fetched.current = matterId
     setPortalLoading(true); setSmsLoading(true); setReadError(null)
-    const [portal, sms] = await Promise.allSettled([
+    // Sent email lives in email_log, tagged with the matter; without it the
+    // Email filter could only ever say "No email messages yet".
+    const [portal, sms, email] = await Promise.allSettled([
       apiRequest<PortalMessage[]>(`/api/messages?matter_id=${encodeURIComponent(matterId)}`, { headers: { Authorization: `Bearer ${token}` } }),
       apiRequest<SmsMessage[]>(`/api/admin/matters/${matterId}/sms-messages`, { headers: { Authorization: `Bearer ${token}` } }),
+      apiRequest<CommunicationItem[]>(`/api/admin/comms/email-history?type=matter&id=${encodeURIComponent(matterId)}`, { headers: { Authorization: `Bearer ${token}` } }),
     ])
     if (identity.current !== matterId || generation !== historyGeneration.current) return
     setHistory(previous => ({ id: matterId,
       portal: portal.status === 'fulfilled' ? portal.value : previous.id === matterId ? previous.portal : [],
       sms: sms.status === 'fulfilled' ? sms.value : previous.id === matterId ? previous.sms : [],
+      email: email.status === 'fulfilled' && Array.isArray(email.value) ? email.value : previous.id === matterId ? previous.email : [],
     }))
-    if (portal.status === 'rejected' || sms.status === 'rejected') setReadError('Some message history is unavailable. Please retry.')
+    if (portal.status === 'rejected' || sms.status === 'rejected' || email.status === 'rejected') setReadError('Some message history is unavailable. Please retry.')
     setPortalLoading(false); setSmsLoading(false)
   }, [matterId, token])
 
@@ -158,6 +163,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
       setEmailSubject('')
       setEmailBody('')
       toast.success('Email sent')
+      if (enabled) void loadHistory()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not send email')
     } finally {
@@ -183,7 +189,8 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
       sender: m.direction === 'inbound' ? m.recipient_name : m.actor_name ?? 'Firm',
       created_at: m.created_at,
     })),
-  ), [portalMessages, smsMessages])
+    emailItems,
+  ), [portalMessages, smsMessages, emailItems])
 
   return {
     items, sendOnChannel, portalMessages, portalLoading, portalDraft, portalSending,

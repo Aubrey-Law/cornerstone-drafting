@@ -167,7 +167,7 @@ export function MatterCommunicationsTab({
     <TabsContent value="communications" className="space-y-4">
       <RecordTabHeader
         title="Messages"
-        description="Portal messages, texts, email, and call logs for this matter."
+        description="Portal messages, texts, and email for this matter."
         actions={
           <>
             <Button type="button" size="sm" variant="outline" onClick={onSendSchedulingLink}>
@@ -194,9 +194,9 @@ export function MatterCommunicationsTab({
         </div>
         {smsEnabled && (channel === 'sms' || channel === 'all') && (
           <div className="flex items-center gap-1.5">
-            <Label className="text-micro text-muted-foreground">Text to</Label>
+            <Label htmlFor="matter-sms-recipient" className="text-micro text-muted-foreground">Text to</Label>
             <Select value={smsRecipient} onValueChange={v => setSmsRecipient(v as 'client' | 'spouse')}>
-              <SelectTrigger className="h-8 w-28">
+              <SelectTrigger id="matter-sms-recipient" className="h-8 w-28">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
