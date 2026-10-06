@@ -2,9 +2,12 @@
 
 import Link from 'next/link'
 import { History } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/EmptyState'
-import { cn, formatDateTime } from '@/lib/utils'
+import { cn, FIRM_TIMEZONE } from '@/lib/utils'
+import { firmDateKey } from '@/lib/firmDate'
+import { completeActivity } from '@/lib/matters/activityPage'
 import type { MatterActivity } from '@/types/database'
 import {
   activityEventTitle,
@@ -20,17 +23,24 @@ interface ActivityDay {
   events: MatterActivity[]
 }
 
+const TIME = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: FIRM_TIMEZONE })
+
+/**
+ * Days in the firm's calendar, the same zone each row's time is shown in.
+ * Grouping by the viewer's zone (or the server's UTC on first render) put a
+ * late-evening event under the next day.
+ */
 export function groupActivityByDay(activity: MatterActivity[]): ActivityDay[] {
   const formatter = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
+    timeZone: FIRM_TIMEZONE,
   })
   const groups = new Map<string, MatterActivity[]>()
   for (const event of activity) {
-    const date = new Date(event.created_at)
-    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+    const key = firmDateKey(event.created_at) ?? 'unknown'
     groups.set(key, [...(groups.get(key) ?? []), event])
   }
   return [...groups.entries()].map(([key, events]) => ({
@@ -40,7 +50,20 @@ export function groupActivityByDay(activity: MatterActivity[]): ActivityDay[] {
   }))
 }
 
-export function MatterActivityTab({ activity, loading }: { activity: MatterActivity[]; loading: boolean }) {
+export function MatterActivityTab({
+  activity,
+  loading,
+  olderCursor = null,
+  loadingOlder = false,
+  onLoadOlder,
+}: {
+  activity: MatterActivity[]
+  loading: boolean
+  /** Set while older matter activity is still to load; the list stops at it. */
+  olderCursor?: string | null
+  loadingOlder?: boolean
+  onLoadOlder?: () => void
+}) {
   if (loading) return <p className="text-sm text-muted-foreground">Loading activity…</p>
   if (activity.length === 0) {
     return (
@@ -48,15 +71,17 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
         <EmptyState
           icon={History}
           title="No activity yet"
-          description="Stage changes, intake, comms, and drafting events appear here."
+          description="Stage changes, intake, communications, and drafting events appear here."
         />
       </Card>
     )
   }
 
+  const shown = completeActivity(activity, olderCursor)
+
   return (
     <div className="space-y-7">
-      {groupActivityByDay(activity).map(day => (
+      {groupActivityByDay(shown).map(day => (
         <section key={day.key} aria-labelledby={`activity-day-${day.key}`}>
           <h3 id={`activity-day-${day.key}`} className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {day.label}
@@ -107,8 +132,9 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
                         </ul>
                       </details>
                     )}
+                    {/* The day is the section heading; the row needs only the time. */}
                     <p className="mt-1 text-micro text-muted-foreground">
-                      {formatDateTime(item.created_at)}
+                      <time dateTime={item.created_at}>{TIME.format(new Date(item.created_at))}</time>
                       {item.actor_name ? ` · ${item.actor_name}` : ''}
                     </p>
                   </div>
@@ -118,6 +144,13 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
           </div>
         </section>
       ))}
+      {olderCursor && onLoadOlder ? (
+        <div className="flex justify-center">
+          <Button type="button" variant="outline" size="sm" disabled={loadingOlder} onClick={onLoadOlder}>
+            {loadingOlder ? 'Loading…' : 'Show older activity'}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

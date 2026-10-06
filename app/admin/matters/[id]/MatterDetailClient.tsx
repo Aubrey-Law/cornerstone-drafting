@@ -188,6 +188,8 @@ interface MatterDetailClientProps {
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
   initialMatterLinkedNotes?: LinkedMatterNote[]
   initialActivity?: MatterActivity[]
+  /** Where older matter activity starts, when the first page was full. */
+  initialActivityCursor?: string | null
   initialStageHistory?: MatterStageHistoryEntry[]
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
@@ -243,6 +245,7 @@ function MatterDetailClientInner({
   initialLeadNotes = [],
   initialMatterLinkedNotes = [],
   initialActivity = [],
+  initialActivityCursor = null,
   initialStageHistory = [],
   designSheetSeeded = false,
   reviewFlags = [],
@@ -340,6 +343,28 @@ function MatterDetailClientInner({
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
   const activityLoading = false
+  const [activityCursor, setActivityCursor] = useState<string | null>(initialActivityCursor)
+  const [loadingOlderActivity, setLoadingOlderActivity] = useState(false)
+  const loadOlderActivity = useCallback(async () => {
+    if (!activityCursor) return
+    setLoadingOlderActivity(true)
+    try {
+      const response = await fetch(`/api/admin/matters/${encodeURIComponent(matterId)}/activity?before=${encodeURIComponent(activityCursor)}`)
+      const body = (await response.json().catch(() => ({}))) as { activity?: MatterActivity[]; cursor?: string | null; error?: string }
+      if (!response.ok || !body.activity) throw new Error(body.error ?? 'Could not load older activity')
+      const older = body.activity
+      setActivity(current => {
+        const seen = new Set(current.map(item => item.id))
+        return [...current, ...older.filter(item => !seen.has(item.id))]
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      })
+      setActivityCursor(body.cursor ?? null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load older activity')
+    } finally {
+      setLoadingOlderActivity(false)
+    }
+  }, [activityCursor, matterId])
   // Header Email/Text open the same composer the lead page uses, AI drafting
   // included, rather than only switching to the communications tab.
   const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
@@ -1386,7 +1411,13 @@ function MatterDetailClientInner({
                   title="Activity"
                   description="Stage changes, intake, communications, and drafting events, newest first."
                 />
-                <MatterActivityTab activity={activity} loading={activityLoading} />
+                <MatterActivityTab
+                  activity={activity}
+                  loading={activityLoading}
+                  olderCursor={activityCursor}
+                  loadingOlder={loadingOlderActivity}
+                  onLoadOlder={() => void loadOlderActivity()}
+                />
               </TabsContent>
             </Tabs>
           </div>
