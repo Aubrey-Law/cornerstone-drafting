@@ -20,6 +20,24 @@ describe('portal next actions', () => {
     })
   })
 
+  it('puts a signature the firm is waiting on ahead of everything but the intake', () => {
+    expect(computePortalNextAction({
+      ...complete,
+      matterStage: 'client_review',
+      sharedDocumentCount: 1,
+      unreadFirmMessageCount: 3,
+      pendingSignatureCount: 1,
+      pendingSignatureHref: '/documents/sign/session-1',
+    })).toMatchObject({ kind: 'sign', label: 'Review and sign', href: '/documents/sign/session-1' })
+    expect(computePortalNextAction({ ...complete, pendingSignatureCount: 2 })).toMatchObject({
+      kind: 'sign', href: '/documents#sign',
+    })
+    expect(computePortalNextAction({ ...complete, pendingSignatureCount: 2 }).message).toContain('2 documents')
+    expect(computePortalNextAction({ ...complete, intakeComplete: false, pendingSignatureCount: 1 }).kind).toBe('intake')
+    expect(computePortalNextAction({ ...complete, matterStatus: 'closed', pendingSignatureCount: 1 }).kind).toBe('closed')
+    expect(computePortalNextAction({ ...complete, pendingSignatureCount: 0 }).kind).toBe('clear')
+  })
+
   it('directs client review to firm-shared documents', () => {
     expect(computePortalNextAction({ ...complete, matterStage: 'client_review', sharedDocumentCount: 1 })).toMatchObject({
       kind: 'review', label: 'Review documents', href: '/documents',

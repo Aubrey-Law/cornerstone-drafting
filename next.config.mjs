@@ -145,6 +145,13 @@ const nextConfig = {
       // where losing it silently downgrades a client's signature.
       './assets/fonts/NothingYouCouldDo-Regular.ttf',
     ],
+    // The portal's door to the same signing flow (lib/esign/signingFlow.ts):
+    // it seals the same PDF with the same font, so it traces the same files.
+    '/api/documents/sign/[sessionId]': [
+      './node_modules/@napi-rs/canvas*/**',
+      './node_modules/pdfjs-dist/**',
+      './assets/fonts/NothingYouCouldDo-Regular.ttf',
+    ],
     // Settings serves and preview-validates a registered template's *bundled*
     // master by path — `definition.bundledPath` for anything in the registry,
     // which is both the engagement masters and the generator's templates.

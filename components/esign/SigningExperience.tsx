@@ -37,11 +37,37 @@ type Loaded = {
   documentUrl: string
   signer: { name: string; email: string }
   consentText: string
+  /** 'engagement' or 'document'; absent from older responses, read as an engagement. */
+  kind?: 'engagement' | 'document'
+  /** "engagement agreement", or the document's own name. */
+  label?: string
 }
 
 type Outcome = 'signed' | 'declined'
 
-export function SigningExperience({ token }: { token: string }) {
+export interface SigningExperienceProps {
+  /**
+   * The route this page talks to: `/api/sign/<token>` from an emailed link,
+   * `/api/documents/sign/<sessionId>` from inside the portal. Same shape,
+   * same flow behind it; only the credential differs.
+   */
+  endpoint: string
+  /** Send the signed-in client's bearer token (the portal door); the token door needs none. */
+  withSession?: boolean
+  /** Rendered inside the portal shell rather than as its own page. */
+  embedded?: boolean
+  /** Where to go once signed or declined, when there is somewhere to go. */
+  doneHref?: string
+}
+
+async function sessionHeaders(withSession: boolean): Promise<Record<string, string>> {
+  if (!withSession) return {}
+  const { supabase } = await import('@/lib/supabaseClient')
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+}
+
+export function SigningExperience({ endpoint, withSession = false, embedded = false, doneHref }: SigningExperienceProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
@@ -64,7 +90,7 @@ export function SigningExperience({ token }: { token: string }) {
     let cancelled = false
     void (async () => {
       try {
-        const response = await fetch(`/api/sign/${encodeURIComponent(token)}`)
+        const response = await fetch(endpoint, { headers: await sessionHeaders(withSession) })
         const body = await response.json()
         if (!response.ok) throw new Error(body.error ?? 'This signing link could not be opened')
         if (!cancelled) setLoaded(body as Loaded)
@@ -73,7 +99,7 @@ export function SigningExperience({ token }: { token: string }) {
       }
     })()
     return () => { cancelled = true }
-  }, [token])
+  }, [endpoint, withSession])
 
   const pointTo = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -134,9 +160,9 @@ export function SigningExperience({ token }: { token: string }) {
         const trimmed = reason?.trim()
         if (trimmed) payload.declineReason = trimmed
       }
-      const response = await fetch(`/api/sign/${encodeURIComponent(token)}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await sessionHeaders(withSession)) },
         body: JSON.stringify(payload),
       })
       const body = await response.json()
@@ -149,46 +175,67 @@ export function SigningExperience({ token }: { token: string }) {
     }
   }
 
+  // The page is its own document from an emailed link and a panel inside the
+  // portal shell otherwise; the shell already supplies the frame and the serif.
+  const Wrapper = embedded ? 'div' : 'main'
+  const narrow = embedded ? 'mx-auto max-w-lg py-8 text-center' : 'client-root mx-auto max-w-lg p-8 text-center'
+  // What is being signed, in the words the buttons and headings use. An
+  // uploaded document is named by its own title; an agreement stays "agreement".
+  const noun = loaded?.kind === 'document' ? 'document' : 'agreement'
+  const title = loaded?.kind === 'document'
+    ? (loaded.label?.trim() || 'Document to sign')
+    : 'Your engagement agreement'
+
   if (loadError) {
     return (
-      <main className="client-root mx-auto max-w-lg p-8 text-center">
+      <Wrapper className={narrow}>
         <h1 className="text-lg font-semibold text-foreground">This link cannot be opened</h1>
         <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
         <p className="mt-4 text-xs text-muted-foreground">
           Please contact the firm if you believe this is a mistake.
         </p>
-      </main>
+        {doneHref && (
+          <Button asChild size="sm" variant="outline" className="mt-5">
+            <a href={doneHref}>Back to documents</a>
+          </Button>
+        )}
+      </Wrapper>
     )
   }
 
   if (outcome) {
     return (
-      <main className="client-root mx-auto max-w-lg p-8 text-center">
+      <Wrapper className={narrow}>
         <h1 className="text-lg font-semibold text-foreground">
-          {outcome === 'signed' ? 'Thank you — your agreement is signed' : 'You have declined this agreement'}
+          {outcome === 'signed' ? `Thank you — your ${noun} is signed` : `You have declined this ${noun}`}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {outcome === 'signed'
             ? 'A copy has been saved to your matter. The firm has been notified.'
             : 'The firm has been notified and will be in touch.'}
         </p>
-      </main>
+        {doneHref && (
+          <Button asChild size="sm" className="mt-5">
+            <a href={doneHref}>Back to documents</a>
+          </Button>
+        )}
+      </Wrapper>
     )
   }
 
   if (!loaded) {
-    return <main className="client-root mx-auto max-w-lg p-8 text-sm text-muted-foreground">Loading your agreement…</main>
+    return <Wrapper className={cn(narrow, 'text-left text-sm text-muted-foreground')}>Loading your {noun}…</Wrapper>
   }
 
   const canSign = consent && (mode === 'drawn' ? hasDrawing : typedName.trim().length > 0)
 
   return (
-    <main className="client-root mx-auto max-w-3xl space-y-5 p-4 md:p-8">
+    <Wrapper className={embedded ? 'space-y-5' : 'client-root mx-auto max-w-3xl space-y-5 p-4 md:p-8'}>
       <header>
-        <h1 className="text-lg font-semibold text-foreground">Your engagement agreement</h1>
+        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
         <p className="text-sm text-muted-foreground">
           {loaded.signer.name ? `Prepared for ${loaded.signer.name}. ` : ''}
-          Please read the agreement before signing.
+          Please read the {noun} before signing.
         </p>
       </header>
 
@@ -196,7 +243,7 @@ export function SigningExperience({ token }: { token: string }) {
           can see, and it is the same PDF the firm stores. */}
       <iframe
         src={loaded.documentUrl}
-        title="Engagement agreement"
+        title={title}
         className="h-[60vh] w-full rounded-lg border border-border bg-card"
       />
 
@@ -256,7 +303,7 @@ export function SigningExperience({ token }: { token: string }) {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => submit('sign')} disabled={busy || !canSign}>
-            Sign agreement
+            Sign {noun}
           </Button>
           {/* Declining has to be as reachable as signing, or the only way out
               is to close the tab and leave the firm guessing. Reachable, but
@@ -283,7 +330,7 @@ export function SigningExperience({ token }: { token: string }) {
       <AlertDialog open={declineOpen} onOpenChange={setDeclineOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Decline this agreement?</AlertDialogTitle>
+            <AlertDialogTitle>Decline this {noun}?</AlertDialogTitle>
             <AlertDialogDescription>
               This cannot be undone here. Your signing link stops working, and the firm
               will need to send a new one if you change your mind.
@@ -313,11 +360,11 @@ export function SigningExperience({ token }: { token: string }) {
               }}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              Decline agreement
+              Decline {noun}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </Wrapper>
   )
 }

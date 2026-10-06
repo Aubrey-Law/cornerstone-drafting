@@ -2,6 +2,7 @@ import type { MatterStage } from '@/types/database'
 
 export type PortalNextActionKind =
   | 'intake'
+  | 'sign'
   | 'review'
   | 'requests'
   | 'message'
@@ -30,6 +31,10 @@ export interface PortalNextActionFacts {
   outstandingInvoiceCount: number
   /** Things the firm has asked for that the client has not sent yet. Optional during rollout. */
   openDocumentRequestCount?: number
+  /** Documents addressed to this client that await their signature. Optional during rollout. */
+  pendingSignatureCount?: number
+  /** Where "Review and sign" goes: the one item, or the list on Documents. */
+  pendingSignatureHref?: string | null
   factsAvailable: boolean
 }
 
@@ -51,6 +56,21 @@ export function computePortalNextAction(facts: PortalNextActionFacts): PortalNex
       message: 'We could not confirm your next step right now. Please retry before assuming that nothing is needed.',
       label: 'Retry',
       href: '/dashboard',
+    }
+  }
+
+  // A signature the firm is waiting on comes before everything but the intake:
+  // nothing else moves (the engagement, a release, an authorisation) until it
+  // is given, and it is the one thing only this client can do.
+  const toSign = facts.pendingSignatureCount ?? 0
+  if (!closed && toSign > 0) {
+    return {
+      kind: 'sign',
+      message: toSign === 1
+        ? 'A document is waiting for your signature. You can read it in full first, and signing takes a minute.'
+        : `${toSign} documents are waiting for your signature. You can read each in full first.`,
+      label: 'Review and sign',
+      href: facts.pendingSignatureHref ?? '/documents#sign',
     }
   }
 

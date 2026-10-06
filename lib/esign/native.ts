@@ -358,13 +358,8 @@ export function createNativeEsignProvider(): EsignProvider {
  * Whether this firm signs through Cornerstone rather than the vendor.
  *
  * Mirrors billingMilestonesEnabled() in lib/billing/schedules.ts: ships dark,
- * read per send so a cutover can be reversed without a deploy.
+ * read per send so a cutover can be reversed without a deploy. Defined in
+ * lib/esign/flags.ts so the lifecycle can read it without this module's PDF
+ * dependencies; re-exported here for every existing importer.
  */
-export async function esignNativeEnabled(): Promise<boolean> {
-  const { data, error } = await getAdminClient()
-    .from('firm_settings')
-    .select('esign_native_enabled')
-    .eq('id', 1)
-    .maybeSingle()
-  return !error && data?.esign_native_enabled === true
-}
+export { esignNativeEnabled } from '@/lib/esign/flags'

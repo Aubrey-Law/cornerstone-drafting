@@ -6,9 +6,11 @@ import { fetchSharedDocuments, fetchClientUploads, fetchPortalDocumentRequests }
 import { getFirmConfig } from '@/lib/firmConfig'
 import { firmTodayKey } from '@/lib/firmDate'
 import { Button } from '@/components/ui/button'
+import { fetchPortalSignatures } from '@/lib/portal/signaturesServer'
 import PortalDocumentList from './PortalDocumentList'
 import ClientUploadCard from './ClientUploadCard'
 import RequestedDocuments from './RequestedDocuments'
+import PendingSignatures from './PendingSignatures'
 import { PortalPageHeader } from '../PortalPageHeader'
 
 const firm = getFirmConfig()
@@ -37,12 +39,14 @@ export default async function DocumentsPage() {
     )
   }
 
-  const [documents, clientUploads, requests] = await Promise.all([
+  const [documents, clientUploads, requests, signatures] = await Promise.all([
     fetchSharedDocuments(matter.id),
     fetchClientUploads(matter.id, user.id),
     // The list of what the firm asked for is additive: a failed read leaves
     // the page as it was rather than hiding the documents.
     fetchPortalDocumentRequests(matter.id).catch(() => []),
+    // So is what awaits a signature: the emailed link still works without it.
+    fetchPortalSignatures(matter.id, user.email ?? null).catch(() => []),
   ])
 
   const matterClosed = matter.status === 'closed'
@@ -53,6 +57,12 @@ export default async function DocumentsPage() {
         title="Documents"
         description={`Shared drafts and signed copies from ${firm.firmName}, and anything you send us.`}
       />
+
+      {signatures.length > 0 && (
+        <div className="mb-6">
+          <PendingSignatures signatures={signatures} matterClosed={matterClosed} />
+        </div>
+      )}
 
       {requests.length > 0 && (
         <div className="mb-6">

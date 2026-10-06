@@ -50,6 +50,10 @@ vi.mock('@/lib/portal/planStatusServer', () => ({
   loadPlanStatusFacts: mocks.loadPlanStatusFacts,
 }))
 
+vi.mock('@/lib/portal/signaturesServer', () => ({
+  fetchPortalSignatures: async () => [],
+}))
+
 import PortalDashboardPage from '@/app/(portal)/dashboard/page'
 
 describe('portal dashboard recorded next actions', () => {

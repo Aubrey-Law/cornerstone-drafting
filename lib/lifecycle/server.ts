@@ -6,7 +6,27 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { PipelineMatter } from '@/types/database'
 import type { EngagementState } from '@/lib/lifecycle/matter'
 import { isEsignConfigured } from '@/lib/esign/firma'
+import { esignNativeEnabled } from '@/lib/esign/flags'
 import { inflateDesignSheetRow } from '@/lib/designSheetPersistence'
+
+/**
+ * Whether the engagement requirement applies at all.
+ *
+ * It only makes sense where the firm signs engagement agreements through the
+ * app: through Firma (its env vars) or through the native engine (the firm
+ * setting). Reading only the Firma vars, as this once did, switched the
+ * requirement off for a firm that had moved to native signing. The native read
+ * fails closed, so a database hiccup here means the requirement does not
+ * apply, never that it blocks.
+ */
+async function engagementTracked(): Promise<boolean> {
+  if (isEsignConfigured()) return true
+  try {
+    return await esignNativeEnabled()
+  } catch {
+    return false
+  }
+}
 
 export interface LoadedMatterLifecycleContext {
   matter: PipelineMatter
@@ -26,7 +46,7 @@ export async function loadMatterLifecycleEvidenceBatch(
   const uniqueIds = [...new Set(matterIds.filter(Boolean))]
   if (uniqueIds.length === 0) return new Map()
   const admin = getAdminClient()
-  const engagementQuery = isEsignConfigured()
+  const engagementQuery = (await engagementTracked())
     ? admin.from('matter_details')
         .select('client_id, engagement_signed, engagement_sent_at, engagement_status')
         .in('client_id', uniqueIds)
@@ -77,7 +97,7 @@ export async function loadMatterLifecycleContext(
   matterId: string,
 ): Promise<LoadedMatterLifecycleContext | null> {
   const admin = getAdminClient()
-  const [pipelineResult, engagementResult, designResult] = await Promise.all([
+  const [pipelineResult, engagementResult, designResult, tracked] = await Promise.all([
     admin.from('v_matter_pipeline').select(PIPELINE_MATTER_COLUMNS).eq('matter_id', matterId).maybeSingle(),
     admin.from('matter_details')
       .select('engagement_signed, engagement_sent_at, engagement_status')
@@ -89,6 +109,7 @@ export async function loadMatterLifecycleContext(
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    engagementTracked(),
   ])
 
   if (pipelineResult.error) throw new Error(`Could not load lifecycle matter: ${pipelineResult.error.message}`)
@@ -103,7 +124,7 @@ export async function loadMatterLifecycleContext(
     ? design.intake_review_flags as unknown as IntakeReadinessFlag[]
     : []
   const reviewFlags = resolveIntakeReviewFlags(storedFlags, design)
-  const engagement = isEsignConfigured() && engagementResult.data
+  const engagement = tracked && engagementResult.data
     ? {
         signed: Boolean(engagementResult.data.engagement_signed),
         sentAt: engagementResult.data.engagement_sent_at ?? null,

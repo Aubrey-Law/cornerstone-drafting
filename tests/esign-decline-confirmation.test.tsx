@@ -61,7 +61,7 @@ afterEach(cleanup)
 
 async function openSigningPage() {
   const user = userEvent.setup()
-  render(<SigningExperience token="tok_123" />)
+  render(<SigningExperience endpoint="/api/sign/tok_123" />)
   // The agreement loads before either button is real.
   await screen.findByRole('button', { name: 'Decline' })
   return user
