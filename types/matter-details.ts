@@ -98,6 +98,8 @@ export interface MatterDetailsRow {
   pb_bond_waived_in_will?: boolean | null
 
   // ── V2 — Shared ──
+  /** True when the client asked not to hear about annual plan reviews (lib/annualReview). */
+  annual_review_opt_out?: boolean | null
   conflict_check_completed?: boolean | null
   conflict_check_date?: string | null
   conflict_cleared?: boolean | null

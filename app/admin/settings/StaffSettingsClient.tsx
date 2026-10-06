@@ -33,6 +33,7 @@ import { StatularSettingsSection } from './StatularSettingsSection'
 import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { DelegationSettingsSection } from './DelegationSettingsSection'
+import { AnnualReviewSettingsSection } from './AnnualReviewSettingsSection'
 import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
@@ -705,6 +706,8 @@ export function StaffSettingsClient({
       {tab === 'sla' && <PipelineSlaSettings />}
 
       {tab === 'delegation' && <DelegationSettingsSection isAdministrator={isAdministrator} />}
+
+      {tab === 'annual-review' && <AnnualReviewSettingsSection isAdministrator={isAdministrator} />}
       {confirmDialog}
     </div>
   )

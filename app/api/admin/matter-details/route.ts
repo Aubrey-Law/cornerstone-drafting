@@ -56,6 +56,7 @@ const WRITABLE_FIELDS = new Set([
   'pb_federal_estate_tax_required', 'pb_state_estate_tax_required',
   'pb_bond_amount', 'pb_bond_waived_in_will',
   // V2 — Shared
+  'annual_review_opt_out',
   'conflict_check_completed', 'conflict_check_date',
   'conflict_cleared', 'engagement_signed', 'engagement_status', 'engagement_signed_at',
   'fee_collected', 'fee_collected_date',

@@ -16,6 +16,7 @@ export type SettingsTab =
   | 'statular'
   | 'sla'
   | 'delegation'
+  | 'annual-review'
   | 'ai-usage'
 
 export type SettingsNavItem =
@@ -119,6 +120,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         tab: 'delegation',
         label: 'Delegation',
         description: 'How far the assistant may act on its own, for each kind of action.',
+      },
+      {
+        kind: 'tab',
+        tab: 'annual-review',
+        label: 'Annual reviews',
+        description: 'When clients with a signed plan are invited to a review call, and who is due next.',
       },
       { kind: 'route', href: '/admin/settings/command-center', label: 'Command center' },
     ],

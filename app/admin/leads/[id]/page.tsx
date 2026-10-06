@@ -14,6 +14,7 @@ import { fetchRecordTaskCounts, isUuid } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
+import { fetchLatestConflictCheck } from '@/lib/conflicts/server'
 import { LeadDetailClient } from './LeadDetailClient'
 import { fetchWorkGraphForUser } from '@/lib/work/server'
 import { buildRecordWorkSummaries } from '@/lib/work/recordSummary'
@@ -132,6 +133,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       : null
   } catch (spouseError) {
     console.error('Could not load lead spouse', { leadId: id, error: spouseError })
+  }
+  // The conflict search that ran at creation (or its re-run); null until one has.
+  let initialConflictCheck: Awaited<ReturnType<typeof fetchLatestConflictCheck>> = null
+  try {
+    initialConflictCheck = await fetchLatestConflictCheck(id)
+  } catch (conflictError) {
+    console.error('Could not load the lead conflict check', { leadId: id, error: conflictError })
   }
   if (activityError) console.error('Could not load lead activity', { leadId: id, error: activityError })
   if (notesError) console.error('Could not load lead notes', { leadId: id, error: notesError })
@@ -263,6 +271,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       smsEnabled={manualCommunicationsEnabled() && isSmsConfigured()}
       esignDocumentsEnabled={await esignDocumentsEnabled()}
       workSummary={buildRecordWorkSummaries(workGraph.items, 'lead')[id] ?? null}
+      initialConflictCheck={initialConflictCheck}
     />
   )
 }

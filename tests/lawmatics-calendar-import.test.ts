@@ -359,20 +359,24 @@ describe('POST /api/webhooks/lawmatics', () => {
 
   it('runs the calendar import on a form submission, once per Lawmatics event_id', async () => {
     process.env.LAWMATICS_WEBHOOK_SECRET = secret
-    // The route syncs against the real clock, whose window keeps only events
-    // that ended in the last day; a fixed date fell out of it on Oct 6, 2026.
-    const start = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    mocks.state.events = [lmEvent('e-1', {
-      start_date: start.toISOString(),
-      end_date: new Date(start.getTime() + 30 * 60 * 1000).toISOString(),
-    })]
-    const first = await post(signed({ event_id: 'evt_1', event_type: 'form.submitted', data: {} }))
-    expect(first).toEqual({ status: 200, body: { received: true } })
-    // The import runs in after(), once the response is sent.
-    await vi.waitFor(() => expect(calls()).toEqual([expect.objectContaining({ bookingUid: 'e-1', action: 'created' })]))
+    mocks.state.events = [lmEvent('e-1')]
+    // The route imports with the real clock, and the import keeps only events
+    // ending within the last day. The fixture event is fixed in October 2026,
+    // so once the calendar passed it this test started failing on every
+    // branch. Pin the clock (Date only; timers stay real for waitFor) to the
+    // same NOW the sync tests use.
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+    try {
+      const first = await post(signed({ event_id: 'evt_1', event_type: 'form.submitted', data: {} }))
+      expect(first).toEqual({ status: 200, body: { received: true } })
+      // The import runs in after(), once the response is sent.
+      await vi.waitFor(() => expect(calls()).toEqual([expect.objectContaining({ bookingUid: 'e-1', action: 'created' })]))
 
-    const again = await post(signed({ event_id: 'evt_1', event_type: 'form.submitted', data: {} }))
-    expect(again.body).toEqual({ received: true, duplicate: true })
+      const again = await post(signed({ event_id: 'evt_1', event_type: 'form.submitted', data: {} }))
+      expect(again.body).toEqual({ received: true, duplicate: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
