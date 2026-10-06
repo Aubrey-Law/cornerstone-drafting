@@ -10516,6 +10516,113 @@ export type Database = {
           },
         ]
       }
+      time_entries: {
+        Row: {
+          activity_ids: string[]
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          matter_id: string
+          minutes: number
+          source: string
+          suggestion_key: string | null
+          user_id: string | null
+          work_date: string
+        }
+        Insert: {
+          activity_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          matter_id: string
+          minutes: number
+          source?: string
+          suggestion_key?: string | null
+          user_id?: string | null
+          work_date: string
+        }
+        Update: {
+          activity_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          matter_id?: string
+          minutes?: number
+          source?: string
+          suggestion_key?: string | null
+          user_id?: string | null
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "time_entries_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
+      time_entry_timers: {
+        Row: {
+          description: string | null
+          matter_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          description?: string | null
+          matter_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          description?: string | null
+          matter_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entry_timers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entry_timers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "time_entry_timers_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       user_api_keys: {
         Row: {
           auth_tag: string

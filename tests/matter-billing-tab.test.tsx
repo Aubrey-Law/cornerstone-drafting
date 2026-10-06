@@ -9,6 +9,8 @@ import type { BillingLedgerRow } from '@/lib/billing/types'
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'access-token' }))
+// The Time card loads its own entries; these tests count the tab's billing requests.
+vi.mock('@/app/admin/matters/[id]/tabs/TimeEntriesCard', () => ({ TimeEntriesCard: () => null }))
 
 import { Tabs } from '@/components/ui/tabs'
 import { MatterBillingTab } from '@/app/admin/matters/[id]/tabs/billing'

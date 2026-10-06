@@ -225,4 +225,27 @@ describe('documents tab file manager', () => {
     await user.type(screen.getByLabelText('Search documents'), 'zzzz')
     expect(screen.getByText('No matching documents')).toBeTruthy()
   })
+
+  it('offers only the bulk share action that would change something', async () => {
+    const user = userEvent.setup()
+    renderTab({
+      documents: documents.map(d => d.id === 'd6' ? { ...d, shared_at: '2026-08-02T12:00:00.000Z' } : d),
+    })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Engagement letter.pdf' }))
+    expect((screen.getByRole('button', { name: /^Share$/ }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: /Unshare/ }) as HTMLButtonElement).disabled).toBe(true)
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Engagement letter.pdf' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Retainer notes.docx' }))
+    expect((screen.getByRole('button', { name: /^Share$/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /Unshare/ }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('carries the date and size on the row for the widths that hide their columns', () => {
+    renderTab()
+    const row = document.getElementById('document-row-d4')!
+    // The firm-day date, then the size: what a phone sees in place of the columns.
+    expect(within(row).getByText(/^Aug 1, 2026/).textContent).toBe('Aug 1, 2026 · 512 B')
+  })
 })
