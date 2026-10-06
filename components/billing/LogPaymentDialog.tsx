@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import type { BillingLedgerRow, BillingPaymentMethod } from '@/lib/billing/types'
 
-const methodLabels: Record<BillingPaymentMethod, string> = {
+export const paymentMethodLabels: Record<BillingPaymentMethod, string> = {
   check: 'Check',
   card: 'Card',
   ach: 'ACH',
@@ -186,7 +186,7 @@ export function LogPaymentDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(methodLabels).map(([value, label]) => (
+                  {Object.entries(paymentMethodLabels).map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
                 </SelectContent>

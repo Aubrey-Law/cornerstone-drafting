@@ -187,6 +187,41 @@ describe('MatterBillingTab', () => {
     expect(amounts[1]).toContain('Deposit')
   })
 
+  it('names an ACH payment in capitals, not as a capitalised word', async () => {
+    respondWith({
+      rows: [
+        row({
+          payments: [
+            {
+              id: 'p1',
+              billingItemId: '11111111-1111-4111-8111-111111111111',
+              amount: 50_000,
+              method: 'ach',
+              note: null,
+              receivedAt: '2026-06-02T16:00:00.000Z',
+            },
+          ],
+        }),
+      ],
+    })
+    renderTab()
+
+    const table = (await screen.findByText('Method')).closest('table') as HTMLElement
+    // Once in the Method column, once under the date where a phone hides it.
+    expect(within(table).getAllByText('ACH')).toHaveLength(2)
+  })
+
+  it('carries the status in the charge cell, with no column of its own', async () => {
+    respondWith({ rows: [row({ overdue: true })] })
+    renderTab()
+
+    const label = await screen.findByText('Flat fee — Joint trust package')
+    const table = label.closest('table') as HTMLElement
+    // The status column pushed the edit and delete buttons off a phone screen.
+    expect(within(table).queryByRole('columnheader', { name: 'Status' })).toBeNull()
+    expect(within(label.closest('td') as HTMLElement).getByText('Overdue')).toBeTruthy()
+  })
+
   it('posts a payment through the audited route and reloads', async () => {
     const user = userEvent.setup()
     respondWith({ rows: [row()] })

@@ -21,7 +21,7 @@ import {
 import { TabsContent } from '@/components/ui/tabs'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
-import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
+import { LogPaymentDialog, paymentMethodLabels } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
   editableCharge,
@@ -146,8 +146,11 @@ function FeesChargesCard({
             }
           />
         ) : (
+          // On a phone the 560px table scrolled sideways and hid the edit and
+          // delete buttons off-screen. The status badge now rides in the item
+          // cell and Collected drops below sm, so the row fits a phone.
           <div className="overflow-x-auto">
-            <Table className="min-w-[560px]">
+            <Table className="sm:min-w-[560px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10 pl-4">
@@ -159,8 +162,7 @@ function FeesChargesCard({
                   </TableHead>
                   <TableHead>Item</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Collected</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Collected</TableHead>
                   <TableHead className="w-20 pr-4">
                     <span className="sr-only">Edit or delete</span>
                   </TableHead>
@@ -176,23 +178,23 @@ function FeesChargesCard({
                         aria-label={`Select ${row.label}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-52 whitespace-normal">
+                    <TableCell className="whitespace-normal sm:max-w-64">
                       <span className="font-medium">{row.label}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {row.invoicedAt
-                          ? `${row.status === 'claim_submitted' ? 'Submitted' : 'Invoiced'} ${dayOf(row.invoicedAt)}`
-                          : 'Not invoiced'}
-                        {row.status !== 'paid' && ` · ${row.ageDays}d`}
+                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <BillingStatusBadge row={row} />
+                        <span>
+                          {row.invoicedAt
+                            ? `${row.status === 'claim_submitted' ? 'Submitted' : 'Invoiced'} ${dayOf(row.invoicedAt)}`
+                            : 'Not invoiced'}
+                          {row.status !== 'paid' && ` · ${row.ageDays}d`}
+                        </span>
                       </span>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {billingMoney(row.amountBilled)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
                       {billingMoney(row.collected)}
-                    </TableCell>
-                    <TableCell>
-                      <BillingStatusBadge row={row} />
                     </TableCell>
                     <TableCell className="pr-4 text-right whitespace-nowrap">
                       <Button
@@ -226,10 +228,10 @@ function FeesChargesCard({
                     </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{billingMoney(billed)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-green">
+                  <TableCell className="hidden text-right tabular-nums text-green sm:table-cell">
                     {billingMoney(collected)}
                   </TableCell>
-                  <TableCell colSpan={2} className="pr-4" />
+                  <TableCell className="pr-4" />
                 </TableRow>
               </TableFooter>
             </Table>
@@ -275,12 +277,14 @@ function PaymentsCard({
             }
           />
         ) : (
+          // Below sm the method moves under the date, so the note has room
+          // instead of the table scrolling sideways.
           <div className="overflow-x-auto">
-            <Table className="min-w-[520px]">
+            <Table className="sm:min-w-[520px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-4">Date</TableHead>
-                  <TableHead>Method</TableHead>
+                  <TableHead className="hidden sm:table-cell">Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="pr-4">Note</TableHead>
                 </TableRow>
@@ -288,9 +292,14 @@ function PaymentsCard({
               <TableBody>
                 {payments.map(payment => (
                   <TableRow key={payment.id}>
-                    <TableCell className="pl-4 tabular-nums">{dayOf(payment.receivedAt)}</TableCell>
-                    <TableCell className="capitalize">
-                      {payment.method === 'plan_eft' ? 'Plan EFT' : payment.method}
+                    <TableCell className="pl-4 tabular-nums">
+                      {dayOf(payment.receivedAt)}
+                      <span className="block text-xs text-muted-foreground sm:hidden">
+                        {paymentMethodLabels[payment.method]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {paymentMethodLabels[payment.method]}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {billingMoney(payment.amount)}
