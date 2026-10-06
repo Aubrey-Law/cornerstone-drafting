@@ -79,6 +79,7 @@ export const SYSTEM_AUTOMATIONS: readonly SystemAutomationDefinition[] = [
   { key: 'file-retention', name: 'File retention review', scheduleLabel: 'Mondays at 8:40 AM ET', schedules: ['40 12 * * 1'], path: '/api/cron/file-retention', expectedIntervalMinutes: 10080 },
   { key: 'weekly-financial-snapshot', name: 'Weekly financial snapshot', scheduleLabel: 'Mondays at 8:10 AM ET', schedules: ['10 12 * * 1'], path: '/api/cron/weekly-financial-snapshot', expectedIntervalMinutes: 10080 },
   { key: 'time-entry-suggestions', name: 'Time entry suggestions', scheduleLabel: 'Daily at 8:50 AM ET', schedules: ['50 12 * * *'], path: '/api/cron/time-entry-suggestions', expectedIntervalMinutes: 1440 },
+  { key: 'mercury-deposits', name: 'Mercury deposit matching', scheduleLabel: 'Daily at 7:35 AM ET', schedules: ['35 11 * * *'], path: '/api/cron/mercury-deposits', expectedIntervalMinutes: 1440 },
 ] as const
 
 export function getSystemAutomation(key: string): SystemAutomationDefinition | null {
