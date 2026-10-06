@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Check, FileText, Mail, Phone, Upload } from 'lucide-react'
+import { Check, FileText, Mail, PenLine, Phone, Upload } from 'lucide-react'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
@@ -24,6 +24,14 @@ import { progressFromMatterDetails } from '@/lib/portal/progress'
 import { computePortalNextAction } from '@/lib/portal/nextActions'
 import { describePlanStatus } from '@/lib/portal/planStatus'
 import { fetchLatestPlanStatus, loadPlanStatusFacts } from '@/lib/portal/planStatusServer'
+import { fetchPortalSignatures } from '@/lib/portal/signaturesServer'
+import {
+  portalSigningHref,
+  signatureStatusLine,
+  signatureTitle,
+  summarisePendingSignatures,
+  type PortalSignature,
+} from '@/lib/portal/signatures'
 import type { MatterDocument } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -101,7 +109,7 @@ export default async function PortalDashboardPage() {
     }
   }
 
-  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult, planStatusResult] = matter
+  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult, planStatusResult, signaturesResult] = matter
     ? await Promise.all([
         settled(fetchPortalMatterMeta(matter.id), null),
         settled(fetchRecentPortalDocuments(matter.id, auth.id, 2), [] as MatterDocument[]),
@@ -112,6 +120,7 @@ export default async function PortalDashboardPage() {
         settled(fetchPortalAccount(matter.id), null),
         settled(fetchOpenPortalDocumentRequests(matter.id), [] as DocumentRequest[]),
         settled(fetchLatestPlanStatus(matter.id), null),
+        settled(fetchPortalSignatures(matter.id, auth.email ?? null), [] as PortalSignature[]),
       ])
     : [
         { value: null, available: true },
@@ -123,6 +132,7 @@ export default async function PortalDashboardPage() {
         { value: null, available: true },
         { value: [] as DocumentRequest[], available: true },
         { value: null, available: true },
+        { value: [] as PortalSignature[], available: true },
       ]
 
   // "Where is my plan?" The last update the firm published, when there is
@@ -145,6 +155,8 @@ export default async function PortalDashboardPage() {
   const appointment = appointmentResult.value
   const account = accountResult.value
   const openRequests = requestsResult.value
+  // What awaits a signature: the client's own items first, then anyone else's.
+  const pendingSignatures = summarisePendingSignatures(signaturesResult.value)
 
   const firm = getFirmConfig()
   const progress = meta?.progress ?? progressFromMatterDetails(null)
@@ -158,6 +170,8 @@ export default async function PortalDashboardPage() {
     hasUpcomingAppointment: appointment !== null,
     outstandingInvoiceCount: account?.invoices.filter(invoice => invoice.balanceCents > 0).length ?? 0,
     openDocumentRequestCount: openRequests.length,
+    pendingSignatureCount: pendingSignatures.mine.length,
+    pendingSignatureHref: pendingSignatures.href,
     factsAvailable: sharedResult.available && unreadResult.available && appointmentResult.available && accountResult.available,
   })
 
@@ -254,6 +268,31 @@ export default async function PortalDashboardPage() {
           </Button>
         )}
       </section>
+
+      {/* ── ready for your signature ── */}
+      {signaturesResult.value.length > 0 && (
+        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="pending-signatures">
+          <h2 className="text-sm font-semibold text-foreground">Ready for your signature</h2>
+          <ul className="mt-3 space-y-2">
+            {[...pendingSignatures.mine, ...pendingSignatures.others].slice(0, 4).map(signature => (
+              <li key={signature.sessionId} className="flex items-start gap-2.5">
+                <PenLine className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">{signatureTitle(signature)}</p>
+                  <p className="text-xs text-muted-foreground">{signatureStatusLine(signature)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {pendingSignatures.mine.length > 0 && (
+            <Button asChild size="sm" className="mt-4">
+              <Link href={pendingSignatures.mine.length === 1 ? portalSigningHref(pendingSignatures.mine[0].sessionId) : '/documents#sign'}>
+                Review and sign
+              </Link>
+            </Button>
+          )}
+        </section>
+      )}
 
       {/* ── what the firm has asked for ── */}
       {openRequests.length > 0 && (

@@ -227,9 +227,10 @@ export async function createDocumentSignatureRequest(
  * So this does only the part that is genuinely shared: the executed file lands
  * in the matter's documents, where anyone looking for it would look.
  *
- * Not shared with the client automatically. shared_at stays null, matching the
- * engagement path; releasing a signed document to the portal is a decision, not
- * a side effect.
+ * Shared with the client at once, as the signed engagement agreement is
+ * (storeSignedEngagement): the signer was just told "a copy has been saved to
+ * your matter", and the executed copy of something they signed is theirs to
+ * keep. The portal gets the usual "a document is ready" notice.
  */
 export async function completeDocumentSignature(input: {
   requestId: string
@@ -262,25 +263,34 @@ export async function completeDocumentSignature(input: {
 
   await putFileToR2(r2Key, input.sealedPdf, 'application/pdf')
 
+  const now = new Date().toISOString()
+  const documentName = `${safeName} - signed.pdf`
   const { error: documentError } = await admin.from('matter_documents').insert({
     matter_id: matterId,
     r2_key: r2Key,
-    name: `${safeName} - signed.pdf`,
+    name: documentName,
     size: input.sealedPdf.length,
     content_type: 'application/pdf',
     source: 'firm',
+    shared_at: now,
   })
   // A duplicate r2_key means this already ran; that is idempotent, not an error.
   if (documentError && !/duplicate key/i.test(documentError.message)) {
     return { ok: false, error: documentError.message }
   }
 
-  const now = new Date().toISOString()
   const { error: statusError } = await admin
     .from('signature_requests')
     .update({ status: 'completed', completed_r2_key: r2Key, completed_at: now, updated_at: now })
     .eq('id', input.requestId)
   if (statusError) return { ok: false, error: statusError.message }
+
+  if (!documentError) {
+    // Fire-and-forget by design (the helper logs rather than throws): the
+    // request is complete whether or not the notice goes out.
+    const { notifyClientOfSharedDocument } = await import('@/lib/portalNotifications')
+    await notifyClientOfSharedDocument(matterId, documentName)
+  }
 
   return { ok: true }
 }

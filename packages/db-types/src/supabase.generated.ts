@@ -4719,6 +4719,7 @@ export type Database = {
           completed_at: string | null
           completed_r2_key: string | null
           created_at: string
+          document_id: string | null
           external_request_id: string | null
           firma_request_id: string | null
           id: string
@@ -4743,6 +4744,7 @@ export type Database = {
           completed_at?: string | null
           completed_r2_key?: string | null
           created_at?: string
+          document_id?: string | null
           external_request_id?: string | null
           firma_request_id?: string | null
           id?: string
@@ -4767,6 +4769,7 @@ export type Database = {
           completed_at?: string | null
           completed_r2_key?: string | null
           created_at?: string
+          document_id?: string | null
           external_request_id?: string | null
           firma_request_id?: string | null
           id?: string
@@ -4786,6 +4789,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "engagement_agreements_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "engagement_agreements_active_revision_fkey"
             columns: ["id", "active_revision_id"]
