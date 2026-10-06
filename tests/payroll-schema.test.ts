@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const sql = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20270120090000_payroll.sql'), 'utf8')
+const sql = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20270120091500_payroll.sql'), 'utf8')
 const TABLES = ['payroll_settings', 'payroll_runs', 'payroll_filings', 'payroll_checklist_items']
 
 describe('payroll migration', () => {
