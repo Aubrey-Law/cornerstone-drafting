@@ -146,6 +146,15 @@ export const COLLEGE_PREPARATION_LEAD_ENGAGEMENT_REQUIREMENTS = [
 function leadWorkflowRequirements(practiceAreas: readonly string[]): readonly RequirementDefinition[] {
   return [
   {
+    // The search runs at creation (lib/conflicts/server.ts); this is the
+    // attorney's reading of it. Evaluated only when the caller supplies the
+    // check's state, so surfaces that do not load it are unchanged.
+    key: 'lead.conflict_check', recordType: 'lead', label: 'Conflict check clear',
+    source: { kind: 'record', field: 'conflict_check', confirmation: 'recorded' },
+    applicability: { practiceAreas, stages: LEAD_STAGES, condition: 'Always required before engagement.' },
+    severity: 'blocking', owner: 'attorney', resolution: 'attorney_judgment', blocksStage: true,
+  },
+  {
     key: 'lead.intake_sent', recordType: 'lead', label: 'Intake questionnaire sent',
     source: { kind: 'record', field: 'intake_sent_at', confirmation: 'recorded' },
     applicability: { practiceAreas, stages: LEAD_STAGES, condition: 'Open lead.' },

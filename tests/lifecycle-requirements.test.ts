@@ -120,8 +120,11 @@ describe('versioned lifecycle requirement registry', () => {
     const requirements = evaluateLeadRequirements(cpLead, null)
     expect(COLLEGE_PREPARATION_REQUIREMENT_REGISTRY.lead.map(item => item.key)).toEqual([
       'lead.firstName', 'lead.email', 'lead.practiceArea', 'lead.fee',
+      'lead.conflict_check',
       'lead.intake_sent', 'lead.intake_complete', 'lead.engagement_started', 'lead.engagement_signed',
     ])
+    // The conflict check is evaluated only when its state is supplied.
+    expect(requirements.map(item => item.key)).not.toContain('lead.conflict_check')
     expect(requirements.map(item => item.key)).not.toContain('lead.maritalStatus')
     expect(requirements.map(item => item.key)).not.toContain('lead.address')
     expect(requirements.find(item => item.key === 'lead.firstName')?.satisfied).toBe(true)

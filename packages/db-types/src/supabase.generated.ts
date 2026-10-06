@@ -1970,6 +1970,66 @@ export type Database = {
         }
         Relationships: []
       }
+      conflict_checks: {
+        Row: {
+          checked_at: string
+          client_intake_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          hits: Json
+          id: string
+          matter_id: string | null
+          note: string | null
+          query: Json
+          result: string
+        }
+        Insert: {
+          checked_at?: string
+          client_intake_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          hits?: Json
+          id?: string
+          matter_id?: string | null
+          note?: string | null
+          query?: Json
+          result: string
+        }
+        Update: {
+          checked_at?: string
+          client_intake_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          hits?: Json
+          id?: string
+          matter_id?: string | null
+          note?: string | null
+          query?: Json
+          result?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conflict_checks_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conflict_checks_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_roles: {
         Row: {
           client_intake_id: string | null

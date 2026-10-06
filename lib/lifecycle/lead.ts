@@ -1,6 +1,7 @@
 import { leadFieldApplies, leadFieldDefinition } from '@/lib/leads/fieldDefinitions'
 import type { NextAction } from '@/lib/leads/nextAction'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { conflictCheckSatisfied, type ConflictCheckState } from '@/lib/conflicts/match'
 import {
   ALL_LEAD_REQUIREMENTS,
   LIFECYCLE_REGISTRY_VERSION,
@@ -14,6 +15,12 @@ export interface LeadLifecycleContext {
   spouse: LeadSpouseRecord | null
   nextAction?: NextAction | null
   nextAppointmentAt?: string | null
+  /**
+   * The lead's conflict check. `undefined` means the caller did not load it,
+   * and the requirement is left out; `null` means it was loaded and no check
+   * has run, which is an unmet requirement.
+   */
+  conflictCheck?: Pick<ConflictCheckState, 'result' | 'decision'> | null
 }
 
 function evaluateFieldRequirement(
@@ -45,6 +52,13 @@ function evaluateWorkflowRequirement(
   const engagementSigned = Boolean(lead.engagement_signed_at) || ['signed', 'completed'].includes(status)
 
   switch (requirement.key) {
+    case 'lead.conflict_check':
+      if (context.conflictCheck === undefined) return null
+      return {
+        ...requirement,
+        label: context.conflictCheck?.decision === 'conflict' ? 'Conflict of interest recorded' : requirement.label,
+        satisfied: conflictCheckSatisfied(context.conflictCheck),
+      }
     case 'lead.intake_sent':
       return { ...requirement, satisfied: Boolean(lead.intake_sent_at) || intakeComplete }
     case 'lead.intake_complete':
@@ -64,8 +78,9 @@ function evaluateWorkflowRequirement(
 export function evaluateLeadRequirements(
   lead: LeadDetailRecord,
   spouse: LeadSpouseRecord | null,
+  extras: Pick<LeadLifecycleContext, 'conflictCheck'> = {},
 ): EvaluatedRequirement[] {
-  const context = { lead, spouse }
+  const context: LeadLifecycleContext = { lead, spouse, ...extras }
   return [
     ...ALL_LEAD_REQUIREMENTS
       .filter(requirement => requirementAppliesToPracticeArea(requirement, lead.practice_area))
@@ -95,7 +110,7 @@ function nextLeadMilestone(context: LeadLifecycleContext): string | null {
 }
 
 export function leadOperationalBrief(context: LeadLifecycleContext) {
-  const requirements = evaluateLeadRequirements(context.lead, context.spouse)
+  const requirements = evaluateLeadRequirements(context.lead, context.spouse, { conflictCheck: context.conflictCheck })
   const unmet = requirements.filter(requirement => !requirement.satisfied)
   const intakeSubmitted = Boolean(context.lead.intake_completed_at)
     || ['submitted', 'approved', 'completed'].includes(String(context.lead.status ?? context.lead.intake_status ?? '').toLowerCase())
