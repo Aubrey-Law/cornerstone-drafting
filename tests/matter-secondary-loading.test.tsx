@@ -11,7 +11,7 @@ beforeEach(() => {
   apiRequest.mockReset().mockImplementation(async (url: string, options?: RequestInit) => {
     if (url.includes('summary=1')) return { latest: message, unread: 4 }
     if (options?.method === 'PATCH') return { ok: true }
-    if (url.includes('sms-messages')) return []
+    if (url.includes('sms-messages') || url.includes('email-history')) return []
     return [message]
   })
 })
@@ -45,4 +45,17 @@ it('sends texts through the matter send-sms route to the chosen recipient', asyn
   const post = apiRequest.mock.calls.find(([, options]) => options?.method === 'POST')
   expect(post?.[0]).toBe('/api/admin/matters/matter-1/send-sms')
   expect(JSON.parse(String(post?.[1]?.body))).toEqual({ recipient: 'client', body: 'Running late' })
+})
+it('merges the matter email log into the timeline, so the Email filter is not always empty', async () => {
+  const email = { id: 'email-1', channel: 'email', direction: 'outbound', body: 'Your signing is Thursday.', meta: 'Signing · sent', sender: 'To client@example.com', created_at: '2026-09-11T12:00:00Z' }
+  apiRequest.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (url.includes('summary=1')) return { latest: null, unread: 0 }
+    if (options?.method === 'PATCH') return { ok: true }
+    if (url.includes('email-history')) return [email]
+    if (url.includes('sms-messages')) return []
+    return [message]
+  })
+  const { result } = renderHook(() => useMatterCommunications({ matterId: 'matter-1', token: 'synthetic', initialEmailTo: '' }))
+  await waitFor(() => expect(result.current.items.map(item => item.channel)).toEqual(['portal', 'email']))
+  expect(apiRequest.mock.calls.some(([url]) => url === '/api/admin/comms/email-history?type=matter&id=matter-1')).toBe(true)
 })

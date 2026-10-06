@@ -30,3 +30,22 @@ export function mapMatterNoteRows(rows: MatterNoteLoaderRow[]): LinkedMatterNote
     sourceLeadNoteId: note.source_lead_note_id,
   }))
 }
+
+/**
+ * Matter notes as the tab shows them. Body and type come from live state, so
+ * an edit shows at once; the page-load rows only add the lead-note link.
+ */
+export function linkLiveMatterNotes(
+  notes: Pick<MatterNoteRow, 'id' | 'body' | 'created_at' | 'note_type'>[],
+  loaded: LinkedMatterNote[],
+): LinkedMatterNote[] {
+  return notes.map(note => ({
+    id: note.id,
+    sourceId: note.id,
+    origin: 'matter',
+    body: note.body,
+    created_at: note.created_at,
+    note_type: note.note_type,
+    sourceLeadNoteId: loaded.find(linked => linked.sourceId === note.id)?.sourceLeadNoteId ?? null,
+  }))
+}

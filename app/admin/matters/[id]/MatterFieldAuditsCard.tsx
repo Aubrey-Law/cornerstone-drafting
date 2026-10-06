@@ -10,6 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { runAudit, type RunAuditState } from '@/app/admin/field-audits/actions'
 import type { FieldAuditRunChoice, PromptChoice } from '@/app/admin/field-audits/FieldAuditWorkspace'
 import { TONE_NOTICE } from '@/lib/ui/tone'
+import { runSummaryLine } from '@/app/admin/review/components/RunHistoryList'
 
 interface FieldAuditsView {
   prompts: PromptChoice[]
@@ -136,21 +137,26 @@ export function MatterFieldAuditsCard({ matterId }: { matterId: string }) {
       ) : !view.hasDesignSheet ? (
         <EmptyState
           icon={ClipboardCheck}
-          className="py-8"
+          className="py-6"
           title="Nothing to audit yet"
           description="This matter has no design sheet yet, so there is nothing for a field audit to check."
+          action={(
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/drafting/${encodeURIComponent(matterId)}`}>Open the design sheet</Link>
+            </Button>
+          )}
         />
       ) : view.prompts.length === 0 && view.runs.length === 0 ? (
         <EmptyState
           icon={ClipboardCheck}
-          className="py-8"
+          className="py-6"
           title="No field audits available"
           description="No field-audit prompt is published yet."
         />
       ) : view.runs.length === 0 ? (
         <EmptyState
           icon={ClipboardCheck}
-          className="py-8"
+          className="py-6"
           title="No field audits yet"
           description="No field audits have run on this matter yet."
         />
@@ -163,13 +169,7 @@ export function MatterFieldAuditsCard({ matterId }: { matterId: string }) {
                 className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm transition-colors hover:bg-accent"
               >
                 <span className="font-medium">{run.promptTitle ?? 'Field audit'}</span>
-                <span className="text-xs text-muted-foreground">
-                  {run.findingCount} findings
-                  {run.failedCount > 0 ? ` · ${run.failedCount} checks failed` : ''}
-                  {run.status === 'partial' ? ' · partial' : ''}
-                  {run.status === 'queued' || run.status === 'running' ? ' · in progress' : ''}
-                  {run.finishedAt ? ` · ${run.finishedAt.slice(0, 10)}` : ''}
-                </span>
+                <span className="text-xs text-muted-foreground">{runSummaryLine(run, 'check')}</span>
               </Link>
             </li>
           ))}

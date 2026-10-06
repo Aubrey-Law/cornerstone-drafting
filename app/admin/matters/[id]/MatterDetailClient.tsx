@@ -100,7 +100,7 @@ import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { RequestedDocumentsCard } from './RequestedDocumentsCard'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
-import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
+import { MatterNotesTab, linkLiveMatterNotes, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
@@ -312,6 +312,7 @@ function MatterDetailClientInner({
     setPortalDraft,
     items: communicationItems,
     sendOnChannel,
+    loadFullMessage,
     unreadPortalCount,
     lastPortalMessage,
     readError: messagesError,
@@ -510,7 +511,7 @@ function MatterDetailClientInner({
   const [leadNotes, setLeadNotes] = useState(initialLeadNotes)
   const linkedNotes = useMemo(() => mergeLinkedNotes(
     leadNotes.map(note => ({ id: note.id, sourceId: note.id, origin: 'lead' as const, leadId: note.lead_id, body: note.body, created_at: note.created_at, note_type: note.note_type })),
-    notes.map(note => initialMatterLinkedNotes.find(linked => linked.sourceId === note.id) ?? ({ id: note.id, sourceId: note.id, origin: 'matter' as const, body: note.body, created_at: note.created_at, note_type: note.note_type })),
+    linkLiveMatterNotes(notes, initialMatterLinkedNotes),
   ), [initialMatterLinkedNotes, leadNotes, notes])
 
   const handleUpdateLeadNote = async (note: LinkedMatterNote) => {
@@ -1328,6 +1329,7 @@ function MatterDetailClientInner({
                 clientPhone={matter.client_phone || null}
                 recordLabel={matterNum ?? (matter.client_name || matter.matter_name || 'this matter')}
                 onSendOnChannel={sendOnChannel}
+                loadFullMessage={loadFullMessage}
                 portalLoading={portalLoading}
                 portalSending={portalSending}
                 smsLoading={smsLoading}

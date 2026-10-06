@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
 import { TONE_NOTICE } from '@/lib/ui/tone'
+import { runSummaryLine } from '@/app/admin/review/components/RunHistoryList'
 import { runAudit, type RunAuditState } from './actions'
 
 export interface PromptChoice {
@@ -225,11 +226,7 @@ export function FieldAuditWorkspace({
                     <span className="font-medium">{run.promptTitle ?? 'Field audit'}</span>
                     <span className="ml-2 text-xs text-muted-foreground">{run.matterTitle}</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {run.findingCount} findings
-                    {run.failedCount > 0 ? ` · ${run.failedCount} checks failed` : ''}
-                    {run.status === 'partial' ? ' · partial' : ''}
-                  </span>
+                  <span className="text-xs text-muted-foreground">{runSummaryLine(run, 'check')}</span>
                 </Link>
               </li>
             ))}

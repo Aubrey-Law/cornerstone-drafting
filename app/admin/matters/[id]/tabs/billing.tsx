@@ -133,6 +133,7 @@ function FeesChargesCard({
       <CardContent className="px-0">
         {rows.length === 0 ? (
           <EmptyState
+            className="py-6"
             icon={ReceiptText}
             title="Nothing billed yet"
             description="The engagement fee appears here once the agreement is signed. Costs and plan claims can be added now."
@@ -264,6 +265,7 @@ function PaymentsCard({
       <CardContent className="px-0">
         {payments.length === 0 ? (
           <EmptyState
+            className="py-6"
             title="No payments recorded"
             description={
               canLog
@@ -602,55 +604,19 @@ export function MatterBillingTab({
           />
         </Card>
       ) : (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 space-y-4">
-            <FeeTypeCard details={details} onSaveField={onSaveField} />
-            <ProposalPricingCard details={details} onSaveField={onSaveField} />
-            <LegalPlanClaimCard
-              details={details}
-              onSaveField={onSaveField}
-              hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
-              onStartClaim={() => openCharge('plan_claim')}
-            />
-            {view?.milestonesEnabled && (
-              <FeeScheduleCard
-                schedule={view.feeSchedule}
-                packageCount={view.servicePackages.length}
-                onAttach={openSchedule}
-              />
-            )}
-            <FeesChargesCard
-              rows={rows}
-              selected={selectedCharges}
-              onAddCharge={() => openCharge()}
-              onToggleRow={(id, checked) =>
-                setSelectedCharges(current => ({ ...current, [id]: checked }))}
-              onToggleAll={checked =>
-                setSelectedCharges(
-                  checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {},
-                )}
-              onEdit={openEdit}
-              onDelete={askDelete}
-            />
-            <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
-          </div>
-
-          <div className="space-y-4">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_1fr]">
+          {/*
+            On a wide screen: the ledger on the left, the summary beside it. On a
+            phone the side column used to stack under every ledger card, so the
+            balance came last; the summary block now comes first there and the
+            close-out after the ledger.
+          */}
+          <div className="space-y-4 lg:col-start-2 lg:row-start-1">
             <MoneyInCard
               details={details}
               onSaveField={onSaveField}
               billed={rows.reduce((sum, row) => sum + row.amountBilled, 0)}
               collected={rows.reduce((sum, row) => sum + row.collected, 0)}
-            />
-            <PlanClaimsCard rows={rows} invoiceHref={claimsInvoiceHref} />
-            <CloseOutCard
-              details={details}
-              onSaveField={onSaveField}
-              onCloseMatter={() => void onCloseMatter()}
-              closing={closing}
-              alreadyClosed={alreadyClosed}
-              directBalance={rows.filter(row => row.kind !== 'plan_claim').reduce((sum, row) => sum + row.balance, 0)}
-              uninvoicedDirectCount={billableCharges.length}
             />
             {(billableCharges.length > 0 || claimsToSubmit.length > 0 || overdue.length > 0) && (
               <Card>
@@ -704,6 +670,51 @@ export function MatterBillingTab({
                 </CardContent>
               </Card>
             )}
+          </div>
+
+          <div className="min-w-0 space-y-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+            <FeeTypeCard details={details} onSaveField={onSaveField} />
+            <ProposalPricingCard details={details} onSaveField={onSaveField} />
+            <LegalPlanClaimCard
+              details={details}
+              onSaveField={onSaveField}
+              hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
+              onStartClaim={() => openCharge('plan_claim')}
+            />
+            {view?.milestonesEnabled && (
+              <FeeScheduleCard
+                schedule={view.feeSchedule}
+                packageCount={view.servicePackages.length}
+                onAttach={openSchedule}
+              />
+            )}
+            <FeesChargesCard
+              rows={rows}
+              selected={selectedCharges}
+              onAddCharge={() => openCharge()}
+              onToggleRow={(id, checked) =>
+                setSelectedCharges(current => ({ ...current, [id]: checked }))}
+              onToggleAll={checked =>
+                setSelectedCharges(
+                  checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {},
+                )}
+              onEdit={openEdit}
+              onDelete={askDelete}
+            />
+            <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
+          </div>
+
+          <div className="space-y-4 lg:col-start-2 lg:row-start-2">
+            <PlanClaimsCard rows={rows} invoiceHref={claimsInvoiceHref} />
+            <CloseOutCard
+              details={details}
+              onSaveField={onSaveField}
+              onCloseMatter={() => void onCloseMatter()}
+              closing={closing}
+              alreadyClosed={alreadyClosed}
+              directBalance={rows.filter(row => row.kind !== 'plan_claim').reduce((sum, row) => sum + row.balance, 0)}
+              uninvoicedDirectCount={billableCharges.length}
+            />
           </div>
         </div>
       )}
