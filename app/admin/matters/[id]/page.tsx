@@ -21,6 +21,7 @@ import { fetchRecordTaskCounts } from '@/lib/queries/tasks'
 import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
+import { MATTER_ACTIVITY_PAGE, olderActivityCursor } from '@/lib/matters/activityPage'
 import type { IntakeSnapshot } from '@/lib/queries'
 import { profileMatterDetail } from '@/lib/performance/matterDetailTiming'
 import { getCachedClaims } from '@/lib/supabaseServer'
@@ -155,7 +156,7 @@ async function loadMatterActivity(admin: ReturnType<typeof getAdminClient>, matt
     .select('*')
     .eq('matter_id', matterId)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(MATTER_ACTIVITY_PAGE)
 
   if (!error) return (data ?? []) as MatterActivity[]
   console.warn('Matter activity unavailable; continuing without activity timeline:', error.message)
@@ -337,6 +338,7 @@ export default async function MatterDetailPage({ params }: Params) {
           ...leadMeetingNotes.map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),
         ]}
         initialActivity={initialActivity}
+        initialActivityCursor={olderActivityCursor(matterActivity)}
         initialStageHistory={stageHistory.entries}
         designSheetSeeded={designSheetSeeded}
         reviewFlags={reviewFlags}
