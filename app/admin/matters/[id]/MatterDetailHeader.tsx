@@ -9,6 +9,8 @@ import {
   Mail,
   MoreHorizontal,
   PanelLeft,
+  PenLine,
+  Phone,
   Trash2,
   Upload,
   Clock as UnlockIcon,
@@ -214,7 +216,11 @@ export function MatterDetailHeader({
           <DropdownMenuContent align="end">
             {matter.client_phone && (
               <DropdownMenuItem asChild>
-                <CallPhoneLink phone={matter.client_phone} label="Call client" />
+                <CallPhoneLink
+                  phone={matter.client_phone}
+                  label="Call client"
+                  icon={<Phone className="mr-2 size-3.5" />}
+                />
               </DropdownMenuItem>
             )}
             <DropdownMenuItem disabled={!matter.client_email} onClick={onEmail}>
@@ -241,7 +247,10 @@ export function MatterDetailHeader({
               </DropdownMenuItem>
             )}
             <DropdownMenuItem asChild>
-              <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
+              <Link href={`/admin/drafting/${matter.matter_id}`}>
+                <PenLine className="mr-2 size-3.5" />
+                Open drafting
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href={`/admin/assistant?matter=${matter.matter_id}`}>

@@ -74,6 +74,20 @@ describe('responsive admin detail layout', () => {
     expect(screen.getAllByLabelText('Client name')).toHaveLength(1)
   })
 
+  it('opens the mobile sheet focused on itself, not on its first field', async () => {
+    mediaState.mobile = true
+    render(
+      <ResponsiveDetailRail open onOpenChange={vi.fn()} label="Matter facts">
+        <label htmlFor="client-name">Client name</label>
+        <input id="client-name" defaultValue="Jordan Client" />
+      </ResponsiveDetailRail>,
+    )
+    const sheet = await screen.findByRole('dialog', { name: 'Matter facts' })
+    // Focusing the name field selected it for editing and raised the keyboard.
+    await vi.waitFor(() => expect(document.activeElement).toBe(sheet))
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Client name'))
+  })
+
   it('puts lead actions in a named mobile overflow menu', async () => {
     const callbacks = {
       onDraft: vi.fn(),
