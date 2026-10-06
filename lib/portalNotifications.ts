@@ -63,6 +63,35 @@ export async function notifyClientOfSharedDocument(matterId: string, documentNam
   }
 }
 
+/** The firm asked for a document. Several requests in one sitting send one notice. */
+export async function notifyClientOfDocumentRequest(matterId: string, title: string): Promise<void> {
+  try {
+    const client = await fetchMatterClient(matterId)
+    if (!client) return
+    if (await recentlyNotified('document_request_notice', client.email, 30)) return
+
+    const firm = getFirmConfig()
+    const link = portalUrl('/documents#requests')
+    const safeTitle = title.replace(/[&<>"']/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]!)
+    await sendEmail({
+      category: 'document_request_notice',
+      to: client.email,
+      subject: `We need a document from you — ${firm.firmName}`,
+      html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
+        <p>Hi ${firstName(client.name)},</p>
+        <p>We have asked for something to move your matter along: <strong>${safeTitle}</strong>.</p>
+        <p>You can upload it any time from your secure portal, where the full list of what we need is kept up to date.</p>
+        <p><a href="${link}" style="color:#1a6b72">See what we need →</a></p>
+      </div>`,
+      from: `${firm.attorneyShortName} <${firm.email}>`,
+    })
+  } catch (err) {
+    console.error('notifyClientOfDocumentRequest failed:', err)
+  }
+}
+
 export async function notifyClientOfFirmMessage(matterId: string): Promise<void> {
   try {
     const client = await fetchMatterClient(matterId)

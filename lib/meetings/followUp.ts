@@ -4,6 +4,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { buildDesignSheetImportPreview } from '@/lib/designSheetImport/shared'
 import type { FiduciaryProposal } from '@/lib/designSheet/fiduciaryProposal'
+import { requestTitlesFromClientItems } from '@/lib/documentRequests/model'
 
 /**
  * The meeting follow-up: what the firm does after a meeting's notes land.
@@ -16,6 +17,7 @@ import type { FiduciaryProposal } from '@/lib/designSheet/fiduciaryProposal'
  *
  *   design-sheet decisions   one batch of fields and appointments, always reviewed line by line
  *   the attorney's to-dos    one task each
+ *   what the client owes     one document request each, shown in the portal (matter only)
  *   the client recap         a draft in the composer, then a send proposal
  *
  * Nothing here writes a record directly, and nothing is invented: a decision
@@ -134,7 +136,7 @@ export async function extractMeetingFollowUp(input: {
 }
 
 export interface MeetingPlanItem {
-  actionKey: 'design_sheet.proposal.apply' | 'task.create' | 'email.draft.compose'
+  actionKey: 'design_sheet.proposal.apply' | 'task.create' | 'document_request.create' | 'email.draft.compose'
   summary: string
   payload: Record<string, unknown>
   recordType: 'lead' | 'matter'
@@ -202,6 +204,22 @@ export function planMeetingActions(input: {
       slot: `task-${index + 1}`,
     })
   })
+
+  // What the client agreed to send becomes a request on the matter, so the
+  // portal lists it and the firm sees it arrive. A lead has no matter yet, so
+  // there the recap's "what we need from you" line is all that carries it.
+  if (input.matterId) {
+    requestTitlesFromClientItems(input.extraction.clientRequests).forEach((title, index) => {
+      items.push({
+        actionKey: 'document_request.create',
+        summary: `Ask the client for: ${title}`,
+        payload: { matterId: input.matterId, title, description: from, source: 'meeting_notes' },
+        recordType,
+        recordId,
+        slot: `request-${index + 1}`,
+      })
+    })
+  }
 
   const email = input.extraction.followUpEmail
   if (email && input.recipient?.email) {

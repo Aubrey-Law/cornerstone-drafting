@@ -97,6 +97,7 @@ import { MatterStageHistoryCard } from './MatterStageHistoryCard'
 import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
+import { RequestedDocumentsCard } from './RequestedDocumentsCard'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
@@ -1273,6 +1274,7 @@ function MatterDetailClientInner({
                         <Button variant="outline" size="sm" disabled={docsLoading} onClick={() => void loadDocuments()}>Retry</Button>
                       </div>
                     )}
+                    <RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} />
                     <MatterDocumentsTab
                       matterId={matterId}
                       clientName={matter.client_name}

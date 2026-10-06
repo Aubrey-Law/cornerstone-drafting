@@ -40,6 +40,7 @@ vi.mock('@/lib/queries/portal', () => ({
   fetchUnreadFirmMessageCount: mocks.fetchUnreadCount,
   fetchNextAppointment: mocks.fetchAppointment,
   fetchPortalAccount: mocks.fetchAccount,
+  fetchOpenPortalDocumentRequests: async () => [],
 }))
 
 import PortalDashboardPage from '@/app/(portal)/dashboard/page'

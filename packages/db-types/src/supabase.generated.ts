@@ -3308,6 +3308,91 @@ export type Database = {
           },
         ]
       }
+      document_requests: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          description: string | null
+          due_on: string | null
+          id: string
+          matter_id: string
+          received_at: string | null
+          received_document_id: string | null
+          requested_at: string
+          requested_by: string | null
+          source: string
+          source_ref: string | null
+          status: string
+          title: string
+          updated_at: string
+          waived_at: string | null
+          waived_reason: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          description?: string | null
+          due_on?: string | null
+          id?: string
+          matter_id: string
+          received_at?: string | null
+          received_document_id?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          source?: string
+          source_ref?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          waived_at?: string | null
+          waived_reason?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          description?: string | null
+          due_on?: string | null
+          id?: string
+          matter_id?: string
+          received_at?: string | null
+          received_document_id?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          source?: string
+          source_ref?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          waived_at?: string | null
+          waived_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_requests_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_requests_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "document_requests_received_document_id_fkey"
+            columns: ["received_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_scan_items: {
         Row: {
           attempted_quote: string | null

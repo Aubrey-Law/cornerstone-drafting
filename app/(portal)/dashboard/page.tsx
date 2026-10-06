@@ -12,12 +12,14 @@ import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import {
   fetchLatestFirmMessage,
   fetchNextAppointment,
+  fetchOpenPortalDocumentRequests,
   fetchPortalAccount,
   fetchPortalMatterMeta,
   fetchRecentPortalDocuments,
   fetchSharedDocuments,
   fetchUnreadFirmMessageCount,
 } from '@/lib/queries/portal'
+import type { DocumentRequest } from '@/lib/documentRequests/model'
 import { progressFromMatterDetails } from '@/lib/portal/progress'
 import { computePortalNextAction } from '@/lib/portal/nextActions'
 import type { MatterDocument } from '@/types/database'
@@ -97,7 +99,7 @@ export default async function PortalDashboardPage() {
     }
   }
 
-  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult] = matter
+  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult] = matter
     ? await Promise.all([
         settled(fetchPortalMatterMeta(matter.id), null),
         settled(fetchRecentPortalDocuments(matter.id, auth.id, 2), [] as MatterDocument[]),
@@ -106,6 +108,7 @@ export default async function PortalDashboardPage() {
         settled(fetchUnreadFirmMessageCount(matter.id), 0),
         settled(fetchNextAppointment(matter.id), null),
         settled(fetchPortalAccount(matter.id), null),
+        settled(fetchOpenPortalDocumentRequests(matter.id), [] as DocumentRequest[]),
       ])
     : [
         { value: null, available: true },
@@ -115,6 +118,7 @@ export default async function PortalDashboardPage() {
         { value: 0, available: true },
         { value: null, available: true },
         { value: null, available: true },
+        { value: [] as DocumentRequest[], available: true },
       ]
 
   const meta = metaResult.value
@@ -123,6 +127,7 @@ export default async function PortalDashboardPage() {
   const unreadCount = unreadResult.value
   const appointment = appointmentResult.value
   const account = accountResult.value
+  const openRequests = requestsResult.value
 
   const firm = getFirmConfig()
   const progress = meta?.progress ?? progressFromMatterDetails(null)
@@ -135,6 +140,7 @@ export default async function PortalDashboardPage() {
     unreadFirmMessageCount: unreadCount,
     hasUpcomingAppointment: appointment !== null,
     outstandingInvoiceCount: account?.invoices.filter(invoice => invoice.balanceCents > 0).length ?? 0,
+    openDocumentRequestCount: openRequests.length,
     factsAvailable: sharedResult.available && unreadResult.available && appointmentResult.available && accountResult.available,
   })
 
@@ -218,6 +224,30 @@ export default async function PortalDashboardPage() {
           </Button>
         )}
       </section>
+
+      {/* ── what the firm has asked for ── */}
+      {openRequests.length > 0 && (
+        <section className="mt-4 rounded-lg border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">What we need from you</h2>
+          <ul className="mt-3 space-y-2">
+            {openRequests.slice(0, 4).map(request => (
+              <li key={request.id} className="flex items-start gap-2.5">
+                <Upload className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">{request.title}</p>
+                  {request.dueOn && <p className="text-xs text-muted-foreground">Due {request.dueOn}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {openRequests.length > 4 && (
+            <p className="mt-2 text-xs text-muted-foreground">And {openRequests.length - 4} more.</p>
+          )}
+          <Button asChild size="sm" variant="outline" className="mt-4">
+            <Link href="/documents#requests">Upload what we need</Link>
+          </Button>
+        </section>
+      )}
 
       {/* Only shown when there is something to say: a client with no invoices
           should not be told their balance is zero. */}

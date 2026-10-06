@@ -39,6 +39,24 @@ function optionalUuid(input: Record<string, unknown>, key: string): string | nul
   return value
 }
 
+function documentRequestCreateInput(value: unknown): {
+  matterId: string
+  title: string
+  description: string | null
+  dueOn: string | null
+  source: 'staff' | 'meeting_notes' | 'automation'
+} {
+  const input = objectInput(value)
+  const matterId = optionalUuid(input, 'matterId')
+  if (!matterId) throw new Error('A document request needs a matter')
+  const title = requiredText(input, 'title', 160)
+  const description = typeof input.description === 'string' ? input.description.trim().slice(0, 1_000) || null : null
+  const dueOn = typeof input.dueOn === 'string' && input.dueOn.trim() ? input.dueOn.trim() : null
+  if (dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(dueOn)) throw new Error('dueOn must be a YYYY-MM-DD date')
+  const source = input.source === 'meeting_notes' || input.source === 'automation' ? input.source : 'staff'
+  return { matterId, title, description, dueOn, source }
+}
+
 function taskCreateInput(value: unknown): Record<string, unknown> {
   const input = objectInput(value)
   const title = requiredText(input, 'title', 300)
@@ -1307,6 +1325,62 @@ const definitions: ActionDefinition[] = [
       return { ceremonyId: value.ceremonyId, kind: value.kind, signedOn: value.signedOn, documentId: value.documentId }
     },
   } as ActionDefinition<ReturnType<typeof executedRecordInput>>,
+  {
+    // Ask the client for a document: a row on the matter that the portal
+    // lists and the client uploads against. An internal record, so a widened
+    // dial may add it unattended; the undo removes a request nothing has
+    // arrived against.
+    key: 'document_request.create',
+    risk: 'internal_write',
+    validate: documentRequestCreateInput,
+    async preview(input, context) {
+      const { listDocumentRequests } = await import('@/lib/documentRequests/repository')
+      const { findMatchingRequest } = await import('@/lib/documentRequests/model')
+      const existing = findMatchingRequest(await listDocumentRequests(input.matterId, context.admin), input.title)
+      return {
+        display: {
+          action: 'Request a document from the client',
+          title: input.title,
+          description: input.description,
+          dueOn: input.dueOn,
+          source: input.source,
+          alreadyRequested: existing ? { id: existing.id, status: existing.status } : null,
+        },
+        auditBefore: null,
+        auditAfter: { matterId: input.matterId, title: input.title, dueOn: input.dueOn, source: input.source },
+      }
+    },
+    async execute(input, context) {
+      const { createDocumentRequest, listDocumentRequests } = await import('@/lib/documentRequests/repository')
+      const { findMatchingRequest } = await import('@/lib/documentRequests/model')
+      // A request already open for the same ask is the answer, not a second row.
+      const existing = findMatchingRequest(await listDocumentRequests(input.matterId, context.admin), input.title)
+      if (existing && existing.status !== 'accepted') return { ...existing, reused: true }
+      const created = await createDocumentRequest({
+        matterId: input.matterId,
+        title: input.title,
+        description: input.description,
+        dueOn: input.dueOn,
+        source: input.source,
+        sourceRef: context.idempotencyKey,
+        requestedBy: context.actor.id,
+      }, context.admin)
+      return { ...created, reused: false }
+    },
+    auditResult(result) {
+      const value = result as { id?: string; matterId?: string; status?: string; reused?: boolean }
+      return { requestId: value.id, matterId: value.matterId, status: value.status, reused: value.reused === true }
+    },
+    async undo(_input, record, context) {
+      const requestId = typeof record.afterState?.requestId === 'string' ? record.afterState.requestId : null
+      if (!requestId) throw new Error('The created request was not recorded, so it cannot be removed')
+      if (record.afterState?.reused === true) return { requestId, deleted: false, reason: 'the request already existed' }
+      const { deleteUnansweredDocumentRequest } = await import('@/lib/documentRequests/repository')
+      const deleted = await deleteUnansweredDocumentRequest(requestId, context.admin)
+      if (!deleted) throw new Error('The client has already sent something against this request, so it stays')
+      return { requestId, deleted: true }
+    },
+  } as ActionDefinition<ReturnType<typeof documentRequestCreateInput>>,
   {
     key: 'signing.kit.prepare',
     risk: 'prepare',

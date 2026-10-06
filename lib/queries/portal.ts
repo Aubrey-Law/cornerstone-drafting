@@ -4,6 +4,8 @@ import { loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { listDocumentRequests } from '@/lib/documentRequests/repository'
+import { awaitsClient, type DocumentRequest } from '@/lib/documentRequests/model'
 import type { MatterDocument } from '@/types/database'
 
 /**
@@ -28,6 +30,20 @@ export async function fetchSharedDocuments(matterId: string, limit?: number): Pr
   const { data, error } = await query
   if (error) throw new Error('Shared documents are unavailable. Please retry.')
   return (data ?? []) as MatterDocument[]
+}
+
+/**
+ * What the firm has asked this client to send: every request but the waived
+ * ones, oldest first. Shown on the Documents page with an upload per request.
+ */
+export async function fetchPortalDocumentRequests(matterId: string): Promise<DocumentRequest[]> {
+  const requests = await listDocumentRequests(matterId)
+  return requests.filter(request => request.status !== 'waived')
+}
+
+/** The requests the client still owes, for the dashboard. */
+export async function fetchOpenPortalDocumentRequests(matterId: string): Promise<DocumentRequest[]> {
+  return (await fetchPortalDocumentRequests(matterId)).filter(awaitsClient)
 }
 
 /** Documents the client uploaded themselves. */

@@ -91,6 +91,7 @@ a re-save proposes nothing twice:
 | --- | --- |
 | Design decisions that would change the sheet (matter only): field values and fiduciary appointments | `design_sheet.proposal.apply`: one batch, shown line by line as current → proposed. An appointment names who holds the slot now and whether accepting would create a contact. Legal and financial, so it is capped at Propose and always waits for a click. |
 | Each thing the attorney agreed to do | `task.create`, dated from the notes or a week out |
+| Each thing the client agreed to send (matter only) | `document_request.create`: a request on the matter that the client's portal lists with its own upload. An internal record, so the dial may add it unattended; a request already open for the same ask is reused |
 | The recap, when the client has an email | `email.draft.compose`: a draft in that record's composer, then `email.draft.send` for the same draft |
 
 Appointments are matched to the people already on the matter when proposed and again when
@@ -140,6 +141,15 @@ signing record, links the filed scan (`ceremony_documents.executed_document_id`)
 witness and notary names only where the record does not yet say, and notes where the originals
 are kept (`signing_ceremonies.originals_location`). It has no undo, like every other record of
 a legal fact.
+
+**Document requests** (`lib/documentRequests/`) are the list of what the firm needs from the
+client. Staff add one from the matter's Documents tab ("Requested from the client"), which
+also sends the client one notice email; the meeting follow-up proposes one per thing the
+client agreed to send, through the dial as above. The client's portal shows the open requests
+on the dashboard and on Documents, each with its own upload; uploading against a request
+files the document to the matter and marks the request received, and staff then accept it,
+waive it, or ask again. Only a request nothing has arrived against can be removed. The
+portal's "What's next" line points at outstanding requests ahead of unread messages.
 
 Every unattended flow in the app now consults the dial; the next ones to add should opt in the
 same way as they move onto the registry.
