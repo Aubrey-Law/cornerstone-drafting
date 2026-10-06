@@ -138,6 +138,8 @@ export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProp
   /** What sends log to — matter number when assigned, else the client name. */
   recordLabel: string
   onSendOnChannel: (channel: 'portal' | 'sms', body: string) => Promise<boolean>
+  /** Reads a filed inbound email's full text from Gmail. */
+  loadFullMessage?: (item: CommunicationItem) => Promise<string>
 }
 
 export function MatterCommunicationsTab({
@@ -151,6 +153,7 @@ export function MatterCommunicationsTab({
   clientPhone,
   recordLabel,
   onSendOnChannel,
+  loadFullMessage,
   ...messageProps
 }: MatterCommunicationsTabProps) {
   const {
@@ -221,6 +224,7 @@ export function MatterCommunicationsTab({
         channelFilter={channel}
         sending={portalSending || smsSending}
         onSend={onSendOnChannel}
+        loadFullMessage={loadFullMessage}
         emailComposer={<EmailMessagesSection matterId={matterId} {...messageProps} />}
         renderDraftAi={(replyChannel, notes, onDraft) => (
           <DraftWithAiButton

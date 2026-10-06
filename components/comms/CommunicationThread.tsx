@@ -45,7 +45,14 @@ export interface CommunicationThreadProps {
   className?: string
   draft?: string
   onDraftChange?: (draft: string) => void
+  /**
+   * Reads the full text of an item that carries only a preview (an inbound
+   * email filed from Gmail). Without it the preview is all that shows.
+   */
+  loadFullMessage?: (item: CommunicationItem) => Promise<string>
 }
+
+type Expansion = { state: 'loading' } | { state: 'ready'; text: string } | { state: 'error'; message: string }
 
 const FILTER_CHANNEL: Record<Exclude<ThreadChannelFilter, 'all'>, CommChannel> = {
   portal: 'portal',
@@ -82,11 +89,26 @@ export function CommunicationThread({
   className,
   draft: controlledDraft,
   onDraftChange,
+  loadFullMessage,
 }: CommunicationThreadProps) {
   const [localDraft, setLocalDraft] = useState('')
   const draft = controlledDraft ?? localDraft
   const setDraft = onDraftChange ?? setLocalDraft
   const logRef = useRef<HTMLOListElement>(null)
+  const [expansions, setExpansions] = useState<Record<string, Expansion>>({})
+
+  async function expand(item: CommunicationItem) {
+    if (!loadFullMessage) return
+    const key = `${item.channel}-${item.id}`
+    setExpansions(current => ({ ...current, [key]: { state: 'loading' } }))
+    try {
+      const text = await loadFullMessage(item)
+      setExpansions(current => ({ ...current, [key]: { state: 'ready', text } }))
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'The message could not be read.'
+      setExpansions(current => ({ ...current, [key]: { state: 'error', message } }))
+    }
+  }
 
   const merged = useMemo(() => mergeCommunicationItems(items), [items])
   const visible = useMemo(
@@ -192,30 +214,65 @@ export function CommunicationThread({
               : `No ${CHANNEL_LABEL[FILTER_CHANNEL[channelFilter]].toLowerCase()} messages yet.`}
           </li>
         ) : (
-          visible.map(item => (
-            <li
-              key={`${item.channel}-${item.id}`}
-              // Received on the left, sent on the right: the two fills alone
-              // were too close in tone to tell the client from the firm.
-              className={cn(
-                'rounded-md px-2.5 py-2 text-xs',
-                item.direction === 'inbound'
-                  ? 'mr-6 bg-muted sm:mr-16'
-                  : 'ml-6 border border-border bg-background sm:ml-16',
-              )}
-            >
-              <div className="mb-0.5 flex justify-between gap-2 text-micro text-muted-foreground">
-                <span>
-                  {CHANNEL_LABEL[item.channel]}
-                  {' · '}
-                  {item.sender ?? (item.direction === 'inbound' ? recipientName : 'Firm')}
-                  {item.meta ? ` · ${item.meta}` : ''}
-                </span>
-                <time dateTime={item.created_at} className="shrink-0 whitespace-nowrap">{TIME_FORMAT.format(new Date(item.created_at))}</time>
-              </div>
-              <p className="whitespace-pre-wrap">{linkifyText(item.body)}</p>
-            </li>
-          ))
+          visible.map(item => {
+            const key = `${item.channel}-${item.id}`
+            const expansion = expansions[key]
+            return (
+              <li
+                key={key}
+                // Received on the left, sent on the right: the two fills alone
+                // were too close in tone to tell the client from the firm.
+                className={cn(
+                  'rounded-md px-2.5 py-2 text-xs',
+                  item.direction === 'inbound'
+                    ? 'mr-6 bg-muted sm:mr-16'
+                    : 'ml-6 border border-border bg-background sm:ml-16',
+                )}
+              >
+                <div className="mb-0.5 flex justify-between gap-2 text-micro text-muted-foreground">
+                  <span>
+                    {CHANNEL_LABEL[item.channel]}
+                    {' · '}
+                    {item.sender ?? (item.direction === 'inbound' ? recipientName : 'Firm')}
+                    {item.meta ? ` · ${item.meta}` : ''}
+                  </span>
+                  <time dateTime={item.created_at} className="shrink-0 whitespace-nowrap">{TIME_FORMAT.format(new Date(item.created_at))}</time>
+                </div>
+                <p className="whitespace-pre-wrap">
+                  {linkifyText(expansion?.state === 'ready' ? expansion.text : item.body)}
+                </p>
+                {expansion?.state === 'error' && (
+                  <p role="alert" className="mt-1 text-micro text-destructive">{expansion.message}</p>
+                )}
+                {(item.body_href || item.links?.length) ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro">
+                    {item.body_href && loadFullMessage && expansion?.state !== 'ready' && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-micro"
+                        disabled={expansion?.state === 'loading'}
+                        onClick={() => void expand(item)}
+                      >
+                        {expansion?.state === 'loading' ? 'Reading…' : 'Read full message'}
+                      </Button>
+                    )}
+                    {item.links?.map(link => (
+                      <a
+                        key={link.href}
+                        href={link.href}
+                        className="text-primary underline-offset-2 hover:underline"
+                        {...(link.href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}
+                      >
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            )
+          })
         )}
       </ol>
 

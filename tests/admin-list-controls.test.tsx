@@ -184,7 +184,10 @@ describe('lead list controls', () => {
 
     expect(screen.queryByRole('button', { name: /Load \d+ more/ })).toBeNull()
     expect(screen.getByText('Search or filter to reach the rest')).toBeTruthy()
-  })
+    // Rendering the ceiling's worth of rows in jsdom is the slow part, and on a
+    // loaded CI runner it has crossed the default 30s once; the budget is the
+    // render's, not a sign the list is slow.
+  }, 120_000)
 })
 
 const matterRows: MatterListRow[] = [

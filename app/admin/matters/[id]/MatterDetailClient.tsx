@@ -311,6 +311,7 @@ function MatterDetailClientInner({
     setPortalDraft,
     items: communicationItems,
     sendOnChannel,
+    loadFullMessage,
     unreadPortalCount,
     lastPortalMessage,
     readError: messagesError,
@@ -1326,6 +1327,7 @@ function MatterDetailClientInner({
                 clientPhone={matter.client_phone || null}
                 recordLabel={matterNum ?? (matter.client_name || matter.matter_name || 'this matter')}
                 onSendOnChannel={sendOnChannel}
+                loadFullMessage={loadFullMessage}
                 portalLoading={portalLoading}
                 portalSending={portalSending}
                 smsLoading={smsLoading}

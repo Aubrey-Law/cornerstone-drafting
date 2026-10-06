@@ -39,6 +39,17 @@ Act and report sends through the registry action, which shares its send path wit
 are ever answered unattended; contacts and possible leads always wait on the page. A cron run
 sends as the mailbox owner; a manual refresh sends as the person who clicked.
 
+The same scan files inbound mail on the record (`lib/emailTriage/fileInbound.ts`). Every thread
+it examines whose correspondent it can place as a client, lead or contact has that person's
+inbound messages written to `email_inbound_messages`, snippets and Gmail ids only, so the
+record's communications history shows what the firm received and not only what it sent. Each
+correspondent is looked up once per run and mail already on the record is skipped. The filed
+message is read live from Gmail when opened from the record ("Read full message"), and the
+history offers "Reply in Email triage" while the thread is open in the queue and "Open in
+Gmail" always. Mail from senders the firm cannot place is never filed. Filing is a record of
+what happened, not an action, so it does not consult the dial; a missing table (deploy order)
+switches it off for the run without touching the queue.
+
 **Invoice reminders** (`lib/billing/delegateReminders.ts`) consult the dial for
 `billing.reminder.send` as soon as `prepareInvoiceReminderDrafts` writes a new draft. A draft
 already waiting from an earlier run is not offered again. Final notices never send unattended;

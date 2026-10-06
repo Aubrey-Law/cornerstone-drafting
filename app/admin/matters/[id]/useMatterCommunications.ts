@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/clientApi'
 import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
+import { formatLiveThread, type LiveEmailMessage } from '@/lib/comms/inboundEmail'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 
 export interface PortalMessage {
@@ -171,6 +172,18 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
     }
   }
 
+  // A filed inbound email carries Gmail's preview; the full text is read live
+  // from the mailbox when asked for, as on the lead and contact cards.
+  const loadFullMessage = useCallback(async (item: CommunicationItem): Promise<string> => {
+    if (!token || !item.body_href) throw new Error('The message could not be read.')
+    const result = await apiRequest<{ messages: LiveEmailMessage[]; gone?: boolean }>(
+      item.body_href,
+      { headers: { Authorization: `Bearer ${token}` } },
+      'The message could not be read from Gmail',
+    )
+    return formatLiveThread(result.messages ?? [])
+  }, [token])
+
   const items: CommunicationItem[] = useMemo(() => mergeCommunicationItems(
     portalMessages.map(m => ({
       id: m.id,
@@ -193,7 +206,7 @@ export function useMatterCommunications({ matterId, token, initialEmailTo, enabl
   ), [portalMessages, smsMessages, emailItems])
 
   return {
-    items, sendOnChannel, portalMessages, portalLoading, portalDraft, portalSending,
+    items, sendOnChannel, loadFullMessage, portalMessages, portalLoading, portalDraft, portalSending,
     smsMessages, smsLoading, smsRecipient, smsSending,
     emailTo, emailSubject, emailBody, emailSending,
     setPortalDraft, setSmsRecipient, setEmailTo, setEmailSubject, setEmailBody,

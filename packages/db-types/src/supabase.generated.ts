@@ -3985,6 +3985,116 @@ export type Database = {
           },
         ]
       }
+      email_inbound_messages: {
+        Row: {
+          classification: string
+          client_intake_id: string | null
+          connection_email: string
+          contact_id: string | null
+          created_at: string
+          gmail_message_id: string
+          gmail_thread_id: string
+          id: string
+          matter_id: string | null
+          message_id_header: string | null
+          read_by_staff_at: string | null
+          received_at: string
+          sender_email: string
+          sender_name: string | null
+          snippet: string | null
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          classification: string
+          client_intake_id?: string | null
+          connection_email: string
+          contact_id?: string | null
+          created_at?: string
+          gmail_message_id: string
+          gmail_thread_id: string
+          id?: string
+          matter_id?: string | null
+          message_id_header?: string | null
+          read_by_staff_at?: string | null
+          received_at: string
+          sender_email: string
+          sender_name?: string | null
+          snippet?: string | null
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          classification?: string
+          client_intake_id?: string | null
+          connection_email?: string
+          contact_id?: string | null
+          created_at?: string
+          gmail_message_id?: string
+          gmail_thread_id?: string
+          id?: string
+          matter_id?: string | null
+          message_id_header?: string | null
+          read_by_staff_at?: string | null
+          received_at?: string
+          sender_email?: string
+          sender_name?: string | null
+          snippet?: string | null
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbound_messages_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       email_log: {
         Row: {
           actor_id: string | null

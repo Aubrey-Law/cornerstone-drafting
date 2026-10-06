@@ -15,6 +15,7 @@ import { apiRequest } from '@/lib/clientApi'
 import { MAX_LEAD_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import { normalizeSmsRecipient } from '@/lib/sms/transport'
 import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
+import { formatLiveThread, type LiveEmailMessage } from '@/lib/comms/inboundEmail'
 import { CommunicationThread, type ThreadChannelFilter } from './CommunicationThread'
 
 export interface CommsRecord {
@@ -160,6 +161,18 @@ function RecordCommunicationsContent({
     }
   }, [token, record.type, smsRecipientRole, recordBase, loadMessages, onClientContact])
 
+  // A filed inbound email carries Gmail's preview; the full text is read live
+  // from the mailbox when asked for, and never stored.
+  const loadFullMessage = useCallback(async (item: CommunicationItem): Promise<string> => {
+    if (!token || !item.body_href) throw new Error('The message could not be read.')
+    const result = await apiRequest<{ messages: LiveEmailMessage[]; gone?: boolean }>(
+      item.body_href,
+      { headers: { Authorization: `Bearer ${token}` } },
+      'The message could not be read from Gmail',
+    )
+    return formatLiveThread(result.messages ?? [])
+  }, [token])
+
   const textsPhone = normalizeSmsRecipient(recipientPhone)
 
   const chips: Array<{ key: ThreadChannelFilter; label: string }> = [
@@ -168,7 +181,7 @@ function RecordCommunicationsContent({
     { key: 'email', label: 'Email' },
   ]
 
-  const scope = 'Client messages: texts and recorded outbound email. Inbound email is not included. Internal notes are in Notes.'
+  const scope = 'Client messages: texts, email sent from Cornerstone, and email received from this person\'s address. Internal notes are in Notes.'
   const channelChips = (
     <div className="flex items-center gap-2 overflow-x-auto">
       {chips.map(chip => (
@@ -233,6 +246,7 @@ function RecordCommunicationsContent({
         channelFilter={channel}
         sending={sending}
         onSend={sendSms}
+        loadFullMessage={loadFullMessage}
         emailComposer={recipientEmail ? (
           <div className="rounded-md border border-border">
             {/* A seed so the recipient shows at once — the composer fetches the
