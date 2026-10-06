@@ -81,14 +81,20 @@ describe('reading the model’s answer', () => {
 describe('what a meeting proposes', () => {
   const base = { title: 'Design meeting', meetingDate: '2026-10-05', recipient, extraction, now: NOW }
 
-  it('on a matter: the design decisions as one batch, one task per to-do, and the recap', () => {
+  it('on a matter: the design decisions as one batch, one task per to-do, one request per thing the client owes, and the recap', () => {
     const plan = planMeetingActions({ ...base, matterId: MATTER, leadId: null, designFields: { plan_type: 'joint_trust', trust_name: 'The Client Family Trust' } })
     expect(plan.map(item => [item.actionKey, item.slot])).toEqual([
       ['design_sheet.proposal.apply', 'design'],
       ['task.create', 'task-1'],
       ['task.create', 'task-2'],
+      ['document_request.create', 'request-1'],
+      ['document_request.create', 'request-2'],
       ['email.draft.compose', 'email'],
     ])
+    expect(plan[3]).toMatchObject({
+      summary: 'Ask the client for: Send the deed to the lake house',
+      payload: { matterId: MATTER, title: 'Send the deed to the lake house', description: 'From the meeting "Design meeting" on 2026-10-05.', source: 'meeting_notes' },
+    })
     expect(plan[0].summary).toBe('Apply 2 design decisions from "Design meeting"')
     expect(plan[0].payload).toEqual({ matterId: MATTER, fields: { plan_type: 'joint_trust', trust_name: 'The Client Family Trust' }, fiduciaries: [] })
     expect(plan.every(item => item.recordType === 'matter' && item.recordId === MATTER)).toBe(true)
@@ -118,7 +124,7 @@ describe('what a meeting proposes', () => {
     expect(tasks[1].payload.description).toBe('From the meeting "Design meeting" on 2026-10-05.')
   })
 
-  it('on a lead: never a design-sheet batch, even when fields or appointments were offered', () => {
+  it('on a lead: never a design-sheet batch or a document request, even when fields or appointments were offered', () => {
     const plan = planMeetingActions({ ...base, matterId: null, leadId: LEAD, designFields: { plan_type: 'joint_trust' }, designFiduciaries: [trustee] })
     expect(plan.map(item => item.actionKey)).toEqual(['task.create', 'task.create', 'email.draft.compose'])
     expect(plan[0].payload).toMatchObject({ matter_id: null, lead_id: LEAD })
@@ -138,7 +144,7 @@ describe('what a meeting proposes', () => {
 
   it('skips the recap when there is no one to send it to, or nothing honest to say', () => {
     const noRecipient = planMeetingActions({ ...base, matterId: MATTER, leadId: null, designFields: null, recipient: null })
-    expect(noRecipient.map(item => item.actionKey)).toEqual(['task.create', 'task.create'])
+    expect(noRecipient.map(item => item.actionKey)).toEqual(['task.create', 'task.create', 'document_request.create', 'document_request.create'])
     const thin = planMeetingActions({ ...base, matterId: MATTER, leadId: null, designFields: null, extraction: { ...extraction, followUpEmail: null } })
     expect(thin.some(item => item.actionKey === 'email.draft.compose')).toBe(false)
   })

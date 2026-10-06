@@ -2,11 +2,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
-import { fetchSharedDocuments, fetchClientUploads } from '@/lib/queries/portal'
+import { fetchSharedDocuments, fetchClientUploads, fetchPortalDocumentRequests } from '@/lib/queries/portal'
 import { getFirmConfig } from '@/lib/firmConfig'
+import { firmTodayKey } from '@/lib/firmDate'
 import { Button } from '@/components/ui/button'
 import PortalDocumentList from './PortalDocumentList'
 import ClientUploadCard from './ClientUploadCard'
+import RequestedDocuments from './RequestedDocuments'
 import { PortalPageHeader } from '../PortalPageHeader'
 
 const firm = getFirmConfig()
@@ -35,9 +37,12 @@ export default async function DocumentsPage() {
     )
   }
 
-  const [documents, clientUploads] = await Promise.all([
+  const [documents, clientUploads, requests] = await Promise.all([
     fetchSharedDocuments(matter.id),
     fetchClientUploads(matter.id, user.id),
+    // The list of what the firm asked for is additive: a failed read leaves
+    // the page as it was rather than hiding the documents.
+    fetchPortalDocumentRequests(matter.id).catch(() => []),
   ])
 
   const matterClosed = matter.status === 'closed'
@@ -48,6 +53,12 @@ export default async function DocumentsPage() {
         title="Documents"
         description={`Shared drafts and signed copies from ${firm.firmName}, and anything you send us.`}
       />
+
+      {requests.length > 0 && (
+        <div className="mb-6">
+          <RequestedDocuments matterId={matter.id} matterClosed={matterClosed} requests={requests} today={firmTodayKey()} />
+        </div>
+      )}
 
       <PortalDocumentList documents={documents} />
 

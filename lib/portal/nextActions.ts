@@ -3,6 +3,7 @@ import type { MatterStage } from '@/types/database'
 export type PortalNextActionKind =
   | 'intake'
   | 'review'
+  | 'requests'
   | 'message'
   | 'appointment'
   | 'account'
@@ -27,6 +28,8 @@ export interface PortalNextActionFacts {
   unreadFirmMessageCount: number
   hasUpcomingAppointment: boolean
   outstandingInvoiceCount: number
+  /** Things the firm has asked for that the client has not sent yet. Optional during rollout. */
+  openDocumentRequestCount?: number
   factsAvailable: boolean
 }
 
@@ -57,6 +60,18 @@ export function computePortalNextAction(facts: PortalNextActionFacts): PortalNex
       message: 'The firm has shared documents for your review. Send any questions or requested changes through Messages.',
       label: 'Review documents',
       href: '/documents',
+    }
+  }
+
+  const owed = facts.openDocumentRequestCount ?? 0
+  if (!closed && owed > 0) {
+    return {
+      kind: 'requests',
+      message: owed === 1
+        ? 'The firm has asked you for one document. Upload it from Documents when you have it.'
+        : `The firm has asked you for ${owed} documents. Upload them from Documents as you gather them.`,
+      label: 'See what we need',
+      href: '/documents#requests',
     }
   }
 

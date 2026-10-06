@@ -144,6 +144,11 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
     description: 'Write proposed design-sheet fields from meeting notes or imported text. Legal judgment, so it is always reviewed field by field before anything is written.',
     group: 'matters',
   },
+  'document_request.create': {
+    label: 'Request a document from the client',
+    description: 'Add an item to the list of things the client is asked to send, shown in their portal.',
+    group: 'matters',
+  },
   'signing.kit.prepare': {
     label: 'Prepare the signing-day kit',
     description: 'When a signing appointment is booked, open the matter’s signing record with the documents to be signed and add a task to print the kit. The kit page itself is always available from the Signing view.',

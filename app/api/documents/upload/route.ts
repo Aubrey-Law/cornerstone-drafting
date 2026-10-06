@@ -10,6 +10,9 @@ import {
   safeUploadFilename,
 } from '@/lib/documentUpload'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
+import { isUuid } from '@/lib/queries/tasks'
+import { markDocumentRequestReceived } from '@/lib/documentRequests/repository'
+import type { DocumentRequest } from '@/lib/documentRequests/model'
 
 // POST /api/documents/upload — multipart proxy upload (avoids browser → R2 CORS)
 export async function POST(req: Request) {
@@ -25,6 +28,9 @@ export async function POST(req: Request) {
 
   const file = form.get('file')
   const matterId = String(form.get('matterId') ?? '').trim()
+  // A portal upload against one of the firm's requests: the request is marked
+  // received and the document linked to it once the file is stored.
+  const requestId = String(form.get('requestId') ?? '').trim() || null
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Missing file' }, { status: 400 })
@@ -98,7 +104,19 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ document: data })
+  let request: DocumentRequest | null = null
+  if (requestId && isUuid(requestId)) {
+    // Scoped to the matter the upload was authorised for, so a request id from
+    // another matter changes nothing. A request already accepted or waived is
+    // left as it is; the document is still filed.
+    request = await markDocumentRequestReceived({ requestId, matterId, documentId: String(data.id) })
+      .catch(caught => {
+        console.error('[documents] could not mark the request received', { requestId, cause: caught instanceof Error ? caught.message : String(caught) })
+        return null
+      })
+  }
+
+  return NextResponse.json({ document: data, request })
 }
 
 export const runtime = 'nodejs'

@@ -35,6 +35,8 @@ export async function uploadDocument(
   file: File,
   matterId: string,
   onProgress?: (pct: number) => void,
+  /** `requestId`: the firm's document request this upload answers. */
+  options?: { requestId?: string | null },
 ): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -42,6 +44,7 @@ export async function uploadDocument(
   const form = new FormData()
   form.append('file', file)
   form.append('matterId', matterId)
+  if (options?.requestId) form.append('requestId', options.requestId)
 
   const document = await new Promise<MatterDocument>((resolve, reject) => {
     const xhr = new XMLHttpRequest()

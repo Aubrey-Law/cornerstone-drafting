@@ -2,6 +2,7 @@ export const EMAIL_CATEGORIES = [
   'message_alert',
   'portal_message_notice',
   'document_shared_notice',
+  'document_request_notice',
   'intake_complete_alert',
   'intake_invite',
   'intake_invite_college_prep',
@@ -68,6 +69,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'document_shared_notice',
     label: 'Document shared notice',
     description: 'Sent to a client when the firm shares a document to their portal.',
+    recipient: 'client',
+  },
+  document_request_notice: {
+    category: 'document_request_notice',
+    label: 'Document request notice',
+    description: 'Sent to a client when the firm asks them to send a document through their portal.',
     recipient: 'client',
   },
   intake_complete_alert: {
