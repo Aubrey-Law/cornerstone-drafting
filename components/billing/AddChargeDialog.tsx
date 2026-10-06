@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import {
   addableBillingKinds,
+  billingPlanLabels,
   billingPlans,
   MAX_CHARGES_PER_BATCH,
   type AddableBillingKind,
@@ -61,10 +62,7 @@ const kindPlaceholders: Record<AddableBillingKind, string> = {
   cost: 'e.g. Deed recording fee',
 }
 
-const planLabels: Record<BillingPlan, string> = {
-  metlife: 'MetLife',
-  legalease: 'LegalEASE',
-}
+const planLabels: Record<BillingPlan, string> = billingPlanLabels
 
 /** An existing charge being corrected, rather than a new one being added. */
 export interface EditableCharge {

@@ -1,5 +1,5 @@
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
-import { billingPlans } from './types'
+import { billingPlanLabels, billingPlans } from './types'
 import type {
   BillingFilter,
   BillingItem,
@@ -391,7 +391,7 @@ function buildNudges(
         key,
         kind: 'claim',
         clientName: claim.clientName,
-        description: `${claim.legalPlan === 'metlife' ? 'MetLife' : 'LegalEASE'} claim not prepared`,
+        description: `${billingPlanLabels[claim.legalPlan]} claim not prepared`,
         itemId: null,
         matterId: claim.matterId,
         clientEmail: claim.clientEmail,
