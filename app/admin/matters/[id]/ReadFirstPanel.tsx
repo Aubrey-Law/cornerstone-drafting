@@ -70,7 +70,7 @@ export function ReadValue({
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-1 text-sm ${tabular ? 'tabular-nums' : ''}`}>{value || '—'}</dd>
+      <dd className={`mt-1 break-words text-sm ${tabular ? 'tabular-nums' : ''}`}>{value || '—'}</dd>
     </div>
   )
 }

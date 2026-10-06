@@ -112,7 +112,7 @@ export function MatterDetailsCard({
   }
 
   const readView = (
-    <dl className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-x-5 gap-y-4 lg:grid-cols-4">
       <ReadValue label="Matter number" value={matterNumber ? `#${matterNumber}` : '—'} />
       <ReadValue label="Practice area" value={practiceAreaLabel(practiceArea)} />
       <ReadValue

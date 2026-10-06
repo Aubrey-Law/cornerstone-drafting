@@ -1056,6 +1056,7 @@ function MatterDetailClientInner({
               agingSummary={agingSummary}
               stageSaving={stageSaving}
               onStageChange={stage => void handleStageChange(stage)}
+              history={initialStageHistory}
             />
           </div>
 
