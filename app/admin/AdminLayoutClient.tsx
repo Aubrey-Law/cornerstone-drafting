@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
+  Banknote,
   Briefcase,
   BookOpen,
   CalendarDays,
@@ -96,6 +97,7 @@ export const adminNavItems: {
   { href: '/admin/communications', label: 'Communications', icon: MessageSquareText, group: 'Operations' },
   { href: '/admin/automations', label: 'Automations', icon: Zap, group: 'Operations' },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Operations' },
+  { href: '/admin/payroll', label: 'Payroll', icon: Banknote, group: 'Operations' },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles, group: 'Tools' },
   { href: '/admin/works', label: 'Library', icon: BookOpen, group: 'Tools' },
   { href: '/admin/settings', label: 'Settings', icon: Settings, group: 'Tools' },
