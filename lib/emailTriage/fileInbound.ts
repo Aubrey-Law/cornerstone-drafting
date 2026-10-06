@@ -120,7 +120,7 @@ export function inboundFilingRows(input: {
 
 /**
  * Whether a storage error means the table is not there yet. Code and
- * migrations deploy in no guaranteed order, so until 20270110090000 lands the
+ * migrations deploy in no guaranteed order, so until 20270111090000 lands the
  * scan files nothing rather than failing.
  */
 export function isMissingTableError(error: { code?: string | null; message?: string | null } | null | undefined): boolean {

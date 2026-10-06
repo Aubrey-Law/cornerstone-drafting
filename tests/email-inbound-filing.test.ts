@@ -185,7 +185,7 @@ describe('inbound email on the record', () => {
   })
 
   it('stores snippets only, keyed so a rescan is an update', () => {
-    const migration = fs.readFileSync('supabase/migrations/20270110090000_email_inbound_messages.sql', 'utf8')
+    const migration = fs.readFileSync('supabase/migrations/20270111090000_email_inbound_messages.sql', 'utf8')
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.email_inbound_messages')
     expect(migration).toContain('ON public.email_inbound_messages (connection_email, gmail_message_id)')
     expect(migration).toMatch(/CHECK \(classification IN \('client', 'lead', 'contact'\)\)/)
