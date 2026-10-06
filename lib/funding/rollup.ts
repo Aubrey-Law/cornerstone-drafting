@@ -22,6 +22,12 @@ export interface FundingJoinRow {
   status: string | null
   confirmed_on: string | null
   note: string | null
+  /** 'staff', 'client' or 'import'; absent on rows read before the column existed. */
+  source?: string | null
+  /** What the client sent from the portal, when they have. */
+  confirmation_document_id?: string | null
+  client_reported_at?: string | null
+  client_note?: string | null
 }
 
 export interface FundingAsset {
@@ -36,6 +42,12 @@ export interface FundingAsset {
   note: string | null
   /** False when nothing has been recorded yet, so the row is a suggestion. */
   isRecorded: boolean
+  /** Where the asset row came from: 'staff', 'client' or 'import'. */
+  source: string
+  /** The institution's confirmation the client uploaded, and when they said the step was done. */
+  confirmationDocumentId: string | null
+  clientReportedAt: string | null
+  clientNote: string | null
 }
 
 const asMethod = (value: string | null): FundingMethod | null =>
@@ -69,6 +81,10 @@ export function toFundingAssets(rows: readonly FundingJoinRow[]): FundingAsset[]
     confirmedOn: row.confirmed_on,
     note: row.note,
     isRecorded: asStatus(row.status) !== null,
+    source: row.source ?? 'staff',
+    confirmationDocumentId: row.confirmation_document_id ?? null,
+    clientReportedAt: row.client_reported_at ?? null,
+    clientNote: row.client_note ?? null,
   }))
 }
 

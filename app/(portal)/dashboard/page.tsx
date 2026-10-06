@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Check, FileText, Mail, PenLine, Phone, Upload } from 'lucide-react'
+import { Check, FileText, Landmark, Mail, PenLine, Phone, Upload } from 'lucide-react'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
@@ -32,6 +32,8 @@ import {
   summarisePendingSignatures,
   type PortalSignature,
 } from '@/lib/portal/signatures'
+import { fetchPortalAssets } from '@/lib/funding/portalServer'
+import { PORTAL_STATE_LABELS, summarisePortalAssets, type PortalAsset } from '@/lib/funding/portal'
 import type { MatterDocument } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -109,7 +111,7 @@ export default async function PortalDashboardPage() {
     }
   }
 
-  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult, planStatusResult, signaturesResult] = matter
+  const [metaResult, documentsResult, sharedResult, messageResult, unreadResult, appointmentResult, accountResult, requestsResult, planStatusResult, signaturesResult, assetsResult] = matter
     ? await Promise.all([
         settled(fetchPortalMatterMeta(matter.id), null),
         settled(fetchRecentPortalDocuments(matter.id, auth.id, 2), [] as MatterDocument[]),
@@ -121,6 +123,7 @@ export default async function PortalDashboardPage() {
         settled(fetchOpenPortalDocumentRequests(matter.id), [] as DocumentRequest[]),
         settled(fetchLatestPlanStatus(matter.id), null),
         settled(fetchPortalSignatures(matter.id, auth.email ?? null), [] as PortalSignature[]),
+        settled(fetchPortalAssets(matter.id), [] as PortalAsset[]),
       ])
     : [
         { value: null, available: true },
@@ -133,6 +136,7 @@ export default async function PortalDashboardPage() {
         { value: [] as DocumentRequest[], available: true },
         { value: null, available: true },
         { value: [] as PortalSignature[], available: true },
+        { value: [] as PortalAsset[], available: true },
       ]
 
   // "Where is my plan?" The last update the firm published, when there is
@@ -157,6 +161,11 @@ export default async function PortalDashboardPage() {
   const openRequests = requestsResult.value
   // What awaits a signature: the client's own items first, then anyone else's.
   const pendingSignatures = summarisePendingSignatures(signaturesResult.value)
+  // The funding work that is the client's: the accounts they retitle themselves.
+  const assets = assetsResult.value
+  const funding = summarisePortalAssets(assets)
+  const fundingStage = matter?.stage === 'signing_complete' || matter?.stage === 'post_execution' || matter?.stage === 'funding'
+  const assetsTodo = assets.filter(asset => asset.state === 'todo' || asset.state === 'checking')
 
   const firm = getFirmConfig()
   const progress = meta?.progress ?? progressFromMatterDetails(null)
@@ -172,6 +181,7 @@ export default async function PortalDashboardPage() {
     openDocumentRequestCount: openRequests.length,
     pendingSignatureCount: pendingSignatures.mine.length,
     pendingSignatureHref: pendingSignatures.href,
+    fundingTodoCount: funding.todo,
     factsAvailable: sharedResult.available && unreadResult.available && appointmentResult.available && accountResult.available,
   })
 
@@ -291,6 +301,34 @@ export default async function PortalDashboardPage() {
               </Link>
             </Button>
           )}
+        </section>
+      )}
+
+      {/* ── your assets, once the plan is signed ── */}
+      {fundingStage && assets.length > 0 && (
+        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="portal-funding">
+          <h2 className="text-sm font-semibold text-foreground">Moving your assets into the plan</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {funding.done} of {funding.total} in the plan
+            {funding.todo > 0 ? ` · ${funding.todo} need${funding.todo === 1 ? 's' : ''} your action` : ''}
+            {funding.checking > 0 ? ` · ${funding.checking} being checked` : ''}.
+          </p>
+          {assetsTodo.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {assetsTodo.slice(0, 4).map(asset => (
+                <li key={asset.assetId} className="flex items-start gap-2.5">
+                  <Landmark className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground">{asset.description || asset.categoryLabel}</p>
+                    <p className="text-xs text-muted-foreground">{PORTAL_STATE_LABELS[asset.state]}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button asChild size="sm" variant={funding.todo > 0 ? 'default' : 'outline'} className="mt-4">
+            <Link href="/assets">{funding.todo > 0 ? 'See what to do' : 'See your assets'}</Link>
+          </Button>
         </section>
       )}
 

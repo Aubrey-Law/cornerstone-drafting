@@ -180,6 +180,10 @@ describe('AssetRow', () => {
     confirmedOn: null,
     note: null,
     isRecorded: true,
+    source: 'staff',
+    confirmationDocumentId: null,
+    clientReportedAt: null,
+    clientNote: null,
   }
 
   it('never offers retitling or a deed for a retirement account', () => {

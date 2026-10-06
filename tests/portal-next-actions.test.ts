@@ -38,6 +38,19 @@ describe('portal next actions', () => {
     expect(computePortalNextAction({ ...complete, pendingSignatureCount: 0 }).kind).toBe('clear')
   })
 
+  it('sends a signed client to the accounts only they can retitle, ahead of messages', () => {
+    expect(computePortalNextAction({ ...complete, matterStage: 'funding', fundingTodoCount: 2, unreadFirmMessageCount: 1 })).toMatchObject({
+      kind: 'funding', label: 'See your assets', href: '/assets',
+    })
+    expect(computePortalNextAction({ ...complete, matterStage: 'funding', fundingTodoCount: 1 }).message).toContain('One account')
+    // Before the plan is signed there is nothing to retitle yet, whatever the tracker holds.
+    expect(computePortalNextAction({ ...complete, matterStage: 'drafting', fundingTodoCount: 2 }).kind).toBe('clear')
+    // A request the firm made, or a signature it waits on, comes first.
+    expect(computePortalNextAction({ ...complete, matterStage: 'funding', fundingTodoCount: 2, openDocumentRequestCount: 1 }).kind).toBe('requests')
+    expect(computePortalNextAction({ ...complete, matterStage: 'funding', fundingTodoCount: 2, pendingSignatureCount: 1 }).kind).toBe('sign')
+    expect(computePortalNextAction({ ...complete, matterStatus: 'closed', matterStage: 'funding', fundingTodoCount: 2 }).kind).toBe('closed')
+  })
+
   it('directs client review to firm-shared documents', () => {
     expect(computePortalNextAction({ ...complete, matterStage: 'client_review', sharedDocumentCount: 1 })).toMatchObject({
       kind: 'review', label: 'Review documents', href: '/documents',
