@@ -8,6 +8,7 @@ export const EMAIL_CATEGORIES = [
   'intake_invite_college_prep',
   'retell_call_alert',
   'daily_digest',
+  'weekly_financial_snapshot',
   'appointment_confirmation',
   'appointment_booked_alert',
   'appointment_reminder',
@@ -107,6 +108,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'daily_digest',
     label: 'Daily digest',
     description: 'Weekday-morning summary of overdue matters, unread messages, and intakes waiting on review.',
+    recipient: 'internal',
+  },
+  weekly_financial_snapshot: {
+    category: 'weekly_financial_snapshot',
+    label: 'Weekly financial snapshot',
+    description: 'Monday-morning summary of the week just ended: collected, billed, costs, receivables and aging, plan claims, and the year against the goal.',
     recipient: 'internal',
   },
   appointment_confirmation: {

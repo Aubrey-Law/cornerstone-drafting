@@ -77,6 +77,10 @@
     {
       "path": "/api/cron/file-retention",
       "schedule": "40 12 * * 1"
+    },
+    {
+      "path": "/api/cron/weekly-financial-snapshot",
+      "schedule": "10 12 * * 1"
     }
   ]
 }

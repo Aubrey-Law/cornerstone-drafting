@@ -39,6 +39,7 @@ import { ReceivablesSummaryCard } from './ReceivablesSummaryCard'
 import { PlanBillingCard } from './PlanBillingCard'
 import { RecentPaymentsCard } from './RecentPaymentsCard'
 import { RevenueSourcesCard } from './RevenueSourcesCard'
+import { WeeklySnapshotCard } from './WeeklySnapshotCard'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
@@ -662,6 +663,7 @@ export default function BillingClient({
             <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
             <ReceivablesSummaryCard snapshot={initialSnapshot} />
             <PlanBillingCard snapshot={initialSnapshot} />
+            <WeeklySnapshotCard />
             {bankDeposits}
           </div>
         </div>

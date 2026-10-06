@@ -1277,6 +1277,69 @@ export type Database = {
           },
         ]
       }
+      billing_weekly_snapshots: {
+        Row: {
+          billed_cents: number
+          collected_cents: number
+          costs_cents: number
+          created_at: string
+          email_status: string | null
+          goal_cents: number
+          id: string
+          metrics: Json
+          open_count: number
+          outstanding_cents: number
+          overdue_cents: number
+          overdue_count: number
+          payment_count: number
+          sent_at: string | null
+          updated_at: string
+          week_end: string
+          week_start: string
+          ytd_collected_cents: number
+        }
+        Insert: {
+          billed_cents?: number
+          collected_cents?: number
+          costs_cents?: number
+          created_at?: string
+          email_status?: string | null
+          goal_cents?: number
+          id?: string
+          metrics?: Json
+          open_count?: number
+          outstanding_cents?: number
+          overdue_cents?: number
+          overdue_count?: number
+          payment_count?: number
+          sent_at?: string | null
+          updated_at?: string
+          week_end: string
+          week_start: string
+          ytd_collected_cents?: number
+        }
+        Update: {
+          billed_cents?: number
+          collected_cents?: number
+          costs_cents?: number
+          created_at?: string
+          email_status?: string | null
+          goal_cents?: number
+          id?: string
+          metrics?: Json
+          open_count?: number
+          outstanding_cents?: number
+          overdue_cents?: number
+          overdue_count?: number
+          payment_count?: number
+          sent_at?: string | null
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+          ytd_collected_cents?: number
+        }
+        Relationships: []
+      }
       box_document_exports: {
         Row: {
           attempts: number
