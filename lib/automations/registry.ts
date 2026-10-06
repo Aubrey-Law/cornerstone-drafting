@@ -77,6 +77,7 @@ export const SYSTEM_AUTOMATIONS: readonly SystemAutomationDefinition[] = [
   { key: 'meeting-transcripts', name: 'Meeting transcripts', scheduleLabel: 'Every 30 minutes', schedules: ['*/30 * * * *'], path: '/api/cron/meeting-transcripts', expectedIntervalMinutes: 30 },
   { key: 'annual-review-outreach', name: 'Annual review outreach', scheduleLabel: 'Weekdays at 8:20 AM ET', schedules: ['20 12 * * 1-5'], path: '/api/cron/annual-review-outreach', expectedIntervalMinutes: 1440 },
   { key: 'file-retention', name: 'File retention review', scheduleLabel: 'Mondays at 8:40 AM ET', schedules: ['40 12 * * 1'], path: '/api/cron/file-retention', expectedIntervalMinutes: 10080 },
+  { key: 'weekly-financial-snapshot', name: 'Weekly financial snapshot', scheduleLabel: 'Mondays at 8:10 AM ET', schedules: ['10 12 * * 1'], path: '/api/cron/weekly-financial-snapshot', expectedIntervalMinutes: 10080 },
 ] as const
 
 export function getSystemAutomation(key: string): SystemAutomationDefinition | null {

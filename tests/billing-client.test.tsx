@@ -473,8 +473,11 @@ describe('billing workspace', () => {
         expect.objectContaining({ method: 'POST' }),
       )
     })
-    // 20 days past due escalates past "friendly" but not to "final".
-    expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+    // 20 days past due escalates past "friendly" but not to "final". Found by
+    // URL: the Reports view's cards read their own data on mount, so the
+    // reminder is not necessarily the first request.
+    const reminder = request.mock.calls.find(entry => entry[0] === '/api/admin/billing/invoices/inv-1/reminder')
+    expect(JSON.parse(reminder![1].body)).toEqual({
       tone: 'firm',
       attachInvoice: true,
     })
