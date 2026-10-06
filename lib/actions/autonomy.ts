@@ -185,6 +185,7 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
   },
   'annual_review.outreach.send': { label: 'Send an annual review invitation', description: 'Email a client whose signed plan is a year old (and each cycle after) inviting a short review call, with a booking link.', group: 'communications' },
   'matter.closing.notice.send': { label: 'Send a closing notice', description: 'Tell a client their matter is complete: where their documents live, what to keep safe, and how long the firm keeps the file.', group: 'communications' },
+  'billing.time_entry.create': { label: 'Log time on a matter', description: 'Record a time entry, including the ones suggested each morning from the activity log. Time stays inside the firm.', group: 'billing' },
   'billing.reminder.send': { label: 'Send an invoice reminder', description: 'Send a drafted overdue-invoice reminder with the invoice attached. Final notices always wait for you.', group: 'billing' },
   'template.register': { label: 'Register a template', description: 'Add an uploaded Word template to the firm library.', group: 'templates' },
 }
