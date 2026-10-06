@@ -1,11 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { BillingPlan, BillingSnapshot } from '@/lib/billing/types'
+import { billingPlanLabels, type BillingSnapshot } from '@/lib/billing/types'
 import { money } from './financeFormat'
 
-const planNames: Record<BillingPlan, string> = {
-  metlife: 'MetLife',
-  legalease: 'LegalEASE',
-}
+const planNames = billingPlanLabels
 
 /**
  * What each legal plan carrier has been billed and has paid. Billed counts a

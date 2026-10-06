@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { CheckCircle2, CircleDollarSign, ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { BillingNudge, BillingSnapshot } from '@/lib/billing/types'
+import { billingPlanLabel, claimWorkflowSearch, type BillingNudge, type BillingSnapshot } from '@/lib/billing/types'
 
 const MONEY = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -39,7 +39,7 @@ function ClaimsCard({ snapshot }: { snapshot: BillingSnapshot }) {
                     href={`/admin/matters/${claim.matterId}`}
                     className="text-xs font-medium hover:text-primary hover:underline"
                   >
-                    {claim.clientName} — {claim.plan === 'metlife' ? 'MetLife' : 'LegalEASE'}
+                    {claim.clientName} — {billingPlanLabel(claim.plan)}
                   </Link>
                   <span className={claim.overdue ? 'text-xs font-semibold tabular-nums text-destructive' : 'text-xs font-medium tabular-nums'}>
                     {amount(claim.balance)}
@@ -51,12 +51,12 @@ function ClaimsCard({ snapshot }: { snapshot: BillingSnapshot }) {
               </div>
             ))}
             {snapshot.unpreparedClaims.map(claim => {
-              const search = claim.legalPlan === 'metlife' ? 'metlife-claim' : 'legalease'
+              const search = claimWorkflowSearch(claim.legalPlan)
               return (
                 <div key={`${claim.matterId}:${claim.legalPlan}`} className="px-4 py-3">
                   <p className="text-xs font-medium">{claim.clientName}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {claim.legalPlan === 'metlife' ? 'MetLife' : 'LegalEASE'} claim not prepared
+                    {billingPlanLabel(claim.legalPlan)} claim not prepared
                   </p>
                   <Button asChild variant="link" size="sm" className="mt-1 h-auto min-h-11 px-0">
                     <Link href={`/admin/works?search=${search}`}>

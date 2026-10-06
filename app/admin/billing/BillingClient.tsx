@@ -22,12 +22,13 @@ import {
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { filterBillingRows } from '@/lib/billing/metrics'
 import { planBatchInvoices } from '@/lib/billing/invoices'
-import type {
-  BillingFilter,
-  BillingLedgerRow,
-  BillingNudge,
-  BillingPaymentMethod,
-  BillingSnapshot,
+import {
+  claimWorkflowSearch,
+  type BillingFilter,
+  type BillingLedgerRow,
+  type BillingNudge,
+  type BillingPaymentMethod,
+  type BillingSnapshot,
 } from '@/lib/billing/types'
 import type { LedgerPage } from '@/lib/queries/billing'
 import { BillingRail } from './BillingRail'
@@ -478,7 +479,7 @@ export default function BillingClient({
       return
     }
 
-    const search = nudge.legalPlan === 'metlife' ? 'metlife-claim' : 'legalease'
+    const search = claimWorkflowSearch(nudge.legalPlan)
     await dismissNudge(nudge)
     router.replace(`/admin/works?search=${search}`)
   }

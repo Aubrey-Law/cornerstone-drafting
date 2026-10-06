@@ -23,6 +23,7 @@ import {
   type OptionalServiceStatus,
 } from '@/lib/billing/optionalServices'
 import {
+  billingPlanLabels,
   billingPlans as billingPlanList,
   type BillingLedgerRow,
   type BillingPlan,
@@ -652,10 +653,7 @@ export function CloseOutCard({
   )
 }
 
-const planCarrierNames: Record<BillingPlan, string> = {
-  metlife: 'MetLife',
-  legalease: 'LegalEASE',
-}
+const planCarrierNames: Record<BillingPlan, string> = billingPlanLabels
 
 /**
  * This matter's legal plan claims, per carrier: what has been billed to the

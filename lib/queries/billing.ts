@@ -2,7 +2,7 @@ import 'server-only'
 import { allAccountingRows } from '@/lib/queries/invoiceBalances'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GeneratedDatabase } from '@/types/supabase'
-import type { BillingFilter } from '@/lib/billing/types'
+import { billingPlanFor, type BillingFilter } from '@/lib/billing/types'
 import { pageRequest, monthRange, type PageRequest, type PageResult } from '@/lib/queries/page'
 
 import { buildBillingSnapshot, buildRows } from '@/lib/billing/metrics'
@@ -81,11 +81,9 @@ type DetailRow = {
   engagement_signed_at: string | null
 }
 
+/** `legal_plan` is the display name derived from billing_type ("ARAG", "Hyatt"…). */
 function billingPlan(value: string | null): BillingPlan | null {
-  const normalized = value?.toLowerCase().replace(/[\s_-]+/g, '') ?? ''
-  if (normalized.includes('metlife')) return 'metlife'
-  if (normalized.includes('legalease')) return 'legalease'
-  return null
+  return billingPlanFor(value)
 }
 
 function currentWeekStart(now = new Date()): string {

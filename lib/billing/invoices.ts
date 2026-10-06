@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import {
   billingPaymentMethods,
+  billingPlanLabels,
+  billingPlans,
   type BillingKind,
   type BillingPlan,
 } from './types'
@@ -27,13 +29,13 @@ export type InvoiceKind = (typeof invoiceKinds)[number]
  * A carrier invoice is the firm's own record of claims billed to the plan: it
  * is never emailed, shown in the portal, offered for checkout or reminded.
  */
-export const invoicePayers = ['client', 'metlife', 'legalease'] as const
+export const invoicePayers = ['client', ...billingPlans] as const
 export type InvoicePayer = (typeof invoicePayers)[number]
 
 export const invoicePayerLabels: Record<InvoicePayer, string> = {
   client: 'Client',
+  ...billingPlanLabels,
   metlife: 'MetLife Legal Plans',
-  legalease: 'LegalEASE',
 }
 
 /** Mirrors public.billing_item_payer. */
@@ -43,7 +45,7 @@ export function chargePayer(charge: { kind: BillingKind; plan: BillingPlan | nul
 
 /** A row read before the payer column existed counts as a client invoice. */
 export function isCarrierInvoice(invoice: { payer?: InvoicePayer | null }): boolean {
-  return invoice.payer === 'metlife' || invoice.payer === 'legalease'
+  return Boolean(invoice.payer) && invoice.payer !== 'client'
 }
 
 /**
