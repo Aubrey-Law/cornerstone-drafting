@@ -101,6 +101,7 @@ import {
 import { isRequestLive, SIGNATURE_REQUEST_LABELS } from '@/lib/esign/requestStatus'
 import type { SignatureRequestSummary } from '@/lib/esign/requestStatus'
 import { cn, formatDateTime } from '@/lib/utils'
+import { formatFirmDate } from '@/lib/format'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
@@ -757,14 +758,16 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        {/* Toolbar: select-all, search, filter, sort — the file-manager header row. */}
+        {/* Toolbar: select-all, search, filter, sort — the file-manager header row.
+            On a phone the search takes the first line and the rest share the
+            second, rather than Sort wrapping onto a line of its own. */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
           <Checkbox
             checked={allVisibleSelected}
             onCheckedChange={checked => setSelection(selectAllTargets, checked === true)}
             aria-label="Select all listed documents"
           />
-          <div className="relative min-w-[12rem] flex-1">
+          <div className="relative order-first w-full sm:order-none sm:w-auto sm:min-w-[12rem] sm:flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={query}
@@ -855,11 +858,11 @@ export function MatterDocumentsTab({
               {busy === 'bulk-download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               Download selected
             </Button>
-            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'share'} onClick={() => void handleShare(selectedDocuments.filter(doc => !isDocumentShared(doc)), true)}>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'share' || selectedDocuments.every(isDocumentShared)} onClick={() => void handleShare(selectedDocuments.filter(doc => !isDocumentShared(doc)), true)}>
               <Share2 className="h-3.5 w-3.5" />
               Share
             </Button>
-            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'unshare'} onClick={() => void handleShare(selectedDocuments.filter(isDocumentShared), false)}>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'unshare' || !selectedDocuments.some(isDocumentShared)} onClick={() => void handleShare(selectedDocuments.filter(isDocumentShared), false)}>
               <Undo2 className="h-3.5 w-3.5" />
               Unshare
             </Button>
@@ -998,6 +1001,8 @@ export function MatterDocumentsTab({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+                  {/* Holds the menu's slot so every folder's chevron lines up. */}
+                  {!folder.custom && <span aria-hidden className="h-8 w-8 shrink-0" />}
                 </div>
               </li>
             ))}
@@ -1011,7 +1016,7 @@ export function MatterDocumentsTab({
                   key={doc.id}
                   id={`document-row-${doc.id}`}
                   className={cn(
-                    'flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-accent',
+                    'flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 hover:bg-accent',
                     selectedIds.has(doc.id) && 'bg-muted',
                     highlightedDocumentId === doc.id && 'bg-amber-bg ring-1 ring-inset ring-amber-border',
                   )}
@@ -1027,13 +1032,20 @@ export function MatterDocumentsTab({
                       the title down to three letters. */}
                   <div className="min-w-[12rem] flex-1">
                     <p
-                      className="truncate text-sm font-medium"
+                      className="line-clamp-2 break-words text-sm font-medium sm:line-clamp-none sm:truncate"
                       title={doc.name}
                       aria-label={`${documentDisplayTitle(doc.name, clientName)}. Full filename: ${doc.name}`}
                     >
                       {documentDisplayTitle(doc.name, clientName)}
                     </p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      {/* The date and size columns are hidden below lg and sm;
+                          there they ride on this line so a sort by date or
+                          size still shows what it sorted by. */}
+                      <span className="text-micro tabular-nums text-muted-foreground lg:hidden">
+                        {doc.created_at ? formatFirmDate(doc.created_at) : '—'}
+                        <span className="sm:hidden"> · {formatDocumentSize(doc.size)}</span>
+                      </span>
                       {/* Only a search puts foldered files in this list, and
                           there the chip is what says where the hit lives. */}
                       {openFolder === null && folderKey !== null && (
