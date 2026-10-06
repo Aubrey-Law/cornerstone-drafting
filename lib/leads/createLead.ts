@@ -73,6 +73,15 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
     .maybeSingle()
   if (opportunity?.id) await ensureLeadSlaTasks(opportunity.id, { practiceArea })
 
+  // Search the new lead against everyone the firm already knows, behind the
+  // response. A possible match reaches the attorney through the dial.
+  try {
+    const { scheduleConflictCheck } = await import('@/lib/conflicts/server')
+    scheduleConflictCheck(lead.id)
+  } catch (error) {
+    console.error('[leads] conflict check not scheduled', { leadId: lead.id, cause: error instanceof Error ? error.message : String(error) })
+  }
+
   return {
     leadId: lead.id,
     clientName,

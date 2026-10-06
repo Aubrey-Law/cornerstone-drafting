@@ -143,6 +143,14 @@ async function createLeadFromAppointment(input: {
     actor_id: null,
   })
 
+  // The same conflict check every hand-created lead gets (lib/leads/createLead.ts).
+  try {
+    const { scheduleConflictCheck } = await import('@/lib/conflicts/server')
+    scheduleConflictCheck(lead.id)
+  } catch (error) {
+    console.error('[booking] conflict check not scheduled', { leadId: lead.id, cause: error instanceof Error ? error.message : String(error) })
+  }
+
   return lead
 }
 

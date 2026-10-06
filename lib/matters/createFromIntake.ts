@@ -50,6 +50,13 @@ export async function createMatterFromIntake(
   const intake = intakeData as LeadIntakeRow | null
   if (!intake) return { ok: false, error: 'Lead not found' }
 
+  // A lead the attorney has marked as a conflict of interest is never hired,
+  // by any path: the manual hire, the status change, or a signed engagement
+  // arriving from e-sign. Clear the conflict on the lead page first.
+  const { conflictBlocksHire } = await import('@/lib/conflicts/server')
+  const conflictBlock = await conflictBlocksHire(intakeId, admin)
+  if (conflictBlock) return { ok: false, error: conflictBlock }
+
   const clientName =
     intake.full_name?.trim() ||
     [intake.first_name, intake.last_name].filter(Boolean).join(' ').trim() ||

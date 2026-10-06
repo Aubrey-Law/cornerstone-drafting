@@ -51,6 +51,8 @@ import {
   type LeadChannelTarget,
 } from '@/components/leads/LeadChannelsCard'
 import { LeadKeyDatesCard, type LeadKeyDates } from '@/components/leads/LeadKeyDatesCard'
+import { LeadConflictCard } from '@/components/leads/LeadConflictCard'
+import type { ConflictCheckState } from '@/lib/conflicts/match'
 import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
@@ -138,6 +140,8 @@ type LeadDetailClientProps = {
   /** firm_settings.esign_documents_enabled — sending a document for signature. */
   esignDocumentsEnabled?: boolean
   workSummary?: import('@/lib/work/recordSummary').RecordWorkSummary | null
+  /** The lead's conflict-of-interest check; null when none has run yet. */
+  initialConflictCheck?: ConflictCheckState | null
 }
 
 type LeadPatchResponse = {
@@ -213,6 +217,7 @@ export function LeadDetailClient({
   smsEnabled = true,
   esignDocumentsEnabled = false,
   workSummary = null,
+  initialConflictCheck = null,
 }: LeadDetailClientProps) {
   const { confirm, confirmDialog } = useConfirm()
   const token = useAccessToken()
@@ -221,6 +226,7 @@ export function LeadDetailClient({
   const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
   const [spouse, setSpouse] = useState(initialSpouse)
+  const [conflictCheck, setConflictCheck] = useState<ConflictCheckState | null>(initialConflictCheck)
   const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activity, setActivity] = useState(initialActivity)
@@ -811,6 +817,7 @@ export function LeadDetailClient({
     spouse,
     nextAction: availableAction,
     nextAppointmentAt,
+    conflictCheck,
   })
 
 
@@ -993,6 +1000,12 @@ export function LeadDetailClient({
                 nextStageBlockers: operationalBrief.blockers.map(item => item.label),
                 meetingPreparation: operationalBrief.meetingPreparation,
               }} />
+              <LeadConflictCard
+                leadId={lead.id}
+                initialCheck={conflictCheck}
+                canDecide={lead.lead_status === 'lead'}
+                onChange={setConflictCheck}
+              />
               <LeadScoreCard
                 leadId={lead.id}
                 score={leadScore}
