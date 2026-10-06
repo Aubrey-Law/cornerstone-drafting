@@ -401,8 +401,11 @@ export function MoneyInCard({
   // A flat fee is quoted before the engagement seeds its ledger row, so the
   // stated figure is the only answer until then. A plan claim has no such
   // window — it exists once it is in the ledger, and the ledger is the answer.
+  // `flat_fee_amount` is dollars (4500 = $4,500); the ledger and
+  // billingMoney work in cents. Comparing the two unconverted printed a
+  // $4,500 fee as "$45" and subtracted cents from dollars for the balance.
   const stated = isPlan ? null : details?.flat_fee_amount
-  const expected = typeof stated === 'number' && Number.isFinite(stated) ? stated : billed
+  const expected = typeof stated === 'number' && Number.isFinite(stated) ? Math.round(stated * 100) : billed
   const balance = expected - collected
   const percent = expected > 0 ? Math.max(0, Math.min(100, Math.round((collected / expected) * 100))) : 100
   const linkSentAt = details?.payment_link_sent_at ?? null

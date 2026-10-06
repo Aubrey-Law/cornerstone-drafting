@@ -319,6 +319,19 @@ describe('MatterBillingTab', () => {
     expect(within(moneyIn).queryByText(/9,999/)).toBeNull()
   })
 
+  it('reads a flat fee in dollars against a ledger kept in cents', async () => {
+    // $4,800 quoted, $1,500 of it collected.
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await screen.findByText('Flat fee — Joint trust package')
+    const moneyIn = screen.getByText('Money in').closest('div[data-slot="card"]') as HTMLElement
+    const value = (label: string) => within(moneyIn).getByText(label).nextElementSibling?.textContent
+    expect(value('Fee amount')).toBe('$4,800')
+    expect(value('Amount collected')).toBe('$1,500')
+    expect(value('Balance due')).toBe('$3,300')
+  })
+
   it('renders no claim block at all for a flat-fee matter', async () => {
     respondWith({ rows: [row()] })
     renderTab()
