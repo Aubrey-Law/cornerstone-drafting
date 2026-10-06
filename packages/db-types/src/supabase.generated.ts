@@ -7199,9 +7199,11 @@ export type Database = {
           pb_heir_count: number | null
           pb_inventory_due_date: string | null
           pb_inventory_filed_date: string | null
+          pb_letters_issued_date: string | null
           pb_m706_due_date: string | null
           pb_m706_filed_date: string | null
           pb_personal_representative: string | null
+          pb_petition_filed_date: string | null
           pb_pr_appointment_date: string | null
           pb_probate_type: string | null
           pb_qualifies_small_estate: boolean | null
@@ -7339,9 +7341,11 @@ export type Database = {
           pb_heir_count?: number | null
           pb_inventory_due_date?: string | null
           pb_inventory_filed_date?: string | null
+          pb_letters_issued_date?: string | null
           pb_m706_due_date?: string | null
           pb_m706_filed_date?: string | null
           pb_personal_representative?: string | null
+          pb_petition_filed_date?: string | null
           pb_pr_appointment_date?: string | null
           pb_probate_type?: string | null
           pb_qualifies_small_estate?: boolean | null
@@ -7479,9 +7483,11 @@ export type Database = {
           pb_heir_count?: number | null
           pb_inventory_due_date?: string | null
           pb_inventory_filed_date?: string | null
+          pb_letters_issued_date?: string | null
           pb_m706_due_date?: string | null
           pb_m706_filed_date?: string | null
           pb_personal_representative?: string | null
+          pb_petition_filed_date?: string | null
           pb_pr_appointment_date?: string | null
           pb_probate_type?: string | null
           pb_qualifies_small_estate?: boolean | null
@@ -8859,6 +8865,63 @@ export type Database = {
           snoozed_by?: string | null
           snoozed_until?: string
           stage_key?: string
+        }
+        Relationships: []
+      }
+      probate_deadline_rules: {
+        Row: {
+          active: boolean
+          anchor: string
+          applies_when: string
+          citation: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          description: string | null
+          key: string
+          offset_days: number
+          offset_months: number
+          roll_weekend: boolean
+          sort_order: number
+          target_field: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          anchor: string
+          applies_when?: string
+          citation?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          description?: string | null
+          key: string
+          offset_days?: number
+          offset_months?: number
+          roll_weekend?: boolean
+          sort_order?: number
+          target_field?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          anchor?: string
+          applies_when?: string
+          citation?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          description?: string | null
+          key?: string
+          offset_days?: number
+          offset_months?: number
+          roll_weekend?: boolean
+          sort_order?: number
+          target_field?: string | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }

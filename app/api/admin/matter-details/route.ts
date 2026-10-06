@@ -7,6 +7,8 @@ import { parsePracticeArea } from '@/lib/practiceArea'
 import { reconcileDesignSheetPlanTrack } from '@/lib/designSheet/reconcilePlanTrack'
 import { reconcileMatterIntakeTrack } from '@/lib/intake/reconcileMatterIntakeTrack'
 import { resyncMatterSlaTemplate } from '@/lib/slaTasks/generate'
+import { DEADLINE_INPUT_FIELDS } from '@/lib/probateDeadlines/model'
+import { syncProbateDeadlines } from '@/lib/probateDeadlines/server'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
 import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
@@ -55,6 +57,7 @@ const WRITABLE_FIELDS = new Set([
   'pb_estate_closed', 'pb_estate_closed_date',
   'pb_federal_estate_tax_required', 'pb_state_estate_tax_required',
   'pb_bond_amount', 'pb_bond_waived_in_will',
+  'pb_letters_issued_date', 'pb_petition_filed_date',
   // V2 — Shared
   'annual_review_opt_out',
   'conflict_check_completed', 'conflict_check_date',
@@ -342,6 +345,16 @@ export async function PATCH(req: Request) {
     // And the checklist with it, so the reclassification lands everywhere at
     // once rather than waiting for someone to open the drafting workspace.
     await resyncMatterSlaTemplate(admin, matterId, normalizedValue)
+  }
+
+  // A corrected date of death or appointment moves the probate deadlines it
+  // anchors. The field has already saved; a failed recompute must not undo it.
+  if (DEADLINE_INPUT_FIELDS.has(field)) {
+    try {
+      await syncProbateDeadlines(admin, matterId)
+    } catch (cause) {
+      console.error('[probate deadlines] recompute after a matter edit failed', { matterId, field, cause: cause instanceof Error ? cause.message : String(cause) })
+    }
   }
 
   return NextResponse.json({ row: data })

@@ -107,6 +107,26 @@ export function MatterProbateEssentialsCard({
         </label>
 
         <label className="space-y-1.5">
+          <FieldLabel>Petition filed</FieldLabel>
+          <Input
+            type="date"
+            className="h-9"
+            defaultValue={details?.pb_petition_filed_date ?? ''}
+            onBlur={event => void onSaveField('pb_petition_filed_date', event.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <FieldLabel>Letters issued</FieldLabel>
+          <Input
+            type="date"
+            className="h-9"
+            defaultValue={details?.pb_letters_issued_date ?? ''}
+            onBlur={event => void onSaveField('pb_letters_issued_date', event.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1.5">
           <FieldLabel>Inventory due date</FieldLabel>
           <Input
             type="date"

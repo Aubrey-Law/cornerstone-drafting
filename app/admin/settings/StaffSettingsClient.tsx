@@ -35,6 +35,7 @@ import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { DelegationSettingsSection } from './DelegationSettingsSection'
 import { AnnualReviewSettingsSection } from './AnnualReviewSettingsSection'
 import { FileClosingSettingsSection } from './FileClosingSettingsSection'
+import { ProbateDeadlinesSettingsSection } from './ProbateDeadlinesSettingsSection'
 import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
@@ -710,6 +711,7 @@ export function StaffSettingsClient({
 
       {tab === 'annual-review' && <AnnualReviewSettingsSection isAdministrator={isAdministrator} />}
       {tab === 'file-closing' && <FileClosingSettingsSection isAdministrator={isAdministrator} />}
+      {tab === 'probate-deadlines' && <ProbateDeadlinesSettingsSection isAdministrator={isAdministrator} />}
       {confirmDialog}
     </div>
   )

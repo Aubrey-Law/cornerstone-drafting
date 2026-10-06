@@ -18,6 +18,7 @@ export type SettingsTab =
   | 'delegation'
   | 'annual-review'
   | 'file-closing'
+  | 'probate-deadlines'
   | 'ai-usage'
 
 export type SettingsNavItem =
@@ -133,6 +134,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         tab: 'file-closing',
         label: 'File closing',
         description: 'How long closed files are kept, which are due for review, and the closing notice to the client.',
+      },
+      {
+        kind: 'tab',
+        tab: 'probate-deadlines',
+        label: 'Probate deadlines',
+        description: 'The statutory clocks that date every probate matter, and which you have confirmed.',
       },
       { kind: 'route', href: '/admin/settings/command-center', label: 'Command center' },
     ],
