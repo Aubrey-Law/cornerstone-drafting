@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { formatDateKey } from '@/lib/fileClosing/model'
 import {
   Select,
   SelectContent,
@@ -611,6 +612,40 @@ export function CloseOutCard({
           <p className="text-xs text-muted-foreground">
             Resolve every close-out item, including billing, before this matter can close.
           </p>
+        )}
+        {!alreadyClosed && (
+          <p className="text-xs text-muted-foreground">
+            Closing runs the billing check, stamps the closed and retention dates, and offers the
+            client a closing notice through the delegation dial.
+          </p>
+        )}
+
+        {details?.closed_date && (
+          <div className="space-y-2 border-t pt-3 text-sm">
+            <p>
+              Closed {formatDateKey(details.closed_date.slice(0, 10))}
+              <span className="block text-xs text-muted-foreground">
+                {details.retention_until
+                  ? `File kept until ${formatDateKey(details.retention_until)}, then reviewed for destruction.`
+                  : 'Retention date not set yet; the weekly review stamps it from the closed date.'}
+              </span>
+            </p>
+            <div className="flex items-start justify-between gap-3">
+              <span id="retention-hold-label">
+                Retention hold
+                <span className="block text-xs text-muted-foreground">
+                  {details.retention_hold
+                    ? `Held: this file is never listed for destruction.${details.retention_hold_reason ? ` ${details.retention_hold_reason}` : ''}`
+                    : 'Keep this file past its retention date (a dispute, a request, an open estate).'}
+                </span>
+              </span>
+              <Switch
+                aria-labelledby="retention-hold-label"
+                checked={Boolean(details.retention_hold)}
+                onCheckedChange={checked => void onSaveField('retention_hold', checked)}
+              />
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

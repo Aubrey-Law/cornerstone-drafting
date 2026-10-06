@@ -34,6 +34,7 @@ import { MicrosoftTeamsSection } from './MicrosoftTeamsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { DelegationSettingsSection } from './DelegationSettingsSection'
 import { AnnualReviewSettingsSection } from './AnnualReviewSettingsSection'
+import { FileClosingSettingsSection } from './FileClosingSettingsSection'
 import { resolveSettingsTab, settingsTabHref, settingsTabItem, type SettingsTab } from './settingsNav'
 
 interface ApiKeyStatus {
@@ -708,6 +709,7 @@ export function StaffSettingsClient({
       {tab === 'delegation' && <DelegationSettingsSection isAdministrator={isAdministrator} />}
 
       {tab === 'annual-review' && <AnnualReviewSettingsSection isAdministrator={isAdministrator} />}
+      {tab === 'file-closing' && <FileClosingSettingsSection isAdministrator={isAdministrator} />}
       {confirmDialog}
     </div>
   )

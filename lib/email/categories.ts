@@ -14,6 +14,7 @@ export const EMAIL_CATEGORIES = [
   'appointment_missed_followup',
   'scheduling_link',
   'annual_review_outreach',
+  'matter_closing_notice',
   'sla_task_nudge',
   'sla_task_internal_reminder',
   'invoice_sent',
@@ -142,6 +143,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'annual_review_outreach',
     label: 'Annual review invitation',
     description: 'Sent to a client a year after their plan is signed (and on the configured cadence after), inviting a short review call.',
+    recipient: 'client',
+  },
+  matter_closing_notice: {
+    category: 'matter_closing_notice',
+    label: 'Matter closing notice',
+    description: 'Sent to a client when their matter closes: the work is complete, where their documents live, and how long the firm keeps the file.',
     recipient: 'client',
   },
   sla_task_nudge: {

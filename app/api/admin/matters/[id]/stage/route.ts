@@ -7,6 +7,7 @@ import { LIFECYCLE_REGISTRY_VERSION } from '@/lib/lifecycle/registry'
 import { matterStageTransitionPreflight } from '@/lib/lifecycle/matter'
 import { loadMatterLifecycleContext } from '@/lib/lifecycle/server'
 import { schedulePlanStatusUpdate } from '@/lib/portal/delegatePlanStatus'
+import { finishMatterClose } from '@/lib/fileClosing/server'
 
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import {
@@ -92,6 +93,29 @@ export async function PATCH(req: Request, { params }: Params) {
       (user?.user_metadata?.full_name as string | undefined)
       ?? user?.email
       ?? null
+
+    // Closing is one move on both axes. The status transition runs first
+    // because it carries the billing check: a matter with a balance, an open
+    // claim or a ready milestone is refused here (409) before the stage moves,
+    // instead of landing at `closed` with its status still `active` and the
+    // check never run. Leaving `closed` by stage reopens the status too.
+    if (stage === 'closed') {
+      const { error: statusError } = await admin.rpc('transition_matter_status_with_closeout', {
+        p_matter_id: matterId,
+        p_status: 'closed',
+        p_hold_reason: null,
+        p_status_label: 'Closed',
+        p_actor_id: userId,
+        p_actor_email: user?.email ?? null,
+        p_actor_name: actorName,
+      })
+      if (statusError) {
+        if (statusError.code === 'P0002') return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+        if (statusError.code === 'P0001') return NextResponse.json({ error: statusError.message }, { status: 409 })
+        throw new Error(statusError.message)
+      }
+    }
+
     const { data, error } = await admin.rpc('transition_matter_stage_with_jobs', {
       p_matter_id: matterId,
       p_stage: stage,
@@ -121,10 +145,23 @@ export async function PATCH(req: Request, { params }: Params) {
       const actor = { id: userId, email: user?.email ?? null, name: actorName }
       if (stage === 'closed') {
         await archiveTasksForClosedRecord(admin, { matterId }, 'matter_closed', actor)
+        // The closed date, the retention date, and the client's closing notice
+        // through the dial. Never fails the close: it has already committed.
+        await finishMatterClose(admin, { matterId, actor })
       } else if (result.previousStage === 'closed') {
         // Scoped to this sweep's own rows: a lead's held-back plan and a
         // hand-skipped task carry their own markers and are not this to revive.
         await restoreTasksForReopenedRecord(admin, { matterId }, actor, { reasons: ['matter_closed'] })
+        const { error: reopenError } = await admin.rpc('transition_matter_status_with_closeout', {
+          p_matter_id: matterId,
+          p_status: 'active',
+          p_hold_reason: null,
+          p_status_label: 'Active',
+          p_actor_id: userId,
+          p_actor_email: user?.email ?? null,
+          p_actor_name: actorName,
+        })
+        if (reopenError) console.error('[stage] could not reopen matter status:', reopenError.message)
       }
     }
 

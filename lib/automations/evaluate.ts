@@ -283,7 +283,10 @@ async function signingCandidates(now: Date): Promise<AutomationCandidate[]> {
       reason: 'Executed documents are recorded',
       href: `/admin/matters/${matter.id}?tab=tasks`,
       actions: [
-        workflowAction({ eventKey: `${eventKey}:closeout`, type: 'fire_stage_task', matterId: matter.id, summary: 'Create signing closeout work', payload: { stage: 'closeout' } }),
+        // The job maps a pipeline stage to its engine key; `closeout` is the
+        // engine key, and passing it here meant the job mapped nothing and
+        // created no task. `post_execution` is the stage whose template it is.
+        workflowAction({ eventKey: `${eventKey}:closeout`, type: 'fire_stage_task', matterId: matter.id, summary: 'Create signing closeout work', payload: { stage: 'post_execution' } }),
         workflowAction({ eventKey: `${eventKey}:funding`, type: 'fire_stage_task', matterId: matter.id, summary: 'Create funding work', payload: { stage: 'funding' } }),
       ],
     }

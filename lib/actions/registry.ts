@@ -45,6 +45,12 @@ function annualReviewSendInput(value: unknown): { outreachId: string } {
   return { outreachId: input.outreachId }
 }
 
+function closingNoticeSendInput(value: unknown): { matterId: string } {
+  const input = objectInput(value)
+  if (typeof input.matterId !== 'string' || !isUuid(input.matterId)) throw new Error('A valid matter identifier is required')
+  return { matterId: input.matterId }
+}
+
 function documentRequestCreateInput(value: unknown): {
   matterId: string
   title: string
@@ -1052,6 +1058,40 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, status: send.status, outreachId: send.outreachId, matterId: send.matterId, portalMessage: Boolean(send.messageId) }
     },
   } as ActionDefinition<{ outreachId: string }>,
+  {
+    key: 'matter.closing.notice.send',
+    risk: 'external_write',
+    validate: closingNoticeSendInput,
+    async preview(input, context) {
+      const { draftClosingNotice } = await import('@/lib/fileClosing/server')
+      const draft = await draftClosingNotice(input.matterId, context.admin)
+      if (!draft) throw new Error('This matter has no client email to send the closing notice to')
+      // The words the client would read belong in the preview, so a record
+      // that changed since fails the digest check; the audit keeps references.
+      return {
+        display: {
+          action: 'Send closing notice',
+          recipient: draft.to,
+          clientName: draft.clientName,
+          matterName: draft.matterName,
+          retentionUntil: draft.retentionUntil,
+          portalCopy: draft.hasPortalAccount,
+          subject: draft.subject,
+          content: draft.text,
+        },
+        auditBefore: { matterId: draft.matterId },
+        auditAfter: { matterId: draft.matterId, channel: 'email', retentionUntil: draft.retentionUntil },
+      }
+    },
+    async execute(input, context) {
+      const { sendClosingNotice } = await import('@/lib/fileClosing/server')
+      return sendClosingNotice({ admin: context.admin, matterId: input.matterId, actorId: context.actor.id })
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; matterId?: string; messageId?: string | null }
+      return { sent: send.sent, status: send.status, matterId: send.matterId, portalMessage: Boolean(send.messageId) }
+    },
+  } as ActionDefinition<{ matterId: string }>,
   {
     key: 'billing.reminder.send',
     risk: 'external_write',

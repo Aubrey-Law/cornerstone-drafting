@@ -176,6 +176,11 @@ export interface MatterDetailsRow {
   work_started_date?: string | null
   work_finished_date?: string | null
   closing_package_sent_date?: string | null
+  /** The day the firm's retention period ends; set when the matter closes (lib/fileClosing). */
+  retention_until?: string | null
+  /** True while the file must be kept past its retention date. */
+  retention_hold?: boolean | null
+  retention_hold_reason?: string | null
   /** Drives the header pill and the weekly ops board. */
   next_action_date?: string | null
 }
