@@ -13,6 +13,13 @@ export interface CommunicationItem {
   meta?: string | null
   sender?: string | null
   created_at: string
+  /**
+   * Set on an inbound email filed from Gmail: the body shown is Gmail's
+   * snippet, and the full message is read live through this route.
+   */
+  body_href?: string | null
+  /** Where the message can be acted on: the triage row, the Gmail thread. */
+  links?: Array<{ label: string; href: string }> | null
 }
 
 /**

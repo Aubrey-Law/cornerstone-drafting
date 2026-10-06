@@ -19,7 +19,15 @@ import {
 import { generateTriageDraft } from './draft'
 import { delegateTriageReply } from './delegate'
 import { describeError } from './describeError'
+import {
+  FILED_CLASSIFICATIONS,
+  fileInboundMessages,
+  inboundFilingRows,
+  isMissingTableError,
+  latestInboundMessage,
+} from './fileInbound'
 import { evaluateNeedsReply } from './needsReply'
+import type { SenderMatch } from './classifySender'
 
 export { describeError }
 
@@ -126,6 +134,8 @@ export interface TriageScanResult {
   threadsDeferred: number
   /** The listing hit `TRIAGE_LISTING_CEILING` and may be incomplete. */
   listingTruncated: boolean
+  /** Inbound messages from known clients, leads and contacts filed on their record. */
+  messagesFiled: number
   remainingNeedsDraft: number
   durationMs: number
 }
@@ -146,9 +156,31 @@ function emptyResult(reason: TriageScanResult['reason'], durationMs = 0): Triage
     repliesObserved: 0,
     threadsDeferred: 0,
     listingTruncated: false,
+    messagesFiled: 0,
     remainingNeedsDraft: 0,
     durationMs,
   }
+}
+
+/** The filing window: a little wider than the scan's own 14 days. */
+const FILED_LOOKBACK_MS = 21 * 24 * 60 * 60 * 1000
+
+/**
+ * Which messages in this mailbox are already on a record, so a rescan does
+ * not look a known sender up again for mail it filed yesterday. `null` means
+ * the table is not there yet and nothing is filed this run.
+ */
+async function loadFiledMessageIds(connectionEmail: string): Promise<Set<string> | null> {
+  const { data, error } = await getAdminClient()
+    .from('email_inbound_messages')
+    .select('gmail_message_id')
+    .eq('connection_email', connectionEmail)
+    .gte('received_at', new Date(Date.now() - FILED_LOOKBACK_MS).toISOString())
+  if (error) {
+    if (isMissingTableError(error)) return null
+    throw error
+  }
+  return new Set(((data ?? []) as { gmail_message_id: string }[]).map(row => row.gmail_message_id))
 }
 
 async function mapWithConcurrency<T, R>(
@@ -330,15 +362,25 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
     repliesSent: 0,
     repliesObserved: 0,
     threadsDeferred: 0,
+    messagesFiled: 0,
   }
   let listingTruncated = false
   let failure: string | null = null
 
   try {
-    const [ignore, existingRows] = await Promise.all([
+    const [ignore, existingRows, filedIds] = await Promise.all([
       loadIgnoreRules(),
       loadExistingRows(identity.address),
+      loadFiledMessageIds(identity.address),
     ])
+    // Filing is on until the table proves absent (deploy order) or a write
+    // says so mid-run; the queue never waits on it.
+    let filingAvailable = filedIds !== null
+    // One record lookup per correspondent per run, not per thread: a client
+    // with five threads open is looked up once. Only record matches are kept;
+    // the automated and internal verdicts depend on the message, not the
+    // address, and are re-derived each time.
+    const recordMatchBySender = new Map<string, SenderMatch | null>()
 
     const firmDomains = Array.from(new Set([
       emailDomain(identity.address),
@@ -403,6 +445,52 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       if (!thread) continue
       counts.threadsExamined += 1
       const existing = rowByThread.get(thread.id)
+
+      // File the thread's inbound mail on the sender's record, whether or not
+      // anything is waiting on a reply. Skipped once the metadata budget is
+      // spent, so a large mailbox still reaches drafting; what was skipped is
+      // inside the window next run.
+      const latestInbound = latestInboundMessage(thread, identity.address, firmDomains)
+      if (filingAvailable && latestInbound && Date.now() <= metadataDeadline
+        && !filedIds!.has(latestInbound.id)) {
+        const senderKey = latestInbound.from.email.toLowerCase()
+        let match = recordMatchBySender.get(senderKey)
+        if (match === undefined) {
+          const classified = await classifySender(admin, {
+            email: latestInbound.from.email,
+            name: latestInbound.from.name,
+            threadsFromSender: threadsBySender.get(senderKey) ?? 1,
+            headers: latestInbound.headers,
+            labelIds: latestInbound.labelIds,
+            subject: latestInbound.subject,
+            ignore,
+            connectedAddress: identity.address,
+            firmDomains,
+            threadParticipants: collectThreadParticipants({
+              messages: thread.messages,
+              senderEmail: latestInbound.from.email,
+              connectedAddress: identity.address,
+              firmDomains,
+            }),
+          })
+          match = FILED_CLASSIFICATIONS.has(classified.classification) ? classified : null
+          // A hard-automated verdict is about this message (an out-of-office
+          // from a client is still a client), so only a settled answer about
+          // the address itself is remembered.
+          if (match || classified.classification === 'possible_lead') {
+            recordMatchBySender.set(senderKey, match)
+          }
+        }
+        if (match) {
+          const rows = inboundFilingRows({
+            thread, sender: latestInbound, match, connectedAddress: identity.address, firmDomains,
+          }).filter(row => !filedIds!.has(row.gmail_message_id))
+          const filed = await fileInboundMessages(admin, rows)
+          counts.messagesFiled += filed.filed
+          if (filed.unavailable) filingAvailable = false
+          for (const row of rows) filedIds!.add(row.gmail_message_id)
+        }
+      }
 
       const verdict = evaluateNeedsReply({
         connectedAddress: identity.address,
