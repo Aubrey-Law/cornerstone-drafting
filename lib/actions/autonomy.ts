@@ -183,6 +183,7 @@ export const ACTION_CATALOG: Record<string, ActionCatalogEntry> = {
     description: 'Email a lead or client the booking link for a meeting type.',
     group: 'communications',
   },
+  'annual_review.outreach.send': { label: 'Send an annual review invitation', description: 'Email a client whose signed plan is a year old (and each cycle after) inviting a short review call, with a booking link.', group: 'communications' },
   'billing.reminder.send': { label: 'Send an invoice reminder', description: 'Send a drafted overdue-invoice reminder with the invoice attached. Final notices always wait for you.', group: 'billing' },
   'template.register': { label: 'Register a template', description: 'Add an uploaded Word template to the firm library.', group: 'templates' },
 }

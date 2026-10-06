@@ -13,6 +13,7 @@ export const EMAIL_CATEGORIES = [
   'appointment_reminder',
   'appointment_missed_followup',
   'scheduling_link',
+  'annual_review_outreach',
   'sla_task_nudge',
   'sla_task_internal_reminder',
   'invoice_sent',
@@ -135,6 +136,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'scheduling_link',
     label: 'Scheduling link',
     description: 'Sent to a client or lead with a Calendly link to book an appointment.',
+    recipient: 'client',
+  },
+  annual_review_outreach: {
+    category: 'annual_review_outreach',
+    label: 'Annual review invitation',
+    description: 'Sent to a client a year after their plan is signed (and on the configured cadence after), inviting a short review call.',
     recipient: 'client',
   },
   sla_task_nudge: {

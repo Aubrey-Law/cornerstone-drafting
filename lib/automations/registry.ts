@@ -75,6 +75,7 @@ export const SYSTEM_AUTOMATIONS: readonly SystemAutomationDefinition[] = [
   { key: 'lawmatics-calendar', name: 'Lawmatics calendar sync', scheduleLabel: 'Every 10 minutes', schedules: ['*/10 * * * *'], path: '/api/cron/lawmatics-calendar', expectedIntervalMinutes: 10 },
   { key: 'automation-rules', name: 'Rule automation runner', scheduleLabel: 'Every 5 minutes', schedules: ['*/5 * * * *'], path: '/api/cron/automation-rules', expectedIntervalMinutes: 5 },
   { key: 'meeting-transcripts', name: 'Meeting transcripts', scheduleLabel: 'Every 30 minutes', schedules: ['*/30 * * * *'], path: '/api/cron/meeting-transcripts', expectedIntervalMinutes: 30 },
+  { key: 'annual-review-outreach', name: 'Annual review outreach', scheduleLabel: 'Weekdays at 8:20 AM ET', schedules: ['20 12 * * 1-5'], path: '/api/cron/annual-review-outreach', expectedIntervalMinutes: 1440 },
 ] as const
 
 export function getSystemAutomation(key: string): SystemAutomationDefinition | null {

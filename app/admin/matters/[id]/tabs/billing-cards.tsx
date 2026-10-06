@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -577,6 +578,26 @@ export function CloseOutCard({
           details={details}
           onSaveField={onSaveField}
         />
+
+        {/*
+          A closed plan is exactly the one the annual review campaign writes
+          to, so the switch to leave this client out lives with the close-out.
+        */}
+        <div className="flex items-start justify-between gap-3 text-sm">
+          <span id="annual-review-invites-label">
+            Annual review invitations
+            <span className="block text-xs text-muted-foreground">
+              {details?.annual_review_opt_out
+                ? 'This client will not be invited to plan reviews.'
+                : 'Invited each year after signing, when the campaign is on.'}
+            </span>
+          </span>
+          <Switch
+            aria-labelledby="annual-review-invites-label"
+            checked={!details?.annual_review_opt_out}
+            onCheckedChange={checked => void onSaveField('annual_review_opt_out', !checked)}
+          />
+        </div>
 
         <Button
           type="button"

@@ -39,6 +39,12 @@ function optionalUuid(input: Record<string, unknown>, key: string): string | nul
   return value
 }
 
+function annualReviewSendInput(value: unknown): { outreachId: string } {
+  const input = objectInput(value)
+  if (typeof input.outreachId !== 'string' || !isUuid(input.outreachId)) throw new Error('A valid invitation identifier is required')
+  return { outreachId: input.outreachId }
+}
+
 function documentRequestCreateInput(value: unknown): {
   matterId: string
   title: string
@@ -1011,6 +1017,41 @@ const definitions: ActionDefinition[] = [
       return { sent: send.sent, triageId: send.triageId, label: send.label ?? null, noticeCount: send.notices?.length ?? 0 }
     },
   } as ActionDefinition<{ triageId: string }>,
+  {
+    key: 'annual_review.outreach.send',
+    risk: 'external_write',
+    validate: annualReviewSendInput,
+    async preview(input, context) {
+      const { fetchAnnualReviewOutreach } = await import('@/lib/annualReview/server')
+      const row = await fetchAnnualReviewOutreach(context.admin, input.outreachId)
+      if (!row) throw new Error('Annual review invitation not found')
+      if (row.status !== 'drafted') throw new Error('This invitation has already been sent or set aside')
+      // The words the client would read belong in the preview, so a redrafted
+      // invitation fails the digest check; the audit keeps references only.
+      return {
+        display: {
+          action: 'Send annual review invitation',
+          recipient: row.toEmail,
+          clientName: row.clientName,
+          matterName: row.matterName,
+          reviewDueOn: row.cycleDueOn,
+          bookingUrl: row.bookingUrl,
+          subject: row.subject,
+          content: row.bodyText,
+        },
+        auditBefore: { outreachId: row.id, status: row.status, matterId: row.matterId },
+        auditAfter: { outreachId: row.id, matterId: row.matterId, channel: 'email', reviewDueOn: row.cycleDueOn },
+      }
+    },
+    async execute(input, context) {
+      const { sendAnnualReviewOutreach } = await import('@/lib/annualReview/server')
+      return sendAnnualReviewOutreach({ admin: context.admin, outreachId: input.outreachId, actorId: context.actor.id })
+    },
+    auditResult(result) {
+      const send = result as { sent?: boolean; status?: string; outreachId?: string; matterId?: string; messageId?: string | null }
+      return { sent: send.sent, status: send.status, outreachId: send.outreachId, matterId: send.matterId, portalMessage: Boolean(send.messageId) }
+    },
+  } as ActionDefinition<{ outreachId: string }>,
   {
     key: 'billing.reminder.send',
     risk: 'external_write',
