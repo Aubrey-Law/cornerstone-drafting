@@ -54,6 +54,25 @@ describe('matter notes tab', () => {
   })
 })
 
+describe('matter notes tab on a touch screen', () => {
+  // jsdom applies no media queries, so these pin the classes the browser keys
+  // on: pointer-fine for the keyboard hint, pointer-coarse for touch sizes.
+  it('keeps the keyboard shortcut out of the placeholder and shows it only with a fine pointer', () => {
+    renderNotes()
+    expect(screen.getByRole('textbox', { name: 'New matter note' }).getAttribute('placeholder')).toBe('Add a note…')
+    const hint = screen.getByText('⌘Enter to save')
+    expect(hint.className).toContain('hidden')
+    expect(hint.className).toContain('pointer-fine:inline')
+  })
+
+  it('gives the edit and delete buttons a 40px target on a touch screen', () => {
+    renderNotes({ notes: mergeLinkedNotes([], linkLiveMatterNotes([saved], [])) })
+    for (const name of ['Edit note', 'Delete note']) {
+      expect(screen.getByRole('button', { name }).className).toContain('pointer-coarse:size-10')
+    }
+  })
+})
+
 describe('adding a matter note', () => {
   it('puts the text back and says so when the save fails', async () => {
     mocks.add.mockRejectedValue(new Error('Offline'))
