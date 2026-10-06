@@ -8,7 +8,7 @@ import {
   Loader as Loader2,
   Mail,
   MoreHorizontal,
-  PanelRight,
+  PanelLeft,
   Trash2,
   Upload,
   Clock as UnlockIcon,
@@ -96,7 +96,10 @@ export function MatterDetailHeader({
         </Badge>
       </div>
 
-      <div className="hidden shrink-0 items-center gap-2 md:flex">
+      {/* The full row needs about 760px; below xl it pushed the client's name
+          out of a 1024px header and overlapped the matter number at 820px.
+          There, the primary action stays and the rest move to the menu. */}
+      <div className="hidden shrink-0 items-center gap-2 xl:flex">
         {matter.client_phone && (
           <CallPhoneLink
             phone={matter.client_phone}
@@ -188,76 +191,87 @@ export function MatterDetailHeader({
           aria-label={factsRailOpen ? 'Hide matter facts' : 'Show matter facts'}
           title={factsRailOpen ? 'Hide matter facts' : 'Show matter facts'}
         >
-          <PanelRight className="size-3.5" />
+          <PanelLeft className="size-3.5" />
         </Button>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="shrink-0 md:hidden"
-            aria-label="Matter actions"
-          >
-            <MoreHorizontal className="size-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {matter.client_phone && (
-            <DropdownMenuItem asChild>
-              <CallPhoneLink phone={matter.client_phone} label="Call client" />
+      <div className="flex shrink-0 items-center gap-2 xl:hidden">
+        <Button type="button" size="sm" className="hidden md:inline-flex" asChild>
+          <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              aria-label="Matter actions"
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {matter.client_phone && (
+              <DropdownMenuItem asChild>
+                <CallPhoneLink phone={matter.client_phone} label="Call client" />
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem disabled={!matter.client_email} onClick={onEmail}>
+              <Mail className="mr-2 size-3.5" />
+              Email client
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem disabled={!matter.client_email} onClick={onEmail}>
-            <Mail className="mr-2 size-3.5" />
-            Email client
-          </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={onOpenIntake}>
-            <ClipboardList className="mr-2 size-3.5" />
-            {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onImportIntake}>
-            <Upload className="mr-2 size-3.5" />
-            Import intake
-          </DropdownMenuItem>
-          {intakeCompleted && intakeId && (
-            <DropdownMenuItem onClick={onUnlockIntake} disabled={unlocking}>
-              {unlocking ? (
-                <Loader2 className="mr-2 size-3.5 animate-spin text-muted-foreground" />
-              ) : (
-                <UnlockIcon className="mr-2 size-3.5 text-muted-foreground" />
-              )}
-              Unlock intake
+            <DropdownMenuItem onClick={onOpenIntake}>
+              <ClipboardList className="mr-2 size-3.5" />
+              {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem asChild>
-            <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
-          </DropdownMenuItem>
-          {onPushToLawmatics && intakeId && (
-            <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
-              <CloudUpload className="mr-2 size-3.5" />
-              {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+            <DropdownMenuItem onClick={onImportIntake}>
+              <Upload className="mr-2 size-3.5" />
+              Import intake
             </DropdownMenuItem>
-          )}
-          {onPushToStatular && intakeId && (
-            <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
-              <CloudUpload className="mr-2 size-3.5" />
-              {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
+            {intakeCompleted && intakeId && (
+              <DropdownMenuItem onClick={onUnlockIntake} disabled={unlocking}>
+                {unlocking ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <UnlockIcon className="mr-2 size-3.5 text-muted-foreground" />
+                )}
+                Unlock intake
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={onToggleFactsRail}>
-            <PanelRight className="mr-2 size-3.5" />
-            {factsRailOpen ? 'Hide facts' : 'Open facts'}
-          </DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-            <Trash2 className="mr-2 size-3.5" />
-            Delete matter
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/assistant?matter=${matter.matter_id}`}>
+                <Sparkles className="mr-2 size-3.5" />
+                Open in Assistant
+              </Link>
+            </DropdownMenuItem>
+            {onPushToLawmatics && intakeId && (
+              <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+                <CloudUpload className="mr-2 size-3.5" />
+                {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
+              </DropdownMenuItem>
+            )}
+            {onPushToStatular && intakeId && (
+              <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+                <CloudUpload className="mr-2 size-3.5" />
+                {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={onToggleFactsRail}>
+              <PanelLeft className="mr-2 size-3.5" />
+              {factsRailOpen ? 'Hide facts' : 'Open facts'}
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+              <Trash2 className="mr-2 size-3.5" />
+              Delete matter
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   )
 }
