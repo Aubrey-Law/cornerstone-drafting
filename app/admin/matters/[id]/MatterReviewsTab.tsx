@@ -67,7 +67,7 @@ function MatterPlaybookReviewsCard({ matterId }: { matterId: string }) {
       ) : runs.length === 0 ? (
         <EmptyState
           icon={FileSearch}
-          className="py-8"
+          className="py-6"
           title="No reviews yet"
           description="Review one of this matter's documents, or run one from the Review tab in Word with this matter linked."
         />

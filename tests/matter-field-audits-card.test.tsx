@@ -54,5 +54,24 @@ describe('MatterFieldAuditsCard', () => {
     render(<MatterFieldAuditsCard matterId={MATTER} />)
     await waitFor(() => expect(screen.getByText(/no design sheet yet/i)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Run field audit' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open the design sheet' })).toHaveAttribute('href', `/admin/drafting/${MATTER}`)
+  })
+
+  it('counts in the singular, dates in the firm calendar, and says a running audit is in progress', async () => {
+    vi.stubGlobal('fetch', respond({
+      prompts: [],
+      hasDesignSheet: true,
+      runs: [
+        // 02:00 UTC on Sep 6 is still Sep 5 in Boston.
+        { runId: 'done', matterTitle: 'Smith', promptTitle: 'Done', status: 'completed', findingCount: 1, failedCount: 1, finishedAt: '2026-09-06T02:00:00Z' },
+        { runId: 'busy', matterTitle: 'Smith', promptTitle: 'Busy', status: 'running', findingCount: 0, failedCount: 0, finishedAt: null },
+      ],
+      unresolvedBlocker: null,
+    }))
+    render(<MatterFieldAuditsCard matterId={MATTER} />)
+    await waitFor(() => expect(screen.getByTestId('matter-field-audit-runs')).toBeInTheDocument())
+    expect(screen.getByRole('link', { name: /Done/ })).toHaveTextContent('1 finding · 1 check failed · Sep 5, 2026')
+    expect(screen.getByRole('link', { name: /Busy/ })).toHaveTextContent('In progress')
+    expect(screen.getByRole('link', { name: /Busy/ })).not.toHaveTextContent('0 findings')
   })
 })
