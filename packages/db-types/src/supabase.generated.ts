@@ -261,6 +261,89 @@ export type Database = {
           },
         ]
       }
+      annual_review_outreach: {
+        Row: {
+          body_html: string
+          body_text: string
+          booking_url: string | null
+          created_at: string
+          cycle_due_on: string
+          error: string | null
+          id: string
+          matter_id: string
+          message_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          body_text: string
+          booking_url?: string | null
+          created_at?: string
+          cycle_due_on: string
+          error?: string | null
+          id?: string
+          matter_id: string
+          message_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          body_text?: string
+          booking_url?: string | null
+          created_at?: string
+          cycle_due_on?: string
+          error?: string | null
+          id?: string
+          matter_id?: string
+          message_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "annual_review_outreach_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "annual_review_outreach_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "annual_review_outreach_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "annual_review_outreach_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_types: {
         Row: {
           active: boolean
@@ -5746,6 +5829,10 @@ export type Database = {
       firm_settings: {
         Row: {
           admitted: string | null
+          annual_review_cadence_months: number
+          annual_review_lead_days: number
+          annual_review_months_after_signing: number
+          annual_review_outreach_enabled: boolean
           attorney_name: string | null
           attorney_short_name: string | null
           bar_number: string | null
@@ -5782,6 +5869,10 @@ export type Database = {
         }
         Insert: {
           admitted?: string | null
+          annual_review_cadence_months?: number
+          annual_review_lead_days?: number
+          annual_review_months_after_signing?: number
+          annual_review_outreach_enabled?: boolean
           attorney_name?: string | null
           attorney_short_name?: string | null
           bar_number?: string | null
@@ -5818,6 +5909,10 @@ export type Database = {
         }
         Update: {
           admitted?: string | null
+          annual_review_cadence_months?: number
+          annual_review_lead_days?: number
+          annual_review_months_after_signing?: number
+          annual_review_outreach_enabled?: boolean
           attorney_name?: string | null
           attorney_short_name?: string | null
           bar_number?: string | null
@@ -6930,6 +7025,7 @@ export type Database = {
         Row: {
           billing_type: string | null
           claim_amount: number | null
+          annual_review_opt_out: boolean
           claim_submitted_date: string | null
           client_id: string
           client_review_date: string | null
@@ -7066,6 +7162,7 @@ export type Database = {
         Insert: {
           billing_type?: string | null
           claim_amount?: number | null
+          annual_review_opt_out?: boolean
           claim_submitted_date?: string | null
           client_id: string
           client_review_date?: string | null
@@ -7202,6 +7299,7 @@ export type Database = {
         Update: {
           billing_type?: string | null
           claim_amount?: number | null
+          annual_review_opt_out?: boolean
           claim_submitted_date?: string | null
           client_id?: string
           client_review_date?: string | null
