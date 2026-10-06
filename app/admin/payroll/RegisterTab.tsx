@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useConfirm } from '@/components/useConfirm'
 import { computeRegister, sumPaychecks } from '@/lib/payroll/calc'
 import type { Paycheck, PayrollRun, RegisterRow } from '@/lib/payroll/types'
 import type { PayrollYearData } from './PayrollClient'
@@ -120,6 +121,7 @@ function NewRunForm({ year, data, onCreated }: { year: number; data: PayrollYear
 
 function RunDetails({ row, run, year, onChanged }: { row: RegisterRow; run: PayrollRun; year: number; onChanged: () => void }) {
   const { request, download } = usePayrollApi()
+  const { confirm, confirmDialog } = useConfirm()
   const [busy, setBusy] = useState<string | null>(null)
   const [fedPaid, setFedPaid] = useState(run.fedDepositPaidOn ?? '')
   const [eftps, setEftps] = useState(run.eftpsConfirmation ?? '')
@@ -139,7 +141,13 @@ function RunDetails({ row, run, year, onChanged }: { row: RegisterRow; run: Payr
   }
 
   async function remove() {
-    if (!window.confirm(`Delete the ${row.payDate} payroll run?`)) return
+    const confirmed = await confirm({
+      title: `Delete the ${row.payDate} payroll run?`,
+      body: 'Only draft runs can be deleted. This cannot be undone.',
+      confirmLabel: 'Delete run',
+      destructive: true,
+    })
+    if (!confirmed) return
     setBusy('delete')
     try {
       await request(`/api/admin/payroll/runs/${run.id}`, { method: 'DELETE' })
@@ -160,6 +168,7 @@ function RunDetails({ row, run, year, onChanged }: { row: RegisterRow; run: Payr
   const finalized = run.status === 'finalized'
   return (
     <div className="space-y-4 rounded-md border bg-muted p-4">
+      {confirmDialog}
       <PaycheckPreview paycheck={row.paycheck} />
       {row.driftsFromSettings && (
         <p className="text-xs text-warning">This finalized check keeps the figures it was paid with; today&apos;s settings would compute it differently.</p>
