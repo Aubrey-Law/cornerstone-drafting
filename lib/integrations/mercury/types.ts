@@ -41,6 +41,9 @@ export const mercuryTransactionSchema = z.object({
   bankDescription: z.string().nullish(),
   counterpartyName: z.string().nullish(),
   counterpartyNickname: z.string().nullish(),
+  // What the sender typed. The only place a client can cite an invoice number.
+  externalMemo: z.string().nullish(),
+  note: z.string().nullish(),
 }).transform(({ amount, ...rest }) => ({ ...rest, amountCents: amount }))
 
 export const mercuryLineItemSchema = z.object({

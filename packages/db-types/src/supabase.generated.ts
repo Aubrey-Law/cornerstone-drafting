@@ -8610,6 +8610,225 @@ export type Database = {
           },
         ]
       }
+      payroll_checklist_items: {
+        Row: {
+          done_at: string
+          id: string
+          item_key: string
+          period_ref: string
+          scope: string
+          tax_year: number
+        }
+        Insert: {
+          done_at?: string
+          id?: string
+          item_key: string
+          period_ref?: string
+          scope: string
+          tax_year: number
+        }
+        Update: {
+          done_at?: string
+          id?: string
+          item_key?: string
+          period_ref?: string
+          scope?: string
+          tax_year?: number
+        }
+        Relationships: []
+      }
+      payroll_filings: {
+        Row: {
+          calendar_event_id: string | null
+          confirmation: string | null
+          created_at: string
+          done_on: string | null
+          due_date: string
+          id: string
+          key: string
+          notes: string | null
+          tax_year: number
+          updated_at: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          confirmation?: string | null
+          created_at?: string
+          done_on?: string | null
+          due_date: string
+          id?: string
+          key: string
+          notes?: string | null
+          tax_year: number
+          updated_at?: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          confirmation?: string | null
+          created_at?: string
+          done_on?: string | null
+          due_date?: string
+          id?: string
+          key?: string
+          notes?: string | null
+          tax_year?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll_runs: {
+        Row: {
+          calendar_event_id: string | null
+          computed: Json
+          created_at: string
+          eftps_confirmation: string | null
+          fed_deposit_paid_on: string | null
+          fed_wh_override_cents: number | null
+          finalized_at: string | null
+          gross_cents: number
+          id: string
+          ma_deposit_paid_on: string | null
+          net_paid_on: string | null
+          notes: string | null
+          pay_date: string
+          status: string
+          tax_year: number
+          updated_at: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          computed?: Json
+          created_at?: string
+          eftps_confirmation?: string | null
+          fed_deposit_paid_on?: string | null
+          fed_wh_override_cents?: number | null
+          finalized_at?: string | null
+          gross_cents: number
+          id?: string
+          ma_deposit_paid_on?: string | null
+          net_paid_on?: string | null
+          notes?: string | null
+          pay_date: string
+          status?: string
+          tax_year: number
+          updated_at?: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          computed?: Json
+          created_at?: string
+          eftps_confirmation?: string | null
+          fed_deposit_paid_on?: string | null
+          fed_wh_override_cents?: number | null
+          finalized_at?: string | null
+          gross_cents?: number
+          id?: string
+          ma_deposit_paid_on?: string | null
+          net_paid_on?: string | null
+          notes?: string | null
+          pay_date?: string
+          status?: string
+          tax_year?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll_settings: {
+        Row: {
+          addl_medicare_rate: number
+          addl_medicare_threshold_cents: number
+          created_at: string
+          employee_address: string
+          employee_name: string
+          employee_ssn_last4: string
+          employer_ein: string
+          employer_name: string
+          fed_wh_per_check_cents: number
+          futa_rate: number
+          futa_wage_base_cents: number
+          ma_covid_rate: number
+          ma_emac_rate: number
+          ma_exemption_cents: number
+          ma_income_tax_rate: number
+          ma_ui_rate: number
+          ma_ui_wage_base_cents: number
+          ma_wtf_rate: number
+          medicare_rate: number
+          pay_periods_per_year: number
+          pfml_employee_rate: number
+          pfml_employer_rate: number
+          pfml_wage_cap_cents: number | null
+          prior_wages_cents: number
+          rates_confirmed_at: string | null
+          ss_rate: number
+          ss_wage_base_cents: number
+          tax_year: number
+          updated_at: string
+        }
+        Insert: {
+          addl_medicare_rate?: number
+          addl_medicare_threshold_cents?: number
+          created_at?: string
+          employee_address?: string
+          employee_name?: string
+          employee_ssn_last4?: string
+          employer_ein?: string
+          employer_name?: string
+          fed_wh_per_check_cents?: number
+          futa_rate?: number
+          futa_wage_base_cents?: number
+          ma_covid_rate?: number
+          ma_emac_rate?: number
+          ma_exemption_cents?: number
+          ma_income_tax_rate?: number
+          ma_ui_rate?: number
+          ma_ui_wage_base_cents?: number
+          ma_wtf_rate?: number
+          medicare_rate?: number
+          pay_periods_per_year?: number
+          pfml_employee_rate?: number
+          pfml_employer_rate?: number
+          pfml_wage_cap_cents?: number | null
+          prior_wages_cents?: number
+          rates_confirmed_at?: string | null
+          ss_rate?: number
+          ss_wage_base_cents?: number
+          tax_year: number
+          updated_at?: string
+        }
+        Update: {
+          addl_medicare_rate?: number
+          addl_medicare_threshold_cents?: number
+          created_at?: string
+          employee_address?: string
+          employee_name?: string
+          employee_ssn_last4?: string
+          employer_ein?: string
+          employer_name?: string
+          fed_wh_per_check_cents?: number
+          futa_rate?: number
+          futa_wage_base_cents?: number
+          ma_covid_rate?: number
+          ma_emac_rate?: number
+          ma_exemption_cents?: number
+          ma_income_tax_rate?: number
+          ma_ui_rate?: number
+          ma_ui_wage_base_cents?: number
+          ma_wtf_rate?: number
+          medicare_rate?: number
+          pay_periods_per_year?: number
+          pfml_employee_rate?: number
+          pfml_employer_rate?: number
+          pfml_wage_cap_cents?: number | null
+          prior_wages_cents?: number
+          rates_confirmed_at?: string | null
+          ss_rate?: number
+          ss_wage_base_cents?: number
+          tax_year?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pipeline_aging_snooze: {
         Row: {
           created_at: string

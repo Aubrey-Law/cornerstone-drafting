@@ -20,6 +20,8 @@ export type MercuryDeposit = {
   bankDescription: string | null
   kind: string
   status: string
+  /** The sender's memo and Mercury's note, joined; null when neither was given. */
+  memo?: string | null
 }
 
 export type OpenInvoice = {
