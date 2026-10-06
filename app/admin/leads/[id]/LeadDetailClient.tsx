@@ -57,6 +57,7 @@ import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
 import { computeLeadScore, leadScoreInputFromRow, type LeadScoreInput } from '@/lib/leads/score'
 import { clientContactTimestamps } from '@/lib/leads/contactEvents'
 import { LeadOverview, leadProgressLabel, leadDisplayDate } from '@/components/leads/LeadOverview'
+import { agreementSentInApp, effectiveEngagementStatus } from '@/lib/leads/engagementStatus'
 import { LeadSnoozeDialog } from '@/components/leads/LeadSnoozeDialog'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
@@ -349,6 +350,29 @@ export function LeadDetailClient({
     const json = await call<{ activity?: LeadActivityRow[] }>(`/api/admin/leads/${lead.id}/activity`, undefined, 'GET')
     setActivity(Array.isArray(json.activity) ? json.activity : [])
     setActivityRefreshWarning(null)
+  }
+
+  /**
+   * Record (or undo) an engagement sent outside the app — emailed, or through
+   * another e-sign service. The matter-details route owns this status for the
+   * opportunity and mirrors it onto the lead, the same as the matter page's
+   * Engagement dropdown.
+   */
+  async function markEngagementSentOutside(sent: boolean) {
+    if (!lead.matter_id) return
+    const value = sent ? 'sent' : activeAgreement ? 'draft' : 'not_sent'
+    try {
+      await call('/api/admin/matter-details', { matterId: lead.matter_id, field: 'engagement_status', value }, 'PATCH')
+      setLead(current => ({
+        ...current,
+        engagement_status: sent ? 'sent' : value === 'draft' ? 'draft' : null,
+        engagement_sent_at: sent ? current.engagement_sent_at ?? new Date().toISOString() : null,
+      }))
+      toast.success(sent ? 'Engagement marked as sent' : 'Engagement no longer marked as sent')
+      router.refresh()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not update the engagement status')
+    }
   }
 
   async function refreshActivityBestEffort() {
@@ -749,6 +773,7 @@ export function LeadDetailClient({
   const effectiveLastResponseAt = newestTimestamp([lastClientResponseAt, contacts.lastClientResponseAt])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
   const leadScore = computeLeadScore(initialScoreInput ?? leadScoreInputFromRow(lead))
+  const engagementStatus = effectiveEngagementStatus(activeAgreement?.status, lead)
   const computedAction = computeNextAction({
     leadStatus: lead.lead_status,
     intakeSentAt: lead.intake_sent_at ?? null,
@@ -756,7 +781,7 @@ export function LeadDetailClient({
     nextAppointmentAt,
     feeQuoted: lead.engagement_fee_quoted,
     hasActiveAgreement: Boolean(activeAgreement),
-    engagementStatus: activeAgreement?.status ?? lead.engagement_status,
+    engagementStatus: engagementStatus ?? undefined,
     engagementSentAt: lead.engagement_sent_at,
     engagementSignedAt: lead.engagement_signed_at,
     discoveryCallAt: keyDates?.discoveryCallAt,
@@ -834,7 +859,7 @@ export function LeadDetailClient({
         <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
           {statusLabel} · day {leadDay}
         </span>
-        <span className="text-xs text-muted-foreground">{leadProgressLabel(lead, activeAgreement?.status)}</span>
+        <span className="text-xs text-muted-foreground">{leadProgressLabel(lead, engagementStatus)}</span>
         {effectiveLastTouchAt !== null && lastTouchDays !== null && (
           <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground md:inline">
             Last contact {lastTouchDays}d ago
@@ -951,7 +976,10 @@ export function LeadDetailClient({
               <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt}
                 lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
                 updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
-                agreementStatus={activeAgreement?.status ?? lead.engagement_status} timeZone={firmTimezone}
+                agreementStatus={engagementStatus} timeZone={firmTimezone}
+                // Sent by the app, the agreement's own status says so; this is for the ones that were not.
+                engagementSentOutside={agreementSentInApp(activeAgreement?.status) ? undefined : Boolean(lead.engagement_sent_at || lead.engagement_signed_at)}
+                onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
                 taskCount={taskCounts.open} tasksVersion={tasksVersion}
                 onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
                 onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />

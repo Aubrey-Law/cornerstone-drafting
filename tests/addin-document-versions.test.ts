@@ -103,6 +103,14 @@ describe('saving a version from the pane', () => {
     expect(source(VERSIONS)).toContain('status: 415')
   })
 
+  it('reaches an engagement agreement still being drafted, a lead\'s included', () => {
+    // The drafting worklist only holds matters already in drafting, which is
+    // after the engagement is signed; the agreement's Word document is edited
+    // before that, often while the client is still a lead.
+    expect(source('app/api/addin/matters/route.ts')).toContain('engagementDraftMatters(search)')
+    expect(source(DOCUMENTS)).toContain('includeLeads: true')
+  })
+
   it('gates itself, having no middleware backstop', () => {
     for (const route of [VERSIONS, DOCUMENTS]) {
       expect(source(route)).toContain('requireAdmin(req)')

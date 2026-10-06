@@ -26,7 +26,10 @@ export async function GET(req: Request, { params }: Params) {
 
   const { id } = await params
   const admin = getAdminClient()
-  const matterId = await resolveMatterId(id, admin)
+  // Leads included: a lead's engagement agreement is a Word document on its
+  // opportunity's matters row, and the pane offers those matters for editing it.
+  // Listing documents reads no drafting data, which is what hired-only guards.
+  const matterId = await resolveMatterId(id, admin, { includeLeads: true })
 
   const { data, error } = await admin
     .from('matter_documents')

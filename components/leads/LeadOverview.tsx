@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { compareTasks, isTaskOpen, formatTaskDate, type TaskRow } from '@/lib/tasks/types'
 import { getLeadIntakeProgress } from '@/lib/leads/intakeProgress'
@@ -39,6 +40,7 @@ export function leadProgressLabel(lead: LeadDetailRecord, agreementStatus?: stri
 
 export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastResponseAt, updatedAt,
   agreementStatus, timeZone, taskCount, tasksVersion, onIntake, onEngagement, onTasks, onSchedule,
+  engagementSentOutside, onEngagementSentOutside,
 }: {
   lead: LeadDetailRecord
   nextAppointmentAt: string | null
@@ -53,8 +55,19 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   onEngagement: () => void
   onTasks: () => void
   onSchedule: () => void
+  /**
+   * Whether the engagement is recorded as sent outside the app. Undefined when
+   * the app sent it itself, which its own status already shows.
+   */
+  engagementSentOutside?: boolean
+  onEngagementSentOutside?: (sent: boolean) => Promise<void>
 }) {
   const token = useAccessToken()
+  const sentOutsideId = useId()
+  const [savingSentOutside, setSavingSentOutside] = useState(false)
+  // A signed engagement is not un-sent from here: that would clear the signature too.
+  const engagementSigned = agreementStatus === 'signed' || agreementStatus === 'completed'
+  const showSentOutside = engagementSentOutside !== undefined && Boolean(onEngagementSentOutside) && !engagementSigned
   const [nextTask, setNextTask] = useState<TaskRow | null>(null)
   const [taskError, setTaskError] = useState(false)
   const [taskLoading, setTaskLoading] = useState(taskCount > 0)
@@ -87,6 +100,20 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
           <Button variant="link" className="h-auto p-0" onClick={onIntake}>Review intake</Button>
         </OverviewFact>
         <OverviewFact label="Engagement" value={agreementStatus ? (agreementStatus.charAt(0).toUpperCase() + agreementStatus.slice(1)).replaceAll('_', ' ') : 'Not prepared'}>
+          {showSentOutside && (
+            <div className="flex items-center gap-2 py-1">
+              <Checkbox
+                id={sentOutsideId}
+                checked={engagementSentOutside}
+                disabled={savingSentOutside}
+                onCheckedChange={checked => {
+                  setSavingSentOutside(true)
+                  void onEngagementSentOutside!(checked === true).finally(() => setSavingSentOutside(false))
+                }}
+              />
+              <label htmlFor={sentOutsideId} className="text-sm">Sent outside the app</label>
+            </div>
+          )}
           <Button variant="link" className="h-auto p-0" onClick={onEngagement}>View engagement details</Button>
         </OverviewFact>
         <OverviewFact label="Next task" value={taskLoading ? 'Loading…' : taskError ? 'Task status unavailable' : nextTask?.title ?? (taskCount > 0 ? 'Open the task queue' : 'No open tasks')}>

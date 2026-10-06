@@ -22,11 +22,14 @@ export type EngagementWorkspaceAgreement = {
   matter_id?: string | null
   lead_id?: string | null
   status: string
+  /** The editable Word document every revision writes to; see lib/engagement/editableDocument.ts. */
+  document_id?: string | null
   active_revision: {
     id: string
     render_sha256: string
+    master_version?: string | null
     input_snapshot: EngagementInput
-    render_snapshot?: { docxBase64?: string; pdfBase64?: string } | null
+    render_snapshot?: { docxBase64?: string; pdfBase64?: string; documentVersionId?: string | null } | null
   }
   recipients: Array<{
     id?: string
