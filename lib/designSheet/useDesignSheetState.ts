@@ -699,7 +699,7 @@ export function useDesignSheetState({
     router.refresh()
   }, [commitSheet, router])
 
-  const exportDesignSheet = useCallback(async (format?: 'json' | 'json-docx' | 'statular') => {
+  const exportDesignSheet = useCallback(async (format?: 'json' | 'json-docx' | 'statular' | 'summary') => {
     setExporting(true)
     try {
       const saved = await persistSheet()
@@ -715,7 +715,8 @@ export function useDesignSheetState({
       const filenameMatch = disposition.match(/filename="([^"]+)"/)
       const fallbackName = format === 'json'
         ? 'generator-data.json'
-        : format === 'statular' ? 'statular-import.md' : 'design-sheet.docx'
+        : format === 'statular' ? 'statular-import.md'
+        : format === 'summary' ? 'internal-design-summary.docx' : 'design-sheet.docx'
       const filename = filenameMatch?.[1] ?? fallbackName
       // json-docx also falls back to .docx above, which matches its payload.
       const url = URL.createObjectURL(blob)
@@ -728,6 +729,7 @@ export function useDesignSheetState({
       URL.revokeObjectURL(url)
       toast.success(
         format === 'statular' ? 'Statular import file exported'
+          : format === 'summary' ? 'Internal design summary exported'
           : format ? 'Generator data exported'
           : 'Design sheet exported',
       )
@@ -747,6 +749,8 @@ export function useDesignSheetState({
   // Statular ingests uploaded files and extracts from them, so the export is
   // Markdown in its own question wording rather than our generator paths.
   const handleExportStatular = useCallback(() => exportDesignSheet('statular'), [exportDesignSheet])
+
+  const handleExportSummary = useCallback(() => exportDesignSheet('summary'), [exportDesignSheet])
 
   return {
     isLP,
@@ -784,6 +788,7 @@ export function useDesignSheetState({
     handleExportGeneratorData,
     handleExportGeneratorDataDocx,
     handleExportStatular,
+    handleExportSummary,
     applyPlanStructurePatch,
     // readiness
     readiness,

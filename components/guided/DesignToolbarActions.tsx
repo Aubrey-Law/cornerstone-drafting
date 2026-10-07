@@ -21,6 +21,8 @@ interface DesignToolbarActionsProps {
   onExportJsonDocx?: () => void
   /** Downloads the answers as Markdown in Statular's question wording, for its file import. */
   onExportStatular?: () => void
+  /** Downloads the internal question-and-answer summary as a Word document. */
+  onExportSummary?: () => void
   saveLabel: string
   saving: boolean
   exporting: boolean
@@ -43,6 +45,7 @@ export function DesignToolbarActions({
   onExportJson,
   onExportJsonDocx,
   onExportStatular,
+  onExportSummary,
   saveLabel,
   saving,
   exporting,
@@ -97,6 +100,12 @@ export function DesignToolbarActions({
             <DropdownMenuItem onSelect={onExportJsonDocx} disabled={exporting} className="text-xs">
               <Braces size={14} />
               Export generator data for Mike (.docx)
+            </DropdownMenuItem>
+          )}
+          {onExportSummary && (
+            <DropdownMenuItem onSelect={onExportSummary} disabled={exporting} className="text-xs">
+              <FileText size={14} />
+              Export internal summary (.docx)
             </DropdownMenuItem>
           )}
           {onExportStatular && (

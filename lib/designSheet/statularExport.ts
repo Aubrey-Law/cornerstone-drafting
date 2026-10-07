@@ -48,7 +48,7 @@ export interface StatularExportContext {
  * reading order. They print under "Additional answers" with our own labels, so
  * an answer is never dropped just because the map has not reached it.
  */
-const FALLBACK_SECTION_ORDER = [
+export const FALLBACK_SECTION_ORDER = [
   'Plan Design',
   'Personal',
   'Client Information',
@@ -95,7 +95,7 @@ function formatCurrency(value: number): string {
  * A single answer, or null when the field is unanswered and should be omitted.
  * `options` is the map's wording for this question's values, when it has any.
  */
-function formatValue(
+export function formatValue(
   field: string,
   value: unknown,
   options?: Record<string, string>,
@@ -132,7 +132,7 @@ function formatValue(
 }
 
 /** Records inside a list (children, assets, charities) render as `key: value` pairs. */
-function formatArrayEntry(entry: unknown): string {
+export function formatArrayEntry(entry: unknown): string {
   if (entry === null || entry === undefined) return ''
   if (typeof entry === 'string') return entry.trim()
   if (typeof entry === 'number' || typeof entry === 'boolean') return String(entry)
@@ -155,7 +155,7 @@ function formatArrayEntry(entry: unknown): string {
  * do. `decisions.<key>` addresses a flat decisions key, which is where
  * `trust_planning_type` lives.
  */
-function readFieldValue(sheet: DesignSheet, field: string): unknown {
+export function readFieldValue(sheet: DesignSheet, field: string): unknown {
   if (field.startsWith('decisions.')) {
     const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
     return decisions[field.slice('decisions.'.length)]
