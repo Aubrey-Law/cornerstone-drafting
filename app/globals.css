@@ -30,7 +30,7 @@
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }
   .admin-root {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
   }
 
@@ -59,10 +59,10 @@
   /* ── client-*: the 18px-base scale ──────────────────────────────────────────
      Sized against `body { font-size: 18px }`, which is what the client portal
      and the guided interview actually run at. It was written as `text-*`, which
-     read like Tailwind's own size utilities, so nothing in the admin app (13px
+     read like Tailwind's own size utilities, so nothing in the admin app (14px
      base, `.admin-root`) could use it without looking wrong — and nothing did:
      all nine had zero callers. The prefix says which surface they belong to.
-     Admin code wants `text-micro`/`text-xs`/`text-compact`/`text-sm` instead. */
+     Admin code uses `text-xs` for metadata and `text-sm` for body text. */
   .client-title-1  { font-size: 30px; font-weight: 700; letter-spacing: -0.018em; line-height: 1.21; }
   .client-title-2  { font-size: 24px; font-weight: 700; letter-spacing: -0.016em; line-height: 1.26; }
   .client-title-3  { font-size: 21px; font-weight: 600; letter-spacing: -0.014em; line-height: 1.30; }
@@ -73,12 +73,14 @@
   .client-field-value { font-size: 15px; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
   .client-footnote { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.55; }
 
-  /* ── admin-*: the 13px-base surfaces ──────────────────────────────────────── */
+  /* ── admin-*: the 14px-base surfaces ──────────────────────────────────────── */
+  .admin-root .admin-page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.3; }
+
   .admin-category { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.60; }
 
   .admin-section-title {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.35;

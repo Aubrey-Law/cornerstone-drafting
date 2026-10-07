@@ -22,7 +22,7 @@ export function useTaskPresentation() {
 
 export function TaskPresentationSwitch({ value, onChange }: { value: TaskPresentation; onChange: (value: TaskPresentation) => void }) {
   return <div role="group" aria-label="Task presentation" className="inline-flex gap-1 rounded-lg border p-1">
-    {TASK_PRESENTATIONS.map(item => <Button key={item} type="button" size="sm" variant={value === item ? 'secondary' : 'ghost'} aria-pressed={value === item} onClick={() => onChange(item)}>{item[0].toUpperCase() + item.slice(1)}</Button>)}
+    {TASK_PRESENTATIONS.map(item => <Button key={item} type="button" size="sm" variant={value === item ? 'selected' : 'ghost'} aria-pressed={value === item} onClick={() => onChange(item)}>{item[0].toUpperCase() + item.slice(1)}</Button>)}
   </div>
 }
 
