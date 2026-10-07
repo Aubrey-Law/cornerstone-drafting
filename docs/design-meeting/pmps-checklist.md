@@ -114,7 +114,7 @@ Who the client has in mind. These are confirmed at the design meeting, not here.
 What the client was quoted and what happens next.
 
 - [ ] Drafting notes
-- [ ] Legal plan (MetLife / ARAG / LegalShield / none) and member ID
+- [ ] Legal plan (MetLife / LegalEASE / ARAG / CLC / none) and member ID
 - [ ] Flat fee quoted, and what it covers
 - [ ] Optional services discussed (real property transfer, advanced estate-tax planning, supervised signing)
 - [ ] Engagement decision (hired / thinking it over / not proceeding)

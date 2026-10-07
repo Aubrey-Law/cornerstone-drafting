@@ -29,12 +29,7 @@ import {
   type AddableBillingKind,
   type BillingPlan,
 } from '@/lib/billing/types'
-import {
-  calculateMetlifeScheduleAmount,
-  METLIFE_FEE_SCHEDULE_SOURCE,
-  METLIFE_SCHEDULE_ITEMS,
-  metlifeScheduleLabel,
-} from '@/lib/metlife/pricing'
+import { PLAN_FEE_SCHEDULES } from '@/lib/billing/planFeeSchedules'
 
 export interface BillingMatterOption {
   hasLegalFee?: boolean
@@ -101,25 +96,27 @@ interface ChargeLine {
   label: string
   amount: string
   plan: BillingPlan
-  metlifeFeeKey: string
-  metlifeFeeInput: string
+  /** The carrier fee schedule row this line was filled from, or 'custom'. */
+  feeKey: string
+  feeInput: string
 }
 
 function blankLine(key: number, kind: AddableBillingKind, plan: BillingPlan): ChargeLine {
-  return { key, kind, label: '', amount: '', plan, metlifeFeeKey: 'custom', metlifeFeeInput: '' }
+  return { key, kind, label: '', amount: '', plan, feeKey: 'custom', feeInput: '' }
 }
 
-/** Fills a line's description and amount from a MetLife schedule item. */
-function withMetlifeFee(line: ChargeLine, key: string, rawInput = ''): ChargeLine {
-  const item = METLIFE_SCHEDULE_ITEMS.find(candidate => candidate.key === key)
-  if (!item) return { ...line, metlifeFeeKey: key, metlifeFeeInput: rawInput, label: '', amount: '' }
+/** Fills a line's description and amount from its carrier's fee schedule. */
+function withScheduleFee(line: ChargeLine, key: string, rawInput = ''): ChargeLine {
+  const schedule = PLAN_FEE_SCHEDULES[line.plan]
+  const entry = schedule?.entries.find(candidate => candidate.key === key)
+  if (!schedule || !entry) return { ...line, feeKey: key, feeInput: rawInput, label: '', amount: '' }
   const numericInput = rawInput === '' ? undefined : Number(rawInput)
-  const cents = calculateMetlifeScheduleAmount(item, numericInput)
+  const cents = schedule.amountCents(key, numericInput)
   return {
     ...line,
-    metlifeFeeKey: key,
-    metlifeFeeInput: rawInput,
-    label: metlifeScheduleLabel(item),
+    feeKey: key,
+    feeInput: rawInput,
+    label: entry.label,
     amount: cents === null ? '' : (cents / 100).toFixed(2),
   }
 }
@@ -232,8 +229,8 @@ export function AddChargeDialog({
   function changeKind(key: number, value: AddableBillingKind) {
     updateLine(key, line => {
       const next = { ...line, kind: value }
-      return value !== 'plan_claim' && line.metlifeFeeKey !== 'custom'
-        ? withMetlifeFee(next, 'custom')
+      return value !== 'plan_claim' && line.feeKey !== 'custom'
+        ? withScheduleFee(next, 'custom')
         : next
     })
   }
@@ -241,8 +238,9 @@ export function AddChargeDialog({
   function changePlan(key: number, value: BillingPlan) {
     updateLine(key, line => {
       const next = { ...line, plan: value }
-      return value !== 'metlife' && line.metlifeFeeKey !== 'custom'
-        ? withMetlifeFee(next, 'custom')
+      // Each carrier has its own schedule, so a row picked for one never carries over.
+      return value !== line.plan && line.feeKey !== 'custom'
+        ? withScheduleFee(next, 'custom')
         : next
     })
   }
@@ -339,8 +337,8 @@ export function AddChargeDialog({
                 }}
                 onKindChange={value => changeKind(line.key, value)}
                 onPlanChange={value => changePlan(line.key, value)}
-                onMetlifeFeeChange={(key, rawInput) =>
-                  updateLine(line.key, current => withMetlifeFee(current, key, rawInput))}
+                onScheduleFeeChange={(key, rawInput) =>
+                  updateLine(line.key, current => withScheduleFee(current, key, rawInput))}
                 onLabelChange={value => updateLine(line.key, current => ({ ...current, label: value }))}
                 onAmountChange={value => updateLine(line.key, current => ({ ...current, amount: value }))}
                 onRemove={multiple ? () => removeLine(line.key) : undefined}
@@ -406,7 +404,7 @@ function ChargeLineFields({
   labelRef,
   onKindChange,
   onPlanChange,
-  onMetlifeFeeChange,
+  onScheduleFeeChange,
   onLabelChange,
   onAmountChange,
   onRemove,
@@ -419,16 +417,16 @@ function ChargeLineFields({
   labelRef: (element: HTMLInputElement | null) => void
   onKindChange: (value: AddableBillingKind) => void
   onPlanChange: (value: BillingPlan) => void
-  onMetlifeFeeChange: (key: string, rawInput?: string) => void
+  onScheduleFeeChange: (key: string, rawInput?: string) => void
   onLabelChange: (value: string) => void
   onAmountChange: (value: string) => void
   onRemove?: () => void
 }) {
   const id = (field: string) => `charge-${field}-${line.key}`
   const suffix = number === null ? null : <span className="sr-only">, charge {number}</span>
-  const selectedMetlifeFee = METLIFE_SCHEDULE_ITEMS.find(item => item.key === line.metlifeFeeKey)
-  const scheduleFilled =
-    line.kind === 'plan_claim' && Boolean(selectedMetlifeFee) && line.plan === 'metlife' && !editing
+  const schedule = line.kind === 'plan_claim' && !editing ? PLAN_FEE_SCHEDULES[line.plan] : undefined
+  const selectedFee = schedule?.entries.find(entry => entry.key === line.feeKey)
+  const scheduleFilled = Boolean(selectedFee)
 
   const fields = (
     <>
@@ -462,46 +460,42 @@ function ChargeLineFields({
             </Select>
           </div>
 
-          {line.plan === 'metlife' && !editing && (
+          {schedule && (
             <div className="space-y-2">
-              <Label htmlFor={id('metlife-fee')}>MetLife fee schedule item{suffix}</Label>
-              <Select value={line.metlifeFeeKey} onValueChange={value => onMetlifeFeeChange(value)}>
-                <SelectTrigger id={id('metlife-fee')} className="min-h-11 w-full">
+              <Label htmlFor={id('schedule-fee')}>{schedule.pickerLabel}{suffix}</Label>
+              <Select value={line.feeKey} onValueChange={value => onScheduleFeeChange(value)}>
+                <SelectTrigger id={id('schedule-fee')} className="min-h-11 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="custom">Custom or combined claim</SelectItem>
-                  {METLIFE_SCHEDULE_ITEMS.map(item => (
-                    <SelectItem key={item.key} value={item.key}>
-                      {metlifeScheduleLabel(item)}
+                  {schedule.entries.map(entry => (
+                    <SelectItem key={entry.key} value={entry.key}>
+                      {entry.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Massachusetts schedule · location {METLIFE_FEE_SCHEDULE_SOURCE.locationCode}
-              </p>
+              <p className="text-xs text-muted-foreground">{schedule.source}</p>
             </div>
           )}
 
-          {selectedMetlifeFee?.input && line.plan === 'metlife' && !editing && (
+          {selectedFee?.input && (
             <div className="space-y-2">
-              <Label htmlFor={id('metlife-input')}>{selectedMetlifeFee.inputLabel}{suffix}</Label>
+              <Label htmlFor={id('schedule-input')}>{selectedFee.input.label}{suffix}</Label>
               <Input
-                id={id('metlife-input')}
+                id={id('schedule-input')}
                 type="number"
                 min="0"
-                step={selectedMetlifeFee.input === 'probate_assets' ? '0.01' : '0.25'}
+                step={selectedFee.input.step}
                 inputMode="decimal"
-                value={line.metlifeFeeInput}
-                onChange={event => onMetlifeFeeChange(line.metlifeFeeKey, event.target.value)}
+                value={line.feeInput}
+                onChange={event => onScheduleFeeChange(line.feeKey, event.target.value)}
                 className="min-h-11 tabular-nums"
               />
-              <p className="text-xs text-muted-foreground">
-                {selectedMetlifeFee.input === 'probate_assets'
-                  ? '1.5% through $100,000 (minimum $450), then 1% over $100,000; maximum $4,000.'
-                  : '$1,000 through 10 hours, then $100 per additional hour; maximum $2,000.'}
-              </p>
+              {selectedFee.input.help && (
+                <p className="text-xs text-muted-foreground">{selectedFee.input.help}</p>
+              )}
             </div>
           )}
         </>

@@ -43,7 +43,7 @@ describe('payor predicate parity', () => {
 
   it('treats only flat_fee as direct-pay among the known types', () => {
     const carriers = MATTER_BILLING_TYPES.filter(type => sqlPredicate(type))
-    expect(carriers).toEqual(['metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan'])
+    expect(carriers).toEqual(['metlife', 'legalease', 'arag', 'clc', 'other_legal_plan'])
   })
 
   /**

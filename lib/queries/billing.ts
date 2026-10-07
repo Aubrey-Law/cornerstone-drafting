@@ -81,7 +81,7 @@ type DetailRow = {
   engagement_signed_at: string | null
 }
 
-/** `legal_plan` is the display name derived from billing_type ("ARAG", "Hyatt"…). */
+/** `legal_plan` is the display name derived from billing_type ("ARAG", "CLC"…). */
 function billingPlan(value: string | null): BillingPlan | null {
   return billingPlanFor(value)
 }

@@ -145,7 +145,7 @@ export interface LawmaticsAddress {
   postal_code?: string
 }
 
-const LEGAL_PLAN_NAMES = ['arag', 'metlife', 'legalease', 'legal ease']
+const LEGAL_PLAN_NAMES = ['arag', 'metlife', 'legalease', 'legal ease', 'clc']
 // Mirrors MARITAL_STATUS_OPTIONS (packages/estate-fields) — the vocabulary
 // every intake/design surface reads.
 const VALID_CLIENT_INTAKE_MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed', 'separated', 'domestic partner', 'civil union', 'unmarried partnership'] as const

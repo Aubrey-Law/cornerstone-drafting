@@ -7,7 +7,7 @@ export const billingKinds = ['flat_fee', 'plan_claim', 'cost'] as const
  * MATTER_BILLING_TYPES. `other_legal_plan` has no carrier to bill, so a claim
  * for it is recorded against the plan once the firm knows which it is.
  */
-export const billingPlans = ['metlife', 'legalease', 'arag', 'hyatt', 'legalshield'] as const
+export const billingPlans = ['metlife', 'legalease', 'arag', 'clc'] as const
 export const billingStatuses = [
   'to_invoice',
   'invoiced',

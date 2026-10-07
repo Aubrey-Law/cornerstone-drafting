@@ -87,7 +87,7 @@ export const LEAD_SCORE_BANDS: { key: LeadScoreBand; label: string; min: number 
   { key: 'cold', label: 'Cold', min: 0 },
 ]
 
-const LEGAL_PLAN_BILLING_TYPES = ['metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan']
+const LEGAL_PLAN_BILLING_TYPES = ['metlife', 'legalease', 'arag', 'clc', 'other_legal_plan']
 
 /**
  * The band for a percentage. Kept on the 0-100 scale it always used, but what

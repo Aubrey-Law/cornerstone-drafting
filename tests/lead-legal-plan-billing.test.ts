@@ -52,7 +52,7 @@ describe('legal plan field group', () => {
 
   it('offers carriers but not flat fee, because the rail is asking which plan', () => {
     expect(LEGAL_PLAN_OPTIONS.map(option => option.value)).toEqual([
-      'metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan',
+      'metlife', 'legalease', 'arag', 'clc', 'other_legal_plan',
     ])
   })
 

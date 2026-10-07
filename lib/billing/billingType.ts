@@ -5,13 +5,16 @@
  * now the display name derived from this — never an independent answer.
  */
 
+/**
+ * The firm takes four legal plans: MetLife, LegalEASE, ARAG and CLC. Hyatt and
+ * LegalShield were removed; old text naming them reads as `other_legal_plan`.
+ */
 export const MATTER_BILLING_TYPES = [
   'flat_fee',
   'metlife',
   'legalease',
   'arag',
-  'hyatt',
-  'legalshield',
+  'clc',
   'other_legal_plan',
 ] as const
 
@@ -22,8 +25,7 @@ export const MATTER_BILLING_TYPE_LABEL: Record<MatterBillingType, string> = {
   metlife: 'MetLife',
   legalease: 'LegalEASE',
   arag: 'ARAG',
-  hyatt: 'Hyatt',
-  legalshield: 'LegalShield',
+  clc: 'CLC',
   other_legal_plan: 'Other legal plan',
 }
 
@@ -50,8 +52,11 @@ export function normalizeMatterBillingType(value: unknown): MatterBillingType | 
   if (trimmed.includes('metlife') || trimmed.includes('met life')) return 'metlife'
   if (trimmed.includes('legalease')) return 'legalease'
   if (trimmed.includes('arag')) return 'arag'
-  if (trimmed.includes('hyatt')) return 'hyatt'
-  if (trimmed.includes('legalshield') || trimmed.includes('legal shield')) return 'legalshield'
+  if (/\bclc\b/.test(trimmed)) return 'clc'
+  // Plans the firm no longer takes still name a plan, just not one of the four.
+  if (trimmed.includes('hyatt') || trimmed.includes('legalshield') || trimmed.includes('legal shield')) {
+    return 'other_legal_plan'
+  }
   if (trimmed.includes('plan')) return 'other_legal_plan'
   if (trimmed.includes('flat')) return 'flat_fee'
   return null

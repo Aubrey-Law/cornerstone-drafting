@@ -214,7 +214,7 @@ describe('lead details validation', () => {
 
 describe('legal plan billing fields', () => {
   it('accepts every plan carrier and rejects an unknown one', () => {
-    for (const plan of ['metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan']) {
+    for (const plan of ['metlife', 'legalease', 'arag', 'clc', 'other_legal_plan']) {
       expect(validateLeadFieldPatch({ field: 'legalPlan', value: plan })).toEqual({
         field: 'legalPlan',
         value: plan,
