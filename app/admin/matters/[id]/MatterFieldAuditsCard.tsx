@@ -10,7 +10,17 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { runAudit, type RunAuditState } from '@/app/admin/field-audits/actions'
 import type { FieldAuditRunChoice, PromptChoice } from '@/app/admin/field-audits/FieldAuditWorkspace'
 import { TONE_NOTICE } from '@/lib/ui/tone'
-import { runSummaryLine } from '@/app/admin/review/components/RunHistoryList'
+import { RUN_ROW_CLASS, runSummaryLine } from '@/app/admin/review/components/RunHistoryList'
+
+/**
+ * The Reviews tab's card actions: beside the title from sm up, but on a phone
+ * on their own row under the description, which the action otherwise squeezed
+ * into a narrow column four lines deep. Its card's description takes
+ * col-start-1 so it stays under the title rather than filling the empty
+ * second column.
+ */
+export const CARD_ACTION_STACKED =
+  'col-start-1 row-span-1 row-start-3 justify-self-start sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:justify-self-end'
 
 interface FieldAuditsView {
   prompts: PromptChoice[]
@@ -71,11 +81,11 @@ export function MatterFieldAuditsCard({ matterId }: { matterId: string }) {
     <Card className="gap-0 py-0" data-testid="matter-field-audits">
       <CardHeader className="border-b py-3 [.border-b]:pb-3">
         <CardTitle className="text-sm">Field audits</CardTitle>
-        <CardDescription className="text-xs">
+        <CardDescription className="col-start-1 text-xs">
           Checks this matter&apos;s design sheet against a published audit prompt, and opens tasks for what it finds.
         </CardDescription>
         {canRun && view ? (
-          <CardAction>
+          <CardAction className={CARD_ACTION_STACKED}>
             <form action={formAction} className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="matterId" value={matterId} />
               {view.prompts.length > 1 ? (
@@ -166,7 +176,7 @@ export function MatterFieldAuditsCard({ matterId }: { matterId: string }) {
             <li key={run.runId}>
               <Link
                 href={`/admin/field-audits/${run.runId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm transition-colors hover:bg-accent"
+                className={RUN_ROW_CLASS}
               >
                 <span className="font-medium">{run.promptTitle ?? 'Field audit'}</span>
                 <span className="text-xs text-muted-foreground">{runSummaryLine(run, 'check')}</span>

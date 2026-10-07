@@ -108,7 +108,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
         <FormattedNoteEditor
           textareaRef={textareaRef}
           ariaLabel="New matter note"
-          placeholder="Add a note... (Cmd+Enter to save)"
+          placeholder="Add a note…"
           value={noteText}
           onChange={setNoteText}
           rows={3}
@@ -121,6 +121,9 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <NoteTypeToggle value={noteType} onChange={setNoteType} />
+          {/* The shortcut hint shows only where there is a keyboard; on a
+              phone it named a key that does not exist. */}
+          <span className="ml-auto hidden text-micro text-muted-foreground pointer-fine:inline">⌘Enter to save</span>
           <Button
             type="button"
             size="sm"
@@ -173,28 +176,28 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                     {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-micro font-semibold text-muted-foreground">From lead</span>}
                   </div>
                   {isEditable && !isPending && (
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-2">
                       {isEditing ? (
                         <>
                           <Button
                             size="sm"
-                            className="h-7 gap-1 px-2 text-micro"
+                            className="h-7 gap-1 px-2 text-micro pointer-coarse:h-10 pointer-coarse:px-3"
                             disabled={!editingNoteText.trim() || isMutating}
                             onClick={() => void (isLead ? handleUpdateLeadNote?.(note) : handleUpdateNote())}
                           >
                             <Check className="h-3 w-3" />
                             Save
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={isMutating} onClick={cancelEditingNote} aria-label="Cancel note edit">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 pointer-coarse:size-10" disabled={isMutating} onClick={cancelEditingNote} aria-label="Cancel note edit">
                             <X className="h-3.5 w-3.5" />
                           </Button>
                         </>
                       ) : (
                         <>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={isMutating} onClick={() => startEditingNote({ ...note, id: note.sourceId })} aria-label="Edit note">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 pointer-coarse:size-10" disabled={isMutating} onClick={() => startEditingNote({ ...note, id: note.sourceId })} aria-label="Edit note">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" disabled={isMutating} onClick={() => void (isLead ? handleDeleteLeadNote?.(note) : handleDeleteNote(note.sourceId))} aria-label="Delete note">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive pointer-coarse:size-10" disabled={isMutating} onClick={() => void (isLead ? handleDeleteLeadNote?.(note) : handleDeleteNote(note.sourceId))} aria-label="Delete note">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </>

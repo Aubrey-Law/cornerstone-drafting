@@ -20,3 +20,14 @@ it('shows a queued review as in progress rather than "0 findings"', () => {
   expect(screen.getByRole('link', { name: /Trust\.docx/ }).textContent).toContain('In progress')
   expect(screen.queryByText(/0 findings/)).toBeNull()
 })
+
+it('stacks the summary under the name below sm, so a phone list does not read ragged', () => {
+  render(<RunHistoryList showMatter={false} runs={[{
+    runId: 'r1', matterTitle: 'Smith', documentName: 'Trust.docx', status: 'completed',
+    ruleTotal: 5, findingCount: 0, failedCount: 0, finishedAt: null,
+  }]} />)
+  // jsdom applies no media queries; these are the classes the browser keys on.
+  const row = screen.getByRole('link', { name: /Trust\.docx/ })
+  expect(row.className).toContain('flex-col')
+  expect(row.className).toContain('sm:flex-row')
+})

@@ -61,7 +61,7 @@ export function MatterProgressTimeline({
             {index < steps.length - 1 && <span className="absolute right-0 top-2 h-px w-1/2 bg-border" />}
             <span
               className={cn(
-                'relative z-10 mx-auto block h-4 w-4 rounded-full border-2',
+                'relative mx-auto block h-4 w-4 rounded-full border-2',
                 complete && 'border-primary bg-primary',
                 current && 'border-primary bg-card',
                 !complete && !current && 'border-muted-foreground/30 bg-muted',

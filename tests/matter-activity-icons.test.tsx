@@ -48,3 +48,17 @@ describe('matter activity event icons', () => {
     expect(screen.getAllByText(/Jane Doe/)).toHaveLength(4)
   })
 })
+
+describe('matter activity on a phone', () => {
+  it('keeps event icons out of the sticky section picker and tab bar, both z-10', () => {
+    render(<MatterActivityTab loading={false} activity={[activity('stage', 'stage_changed')]} />)
+    // z-10 on the icon painted it over the sticky bar as the list scrolled under it.
+    expect(screen.getByRole('img', { name: 'Stage changed activity' }).className).not.toMatch(/\bz-\d/)
+  })
+
+  it('wraps a long unbroken link in the detail instead of running off the screen', () => {
+    const long = 'https://aubreylegal.sharepoint.com/sites/clients/Shared%20Documents/2026-EP-FIXTURE-1/Signing-instructions-final-v2.pdf'
+    render(<MatterActivityTab loading={false} activity={[{ ...activity('email', 'email_sent'), detail: long }]} />)
+    expect(screen.getByText(long).className).toContain('break-words')
+  })
+})
