@@ -22,7 +22,7 @@ const MIGRATION = path.join(
 describe('billing type', () => {
   it('is the one enum for how a matter is paid', () => {
     expect([...MATTER_BILLING_TYPES]).toEqual([
-      'flat_fee', 'metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan',
+      'flat_fee', 'metlife', 'legalease', 'arag', 'clc', 'other_legal_plan',
     ])
   })
 
@@ -30,7 +30,8 @@ describe('billing type', () => {
     expect(normalizeMatterBillingType('MetLife')).toBe('metlife')
     expect(normalizeMatterBillingType('Met Life')).toBe('metlife')
     expect(normalizeMatterBillingType('LegalEASE plan')).toBe('legalease')
-    expect(normalizeMatterBillingType('Legal Shield')).toBe('legalshield')
+    expect(normalizeMatterBillingType('CLC')).toBe('clc')
+    expect(normalizeMatterBillingType('Legal Shield')).toBe('other_legal_plan')
     expect(normalizeMatterBillingType('Prepaid plan')).toBe('other_legal_plan')
     expect(normalizeMatterBillingType('Flat Fee')).toBe('flat_fee')
     expect(normalizeMatterBillingType(null)).toBeNull()
@@ -128,9 +129,12 @@ describe('the migration', () => {
 
   it('constrains billing_type to the enum and backfills the free text', () => {
     expect(sql).toContain('matter_details_billing_type_check')
-    for (const value of MATTER_BILLING_TYPES) {
-      expect(sql).toContain(`'${value}'`)
-    }
+    // The list itself was last restated when the plans became the firm's four.
+    const latest = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20270129090000_legal_plans_metlife_legalease_arag_clc.sql'),
+      'utf8',
+    )
+    expect(latest).toContain(`billing_type in (\n      ${MATTER_BILLING_TYPES.map(value => `'${value}'`).join(', ')}\n    )`)
     expect(sql).toMatch(/update public\.matter_details[\s\S]*set billing_type = case/)
   })
 

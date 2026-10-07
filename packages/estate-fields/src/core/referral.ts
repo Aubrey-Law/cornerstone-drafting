@@ -9,8 +9,9 @@ export const REFERRAL_SOURCE_OPTIONS: FieldOption[] = [
 
 export const LEGAL_INSURANCE_PLAN_OPTIONS: FieldOption[] = [
   { value: 'MetLife', label: 'MetLife' },
-  { value: 'ARAG', label: 'ARAG' },
   { value: 'LegalEase', label: 'LegalEase' },
+  { value: 'ARAG', label: 'ARAG' },
+  { value: 'CLC', label: 'CLC' },
 ]
 
 export const REFERRAL_SOURCE_VALUES = REFERRAL_SOURCE_OPTIONS.map((o) => o.value)

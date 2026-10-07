@@ -13,7 +13,7 @@ export type EngagementClientMode = 'individual' | 'couple'
  * plan has nothing to render there.
  */
 export const ENGAGEMENT_LEGAL_PLANS = [
-  'metlife', 'legalease', 'arag', 'hyatt', 'legalshield',
+  'metlife', 'legalease', 'arag', 'clc',
 ] as const satisfies readonly MatterBillingType[]
 
 export type EngagementLegalPlan = (typeof ENGAGEMENT_LEGAL_PLANS)[number]

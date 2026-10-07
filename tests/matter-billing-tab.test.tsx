@@ -4,7 +4,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { BillingLedgerRow } from '@/lib/billing/types'
+import type { BillingLedgerRow, BillingPlan } from '@/lib/billing/types'
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
@@ -57,7 +57,7 @@ const fetchMock = vi.fn()
 
 function respondWith(view: {
   rows: BillingLedgerRow[]
-  legalPlan?: 'metlife' | 'legalease' | null
+  legalPlan?: BillingPlan | null
   hasClaim?: boolean
 }) {
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -499,6 +499,34 @@ describe('MatterBillingTab', () => {
         plan: 'metlife',
         label: 'CT 420 — Deed',
         amountBilled: 9_000,
+      })
+    })
+  })
+
+  it('fills an ARAG claim from the ARAG schedule, pricing per document', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()], legalPlan: 'arag' })
+    renderTab(true, { details: { billing_type: 'arag' } })
+
+    await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Legal plan').textContent).toContain('ARAG')
+    expect(within(dialog).queryByLabelText('MetLife fee schedule item')).toBeNull()
+    await user.click(within(dialog).getByLabelText('ARAG fee schedule item'))
+    await user.click(await screen.findByRole('option', { name: 'ARAG Specific document — Deed' }))
+    await user.type(within(dialog).getByLabelText('Deeds'), '2')
+
+    expect((within(dialog).getByLabelText('Description') as HTMLInputElement).value).toBe('ARAG Specific document — Deed')
+    expect((within(dialog).getByLabelText('Amount') as HTMLInputElement).value).toBe('110.00')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(call => call[0] === '/api/admin/billing/items')
+      expect(JSON.parse(post![1].body)).toMatchObject({
+        kind: 'plan_claim',
+        plan: 'arag',
+        label: 'ARAG Specific document — Deed',
+        amountBilled: 11_000,
       })
     })
   })
