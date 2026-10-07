@@ -79,6 +79,8 @@ export interface MatterDetailsRow {
   pb_docket_number?: string | null
   pb_personal_representative?: string | null
   pb_pr_appointment_date?: string | null
+  pb_petition_filed_date?: string | null
+  pb_letters_issued_date?: string | null
   pb_inventory_due_date?: string | null
   pb_inventory_filed_date?: string | null
   pb_claims_period_end_date?: string | null

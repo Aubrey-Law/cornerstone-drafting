@@ -14,7 +14,7 @@ export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
  * them; this app is the only place they are seen, so a value the database
  * allows and this union omits is a task nobody can see the origin of.
  */
-export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt', 'fiduciary', 'identity'] as const
+export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla', 'prompt', 'fiduciary', 'identity', 'deadline'] as const
 export const TASK_TYPES = ['single', 'checklist'] as const
 
 /**
@@ -313,6 +313,7 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   prompt: 'Prompt',
   fiduciary: 'Fiduciary',
   identity: 'Identity',
+  deadline: 'Deadline',
 }
 
 /**
@@ -347,6 +348,10 @@ export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   // disagreement is a fact about the file rather than a judgement about the
   // drafting, and it should not look like either of those.
   identity: 'bg-violet-bg text-violet',
+  // A statutory clock the attorney confirmed: the overdue-status pair, a deeper
+  // red than the fiduciary chip so the two stay distinct (7.65:1 light,
+  // 6.62:1 dark).
+  deadline: 'bg-status-overdue-bg text-status-overdue-text',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {
