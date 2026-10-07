@@ -40,9 +40,28 @@ export const SLA_PHASES = [
   'post_signing', // legacy v1
   'funding',
   'closed',
+  // Probate stages (lib/probateStages/model.ts). A probate matter's checklist
+  // is filed under these rather than the estate-planning names above, which it
+  // has no design, drafting or signing to match. They sit after `closed` so
+  // the lead/matter boundary above is unchanged; a probate checklist ascends
+  // through them on its own.
+  'probate_opening',
+  'probate_petition_filed',
+  'probate_appointed',
+  'probate_inventory_filed',
+  'probate_claims_closed',
+  'probate_distributed',
+  'probate_closed',
 ] as const
 
 export type SlaPhase = (typeof SLA_PHASES)[number]
+
+/**
+ * The phases that are also `matters.stage` values: everything but the probate
+ * stages, which are read from dates and never written to that column. This is
+ * the list `pipeline_stage_rank()` and the stage check must name.
+ */
+export const PIPELINE_SLA_PHASES: readonly SlaPhase[] = SLA_PHASES.filter(phase => !phase.startsWith('probate_'))
 
 /**
  * Where the lead stages end and the matter stages begin.
@@ -94,6 +113,13 @@ export const SLA_PHASE_LABEL: Record<SlaPhase, string> = {
   post_signing: 'Post-signing',
   funding: 'Funding',
   closed: 'Complete',
+  probate_opening: 'Opening',
+  probate_petition_filed: 'Petition Filed',
+  probate_appointed: 'Appointed',
+  probate_inventory_filed: 'Inventory Filed',
+  probate_claims_closed: 'Claims Period Over',
+  probate_distributed: 'Distributed',
+  probate_closed: 'Estate Closed',
 }
 
 /** Phases that run before the engagement is signed, on the soft clock. */
