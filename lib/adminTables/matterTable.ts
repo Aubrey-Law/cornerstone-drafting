@@ -1,6 +1,6 @@
 import type { MatterListRow } from '@/lib/queries/matters'
 import { isClosedMatter } from '@/lib/matters/closedMatter'
-import { stageInfo, type StageGroup } from '@/types/database'
+import { STAGES, stageInfo, type StageGroup } from '@/types/database'
 import { compareNullable, normalizeSearchText, stableSort, timestamp } from '@/lib/collections'
 
 export type MatterTableFilters = {
@@ -16,7 +16,10 @@ export type MatterTableFilters = {
   includeClosed: boolean
 }
 
-export type MatterSortKey = 'last_activity' | 'newest' | 'oldest' | 'client_asc' | 'client_desc' | 'matter_number'
+export type MatterSortKey =
+  | 'last_activity' | 'last_activity_oldest' | 'newest' | 'oldest'
+  | 'client_asc' | 'client_desc' | 'matter_number' | 'matter_number_desc'
+  | 'practice_asc' | 'practice_desc' | 'stage_asc' | 'stage_desc' | 'intake_asc' | 'intake_desc'
 
 export const EMPTY_MATTER_TABLE_FILTERS: MatterTableFilters = {
   search: '',
@@ -103,11 +106,31 @@ function compareMatters(left: MatterListRow, right: MatterListRow, sortKey: Matt
   if (sortKey === 'last_activity') {
     return compareNullable(matterLastActivityAt(left), matterLastActivityAt(right), (a, b) => b - a)
   }
+  if (sortKey === 'last_activity_oldest') {
+    return compareNullable(matterLastActivityAt(left), matterLastActivityAt(right), (a, b) => a - b)
+  }
   if (sortKey === 'newest') return compareNullable(timestamp(left.matter_created), timestamp(right.matter_created), (a, b) => b - a)
   if (sortKey === 'oldest') return compareNullable(timestamp(left.matter_created), timestamp(right.matter_created), (a, b) => a - b)
   if (sortKey === 'client_asc') return compareNullable(clientName(left), clientName(right), (a, b) => a.localeCompare(b))
   if (sortKey === 'client_desc') return compareNullable(clientName(left), clientName(right), (a, b) => b.localeCompare(a))
+  if (sortKey === 'practice_asc') return compareNullable(text(left.practice_area), text(right.practice_area), (a, b) => a.localeCompare(b))
+  if (sortKey === 'practice_desc') return compareNullable(text(left.practice_area), text(right.practice_area), (a, b) => b.localeCompare(a))
+  if (sortKey === 'stage_asc') return stageOrder(left) - stageOrder(right)
+  if (sortKey === 'stage_desc') return stageOrder(right) - stageOrder(left)
+  if (sortKey === 'intake_asc') return compareNullable(text(left.intake_status), text(right.intake_status), (a, b) => a.localeCompare(b))
+  if (sortKey === 'intake_desc') return compareNullable(text(left.intake_status), text(right.intake_status), (a, b) => b.localeCompare(a))
+  if (sortKey === 'matter_number_desc') return compareNullable(matterNumber(left), matterNumber(right), (a, b) => b.localeCompare(a))
   return compareNullable(matterNumber(left), matterNumber(right), (a, b) => a.localeCompare(b))
+}
+
+function text(value: string | null | undefined): string | null {
+  return value?.trim() || null
+}
+
+/** Pipeline position, so Stage sorts by progress rather than alphabetically. */
+function stageOrder(matter: MatterListRow): number {
+  const index = STAGES.findIndex(stage => stage.key === matter.stage)
+  return index === -1 ? STAGES.length : index
 }
 
 function clientName(matter: MatterListRow): string | null {
@@ -127,7 +150,9 @@ function normalize(value: string | null | undefined): string {
 export const MATTER_STAGE_GROUPS: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
 
 export const MATTER_SORT_KEYS: MatterSortKey[] = [
-  'last_activity', 'newest', 'oldest', 'client_asc', 'client_desc', 'matter_number',
+  'last_activity', 'last_activity_oldest', 'newest', 'oldest', 'client_asc', 'client_desc',
+  'matter_number', 'matter_number_desc', 'practice_asc', 'practice_desc',
+  'stage_asc', 'stage_desc', 'intake_asc', 'intake_desc',
 ]
 
 /**
