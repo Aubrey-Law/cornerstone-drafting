@@ -97,6 +97,16 @@ const matterSortFixtures = {
     matterRow('zulu', { client_name: 'Zulu' }),
     matterRow('missing', { client_name: null as unknown as string }),
   ],
+  stage_asc: [
+    matterRow('late', { stage: 'funding' }),
+    matterRow('early', { stage: 'intake' }),
+    matterRow('mid', { stage: 'drafting' }),
+  ],
+  practice_desc: [
+    matterRow('a', { practice_area: 'EP' }),
+    matterRow('z', { practice_area: 'TA' }),
+    matterRow('missing', { practice_area: null as unknown as string }),
+  ],
   matter_number: [
     matterRow('number-010', { matter_number: '010' }),
     matterRow('number-001', { matter_number: '001' }),
@@ -127,6 +137,8 @@ describe('matter table controls', () => {
     ['oldest', ['older', 'newest', 'missing']],
     ['client_asc', ['alpha', 'zulu', 'missing']],
     ['client_desc', ['zulu', 'alpha', 'missing']],
+    ['stage_asc', ['early', 'mid', 'late']],
+    ['practice_desc', ['z', 'a', 'missing']],
     ['matter_number', ['number-001', 'number-010', 'missing']],
   ] as const)('sorts matters by %s with missing values last', (sort, want) => {
     expect(matterIds(filterAndSortMatters(

@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, ChevronRight, Columns3, Database, History, Plus, Table2, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, ChevronRight, Columns3, Database, History, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -161,6 +161,11 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
   const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
   const [createdIntakeUrl, setCreatedIntakeUrl] = useState<string | null>(null)
+
+  const applySort = (key: MatterSortKey) => {
+    setSortKey(key)
+    if (pagination) navigate({ sort: key })
+  }
 
   useEffect(() => {
     setMatters(initialMatters)
@@ -580,7 +585,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                 ))}
               </SelectContent>
             </Select>
-            <Select value={sortKey} onValueChange={value => {setSortKey(value as MatterSortKey); if(pagination) navigate({sort:value})}}>
+            <Select value={sortKey} onValueChange={value => applySort(value as MatterSortKey)}>
               <SelectTrigger size="sm" className="w-40" aria-label="Sort matters by">
                 <SelectValue />
               </SelectTrigger>
@@ -591,6 +596,14 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                 <SelectItem value="client_asc">Client A-Z</SelectItem>
                 <SelectItem value="client_desc">Client Z-A</SelectItem>
                 <SelectItem value="matter_number">Matter number</SelectItem>
+                <SelectItem value="matter_number_desc">Matter number (high-low)</SelectItem>
+                <SelectItem value="last_activity_oldest">Least recent activity</SelectItem>
+                <SelectItem value="practice_asc">Practice A-Z</SelectItem>
+                <SelectItem value="practice_desc">Practice Z-A</SelectItem>
+                <SelectItem value="stage_asc">Stage (early first)</SelectItem>
+                <SelectItem value="stage_desc">Stage (late first)</SelectItem>
+                <SelectItem value="intake_asc">Intake A-Z</SelectItem>
+                <SelectItem value="intake_desc">Intake Z-A</SelectItem>
               </SelectContent>
             </Select>
             {hasActiveFilters && (
@@ -703,11 +716,11 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                       aria-label="Select all visible matters"
                     />
                   </TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Practice Area</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead>Intake</TableHead>
-                  <TableHead>Last activity</TableHead>
+                  <SortableHead label="Client" asc="client_asc" desc="client_desc" sortKey={sortKey} onSort={applySort} />
+                  <SortableHead label="Practice Area" asc="practice_asc" desc="practice_desc" sortKey={sortKey} onSort={applySort} />
+                  <SortableHead label="Stage" asc="stage_asc" desc="stage_desc" sortKey={sortKey} onSort={applySort} />
+                  <SortableHead label="Intake" asc="intake_asc" desc="intake_desc" sortKey={sortKey} onSort={applySort} />
+                  <SortableHead label="Last activity" asc="last_activity_oldest" desc="last_activity" sortKey={sortKey} onSort={applySort} />
                   <TableHead>Attention</TableHead>
                   <TableHead className="w-10" aria-label="Open matter" />
                 </TableRow>
@@ -944,5 +957,28 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
       <LawmaticsImportDialog open={lawmaticsOpen} onOpenChange={setLawmaticsOpen} />
       <ImportExistingMatterDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
+  )
+}
+
+function SortableHead({ label, asc, desc, sortKey, onSort }: {
+  label: string
+  asc: MatterSortKey
+  desc: MatterSortKey
+  sortKey: MatterSortKey
+  onSort: (key: MatterSortKey) => void
+}) {
+  const active = sortKey === asc || sortKey === desc
+  const Icon = !active ? ArrowUpDown : sortKey === asc ? ArrowUp : ArrowDown
+  return (
+    <TableHead aria-sort={!active ? 'none' : sortKey === asc ? 'ascending' : 'descending'}>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 hover:text-foreground"
+        onClick={() => onSort(sortKey === asc ? desc : asc)}
+      >
+        {label}
+        <Icon className={`h-3 w-3 ${active ? '' : 'opacity-40'}`} aria-hidden />
+      </button>
+    </TableHead>
   )
 }
