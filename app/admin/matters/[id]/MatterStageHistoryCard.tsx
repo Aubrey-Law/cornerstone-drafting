@@ -101,7 +101,7 @@ export function MatterStageHistoryCard({
                     <span
                       aria-hidden
                       className={cn(
-                        'relative z-10 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
+                        'relative mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
                         entry.isCurrent
                           ? 'border-brand-teal/40 bg-teal-bg'
                           : 'border-border bg-muted',

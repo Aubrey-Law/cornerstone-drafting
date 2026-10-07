@@ -96,9 +96,12 @@ export function MatterActivityTab({
               const draftCount = draftDocumentCount(item)
               return (
                 <article key={item.id} className="relative flex gap-3">
+                  {/* relative without a z-index: a later sibling of the rail, so
+                      it paints over it, but under the sticky section picker and
+                      tab bar (z-10), which z-10 here had it paint over. */}
                   <div
                     className={cn(
-                      'relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                      'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
                       meta.color,
                     )}
                     role="img"
@@ -107,13 +110,13 @@ export function MatterActivityTab({
                     <EventIcon className="h-3.5 w-3.5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1 pb-1">
-                    <p className="text-sm font-medium">{activityEventTitle(item)}</p>
+                    <p className="break-words text-sm font-medium">{activityEventTitle(item)}</p>
                     {item.metadata?.origin === 'lead' && (
                       <span className="inline-flex rounded-full border px-2 py-0.5 text-micro font-semibold text-muted-foreground">
                         From lead
                       </span>
                     )}
-                    {item.detail && <p className="max-w-[70ch] text-xs text-muted-foreground">{item.detail}</p>}
+                    {item.detail && <p className="max-w-[70ch] break-words text-xs text-muted-foreground">{item.detail}</p>}
                     {item.event_type === 'draft_generated' && draftCount > 0 && (
                       <details className="mt-1 text-xs">
                         <summary className="cursor-pointer text-muted-foreground">Show drafts</summary>
