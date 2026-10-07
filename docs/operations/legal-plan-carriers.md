@@ -60,7 +60,7 @@ schedule means a pricing module and one entry there.
 ## Migrations
 
 - `20270122090000_legal_plan_carriers.sql` made every named plan a carrier.
-- `20270129090000_legal_plans_metlife_legalease_arag_clc.sql` narrows the billing type, plan and
+- `20270129090100_legal_plans_metlife_legalease_arag_clc.sql` narrows the billing type, plan and
   payer checks to the four plans, and restates the four functions that carry their own copy of
   the list: `legal_plan_display_name`, `update_lead_opportunity_field`,
   `update_lead_opportunity_details` and `lead_score`. Each is its live definition with only the

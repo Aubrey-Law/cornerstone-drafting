@@ -120,3 +120,15 @@ describe('conflict recovery lifecycle', () => {
   })
 
 })
+
+it('blocks workspace navigation while a design sheet has unsaved changes', () => {
+  const { result } = renderHook(() => useDesignSheetState(args))
+  act(() => result.current.updateField('client_name', 'Unsaved client'))
+  const link = document.createElement('a')
+  link.href = '/admin/matters/m?tab=tasks'
+  document.body.append(link)
+  const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+  link.dispatchEvent(click)
+  expect(click.defaultPrevented).toBe(true)
+  link.remove()
+})

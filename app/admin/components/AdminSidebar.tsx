@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useMatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
+import { matterIdFromPath, matterWorkspaceHref } from '@/lib/matters/workspace'
 import { Pin, PinOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -120,6 +122,12 @@ function MatterRow({
             onMovePin={onMovePin}
           />
         </div>
+        {(active || isPinned) && <details open={active || undefined} className="px-3 pb-2 text-xs">
+          <summary className="cursor-pointer py-1 text-muted-foreground">Workspace</summary>
+          <div className="flex flex-col gap-1 border-l pl-3">
+            {(['overview', 'tasks', 'drafting', 'documents', 'reviews'] as const).map(section => <Link key={section} href={matterWorkspaceHref(matter.matter_id, section)} onClick={onNavigate} className="rounded px-2 py-1 capitalize hover:bg-accent">{section}</Link>)}
+          </div>
+        </details>}
       </div>
     </MatterContextMenu>
   )
@@ -132,7 +140,7 @@ function MatterRow({
  */
 const NAV_SECTION_OWNERS: Record<string, readonly string[]> = {
   '/admin/matters/list': ['/admin/funding', '/admin/execution', '/admin/fiduciaries'],
-  '/admin/review': ['/admin/field-audits', '/admin/playbooks'],
+  '/admin/overview': ['/admin/review', '/admin/field-audits', '/admin/playbooks', '/admin/drafting'],
 }
 
 function isOwnedSection(href: string, pathname: string): boolean {
@@ -144,9 +152,9 @@ export function isNavItemActive(item: Pick<AdminNavItem, 'href' | 'exact'>, path
   return (
     pathname === item.href
     || (!item.exact && pathname.startsWith(`${item.href}/`))
-    || (item.href === '/admin/matters/list' && pathname.startsWith('/admin/matters/'))
+    || (item.href === '/admin/matters/list' && (pathname.startsWith('/admin/matters') || Boolean(matterIdFromPath(pathname))))
     || (item.href === '/admin/crm/opportunities' && pathname.startsWith('/admin/leads/'))
-    || isOwnedSection(item.href, pathname)
+    || (isOwnedSection(item.href, pathname) && !matterIdFromPath(pathname))
   )
 }
 
@@ -161,7 +169,8 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   // `new` and `list` are sibling routes, not matter ids — without excluding them
   // visiting the list would highlight a row called "list" that does not exist.
-  const activeMatterId = pathname.match(/^\/admin\/matters\/(?!new$|list$)([^/]+)/)?.[1]
+  const workspace = useMatterWorkspaceContext()
+  const activeMatterId = workspace?.matterId ?? matterIdFromPath(pathname)
 
   return (
     // One scroll area between the logo and the theme footer. Without it a short
@@ -177,7 +186,7 @@ export function AdminSidebar({
           {navItems
             .filter(item => item.group === group)
             .map(item => {
-              const active = isNavItemActive(item, pathname)
+              const active = workspace?.matterId ? item.href === '/admin/matters/list' : isNavItemActive(item, pathname)
               const Icon = item.icon
               const badge = getNavBadge(item.href, badgeCounts)
               return (

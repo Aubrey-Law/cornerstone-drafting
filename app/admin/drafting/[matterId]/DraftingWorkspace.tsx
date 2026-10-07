@@ -159,7 +159,7 @@ export default function DraftingWorkspace({
   const nextStep = STEPS[stepIndex + 1]
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       {/* Workspace header */}
       <div className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex items-center justify-between gap-2 md:gap-4">

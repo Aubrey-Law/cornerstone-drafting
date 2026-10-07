@@ -131,7 +131,7 @@ describe('the migration', () => {
     expect(sql).toContain('matter_details_billing_type_check')
     // The list itself was last restated when the plans became the firm's four.
     const latest = fs.readFileSync(
-      path.join(process.cwd(), 'supabase/migrations/20270129090000_legal_plans_metlife_legalease_arag_clc.sql'),
+      path.join(process.cwd(), 'supabase/migrations/20270129090100_legal_plans_metlife_legalease_arag_clc.sql'),
       'utf8',
     )
     expect(latest).toContain(`billing_type in (\n      ${MATTER_BILLING_TYPES.map(value => `'${value}'`).join(', ')}\n    )`)

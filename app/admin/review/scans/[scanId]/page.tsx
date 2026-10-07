@@ -1,3 +1,4 @@
+import { MatterWorkspaceShell } from '@/components/matter/MatterWorkspaceShell'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -35,6 +36,7 @@ export default async function SavedScanPage({ params }: { params: Promise<{ scan
 
   return (
     <div className="space-y-4">
+      {scan.matterId && <MatterWorkspaceShell matterId={scan.matterId} active="reviews" />}
       <PageHeader
         eyebrow="From Word"
         title={SCAN_LABEL[scan.kind]}

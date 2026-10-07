@@ -1,4 +1,5 @@
 'use client'
+import { matterIdFromPath } from './workspace'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
@@ -51,11 +52,11 @@ export interface SidebarMattersState {
   movePin: (matterId: string, direction: -1 | 1) => void
 }
 
-export function useSidebarMatters(): SidebarMattersState {
+export function useSidebarMatters(workspaceMatterId: string | null = null): SidebarMattersState {
   const { savePreferences, loadPreferences } = useUserPreferences()
   const pathname = usePathname()
   // `new` and `list` are sibling routes under /admin/matters, not matter ids.
-  const activeMatterId = pathname.match(/^\/admin\/matters\/(?!new$|list$)([^/]+)$/)?.[1] ?? null
+  const activeMatterId = workspaceMatterId ?? matterIdFromPath(pathname) ?? null
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [rows, setRows] = useState<{ pinned: MatterNavRow[]; recent: MatterNavRow[] }>({
     pinned: [],

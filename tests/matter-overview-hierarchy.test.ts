@@ -15,10 +15,12 @@ describe('matter overview hierarchy', () => {
   it('uses plain collection tab labels, keeps their workspaces mounted, and keeps Activity last', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
 
-    expect(client).toContain('>People</TabsTrigger>')
-    expect(client).toContain('>Assets</TabsTrigger>')
-    expect(client).toContain('>People</TabsTrigger>')
-    expect(client).toMatch(/Documents\s*\n\s*\{unreviewedUploadCounts\.total > 0/)
+    const navigation = fs.readFileSync(path.join(process.cwd(), 'lib/matters/workspace.ts'), 'utf8')
+    expect(client).toContain('<MatterWorkspaceNav')
+    expect(navigation).toContain("['people', 'People']")
+    expect(navigation).toContain("['assets', 'Assets']")
+    expect(navigation).toContain("['documents', 'Documents']")
+    expect(client).toContain('documents: unreviewedUploadCounts.total')
     expect(client).not.toContain('People {contacts.length}')
     expect(client).not.toContain('Assets {initialEstateSnapshot.assetCount}')
     expect(client).not.toContain('Documents {documents.length}')

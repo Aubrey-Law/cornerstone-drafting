@@ -1,4 +1,6 @@
 'use client'
+import { TaskPresentationView } from './TaskPresentation'
+import type { TaskPresentation } from '@/lib/tasks/presentation'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -64,6 +66,7 @@ interface PlanMatter {
 }
 
 interface TaskPlanViewProps {
+  presentation?: TaskPresentation
   matterId: string
   /** False until the view is first opened, so its data loads lazily. */
   enabled: boolean
@@ -500,6 +503,7 @@ export function TaskPlanView({
   enabled,
   onTasksChanged,
   showMatter = true,
+  presentation = 'list',
 }: TaskPlanViewProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<PlanTask[]>([])
@@ -737,7 +741,8 @@ export function TaskPlanView({
                 </Card>
               )}
 
-              {sections.map(section => (
+              {presentation !== 'list' && <TaskPresentationView tasks={tasks} presentation={presentation} renderDetails={task => <ul><PlanTaskRow matterId={matterId} matterName={matter?.name ?? null} showMatter={showMatter} task={task} busy={busyId === task.id} onStatus={status => void patchTask(task.id, { status })} onNotes={notes => void patchTask(task.id, { notes })} onPause={paused => void patchTask(task.id, { paused })} /></ul>} />}
+              {presentation === 'list' && sections.map(section => (
                 <section key={section.key} aria-labelledby={`plan-${section.key}-heading`} className="space-y-4">
                   <h3
                     id={`plan-${section.key}-heading`}

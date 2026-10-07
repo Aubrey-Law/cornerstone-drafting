@@ -74,6 +74,9 @@ export function useTaskActions(onChanged?: () => void) {
         invalidateSidebarCountsClient()
         onChanged?.()
         return json.task as TaskRow
+      } catch {
+        toast.error('Could not update that task. Check your connection and try again.')
+        return null
       } finally {
         markPending(id, false)
       }
