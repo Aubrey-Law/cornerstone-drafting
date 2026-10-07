@@ -138,8 +138,8 @@ describe('wiring', () => {
     expect(sql).toContain('on delete restrict')
   })
 
-  it('shows the ledger on probate matters only, behind the staff gate', () => {
-    expect(read('app/admin/matters/[id]/MatterDetailClient.tsx')).toContain('{showProbate && <EstateLedgerCard matterId={matterId} />}')
+  it('shows the ledger on probate and trust administration matters, behind the staff gate', () => {
+    expect(read('app/admin/matters/[id]/MatterDetailClient.tsx')).toContain("{showFiduciaryLedger && <EstateLedgerCard matterId={matterId} trust={practiceArea === 'TA'} />}")
     for (const route of ['route.ts', 'assets/[assetId]/route.ts', 'entries/[entryId]/route.ts']) {
       expect(read(`app/api/admin/matters/[id]/estate-ledger/${route}`)).toContain('await requireAdmin(req)')
     }

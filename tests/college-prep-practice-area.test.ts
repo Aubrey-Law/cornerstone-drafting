@@ -61,7 +61,7 @@ function estateSheet(): DesignSheet {
 
 describe('College Preparation Plan practice area', () => {
   it('is a practice area the firm can pick', () => {
-    expect(PRACTICE_AREA_OPTIONS.map(option => option.value)).toEqual(['EP', 'EP-LP', 'CP', 'Probate'])
+    expect(PRACTICE_AREA_OPTIONS.map(option => option.value)).toEqual(['EP', 'EP-LP', 'CP', 'Probate', 'TA'])
     expect(practiceAreaLabel('CP')).toBe('College Preparation Plan')
     expect(isCollegePrepPracticeArea('CP')).toBe(true)
     expect(isCollegePrepPracticeArea('EP')).toBe(false)

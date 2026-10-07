@@ -27,7 +27,7 @@ const optionalPracticeArea = z.preprocess(
     const normalized = parsePracticeArea(blankToNull(value))
     return normalized ?? blankToNull(value)
   },
-  z.enum(['EP', 'EP-LP', 'Probate'], { message: 'Invalid practice area' }).nullable(),
+  z.enum(['EP', 'EP-LP', 'Probate', 'TA'], { message: 'Invalid practice area' }).nullable(),
 )
 
 // Accepts the whole billing enum, not just the carriers the rail offers, so a

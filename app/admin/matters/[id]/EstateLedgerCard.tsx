@@ -42,7 +42,7 @@ const emptyEntry = (): { date: string; kind: EntryKind; fund: Fund; amount: stri
  * balance is proved against cash and the assets still held; a mismatch or an
  * overdrawn cash line means an entry is missing or wrong.
  */
-export function EstateLedgerCard({ matterId }: { matterId: string }) {
+export function EstateLedgerCard({ matterId, trust = false }: { matterId: string; trust?: boolean }) {
   const token = useAccessToken()
   const [ledger, setLedger] = useState<LedgerResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -147,7 +147,7 @@ export function EstateLedgerCard({ matterId }: { matterId: string }) {
     <section className="space-y-4 rounded-lg border border-border bg-card p-4" data-testid="estate-ledger">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold">Estate ledger</h3>
+          <h3 className="text-sm font-semibold">{trust ? 'Trust ledger' : 'Estate ledger'}</h3>
           <p className="text-xs text-muted-foreground">The inventory at date-of-death value and every dollar since, adding up to the account.</p>
         </div>
         <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => void download()}>
@@ -174,7 +174,7 @@ export function EstateLedgerCard({ matterId }: { matterId: string }) {
       <p className="text-xs text-muted-foreground">
         Held as {formatCents(account.onHand.cash)} cash and {account.onHand.assetCount} {account.onHand.assetCount === 1 ? 'asset' : 'assets'} worth {formatCents(account.onHand.assets)}.
         {' '}Principal {formatCents(account.principal.balance)} · income {formatCents(account.income.balance)}
-        {account.nonProbate > 0 && <> · {formatCents(account.nonProbate)} non-probate property listed outside the account</>}.
+        {account.nonProbate > 0 && <> · {formatCents(account.nonProbate)} {trust ? 'outside the trust' : 'non-probate property'} listed outside the account</>}.
       </p>
       {(!account.proves || account.overdrawn) && (
         <p role="alert" className="flex items-center gap-1.5 text-xs text-amber">
@@ -212,7 +212,7 @@ export function EstateLedgerCard({ matterId }: { matterId: string }) {
             </div>
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={assetForm.probate} onChange={event => setAssetForm({ ...assetForm, probate: event.target.checked })} />
-              Probate property (untick for joint, beneficiary or trust assets)
+              {trust ? 'Held in the trust (untick for assets passing outside it)' : 'Probate property (untick for joint, beneficiary or trust assets)'}
             </label>
             <div className="flex justify-end gap-2">
               <Button type="button" size="sm" variant="ghost" onClick={() => setAssetForm(null)}>Cancel</Button>
@@ -226,7 +226,7 @@ export function EstateLedgerCard({ matterId }: { matterId: string }) {
             <li key={asset.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-xs">
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{asset.description}</span>
-                <span className="text-muted-foreground"> · {ASSET_CATEGORY_LABELS[asset.category]}{!asset.probate && ' · non-probate'}{disposedIds.has(asset.id) && ' · disposed of'}</span>
+                <span className="text-muted-foreground"> · {ASSET_CATEGORY_LABELS[asset.category]}{!asset.probate && (trust ? ' · outside the trust' : ' · non-probate')}{disposedIds.has(asset.id) && ' · disposed of'}</span>
               </span>
               <span className="tabular-nums">{formatCents(asset.dateOfDeathValueCents)}</span>
               <span className="flex">
