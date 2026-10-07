@@ -134,3 +134,11 @@ export function allowedFormats(type: BookableType | undefined): LocationType[] {
   if (!type) return ['phone']
   return type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
 }
+
+export interface DayAvailability {
+  date: string
+  timezone: string
+  windows: Array<{ start: number; end: number }>
+  busy: Array<{ start: number; end: number }>
+  bufferMinutes: number
+}
