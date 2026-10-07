@@ -195,7 +195,7 @@ export async function resolveStatularPackageKey(matterId: string): Promise<strin
     if (!rows) return null
     const area = practiceArea(rows.details?.practice_area, rows.intake?.practice_area)
 
-    if (area === 'Probate') throw configurationRequired()
+    if (area === 'Probate' || area === 'TA') throw configurationRequired()
     if (area === 'CP') {
       const designTrack = normalizeIntakeTrack(decisions(rows.design?.decisions ?? {})?.plan_track)
       const intakeTrack = normalizeIntakeTrack(rows.intake?.intake_track)

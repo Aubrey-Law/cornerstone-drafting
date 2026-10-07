@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { practiceAreaMatterCode } from '@/lib/practiceArea'
 
-export type MatterCode = 'EP' | 'EPLP' | 'CP' | 'PR'
+export type MatterCode = 'EP' | 'EPLP' | 'CP' | 'PR' | 'TA'
 
 /** Format a matter number, e.g. formatMatterNumber(2026, 'EP', 1) -> "2026-EP-001". */
 export function formatMatterNumber(year: number, code: MatterCode, seq: number): string {

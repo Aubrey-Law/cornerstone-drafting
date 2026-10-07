@@ -46,10 +46,15 @@ export const PROBATE_SLA_V1 = 'probate_sla_v1'
  *
  * Legal-plan estate matters (EP-LP) run a copy of the estate checklist that
  * confirms plan coverage instead of invoicing and always files the plan claim.
+ *
+ * Trust Administration has no checklist yet, and must never fall through to
+ * the estate one: forty-eight design, drafting and signing tasks on a trust
+ * being settled would be noise in the queue.
  */
 export function slaTemplateForPracticeArea(practiceArea: unknown): string | null {
   const area = normalizePracticeArea(practiceArea)
   if (area === 'Probate') return PROBATE_SLA_V1
+  if (area === 'TA') return null
   if (area === 'CP') return COLLEGE_PREP_SLA_V1
   if (area === 'EP-LP') return ESTATE_PLANNING_LP_SLA_V1
   return ESTATE_PLANNING_SLA_V3
@@ -322,7 +327,8 @@ export async function ensureLeadSlaTasks(
         .select('probate_track_enabled').eq('id', 1).maybeSingle()
       if (settings?.probate_track_enabled !== true) return
     }
-    const templateName = slaTemplateForPracticeArea(options.practiceArea) ?? ESTATE_PLANNING_SLA_V3
+    const templateName = slaTemplateForPracticeArea(options.practiceArea)
+    if (!templateName) return
     const admin = getAdminClient()
     const result = await generateMatterTasks(admin, {
       matterId,

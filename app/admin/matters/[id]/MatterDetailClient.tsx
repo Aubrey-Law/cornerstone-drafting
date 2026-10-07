@@ -432,6 +432,8 @@ function MatterDetailClientInner({
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
   const showProbate = practiceArea === 'Probate'
+  // Probate and Trust Administration both keep the estate's (or trust's) books.
+  const showFiduciaryLedger = practiceArea === 'Probate' || practiceArea === 'TA'
 
   const setActiveTab = useCallback((
     tab: MatterTab,
@@ -1230,7 +1232,7 @@ function MatterDetailClientInner({
                     error={matterDetailsError}
                   />
                 )}
-                {showProbate && <EstateLedgerCard matterId={matterId} />}
+                {showFiduciaryLedger && <EstateLedgerCard matterId={matterId} trust={practiceArea === 'TA'} />}
                 {currentEngineStageTask && (
                   <div id="matter-open-task" className="scroll-mt-24">
                     <MatterEngineStageTaskCard

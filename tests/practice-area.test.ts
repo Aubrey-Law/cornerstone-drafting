@@ -13,6 +13,7 @@ describe('practice area options', () => {
       'Estate Planning - LP',
       'College Preparation Plan',
       'Probate',
+      'Trust Administration',
     ])
   })
 

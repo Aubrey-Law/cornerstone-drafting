@@ -17,7 +17,7 @@ const CREATE_LEAD_TOOL: Anthropic.Tool = {
       client_phone: { type: 'string', description: 'Optional phone number.' },
       practice_area: {
         type: 'string',
-        enum: ['EP', 'EP-LP', 'Probate'],
+        enum: ['EP', 'EP-LP', 'Probate', 'TA'],
         description: 'Practice area. Defaults to EP when the attorney does not specify one.',
       },
       fee_quoted: {

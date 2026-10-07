@@ -526,7 +526,7 @@ export function buildFiduciariesFromDesignSheet(
  * `CP` belongs here too. It is a different document set, but the set is chosen
  * by the design sheet's inclusions, not by this gate — leaving CP out would zero
  * every `include_*` flag and generate an empty package for a plan that has four
- * documents. Probate is the only practice area this drafting flow does not serve.
+ * documents. Probate and Trust Administration are the practice areas this drafting flow does not serve.
  */
 export function isEstatePlanningPracticeArea(practiceArea: string | null | undefined): boolean {
   const normalized = normalizePracticeArea(practiceArea)

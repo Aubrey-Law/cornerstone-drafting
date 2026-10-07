@@ -67,7 +67,9 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
   // Prefer matter_details, then pipeline row already loaded via fetchMatter.
   const practiceArea = detailsRow?.practice_area ?? matter.practice_area ?? null
   const normalizedPracticeArea = normalizePracticeArea(practiceArea)
-  if (normalizedPracticeArea === 'Probate') {
+  // Probate and Trust Administration have no drafting package; the estate
+  // workspace would render an estate plan for a matter that is not one.
+  if (normalizedPracticeArea === 'Probate' || normalizedPracticeArea === 'TA') {
     notFound()
   }
 
