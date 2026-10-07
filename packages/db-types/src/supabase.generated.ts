@@ -5372,6 +5372,60 @@ export type Database = {
           },
         ]
       }
+      estate_assets: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          date_of_death_value_cents: number
+          description: string
+          id: string
+          matter_id: string
+          probate: boolean
+          updated_at: string
+          valuation_note: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          date_of_death_value_cents?: number
+          description: string
+          id?: string
+          matter_id: string
+          probate?: boolean
+          updated_at?: string
+          valuation_note?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          date_of_death_value_cents?: number
+          description?: string
+          id?: string
+          matter_id?: string
+          probate?: boolean
+          updated_at?: string
+          valuation_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estate_assets_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estate_assets_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       estate_clause_preview_evidence: {
         Row: {
           clause_id: string
@@ -5876,6 +5930,70 @@ export type Database = {
             columns: ["linked_matter_id"]
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
+      estate_ledger_entries: {
+        Row: {
+          amount_cents: number
+          asset_id: string | null
+          counterparty: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          entry_date: string
+          fund: string
+          id: string
+          kind: string
+          matter_id: string
+        }
+        Insert: {
+          amount_cents: number
+          asset_id?: string | null
+          counterparty?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          entry_date: string
+          fund?: string
+          id?: string
+          kind: string
+          matter_id: string
+        }
+        Update: {
+          amount_cents?: number
+          asset_id?: string | null
+          counterparty?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          entry_date?: string
+          fund?: string
+          id?: string
+          kind?: string
+          matter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estate_ledger_entries_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "estate_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estate_ledger_entries_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estate_ledger_entries_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
             referencedColumns: ["matter_id"]
           },
         ]
