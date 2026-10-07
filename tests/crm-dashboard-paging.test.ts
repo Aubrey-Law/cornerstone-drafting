@@ -177,7 +177,7 @@ describe('the CRM dashboard page', () => {
   })
 
   it('says so on the page when the counts are a sample', () => {
-    const page = read('app/admin/crm/page.tsx')
+    const page = read('app/admin/overview/LeadsOverviewSection.tsx')
     expect(page).toContain('truncated')
     expect(page).toMatch(/sample rather than a total/)
   })

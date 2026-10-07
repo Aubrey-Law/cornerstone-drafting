@@ -5,6 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useLeadDocuments, LeadDocumentsTab } from '@/components/leads/LeadDocumentsTab'
 import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/admin/leads/test', useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: vi.fn() }) }))
+
 const mocks = vi.hoisted(() => ({ documents: vi.fn(), folders: vi.fn(), signatureRequests: vi.fn(), token: 'token' }))
 vi.mock('@/lib/documents', () => ({ listDocuments: mocks.documents, listDocumentFolders: mocks.folders, listSignatureRequests: mocks.signatureRequests }))
 vi.mock('@/app/admin/matters/[id]/MatterDocumentsTab', () => ({ MatterDocumentsTab: ({ documents }: { documents: { id: string }[] }) => <div>{documents.length ? 'Loaded documents' : 'No documents'}</div> }))

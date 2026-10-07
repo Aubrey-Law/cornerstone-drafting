@@ -172,13 +172,21 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
     if(pagination) { setFilters(pagination.params.filters);setCardFilter(pagination.params.card);setSortKey(pagination.params.sort);setView(pagination.params.view);setSelected({}) }
   }, [initialMatters,pagination])
 
+  const restoredMatterView = useRef(false)
   useEffect(() => {
+    if (restoredMatterView.current) return
+    restoredMatterView.current = true
     // Below md the five columns are too cramped, so start on the table without
     // overwriting the stored choice — the board stays one tap away.
-    if (pagination) return
+    if (pagination && searchParams.has('view')) return
     const stored = readMatterListView()
-    setView(isMobileDetailViewport() && stored === 'board' ? 'table' : stored)
-  }, [pagination])
+    const preferred = isMobileDetailViewport() && stored === 'board' ? 'table' : stored
+    if (pagination && preferred !== pagination.params.view) {
+      const query = new URLSearchParams(searchParams.toString())
+      query.set('view', preferred)
+      router.replace(`/admin/matters/list?${query}`, { scroll: false })
+    } else setView(preferred)
+  }, [pagination, router, searchParams])
 
   useEffect(() => {
     if (searchParams.get('create') === '1') setCreateOpen(true)
@@ -285,10 +293,10 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
   const switchView = (next: MatterListView) => {
     setView(next)
     writeMatterListView(next)
-    if(pagination) navigate({view:next})
+    if(pagination) navigate({view:next}, false)
     // Row selection is a table affordance; the board has no checkboxes, so a
     // stale selection would leave an un-clearable bulk bar on screen.
-    if (next === 'board') setSelected({})
+    if (next !== 'table') setSelected({})
   }
 
   const selectedIds = useMemo(
@@ -544,6 +552,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
               role="group"
               aria-label="View mode"
             >
+              <button type="button" aria-pressed={view === 'grid'} onClick={() => switchView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-card shadow-sm')}>Grid</button>
               <button
                 type="button"
                 aria-pressed={view === 'board'}
@@ -636,7 +645,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
-        {pagination && <div className="mb-3 flex items-center gap-3 text-sm"><span>{pagination.total} matching matters{view==='table' ? ` · page ${pagination.page}` : ''}</span>{view==='table' && <><Button variant="outline" size="sm" disabled={pagination.page<=1} onClick={()=>navigate({page:String(pagination.page-1)},false)}>Previous</Button><Button variant="outline" size="sm" disabled={pagination.page*pagination.pageSize>=pagination.total} onClick={()=>navigate({page:String(pagination.page+1)},false)}>Next</Button></>}</div>}
+        {pagination && <div className="mb-3 flex items-center gap-3 text-sm"><span>{pagination.total} matching matters{view!=='board' ? ` · page ${pagination.page}` : ''}</span>{view!=='board' && <><Button variant="outline" size="sm" disabled={pagination.page<=1} onClick={()=>navigate({page:String(pagination.page-1)},false)}>Previous</Button><Button variant="outline" size="sm" disabled={pagination.page*pagination.pageSize>=pagination.total} onClick={()=>navigate({page:String(pagination.page+1)},false)}>Next</Button></>}</div>}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border px-6 py-16 text-center">
             <Briefcase className="h-8 w-8 text-muted-foreground" />
@@ -648,6 +657,15 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
               </Button>
             )}
           </div>
+        ) : view === 'grid' ? (
+          <ul aria-label="Matters grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filtered.map(m => <li key={m.matter_id} className="space-y-3 rounded-lg border bg-card p-4">
+              <div className="flex items-start justify-between gap-2"><Link href={`/admin/matters/${m.matter_id}`} className="font-semibold hover:underline">{matterTitle(m)}</Link><Badge variant="secondary">{stageLabel(m.stage)}</Badge></div>
+              <p className="text-xs text-muted-foreground">{matterSubtitle(m)}</p>
+              <RecordWorkIndicator summary={workSummaries[m.matter_id]} />
+              <p className="text-xs text-muted-foreground">Last milestone · {formatLastMilestone(matterLastMilestoneAt(m))}</p>
+            </li>)}
+          </ul>
         ) : view === 'board' ? (
           <MatterStageBoard
             cards={boardCards}

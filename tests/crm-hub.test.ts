@@ -10,7 +10,9 @@ describe('unified CRM hub', () => {
     const subnav = read('app/admin/crm/CrmSubnav.tsx')
 
     expect(adminLayout).toContain("{ href: '/admin/crm/opportunities', label: 'Leads'")
-    expect(adminLayout).not.toMatch(/label: '(People|Contacts|Campaigns)'/)
+    expect(adminLayout).toContain("label: 'People'")
+    expect(adminLayout).toContain("label: 'Activities'")
+    expect(read('app/admin/crm/layout.tsx')).not.toContain('CrmSubnav')
     for (const route of ['people', 'opportunities', 'activities']) {
       expect(subnav).toContain(`/admin/crm/${route}`)
     }

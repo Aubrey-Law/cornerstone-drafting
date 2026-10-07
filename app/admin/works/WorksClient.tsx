@@ -192,6 +192,7 @@ export default function WorksClient({ canManageMasters = false, currentUserId = 
         eyebrow="Attorney tools"
         icon={BookOpen}
         title="Library"
+        actions={<Button asChild variant="outline" size="sm"><a href="/admin/playbooks">Review playbooks</a></Button>}
         description={canManageMasters
           ? "Reusable workflows for drafting, review, and structured matter work — plus the firm's document, email, e-signature, and clause templates."
           : 'Reusable workflows for drafting, review, and structured matter work.'}

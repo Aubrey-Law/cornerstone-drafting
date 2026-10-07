@@ -33,10 +33,10 @@ function draftingQueueItem(
 }
 
 describe('drafting hub and workspace', () => {
-  it('exposes drafting in admin navigation', () => {
-    const adminNav = fs.readFileSync(path.join(process.cwd(), 'app/admin/AdminLayoutClient.tsx'), 'utf8')
+  it('keeps drafting reachable through Overview', () => {
+    const adminNav = fs.readFileSync(path.join(process.cwd(), 'app/admin/overview/page.tsx'), 'utf8')
 
-    expect(adminNav).toContain("{ href: '/admin/drafting', label: 'Drafting'")
+    expect(adminNav).toContain("['/admin/drafting', 'Drafting'")
   })
 
   it('uses the existing matter draft endpoint and displays backend detail errors', () => {

@@ -44,9 +44,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { MobileRecordSectionSelect } from '@/components/admin/MobileRecordSectionSelect'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type AssetView,
@@ -121,6 +119,7 @@ import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
+import { MatterWorkspaceNav } from '@/components/matter/MatterWorkspaceNav'
 import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
@@ -129,19 +128,6 @@ const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: 
 const DOCUMENT_VIEW_OPTIONS: readonly ViewSwitchOption<DocumentView>[] = [
   { value: 'files', label: 'Files', icon: FileText },
   { value: 'signing', label: 'Signing', icon: Signature },
-]
-
-const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'tasks', label: 'Tasks' },
-  { value: 'people', label: 'People' },
-  { value: 'assets', label: 'Assets' },
-  { value: 'documents', label: 'Documents' },
-  { value: 'billing', label: 'Billing' },
-  { value: 'communications', label: 'Messages' },
-  { value: 'notes', label: 'Notes' },
-  { value: 'reviews', label: 'Reviews' },
-  { value: 'activity', label: 'Activity' },
 ]
 
 /** Whether the work-graph strip and the overview's next action name the same thing. */
@@ -1090,45 +1076,10 @@ function MatterDetailClientInner({
                   <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
                 </p>
               )}
-              <MobileRecordSectionSelect
-                label="Matter section"
-                value={activeTab}
-                options={MATTER_SECTION_OPTIONS}
-                onValueChange={setActiveTab}
-              />
-              <TabsList className="sticky top-0 z-10 hidden w-full justify-start overflow-x-auto bg-background md:flex">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="tasks" className="gap-1.5">
-                  Tasks
-                  {taskCounts.overdue > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
-                      {taskCounts.overdue}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="people">People</TabsTrigger>
-                <TabsTrigger value="assets">Assets</TabsTrigger>
-                <TabsTrigger value="documents" className="gap-1.5">
-                  Documents
-                  {unreviewedUploadCounts.total > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
-                      {unreviewedUploadCounts.total}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="billing">Billing</TabsTrigger>
-                <TabsTrigger value="communications" className="gap-1.5">
-                  Messages
-                  {unreadPortalCount > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
-                      {unreadPortalCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="notes">Notes</TabsTrigger>
-                <TabsTrigger value="reviews">Reviews</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
+              <MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.overdue, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
+                if (section === 'drafting') router.push(draftingHref)
+                else setActiveTab(section)
+              }} />
 
               <TabsContent value="overview">
                 {/* The facts rail moved to the persistent left column, so Overview

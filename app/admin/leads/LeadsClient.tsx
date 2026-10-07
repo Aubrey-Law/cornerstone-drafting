@@ -43,6 +43,7 @@ import { apiRequest } from '@/lib/clientApi'
 import { Checkbox } from '@/components/ui/checkbox'
 import { describeDeletionProtections } from '@/lib/matters/deletionProtections'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
+import { LeadsGrid } from '@/components/leads/LeadsGrid'
 import { LeadsBoard } from '@/components/leads/LeadsBoard'
 import { cn } from '@/lib/utils'
 import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
@@ -73,7 +74,7 @@ export type LeadRow = LeadListRow
 export type ScoredLeadRow = LeadRow & { score: number; scoreDetail: LeadScore }
 
 type LeadFilter = LeadListParams['status']
-type LeadView = 'table' | 'board'
+type LeadView = 'table' | 'board' | 'grid'
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -228,15 +229,27 @@ export function LeadsClient({
 
   // The view lives in the URL so a refresh or a shared link lands on the same
   // board or table.
-  const urlView: LeadView = searchParams?.get('view') === 'board' ? 'board' : 'table'
+  const urlView: LeadView = searchParams?.get('view') === 'grid' ? 'grid' : searchParams?.get('view') === 'board' ? 'board' : 'table'
   const [view, setView] = useState<LeadView>(urlView)
   useEffect(() => { setView(urlView) }, [urlView])
   const selectView = useCallback((next: LeadView) => {
     setView(next)
     // Only the table can show or change a selection, so it does not travel.
     setSelected({})
-    writeParam('view', next === 'board' ? 'board' : null)
+    try { localStorage.setItem('cornerstone.admin.leadsView', next) } catch { /* unavailable storage */ }
+    writeParam('view', next)
   }, [writeParam])
+
+  const restoredView = useRef(false)
+  useEffect(() => {
+    if (restoredView.current) return
+    restoredView.current = true
+    if (searchParams?.has('view')) return
+    try {
+      const stored = localStorage.getItem('cornerstone.admin.leadsView')
+      if (stored === 'grid' || stored === 'board') writeParam('view', stored)
+    } catch { /* unavailable storage */ }
+  }, [searchParams, writeParam])
 
   const hasTableFilters = Boolean(
     params.search.trim() || params.practice !== 'all' || params.progress !== 'all',
@@ -680,6 +693,7 @@ export function LeadsClient({
             role="group"
             aria-label="View mode"
           >
+            <button type="button" aria-pressed={view === 'grid'} onClick={() => selectView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-card shadow-sm')}>Grid</button>
             <button
               type="button"
               aria-pressed={view === 'table'}
@@ -721,7 +735,7 @@ export function LeadsClient({
       )}
 
       <div className={cn('min-w-0 space-y-3', pending && 'opacity-60 transition-opacity')}>
-        {view === 'board' ? (
+        {view === 'grid' ? <LeadsGrid leads={filteredLeads} workSummaries={workSummaries} /> : view === 'board' ? (
           <LeadsBoard
             leads={filteredLeads}
             hasAnyLeads={initialLeads.length > 0}

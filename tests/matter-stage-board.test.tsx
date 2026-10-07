@@ -162,4 +162,14 @@ describe('matters list board view', () => {
     await openBoard(user)
     expect(screen.queryByText('2 selected')).toBeNull()
   })
+  it('shows the same filtered matters as cards and remembers Grid', async () => {
+    const user = userEvent.setup()
+    render(<MattersClient matters={matterRows} />)
+    await user.click(screen.getByRole('button', { name: 'Grid' }))
+    const grid = screen.getByRole('list', { name: 'Matters grid' })
+    expect(within(grid).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(grid).getByText('Zoe Beta')).toBeTruthy()
+    expect(window.localStorage.getItem(MATTER_LIST_VIEW_KEY)).toBe('grid')
+  })
+
 })

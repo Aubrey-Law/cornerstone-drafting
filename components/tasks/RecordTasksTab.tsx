@@ -1,4 +1,6 @@
 'use client'
+import { TaskPresentationSwitch, TaskPresentationView, useTaskPresentation } from '@/components/tasks/TaskPresentation'
+
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarRange, ChevronDown, ChevronRight, Layers, ListTodo, Plus, Repeat } from 'lucide-react'
@@ -80,6 +82,7 @@ export function RecordTasksTab({
   onViewChange,
   hideViewSwitch = false,
 }: RecordTasksTabProps) {
+  const { presentation, selectPresentation } = useTaskPresentation()
   const token = useAccessToken()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [templates, setTemplates] = useState<TemplateOption[]>([])
@@ -208,7 +211,9 @@ export function RecordTasksTab({
         {!hideViewSwitch && (
           <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />
         )}
+        <TaskPresentationSwitch value={presentation} onChange={selectPresentation} />
         <TaskPlanView
+          presentation={presentation}
           matterId={planMatter}
           enabled
           onTasksChanged={() => {
@@ -225,6 +230,7 @@ export function RecordTasksTab({
     <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-3">
         {planMatter && !hideViewSwitch && <ViewSwitch value={mode} options={TASK_VIEW_OPTIONS} onChange={switchView} label="Task view" />}
+        <TaskPresentationSwitch value={presentation} onChange={selectPresentation} />
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
             <button
@@ -311,7 +317,7 @@ export function RecordTasksTab({
           />
         )}
 
-        {stageTask && view === 'open' && (
+        {presentation === 'list' && stageTask && view === 'open' && (
           <StageTaskCard task={stageTask} onToggleItem={toggleChecklistItem} onComplete={() => void toggle(stageTask)} />
         )}
 
@@ -321,7 +327,10 @@ export function RecordTasksTab({
             <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void load()}>Retry</Button>
           </div>
         )}
-        {loading && tasks.length === 0 ? (
+        {presentation !== 'list' && !loading && !loadError ? <TaskPresentationView tasks={[...(stageTask && view === 'open' ? [stageTask] : []), ...listed]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
+          const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
+          if (updated?.status === 'done' && task.stage_key) onStageTaskCompleted?.()
+        }} /> : loading && tasks.length === 0 ? (
           <p className="px-1 text-sm text-muted-foreground">Loading tasks…</p>
         ) : loadError && tasks.length === 0 ? null : listed.length === 0 ? (
           <Card className="py-0">

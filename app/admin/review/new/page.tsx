@@ -1,3 +1,4 @@
+import { MatterWorkspaceShell } from '@/components/matter/MatterWorkspaceShell'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -68,6 +69,7 @@ export default async function NewReviewPage({
 
   return (
     <div className="space-y-4">
+      {initialMatterId && <MatterWorkspaceShell matterId={initialMatterId} active="reviews" />}
       <PageHeader
         title="Start a review"
         description="Runs a playbook against one document. Each finding quotes the passage it is about, checked against the document's own text. The review is saved and fills in over a minute or two."

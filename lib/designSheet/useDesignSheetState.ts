@@ -587,8 +587,22 @@ export function useDesignSheetState({
     const handler = (e: BeforeUnloadEvent) => {
       if (saveStatus !== 'saved' || auxiliaryStatus !== 'saved') e.preventDefault()
     }
+    const navigate = (event: MouseEvent) => {
+      if (saveStatus === 'saved' && auxiliaryStatus === 'saved') return
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null
+      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.hasAttribute('download') || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const destination = new URL(link.href, window.location.href)
+      if (destination.pathname === window.location.pathname && destination.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      toast.error('Save or resolve your design sheet changes before leaving this page.')
+    }
     window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
+    document.addEventListener('click', navigate, true)
+    return () => {
+      window.removeEventListener('beforeunload', handler)
+      document.removeEventListener('click', navigate, true)
+    }
   }, [auxiliaryStatus, saveStatus])
 
   // ── Contacts ──────────────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ afterEach(() => {
   cleanup()
   searchParams = new URLSearchParams()
   replace.mockClear()
+  localStorage.removeItem('cornerstone.admin.leadsView')
 })
 
 const PARAMS = {
@@ -85,6 +86,21 @@ describe('lead board view', () => {
     expect(within(screen.getByRole('region', { name: 'Intake sent' })).getByText('Waiting Lead')).toBeTruthy()
     expect(within(screen.getByRole('region', { name: 'Engagement' })).getByText('Signing Lead')).toBeTruthy()
     expect(within(screen.getByRole('region', { name: 'Hired' })).getByText('Drop to create the matter')).toBeTruthy()
+  })
+
+  it('adds Grid without changing the lead set and persists its preference', async () => {
+    renderLeads(leads)
+    await userEvent.click(screen.getByRole('button', { name: 'Grid' }))
+    expect(within(screen.getByRole('list', { name: 'Leads grid' })).getAllByRole('listitem')).toHaveLength(3)
+    expect(replace).toHaveBeenCalledWith('/admin/leads?view=grid', { scroll: false })
+    expect(localStorage.getItem('cornerstone.admin.leadsView')).toBe('grid')
+  })
+
+  it('restores a saved view only once while the router is transitioning', () => {
+    localStorage.setItem('cornerstone.admin.leadsView', 'grid')
+    renderLeads(leads)
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith('/admin/leads?view=grid', { scroll: false })
   })
 
   it('renders the board directly when the URL asks for it', () => {

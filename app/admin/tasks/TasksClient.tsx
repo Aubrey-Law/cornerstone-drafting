@@ -1,4 +1,6 @@
 'use client'
+import { TaskPresentationSwitch, TaskPresentationView, useTaskPresentation } from '@/components/tasks/TaskPresentation'
+
 import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -239,6 +241,7 @@ export function TasksClient({
     setDoneToday(initialDoneToday)
   }, [initialOpenTasks, initialDoneToday])
 
+  const { presentation, selectPresentation } = useTaskPresentation()
   const actions = useTaskActions()
 
   /** Move a completed task into the Done group without waiting on the server. */
@@ -464,6 +467,7 @@ export function TasksClient({
 
   useEffect(() => {
     function handler(event: KeyboardEvent) {
+      if (presentation !== 'list') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       // Never steal keys from inputs, dialogs or the rail.
@@ -531,7 +535,7 @@ export function TasksClient({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [clearSelection, focusId, focusOrder, router, selectedIds, toggleSelected, toggleTask])
+  }, [clearSelection, focusId, focusOrder, presentation, router, selectedIds, toggleSelected, toggleTask])
 
   // ⌘⇧T opens quick capture from anywhere on this page.
   useEffect(() => {
@@ -629,6 +633,7 @@ export function TasksClient({
         }
       />
 
+      <TaskPresentationSwitch value={presentation} onChange={value => { clearSelection(); selectPresentation(value) }} />
       {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
         <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : 'Groups below show this page.'}</span>
         <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
@@ -755,7 +760,10 @@ export function TasksClient({
         </div>
       </div>
 
-      {nothingToShow && doneTodayScoped.length === 0 ? (
+      {presentation !== 'list' ? <TaskPresentationView tasks={[...scoped, ...doneTodayScoped]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
+        const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
+        if (updated) { applyUpdate(updated); router.refresh() }
+      }} /> : nothingToShow && doneTodayScoped.length === 0 ? (
         <EmptyState
           icon={ListTodo}
           title="Nothing in this queue"

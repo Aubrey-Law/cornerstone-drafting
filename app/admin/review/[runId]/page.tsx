@@ -1,3 +1,4 @@
+import { MatterWorkspaceShell } from '@/components/matter/MatterWorkspaceShell'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -54,6 +55,7 @@ export default async function SavedReviewPage({ params }: { params: Promise<{ ru
 
   return (
     <div className="space-y-4">
+      {matterId && <MatterWorkspaceShell matterId={matterId} active="reviews" />}
       <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <PageHeader
         eyebrow="Review"

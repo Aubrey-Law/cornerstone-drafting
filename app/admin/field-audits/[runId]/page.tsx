@@ -1,3 +1,4 @@
+import { MatterWorkspaceShell } from '@/components/matter/MatterWorkspaceShell'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -34,6 +35,7 @@ export default async function FieldAuditRunPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-4">
+      {run.matterId && <MatterWorkspaceShell matterId={run.matterId} active="reviews" />}
       <RunProgressRefresh runStatus={statusFromSteps(run.steps)} />
       <PageHeader
         eyebrow="Field audit"

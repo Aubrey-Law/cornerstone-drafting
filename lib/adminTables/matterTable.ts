@@ -28,7 +28,7 @@ export const EMPTY_MATTER_TABLE_FILTERS: MatterTableFilters = {
   includeClosed: false,
 }
 
-export type MatterListView = 'board' | 'table'
+export type MatterListView = 'board' | 'table' | 'grid'
 
 export const MATTER_LIST_VIEW_KEY = 'cornerstone.admin.mattersView'
 
@@ -36,7 +36,8 @@ export const MATTER_LIST_VIEW_KEY = 'cornerstone.admin.mattersView'
 export function readMatterListView(): MatterListView {
   if (typeof window === 'undefined') return 'table'
   try {
-    return window.localStorage.getItem(MATTER_LIST_VIEW_KEY) === 'board' ? 'board' : 'table'
+    const view = window.localStorage.getItem(MATTER_LIST_VIEW_KEY)
+    return view === 'board' || view === 'grid' ? view : 'table'
   } catch {
     return 'table'
   }

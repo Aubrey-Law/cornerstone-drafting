@@ -10,8 +10,10 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
-  ClipboardCheck,
-  FilePenLine,
+  Activity,
+  ContactRound,
+  AlarmClock,
+  LayoutDashboard,
   ListTodo,
   LogOut,
   Menu,
@@ -51,6 +53,7 @@ import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 import { AdminSidebar } from './components/AdminSidebar'
 import { AdminBreadcrumbs } from './components/AdminBreadcrumbs'
 import { adminBreadcrumbs } from '@/lib/adminBreadcrumbs'
+import { MatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
 import { SidebarMattersContext } from '@/lib/matters/SidebarMattersContext'
 import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
 
@@ -84,14 +87,12 @@ export const adminNavItems: {
 }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, group: 'Today', exact: true },
+  { href: '/admin/overview', label: 'Overview', icon: LayoutDashboard, group: 'Today' },
   { href: '/admin/crm/opportunities', label: 'Leads', icon: Send, group: 'Clients' },
   { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
-  { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },
-  { href: '/admin/review', label: 'Reviews', icon: ClipboardCheck, group: 'Work' },
-  // Funding, signing and fiduciaries are worked on the matter (Assets,
-  // Documents, People) and field audits on its Reviews tab; their firm-wide
-  // worklists open from the Matters dashboard's Close-out card rather than
-  // taking four places in the nav. See NAV_SECTION_OWNERS in AdminSidebar.
+  { href: '/admin/crm/people', label: 'People', icon: ContactRound, group: 'Clients' },
+  { href: '/admin/crm/activities', label: 'Activities', icon: Activity, group: 'Clients' },
+  { href: '/admin/pipeline/aging', label: 'Aging', icon: AlarmClock, group: 'Clients' },
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
   { href: '/admin/communications', label: 'Communications', icon: MessageSquareText, group: 'Operations' },
@@ -135,7 +136,8 @@ export default function AdminLayoutClient({
   const matterDisplayName = useMatterDisplayName()
   // Called once and passed to both sidebar instances (desktop column and mobile
   // sheet) so they share one fetch and one view of what is pinned.
-  const sidebarMatters = useSidebarMatters()
+  const [workspaceMatterId, setWorkspaceMatterId] = useState<string | null>(null)
+  const sidebarMatters = useSidebarMatters(workspaceMatterId)
 
   useEffect(() => {
     let cancelled = false
@@ -245,6 +247,7 @@ export default function AdminLayoutClient({
   return (
     // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
     // can be a full-height column beside it instead of floating over content.
+    <MatterWorkspaceContext.Provider value={{ matterId: workspaceMatterId, setMatterId: setWorkspaceMatterId }}>
     <SidebarMattersContext.Provider value={sidebarMatters}>
     <div className="flex h-screen overflow-hidden bg-background">
       <aside
@@ -384,5 +387,6 @@ export default function AdminLayoutClient({
 
     </div>
     </SidebarMattersContext.Provider>
+    </MatterWorkspaceContext.Provider>
   )
 }

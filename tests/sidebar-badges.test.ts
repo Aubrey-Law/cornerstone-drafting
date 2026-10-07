@@ -173,3 +173,9 @@ describe('sidebar badges', () => {
     expect(layout).not.toContain('@/lib/sidebarCountsInvalidation')
   })
 })
+
+it('keeps drafting and aging alerts on their new sidebar destinations', () => {
+  const counts = { ...EMPTY_SIDEBAR_COUNTS, draftingNeedsDesignCount: 4, agingRedCount: 2, errors: ['aging'] }
+  expect(getNavBadge('/admin/overview', counts)).toEqual({ value: 4, tone: 'accent' })
+  expect(getNavBadge('/admin/pipeline/aging', counts)).toEqual({ value: 2, tone: 'destructive', stale: true })
+})

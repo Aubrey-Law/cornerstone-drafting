@@ -143,12 +143,13 @@ describe('the admin navigation', () => {
     for (const href of ['/admin/funding', '/admin/execution', '/admin/fiduciaries', '/admin/field-audits']) {
       expect(hrefs).not.toContain(href)
     }
-    expect(hrefs).toContain('/admin/review')
+    expect(hrefs).toContain('/admin/overview')
+    expect(hrefs).not.toContain('/admin/review')
   })
 
   it('highlights the item that owns a worklist while it is open', () => {
     const matters = { href: '/admin/matters/list' }
-    const reviews = { href: '/admin/review' }
+    const reviews = { href: '/admin/overview' }
     expect(isNavItemActive(matters, '/admin/funding')).toBe(true)
     expect(isNavItemActive(matters, '/admin/execution')).toBe(true)
     expect(isNavItemActive(matters, '/admin/fiduciaries')).toBe(true)

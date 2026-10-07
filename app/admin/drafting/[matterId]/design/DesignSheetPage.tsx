@@ -138,7 +138,6 @@ function DesignSheetPageContent({
   matterId,
   matter,
   intakeSnapshot,
-  embedded = false,
   onOpenDrafting,
   requestedSectionId = null,
   initialFocus = null,
@@ -484,7 +483,7 @@ function DesignSheetPageContent({
   }, [matterId, onOpenDrafting, router, state])
 
   const matterLabel = `${matter.matter_name || 'Matter'} · ${[matter.client_name, matter.spouse_name].filter(Boolean).join(' & ')}`
-  const pageHeight = embedded ? '100%' : 'calc(100vh - 64px)'
+  const pageHeight = '100%'
   const indexStyle: CSSProperties = {
     position: 'sticky',
     top: APP_HEADER_HEIGHT,
