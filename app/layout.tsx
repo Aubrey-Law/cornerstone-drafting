@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
-import { Toaster } from 'sonner'
+import { ThemedToaster } from '@/components/ThemedToaster'
 import { ThemeProvider } from '@/lib/theme/ThemeProvider'
 import { THEME_INIT_SCRIPT } from '@/lib/theme/theme-init-script'
 import './globals.css'
@@ -86,8 +86,8 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider>
           {children}
+          <ThemedToaster />
         </ThemeProvider>
-        <Toaster richColors position="top-right" />
       </body>
     </html>
   )
