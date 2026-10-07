@@ -76,11 +76,11 @@ const ENGAGEMENT_BOUNDARY = SLA_PHASES.indexOf('intake')
 /**
  * Work that happens before anyone has been engaged.
  *
- * The estate-planning checklist is 48 tasks and a lead is generated the whole
- * thing on the day it is created. Only 11 of those are pre-engagement; the rest
- * are drafting, signing, funding and post-execution work for a plan nobody has
- * bought. On 2026-08-24 that put 709 unsold tasks in the firm queue across 39
- * leads — 24 of which were carrying post-execution tasks.
+ * The estate-planning checklist is 48 tasks, and only 11 of those are
+ * pre-engagement; the rest are drafting, signing, funding and post-execution
+ * work for a plan nobody has bought. Leads were once generated the whole thing,
+ * which on 2026-08-24 put 709 unsold tasks in the firm queue across 39 leads.
+ * A lead now gets only this half; see `PlanScope`.
  */
 export function isPreEngagementPhase(phase: string | null | undefined): boolean {
   if (!phase) return false
@@ -91,6 +91,29 @@ export function isPreEngagementPhase(phase: string | null | undefined): boolean 
 /** The phases a lead's plan holds back until it converts. */
 export const POST_ENGAGEMENT_PHASES: readonly string[] =
   SLA_PHASES.slice(ENGAGEMENT_BOUNDARY)
+
+/**
+ * Which half of a template a generation writes.
+ *
+ * A lead and the matter it becomes run separate task lists cut from the same
+ * template at the engagement boundary. The lead list is the pre-engagement
+ * stages and ends at "Client signs engagement agreement"; the matter list is
+ * everything after, and is not created until the engagement is signed. `all`
+ * is the whole template at once, for the manual generate route.
+ */
+export type PlanScope = 'lead' | 'matter' | 'all'
+
+/** The phases a scope covers, or null for every phase. */
+export function phasesForScope(scope: PlanScope): readonly string[] | null {
+  if (scope === 'lead') return SLA_PHASES.slice(0, ENGAGEMENT_BOUNDARY)
+  if (scope === 'matter') return POST_ENGAGEMENT_PHASES
+  return null
+}
+
+export function isPhaseInScope(phase: string | null | undefined, scope: PlanScope): boolean {
+  const phases = phasesForScope(scope)
+  return phases === null || (!!phase && phases.includes(phase))
+}
 
 export const SLA_PHASE_LABEL: Record<SlaPhase, string> = {
   new_lead: 'Discovery',

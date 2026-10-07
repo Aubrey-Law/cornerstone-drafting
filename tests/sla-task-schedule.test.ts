@@ -521,3 +521,49 @@ describe('fit gate', () => {
     expect(rescheduleForGates([ungated, done], { discovery_call: '2026-03-02' }, [])).toEqual([])
   })
 })
+
+describe('separate lead and matter lists', () => {
+  // One template, cut at the engagement boundary: the lead list ends at the
+  // signature, and the matter list is generated once the lead is hired.
+  const template = [
+    templateTask({ phase: 'new_lead', name: 'Hold discovery call', relative_to: 'discovery_call', due_offset_days: 0, pre_engagement: true }),
+    templateTask({
+      phase: 'engagement_sent', name: 'Client signs engagement agreement', relative_to: 'pmps',
+      due_offset_days: 4, pre_engagement: true, triggers_day_zero: true,
+    }),
+    templateTask({ phase: 'intake', name: 'Create matter folder', due_offset_days: 0 }),
+    templateTask({ phase: 'design', name: 'Client approves design', due_offset_days: 7 }),
+  ]
+  const options = { matterId: 'm', templateId: 't', startDate: '2026-03-01' }
+
+  it('gives a lead only the pre-engagement tasks, ending at the signature', () => {
+    const rows = buildPlanTaskDrafts(template, { ...options, scope: 'lead' })
+    expect(rows.map(row => row.name)).toEqual(['Hold discovery call', 'Client signs engagement agreement'])
+  })
+
+  it('gives a matter only the post-engagement tasks', () => {
+    const rows = buildPlanTaskDrafts(template, { ...options, scope: 'matter' })
+    expect(rows.map(row => row.name)).toEqual(['Create matter folder', 'Client approves design'])
+  })
+
+  it('keeps the template order across the two lists', () => {
+    const lead = buildPlanTaskDrafts(template, { ...options, scope: 'lead' })
+    const matter = buildPlanTaskDrafts(template, { ...options, scope: 'matter' })
+    expect([...lead, ...matter].map(row => row.sort_order)).toEqual([0, 1, 2, 3])
+  })
+
+  it('still waits for the signature to date the matter list', () => {
+    // The matter half carries no pre-engagement tasks, but its Day 0 is the
+    // engagement, not the day the list happened to be generated.
+    const unsigned = buildPlanTaskDrafts(template, { ...options, scope: 'matter' })
+    expect(unsigned.every(row => row.due_date === null)).toBe(true)
+    const signed = buildPlanTaskDrafts(template, {
+      ...options, scope: 'matter', anchors: { engagement: '2026-04-01' },
+    })
+    expect(signed.map(row => row.due_date)).toEqual(['2026-04-01', '2026-04-08'])
+  })
+
+  it('writes the whole template when no scope is given', () => {
+    expect(buildPlanTaskDrafts(template, options)).toHaveLength(4)
+  })
+})

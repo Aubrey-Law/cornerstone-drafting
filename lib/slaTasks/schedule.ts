@@ -6,9 +6,11 @@ import {
   SLA_NUDGE_TIERS,
   SLA_PHASES,
   SLA_VARIANTS,
+  isPhaseInScope,
   isSlaAnchor,
   isSlaPhase,
   ownerFromAssignee,
+  type PlanScope,
   type SlaAnchor,
   type SlaAnchorDates,
   type SlaClockAnchor,
@@ -210,6 +212,8 @@ export interface BuildPlanTaskOptions {
   gatesMet?: SlaGate[]
   /** Alternative branches to include. Variant tasks are otherwise skipped. */
   variants?: SlaVariant[]
+  /** Which half of the template to write; see `PlanScope`. Defaults to all. */
+  scope?: PlanScope
 }
 
 function offsetDate(anchor: string | null, offset: number | null): string | null {
@@ -221,10 +225,20 @@ export function buildPlanTaskDrafts(
   tasks: SlaTemplateTask[],
   options: BuildPlanTaskOptions,
 ): PlanTaskDraft[] {
-  const { matterId, templateId, startDate, anchors = {}, gatesMet = [], variants = [] } = options
+  const {
+    matterId,
+    templateId,
+    startDate,
+    anchors = {},
+    gatesMet = [],
+    variants = [],
+    scope = 'all',
+  } = options
   // A template carrying pre-engagement work models Day 0 as a real event, so an
   // unsigned matter leaves those tasks undated. A template without it (v1) is
-  // only ever generated at hire, where the start date *is* Day 0.
+  // only ever generated at hire, where the start date *is* Day 0. Read off the
+  // whole template, not the scoped half: the matter half carries no
+  // pre-engagement tasks, but its Day 0 is still the signature.
   const dayZeroFallback = tasks.some(task => task.pre_engagement) ? null : startDate
   return tasks
     .filter(task => task.variant === null || variants.includes(task.variant))
@@ -262,6 +276,9 @@ export function buildPlanTaskDrafts(
         triggers_day_zero: task.triggers_day_zero,
       }
     })
+    // Scoped after numbering, so the lead and matter lists generated at
+    // different times keep the template's order between them.
+    .filter(draft => isPhaseInScope(draft.phase, scope))
 }
 
 // ── Swapping one template for another ───────────────────────────────────────

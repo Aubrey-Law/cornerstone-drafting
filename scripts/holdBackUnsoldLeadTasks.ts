@@ -2,11 +2,12 @@
  * One-time sweep: hold back the post-engagement plan on leads that already have
  * one.
  *
- * From 20261017000000 onwards `ensureLeadSlaTasks` generates the whole template
- * and immediately archives the post-engagement half behind
- * `closeout_reason = 'not_engaged'`, so a lead carries only the work that can
- * actually be done before an engagement is signed. Every lead created before
- * that is still carrying all 48 tasks. Measured on 2026-08-24: 39 lead matters
+ * From 20261017000000 `ensureLeadSlaTasks` generated the whole template and
+ * immediately archived the post-engagement half behind
+ * `closeout_reason = 'not_engaged'`, so a lead carried only the work that can
+ * actually be done before an engagement is signed. (It now generates only the
+ * lead half, and the matter list is created at conversion.) Every lead created
+ * before 20261017000000 was still carrying all 48 tasks. Measured on 2026-08-24: 39 lead matters
  * held 1,021 of the firm's 1,024 open tasks, 709 of them post-engagement, and
  * 24 leads were carrying post-execution work for a plan nobody had bought.
  *

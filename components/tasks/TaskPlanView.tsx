@@ -39,7 +39,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatFirmDate } from '@/lib/format'
 import { dueTone, type SlaDueTone, type SlaProgress } from '@/lib/slaTasks/schedule'
-import { SLA_PHASES, SLA_PHASE_LABEL, type PlanTask, type SlaPhase } from '@/lib/slaTasks/types'
+import {
+  SLA_PHASES,
+  SLA_PHASE_LABEL,
+  isPreEngagementPhase,
+  type PlanTask,
+  type SlaPhase,
+} from '@/lib/slaTasks/types'
 import { TASK_SOURCE_LABEL, isTaskSkipped } from '@/lib/tasks/types'
 import { cn } from '@/lib/utils'
 
@@ -661,6 +667,19 @@ export function TaskPlanView({
     return groups
   }, [tasks])
 
+  // A lead and the matter it becomes run separate lists: the lead's ends at the
+  // engagement signature, and the matter's is created once it is signed. The
+  // two are shown apart so the work that won the matter and the work of the
+  // matter itself do not read as one checklist. Hand-added work with no stage
+  // sits with the matter.
+  const sections = useMemo(() => {
+    const entries = [...byPhase.entries()]
+    return [
+      { key: 'lead', title: 'Lead tasks', groups: entries.filter(([phase]) => isPreEngagementPhase(phase)) },
+      { key: 'matter', title: 'Matter tasks', groups: entries.filter(([phase]) => !isPreEngagementPhase(phase)) },
+    ].filter(section => section.groups.length > 0)
+  }, [byPhase])
+
   return (
     <div className="space-y-4">
       {loading ? (
@@ -718,43 +737,53 @@ export function TaskPlanView({
                 </Card>
               )}
 
-              {[...byPhase.entries()].map(([phase, phaseTasks]) => (
-                <Card key={phase}>
-                  <CardHeader className="border-b [.border-b]:pb-3">
-                    <CardTitle className="text-sm">
-                      {phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      {phaseTasks.filter(task => task.status === 'done').length} of{' '}
-                      {phaseTasks.length} complete
-                    </p>
-                    <CardAction>
-                      <StageSkipButton
-                        tasks={phaseTasks}
-                        busy={busyPhase === phase}
-                        onSkip={() => void patchPhase(phase, 'skipped')}
-                        onRestore={() => void patchPhase(phase, 'open')}
-                      />
-                    </CardAction>
-                  </CardHeader>
-                  <CardContent className="px-0">
-                    <ul className="divide-y divide-border">
-                      {phaseTasks.map(task => (
-                        <PlanTaskRow
-                          key={task.id}
-                          matterId={matterId}
-                          matterName={matter?.name ?? null}
-                          showMatter={showMatter}
-                          task={task}
-                          busy={busyId === task.id}
-                          onStatus={status => void patchTask(task.id, { status })}
-                          onNotes={notes => void patchTask(task.id, { notes })}
-                          onPause={paused => void patchTask(task.id, { paused })}
-                        />
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+              {sections.map(section => (
+                <section key={section.key} aria-labelledby={`plan-${section.key}-heading`} className="space-y-4">
+                  <h3
+                    id={`plan-${section.key}-heading`}
+                    className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    {section.title}
+                  </h3>
+                  {section.groups.map(([phase, phaseTasks]) => (
+                    <Card key={phase}>
+                      <CardHeader className="border-b [.border-b]:pb-3">
+                        <CardTitle className="text-sm">
+                          {phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {phaseTasks.filter(task => task.status === 'done').length} of{' '}
+                          {phaseTasks.length} complete
+                        </p>
+                        <CardAction>
+                          <StageSkipButton
+                            tasks={phaseTasks}
+                            busy={busyPhase === phase}
+                            onSkip={() => void patchPhase(phase, 'skipped')}
+                            onRestore={() => void patchPhase(phase, 'open')}
+                          />
+                        </CardAction>
+                      </CardHeader>
+                      <CardContent className="px-0">
+                        <ul className="divide-y divide-border">
+                          {phaseTasks.map(task => (
+                            <PlanTaskRow
+                              key={task.id}
+                              matterId={matterId}
+                              matterName={matter?.name ?? null}
+                              showMatter={showMatter}
+                              task={task}
+                              busy={busyId === task.id}
+                              onStatus={status => void patchTask(task.id, { status })}
+                              onNotes={notes => void patchTask(task.id, { notes })}
+                              onPause={paused => void patchTask(task.id, { paused })}
+                            />
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </section>
               ))}
             </>
           )}

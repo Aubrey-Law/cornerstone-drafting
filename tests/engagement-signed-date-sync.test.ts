@@ -265,6 +265,7 @@ describe('the engagement checklist item', () => {
       'supabase/migrations/20260824000001_estate_planning_sla_v3.sql',
       'supabase/migrations/20260922000000_college_prep_sla_v1.sql',
       'supabase/migrations/20270102090700_estate_planning_lp_sla_v1.sql',
+      'supabase/migrations/20270129090000_estate_planning_lp_member_benefits.sql',
     ]) {
       const sql = fs.readFileSync(path.join(process.cwd(), seed), 'utf8')
       expect(sql).toContain(`"name":"${ENGAGEMENT_SIGNED_TASK_TITLE}"`)
