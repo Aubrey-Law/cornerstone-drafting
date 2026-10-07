@@ -1,6 +1,6 @@
 # Mercury bank integration
 
-## Status: Phase 1 and 1b shipped; Phase 3 blocked on a static egress IP
+## Status: Phase 1 and 1b shipped; Phases 2 and 3 declined (2026-10-07)
 
 Phase 1 — the read-only deposit worklist — merged in
 [#538](https://github.com/Aubrey-Law/cornerstone-drafting/pull/538) and is dark until
@@ -8,8 +8,15 @@ Phase 1 — the read-only deposit worklist — merged in
 each matched deposit through the delegation dial rather than as a button on the card; see
 `docs/operations/mercury-deposit-payments.md`. It keeps "propose, human confirms" as the
 default and lets the firm raise exact, memo-confirmed matches to Act and report. Phase 3
-(pushing invoices to Mercury) is specified here but not built; it cannot start until the egress
-problem in Phase 2 is funded.
+(pushing invoices to Mercury) is specified here but **not built, by decision**.
+
+**Decision, 2026-10-07 (Scott): skip the invoice push.** Cornerstone keeps issuing invoices
+itself, emailed through Resend with the Stripe pay link, and Mercury deposits are matched back to
+them every morning (Phase 1b). Pushing invoices into Mercury would have added receivables in
+Mercury Accounting and Mercury's own pay link. Neither was worth a second deployable (the
+static-IP host in Phase 2) and a read-and-write banking credential. Phases 2 and 3 stay here as the
+plan if that changes. Do not raise the static IP as a blocker again unless the decision is
+revisited.
 
 ## Context
 
@@ -303,7 +310,7 @@ historical duplicates first — if the index fails to build, that failure is its
 
 ---
 
-## Phase 2 — static egress IP (funded prerequisite, blocks Phase 3)
+## Phase 2 — static egress IP (declined 2026-10-07; kept as the plan if revisited)
 
 Mercury requires **IP whitelisting for any read-and-write token**; writes from a
 non-whitelisted IP get 403. Vercel serverless has no stable egress IP. Three options:
@@ -320,11 +327,12 @@ surface is small — a single service that accepts an authenticated internal cal
 to Mercury. Cost and operational burden should be confirmed against the Secure Compute quote
 before committing.
 
-This is on the critical path to the 2027 goal. Nothing in Phase 1/1b depends on it.
+Nothing in Phase 1/1b depends on it. Declined on 2026-10-07 together with Phase 3; see the status
+note at the top.
 
 ---
 
-## Phase 3 — Cornerstone pushes, Mercury sends and collects
+## Phase 3 — Cornerstone pushes, Mercury sends and collects (declined 2026-10-07)
 
 New: `lib/integrations/mercury/{invoices,customers,jobs}.ts` (a `mercury_push_invoice`
 `WorkflowJobType` — retries and backoff come free from `lib/workflowJobs.ts`), and
