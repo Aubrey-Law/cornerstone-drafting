@@ -102,7 +102,7 @@ const errorCls = 'text-micro'
 
 // Native <select> (platform picker) styled with the Input primitive's tokens.
 const selectCls =
-  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-[34px] w-full cursor-pointer rounded-md border bg-transparent px-2.5 text-compact shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
+  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/60 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-[34px] w-full cursor-pointer rounded-md border bg-transparent px-2.5 text-compact shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
 function SegmentedYesNo({
   value, onChange,

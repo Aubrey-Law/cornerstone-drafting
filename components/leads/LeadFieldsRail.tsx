@@ -295,7 +295,7 @@ export function LeadFieldsRail({
           <select
             autoFocus
             aria-label={field.label}
-            className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-[3px]"
+            className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/60 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-[3px]"
             disabled={disabled}
             value={String(draft ?? '')}
             onChange={event => {

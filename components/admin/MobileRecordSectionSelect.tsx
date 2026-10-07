@@ -27,7 +27,7 @@ export function MobileRecordSectionSelect<T extends string>({
           aria-label={label}
           value={value}
           onChange={event => onValueChange(event.target.value as T)}
-          className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/60"
         >
           {options.map(option => (
             <option key={option.value} value={option.value}>{option.label}</option>

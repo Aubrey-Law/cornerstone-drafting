@@ -913,7 +913,7 @@ export function ChatPanel({
                   : 'Ask anything...'
             }
             rows={1}
-            className="h-10 max-h-28 min-h-10 w-full resize-none overflow-y-auto rounded-md rounded-t-none border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="h-10 max-h-28 min-h-10 w-full resize-none overflow-y-auto rounded-md rounded-t-none border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/60"
           />
         </div>
         {loading ? (

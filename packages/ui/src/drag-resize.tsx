@@ -152,7 +152,7 @@ export function DragResizeHandle({
       tabIndex={disabled ? -1 : 0}
       {...controls.handleProps}
       className={cn(
-        'flex h-3 shrink-0 cursor-ns-resize items-center justify-center bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        'flex h-3 shrink-0 cursor-ns-resize items-center justify-center bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
         edge === 'top' ? 'border-b border-border/60' : 'border-t border-border/60',
         disabled && 'pointer-events-none opacity-60',
         className,

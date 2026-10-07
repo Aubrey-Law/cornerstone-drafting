@@ -86,7 +86,7 @@ export function FormattedNoteEditor({
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring/50">
+    <div className="overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring/60">
       <div className="flex items-center gap-0.5 border-b border-border bg-muted px-1 py-1" aria-label="Note formatting">
         {FORMATS.map(format => {
           const Icon = format.icon

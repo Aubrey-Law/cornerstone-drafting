@@ -40,7 +40,7 @@ export function isLocationType(value: string): value is LocationType {
 }
 
 export const EYEBROW = 'text-xs font-semibold tracking-[.07em] uppercase'
-export const FOCUS = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+export const FOCUS = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60'
 export const PRIMARY_BUTTON = `rounded-lg bg-primary font-semibold text-primary-foreground transition-colors hover:bg-[var(--booking-primary-hover)] disabled:pointer-events-none disabled:opacity-60 ${FOCUS}`
 
 export function fmtRange(iso: string, durationMinutes: number): string {

@@ -490,7 +490,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                   id="email-template-category"
                   value={form.category}
                   onChange={event => setForm(prev => ({ ...prev, category: event.target.value as EmailCategory }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/60"
                 >
                   {EMAIL_CATEGORIES.map(category => (
                     <option key={category} value={category}>
