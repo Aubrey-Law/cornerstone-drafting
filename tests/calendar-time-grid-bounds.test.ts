@@ -122,3 +122,11 @@ describe('endMinutesOfDay', () => {
     expect(endMinutesOfDay(localIso(10, 23), localIso(11, 1))).toBe(24 * 60)
   })
 })
+
+describe('timezone-aware multi-day columns', () => {
+  it('widens the continuation day from midnight without wrapping the end', () => {
+    const event = externalEvent({ startIso: '2026-08-11T03:00:00Z', endIso: '2026-08-11T05:00:00Z' })
+    const dates = [new Date(2026, 7, 10), new Date(2026, 7, 11)]
+    expect(timeGridBounds(dates, new Map(), new Map([['2026-08-10', [event]], ['2026-08-11', [event]]]), 'America/New_York')).toEqual({ startMin: 0, endMin: 1440 })
+  })
+})

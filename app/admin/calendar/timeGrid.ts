@@ -1,3 +1,4 @@
+import { columnInterval, instantMinutes } from './calendarTime'
 import type { CalendarAppointment, ExternalCalendarEvent } from './types'
 
 /** Default time-grid window for day/week views (minutes from local midnight). */
@@ -10,9 +11,8 @@ function dayKey(d: Date): string {
 }
 
 /** Minutes from local midnight for an ISO instant. */
-export function minutesOfDay(iso: string): number {
-  const d = new Date(iso)
-  return d.getHours() * 60 + d.getMinutes()
+export function minutesOfDay(iso: string, timezone?: string): number {
+  return instantMinutes(iso, timezone)
 }
 
 /**
@@ -40,6 +40,7 @@ export function timeGridBounds(
   days: Date[],
   byDay: Map<string, CalendarAppointment[]>,
   calendarByDay: Map<string, ExternalCalendarEvent[]>,
+  timezone?: string,
 ): { startMin: number; endMin: number } {
   let startMin = GRID_START_MIN
   let endMin = GRID_END_MIN
@@ -52,11 +53,13 @@ export function timeGridBounds(
     const key = dayKey(day)
     for (const a of byDay.get(key) ?? []) {
       if (a.status === 'cancelled') continue
-      widen(minutesOfDay(a.startTime), endMinutesOfDay(a.startTime, a.endTime))
+      const interval = columnInterval(key, a.startTime, a.endTime, timezone)
+      widen(interval.start, interval.end)
     }
     for (const e of calendarByDay.get(key) ?? []) {
       if (e.isAllDay) continue
-      widen(minutesOfDay(e.startIso), endMinutesOfDay(e.startIso, e.endIso))
+      const interval = columnInterval(key, e.startIso, e.endIso, timezone)
+      widen(interval.start, interval.end)
     }
   }
   return {

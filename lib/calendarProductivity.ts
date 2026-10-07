@@ -1,4 +1,4 @@
-import { FIRM_TIMEZONE, firmDateKey } from '@/lib/firmDate'
+import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import type { AttentionItem } from '@/app/admin/calendar/types'
 
 export interface CalendarWorkEvent {
@@ -88,10 +88,12 @@ export function aggregateWorkload(
   events: CalendarWorkEvent[],
   targetMinutes: number,
   todayKey: string,
+  timezone = FIRM_TIMEZONE,
 ): WorkloadDay[] {
   const totals = new Map(dates.map(date => [date, { client: 0, internal: 0 }]))
   for (const event of events) {
-    const date = firmDateKey(event.startIso)
+    const instant = new Date(event.startIso)
+    const date = Number.isFinite(instant.getTime()) ? instant.toLocaleDateString('en-CA', { timeZone: timezone }) : null
     const bucket = date ? totals.get(date) : null
     if (!bucket) continue
     const minutes = Math.max(0, Math.round((Date.parse(event.endIso) - Date.parse(event.startIso)) / 60_000))

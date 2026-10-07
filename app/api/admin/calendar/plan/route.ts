@@ -3,7 +3,9 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { listCalendarView, mapCalendarView } from '@/lib/appointments/googleEvents'
 import { aggregateWorkload, nextWorkingDateKeys } from '@/lib/calendarProductivity'
 import type { CalendarWorkEvent } from '@/lib/calendarProductivity'
-import { FIRM_TIMEZONE, firmTodayKey } from '@/lib/firmDate'
+import { getSchedulingSettings } from '@/lib/appointments/settings'
+import { calendarAnchorDate } from '@/lib/calendarDay'
+import { dateInstant, nextDateKey } from '@/lib/calendarAvailability'
 import { fetchDueTasks, fetchTasks } from '@/lib/queries/tasks'
 import { effectiveDueAt, taskDueGroup } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -19,43 +21,53 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
+  const { timezone } = await getSchedulingSettings()
   const requested = req.nextUrl.searchParams.get('from')
   const from = Number.isFinite(Date.parse(requested ?? '')) ? new Date(requested!) : new Date()
-  const dates = nextWorkingDateKeys(from, 10, FIRM_TIMEZONE)
-  const rangeFrom = new Date(`${dates[0]}T00:00:00-04:00`)
-  const rangeTo = new Date(`${dates[dates.length - 1]}T23:59:59-05:00`)
-  const lastWeekFrom = new Date(rangeFrom.getTime() - 7 * 86_400_000)
+  const requestedTo = req.nextUrl.searchParams.get('to')
+  let dates = nextWorkingDateKeys(from, 10, timezone)
+  if (requestedTo) {
+    const startKey = req.nextUrl.searchParams.get('from') ?? ''
+    if (!Number.isFinite(calendarAnchorDate(startKey, new Date(NaN)).getTime()) || !Number.isFinite(calendarAnchorDate(requestedTo, new Date(NaN)).getTime()) || requestedTo <= startKey || Date.parse(requestedTo) - Date.parse(startKey) > 42 * 86_400_000) return NextResponse.json({ error: 'Valid date range required (maximum 42 days)' }, { status: 400 })
+    dates = []
+    for (let key = startKey; key < requestedTo; key = nextDateKey(key)) dates.push(key)
+  }
+  const rangeFrom = new Date(dateInstant(dates[0], timezone))
+  const rangeTo = new Date(dateInstant(nextDateKey(dates[dates.length - 1]), timezone))
+  const lastWeekFrom = new Date(dateInstant(nextDateKey(dates[0], -7), timezone))
+  const workloadOnly = req.nextUrl.searchParams.get('workload') === '1'
   const admin = getAdminClient()
-  const todayKey = firmTodayKey()
+  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
 
   const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult, workGraph, workPreferences, storedPlan] = await Promise.all([
     admin
       .from('appointments')
       .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, google_event_id')
       .gte('start_time', rangeFrom.toISOString())
-      .lte('start_time', rangeTo.toISOString()),
+      .lt('start_time', rangeTo.toISOString()),
     // Two exact reads where one capped read used to stand in for both: the
     // deadlines and what slipped are due on or before the end of the window,
     // and the unscheduled work is the tasks with an estimate and no date at
     // all. 1,000 was already below the 1,024 open tasks this read walked.
-    fetchDueTasks(rangeTo.toISOString()),
-    fetchTasks({ status: 'open', undated: true, hasEstimate: true, all: true }),
+    workloadOnly ? Promise.resolve([]) : fetchDueTasks(rangeTo.toISOString()),
+    workloadOnly ? Promise.resolve([]) : fetchTasks({ status: 'open', undated: true, hasEstimate: true, all: true }),
     loadFirmSettings(),
-    admin
+    workloadOnly ? Promise.resolve({ data: [] }) : admin
       .from('appointments')
       .select('id, start_time, end_time, status, linked_matter_id')
       .gte('start_time', lastWeekFrom.toISOString())
       .lt('start_time', rangeFrom.toISOString()),
-    admin
+    workloadOnly ? Promise.resolve({ data: [] }) : admin
       .from('matter_activity')
       .select('matter_id, event_type, created_at')
       .eq('event_type', 'stage_changed')
       .gte('created_at', lastWeekFrom.toISOString())
       .lt('created_at', rangeFrom.toISOString()),
-    fetchWorkGraphForUser(auth.userId),
-    fetchWorkPreferences(auth.userId),
-    fetchDailyPlan(auth.userId, todayKey),
+    workloadOnly ? Promise.resolve(null) : fetchWorkGraphForUser(auth.userId),
+    workloadOnly ? Promise.resolve(null) : fetchWorkPreferences(auth.userId),
+    workloadOnly ? Promise.resolve(null) : fetchDailyPlan(auth.userId, todayKey),
   ])
+  if (appointmentResult.error) return NextResponse.json({ error: 'Workload unavailable' }, { status: 500 })
   const appointments = appointmentResult.data ?? []
   const targetMinutes = firmSettings.calendarDailyTargetMinutes
   const workEvents: CalendarWorkEvent[] = appointments
@@ -70,6 +82,7 @@ export async function GET(req: NextRequest) {
         .filter((id): id is string => Boolean(id)),
     )
     const view = await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString())
+    connected = !view.truncated && view.skipped.length === 0
     const calendarEvents = mapCalendarView(view.raw, exclude)
     workEvents.push(...calendarEvents
       .filter(event => !event.isAllDay)
@@ -77,6 +90,10 @@ export async function GET(req: NextRequest) {
   } catch {
     connected = false
   }
+
+  const days = connected ? aggregateWorkload(dates, workEvents, targetMinutes, todayKey, timezone) : []
+  if (workloadOnly) return NextResponse.json({ connected, days })
+  if (!workGraph || !workPreferences) return NextResponse.json({ error: 'Plan unavailable' }, { status: 500 })
 
   const deadlines = tasks
     .map(task => ({ task, date: effectiveDueAt(task) }))
@@ -119,7 +136,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     connected,
-    days: aggregateWorkload(dates, workEvents, targetMinutes, todayKey),
+    days,
     today: buildCalendarTodayPlan({
       items: workGraph.items,
       preview: createDailyPlanPreview({

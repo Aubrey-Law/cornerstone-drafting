@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { type BookingQuestion, MAX_ANSWER_LENGTH } from '@/lib/appointments/bookingQuestions'
 import { normalizeBookingNames } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
 import {
   LOCATION_LABEL,
@@ -86,11 +87,13 @@ export function QuickBookPopover({
   prefillIso,
   authHeaders,
   onBooked,
+  timezone = FIRM_TIMEZONE,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   types: BookableType[]
   prefillIso?: string | null
+  timezone?: string
   authHeaders: () => HeadersInit | undefined
   onBooked: () => void
 }) {
@@ -143,6 +146,8 @@ export function QuickBookPopover({
     if (!open || !draft.typeId || !draft.locationType) return
     const controller = new AbortController()
     setLoadingSlots(true)
+    setSlots([])
+    setConnected(false)
     const params = new URLSearchParams({
       typeId: draft.typeId,
       locationType: draft.locationType,
@@ -156,14 +161,17 @@ export function QuickBookPopover({
     })
       .then(response => response.ok ? response.json() : { connected: false, slots: [] })
       .then(body => {
+        if (controller.signal.aborted) return
         setSlots(body.slots ?? [])
         setConnected(Boolean(body.connected))
       })
-      .finally(() => setLoadingSlots(false))
+      .catch(() => { if (!controller.signal.aborted) { setSlots([]); setConnected(false) } })
+      .finally(() => { if (!controller.signal.aborted) setLoadingSlots(false) })
     return () => controller.abort()
   }, [open, draft.typeId, draft.locationType, range, authHeaders, prefillIso])
 
   async function submit() {
+    if (loadingSlots || !connected || !slots.some(slot => slot.startIso === draft.startIso)) { toast.error('Choose a verified available slot'); return }
     if (!draft.attendeeEmail.trim() || !draft.typeId || !draft.startIso) {
       toast.error('Choose who, what, where, and when')
       return
@@ -362,14 +370,14 @@ export function QuickBookPopover({
           <Step number="4" title="When">
             {!connected ? (
               <p className="rounded-md border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground">
-                Google Calendar is disconnected, so verified openings are unavailable.
+                Verified openings are unavailable. Check the calendar connection and try again.
               </p>
             ) : loadingSlots ? (
               <p className="text-xs text-muted-foreground">Checking the calendar and appointment buffers…</p>
             ) : (
               <div className="grid grid-cols-2 gap-1.5">
                 {slots.slice(0, 14).map(slot => (
-                  <SlotButton key={slot.startIso} slot={slot} selected={draft.startIso === slot.startIso} onClick={() => setDraft(current => ({ ...current, startIso: slot.startIso }))} />
+                  <SlotButton timezone={timezone} key={slot.startIso} slot={slot} selected={draft.startIso === slot.startIso} onClick={() => setDraft(current => ({ ...current, startIso: slot.startIso }))} />
                 ))}
               </div>
             )}
@@ -394,8 +402,8 @@ export function QuickBookPopover({
           )}
         </div>
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
-          <span className="text-micro text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString() : 'Choose a verified slot'}</span>
-          <Button size="sm" disabled={booking || !draft.startIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
+          <span className="text-micro text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString('en-US', { timeZone: timezone }) : 'Choose a verified slot'}</span>
+          <Button size="sm" disabled={booking || loadingSlots || !connected || !slots.some(slot => slot.startIso === draft.startIso) || !draft.startIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
             {booking ? 'Booking…' : 'Book & email confirmation'}
           </Button>
         </div>
@@ -450,11 +458,11 @@ function Step({ number, title, children }: { number: string; title: string; chil
   return <section><h3 className="mb-1.5 text-xs font-semibold text-foreground"><span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-muted text-micro">{number}</span>{title}</h3>{children}</section>
 }
 
-function SlotButton({ slot, selected, onClick }: { slot: OpenSlot; selected: boolean; onClick: () => void }) {
+function SlotButton({ slot, selected, onClick, timezone }: { timezone: string; slot: OpenSlot; selected: boolean; onClick: () => void }) {
   const date = new Date(slot.startIso)
   return (
     <button type="button" onClick={onClick} className={cn('rounded-md border px-2 py-1.5 text-left', selected ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border hover:bg-accent')}>
-      <span className="block text-xs font-medium text-foreground">{date.toLocaleDateString('en-US', { weekday: 'short' })} · {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+      <span className="block text-xs font-medium text-foreground">{date.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'short' })} · {date.toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })}</span>
       <span className="text-micro text-muted-foreground">
         {slot.afterHours ? 'after hours · ' : ''}{slot.meetingOrdinal >= 2 ? `meeting #${slot.meetingOrdinal}` : 'first client meeting'}
       </span>

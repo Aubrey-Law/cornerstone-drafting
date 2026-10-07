@@ -162,7 +162,7 @@ describe('QuickBookPopover booking questions', () => {
         posted.push(JSON.parse(String(init.body)))
         return { ok: true, json: async () => ({ ok: true }) }
       }
-      return { ok: true, json: async () => ({ connected: true, slots: [] }) }
+      return { ok: true, json: async () => ({ connected: true, slots: [{ startIso: slot, endIso: new Date(Date.parse(slot) + 30 * 60_000).toISOString(), afterHours: false, meetingOrdinal: 1 }] }) }
     }))
     const slot = new Date(Date.now() + 86_400_000).toISOString()
     render(
@@ -186,6 +186,7 @@ describe('QuickBookPopover booking questions', () => {
     fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Jones' } })
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'mary@example.com' } })
     fireEvent.change(screen.getByLabelText(/How did you hear about us/), { target: { value: 'Google' } })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Book & email confirmation' }) as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: 'Book & email confirmation' }))
     await waitFor(() => expect(posted).toHaveLength(1))
     expect(posted[0].answers).toEqual({ heard: 'Google' })

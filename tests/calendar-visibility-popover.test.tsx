@@ -71,7 +71,7 @@ describe('CalendarVisibilityPopover', () => {
     renderPopover({ hiddenIds: [HOLIDAYS] })
 
     expect(screen.getByTestId('calendar-visibility-trigger')).toHaveTextContent(
-      '· 2 of 3 calendars',
+      'Calendars 3 of 4',
     )
   })
 
@@ -85,7 +85,7 @@ describe('CalendarVisibilityPopover', () => {
     expect(primary).toBeDisabled()
     // The tally agrees: the primary calendar is still shown.
     expect(screen.getByTestId('calendar-visibility-trigger')).toHaveTextContent(
-      '· 3 of 3 calendars',
+      'Calendars 4 of 4',
     )
   })
 

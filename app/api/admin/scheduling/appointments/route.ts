@@ -37,10 +37,10 @@ export async function GET(req: NextRequest) {
   const run = (columns: string) => {
     const query = getAdminClient().from('appointments').select(columns)
     if (hasRange) {
-      // Calendar mode: everything in [from, to), oldest first.
+      // Calendar mode: every appointment intersecting [from, to), including overnight meetings.
       return query
-        .gte('start_time', new Date(from).toISOString())
         .lt('start_time', new Date(to).toISOString())
+        .gt('end_time', new Date(from).toISOString())
         .order('start_time', { ascending: true })
         .limit(500)
     }
