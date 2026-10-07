@@ -716,6 +716,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                       aria-label="Select all visible matters"
                     />
                   </TableHead>
+                  <SortableHead label="Matter #" asc="matter_number" desc="matter_number_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Client" asc="client_asc" desc="client_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Practice Area" asc="practice_asc" desc="practice_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Stage" asc="stage_asc" desc="stage_desc" sortKey={sortKey} onSort={applySort} />
@@ -740,6 +741,9 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                           aria-label={`Select matter for ${m.client_name || 'client'}`}
                         />
                       </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {m.matter_number || '—'}
+                      </TableCell>
                       <TableCell>
                         <Link
                           href={`/admin/matters/${m.matter_id}`}
@@ -747,10 +751,8 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                         >
                           {matterTitle(m)}
                         </Link>
-                        {(customName || m.matter_number) && (
-                          <span className="block text-xs text-muted-foreground">
-                            {[customName, m.matter_number].filter(Boolean).join(' · ')}
-                          </span>
+                        {customName && (
+                          <span className="block text-xs text-muted-foreground">{customName}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
