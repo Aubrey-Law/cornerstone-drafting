@@ -24,7 +24,7 @@ import {
 
 const root = process.cwd()
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8')
-const MIGRATION = read('supabase/migrations/20270129090000_legal_plans_metlife_legalease_arag_clc.sql')
+const MIGRATION = read('supabase/migrations/20270129090100_legal_plans_metlife_legalease_arag_clc.sql')
 
 describe('the four plans', () => {
   it('are the billing types, the carriers and the lead rail options', () => {
@@ -105,7 +105,7 @@ describe('the migration', () => {
     const files = fs.readdirSync(path.join(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).sort()
     for (const name of ['legal_plan_display_name', 'update_lead_opportunity_field', 'update_lead_opportunity_details', 'lead_score']) {
       const newest = files.filter(file => read(`supabase/migrations/${file}`).includes(`function public.${name}(`)).at(-1)
-      expect(newest, name).toBe('20270129090000_legal_plans_metlife_legalease_arag_clc.sql')
+      expect(newest, name).toBe('20270129090100_legal_plans_metlife_legalease_arag_clc.sql')
     }
   })
 })

@@ -19,7 +19,7 @@ import { chargePayer, invoicePayerLabels, invoicePayers, isCarrierInvoice } from
  */
 
 const migration = fs.readFileSync(
-  path.join(process.cwd(), 'supabase/migrations/20270129090000_legal_plans_metlife_legalease_arag_clc.sql'),
+  path.join(process.cwd(), 'supabase/migrations/20270129090100_legal_plans_metlife_legalease_arag_clc.sql'),
   'utf8',
 )
 
