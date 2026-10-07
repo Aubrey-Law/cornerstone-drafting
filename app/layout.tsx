@@ -7,30 +7,13 @@ import './globals.css'
 
 // Vendored latin-subset variable fonts (assets/fonts/) so production builds
 // don't reach Google's network. Latin-ext glyphs fall back to system fonts.
-// Outfit is the app-wide UI face; DM Sans stays on --font-sans because the
-// guided interview (client intake) pins its typography to that variable.
+// Outfit is the app-wide UI face. DM Sans (the client intake) and Lora (client
+// headings) live in lib/clientFonts.ts so admin routes don't preload them.
 const outfit = localFont({
   src: '../assets/fonts/outfit-latin-var.woff2',
   weight: '100 900',
   display: 'swap',
   variable: '--font-outfit',
-})
-
-const dmSans = localFont({
-  src: '../assets/fonts/dm-sans-latin-var.woff2',
-  weight: '100 1000',
-  display: 'swap',
-  variable: '--font-sans',
-})
-
-// Exposed as `--font-lora`, not `--font-serif`: the Tailwind theme bridge
-// (styles/theme/tailwind-bridge.css) maps `--font-serif` to the sans stack, so
-// anything injected under that name is shadowed and never renders.
-const lora = localFont({
-  src: '../assets/fonts/lora-latin-var.woff2',
-  weight: '400 700',
-  display: 'swap',
-  variable: '--font-lora',
 })
 
 // Not preloaded: only the booking card and the design-sheet clause preview use
@@ -78,7 +61,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${dmSans.variable} ${lora.variable} ${ebGaramond.variable} ${cormorantSc.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${ebGaramond.variable} ${cormorantSc.variable}`} suppressHydrationWarning>
       <head>
         {/* Optional: restores saved light/dark on admin; system mode uses CSS prefers-color-scheme */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { getFirmConfig } from '@/lib/firmConfig'
+import { clientSerifClass } from '@/lib/clientFonts'
 
 /**
  * What a client sees when a client-facing page throws.
@@ -50,7 +51,7 @@ export function ClientErrorState({
   const firm = getFirmConfig()
 
   return (
-    <main className="client-root flex min-h-dvh flex-col items-center justify-center gap-5 bg-background px-6 py-12 text-center text-foreground">
+    <main className={`client-root ${clientSerifClass} flex min-h-dvh flex-col items-center justify-center gap-5 bg-background px-6 py-12 text-center text-foreground`}>
       <AlertTriangle className="size-9 text-destructive" aria-hidden />
 
       <div className="max-w-md space-y-2">

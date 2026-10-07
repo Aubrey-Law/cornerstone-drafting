@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { clientSerifClass } from '@/lib/clientFonts'
 
 interface AuthShellProps {
   children: ReactNode
@@ -22,7 +23,7 @@ export function AuthShell({
   logoHeight = 140,
 }: AuthShellProps) {
   return (
-    <main className={cn('client-root dark flex min-h-screen items-start justify-center bg-background text-foreground px-4 py-6 sm:items-center sm:py-12', className)}>
+    <main className={cn(clientSerifClass, 'client-root dark flex min-h-screen items-start justify-center bg-background text-foreground px-4 py-6 sm:items-center sm:py-12', className)}>
       <div className={cn('w-full max-w-md space-y-5 sm:space-y-8', contentClassName)}>
         <div className="flex justify-center">
           <Link

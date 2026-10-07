@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
+import { guidedFontClass } from '@/lib/clientFonts'
 import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
 import { useContacts } from '@/hooks/useContacts'
 import {
@@ -459,7 +460,7 @@ export default function GuidedInterview({
   // ===== render: submitted/locked (client) =====
   if (submitted && !isAttorney) {
     return (
-      <div className="guided-interview" style={{ ...guidedPageStyle, minHeight: '100vh' }}>
+      <div className={`guided-interview ${guidedFontClass}`} style={{ ...guidedPageStyle, minHeight: '100vh' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto' }}>
           <BrandBar saveStatus="saved" matterLabel={undefined} actions={portalLink} />
           <div style={{
@@ -483,7 +484,7 @@ export default function GuidedInterview({
 
   // ===== render: main =====
   return (
-    <div className="guided-interview" style={{ ...guidedPageStyle, minHeight: '100vh' }}>
+    <div className={`guided-interview ${guidedFontClass}`} style={{ ...guidedPageStyle, minHeight: '100vh' }}>
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
         <BrandBar
           saveStatus={isAttorney ? (attorneySaving === 'idle' ? 'saved' : attorneySaving) : (saveStatus === 'idle' ? 'saved' : saveStatus)}
@@ -739,7 +740,7 @@ export function ReviewModal(props: {
           left the whole modal transparent over the page behind it. */}
       <DialogContent
         showCloseButton={false}
-        className="guided-interview gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[920px]"
+        className={`guided-interview ${guidedFontClass} gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[920px]`}
         style={{ background: 'var(--gi-surface)' }}
       >
         <div style={{ background: 'var(--gi-navy)', padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

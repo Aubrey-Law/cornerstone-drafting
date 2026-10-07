@@ -48,10 +48,11 @@ describe('client serif scope', () => {
   })
 
   it('reuses a font that is already vendored', () => {
-    // Lora is loaded in app/layout.tsx and already carried the portal
+    // Lora is vendored (lib/clientFonts.ts) and already carried the portal
     // dashboard's heading, so this costs no new bytes over the wire.
-    const layout = readFileSync(join(ROOT, 'app/layout.tsx'), 'utf8')
-    expect(layout).toContain('--font-lora')
+    const fonts = readFileSync(join(ROOT, 'lib/clientFonts.ts'), 'utf8')
+    expect(fonts).toContain('--font-lora')
+    expect(fonts).toContain('lora-latin-var.woff2')
     expect(globals).not.toMatch(/@import url\(.*fonts\.googleapis/)
   })
 
@@ -88,5 +89,68 @@ describe('client serif scope', () => {
     const guided = readFileSync(join(ROOT, 'app/intake/guided.css'), 'utf8')
     expect(guided).toContain('font-family: var(--gi-sans)')
     expect(globals).not.toMatch(/\.client-root\s+(body|input|button|p)\b[^{]*\{[^}]*--font-lora/)
+  })
+})
+
+/**
+ * DM Sans and Lora are defined in lib/clientFonts.ts, not on <html>, so admin
+ * routes don't preload ~100 KB they never draw. A CSS variable only exists
+ * where its class is applied, so every element that depends on one has to carry
+ * the class itself — including a Radix dialog, which portals into <body> outside
+ * any wrapper. These assert that per element rather than trusting a layout.
+ */
+describe('client fonts are scoped to the elements that use them', () => {
+  /** Component files naming a class; stylesheets are excluded — selectors aren't elements. */
+  function tsxFilesWith(needle: string): string[] {
+    return execFileSync('git', ['grep', '-l', needle, '--', 'app/*.tsx', 'components/*.tsx'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter(Boolean)
+  }
+
+  /** Lines that put a class on an element: comments and prose don't count. */
+  function classLines(file: string, needle: string): string[] {
+    return readFileSync(join(ROOT, file), 'utf8')
+      .split('\n')
+      .filter(line => line.includes(needle) && !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(line))
+  }
+
+  it('keeps DM Sans and Lora out of the root layout', () => {
+    const layout = readFileSync(join(ROOT, 'app/layout.tsx'), 'utf8')
+    expect(layout).not.toMatch(/dm-sans|lora-latin/)
+    expect(layout).not.toMatch(/--font-sans|--font-lora/)
+  })
+
+  it('puts the serif on every client-root element', () => {
+    const missing = tsxFilesWith('client-root').flatMap(file =>
+      classLines(file, 'client-root')
+        .filter(line => !line.includes('clientSerifClass'))
+        .map(line => `${file}: ${line.trim()}`),
+    )
+    expect(missing).toEqual([])
+  })
+
+  it('puts DM Sans and the serif on every client guided-interview element', () => {
+    const missing = tsxFilesWith('guided-interview').flatMap(file =>
+      classLines(file, 'guided-interview')
+        .filter(line => !line.includes('guided-zinc') && !line.includes('guidedFontClass'))
+        .map(line => `${file}: ${line.trim()}`),
+    )
+    expect(missing).toEqual([])
+  })
+
+  it('does not load the client fonts for the admin drafting surfaces', () => {
+    // These share `.guided-interview` but opt into the app theme (Outfit), so
+    // they must not pull the client faces back into admin routes.
+    for (const file of [
+      'app/admin/drafting/[matterId]/ReviewStep.tsx',
+      'app/admin/drafting/[matterId]/GenerateStep.tsx',
+      'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx',
+    ]) {
+      const source = readFileSync(join(ROOT, file), 'utf8')
+      expect(source, file).not.toMatch(/clientFonts|guidedFontClass|clientSerifClass/)
+    }
   })
 })
