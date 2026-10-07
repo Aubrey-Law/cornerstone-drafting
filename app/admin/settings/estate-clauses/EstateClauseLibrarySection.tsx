@@ -131,7 +131,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
           </div>
           <div>
             <Label htmlFor="clause-status" className="sr-only">Filter by status</Label>
-            <select id="clause-status" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-44" value={filter} onChange={event => setFilter(event.target.value as FilterStatus)}>
+            <select id="clause-status" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/60 sm:w-44" value={filter} onChange={event => setFilter(event.target.value as FilterStatus)}>
               {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>

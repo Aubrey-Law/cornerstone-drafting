@@ -458,7 +458,7 @@ function RealEstateModalContent({ items, onChange }: {
     onChange(items.filter(r => r.id !== id))
   }
 
-  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/60 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   return (
     <div className="space-y-4">
@@ -530,7 +530,7 @@ function BusinessModalContent({ items, onChange }: {
 }) {
   const businessTypes = ['Sole Proprietorship', 'LLC', 'Partnership', 'Corporation', 'Other']
   const ownerOptions = ['Client', 'Spouse', 'Joint']
-  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/60 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   function addRow() {
     onChange([...items, { id: crypto.randomUUID(), name: '', business_type: '', interest_pct: '', value: '', owner: 'Client' }])
@@ -601,7 +601,7 @@ function LiabilityModalContent({ items, onChange }: {
   onChange: (items: LiabilityItem[]) => void
 }) {
   const ownerOptions = ['Client', 'Spouse', 'Joint']
-  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/60 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   function addRow() {
     onChange([...items, { id: crypto.randomUUID(), description: '', value: '', owner: 'Client' }])

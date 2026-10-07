@@ -42,7 +42,7 @@ export default function BookingQuestionFields({
                   return (
                     <label
                       key={option}
-                      className={`flex min-h-11 cursor-pointer items-center rounded-lg border px-3.5 py-2.5 text-base transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 ${
+                      className={`flex min-h-11 cursor-pointer items-center rounded-lg border px-3.5 py-2.5 text-base transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60 ${
                         checked
                           ? 'border-brand-teal bg-selected font-medium text-selected-foreground'
                           : 'border-border bg-card text-foreground hover:border-brand-teal'

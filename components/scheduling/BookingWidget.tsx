@@ -191,7 +191,7 @@ export default function BookingWidget({
                 {locationOptions.map(option => (
                   <label
                     key={option}
-                    className={`flex min-h-11 grow cursor-pointer items-center rounded-lg border px-3.5 @3xl/booking:grow-0 @5xl/booking:grow py-2.5 text-base transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 ${
+                    className={`flex min-h-11 grow cursor-pointer items-center rounded-lg border px-3.5 @3xl/booking:grow-0 @5xl/booking:grow py-2.5 text-base transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60 ${
                       locationType === option
                         ? 'border-brand-teal bg-selected font-medium text-selected-foreground'
                         : 'border-border bg-card text-foreground hover:border-brand-teal'
@@ -319,7 +319,7 @@ export default function BookingWidget({
                 </div>
 
                 <label
-                  className={`flex cursor-pointer items-start gap-3.5 rounded-[10px] border px-4 py-3.5 transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 @3xl/booking:col-span-2 ${
+                  className={`flex cursor-pointer items-start gap-3.5 rounded-[10px] border px-4 py-3.5 transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/60 @3xl/booking:col-span-2 ${
                     includeSpouse
                       ? 'border-brand-teal bg-selected'
                       : 'border-border bg-[var(--booking-panel)]'

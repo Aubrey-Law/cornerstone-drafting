@@ -249,7 +249,7 @@ export default function SlotPicker({
   const selectedDate = selectedDay ? parseDayKey(selectedDay) : null
 
   const navButton =
-    'grid size-11 place-items-center rounded-full border border-border bg-card text-xl leading-none text-primary transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 @2xl/picker:size-9 @2xl/picker:text-lg'
+    'grid size-11 place-items-center rounded-full border border-border bg-card text-xl leading-none text-primary transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60 @2xl/picker:size-9 @2xl/picker:text-lg'
 
   const calendar = (
     <div className="flex flex-col gap-4 @2xl/picker:gap-5 @2xl/picker:px-9 @2xl/picker:pt-9 @2xl/picker:pb-8">
@@ -313,7 +313,7 @@ export default function SlotPicker({
                         aria-current={isSelected ? 'date' : undefined}
                         aria-label={`${fmtLongDay(date)}, ${count > 0 ? plural(count, 'open time') : 'no open times'}`}
                         onClick={() => pickDay(key)}
-                        className={`relative grid size-11 place-items-center rounded-full text-base transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 @2xl/picker:size-12 ${
+                        className={`relative grid size-11 place-items-center rounded-full text-base transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60 @2xl/picker:size-12 ${
                           pending
                             ? 'animate-pulse bg-muted text-transparent'
                             : isSelected
@@ -377,7 +377,7 @@ export default function SlotPicker({
         {canGoNext && (
           <button
             type="button"
-            className="mt-2 font-medium text-brand-teal underline-offset-4 hover:underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="mt-2 font-medium text-brand-teal underline-offset-4 hover:underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
             onClick={() => goMonth(1)}
           >
             Next month →
@@ -410,7 +410,7 @@ export default function SlotPicker({
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => onSelect(isSelected ? null : slot)}
-                className={`h-12 w-full shrink-0 rounded-lg border text-base font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 @2xl/picker:h-[46px] ${
+                className={`h-12 w-full shrink-0 rounded-lg border text-base font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60 @2xl/picker:h-[46px] ${
                   isSelected
                     ? 'border-brand-teal bg-brand-teal text-white'
                     : 'border-border bg-card text-primary hover:border-brand-teal'
@@ -430,7 +430,7 @@ export default function SlotPicker({
     : null
 
   const primaryButton =
-    'h-12 rounded-lg bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-[var(--booking-primary-hover)] disabled:pointer-events-none disabled:opacity-40 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+    'h-12 rounded-lg bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-[var(--booking-primary-hover)] disabled:pointer-events-none disabled:opacity-40 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60'
 
   return (
     <div className="client-booking @container/picker flex h-full flex-col">
