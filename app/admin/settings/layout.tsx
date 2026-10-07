@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
-import { SettingsNav } from './SettingsNav'
+import { SettingsNav } from './SettingsNavMenu'
 
 /** Every settings page — tabs and their own routes alike — shares the side menu. */
 export default async function AdminSettingsLayout({ children }: { children: React.ReactNode }) {
