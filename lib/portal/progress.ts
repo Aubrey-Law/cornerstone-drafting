@@ -1,5 +1,7 @@
 import { parsePracticeArea } from '@/lib/practiceArea'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { firmTodayKey } from '@/lib/firmDate'
+import { readProbateStage } from '@/lib/probateStages/model'
 
 export type PortalTrack = 'estate-planning' | 'probate' | 'other'
 export type PortalMilestone = { key: string; label: string; state: 'completed' | 'current' | 'pending' }
@@ -15,15 +17,15 @@ export function portalProgress(input: Omit<PortalProgressInput, 'heading'>): Por
 }
 
 /** Only recorded facts complete milestones. Later facts never fill earlier gaps. */
-export function progressFromMatterDetails(details: MatterDetailsRow | null): PortalProgress {
+export function progressFromMatterDetails(details: MatterDetailsRow | null, today: string = firmTodayKey()): PortalProgress {
   const practice = parsePracticeArea(details?.practice_area)
   const track: PortalTrack = practice === 'Probate' ? 'probate' : practice === 'EP' || practice === 'EP-LP' ? 'estate-planning' : 'other'
-  const facts: Array<[string, string, boolean]> = track === 'probate' ? [
-    ['appointment', 'Representative appointed', Boolean(details?.pb_pr_appointment_date)],
-    ['inventory', 'Inventory filed', Boolean(details?.pb_inventory_filed_date)],
-    ['distribution', 'Final distribution recorded', Boolean(details?.pb_final_distribution_date)],
-    ['closed', 'Estate closed', details?.pb_estate_closed === true || Boolean(details?.pb_estate_closed_date)],
-  ] : track === 'estate-planning' ? [
+  // Probate milestones are the probate stages the firm sees, each complete
+  // only when its own date is on the record (lib/probateStages/model.ts).
+  const facts: Array<[string, string, boolean]> = track === 'probate' ? readProbateStage(details, today).steps
+    .filter(step => step.key !== 'probate_opening')
+    .map((step): [string, string, boolean] => [step.key.replace(/^probate_/, ''), step.clientLabel, step.reachedOn !== null])
+  : track === 'estate-planning' ? [
     ['intake', 'Intake received', Boolean(details?.intake_completed_at || details?.intake_date)],
     ['drafts', 'Drafts sent', Boolean(details?.draft_sent_date)],
     ['review', 'Drafts approved', Boolean(details?.drafts_approved_date)],

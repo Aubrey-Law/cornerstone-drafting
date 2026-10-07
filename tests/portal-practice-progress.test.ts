@@ -4,7 +4,9 @@ describe('recorded portal progress', () => {
   it('keeps probate milestones separate from drafting and does not infer missing work', () => {
     const progress = progressFromMatterDetails({ practice_area: 'Probate', pb_inventory_filed_date: '2026-09-01' })
     expect(progress.heading).toBe('Your probate matter')
-    expect(progress.milestones.map(m => m.state)).toEqual(['pending', 'completed', 'pending', 'pending'])
+    // Petition, appointed, inventory, claims period, distributed, closed: only the
+    // inventory date is recorded, and it does not fill the earlier two.
+    expect(progress.milestones.map(m => m.state)).toEqual(['pending', 'pending', 'completed', 'pending', 'pending', 'pending'])
     expect(JSON.stringify(progress)).not.toMatch(/draft|two weeks|estate plan/i)
   })
   it('does not mark signing complete from a scheduled signing date', () => {

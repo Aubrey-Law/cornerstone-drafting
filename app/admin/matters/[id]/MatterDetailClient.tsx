@@ -114,6 +114,7 @@ import {
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
+import { ProbateStageStrip } from './ProbateStageStrip'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
 import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
@@ -1048,14 +1049,18 @@ function MatterDetailClientInner({
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           <div className="border-b border-border bg-card px-4 py-2">
-            <MatterStageStrip
-              stage={matter.stage}
-              details={matterDetails}
-              agingSummary={agingSummary}
-              stageSaving={stageSaving}
-              onStageChange={stage => void handleStageChange(stage)}
-              history={initialStageHistory}
-            />
+            {showProbate ? (
+              <ProbateStageStrip details={matterDetails} />
+            ) : (
+              <MatterStageStrip
+                stage={matter.stage}
+                details={matterDetails}
+                agingSummary={agingSummary}
+                stageSaving={stageSaving}
+                onStageChange={stage => void handleStageChange(stage)}
+                history={initialStageHistory}
+              />
+            )}
           </div>
 
           {workSummary && <RecordWorkStrip summary={workSummary} />}

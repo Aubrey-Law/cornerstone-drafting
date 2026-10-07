@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SLA_PHASES } from '@/lib/slaTasks/types'
+import { PIPELINE_SLA_PHASES, SLA_PHASES } from '@/lib/slaTasks/types'
 import { STAGES } from '@/types/database'
 
 vi.mock('server-only', () => ({}))
@@ -296,7 +296,7 @@ describe('revision precedes drafts_approved', () => {
     expect(order(stageKeys, 'revision')).toBeLessThan(order(stageKeys, 'drafts_approved'))
     // …and the ladder names exactly the phases the app knows.
     expect(ranked.map(entry => entry.stage).sort()).toEqual(
-      [...SLA_PHASES, 'discovery_call'].sort(),
+      [...PIPELINE_SLA_PHASES, 'discovery_call'].sort(),
     )
   })
 
