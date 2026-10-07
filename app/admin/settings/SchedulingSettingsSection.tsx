@@ -573,7 +573,7 @@ export function SchedulingSettingsSection() {
         </div>
       </section>
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex items-center gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-10 -mx-1 flex items-center gap-3 border-t border-border bg-background px-1 py-3">
         <Button type="button" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save scheduling settings'}
         </Button>

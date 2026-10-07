@@ -7,9 +7,16 @@ import { useTheme } from '@/lib/theme/useTheme'
 import { isAdminRoute } from '@/lib/theme/routes'
 import type { Theme } from '@/lib/theme/ThemeProvider'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-const CYCLE: Theme[] = ['light', 'dark', 'system']
+const OPTIONS: Theme[] = ['light', 'dark', 'system']
 
 const LABELS: Record<Theme, string> = {
   light: 'Light',
@@ -23,58 +30,70 @@ const ICONS: Record<Theme, ComponentType<{ className?: string }>> = {
   system: Monitor,
 }
 
-const NEXT_LABEL: Record<Theme, string> = {
-  light: 'dark',
-  dark: 'system',
-  system: 'light',
-}
-
 interface ThemeToggleProps {
   collapsed?: boolean
   /** 'sidebar' for nav rail; 'default' for the top header bar. */
   variant?: 'sidebar' | 'default'
 }
 
+/**
+ * A menu rather than a one-click cycle: "System" follows the OS, so what the
+ * next click does isn't visible from the current icon. The menu shows all three
+ * choices and marks the active one.
+ */
 export function ThemeToggle({ collapsed = false, variant = 'default' }: ThemeToggleProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
 
   if (!isAdminRoute(pathname)) return null
 
-  const next = CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length]
   const Icon = ICONS[theme]
   const isSidebar = variant === 'sidebar'
+  const label = `Theme: ${LABELS[theme]}`
 
-  if (isSidebar) {
-    return (
-      <button
-        type="button"
-        onClick={() => setTheme(next)}
-        aria-label={`Theme: ${LABELS[theme]}. Switch to ${NEXT_LABEL[theme]}`}
-        className={cn(
-          'flex items-center rounded-md border-0 bg-transparent text-sm transition-colors',
-          collapsed ? 'justify-center px-2 py-2' : 'w-full gap-3 px-3 py-2',
-          'text-muted-foreground hover:bg-accent hover:text-foreground',
-        )}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed ? <span>{LABELS[theme]}</span> : null}
-      </button>
-    )
-  }
-
-  return (
+  const trigger = isSidebar ? (
+    <button
+      type="button"
+      aria-label={label}
+      className={cn(
+        'flex items-center rounded-md border-0 bg-transparent text-sm transition-colors',
+        collapsed ? 'justify-center px-2 py-2' : 'w-full gap-3 px-3 py-2',
+        'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed ? <span>{LABELS[theme]}</span> : null}
+    </button>
+  ) : (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       className="h-8 gap-1.5 px-2 text-xs"
-      onClick={() => setTheme(next)}
-      aria-label={`Theme: ${LABELS[theme]}. Switch to ${NEXT_LABEL[theme]}`}
-      title={`Theme: ${LABELS[theme]}`}
+      aria-label={label}
+      title={label}
     >
       <Icon className="h-3.5 w-3.5" />
       <span className="hidden sm:inline">{LABELS[theme]}</span>
     </Button>
+  )
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent side={isSidebar ? 'top' : 'bottom'} align={isSidebar ? 'start' : 'end'}>
+        <DropdownMenuRadioGroup value={theme} onValueChange={value => setTheme(value as Theme)}>
+          {OPTIONS.map(option => {
+            const OptionIcon = ICONS[option]
+            return (
+              <DropdownMenuRadioItem key={option} value={option}>
+                <OptionIcon className="mr-2 h-4 w-4" />
+                {LABELS[option]}
+              </DropdownMenuRadioItem>
+            )
+          })}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

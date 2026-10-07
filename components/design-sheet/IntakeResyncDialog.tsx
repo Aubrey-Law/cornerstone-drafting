@@ -124,7 +124,7 @@ export function IntakeResyncDialog({ open, onOpenChange, matterId }: IntakeResyn
         ) : (
           <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-border">
             <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-muted backdrop-blur">
+              <thead className="sticky top-0 bg-muted">
                 <tr className="border-b border-border">
                   <th className="w-10 px-3 py-2" />
                   <th className="px-3 py-2 font-medium">Field</th>

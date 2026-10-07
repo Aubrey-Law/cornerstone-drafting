@@ -112,6 +112,29 @@
   }
 }
 
+/* Honour the OS "reduce motion" setting for every transition and animation —
+   dialog/popover enter-exit (tw-animate-css), skeleton pulses and the DOCX
+   change highlight. Durations collapse rather than the properties being
+   removed, so animationend/transitionend still fire for code that waits on
+   them. Spinners keep turning: they signal "working", and a frozen one reads
+   as a hang. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin,
+  .animate-spin::before,
+  .animate-spin::after {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 /* ── Intake freeze ──────────────────────────────────────────────────────────
    The client-facing guided interview must not change with the app-wide zinc
    retheme: these pins restore the pre-retheme light palette and radius inside

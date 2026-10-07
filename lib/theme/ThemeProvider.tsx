@@ -26,6 +26,11 @@ function getSystemTheme(): ResolvedTheme {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system')
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light')
+  // The placeholder state above ('system' / 'light') only exists so the server
+  // and first client render agree. Applying it would flip a stored-dark admin
+  // back to light for a frame before the stored value is read, undoing what
+  // THEME_INIT_SCRIPT already painted — so nothing is applied until it's read.
+  const [hydrated, setHydrated] = useState(false)
   const pathname = usePathname()
 
   useEffect(() => {
@@ -35,15 +40,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const resolved: ResolvedTheme = initial === 'system' ? getSystemTheme() : initial
     setThemeState(initial)
     setResolvedTheme(resolved)
+    setHydrated(true)
   }, [])
 
   useEffect(() => {
+    if (!hydrated) return
     if (!isAdminRoute(pathname)) {
       applyLightThemeToDocument()
       return
     }
     applyThemeToDocument(theme, resolvedTheme)
-  }, [pathname, theme, resolvedTheme])
+  }, [hydrated, pathname, theme, resolvedTheme])
 
   useEffect(() => {
     if (theme !== 'system' || !isAdminRoute(pathname)) return
