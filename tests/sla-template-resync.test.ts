@@ -29,6 +29,7 @@ const COLLEGE_TASKS = [
 
 function task(overrides: Record<string, unknown> = {}) {
   return {
+    phase: 'intake',
     plan_template_id: ESTATE_TEMPLATE,
     status: 'open',
     notes: null,
@@ -42,9 +43,11 @@ function task(overrides: Record<string, unknown> = {}) {
 /**
  * Enough of the query builder to record what was asked for and answer it.
  * `reply` decides each response from the table and verb; every call is pushed to
- * `ops`, so a test can assert that nothing was written.
+ * `ops`, so a test can assert that nothing was written. The matter row always
+ * carries `relationship`, which decides whether the lead or the matter list is
+ * the one being resynced.
  */
-function stubClient(reply: (op: Op) => Reply) {
+function stubClient(reply: (op: Op) => Reply, relationship: 'lead' | 'hired' = 'hired') {
   const ops: Op[] = []
 
   class Builder {
@@ -65,6 +68,9 @@ function stubClient(reply: (op: Op) => Reply) {
     eq() {
       return this
     }
+    in() {
+      return this
+    }
     order() {
       return this
     }
@@ -72,7 +78,12 @@ function stubClient(reply: (op: Op) => Reply) {
       return this
     }
     then(onFulfilled: (value: Reply) => unknown) {
-      return Promise.resolve(reply(this.op)).then(onFulfilled)
+      let answer = reply(this.op)
+      if (this.op.table === 'matters' && !answer.error) {
+        const row = (answer.data ?? {}) as Record<string, unknown>
+        answer = { data: { id: MATTER, ...row, relationship_status: relationship }, error: null }
+      }
+      return Promise.resolve(answer).then(onFulfilled)
     }
   }
 
@@ -164,6 +175,65 @@ describe('resyncMatterSlaTemplate', () => {
     )
 
     expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('skipped')
+    expect(wrote(ops)).toBe(false)
+  })
+
+  it('swaps only the matter list on a hired matter, leaving the lead list it won', async () => {
+    const { client, ops } = stubClient(op => {
+      if (op.table === 'sla_task_templates') {
+        return { data: { id: COLLEGE_TEMPLATE, tasks: COLLEGE_TASKS }, error: null }
+      }
+      if (op.verb === 'insert') return { data: op.rows, error: null }
+      if (op.verb === 'delete') return { data: null, error: null }
+      // The lead list was worked under the estate template; the matter list
+      // is untouched.
+      return {
+        data: [task({ phase: 'new_lead', status: 'done', completed_at: '2026-08-12T00:00:00Z' }), task()],
+        error: null,
+      }
+    })
+
+    expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('swapped')
+    const insert = ops.find(op => op.verb === 'insert')
+    // Only the matter half of the college template is written back.
+    expect((insert?.rows as { phase: string }[]).map(row => row.phase)).toEqual(['intake'])
+  })
+
+  it('leaves a hired matter alone when only its lead list is on another template', async () => {
+    const { client, ops } = stubClient(op =>
+      op.table === 'tasks'
+        ? {
+            data: [
+              task({ phase: 'new_lead' }),
+              task({ phase: 'intake', plan_template_id: COLLEGE_TEMPLATE }),
+            ],
+            error: null,
+          }
+        : { data: { id: COLLEGE_TEMPLATE }, error: null },
+    )
+
+    expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('unchanged')
+    expect(wrote(ops)).toBe(false)
+  })
+
+  it('reads only the lead list while the record is still a lead', async () => {
+    // A lead carries no matter list yet; a stray matter-stage task must not
+    // make its untouched lead list look worked.
+    const { client, ops } = stubClient(
+      op =>
+        op.table === 'tasks'
+          ? {
+              data: [
+                task({ phase: 'new_lead', plan_template_id: COLLEGE_TEMPLATE }),
+                task({ phase: 'intake', status: 'done', completed_at: '2026-08-12T00:00:00Z' }),
+              ],
+              error: null,
+            }
+          : { data: { id: COLLEGE_TEMPLATE }, error: null },
+      'lead',
+    )
+
+    expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('unchanged')
     expect(wrote(ops)).toBe(false)
   })
 

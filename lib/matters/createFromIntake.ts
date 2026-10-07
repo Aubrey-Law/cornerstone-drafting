@@ -124,21 +124,23 @@ export async function createMatterFromIntake(
   }
 
   // The engagement being signed is what starts the SLA clock, and this is the
-  // path the e-sign webhook takes. Idempotent, so a re-fired webhook or a
-  // manual hire after the fact does not duplicate the checklist.
+  // path the e-sign webhook takes. This is where the matter's own task list is
+  // created: the lead's list ended at "Client signs engagement agreement", and
+  // the post-engagement half of the template is generated now, from the
+  // practice area resolved above. Idempotent, so a re-fired webhook or a manual
+  // hire after the fact does not duplicate it.
   //
-  // `retemplate` is what makes the practice area resolved above stick: a lead
-  // opened as an estate matter that converts as a College Preparation Plan is
-  // carrying the estate checklist, and this is the moment to swap it — before
-  // anyone has worked it, and while the CP checklist's own pre-engagement tasks
-  // can still be dated off the discovery call the lead already had.
+  // `retemplate` only matters for a lead opened before the lists were split,
+  // which already carries a held-back matter list (below): if it was generated
+  // from the wrong template and nobody has worked it, it is swapped.
   if (!durableJobs) await ensureMatterSlaTasks(matterId, { practiceArea, retemplate: true })
 
-  // Release the plan the lead was holding back. `ensureLeadSlaTasks` archives
-  // the post-engagement half behind `not_engaged` so it stays out of the queue
-  // while nobody has signed; this is the moment it becomes real work. Scoped to
-  // that reason so converting a lead that had gone lost does not also revive
-  // the checklist the lost sweep archived.
+  // Release the plan a lead opened before the lists were split was holding
+  // back. Those leads were generated the whole template, with the
+  // post-engagement half archived behind `not_engaged`; this is the moment it
+  // becomes real work. A lead opened since has nothing archived, so this is a
+  // no-op for it. Scoped to that reason so converting a lead that had gone
+  // lost does not also revive the checklist the lost sweep archived.
   try {
     const released = await restoreTasksForReopenedRecord(
       admin,
@@ -151,9 +153,9 @@ export async function createMatterFromIntake(
     console.warn('[sla-tasks] post-engagement release failed for matter', matterId, e)
   }
 
-  // Day 0. A lead already carries its checklist, so the tasks above are a no-op
-  // and the 28-day plan is still undated — replaying the engagement anchor is
-  // what actually starts the firm clock. The signature date itself is stamped
+  // Day 0. Replaying the engagement anchor dates the matter list — and, for a
+  // lead whose held-back list was just released, is what starts its 28-day
+  // clock at all. The signature date itself is stamped
   // on the matter inside convert_lead_to_matter, keeping conversion one write.
   try {
     const signedAt = intake.engagement_signed_at ?? new Date().toISOString()

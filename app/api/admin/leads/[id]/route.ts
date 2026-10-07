@@ -62,11 +62,11 @@ const CLOSEOUT_BY_LEAD_STATUS: Record<string, CloseoutReason> = {
  * What putting a lead back in play releases: the checklist its own death
  * archived, and nothing else.
  *
- * Scoped rather than "everything a sweep marked" because a live lead is
- * already holding an archived plan on purpose — `ensureLeadSlaTasks` parks the
- * post-engagement half behind `not_engaged` until somebody signs, and
- * `lib/matters/createFromIntake.ts` is the one place that releases it. An
- * unscoped restore here handed all of it to the firm queue instead.
+ * Scoped rather than "everything a sweep marked" because a lead opened before
+ * the lead and matter task lists were split is holding an archived plan on
+ * purpose — the post-engagement half, parked behind `not_engaged` until
+ * somebody signs, and `lib/matters/createFromIntake.ts` is the one place that
+ * releases it. An unscoped restore here handed all of it to the firm queue.
  */
 const LEAD_REVIVAL_REASONS = Object.values(CLOSEOUT_BY_LEAD_STATUS)
 

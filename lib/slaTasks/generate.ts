@@ -3,8 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
-import { archiveTasksForClosedRecord } from '@/lib/tasks/closeout'
-import { POST_ENGAGEMENT_PHASES } from './types'
+import { isPhaseInScope, phasesForScope, type PlanScope } from './types'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { planDateColumns, planTimestamp, toPlanTasks } from './plan'
 import { fetchPlanTasks } from './queries'
@@ -152,6 +151,12 @@ interface GenerateOptions {
   retemplate?: boolean
   /** Alternative branches to include, e.g. the remote-signing path. */
   variants?: SlaVariant[]
+  /**
+   * Which half of the template to write — the lead list, the matter list, or
+   * both. Existing tasks outside the scope are neither counted nor touched, so
+   * the matter list can be generated beside a lead list that is already worked.
+   */
+  scope?: PlanScope
 }
 
 /** Load a template and coerce its JSONB task array into typed definitions. */
@@ -181,7 +186,7 @@ export async function generateMatterTasks(
   admin: SupabaseClient,
   options: GenerateOptions,
 ): Promise<GenerateResult> {
-  const { matterId, replace = false } = options
+  const { matterId, replace = false, scope = 'all' } = options
   const templateName = options.templateName?.trim() || ESTATE_PLANNING_SLA_V3
   const startDate = options.startDate?.trim() || firmTodayKey()
 
@@ -212,7 +217,9 @@ export async function generateMatterTasks(
 
   let existingTasks: PlanTask[]
   try {
-    existingTasks = await fetchPlanTasks(admin, matterId)
+    existingTasks = (await fetchPlanTasks(admin, matterId)).filter(task =>
+      isPhaseInScope(task.phase, scope),
+    )
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Task lookup failed', status: 500 }
   }
@@ -228,12 +235,12 @@ export async function generateMatterTasks(
     }
     // Only the generated plan is discarded. Stage-engine and hand-added tasks on
     // the same matter live in the same table now, and a template swap has no
-    // business deleting them.
-    const { error: deleteError } = await admin
-      .from('tasks')
-      .delete()
-      .eq('matter_id', matterId)
-      .eq('source', 'sla')
+    // business deleting them — nor, when swapping the matter list, the lead
+    // list it sits beside.
+    let deletion = admin.from('tasks').delete().eq('matter_id', matterId).eq('source', 'sla')
+    const scopedPhases = phasesForScope(scope)
+    if (scopedPhases) deletion = deletion.in('phase', [...scopedPhases])
+    const { error: deleteError } = await deletion
     if (deleteError) return { ok: false, error: deleteError.message, status: 500 }
   }
 
@@ -244,7 +251,11 @@ export async function generateMatterTasks(
     anchors: anchorsFromMatter(matter),
     gatesMet: gatesFromMatter(matter),
     variants: options.variants ?? [],
+    scope,
   })
+  if (drafts.length === 0) {
+    return { ok: false, error: `Template "${templateName}" has no ${scope} tasks`, status: 422 }
+  }
 
   const { data: inserted, error: insertError } = await admin
     .from('tasks')
@@ -259,15 +270,21 @@ export async function generateMatterTasks(
 }
 
 /**
- * Kick off the SLA for a freshly created or freshly hired matter. Best-effort by
- * design: a matter must never fail to be created because its checklist could not
- * be written. Probate matters are skipped until a probate template exists.
+ * Create the matter's task list: the post-engagement half of its template.
+ * Called when a lead converts to hired and when a matter is opened directly.
+ * Best-effort by design: a matter must never fail to be created because its
+ * checklist could not be written.
  *
- * Idempotent, with one exception. A lead already carries the checklist it was
- * opened with, and a lead opened as an estate matter can convert as a College
- * Preparation Plan — the questionnaire, not the lead form, says what was sold.
- * `retemplate` lets that conversion swap the checklist for the right one while
- * nothing on it has been worked; see `templateSwapVerdict`.
+ * The lead's own list (discovery through "Client signs engagement agreement")
+ * is left exactly as it is — it is the record of how the matter was won, and
+ * this never adds pre-engagement tasks to a matter that had no lead.
+ *
+ * Idempotent, with one exception. A lead opened as an estate matter can convert
+ * as a College Preparation Plan — the questionnaire, not the lead form, says
+ * what was sold. `retemplate` lets that conversion swap a matter list generated
+ * from the wrong template while nothing on it has been worked; see
+ * `templateSwapVerdict`. A lead converted under the current flow has no matter
+ * list yet, so this simply generates the right one.
  */
 export async function ensureMatterSlaTasks(
   matterId: string,
@@ -286,6 +303,7 @@ export async function ensureMatterSlaTasks(
       templateName,
       startDate: options.startDate ?? firmTodayKey(),
       retemplate: options.retemplate === true,
+      scope: 'matter',
     })
     if (!result.ok) {
       console.warn('[sla-tasks] generation skipped for matter', matterId, result.error)
@@ -304,14 +322,16 @@ export async function ensureMatterSlaTasks(
 }
 
 /**
- * Kick off the SLA for a lead's opportunity.
+ * Create a lead's task list: the pre-engagement half of its template, from
+ * scheduling the discovery call through "Client signs engagement agreement".
+ * The matter list is not created until that signature converts the lead to
+ * hired; see `ensureMatterSlaTasks`.
  *
- * A lead already owns a `matters` row, so its checklist lives in the same place
- * a hired matter's does — there is no separate lead task engine. Almost every
- * task starts undated: the pre-engagement ones wait on the discovery call and
- * the PMPS date, and the Day-0 ones wait on the engagement signature. They still
- * belong on the plan, because the firm's next action is visible from the
- * checklist long before any of those dates exist.
+ * A lead already owns a `matters` row, so its list lives in the same place a
+ * hired matter's does — there is no separate lead task engine. Most tasks start
+ * undated, waiting on the discovery call and the PMPS date. They still belong
+ * on the list, because the firm's next action is visible from it long before
+ * either date exists.
  *
  * The practice area on the lead form picks the checklist. It is a statement of
  * intent rather than a decision — a lead can be opened as an estate matter and
@@ -334,26 +354,10 @@ export async function ensureLeadSlaTasks(
       matterId,
       templateName,
       startDate: firmTodayKey(),
+      scope: 'lead',
     })
     if (!result.ok) {
       console.warn('[sla-tasks] lead generation skipped for matter', matterId, result.error)
-      return
-    }
-    // The plan is generated whole and the unsold half is held back. A lead is
-    // 11 pre-engagement tasks and 37 that depend on an engagement nobody has
-    // signed; generating all 48 into the queue is what put 709 undoable tasks
-    // across 39 leads on 2026-08-24. Archived rather than never created, so the
-    // dated plan the Plan view reads stays whole and conversion is a restore
-    // rather than a second generation that would have to reconcile.
-    const held = await archiveTasksForClosedRecord(
-      admin,
-      { matterId },
-      'not_engaged',
-      {},
-      { phases: POST_ENGAGEMENT_PHASES, logActivity: false },
-    )
-    if (held === null) {
-      console.warn('[sla-tasks] post-engagement hold-back failed for matter', matterId)
     }
   } catch (e) {
     console.warn('[sla-tasks] lead generation failed for matter', matterId, e)
@@ -390,7 +394,9 @@ export type SlaTemplateResync =
  * overdue against a Day 0 in the past.
  *
  * Replacing is refused the moment any of the work is real; see
- * `templateSwapVerdict`.
+ * `templateSwapVerdict`. Only the list the record is currently on is
+ * considered: a lead's list while it is a lead, the matter list once it is
+ * hired. A reclassified matter keeps the lead list that won it.
  */
 export async function resyncMatterSlaTemplate(
   admin: SupabaseClient,
@@ -407,12 +413,24 @@ export async function resyncMatterSlaTemplate(
 
     const { data: taskRows, error: tasksError } = await admin
       .from('tasks')
-      .select('plan_template_id, status, notes, completed_at, skipped_at, paused_at')
+      .select('phase, plan_template_id, status, notes, completed_at, skipped_at, paused_at')
       .eq('matter_id', matterId)
       .eq('source', 'sla')
     if (tasksError) throw new Error(tasksError.message)
+    // The common case on a page load, kept to one query.
+    if (!taskRows || taskRows.length === 0) return 'no_checklist'
 
-    const tasks = (taskRows ?? []) as unknown as Parameters<typeof templateSwapVerdict>[0]
+    const { data: matterRow, error: matterError } = await admin
+      .from('matters')
+      .select('relationship_status')
+      .eq('id', matterId)
+      .maybeSingle<{ relationship_status: string | null }>()
+    if (matterError) throw new Error(matterError.message)
+    const scope: PlanScope = matterRow?.relationship_status === 'hired' ? 'matter' : 'lead'
+
+    const tasks = (taskRows as Array<{ phase: string | null }>).filter(task =>
+      isPhaseInScope(task.phase, scope),
+    ) as unknown as Parameters<typeof templateSwapVerdict>[0]
     if (tasks.length === 0) return 'no_checklist'
 
     const { data: templateRow, error: templateError } = await admin
@@ -441,6 +459,7 @@ export async function resyncMatterSlaTemplate(
       templateName,
       startDate: firmTodayKey(),
       replace: true,
+      scope,
     })
     if (!result.ok) {
       console.warn('[sla-tasks] resync failed for matter', matterId, result.error)
