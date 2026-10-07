@@ -115,6 +115,7 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
 import { ProbateStageStrip } from './ProbateStageStrip'
+import { EstateLedgerCard } from './EstateLedgerCard'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
 import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
@@ -1229,6 +1230,7 @@ function MatterDetailClientInner({
                     error={matterDetailsError}
                   />
                 )}
+                {showProbate && <EstateLedgerCard matterId={matterId} />}
                 {currentEngineStageTask && (
                   <div id="matter-open-task" className="scroll-mt-24">
                     <MatterEngineStageTaskCard
