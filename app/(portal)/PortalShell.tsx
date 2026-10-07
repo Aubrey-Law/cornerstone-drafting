@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
+import { clientSerifClass } from '@/lib/clientFonts'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { getFirmConfig } from '@/lib/firmConfig'
@@ -70,7 +71,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   // h-dvh, not h-screen: on iOS 100vh is the *large* viewport (toolbar hidden),
   // which pushed the sticky message composer behind Safari's bottom toolbar.
   return (
-    <div className="client-root flex h-dvh bg-background">
+    <div className={cn('client-root flex h-dvh bg-background', clientSerifClass)}>
       <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           <Link href="/dashboard" className="text-sm font-semibold text-sidebar-foreground">

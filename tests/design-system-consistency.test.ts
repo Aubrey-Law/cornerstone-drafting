@@ -7,7 +7,10 @@ const read = (relative: string) => readFileSync(path.join(root, relative), 'utf8
 
 describe('vendored fonts', () => {
   it('loads all three fonts locally instead of from Google', () => {
-    const layout = read('app/layout.tsx')
+    // The root layout carries the app-wide faces; DM Sans and Lora moved to
+    // lib/clientFonts.ts so admin routes don't preload them. Together they are
+    // the whole set.
+    const layout = read('app/layout.tsx') + read('lib/clientFonts.ts')
     expect(layout).not.toContain('next/font/google')
     expect(layout).toContain("next/font/local")
     for (const file of [

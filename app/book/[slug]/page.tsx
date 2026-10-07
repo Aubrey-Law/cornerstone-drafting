@@ -1,3 +1,4 @@
+import { clientSerifClass } from '@/lib/clientFonts'
 import { notFound } from 'next/navigation'
 import BookingWidget from '@/components/scheduling/BookingWidget'
 import { getAppointmentTypeBySlug } from '@/lib/appointments/settings'
@@ -27,7 +28,7 @@ export default async function PublicBookingPage({
   const officeAddress = firmOfficeAddress(await loadFirmSettings())
 
   return (
-    <div className="client-root client-booking min-h-dvh bg-background">
+    <div className={`client-root client-booking min-h-dvh bg-background ${clientSerifClass}`}>
       <main className="mx-auto flex max-w-[1144px] flex-col items-center md:px-8 md:py-14">
         <div className="w-full">
           <BookingWidget

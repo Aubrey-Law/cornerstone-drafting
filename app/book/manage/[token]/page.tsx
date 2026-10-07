@@ -1,3 +1,4 @@
+import { clientSerifClass } from '@/lib/clientFonts'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { firmOfficeAddress } from '@/lib/appointments/officeAddress'
@@ -15,7 +16,7 @@ export default async function ManageBookingPage({
   const officeAddress = firmOfficeAddress(await loadFirmSettings())
 
   return (
-    <div className="client-root client-booking min-h-dvh bg-background">
+    <div className={`client-root client-booking min-h-dvh bg-background ${clientSerifClass}`}>
       <main className="mx-auto flex max-w-[1144px] flex-col items-center md:px-8 md:py-14">
         <div className="w-full">
           <ManageBookingClient token={token} firmName={firm.firmName} officeAddress={officeAddress} />

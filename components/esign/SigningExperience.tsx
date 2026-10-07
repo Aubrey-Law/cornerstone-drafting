@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { clientSerifClass } from '@/lib/clientFonts'
 
 /**
  * What a client sees when they open their signing link.
@@ -178,7 +179,7 @@ export function SigningExperience({ endpoint, withSession = false, embedded = fa
   // The page is its own document from an emailed link and a panel inside the
   // portal shell otherwise; the shell already supplies the frame and the serif.
   const Wrapper = embedded ? 'div' : 'main'
-  const narrow = embedded ? 'mx-auto max-w-lg py-8 text-center' : 'client-root mx-auto max-w-lg p-8 text-center'
+  const narrow = embedded ? 'mx-auto max-w-lg py-8 text-center' : `client-root ${clientSerifClass} mx-auto max-w-lg p-8 text-center`
   // What is being signed, in the words the buttons and headings use. An
   // uploaded document is named by its own title; an agreement stays "agreement".
   const noun = loaded?.kind === 'document' ? 'document' : 'agreement'
@@ -230,7 +231,7 @@ export function SigningExperience({ endpoint, withSession = false, embedded = fa
   const canSign = consent && (mode === 'drawn' ? hasDrawing : typedName.trim().length > 0)
 
   return (
-    <Wrapper className={embedded ? 'space-y-5' : 'client-root mx-auto max-w-3xl space-y-5 p-4 md:p-8'}>
+    <Wrapper className={embedded ? 'space-y-5' : `client-root ${clientSerifClass} mx-auto max-w-3xl space-y-5 p-4 md:p-8`}>
       <header>
         <h1 className="text-lg font-semibold text-foreground">{title}</h1>
         <p className="text-sm text-muted-foreground">
