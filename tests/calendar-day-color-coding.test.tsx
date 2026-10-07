@@ -76,18 +76,18 @@ describe('day calendar colour coding', () => {
     expect(card.style.borderLeft).toContain(CATEGORY_STYLE.draft.dot)
   })
 
-  it('colour codes external calendar events the same way', () => {
+  it('keeps the category accent on compact external events', () => {
     renderDay({ calendarEvents: [externalEvent({ id: 'o1', subject: 'Estate plan sync' })] })
 
     expect(categorize('Estate plan sync')).toBe('meeting')
-    const strip = screen.getByText('Client meeting').parentElement as HTMLElement
-    expect(strip.style.background).toBe(CATEGORY_STYLE.meeting.bg)
+    const card = screen.getByText('Estate plan sync').closest('[style]') as HTMLElement
+    expect(card.style.borderLeft).toContain(CATEGORY_STYLE.meeting.dot)
   })
 
   it('keeps external calendar blocks as hatched background, not coloured events', () => {
     renderDay({ calendarEvents: [externalEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
 
-    const block = screen.getByText('BLOCK admin time') as HTMLElement
+    const block = screen.getByText('BLOCK admin time').parentElement as HTMLElement
     expect(block.style.backgroundImage).toBe(BLOCK_HATCH)
     expect(screen.queryByText(CATEGORY_LABEL.internal)).toBeNull()
   })

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
   const rangeFrom = new Date(dateInstant(dates[0], timezone))
   const rangeTo = new Date(dateInstant(nextDateKey(dates[dates.length - 1]), timezone))
   const lastWeekFrom = new Date(dateInstant(nextDateKey(dates[0], -7), timezone))
+  const workloadOnly = req.nextUrl.searchParams.get('workload') === '1'
   const admin = getAdminClient()
   const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
 
@@ -48,23 +49,23 @@ export async function GET(req: NextRequest) {
     // deadlines and what slipped are due on or before the end of the window,
     // and the unscheduled work is the tasks with an estimate and no date at
     // all. 1,000 was already below the 1,024 open tasks this read walked.
-    fetchDueTasks(rangeTo.toISOString()),
-    fetchTasks({ status: 'open', undated: true, hasEstimate: true, all: true }),
+    workloadOnly ? Promise.resolve([]) : fetchDueTasks(rangeTo.toISOString()),
+    workloadOnly ? Promise.resolve([]) : fetchTasks({ status: 'open', undated: true, hasEstimate: true, all: true }),
     loadFirmSettings(),
-    admin
+    workloadOnly ? Promise.resolve({ data: [] }) : admin
       .from('appointments')
       .select('id, start_time, end_time, status, linked_matter_id')
       .gte('start_time', lastWeekFrom.toISOString())
       .lt('start_time', rangeFrom.toISOString()),
-    admin
+    workloadOnly ? Promise.resolve({ data: [] }) : admin
       .from('matter_activity')
       .select('matter_id, event_type, created_at')
       .eq('event_type', 'stage_changed')
       .gte('created_at', lastWeekFrom.toISOString())
       .lt('created_at', rangeFrom.toISOString()),
-    fetchWorkGraphForUser(auth.userId),
-    fetchWorkPreferences(auth.userId),
-    fetchDailyPlan(auth.userId, todayKey),
+    workloadOnly ? Promise.resolve(null) : fetchWorkGraphForUser(auth.userId),
+    workloadOnly ? Promise.resolve(null) : fetchWorkPreferences(auth.userId),
+    workloadOnly ? Promise.resolve(null) : fetchDailyPlan(auth.userId, todayKey),
   ])
   if (appointmentResult.error) return NextResponse.json({ error: 'Workload unavailable' }, { status: 500 })
   const appointments = appointmentResult.data ?? []
@@ -89,6 +90,10 @@ export async function GET(req: NextRequest) {
   } catch {
     connected = false
   }
+
+  const days = connected ? aggregateWorkload(dates, workEvents, targetMinutes, todayKey, timezone) : []
+  if (workloadOnly) return NextResponse.json({ connected, days })
+  if (!workGraph || !workPreferences) return NextResponse.json({ error: 'Plan unavailable' }, { status: 500 })
 
   const deadlines = tasks
     .map(task => ({ task, date: effectiveDueAt(task) }))
@@ -131,7 +136,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     connected,
-    days: connected ? aggregateWorkload(dates, workEvents, targetMinutes, todayKey, timezone) : [],
+    days,
     today: buildCalendarTodayPlan({
       items: workGraph.items,
       preview: createDailyPlanPreview({

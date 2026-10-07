@@ -1,7 +1,10 @@
 'use client'
 
 import { calendarAnchorDate } from '@/lib/calendarDay'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCalendarNavigation, shortcutBlocked } from './useCalendarNavigation'
+import { useCalendarClock } from './useCalendarClock'
+import { firmTodayKey } from '@/lib/firmDate'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { ChevronLeft, ChevronRight, Settings } from 'lucide-react'
@@ -18,6 +21,10 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 import { CalendarVisibilityPopover } from './CalendarVisibilityPopover'
+import { NextUp, WeekStrip } from './CalendarPanels'
+import { dateInstant, nextDateKey } from '@/lib/calendarAvailability'
+import { FIRM_TIMEZONE } from '@/lib/firmDate'
+import type { DayAvailability } from './types'
 import { DayAgenda } from './DayAgenda'
 import { EventPrepDrawer } from './EventPrepDrawer'
 import { PlanView } from './PlanView'
@@ -27,7 +34,6 @@ import {
   type BookableType,
   type CalendarAppointment,
   type CalendarRailData,
-  type CalendarView,
   type ExternalCalendarRef,
   type ExternalCalendarEvent,
   type PlanData,
@@ -41,23 +47,17 @@ import {
   categorize,
   isBlock,
 } from './eventCategories'
-import { endMinutesOfDay, minutesOfDay, timeGridBounds } from './timeGrid'
-
-/** Last two segments of a matter number, e.g. "2026-EP-Example-007" → "Example-007". */
-function shortMatterLabel(matterNumber: string): string {
-  return matterNumber.split('-').slice(-2).join('-')
-}
+import { instantDayKey } from './calendarTime'
+import { TimeGrid } from './WeekTimeGrid'
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const SLOT_MIN = 30
-const SLOT_PX = 40
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+function fmtTime(iso: string, timezone = FIRM_TIMEZONE): string {
+  return new Date(iso).toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })
 }
 
 /** Names the calendar an event came from, for tooltips. */
@@ -82,13 +82,6 @@ function fmtDayHeading(d: Date): string {
     day: 'numeric',
     year: 'numeric',
   })
-}
-
-function fmtGridHour(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const suffix = h >= 12 ? 'PM' : 'AM'
-  const display = h % 12 === 0 ? 12 : h % 12
-  return `${display} ${suffix}`
 }
 
 function startOfDay(d: Date): Date {
@@ -144,7 +137,7 @@ function parseIntOrNull(value: string): number | null {
  * events use the UTC date parts (Graph reports them as UTC midnights) and
  * expand across each day they span.
  */
-function calendarEventsByDay(events: ExternalCalendarEvent[]): Map<string, ExternalCalendarEvent[]> {
+function calendarEventsByDay(events: ExternalCalendarEvent[], timezone: string): Map<string, ExternalCalendarEvent[]> {
   const map = new Map<string, ExternalCalendarEvent[]>()
   const push = (key: string, e: ExternalCalendarEvent) => {
     const list = map.get(key) ?? []
@@ -163,27 +156,38 @@ function calendarEventsByDay(events: ExternalCalendarEvent[]): Map<string, Exter
         push(d.toISOString().slice(0, 10), e)
       }
     } else {
-      push(dayKey(new Date(e.startIso)), e)
+      for (let key = instantDayKey(e.startIso, timezone); key <= instantDayKey(new Date(Date.parse(e.endIso) - 1).toISOString(), timezone); key = nextDateKey(key)) push(key, e)
     }
   }
   return map
 }
 
 export function CalendarClient({ initialDay }: { initialDay?: string | null } = {}) {
+  const [timezone, setTimezone] = useState(FIRM_TIMEZONE)
   const token = useAccessToken()
-  const today = useMemo(() => new Date(), [])
-  const [view, setView] = useState<CalendarView>('week')
-  const [anchor, setAnchor] = useState<Date>(() => startOfDay(calendarAnchorDate(initialDay, today)))
+  const now = useCalendarClock()
+  const today = calendarAnchorDate(firmTodayKey(now), now)
+  const navigation = useCalendarNavigation(initialDay, timezone)
+  const { view, anchor, selectedDay } = navigation
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const updateNavigation = navigation.update
+  const setSelectedDay = useCallback((key: string) => updateNavigation(view, calendarAnchorDate(key, anchor), key), [updateNavigation, view, anchor])
+  const setAnchor = useCallback((value: Date | ((current: Date) => Date)) => {
+    const next = typeof value === 'function' ? value(anchor) : value
+    updateNavigation(view, next)
+  }, [updateNavigation, view, anchor])
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([])
   const [types, setTypes] = useState<BookableType[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDay, setSelectedDay] = useState<string>(() => dayKey(calendarAnchorDate(initialDay, today)))
   const [quickBookOpen, setQuickBookOpen] = useState(false)
   const [quickBookPrefill, setQuickBookPrefill] = useState<string | null>(null)
   const [reschedule, setReschedule] = useState<RescheduleDraft | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [acting, setActing] = useState(false)
-  const [showCalendar, setShowCalendar] = useState(true)
+  const showCalendar = true
+  const [discoveryLoading, setDiscoveryLoading] = useState(true)
+  const [discoveryUnavailable, setDiscoveryUnavailable] = useState(false)
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([])
   const [calendarEvents, setCalendarEvents] = useState<ExternalCalendarEvent[]>([])
   const [calendarConnected, setCalendarConnected] = useState(true)
   const [accountCalendars, setAccountCalendars] = useState<ExternalCalendarRef[]>([])
@@ -191,7 +195,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [calendarTruncated, setCalendarTruncated] = useState(false)
   const [calendarError, setCalendarError] = useState<string | null>(null)
   const [calendarSkipped, setCalendarSkipped] = useState<string[]>([])
+  const [attentionUnavailable, setAttentionUnavailable] = useState(false)
   const [attention, setAttention] = useState<AttentionItem[]>([])
+  const [availability, setAvailability] = useState<DayAvailability | null>(null)
+  const [availabilityState, setAvailabilityState] = useState('loading')
+  const [workload, setWorkload] = useState<PlanData['days']>([])
   const [rail, setRail] = useState<CalendarRailData>({ datesThisWeek: [], followUps: [], openSlots: [] })
   const [planData, setPlanData] = useState<PlanData | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<CalendarAppointment | null>(null)
@@ -200,10 +208,16 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
 
   useEffect(() => {
-    const requested = startOfDay(calendarAnchorDate(initialDay, today))
-    setAnchor(current => current.getTime() === requested.getTime() ? current : requested)
-    setSelectedDay(dayKey(requested))
-  }, [initialDay, today])
+    try {
+      const saved = JSON.parse(localStorage.getItem('cornerstone.calendar.hidden-categories') ?? '[]')
+      if (Array.isArray(saved)) setHiddenCategories(saved.filter(value => [...CATEGORY_LEGEND.map(item => item.category), 'blocked'].includes(value)))
+    } catch { /* Optional local preferences. */ }
+  }, [])
+  function toggleCategory(category: string) {
+    const next = hiddenCategories.includes(category) ? hiddenCategories.filter(value => value !== category) : [...hiddenCategories, category]
+    setHiddenCategories(next)
+    try { localStorage.setItem('cornerstone.calendar.hidden-categories', JSON.stringify(next)) } catch { /* Optional local preferences. */ }
+  }
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -211,7 +225,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   }, [token])
 
   const range = useMemo((): { from: Date; to: Date } => {
-    if (view === 'day') return { from: startOfDay(anchor), to: addDays(anchor, 1) }
+    if (view === 'day') { const from = startOfWeek(anchor); return { from, to: addDays(from, 7) } }
     if (view === 'week') {
       const from = startOfWeek(anchor)
       return { from, to: addDays(from, 7) }
@@ -221,9 +235,12 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     return { from: grid[0], to: addDays(grid[41], 1) }
   }, [view, anchor])
 
+  const loadSequence = useRef(0)
   const load = useCallback(async () => {
+    if (!navigation.ready) return
+    const sequence = ++loadSequence.current
     setLoading(true)
-    const rangeQuery = `from=${range.from.toISOString()}&to=${range.to.toISOString()}`
+    const rangeQuery = `from=${new Date(dateInstant(dayKey(range.from), timezone)).toISOString()}&to=${new Date(dateInstant(dayKey(range.to), timezone)).toISOString()}`
     try {
       const [apptRes, calendarRes] = await Promise.all([
         fetch(`/api/admin/scheduling/appointments?${rangeQuery}`, { headers: authHeaders() }),
@@ -231,17 +248,20 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           ? fetch(`/api/admin/scheduling/calendar-events?${rangeQuery}`, { headers: authHeaders() })
           : Promise.resolve(null),
       ])
+      if (sequence !== loadSequence.current) return
       if (!apptRes.ok) {
         toast.error('Failed to load appointments')
         return
       }
       const json = await apptRes.json()
+      if (sequence !== loadSequence.current) return
       setTypes((json.types ?? []).filter((t: BookableType) => t.active))
       let appointmentRows: CalendarAppointment[] = json.appointments ?? []
       if (calendarRes) {
         const calendarJson = calendarRes.ok
           ? await calendarRes.json()
           : { connected: false, events: [], calendars: [], truncated: false }
+        if (sequence !== loadSequence.current) return
         setCalendarEvents(calendarJson.events ?? [])
         setCalendarConnected(Boolean(calendarJson.connected))
         setCalendarTruncated(Boolean(calendarJson.truncated))
@@ -262,6 +282,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           })
           if (resyncRes.ok) {
             appointmentRows = (await resyncRes.json()).appointments ?? appointmentRows
+            if (sequence !== loadSequence.current) return
           }
           toast.info(
             `Synced ${changed} appointment${changed === 1 ? '' : 's'} from Google Calendar`,
@@ -273,16 +294,19 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         setCalendarSkipped([])
         setCalendarError(null)
       }
-      setAppointments(appointmentRows)
+      if (sequence === loadSequence.current) setAppointments(appointmentRows)
     } catch {
-      toast.error('Failed to load appointments')
+      if (sequence === loadSequence.current) toast.error('Failed to load appointments')
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
-  }, [range, authHeaders, showCalendar])
+  }, [range, authHeaders, showCalendar, navigation.ready, timezone])
 
   useEffect(() => {
+    setAppointments([])
+    setCalendarEvents([])
     void load()
+    return () => { loadSequence.current += 1 }
   }, [load])
 
   useEffect(() => {
@@ -293,30 +317,22 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           fetch('/api/admin/scheduling/calendars', { headers: authHeaders() }),
           fetch('/api/admin/scheduling/settings', { headers: authHeaders() }),
         ])
-        if (cancelled || !calendarsRes.ok || !settingsRes.ok) return
+        if (cancelled) return
+        if (!calendarsRes.ok || !settingsRes.ok) { setDiscoveryUnavailable(true); setDiscoveryLoading(false); return }
+        setDiscoveryUnavailable(false)
+        setDiscoveryLoading(false)
         const calendarsJson = await calendarsRes.json()
         const settingsJson = await settingsRes.json()
         if (cancelled) return
         setAccountCalendars(calendarsJson.calendars ?? [])
         setHiddenCalendarIds(settingsJson.settings?.hiddenCalendarIds ?? [])
+        setTimezone(settingsJson.settings?.timezone ?? FIRM_TIMEZONE)
       } catch {
-        // The popover is a convenience; the grid renders without it.
+        if (!cancelled) { setDiscoveryUnavailable(true); setDiscoveryLoading(false) }
       }
     })()
     return () => { cancelled = true }
   }, [authHeaders])
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setQuickBookPrefill(null)
-        setQuickBookOpen(open => !open)
-      }
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [])
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -345,29 +361,32 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       })
       setPreviewEvents(ghosts)
       if (ghosts[0]) {
-        setAnchor(startOfDay(new Date(ghosts[0].startIso)))
-        setSelectedDay(dayKey(new Date(ghosts[0].startIso)))
+        updateNavigation(view, calendarAnchorDate(instantDayKey(ghosts[0].startIso, timezone), anchor))
       }
     }
     window.addEventListener('calendar:preview-proposals', handler)
     return () => window.removeEventListener('calendar:preview-proposals', handler)
-  }, [])
+  }, [updateNavigation, view, timezone, anchor])
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarAppointment[]>()
     for (const a of appointments) {
-      const key = dayKey(new Date(a.startTime))
-      const list = map.get(key) ?? []
-      list.push(a)
-      map.set(key, list)
+      for (let key = instantDayKey(a.startTime, timezone); key <= instantDayKey(new Date(Date.parse(a.endTime) - 1).toISOString(), timezone); key = nextDateKey(key)) {
+        const list = map.get(key) ?? []
+        list.push(a)
+        map.set(key, list)
+      }
     }
     return map
-  }, [appointments])
+  }, [appointments, timezone])
 
   const calendarByDay = useMemo(
-    () => calendarEventsByDay(showCalendar ? [...calendarEvents, ...previewEvents] : previewEvents),
-    [calendarEvents, previewEvents, showCalendar],
+    () => calendarEventsByDay(showCalendar ? [...calendarEvents, ...previewEvents] : previewEvents, timezone),
+    [calendarEvents, previewEvents, showCalendar, timezone],
   )
+
+  const visibleByDay = useMemo(() => new Map([...byDay].map(([key, rows]) => [key, rows.filter(row => !hiddenCategories.includes(categorize(row.typeLabel)))])), [byDay, hiddenCategories])
+  const visibleCalendarByDay = useMemo(() => new Map([...calendarByDay].map(([key, rows]) => [key, rows.filter(row => !hiddenCategories.includes(isBlock(row) ? 'blocked' : categorize(row.subject)))])), [calendarByDay, hiddenCategories])
 
   function shift(delta: number) {
     if (view === 'month') {
@@ -375,8 +394,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     } else if (view === 'day') {
       // The day view renders from selectedDay, not anchor, so move both.
       const next = addDays(selectedDate, delta)
-      setAnchor(next)
-      setSelectedDay(dayKey(next))
+      navigation.update(view, next)
     } else {
       setAnchor(a => addDays(a, delta * (view === 'week' ? 7 : 1)))
     }
@@ -386,7 +404,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     let iso = prefill?.iso ?? null
     if (!iso && prefill?.date) {
       const time = prefill.time ?? '09:00'
-      iso = new Date(`${toDateInputValue(prefill.date)}T${time}`).toISOString()
+      iso = new Date(dateInstant(toDateInputValue(prefill.date), timezone, time)).toISOString()
     }
     setQuickBookPrefill(iso)
     setQuickBookOpen(true)
@@ -423,12 +441,12 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     view === 'month'
       ? anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : view === 'week'
-        ? `${startOfWeek(anchor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${addDays(startOfWeek(anchor), 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        ? `${startOfWeek(anchor).toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...(startOfWeek(anchor).getFullYear() !== addDays(startOfWeek(anchor), 6).getFullYear() ? { year: 'numeric' as const } : {}) })} – ${addDays(startOfWeek(anchor), 6).toLocaleDateString('en-US', { ...(startOfWeek(anchor).getMonth() !== addDays(startOfWeek(anchor), 6).getMonth() ? { month: 'long' as const } : {}), day: 'numeric', year: 'numeric' })}`
         : view === 'plan'
           ? 'Planning horizon'
           : fmtDayHeading(anchor)
 
-  const todayKey = dayKey(today)
+  const todayKey = instantDayKey(now.toISOString(), timezone)
   const selectedAppointments = byDay.get(selectedDay) ?? []
   const selectedDate = useMemo(() => {
     const [y, m, d] = selectedDay.split('-').map(Number)
@@ -436,35 +454,53 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   }, [selectedDay])
 
   const selectedCalendarEvents = calendarByDay.get(selectedDay) ?? []
-  const selectedBlocks = selectedCalendarEvents.filter(isBlock)
 
   useEffect(() => {
-    if (view !== 'day') return
-    let stale = false
+    if ((view !== 'day' && view !== 'week') || !navigation.ready) return
+    const controller = new AbortController()
+    setAttention([])
+    setAttentionUnavailable(false)
+    setRail({ datesThisWeek: [], followUps: [], openSlots: [] })
+    setAvailability(null)
+    setAvailabilityState('loading')
     void (async () => {
-      const response = await fetch(`/api/admin/calendar/attention?date=${selectedDay}`, { headers: authHeaders() })
-      const body = response.ok ? await response.json() : { items: [], rail: { datesThisWeek: [], followUps: [], openSlots: [] } }
-      if (stale) return
-      setAttention(body.items ?? [])
-      let nextRail = body.rail ?? { datesThisWeek: [], followUps: [], openSlots: [] }
-      const firstType = types[0]
-      if (firstType) {
-        const from = new Date(`${selectedDay}T00:00:00`)
-        const to = addDays(from, 1)
-        const params = new URLSearchParams({
-          typeId: firstType.id,
-          locationType: allowedFormats(firstType)[0],
-          from: from.toISOString(),
-          to: to.toISOString(),
-        })
-        const slotsResponse = await fetch(`/api/admin/scheduling/slots?${params}`, { headers: authHeaders() })
-        const slotsBody = slotsResponse.ok ? await slotsResponse.json() : { slots: [] }
-        nextRail = { ...nextRail, openSlots: slotsBody.slots ?? [] }
+      try {
+        const firstType = types[0]
+        const slotParams = firstType ? new URLSearchParams({ typeId: firstType.id, locationType: allowedFormats(firstType)[0], from: new Date(dateInstant(selectedDay, timezone)).toISOString(), to: new Date(dateInstant(nextDateKey(selectedDay), timezone)).toISOString() }) : null
+        const [attentionResponse, availableResponse, slotsResponse] = await Promise.all([
+          fetch(`/api/admin/calendar/attention?date=${selectedDay}`, { headers: authHeaders(), signal: controller.signal }),
+          fetch(`/api/admin/calendar/availability?date=${selectedDay}`, { headers: authHeaders(), signal: controller.signal }),
+          slotParams ? fetch(`/api/admin/scheduling/slots?${slotParams}`, { headers: authHeaders(), signal: controller.signal }) : Promise.resolve(null),
+        ])
+        const [body, available, slots] = await Promise.all([
+          attentionResponse.ok ? attentionResponse.json() : null,
+          availableResponse.ok ? availableResponse.json() : null,
+          slotsResponse?.ok ? slotsResponse.json() : null,
+        ])
+        if (controller.signal.aborted) return
+        setAttentionUnavailable(!body)
+        setAttention(body?.items ?? [])
+        setRail({ ...(body?.rail ?? { datesThisWeek: [], followUps: [] }), openSlots: slots?.connected ? slots.slots ?? [] : [] })
+        setAvailability(available?.connected ? available : null)
+        setAvailabilityState(slots?.connected ? 'ready' : 'unavailable')
+      } catch {
+        if (!controller.signal.aborted) { setAvailabilityState('unavailable'); setAttentionUnavailable(true) }
       }
-      if (!stale) setRail(nextRail)
     })()
-    return () => { stale = true }
-  }, [view, selectedDay, types, authHeaders])
+    return () => controller.abort()
+  }, [view, selectedDay, types, authHeaders, timezone, navigation.ready, appointments])
+
+  const weekFrom = dayKey(startOfWeek(anchor))
+  useEffect(() => {
+    if ((view !== 'day' && view !== 'week') || !navigation.ready) return
+    const controller = new AbortController()
+    setWorkload([])
+    void fetch(`/api/admin/calendar/plan?from=${weekFrom}&to=${nextDateKey(weekFrom, 7)}&workload=1`, { headers: authHeaders(), signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(body => { if (!controller.signal.aborted) setWorkload(body?.connected ? body.days ?? [] : []) })
+      .catch(() => { /* Load unavailable remains visible. */ })
+    return () => controller.abort()
+  }, [weekFrom, view, authHeaders, navigation.ready, appointments])
 
   useEffect(() => {
     if (view !== 'plan') return
@@ -473,6 +509,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     void fetch(`/api/admin/calendar/plan?from=${encodeURIComponent(anchor.toISOString())}`, { headers: authHeaders() })
       .then(response => response.ok ? response.json() : null)
       .then(body => { if (!stale) setPlanData(body) })
+      .catch(() => { if (!stale) setPlanData(null) })
     return () => { stale = true }
   }, [view, anchor, authHeaders])
 
@@ -559,12 +596,40 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     }
   }
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (shortcutBlocked(event)) return
+      const key = event.key.toLowerCase()
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && key === 'k') {
+        event.preventDefault()
+        setQuickBookPrefill(null)
+        setQuickBookOpen(open => !open)
+        return
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const shortcuts = { d: 'day', w: 'week', m: 'month', p: 'plan' } as const
+      if (key in shortcuts && !event.shiftKey) navigation.update(shortcuts[key as keyof typeof shortcuts], selectedDate, selectedDay, true)
+      else if (key === 't' && !event.shiftKey) navigation.update(view, calendarAnchorDate(todayKey, today))
+      else if (key === 'arrowleft' && !event.shiftKey) shift(-1)
+      else if (key === 'arrowright' && !event.shiftKey) shift(1)
+      else if (key === '?') setShortcutsOpen(true)
+      else return
+      event.preventDefault()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
+
+  const panelAppointments = visibleByDay.get(selectedDay) ?? []
+  const panelCalendarEvents = visibleCalendarByDay.get(selectedDay) ?? []
+  const panelBlocks = panelCalendarEvents.filter(isBlock)
+
   const dayPanel = (
     <section className="rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold text-foreground">{fmtDayHeading(selectedDate)}</h2>
-          {selectedCalendarEvents.filter(e => !isBlock(e)).length > 0 && (
+          {panelCalendarEvents.filter(e => !isBlock(e)).length > 0 && (
             <div className="mt-2 space-y-0.5">
-              {selectedCalendarEvents.filter(e => !isBlock(e)).map(e => (
+              {panelCalendarEvents.filter(e => !isBlock(e)).map(e => (
                 <p key={e.id} className="text-xs text-muted-foreground">
                   <span className="mr-1 rounded bg-muted px-1 py-0.5 text-micro uppercase">Calendar</span>
                   {e.isAllDay ? 'All day' : `${fmtTime(e.startIso)}–${fmtTime(e.endIso)}`} · {e.subject}
@@ -572,12 +637,12 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               ))}
             </div>
           )}
-          {selectedAppointments.length === 0 ? (
+          {panelAppointments.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">No appointments.</p>
           ) : (
             <div className="mt-2 divide-y divide-border">
-              {selectedAppointments.map(a => {
-                const isPast = Date.parse(a.startTime) < Date.now()
+              {panelAppointments.map(a => {
+                const isPast = Date.parse(a.startTime) < now.getTime()
                 return (
                   <div key={a.id} className="py-2.5">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -727,9 +792,9 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               })}
             </div>
           )}
-          {selectedBlocks.length > 0 && (
+          {panelBlocks.length > 0 && (
             <p className="mt-3 text-micro text-muted-foreground">
-              {selectedBlocks
+              {panelBlocks
                 .map(b =>
                   b.isAllDay
                     ? 'Blocked all day'
@@ -745,7 +810,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-foreground">Calendar</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" aria-label="Previous" onClick={() => shift(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <h1 className="text-xl font-semibold text-foreground">{heading}</h1>
+          <Button variant="outline" size="icon" aria-label="Next" onClick={() => shift(1)}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-md border border-border p-0.5">
             {(['day', 'week', 'month', 'plan'] as const).map(v => (
@@ -753,8 +822,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                 key={v}
                 type="button"
                 onClick={() => {
-                  if (v === 'day') setAnchor(selectedDate)
-                  setView(v)
+                  navigation.update(v, selectedDate, selectedDay, true)
                 }}
                 className={cn(
                   'rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors',
@@ -763,80 +831,31 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {v}
+                {v} <kbd className="ml-1 text-micro">{v[0].toUpperCase()}</kbd>
               </button>
             ))}
           </div>
-          <Button variant="outline" size="icon" aria-label="Previous" onClick={() => shift(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              setAnchor(startOfDay(today))
-              setSelectedDay(todayKey)
+              navigation.update(view, calendarAnchorDate(todayKey, today))
             }}
           >
-            Today
+            Today <kbd className="ml-1 text-micro">T</kbd>
           </Button>
-          <Button variant="outline" size="icon" aria-label="Next" onClick={() => shift(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <span className="ml-1 text-sm font-medium text-foreground">{heading}</span>
-          <label
-            className="flex items-center gap-1.5 text-xs text-muted-foreground"
-            title={
-              calendarConnected
-                ? 'Show your Google Calendar events alongside booked appointments'
-                : 'Google Calendar is not connected — connect it from Settings → Google'
-            }
-          >
-            <input
-              type="checkbox"
-              checked={showCalendar}
-              onChange={e => setShowCalendar(e.target.checked)}
-            />
-            Calendar events
-            {showCalendar && !calendarConnected && (
-              <span className="text-amber" title={calendarError ?? undefined}>
-                ⚠ not connected{calendarError ? ` — ${calendarError}` : ''}
-              </span>
-            )}
-            {showCalendar && calendarConnected && calendarSkipped.length > 0 && (
-              <span
-                className="text-amber"
-                title={`Google would not return these calendars: ${calendarSkipped.join(', ')}`}
-              >
-                ⚠ {calendarSkipped.length} calendar
-                {calendarSkipped.length === 1 ? '' : 's'} unavailable
-              </span>
-            )}
-            {showCalendar && calendarTruncated && (
-              <span
-                className="text-amber"
-                title="Google returned more events than this view reads. Narrow the range to see the rest."
-              >
-                ⚠ partial
-              </span>
-            )}
-          </label>
-          {showCalendar && calendarConnected && accountCalendars.length > 1 && (
-            <CalendarVisibilityPopover
-              calendars={accountCalendars}
-              hiddenIds={hiddenCalendarIds}
-              authHeaders={authHeaders}
-              onChange={next => {
-                setHiddenCalendarIds(next)
-                void load()
-              }}
-            />
-          )}
+          <CalendarVisibilityPopover
+            calendars={accountCalendars} hiddenIds={hiddenCalendarIds} authHeaders={authHeaders}
+            connected={calendarConnected} error={calendarError} truncated={calendarTruncated}
+            skipped={calendarSkipped} discoveryUnavailable={discoveryUnavailable} discoveryLoading={discoveryLoading}
+            onChange={next => { setHiddenCalendarIds(next); void load() }}
+          />
           <QuickBookPopover
             open={quickBookOpen}
             onOpenChange={setQuickBookOpen}
             types={types}
             prefillIso={quickBookPrefill}
+            timezone={timezone}
             authHeaders={authHeaders}
             onBooked={() => void load()}
           />
@@ -856,31 +875,29 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           view !== 'plan' ? 'flex' : 'hidden',
         )}
       >
-        {CATEGORY_LEGEND.map(({ category, label }) => (
-          <span key={category} className="inline-flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-2.5 rounded-[3px] border"
-              style={{
-                background: CATEGORY_STYLE[category].bg,
-                borderColor: CATEGORY_STYLE[category].dot,
-              }}
-            />
-            {label}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundImage: BLOCK_HATCH }} />
-          Blocked
-        </span>
+        {[...CATEGORY_LEGEND, { category: 'blocked', label: 'Blocked' }].map(({ category, label }) => {
+          const hidden = hiddenCategories.includes(category)
+          const count = category === 'blocked'
+            ? calendarEvents.filter(isBlock).length
+            : appointments.filter(item => item.status === 'scheduled' && categorize(item.typeLabel) === category).length + calendarEvents.filter(item => !isBlock(item) && categorize(item.subject) === category).length
+          const style = category === 'blocked' ? null : CATEGORY_STYLE[category as keyof typeof CATEGORY_STYLE]
+          return <button key={category} type="button" aria-pressed={!hidden} onClick={() => toggleCategory(category)}
+            className={cn('rounded-full border border-border px-2.5 py-1 text-xs', hidden && 'line-through')}
+            style={hidden ? undefined : { background: style?.bg, color: style?.text, backgroundImage: category === 'blocked' ? BLOCK_HATCH : undefined }}>
+            {label} · {count}
+          </button>
+        })}
+        <span className="ml-auto text-xs text-muted-foreground">{appointments.filter(item => item.status === 'scheduled').length} appointments · {calendarEvents.filter(item => !isBlock(item)).length} calendar events · total in range</span>
       </div>
 
-      <div className={cn('flex items-start gap-3', loading && 'opacity-60')}>
+      {loading && <p className="text-xs text-muted-foreground" role="status">Loading calendar…</p>}
+      <div className="flex flex-col items-start gap-3 xl:flex-row" aria-busy={loading}>
         <div className="min-w-0 flex-1">
           {view === 'month' ? (
             <MonthGrid
               anchor={anchor}
-              byDay={byDay}
-              calendarByDay={calendarByDay}
+              byDay={visibleByDay}
+              calendarByDay={visibleCalendarByDay}
               todayKey={todayKey}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
@@ -889,17 +906,29 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           ) : view === 'week' ? (
             <TimeGrid
               days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))}
-              byDay={byDay}
-              calendarByDay={calendarByDay}
+              byDay={visibleByDay}
+              calendarByDay={visibleCalendarByDay}
               todayKey={todayKey}
+              now={now}
+              timezone={timezone}
+              workload={workload}
+              appointmentCounts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
               onSlotClick={(date, time) => openQuickBook({ date, time })}
               onEventClick={setSelectedAppointment}
             />
           ) : view === 'day' ? (
+            <div className="space-y-3">
+            <WeekStrip days={Array.from({ length: 7 }, (_, i) => { const date = nextDateKey(weekFrom, i); return workload.find(day => day.date === date) ?? { date, clientMinutes: 0, internalMinutes: 0, targetMinutes: NaN, isToday: date === todayKey } })} selectedDay={selectedDay} todayKey={todayKey} counts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))} onSelect={setSelectedDay} />
             <DayAgenda
+              now={now} todayKey={todayKey} timezone={timezone} availability={availability} attentionUnavailable={attentionUnavailable}
+              conflictAppointments={selectedAppointments} conflictCalendarEvents={selectedCalendarEvents}
+              totalAppointments={selectedAppointments.filter(a => a.status === 'scheduled').length}
+              totalCalendarEvents={selectedCalendarEvents.filter(e => !isBlock(e)).length}
               date={selectedDate}
-              appointments={selectedAppointments}
-              calendarEvents={selectedCalendarEvents}
+              appointments={visibleByDay.get(selectedDay) ?? []}
+              calendarEvents={visibleCalendarByDay.get(selectedDay) ?? []}
               attention={attention}
               rail={rail}
               onDismissAttention={id => void dismissAttention(id)}
@@ -907,6 +936,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               onReschedule={beginReschedule}
               onBookSlot={iso => openQuickBook(iso ? { iso } : { date: selectedDate })}
             />
+            </div>
           ) : (
               <PlanView
                 data={planData}
@@ -915,11 +945,20 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               />
             )}
         </div>
-        {view === 'week' && <div className="w-[300px] shrink-0">{dayPanel}</div>}
+        {view === 'week' && <div className="w-full shrink-0 xl:w-[300px]"><NextUp date={selectedDay} todayKey={todayKey} now={now} appointments={selectedAppointments} visibleAppointments={panelAppointments} calendarEvents={panelCalendarEvents} attention={attention} attentionUnavailable={attentionUnavailable} slots={rail.openSlots.filter(slot => Date.parse(slot.startIso) >= now.getTime())} availabilityState={availabilityState} timezone={timezone} onDismiss={id => void dismissAttention(id)} onOpen={setSelectedAppointment} onBook={iso => openQuickBook({ iso })} /></div>}
       </div>
 
       {view === 'month' && dayPanel}
 
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent><DialogHeader><DialogTitle>Calendar shortcuts</DialogTitle></DialogHeader>
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            <dt>D / W / M / P</dt><dd>Day / Week / Month / Plan</dd>
+            <dt>T</dt><dd>Today</dd><dt>← / →</dt><dd>Previous / next period</dd>
+            <dt>?</dt><dd>All shortcuts</dd><dt>⌘ / Ctrl + Shift + K</dt><dd>Quick book</dd>
+          </dl>
+        </DialogContent>
+      </Dialog>
       <Dialog open={planBlock !== null} onOpenChange={open => !open && setPlanBlock(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1203,229 +1242,6 @@ function MonthGrid(props: {
             </div>
           )
         })}
-      </div>
-    </div>
-  )
-}
-
-function TimeGrid(props: {
-  days: Date[]
-  byDay: Map<string, CalendarAppointment[]>
-  calendarByDay: Map<string, ExternalCalendarEvent[]>
-  todayKey: string
-  onSlotClick: (date: Date, time: string) => void
-  onEventClick: (a: CalendarAppointment) => void
-}) {
-  const { days, byDay, calendarByDay, todayKey, onSlotClick, onEventClick } = props
-  // Widened past the business window when the days on screen hold earlier or
-  // later events, so nothing on the calendar falls off the grid.
-  const { startMin: gridStartMin, endMin: gridEndMin } = timeGridBounds(days, byDay, calendarByDay)
-  const slotCount = (gridEndMin - gridStartMin) / SLOT_MIN
-  const gridHeight = slotCount * SLOT_PX
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <div className="min-w-[640px]">
-        <div
-          className="grid border-b border-border bg-muted"
-          style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}
-        >
-          <div />
-          {days.map(d => {
-            const key = dayKey(d)
-            const dayCalendarEvents = calendarByDay.get(key) ?? []
-            const allDay = dayCalendarEvents.filter(e => e.isAllDay && !isBlock(e))
-            const allDayBlocked = dayCalendarEvents.some(e => e.isAllDay && isBlock(e))
-            return (
-              <div key={key} className="border-l border-border px-2 py-1.5 text-center">
-                <span
-                  className={cn(
-                    'text-xs font-medium',
-                    key === todayKey ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                >
-                  {d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })}
-                </span>
-                {allDayBlocked && (
-                  <span
-                    className="mt-0.5 block truncate rounded px-1 text-micro leading-4 text-muted-foreground"
-                    style={{ backgroundImage: BLOCK_HATCH }}
-                  >
-                    Blocked all day
-                  </span>
-                )}
-                {allDay.map(e => {
-                  const style = CATEGORY_STYLE[categorize(e.subject)]
-                  return (
-                    <span
-                      key={e.id}
-                      className="mt-0.5 block truncate rounded px-1 text-micro leading-4"
-                      style={{
-                        background: style.bg,
-                        color: style.text,
-                        borderLeft: `3px solid ${style.dot}`,
-                      }}
-                      title={`All day: ${e.subject} (${calendarSource(e)})`}
-                    >
-                      {e.subject}
-                    </span>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-        <div className="grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
-          <div className="relative" style={{ height: gridHeight }}>
-            {Array.from({ length: slotCount }, (_, i) => {
-              const minutes = gridStartMin + i * SLOT_MIN
-              return minutes % 60 === 0 ? (
-                <span
-                  key={i}
-                  className="absolute right-1.5 -translate-y-1/2 text-micro text-muted-foreground"
-                  style={{ top: i * SLOT_PX }}
-                >
-                  {fmtGridHour(minutes)}
-                </span>
-              ) : null
-            })}
-          </div>
-          {days.map(d => {
-            const key = dayKey(d)
-            const events = (byDay.get(key) ?? []).filter(a => a.status !== 'cancelled')
-            const timed = (calendarByDay.get(key) ?? []).filter(e => !e.isAllDay)
-            const blocks = timed.filter(isBlock)
-            const calendarTimed = timed.filter(e => !isBlock(e))
-            return (
-              <div
-                key={key}
-                className={cn('relative border-l border-border', key === todayKey && 'bg-primary/5')}
-                style={{ height: gridHeight }}
-              >
-                {Array.from({ length: slotCount }, (_, i) => {
-                  const minutes = gridStartMin + i * SLOT_MIN
-                  const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
-                  const mm = String(minutes % 60).padStart(2, '0')
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      aria-label={`Book ${key} ${hh}:${mm}`}
-                      onClick={() => onSlotClick(d, `${hh}:${mm}`)}
-                      className={cn(
-                        'absolute inset-x-0 hover:bg-accent',
-                        minutes % 60 === 0 ? 'border-t border-border' : 'border-t border-border/40',
-                      )}
-                      style={{ top: i * SLOT_PX, height: SLOT_PX }}
-                    />
-                  )
-                })}
-                {blocks.map(e => {
-                  const startMin = Math.max(minutesOfDay(e.startIso), gridStartMin)
-                  const endMin = Math.min(
-                    Math.max(endMinutesOfDay(e.startIso, e.endIso), startMin + 15),
-                    gridEndMin,
-                  )
-                  if (startMin >= gridEndMin) return null
-                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
-                  const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
-                  return (
-                    <div
-                      key={e.id}
-                      className="pointer-events-none absolute inset-x-0.5 rounded"
-                      style={{ top, height, backgroundImage: BLOCK_HATCH }}
-                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (blocked)`}
-                    />
-                  )
-                })}
-                {calendarTimed.map(e => {
-                  const startMin = Math.max(minutesOfDay(e.startIso), gridStartMin)
-                  const endMin = Math.min(
-                    Math.max(endMinutesOfDay(e.startIso, e.endIso), startMin + 15),
-                    gridEndMin,
-                  )
-                  if (startMin >= gridEndMin) return null
-                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
-                  const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
-                  const style = CATEGORY_STYLE[categorize(e.subject)]
-                  return (
-                    <div
-                      key={e.id}
-                      className={cn(
-                        'pointer-events-none absolute inset-x-1 overflow-hidden rounded px-1.5 py-0.5',
-                        (e.showAs === 'free' || e.showAs === 'tentative') && 'opacity-60',
-                      )}
-                      style={{
-                        top,
-                        height,
-                        background: style.bg,
-                        color: style.text,
-                        borderLeft: `3px solid ${style.dot}`,
-                      }}
-                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (${calendarSource(e)})`}
-                    >
-                      <span className="block truncate text-micro leading-4">
-                        {fmtTime(e.startIso)} {e.subject}
-                      </span>
-                    </div>
-                  )
-                })}
-                {events.map(a => {
-                  const startMin = Math.max(minutesOfDay(a.startTime), gridStartMin)
-                  const endMin = Math.min(
-                    Math.max(endMinutesOfDay(a.startTime, a.endTime), startMin + 15),
-                    gridEndMin,
-                  )
-                  if (startMin >= gridEndMin) return null
-                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
-                  const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 20)
-                  const style = CATEGORY_STYLE[categorize(a.typeLabel)]
-                  const matterChip = a.linkedMatterNumber
-                    ? shortMatterLabel(a.linkedMatterNumber)
-                    : null
-                  // A sub-90-minute event only fits two lines; the matter chip
-                  // is more useful there than repeating the type label.
-                  const showTypeLabel = !matterChip || endMin - startMin >= 90
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => onEventClick(a)}
-                      className="absolute inset-x-1 overflow-hidden rounded px-1.5 py-0.5 text-left hover:brightness-95"
-                      style={{
-                        top,
-                        height,
-                        background: style.bg,
-                        color: style.text,
-                        borderLeft: `3px solid ${style.dot}`,
-                      }}
-                      title={`${fmtTime(a.startTime)}–${fmtTime(a.endTime)} ${a.typeLabel} — ${a.attendeeName}`}
-                    >
-                      <span className="block truncate text-micro font-medium leading-4">
-                        {fmtTime(a.startTime)} {a.attendeeName}
-                      </span>
-                      <span
-                        className={cn('mt-1 inline-block rounded-full px-1.5 py-0.5 text-micro', availabilityClass(a))}
-                      >
-                        {availabilityLabel(a)}
-                      </span>
-                      {showTypeLabel && (
-                        <span className="block truncate text-micro leading-4 opacity-80">
-                          {a.typeLabel}
-                        </span>
-                      )}
-                      {matterChip && (
-                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-background/80 px-1.5 text-micro font-medium text-foreground">
-                          ↗ {matterChip}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
       </div>
     </div>
   )

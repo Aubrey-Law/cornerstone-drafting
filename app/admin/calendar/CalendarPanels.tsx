@@ -20,14 +20,14 @@ export function WeekStrip({ days, selectedDay, todayKey, counts, onSelect }: {
   </nav>
 }
 
-export function NextUp({ date, todayKey, now, appointments, calendarEvents, attention, attentionUnavailable = false, slots, availabilityState, onDismiss, onOpen, onBook, timezone }: {
-  date: string; todayKey: string; now: Date; appointments: CalendarAppointment[]; calendarEvents: ExternalCalendarEvent[]; attention: AttentionItem[]; attentionUnavailable?: boolean; slots: OpenSlot[]; availabilityState: string; timezone: string
+export function NextUp({ date, todayKey, now, appointments, visibleAppointments = appointments, calendarEvents, attention, attentionUnavailable = false, slots, availabilityState, onDismiss, onOpen, onBook, timezone }: {
+  date: string; todayKey: string; now: Date; appointments: CalendarAppointment[]; visibleAppointments?: CalendarAppointment[]; calendarEvents: ExternalCalendarEvent[]; attention: AttentionItem[]; attentionUnavailable?: boolean; slots: OpenSlot[]; availabilityState: string; timezone: string
   onDismiss: (id: string) => void; onOpen: (appointment: CalendarAppointment) => void; onBook: (iso: string) => void
 }) {
   const meetings = appointments.filter(item => item.status === 'scheduled').sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
   const next = date < todayKey ? undefined : meetings.find(item => date !== todayKey || Date.parse(item.endTime) > now.getTime())
   const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })
-  const later = [...meetings.filter(item => item !== next && (date !== todayKey || Date.parse(item.startTime) > now.getTime())).map(item => ({ id: `a:${item.id}`, start: item.startTime, label: item.attendeeName, appointment: item })), ...calendarEvents.filter(item => !isBlock(item) && (date !== todayKey || Date.parse(item.startIso) > now.getTime())).map(item => ({ id: `g:${item.id}`, start: item.startIso, label: `${item.subject} · Google`, appointment: null }))].sort((a, b) => a.start.localeCompare(b.start))
+  const later = [...visibleAppointments.filter(item => item.status === 'scheduled').filter(item => item !== next && (date !== todayKey || Date.parse(item.startTime) > now.getTime())).map(item => ({ id: `a:${item.id}`, start: item.startTime, label: item.attendeeName, appointment: item })), ...calendarEvents.filter(item => !isBlock(item) && (date !== todayKey || Date.parse(item.startIso) > now.getTime())).map(item => ({ id: `g:${item.id}`, start: item.startIso, label: `${item.subject} · Google`, appointment: null }))].sort((a, b) => a.start.localeCompare(b.start))
   return <section className="space-y-3 rounded-lg border border-border bg-card p-4">
     <h2 className="text-base font-semibold text-foreground">Next up</h2>
     <p className="text-xs text-muted-foreground">{new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>

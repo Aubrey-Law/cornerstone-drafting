@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
   const { data } = await getAdminClient()
     .from('appointments')
     .select('id, start_time, end_time, status, google_event_id')
-    .gte('start_time', fromIso)
     .lt('start_time', toIso)
+    .gt('end_time', fromIso)
     .not('google_event_id', 'is', null)
   const managed = (data ?? []) as ReconcilableAppointment[]
   const exclude = new Set(

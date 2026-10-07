@@ -1,20 +1,21 @@
 'use client'
 
 import Link from 'next/link'
+import { AttentionBand } from './AttentionBand'
 import {
   CalendarDays,
   Check,
-  Circle,
-  Clock3,
   FileText,
   Video,
   RotateCcw,
-  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
+import { isExternallyManagedSource } from '@/lib/appointments/types'
+import { bookedMinutes, dateInstant, intervalMinutes, openGaps } from '@/lib/calendarAvailability'
+import { firmTodayKey, FIRM_TIMEZONE } from '@/lib/firmDate'
 import type {
+  DayAvailability,
   AttentionItem,
   CalendarAppointment,
   CalendarRailData,
@@ -34,143 +35,43 @@ function minutesLabel(minutes: number): string {
   return [hours ? `${hours}h` : '', rest ? `${rest}m` : ''].filter(Boolean).join(' ') || '0m'
 }
 
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
-
-function availabilityLabel(calendarShowAsBusy?: boolean): string {
-  return calendarShowAsBusy === false ? 'Free' : 'Busy'
-}
-
-function availabilityClass(calendarShowAsBusy?: boolean): string {
-  return calendarShowAsBusy === false
-    ? 'bg-green-bg text-green'
-    : 'bg-red-bg text-red'
-}
-
-function durationMinutes(start: string, end: string) {
-  return Math.max(0, Math.round((Date.parse(end) - Date.parse(start)) / 60_000))
-}
-
-function nextMeetingLabel(appointments: CalendarAppointment[]) {
-  const next = appointments.find(item => item.status === 'scheduled' && Date.parse(item.startTime) > Date.now())
-  if (!next) return 'no more meetings'
-  const minutes = Math.max(0, Math.round((Date.parse(next.startTime) - Date.now()) / 60_000))
-  return `next in ${minutes} min`
-}
-
-function AttentionBand({
-  items,
-  onDismiss,
-}: {
-  items: AttentionItem[]
-  onDismiss: (id: string) => void
-}) {
-  if (items.length === 0) return null
-  const red = items.some(item => item.severity === 'red')
-  return (
-    <section
-      className={cn(
-        'rounded-lg border p-3',
-        red ? 'border-red-strong-border bg-red-bg' : 'border-amber-strong-border bg-amber-bg',
-      )}
-    >
-      <h2 className="text-sm font-semibold text-foreground">Needs you before your next meeting</h2>
-      <div className="mt-2 grid gap-2 lg:grid-cols-3">
-        {items.slice(0, 6).map(item => (
-          <article key={item.id} className="relative rounded-md border border-border bg-card p-3">
-            <button
-              type="button"
-              aria-label={`Dismiss ${item.title}`}
-              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-              onClick={() => onDismiss(item.id)}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-            <h3 className="pr-5 text-sm font-semibold text-foreground">{item.title}</h3>
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {item.actions.slice(0, 2).map(action => action.href ? (
-                <Button key={action.label} asChild size="sm" variant="outline">
-                  <Link href={action.href}>{action.label}</Link>
-                </Button>
-              ) : null)}
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/**
- * Colour key shared with the month grid: the category's `bg`/`text` tokens fill
- * a strip across the top of the card and its `dot` carries the left edge, so a
- * day reads by colour the same way a month cell does.
- */
-function CategoryStrip({ label, style }: { label: string; style: { bg: string; text: string; dot: string } }) {
-  return (
-    <div
-      className="flex items-center gap-1.5 rounded-t-[3px] px-2 py-1 text-micro font-medium leading-4"
-      style={{ background: style.bg, color: style.text }}
-    >
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: style.dot }} aria-hidden />
-      <span className="truncate">{label}</span>
-    </div>
-  )
-}
-
-/** Calendar events carry the same category colour as their month-grid block. */
-function CalendarEventRow({ event }: { event: ExternalCalendarEvent }) {
-  const category = categorize(event.subject)
+function CalendarEventRow({ event, overlap, timezone }: { event: ExternalCalendarEvent; overlap: boolean; timezone: string }) {
   const style = categoryStyleFor(event.subject)
-  return (
-    <div className="flex gap-3">
-      <div className="w-[62px] shrink-0 pt-2 text-right text-xs tabular-nums text-muted-foreground">
-        {event.isAllDay ? 'All day' : fmtTime(event.startIso)}
-      </div>
-      <div
-        className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card"
-        style={{ borderLeft: `3px solid ${style.dot}` }}
-      >
-        <CategoryStrip label={CATEGORY_LABEL[category]} style={style} />
-        <div className="px-3 py-2 text-muted-foreground">
-          <p className="text-sm font-medium text-foreground">{event.subject}</p>
-          <p className="text-micro">
-            {event.calendarName ? `Google · ${event.calendarName}` : 'Calendar event'}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
+  return <div className="flex gap-3 rounded border border-border bg-card p-3 text-xs text-foreground" style={{ borderLeft: `3px solid ${style.dot}` }}>
+    <span className="shrink-0 text-muted-foreground">{event.isAllDay ? 'All day' : new Date(event.startIso).toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })}</span>
+    <div className="min-w-0"><p className="font-medium">{event.subject}</p><p className="text-muted-foreground">Google · {event.calendarName ?? 'Calendar'}{event.showAs === 'free' ? ' · Free' : ''}</p>{overlap && <p className="text-muted-foreground">Overlaps another event</p>}</div>
+  </div>
 }
 
 function AgendaRow({
   appointment,
   onOpen,
   onReschedule,
+  now, overlap, timezone,
 }: {
+  now: Date
+  overlap: boolean
+  timezone: string
   appointment: CalendarAppointment
   onOpen: () => void
   onReschedule: () => void
 }) {
-  const past = Date.parse(appointment.endTime) < Date.now()
-  const followUpReady = Date.now() >= Date.parse(appointment.endTime) + 10 * 60_000
-  const minutes = durationMinutes(appointment.startTime, appointment.endTime)
-  const pending = appointment.status === 'scheduled' && !past
+  const past = Date.parse(appointment.endTime) < now.getTime()
+  const followUpReady = now.getTime() >= Date.parse(appointment.endTime) + 10 * 60_000
+  const minutes = Math.max(0, Math.round((Date.parse(appointment.endTime) - Date.parse(appointment.startTime)) / 60_000))
+  const status = appointment.status === 'no_show' ? 'No-show' : appointment.status === 'cancelled' ? 'Cancelled' : appointment.status === 'rescheduled' ? 'Rescheduled' : past ? 'Meeting ended' : Date.parse(appointment.startTime) <= now.getTime() ? 'In progress' : 'Prep readiness unknown'
   const category = categorize(appointment.typeLabel)
   const categoryStyle = categoryStyleFor(appointment.typeLabel)
   return (
-    <div className={cn('flex gap-3', past && 'opacity-55')}>
+    <div className={cn('flex gap-3', past && 'bg-muted')}>
       <div className="w-[62px] shrink-0 pt-2 text-right">
-        <div className="text-xs font-semibold tabular-nums text-foreground">{fmtTime(appointment.startTime)}</div>
+        <div className="text-xs font-semibold tabular-nums text-foreground">{new Date(appointment.startTime).toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })}</div>
         <div className="text-micro text-muted-foreground">{minutesLabel(minutes)}</div>
       </div>
       <article
         className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card"
         style={{ borderLeft: `3px solid ${categoryStyle.dot}` }}
       >
-        <CategoryStrip label={CATEGORY_LABEL[category]} style={categoryStyle} />
         <div className="px-3 py-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
@@ -184,18 +85,11 @@ function AgendaRow({
               <p className="text-xs text-muted-foreground">
                 {appointment.typeLabel}
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
-                <span className="inline-block">
-                  {' '}
-                  · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-micro`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
-                </span>
-                {externalSourceLabel(appointment.source)
-                  ? ` · ${externalSourceLabel(appointment.source)}`
-                  : !appointment.calendarSynced && appointment.status === 'scheduled'
-                    ? ' · ⚠ not on the calendar'
-                    : ''}
+
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full px-2 py-0.5 text-micro" style={{ background: categoryStyle.bg, color: categoryStyle.text }}><span>{CATEGORY_LABEL[category]}</span></span>
               {appointment.linkedMatterNumber && (
                 <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-micro text-foreground">
                   {appointment.linkedMatterNumber}
@@ -211,15 +105,10 @@ function AgendaRow({
               )}
             </div>
           </div>
+          {overlap && <p className="mt-2 text-xs text-muted-foreground">Overlaps another event</p>}
+          {!appointment.calendarSynced && appointment.status === 'scheduled' && !isExternallyManagedSource(appointment.source) && <p className="mt-2 rounded border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground">Not synced to Google Calendar. External bookings may not reflect this appointment.</p>}
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-micro">
-            <span className="inline-flex items-center gap-1 text-success">
-              <Check className="h-3 w-3" /> calendar synced
-            </span>
-            <span className={cn('inline-flex items-center gap-1', pending ? 'text-muted-foreground' : 'text-success')}>
-              {pending ? <Circle className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-              {pending ? 'prep pending' : 'meeting complete'}
-            </span>
-            {appointment.status === 'no_show' && <span className="text-destructive">● no-show</span>}
+            <span className="text-muted-foreground">{status}</span>
             <span className="ml-auto flex flex-wrap gap-1">
               {appointment.linkedMatterId && (
                 <Button asChild size="sm" variant="ghost">
@@ -229,12 +118,12 @@ function AgendaRow({
               <Button size="sm" variant="ghost" onClick={onOpen}>
                 <FileText className="mr-1 h-3 w-3" /> Prep pack
               </Button>
-              {!past && !isExternallyManagedSource(appointment.source) && (
+              {!past && appointment.status === 'scheduled' && !isExternallyManagedSource(appointment.source) && (
                 <Button size="sm" variant="ghost" onClick={onReschedule}>
                   <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
                 </Button>
               )}
-              {appointment.onlineMeetingUrl && (
+              {appointment.onlineMeetingUrl && appointment.status === 'scheduled' && !past && (
                 <Button asChild size="sm">
                   <a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer">
                     <Video className="mr-1 h-3 w-3" /> Join
@@ -255,15 +144,9 @@ function AgendaRow({
 }
 
 export function DayAgenda({
-  date,
-  appointments,
-  calendarEvents,
-  attention,
-  rail,
-  onDismissAttention,
-  onOpenAppointment,
-  onReschedule,
-  onBookSlot,
+  date, appointments, calendarEvents, attention, rail, onDismissAttention, onOpenAppointment, onReschedule, onBookSlot,
+  now = new Date(), todayKey = firmTodayKey(now), timezone = FIRM_TIMEZONE, availability = null,
+  totalAppointments, totalCalendarEvents, attentionUnavailable = false, conflictAppointments = appointments, conflictCalendarEvents = calendarEvents,
 }: {
   date: Date
   appointments: CalendarAppointment[]
@@ -274,97 +157,52 @@ export function DayAgenda({
   onOpenAppointment: (appointment: CalendarAppointment) => void
   onReschedule: (appointment: CalendarAppointment) => void
   onBookSlot: (startIso?: string) => void
+  now?: Date
+  todayKey?: string
+  timezone?: string
+  availability?: DayAvailability | null
+  attentionUnavailable?: boolean
+  conflictAppointments?: CalendarAppointment[]
+  conflictCalendarEvents?: ExternalCalendarEvent[]
+  totalAppointments?: number
+  totalCalendarEvents?: number
 }) {
+  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const isToday = key === todayKey
   const active = appointments.filter(item => item.status !== 'cancelled')
-  const booked = active.reduce((sum, item) => sum + durationMinutes(item.startTime, item.endTime), 0)
-  const workday = 8 * 60
-  const heading = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const blocks = calendarEvents.filter(isBlock)
   const external = calendarEvents.filter(event => !isBlock(event))
-
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
-      <div className="min-w-0 space-y-3">
-        <header>
-          {/* CalendarClient owns this page's <h1>; the agenda is a section within it. */}
-          <h2 className="text-xl font-semibold text-foreground">{heading}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {active.length + external.length} events · {minutesLabel(booked)} booked ·{' '}
-            {minutesLabel(Math.max(0, workday - booked))} open · {nextMeetingLabel(active)}
-          </p>
-        </header>
-        <AttentionBand items={attention} onDismiss={onDismissAttention} />
-        <div className="space-y-2">
-          {blocks.map(event => (
-            <div key={event.id} className="flex gap-3">
-              <div className="w-[62px] shrink-0 pt-1 text-right text-micro text-muted-foreground">
-                {event.isAllDay ? 'All day' : fmtTime(event.startIso)}
-              </div>
-              <div
-                className="min-h-6 flex-1 rounded border border-border px-2 py-1 text-micro text-muted-foreground"
-                style={{ backgroundImage: BLOCK_HATCH }}
-              >
-                {event.subject}
-              </div>
-            </div>
-          ))}
-          {[...active.map(item => ({ kind: 'appointment' as const, start: item.startTime, item })),
-            ...external.map(item => ({ kind: 'calendar' as const, start: item.startIso, item }))]
-            .sort((a, b) => a.start.localeCompare(b.start))
-            .map(row => row.kind === 'appointment' ? (
-              <AgendaRow
-                key={row.item.id}
-                appointment={row.item}
-                onOpen={() => onOpenAppointment(row.item)}
-                onReschedule={() => onReschedule(row.item)}
-              />
-            ) : (
-              <CalendarEventRow key={row.item.id} event={row.item} />
-            ))}
-          {active.length === 0 && external.length === 0 && blocks.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              Nothing scheduled. Use Quick book or choose an open slot.
-            </div>
-          )}
-        </div>
+  const gaps = availability?.date === key ? openGaps(availability.windows, availability.busy, isToday ? now.getTime() : key < todayKey ? Infinity : -Infinity, availability.bufferMinutes) : null
+  const time = (instant: number) => new Date(instant).toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })
+  const next = active.filter(item => item.status === 'scheduled' && Date.parse(item.startTime) > now.getTime()).sort((a, b) => a.startTime.localeCompare(b.startTime))[0]
+  const events = [...conflictAppointments.map(item => ({ id: `a:${item.id}`, start: Date.parse(item.startTime), end: Date.parse(item.endTime), busy: item.status === 'scheduled' && item.calendarShowAsBusy !== false })), ...conflictCalendarEvents.map(item => ({ id: `g:${item.id}`, start: item.isAllDay ? dateInstant(item.startIso.slice(0, 10), timezone) : Date.parse(item.startIso), end: item.isAllDay ? dateInstant(item.endIso.slice(0, 10), timezone) : Date.parse(item.endIso), busy: item.showAs !== 'free' }))]
+  const overlaps = (id: string) => { const event = events.find(item => item.id === id); return !!event?.busy && events.some(other => other.id !== id && other.busy && event.start < other.end && event.end > other.start) }
+  const rows = [
+    ...active.map(item => ({ id: `a:${item.id}`, start: Date.parse(item.startTime), node: <AgendaRow appointment={item} now={now} timezone={timezone} overlap={overlaps(`a:${item.id}`)} onOpen={() => onOpenAppointment(item)} onReschedule={() => onReschedule(item)} /> })),
+    ...external.map(item => ({ id: `g:${item.id}`, start: item.isAllDay ? -Infinity : Date.parse(item.startIso), node: <CalendarEventRow event={item} timezone={timezone} overlap={overlaps(`g:${item.id}`)} /> })),
+    ...blocks.map(item => ({ id: `b:${item.id}`, start: item.isAllDay ? -Infinity : Date.parse(item.startIso), node: <div className="rounded border border-border px-3 py-2 text-xs text-foreground" style={{ backgroundImage: BLOCK_HATCH }}>{item.isAllDay ? 'All day' : time(Date.parse(item.startIso))} · <span>{item.subject}</span></div> })),
+    ...(gaps ?? []).filter(gap => gap.end - gap.start >= 30 * 60_000).map(gap => ({ id: `gap:${gap.start}`, start: gap.start, node: <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-dashed border-border bg-card p-3 text-xs text-foreground"><span>Open · {time(gap.start)}–{time(gap.end)} · {minutesLabel((gap.end - gap.start) / 60_000)}</span><Button size="sm" variant="outline" onClick={() => onBookSlot(new Date(gap.start).toISOString())}>Book</Button></div> })),
+    ...(isToday ? [{ id: 'now', start: now.getTime(), node: <div className="border-t-2 border-red pt-1 text-xs font-medium text-red">{time(now.getTime())} · Now{next ? ` · ${next.attendeeName} in ${Math.ceil((Date.parse(next.startTime) - now.getTime()) / 60_000)} min` : ''}</div> }] : []),
+  ].sort((a, b) => a.start - b.start || a.id.localeCompare(b.id))
+  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
+    <div className="min-w-0 space-y-3">
+      <p className="text-xs text-muted-foreground">{totalAppointments ?? active.filter(item => item.status === 'scheduled').length} appointments · {totalCalendarEvents ?? external.length} calendar events · {availability ? `${minutesLabel(bookedMinutes(availability.windows, availability.busy))} booked${key < todayKey ? ' · past day' : ` · ${minutesLabel(intervalMinutes(gaps ?? []))} open${isToday ? ' for the rest of today' : ' during working hours'}`}` : 'Availability unavailable'} · totals before category filters</p>
+      <AttentionBand items={attention} onDismiss={onDismissAttention} />
+      {attentionUnavailable && <p className="text-xs text-muted-foreground" role="status">Attention items unavailable</p>}
+      <div className="space-y-2">{rows.map(row => <div key={row.id}>{row.node}</div>)}
+        {!rows.length && <p className="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Nothing scheduled. Use Quick book to check availability.</p>}
       </div>
-
-      <aside className="space-y-3">
-        <RailSection icon={CalendarDays} title="Dates this week">
-          {rail.datesThisWeek.length ? rail.datesThisWeek.map(item => (
-            <Link key={item.id} href={`/admin/matters/${item.matterId}`} className="block rounded px-2 py-1.5 hover:bg-accent">
-              <span className="block text-xs font-medium text-foreground">{item.label}</span>
-              <span className="text-micro text-muted-foreground">{new Date(item.date).toLocaleDateString()}</span>
-            </Link>
-          )) : <Empty>Nothing due this week</Empty>}
-        </RailSection>
-        <RailSection icon={Check} title="Follow-ups owed">
-          {rail.followUps.length ? rail.followUps.map(item => (
-            <Link
-              key={item.id}
-              href={item.matterId ? `/admin/matters/${item.matterId}?tab=tasks` : `/admin/crm/opportunities/${item.leadId}`}
-              className="block rounded px-2 py-1.5 text-xs text-foreground hover:bg-accent"
-            >
-              {item.title}
-            </Link>
-          )) : <Empty>No follow-ups owed</Empty>}
-        </RailSection>
-        <RailSection icon={Clock3} title="Open time today">
-          {rail.openSlots.slice(0, 5).map(slot => (
-            <div key={slot.startIso} className="flex items-center justify-between gap-2 px-2 py-1">
-              <span className="text-xs text-foreground">{fmtTime(slot.startIso)}</span>
-              <Button size="sm" variant="outline" onClick={() => onBookSlot(slot.startIso)}>Book</Button>
-            </div>
-          ))}
-          {rail.openSlots.length === 0 && (
-            <Button className="w-full" size="sm" variant="outline" onClick={() => onBookSlot()}>
-              Find an open time
-            </Button>
-          )}
-        </RailSection>
-      </aside>
+      <p className="text-xs text-muted-foreground">← → previous / next day · ? all shortcuts</p>
     </div>
-  )
+    <aside className="space-y-3">
+      <RailSection icon={CalendarDays} title="Dates this week">
+        {rail.datesThisWeek.length ? rail.datesThisWeek.map(item => <Link key={item.id} href={`/admin/matters/${item.matterId}`} className="block rounded px-2 py-1.5 hover:bg-accent"><span className="block text-xs font-medium text-foreground">{item.label}</span><span className="text-micro text-muted-foreground">{item.date.slice(0, 10)}</span></Link>) : <Empty>Nothing due this week</Empty>}
+      </RailSection>
+      <RailSection icon={Check} title="Follow-ups owed">
+        {rail.followUps.length ? rail.followUps.map(item => <Link key={item.id} href={item.matterId ? `/admin/matters/${item.matterId}?tab=tasks` : `/admin/crm/opportunities/${item.leadId}`} className="block rounded px-2 py-1.5 text-xs text-foreground hover:bg-accent">{item.title}</Link>) : <Empty>No follow-ups owed</Empty>}
+      </RailSection>
+    </aside>
+  </div>
 }
 
 function RailSection({

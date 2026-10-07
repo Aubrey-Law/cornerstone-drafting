@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { ExternalCalendarRef } from './types'
 
 interface Props {
+  discoveryLoading?: boolean
   connected?: boolean
   error?: string | null
   truncated?: boolean
@@ -26,7 +27,7 @@ interface Props {
  * booking policy is in Settings → Scheduling on purpose: it changes what
  * clients can book and should not be one click from the grid.
  */
-export function CalendarVisibilityPopover({ calendars, hiddenIds, authHeaders, onChange, connected = true, error, truncated = false, skipped = [], discoveryUnavailable = false }: Props) {
+export function CalendarVisibilityPopover({ calendars, hiddenIds, authHeaders, onChange, connected = true, error, truncated = false, skipped = [], discoveryUnavailable = false, discoveryLoading = false }: Props) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -64,7 +65,7 @@ export function CalendarVisibilityPopover({ calendars, hiddenIds, authHeaders, o
           title="Choose which calendars appear here"
           data-testid="calendar-visibility-trigger"
         >
-          Calendars <span className="text-muted-foreground">{discoveryUnavailable ? 'Unavailable' : `${shown + 1} of ${calendars.length + 1}`}</span>
+          Calendars <span className="text-muted-foreground">{discoveryLoading ? 'Loading…' : discoveryUnavailable ? 'Unavailable' : `${shown + 1} of ${calendars.length + 1}`}</span>
           {warning && <span className="h-2 w-2 rounded-full bg-amber" role="img" aria-label="Calendar warning" />}
         </button>
       </PopoverTrigger>

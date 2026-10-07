@@ -86,11 +86,12 @@ describe('booking component names', () => {
         submitted.push(JSON.parse(String(init.body)))
         return { ok: true, json: async () => ({ ok: true }) } as Response
       }
-      return { ok: true, json: async () => ({ connected: true, slots: [] }) } as Response
+      return { ok: true, json: async () => ({ connected: true, slots: [{ startIso: slot, endIso: new Date(Date.parse(slot) + 30 * 60_000).toISOString(), afterHours: false, meetingOrdinal: 1 }] }) } as Response
     })
     render(<QuickBookPopover open onOpenChange={vi.fn()} types={[{ ...type, id: 'type-1', locationTypes: ['teams'], active: true }]} prefillIso={slot} authHeaders={() => undefined} onBooked={vi.fn()} />)
     fill('First name', 'Mary Jane'); fill('Last name', 'van Buren'); fill('Email', 'mary@example.com')
     fill('Spouse/partner first name', 'Jo Ann'); fill('Spouse/partner last name', 'de la Cruz')
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Book & email confirmation' }) as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: 'Book & email confirmation' }))
     await waitFor(() => expect(submitted).toHaveLength(1))
     expect(submitted[0]).toMatchObject({ attendeeFirstName: 'Mary Jane', attendeeLastName: 'van Buren', secondAttendeeFirstName: 'Jo Ann', secondAttendeeLastName: 'de la Cruz' })
