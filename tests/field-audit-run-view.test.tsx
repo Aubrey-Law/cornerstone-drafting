@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const { retryRun, recordFieldAuditDisposition } = vi.hoisted(() => ({
   retryRun: vi.fn(async (_previous: { message: string | null } | null, _form: FormData) => ({ message: null })),
@@ -108,10 +108,17 @@ describe('FieldAuditRunView decisions', () => {
     await waitFor(() => expect(recordFieldAuditDisposition).toHaveBeenCalledTimes(1))
     const sent = recordFieldAuditDisposition.mock.calls[0][1]
     expect([sent.get('findingId'), sent.get('disposition'), sent.get('runId')]).toEqual(['f-1', 'accepted', 'run-1'])
+    // Let the first decision's transition settle inside act, so the optimistic
+    // revert does not land between the rerender below and its assertion.
+    await act(async () => {
+      await recordFieldAuditDisposition.mock.results[0].value
+    })
 
     // Once the page reloads with the decision recorded, pressing it again reopens.
     rerender(<FieldAuditRunView runId="run-1" findings={[finding({ disposition: 'accepted' })]} steps={[]} />)
-    expect(screen.getByRole('button', { name: 'Accept' }).getAttribute('aria-pressed')).toBe('true')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Accept' }).getAttribute('aria-pressed')).toBe('true'),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
     await waitFor(() => expect(recordFieldAuditDisposition).toHaveBeenCalledTimes(2))
     expect(recordFieldAuditDisposition.mock.calls[1][1].get('disposition')).toBe('open')
