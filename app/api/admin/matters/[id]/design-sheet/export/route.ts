@@ -4,6 +4,7 @@ import PizZip from 'pizzip'
 import { requireAdmin } from '@/lib/apiAuth'
 import { loadCurrentDesignSheet } from '@/lib/designSheetImport/server'
 import { buildStatularExportMarkdown } from '@/lib/designSheet/statularExport'
+import { buildDesignSummaryDocx } from '@/lib/designSheet/summaryDocx'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 import { generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
@@ -112,6 +113,34 @@ export async function GET(req: NextRequest, { params }: Params) {
         status: 200,
         headers: {
           'Content-Type': MARKDOWN_CONTENT_TYPE,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    // ?format=summary is the internal question-and-answer summary: every design
+    // sheet question with its answer (unanswered ones marked), as a Word file.
+    if (format === 'summary') {
+      const sheet = await loadCurrentDesignSheet(matterId)
+      if (!sheet) {
+        return NextResponse.json(
+          { error: 'No design sheet found for this matter. Complete the design sheet before exporting.' },
+          { status: 422 },
+        )
+      }
+      const date = new Date().toISOString().slice(0, 10)
+      const buffer = await buildDesignSummaryDocx(sheet, {
+        clientName: payload.client.full_name ?? null,
+        spouseName: payload.spouse?.full_name ?? null,
+        matterNumber: payload.matter.matter_number ?? null,
+        exportedOn: date,
+      })
+      const filename = safeHeaderFilename(`Internal-Design-Summary-${clientSlug(payload.client.full_name)}-${date}.docx`)
+      return new NextResponse(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': DOCX_CONTENT_TYPE,
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'no-store',
         },
