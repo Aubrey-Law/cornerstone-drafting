@@ -25,6 +25,14 @@ export function runSummaryLine(
 }
 
 /**
+ * A run row: name, then the summary line. Below sm the summary always sits
+ * under the name; a wrapping row put it beside a short name and under a long
+ * one, so a phone's list read ragged.
+ */
+export const RUN_ROW_CLASS =
+  'flex flex-col gap-1 px-4 py-3 text-sm transition-colors hover:bg-accent sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4'
+
+/**
  * Recorded reviews, newest first, each opening its saved review. Shared by the
  * review history page and a matter's Reviews tab.
  */
@@ -35,7 +43,7 @@ export function RunHistoryList({ runs, showMatter = true }: { runs: RunSummary[]
         <li key={run.runId}>
           <Link
             href={`/admin/review/${run.runId}`}
-            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm transition-colors hover:bg-accent"
+            className={RUN_ROW_CLASS}
           >
             <span className="min-w-0">
               <span className="font-medium">{run.documentName}</span>
