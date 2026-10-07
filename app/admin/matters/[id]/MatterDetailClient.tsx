@@ -1299,7 +1299,7 @@ function MatterDetailClientInner({
                         <Button variant="outline" size="sm" disabled={docsLoading} onClick={() => void loadDocuments()}>Retry</Button>
                       </div>
                     )}
-                    <RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} />
+                    <RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} probate={showProbate} />
                     <MatterDocumentsTab
                       matterId={matterId}
                       clientName={matter.client_name}

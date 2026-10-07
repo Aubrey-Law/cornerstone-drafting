@@ -3546,9 +3546,11 @@ export type Database = {
           received_document_id: string | null
           requested_at: string
           requested_by: string | null
+          section: string | null
           source: string
           source_ref: string | null
           status: string
+          template_key: string | null
           title: string
           updated_at: string
           waived_at: string | null
@@ -3566,9 +3568,11 @@ export type Database = {
           received_document_id?: string | null
           requested_at?: string
           requested_by?: string | null
+          section?: string | null
           source?: string
           source_ref?: string | null
           status?: string
+          template_key?: string | null
           title: string
           updated_at?: string
           waived_at?: string | null
@@ -3586,9 +3590,11 @@ export type Database = {
           received_document_id?: string | null
           requested_at?: string
           requested_by?: string | null
+          section?: string | null
           source?: string
           source_ref?: string | null
           status?: string
+          template_key?: string | null
           title?: string
           updated_at?: string
           waived_at?: string | null

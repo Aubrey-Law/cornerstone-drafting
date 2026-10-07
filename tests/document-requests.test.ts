@@ -29,6 +29,7 @@ function request(over: Partial<DocumentRequest> & Pick<DocumentRequest, 'id' | '
   return {
     matterId: MATTER, title: 'The deed to the lake house', description: null, dueOn: null, source: 'staff',
     requestedAt: '2026-10-01T12:00:00Z', receivedDocumentId: null, receivedAt: null, acceptedAt: null, waivedAt: null, waivedReason: null,
+    section: null, templateKey: null,
     ...over,
   }
 }
@@ -151,7 +152,7 @@ describe('the firm’s side', () => {
     expect(one).toContain("case 'waive'")
     expect(one).toContain("case 'reopen'")
     const detail = fs.readFileSync('app/admin/matters/[id]/MatterDetailClient.tsx', 'utf8')
-    expect(detail).toContain('<RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} />')
+    expect(detail).toContain('<RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} probate={showProbate} />')
   })
 
   it('keeps the table staff-writable and client-readable, and describes it in the generated types', () => {

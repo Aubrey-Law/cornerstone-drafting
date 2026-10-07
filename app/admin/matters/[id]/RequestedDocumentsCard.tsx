@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Clock, FileCheck2, Loader2, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, FileCheck2, ListChecks, Loader2, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,11 +10,15 @@ import { Label } from '@/components/ui/label'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
 import { summariseDocumentRequests, type DocumentRequest } from '@/lib/documentRequests/model'
+import { REQUEST_SECTION_LABELS } from '@/lib/documentRequests/probateSet'
+import { ProbateRequestListPanel } from './ProbateRequestListPanel'
 
 interface RequestedDocumentsCardProps {
   matterId: string
   /** Called after a request changes, so the Documents list can refresh its badges. */
   onChanged?: () => void | Promise<void>
+  /** A probate matter, which offers the standard probate document list. */
+  probate?: boolean
 }
 
 const STATUS_LABEL: Record<DocumentRequest['status'], { label: string; variant: 'secondary' | 'default' | 'outline' }> = {
@@ -35,7 +39,7 @@ const SOURCE_LABEL: Record<DocumentRequest['source'], string> = {
  * the portal shows, seen from the firm's side: add a request, accept what came
  * in, waive what is no longer needed.
  */
-export function RequestedDocumentsCard({ matterId, onChanged }: RequestedDocumentsCardProps) {
+export function RequestedDocumentsCard({ matterId, onChanged, probate = false }: RequestedDocumentsCardProps) {
   const token = useAccessToken()
   const [requests, setRequests] = useState<DocumentRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,6 +50,8 @@ export function RequestedDocumentsCard({ matterId, onChanged }: RequestedDocumen
   const [description, setDescription] = useState('')
   const [dueOn, setDueOn] = useState('')
   const [saving, setSaving] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
+  const closeList = useCallback(() => setListOpen(false), [])
 
   const headers = useCallback(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
 
@@ -136,11 +142,27 @@ export function RequestedDocumentsCard({ matterId, onChanged }: RequestedDocumen
               : `${summary.awaitingClient} outstanding · ${summary.awaitingStaff} to review · ${summary.accepted} accepted`}
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(current => !current)}>
-          <Plus className="h-3.5 w-3.5" />
-          Request a document
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {probate && (
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => { setAdding(false); setListOpen(current => !current) }}>
+              <ListChecks className="h-3.5 w-3.5" />
+              Ask for the probate documents
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => { setListOpen(false); setAdding(current => !current) }}>
+            <Plus className="h-3.5 w-3.5" />
+            Request a document
+          </Button>
+        </div>
       </div>
+
+      {listOpen && (
+        <ProbateRequestListPanel
+          matterId={matterId}
+          onClose={closeList}
+          onSent={async () => { await load(); await onChanged?.() }}
+        />
+      )}
 
       {adding && (
         <form
@@ -190,6 +212,7 @@ export function RequestedDocumentsCard({ matterId, onChanged }: RequestedDocumen
                   {request.description && <p className="mt-0.5 text-xs text-muted-foreground">{request.description}</p>}
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 text-micro text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Clock className="size-3" aria-hidden />asked {request.requestedAt.slice(0, 10)}{source ? ` ${source}` : ''}</span>
+                    {request.section && <span>· {REQUEST_SECTION_LABELS[request.section]}</span>}
                     {request.dueOn && <span>· due {request.dueOn}</span>}
                     {request.receivedAt && <span className="inline-flex items-center gap-1">· <FileCheck2 className="size-3" aria-hidden />received {request.receivedAt.slice(0, 10)}</span>}
                     {request.waivedReason && <span>· {request.waivedReason}</span>}
