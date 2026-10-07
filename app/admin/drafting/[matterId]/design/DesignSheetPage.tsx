@@ -620,7 +620,7 @@ function DesignSheetPageContent({
 
             <main className="min-w-0 pb-10">
               <section
-                className="sticky z-30 -mx-1 border-b border-border bg-background/95 px-1 py-3 backdrop-blur"
+                className="sticky z-30 -mx-1 border-b border-border bg-background px-1 py-3"
                 style={{ top: APP_HEADER_HEIGHT, minHeight: READINESS_STRIP_HEIGHT }}
                 aria-label="Draft readiness"
               >

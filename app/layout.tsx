@@ -33,10 +33,14 @@ const lora = localFont({
   variable: '--font-lora',
 })
 
+// Not preloaded: only the booking card and the design-sheet clause preview use
+// it, so every other route (all of admin, the portal, intake) shouldn't pay a
+// preload for it. The @font-face is still emitted, so it loads on demand.
 const ebGaramond = localFont({
   src: '../assets/fonts/eb-garamond-latin-var.woff2',
   weight: '400 800',
   display: 'swap',
+  preload: false,
   variable: '--font-eb-garamond',
 })
 
