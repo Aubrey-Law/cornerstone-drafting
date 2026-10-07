@@ -4,6 +4,8 @@
  * and what counts as outstanding are tested without a database.
  */
 
+import type { RequestSection } from './probateSet'
+
 export const DOCUMENT_REQUEST_STATUSES = ['requested', 'received', 'accepted', 'waived'] as const
 export type DocumentRequestStatus = (typeof DOCUMENT_REQUEST_STATUSES)[number]
 
@@ -24,6 +26,10 @@ export interface DocumentRequest {
   acceptedAt: string | null
   waivedAt: string | null
   waivedReason: string | null
+  /** The portal group a request from a standard list sits under; null for a one-off. */
+  section: RequestSection | null
+  /** The standard list item it was made from, so the list is never sent twice. */
+  templateKey: string | null
 }
 
 export function isDocumentRequestStatus(value: unknown): value is DocumentRequestStatus {

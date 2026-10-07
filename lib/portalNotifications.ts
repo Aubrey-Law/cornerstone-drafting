@@ -63,8 +63,12 @@ export async function notifyClientOfSharedDocument(matterId: string, documentNam
   }
 }
 
-/** The firm asked for a document. Several requests in one sitting send one notice. */
-export async function notifyClientOfDocumentRequest(matterId: string, title: string): Promise<void> {
+/**
+ * The firm asked for a document. Several requests in one sitting send one
+ * notice; a list sent in one step passes its size as `count`, and the notice
+ * says how many items there are instead of naming only the first.
+ */
+export async function notifyClientOfDocumentRequest(matterId: string, title: string, count = 1): Promise<void> {
   try {
     const client = await fetchMatterClient(matterId)
     if (!client) return
@@ -78,11 +82,15 @@ export async function notifyClientOfDocumentRequest(matterId: string, title: str
     await sendEmail({
       category: 'document_request_notice',
       to: client.email,
-      subject: `We need a document from you — ${firm.firmName}`,
+      subject: count > 1
+        ? `We need some documents from you — ${firm.firmName}`
+        : `We need a document from you — ${firm.firmName}`,
       html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
         <p>Hi ${firstName(client.name)},</p>
-        <p>We have asked for something to move your matter along: <strong>${safeTitle}</strong>.</p>
-        <p>You can upload it any time from your secure portal, where the full list of what we need is kept up to date.</p>
+        ${count > 1
+          ? `<p>We have put together a list of ${count} documents we need to move your matter along, starting with <strong>${safeTitle}</strong>. You do not need to send them all at once.</p>`
+          : `<p>We have asked for something to move your matter along: <strong>${safeTitle}</strong>.</p>`}
+        <p>You can upload ${count > 1 ? 'each one' : 'it'} any time from your secure portal, where the full list of what we need is kept up to date.</p>
         <p><a href="${link}" style="color:#1a6b72">See what we need →</a></p>
       </div>`,
       from: `${firm.attorneyShortName} <${firm.email}>`,

@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { isRequestSection, type ProbateRequestItem } from './probateSet'
 import {
   isDocumentRequestStatus,
   type DocumentRequest,
@@ -15,7 +16,8 @@ import {
  * portal through `getMatterForUser`, the registry through the action gate.
  */
 
-const COLUMNS = 'id, matter_id, title, description, due_on, status, source, requested_at, received_document_id, received_at, accepted_at, waived_at, waived_reason'
+const LEGACY_COLUMNS = 'id, matter_id, title, description, due_on, status, source, requested_at, received_document_id, received_at, accepted_at, waived_at, waived_reason'
+const COLUMNS = `${LEGACY_COLUMNS}, section, template_key`
 
 interface Row {
   id: string
@@ -31,6 +33,8 @@ interface Row {
   accepted_at: string | null
   waived_at: string | null
   waived_reason: string | null
+  section?: string | null
+  template_key?: string | null
 }
 
 function fromRow(row: Row): DocumentRequest {
@@ -48,6 +52,8 @@ function fromRow(row: Row): DocumentRequest {
     acceptedAt: row.accepted_at,
     waivedAt: row.waived_at,
     waivedReason: row.waived_reason,
+    section: isRequestSection(row.section) ? row.section : null,
+    templateKey: row.template_key ?? null,
   }
 }
 
@@ -58,14 +64,23 @@ export function isMissingRequestsTable(error: { code?: string | null; message?: 
   return /relation .* does not exist|could not find the table/i.test(error.message ?? '')
 }
 
+/** The section and template columns arrive with the probate intake migration. */
+function isMissingColumn(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false
+  if (error.code === '42703' || error.code === 'PGRST204') return true
+  return /column .* does not exist|could not find the .* column/i.test(error.message ?? '')
+}
+
 /** Every request on the matter, oldest first, waived ones last. */
 export async function listDocumentRequests(matterId: string, client: SupabaseClient = getAdminClient()): Promise<DocumentRequest[]> {
-  const { data, error } = await client
+  const read = (columns: string) => client
     .from('document_requests')
-    .select(COLUMNS)
+    .select(columns)
     .eq('matter_id', matterId)
     .order('requested_at', { ascending: true })
     .limit(200)
+  let { data, error } = await read(COLUMNS)
+  if (error && isMissingColumn(error)) ({ data, error } = await read(LEGACY_COLUMNS))
   if (error) {
     if (isMissingRequestsTable(error)) return []
     throw new Error(error.message)
@@ -96,10 +111,46 @@ export async function createDocumentRequest(input: CreateDocumentRequestInput, c
       source_ref: input.sourceRef ?? null,
       requested_by: input.requestedBy ?? null,
     })
-    .select(COLUMNS)
+    .select(LEGACY_COLUMNS)
     .single()
   if (error) throw new Error(error.message)
   return fromRow(data as unknown as Row)
+}
+
+export class RequestListUnavailableError extends Error {
+  constructor() {
+    super('The probate document list is not available until the probate intake migration has run')
+  }
+}
+
+/**
+ * Adds the chosen standard-list items to the matter. The insert names the
+ * matter and item as its conflict target, so a double click or a second send
+ * adds nothing that is already there. Returns only the rows it created.
+ */
+export async function createListRequests(
+  input: { matterId: string; items: readonly ProbateRequestItem[]; dueOn: string | null; requestedBy: string },
+  client: SupabaseClient = getAdminClient(),
+): Promise<DocumentRequest[]> {
+  if (input.items.length === 0) return []
+  const { data, error } = await client
+    .from('document_requests')
+    .upsert(input.items.map(item => ({
+      matter_id: input.matterId,
+      title: item.title,
+      description: item.description,
+      due_on: input.dueOn,
+      source: 'staff',
+      requested_by: input.requestedBy,
+      section: item.section,
+      template_key: item.key,
+    })), { onConflict: 'matter_id,template_key', ignoreDuplicates: true })
+    .select(COLUMNS)
+  if (error) {
+    if (isMissingColumn(error) || isMissingRequestsTable(error) || error.code === '42P10') throw new RequestListUnavailableError()
+    throw new Error(error.message)
+  }
+  return ((data ?? []) as unknown as Row[]).map(fromRow)
 }
 
 /** The client uploaded against the request: it is received and the document is linked. */
@@ -114,7 +165,7 @@ export async function markDocumentRequestReceived(
     .eq('id', input.requestId)
     .eq('matter_id', input.matterId)
     .in('status', ['requested', 'received'])
-    .select(COLUMNS)
+    .select(LEGACY_COLUMNS)
     .maybeSingle()
   if (error) {
     if (isMissingRequestsTable(error)) return null
@@ -155,7 +206,7 @@ export async function decideDocumentRequest(
     .update(patch)
     .eq('id', input.requestId)
     .eq('matter_id', input.matterId)
-    .select(COLUMNS)
+    .select(LEGACY_COLUMNS)
     .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? fromRow(data as unknown as Row) : null

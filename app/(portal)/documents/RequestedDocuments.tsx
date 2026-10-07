@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { uploadDocument } from '@/lib/documents'
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from '@/lib/documentUpload'
 import { clientStatusLabel, type DocumentRequest } from '@/lib/documentRequests/model'
+import { groupRequestsBySection } from '@/lib/documentRequests/probateSet'
 import { cn } from '@/lib/utils'
 
 const ACCEPT_ATTR = '.pdf,.doc,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.tif,.tiff'
@@ -59,6 +60,49 @@ export default function RequestedDocuments({ matterId, matterClosed, requests: i
   }
 
   const owed = requests.filter(request => request.status === 'requested').length
+  const groups = groupRequestsBySection(requests)
+
+  function renderRequest(request: DocumentRequest) {
+    const open = request.status === 'requested'
+    const uploading = uploadingId === request.id
+    return (
+      <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">{request.title}</p>
+          {request.description && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{request.description}</p>
+          )}
+          <p className={cn('mt-1 flex items-center gap-1 text-xs', open ? 'text-muted-foreground' : 'text-foreground/80')}>
+            {open ? <Clock className="size-3.5" aria-hidden /> : <CheckCircle2 className="size-3.5 text-primary" aria-hidden />}
+            {clientStatusLabel(request, today)}
+          </p>
+        </div>
+        {open && !matterClosed && (
+          <div>
+            <input
+              ref={element => { inputRefs.current[request.id] = element }}
+              type="file"
+              accept={ACCEPT_ATTR}
+              className="hidden"
+              aria-label={`Upload ${request.title}`}
+              onChange={event => void handleFile(request, event.target.files)}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={uploading}
+              onClick={() => inputRefs.current[request.id]?.click()}
+            >
+              {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {uploading ? 'Uploading…' : 'Upload'}
+            </Button>
+          </div>
+        )}
+      </li>
+    )
+  }
 
   return (
     <section id="requests" className="rounded-xl border border-border bg-card p-6">
@@ -70,49 +114,24 @@ export default function RequestedDocuments({ matterId, matterClosed, requests: i
             ? 'One item is still outstanding. Upload it here when you have it.'
             : `${owed} items are still outstanding. Upload each one here when you have it.`}
       </p>
-      <ul className="mt-4 divide-y divide-border/60">
-        {requests.map(request => {
-          const open = request.status === 'requested'
-          const uploading = uploadingId === request.id
+      <div className="mt-4 space-y-5">
+        {groups.map(group => {
+          const arrived = group.requests.filter(request => request.status !== 'requested').length
           return (
-            <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{request.title}</p>
-                {request.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{request.description}</p>
-                )}
-                <p className={cn('mt-1 flex items-center gap-1 text-xs', open ? 'text-muted-foreground' : 'text-foreground/80')}>
-                  {open ? <Clock className="size-3.5" aria-hidden /> : <CheckCircle2 className="size-3.5 text-primary" aria-hidden />}
-                  {clientStatusLabel(request, today)}
-                </p>
-              </div>
-              {open && !matterClosed && (
-                <div>
-                  <input
-                    ref={element => { inputRefs.current[request.id] = element }}
-                    type="file"
-                    accept={ACCEPT_ATTR}
-                    className="hidden"
-                    aria-label={`Upload ${request.title}`}
-                    onChange={event => void handleFile(request, event.target.files)}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5"
-                    disabled={uploading}
-                    onClick={() => inputRefs.current[request.id]?.click()}
-                  >
-                    {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-                    {uploading ? 'Uploading…' : 'Upload'}
-                  </Button>
+            <div key={group.section ?? 'ungrouped'}>
+              {group.label && (
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/60 pb-1">
+                  <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                  <span className="text-xs text-muted-foreground">{arrived} of {group.requests.length} sent</span>
                 </div>
               )}
-            </li>
+              <ul className="divide-y divide-border/60">
+                {group.requests.map(renderRequest)}
+              </ul>
+            </div>
           )
         })}
-      </ul>
+      </div>
     </section>
   )
 }
