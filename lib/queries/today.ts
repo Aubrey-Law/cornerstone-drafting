@@ -27,6 +27,7 @@ export interface TodayQueueAction {
   kind: MatterNextActionKind | NextAction['key']
   label: string
   title?: string
+  detail?: string
   href: string
 }
 
@@ -165,6 +166,7 @@ export function leadQueueAction(row: MatterAgingRow, lead: LeadActionRow): Today
     kind: next.key,
     label: next.actions[0].label,
     title: next.title,
+    detail: next.detail,
     href: `/admin/leads/${lead.id}`,
   }
 }
@@ -193,7 +195,7 @@ function decorateRow(
   )
   return {
     ...row,
-    action: { kind: next.kind, label: ACTION_LABEL[next.kind] ?? next.cta, href: next.href },
+    action: { kind: next.kind, label: ACTION_LABEL[next.kind] ?? next.cta, title: next.title, detail: next.detail, href: next.href },
     nudge_matter_id: next.kind === 'waiting-intake' ? matter.matter_id : null,
   }
 }

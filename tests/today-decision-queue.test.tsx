@@ -138,7 +138,7 @@ describe('Today decision queue', () => {
       intakeToSend: [{ matter_id: 'send-1', client_name: 'Send Client', stage_label: 'Lead' }],
     })
 
-    const primary = screen.getByRole('region', { name: 'Do this next' })
+    const primary = screen.getByRole('region', { name: 'Up next' })
     expect(within(primary).getByText('File petition')).toBeTruthy()
     expect(screen.getAllByText('File petition')).toHaveLength(1)
 
@@ -159,6 +159,22 @@ describe('Today decision queue', () => {
     await user.click(screen.getByRole('button', { name: /Later/i }))
     expect(screen.getByText('Later Matter')).toBeTruthy()
     expect(screen.getByText('Send Client')).toBeTruthy()
+  })
+
+  it('shows the shared lead recommendation and uses it for keyboard actions', async () => {
+    const user = userEvent.setup()
+    renderQueue({ waitingOnYou: [agingRow({
+      entity: 'lead', id: 'lead-1', client_name: 'Lena Prospect',
+      action: { kind: 'send_intake', label: 'Send intake', title: 'Send intake to get the facts', detail: 'Intake has never been sent.', href: '/admin/leads/lead-1' },
+    })] })
+    const next = screen.getByRole('region', { name: 'Up next' })
+    expect(within(next).getByText('Lena Prospect')).toBeTruthy()
+    expect(within(next).getByText('Send intake to get the facts')).toBeTruthy()
+    expect(within(next).getByText('Intake has never been sent.')).toBeTruthy()
+    expect(within(next).getByRole('link', { name: 'Send intake' }).getAttribute('href')).toBe('/admin/leads/lead-1')
+    expect(screen.queryByText('Send booking link')).toBeNull()
+    await user.keyboard('je')
+    expect(router.push).toHaveBeenCalledWith('/admin/leads/lead-1')
   })
 
   it('previews email recipients and skips missing addresses before sending bulk nudges', async () => {
@@ -225,7 +241,7 @@ describe('a backlog of overdue work', () => {
       ),
     })
 
-    // One goes to "Do this next", ten preview, and the rest are behind a click.
+    // One goes to "Up next", ten preview, and the rest are behind a click.
     expect(screen.getByText('Overdue task 0')).toBeTruthy()
     expect(screen.getByText('Overdue task 10')).toBeTruthy()
     expect(screen.queryByText('Overdue task 11')).toBeNull()

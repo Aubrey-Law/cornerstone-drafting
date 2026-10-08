@@ -51,7 +51,6 @@ async function LegacyTodayPage() {
     today.overdueTasks.length === 0 && 'No overdue tasks',
     today.unreadThreads.length === 0 && 'No unread client messages',
     today.intakeReview.length === 0 && 'No intakes waiting on review',
-    today.intakeToSend.length === 0 && 'Every open matter has its intake out',
   ].filter(Boolean) as string[]
 
   return (
@@ -60,7 +59,9 @@ async function LegacyTodayPage() {
       <CommandCenterTelemetry event="legacy_today_opened" />
     <AdminPageShell className="mx-auto w-full max-w-[1240px]">
       <PageHeader
-        title={dateLabel}
+        actions={<Link href="/admin/overview" className="text-sm font-medium text-primary hover:underline">Firm overview</Link>}
+        title="Today"
+        eyebrow={dateLabel}
         description={
           <>
           {today.overdueTasks.length} task{today.overdueTasks.length === 1 ? '' : 's'} overdue
@@ -83,7 +84,7 @@ async function LegacyTodayPage() {
             snoozed={today.snoozed}
             unreadThreads={today.unreadThreads}
             intakeReview={today.intakeReview.map(toMatterItem)}
-            intakeToSend={today.intakeToSend.map(toMatterItem)}
+            intakeToSend={[]}
             overdueTasks={today.overdueTasks}
             tasksDueToday={today.tasksDueToday}
           />
@@ -95,7 +96,7 @@ async function LegacyTodayPage() {
               <DailyBriefCard />
 
               {allClear.length > 0 && (
-                <section className="rounded-lg border border-border bg-card px-3 py-2.5">
+                <section className="rounded-xl border border-border bg-card p-4">
                   <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <CheckCircle2 className="h-4 w-4 text-green" aria-hidden />
                     All clear
@@ -186,8 +187,8 @@ export default async function AdminTodayPage({
       <CommandCenterTelemetry event="command_center_opened" />
       <AdminPageShell className="mx-auto w-full max-w-[1380px]">
         <PageHeader
-          eyebrow="Daily command center"
-          title={dateLabel}
+          eyebrow={dateLabel}
+          title="Today"
           description="One plan across client work, deadlines, communications, calendar, billing, and automation."
           actions={<div className="flex items-center gap-3">
             <Link

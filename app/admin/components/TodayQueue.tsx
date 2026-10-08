@@ -76,7 +76,7 @@ interface TodayQueueProps {
 
 type PrimaryDecision =
   | { kind: 'task'; key: string; task: TaskRow; urgency: 'Overdue task' | 'Due today' }
-  | { kind: 'aging'; key: string; row: TodayQueueRow; urgency: 'Blocking a client' | 'Queue item' }
+  | { kind: 'aging'; key: string; row: TodayQueueRow; urgency: 'Blocking a client' | 'Needs attention' }
   | { kind: 'message'; key: string; thread: TodayUnreadThread }
   | { kind: 'review'; key: string; matter: TodayMatterItem }
   | { kind: 'send'; key: string; matter: TodayMatterItem }
@@ -98,6 +98,12 @@ function rowKey(row: TodayQueueRow) {
 
 function rowHref(row: TodayQueueRow) {
   return row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`
+}
+
+function leadActionHref(row: TodayQueueRow) {
+  return row.action?.label === 'Call' && row.client_phone
+    ? `tel:${row.client_phone}`
+    : row.action?.href ?? rowHref(row)
 }
 
 function taskHref(task: TaskRow) {
@@ -179,7 +185,7 @@ function SnoozeMenu({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs">
+        <Button type="button" variant="ghost" size="sm" className="h-8 text-xs">
           <PauseCircle className="h-3.5 w-3.5" />
           Snooze
         </Button>
@@ -206,7 +212,6 @@ interface RowHandlers {
   setSnoozeMenuKey: (key: string | null) => void
   onSnooze: (row: TodayQueueRow, until: Date, label: string) => void
   onNudge: (row: TodayQueueRow) => void
-  onCopyBookingLink: () => void
 }
 
 function RowActions({ row, handlers }: { row: TodayQueueRow; handlers: RowHandlers }) {
@@ -221,51 +226,38 @@ function RowActions({ row, handlers }: { row: TodayQueueRow; handlers: RowHandle
   )
   if (row.entity === 'lead') {
     return (
-      <span className="flex shrink-0 items-center gap-1">
-        {row.client_phone ? (
-          <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-            <a href={`tel:${row.client_phone}`}>
-              <Phone className="h-3.5 w-3.5" />
-              Call
-            </a>
-          </Button>
-        ) : (
-          <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-            <Link href={rowHref(row)}>Open</Link>
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs"
-          onClick={handlers.onCopyBookingLink}
-        >
-          Send booking link
+      <span className="flex flex-wrap items-center gap-2 sm:shrink-0">
+        <Button asChild size="sm">
+          <Link href={leadActionHref(row)}>{row.action?.label ?? 'Open lead'}</Link>
         </Button>
+        {row.client_phone && row.action?.label !== 'Call' ? (
+          <Button asChild variant="outline" size="sm">
+            <a href={`tel:${row.client_phone}`}><Phone className="h-4 w-4" aria-hidden />Call</a>
+          </Button>
+        ) : null}
         {snoozeMenu}
       </span>
     )
   }
   return (
-    <span className="flex shrink-0 items-center gap-1">
+    <span className="flex flex-wrap items-center gap-2 sm:shrink-0">
       {row.nudge_matter_id ? (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 text-xs"
+          className="h-8 text-xs"
           onClick={() => handlers.onNudge(row)}
         >
           <BellRing className="h-3.5 w-3.5" />
           {row.action?.label ?? 'Resend'}
         </Button>
       ) : (
-        <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+        <Button asChild variant="outline" size="sm" className="h-8 text-xs">
           <Link href={row.action?.href ?? rowHref(row)}>{row.action?.label ?? 'Open'}</Link>
         </Button>
       )}
-      <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+      <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
         <Link href={rowHref(row)}>Open</Link>
       </Button>
       {snoozeMenu}
@@ -287,7 +279,7 @@ function AgingRow({
     <li
       id={`today-row-${rowKey(row)}`}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent',
+        'grid grid-cols-[3rem_minmax(0,1fr)] items-start gap-3 p-4 transition-colors duration-150 ease-out motion-reduce:transition-none hover:bg-accent sm:flex sm:items-center',
         focusClass(focused),
       )}
     >
@@ -308,8 +300,13 @@ function AgingRow({
           {engineStageLabel(row.current_stage)}
           {row.entity === 'lead' && ' · lead'}
         </span>
+        <p className="mt-1 text-xs text-muted-foreground">{days.title}</p>
+        {row.action?.title && <p className="mt-1 text-sm font-medium">{row.action.title}</p>}
+        {row.action?.detail && <p className="mt-1 text-xs text-muted-foreground">{row.action.detail}</p>}
       </span>
-      <RowActions row={row} handlers={handlers} />
+      <div className="col-span-2 sm:ml-auto">
+        <RowActions row={row} handlers={handlers} />
+      </div>
     </li>
   )
 }
@@ -339,7 +336,7 @@ function SimpleRow({
           <span className="block truncate text-sm font-medium text-foreground">{primary}</span>
           <span className="block truncate text-xs text-muted-foreground">{secondary}</span>
         </span>
-        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground">
+        <span className="inline-flex flex-wrap items-center gap-2 sm:shrink-0 text-xs font-medium text-muted-foreground group-hover:text-foreground">
           {cta}
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </span>
@@ -551,8 +548,9 @@ export function TodayQueue({
   const runPrimary = useCallback(
     (row: TodayQueueRow) => {
       if (row.entity === 'lead') {
-        if (row.client_phone) window.location.href = `tel:${row.client_phone}`
-        else router.push(rowHref(row))
+        const href = leadActionHref(row)
+        if (href.startsWith('tel:')) window.location.href = href
+        else router.push(href)
         return
       }
       if (row.nudge_matter_id) {
@@ -596,7 +594,7 @@ export function TodayQueue({
     if (send) return { kind: 'send', key: `send:${send.matter_id}`, matter: send }
     const queueRow = queue[0]
     if (queueRow) {
-      return { kind: 'aging', key: rowKey(queueRow), row: queueRow, urgency: 'Queue item' }
+      return { kind: 'aging', key: rowKey(queueRow), row: queueRow, urgency: 'Needs attention' }
     }
     return null
   }, [overdueTaskRows, blocking, dueTodayTaskRows, unreadThreads, intakeReview, intakeToSend, queue])
@@ -660,20 +658,11 @@ export function TodayQueue({
     [taskActions, router],
   )
 
-  const copyBookingLink = useCallback(() => {
-    const url = `${window.location.origin}/book`
-    void navigator.clipboard
-      .writeText(url)
-      .then(() => toast.success('Booking link copied — paste it into a text or email'))
-      .catch(() => toast.error('Could not copy the booking link'))
-  }, [])
-
   const handlers: RowHandlers = {
     snoozeMenuKey,
     setSnoozeMenuKey,
     onSnooze: (row, until, label) => void snoozeRow(row, until, label),
     onNudge: row => void nudgeRow(row),
-    onCopyBookingLink: copyBookingLink,
   }
 
   // Ordered list of what J/K walk through on the active tab.
@@ -971,6 +960,7 @@ export function TodayQueue({
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs
+          className="min-w-0 max-w-full overflow-x-auto pb-1"
           value={tab}
           onValueChange={v => {
             setTab(v as TabKey)
@@ -979,7 +969,7 @@ export function TodayQueue({
         >
           <TabsList>
             <TabsTrigger value="you">Waiting on you ({youCount})</TabsTrigger>
-            <TabsTrigger value="clients">On clients ({clientRows.length})</TabsTrigger>
+            <TabsTrigger value="clients">Waiting on clients ({clientRows.length})</TabsTrigger>
             <TabsTrigger value="snoozed">Snoozed ({snoozedRows.length})</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1001,7 +991,7 @@ export function TodayQueue({
             href="/admin/pipeline/aging"
             className="text-xs font-medium text-muted-foreground hover:text-foreground"
           >
-            Aging board
+            Aging
           </Link>
         </div>
       </div>
@@ -1012,15 +1002,12 @@ export function TodayQueue({
             <section
               role="region"
               aria-labelledby="today-primary-heading"
-              className="mt-3 overflow-hidden rounded-xl border border-primary/35 bg-primary/[0.04] shadow-sm"
+              className="mt-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5"
             >
-              <header className="flex items-center justify-between gap-3 border-b border-primary/15 px-3 py-2.5">
+              <header className="flex items-center justify-between gap-3 border-b border-primary/15 px-4 py-3">
                 <div>
-                  <p className="text-micro font-semibold uppercase tracking-[0.12em] text-primary">
-                    Highest priority
-                  </p>
                   <h2 id="today-primary-heading" className="text-base font-semibold text-foreground">
-                    Do this next
+                    Up next
                   </h2>
                 </div>
                 <Badge variant="outline" className="border-primary/25 bg-background text-xs">
@@ -1040,7 +1027,7 @@ export function TodayQueue({
           {remainingOverdueTasks.length > 0 && (
             <>
               <GroupHeader title="Overdue work" count={remainingOverdueTasks.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border border-l-[3px] border-l-destructive bg-card">
+              <ul className="divide-y divide-border rounded-xl border border-border border-l-[3px] border-l-destructive bg-card">
                 {overdueShown.map(taskRow)}
                 {overdueHidden > 0 && (
                   <li>
@@ -1064,7 +1051,7 @@ export function TodayQueue({
                 {remainingBlocking.map(row => (
                   <li
                     key={rowKey(row)}
-                    className="overflow-hidden rounded-lg border border-border border-l-[3px] border-l-destructive bg-card"
+                    className="overflow-hidden rounded-xl border border-border border-l-[3px] border-l-destructive bg-card"
                   >
                     <ul>
                       <AgingRow row={row} focused={focusKey === rowKey(row)} handlers={handlers} />
@@ -1078,7 +1065,7 @@ export function TodayQueue({
           {remainingDueTodayTasks.length > 0 && (
             <>
               <GroupHeader title="Due today" count={remainingDueTodayTasks.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+              <ul className="divide-y divide-border rounded-xl border border-border bg-card">
                 {remainingDueTodayTasks.map(taskRow)}
               </ul>
             </>
@@ -1087,7 +1074,7 @@ export function TodayQueue({
           {remainingUnreadThreads.length > 0 && (
             <>
               <GroupHeader title="Unread client messages" count={remainingUnreadThreads.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+              <ul className="divide-y divide-border rounded-xl border border-border bg-card">
                 {remainingUnreadThreads.map(t => (
                   <SimpleRow
                     key={t.matter_id}
@@ -1107,7 +1094,7 @@ export function TodayQueue({
           {remainingIntakeReview.length > 0 && (
             <>
               <GroupHeader title="Intake ready for review" count={remainingIntakeReview.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+              <ul className="divide-y divide-border rounded-xl border border-border bg-card">
                 {remainingIntakeReview.map(m => (
                   <SimpleRow
                     key={m.matter_id}
@@ -1161,7 +1148,7 @@ export function TodayQueue({
                 {remainingQueue.length > 0 && (
                   <div>
                     <GroupHeader title="Queue" count={remainingQueue.length} />
-                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
                       {queueShown.map(row => (
                         <AgingRow
                           key={rowKey(row)}
@@ -1188,7 +1175,7 @@ export function TodayQueue({
                 {remainingIntakeToSend.length > 0 && (
                   <div>
                     <GroupHeader title="Intake to send" count={remainingIntakeToSend.length} />
-                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
                       {remainingIntakeToSend.map(m => (
                         <SimpleRow
                           key={m.matter_id}
@@ -1206,7 +1193,7 @@ export function TodayQueue({
                 )}
 
                 {clientRows.length > 0 && (
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2">
                     <button
                       type="button"
                       className="inline-flex min-w-0 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -1243,7 +1230,7 @@ export function TodayQueue({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
                 disabled={nudging}
                 onClick={openNudgePreview}
               >
@@ -1257,7 +1244,7 @@ export function TodayQueue({
               No at-risk rows are waiting on a client.
             </p>
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
               {clientRowsShown.map(row => (
                 <AgingRow
                   key={rowKey(row)}
@@ -1288,13 +1275,13 @@ export function TodayQueue({
           {snoozedRows.length === 0 ? (
             <p className="px-1 text-sm text-muted-foreground">Nothing is snoozed.</p>
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
               {snoozedRows.map(row => (
                 <li
                   key={rowKey(row)}
                   id={`today-row-${rowKey(row)}`}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent',
+                    'grid grid-cols-[3rem_minmax(0,1fr)] items-start gap-3 p-4 transition-colors duration-150 ease-out motion-reduce:transition-none hover:bg-accent sm:flex sm:items-center',
                     focusClass(focusKey === rowKey(row)),
                   )}
                 >
@@ -1337,10 +1324,10 @@ export function TodayQueue({
               Confirm who will receive an email reminder before anything is sent.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-border">
             <ul className="divide-y divide-border">
               {nudgeCandidates.map(row => (
-                <li key={rowKey(row)} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                <li key={rowKey(row)} className="flex items-start justify-between gap-3 px-4 py-3">
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-foreground">
                       {row.client_name ?? 'Unnamed client'}

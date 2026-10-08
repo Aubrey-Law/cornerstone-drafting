@@ -174,7 +174,7 @@ describe('lifecycle parity and safety', () => {
       engagement_sent_at: input.engagementSentAt, engagement_signed_at: input.engagementSignedAt,
       last_activity_at: input.lastTouchAt, updated_at: input.lastTouchAt,
     })
-    expect(todayAction).toMatchObject({ kind: recordAction.key, title: recordAction.title })
+    expect(todayAction).toMatchObject({ kind: recordAction.key, title: recordAction.title, detail: recordAction.detail })
   })
 
   it('keeps extracted facts suggestion-only until an identified user confirms them', () => {
