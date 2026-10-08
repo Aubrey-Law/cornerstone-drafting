@@ -636,8 +636,26 @@ describe('intake form lifecycle service', () => {
     ])
     const summaries = await service.listIntakeFormTemplateSummaries()
     expect(summaries.map((summary) => summary.template.key)).toEqual(['a_archived', 'test'])
-    expect(summaries[0]).toEqual({ template: archived, draft: null, latestPublished: null, latestVersion: null })
+    expect(summaries[0]).toEqual({ template: archived, draft: null, latestPublished: null, latestVersion: null, lastModifiedAt: archived.updated_at })
     expect(summaries[1]).toMatchObject({ draft: { id: 'draft-new' }, latestPublished: { id: 'published-new' }, latestVersion: { id: 'retired' } })
+  })
+
+  it('includes an older retired version in the last-modified aggregate', async () => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template()])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([
+      version(definition(), { id: 'retired-old', status: 'retired', version: 1, updated_at: '2026-10-10T15:00:00Z' }),
+      version(definition(), { id: 'published', status: 'published', version: 2, updated_at: '2026-10-09T15:00:00Z' }),
+      version(definition(), { id: 'draft', version: 3, updated_at: '2026-10-09T16:00:00Z' }),
+    ])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([
+      { draft: { id: 'draft' }, latestPublished: { id: 'published' }, latestVersion: { id: 'draft' }, lastModifiedAt: '2026-10-10T15:00:00Z' },
+    ])
+  })
+
+  it.each([null, '2026-10-10T15:00:00Z'])('includes template-only archive/restore updates (archived=%s) in last-modified', async archived_at => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template({ archived_at, updated_at: '2026-10-10T15:00:00Z' })])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([version(definition(), { updated_at: '2026-10-09T15:00:00Z' })])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([{ lastModifiedAt: '2026-10-10T15:00:00Z' }])
   })
 
   it('returns a parsed editor snapshot with history and propagates storage errors', async () => {

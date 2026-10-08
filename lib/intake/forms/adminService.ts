@@ -85,7 +85,9 @@ export async function listIntakeFormTemplateSummaries(): Promise<IntakeFormTempl
   templates.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
   return Promise.all(templates.map(async (template) => {
     const versions = await repository.listVersionRows(template.id)
-    return { template, draft: latestVersion(versions, 'draft'), latestPublished: latestVersion(versions, 'published'), latestVersion: latestVersion(versions) }
+    const lastModifiedAt = versions.reduce((latest, row) =>
+      Date.parse(row.updated_at) > Date.parse(latest) ? row.updated_at : latest, template.updated_at)
+    return { template, lastModifiedAt, draft: latestVersion(versions, 'draft'), latestPublished: latestVersion(versions, 'published'), latestVersion: latestVersion(versions) }
   }))
 }
 export async function getIntakeFormEditorSnapshot(templateId: string): Promise<IntakeFormEditorSnapshot | null> {

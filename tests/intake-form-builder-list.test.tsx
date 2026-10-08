@@ -16,7 +16,7 @@ function summary(id = 'active', archived = false): IntakeFormTemplateSummary {
   const draft = version(`${id}-draft`, 'draft', 3)
   return { template: { id, key: id, name: `${id} form`, description: null, created_by: 'admin',
     created_at: date, updated_at: date, archived_at: archived ? date : null },
-  draft, latestPublished: version(`${id}-published`, 'published', 2), latestVersion: draft }
+  draft, latestPublished: version(`${id}-published`, 'published', 2), latestVersion: draft, lastModifiedAt: date }
 }
 function fields(key = 'special_needs', name = 'Special Needs Planning') {
   fireEvent.change(screen.getByLabelText('Stable key'), { target: { value: key } })
@@ -61,9 +61,9 @@ describe('intake form settings list', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('uses the most recently changed version for the modification timestamp', () => {
+  it('renders the service aggregate even when the newest change belongs to an unlisted version', () => {
     const item = summary()
-    item.draft!.updated_at = '2026-10-09T15:00:00Z'
+    item.lastModifiedAt = '2026-10-09T15:00:00Z'
     render(<IntakeFormsListClient initialTemplates={[item]} />)
     expect(screen.getByText(/Last modified/).querySelector('time')?.dateTime).toBe('2026-10-09T15:00:00Z')
   })
@@ -135,11 +135,23 @@ describe('intake form settings list', () => {
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: archived ? 'Restore form' : 'Archive form' }))
     expect(screen.getByRole('heading', { name: 'target form', hidden: true })).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings/intake-forms/target', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ archived: !archived }) }))
-    finish(ok({ template: { ...item.template, archived_at: archived ? null : date } }))
+    finish(ok({ template: { ...item.template, archived_at: archived ? null : date, updated_at: '2026-10-09T15:00:00Z' } }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     const updated = screen.getAllByRole('article').find(el => el.textContent?.includes('target form'))!
     expect(within(updated).getByRole('button', { name: archived ? 'Archive' : 'Restore' })).toBeTruthy()
+    expect(within(updated).getByText(/Last modified/).querySelector('time')?.dateTime).toBe('2026-10-09T15:00:00Z')
     expect(screen.getByRole('heading', { name: 'other form' })).toBeTruthy()
+  })
+
+  it('preserves a newer version aggregate when archive metadata is older', async () => {
+    const item = summary()
+    item.lastModifiedAt = '2026-10-10T15:00:00Z'
+    fetchMock.mockResolvedValue(ok({ template: { ...item.template, archived_at: date, updated_at: '2026-10-09T15:00:00Z' } }))
+    render(<IntakeFormsListClient initialTemplates={[item]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Archive form' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(screen.getByText(/Last modified/).querySelector('time')?.dateTime).toBe('2026-10-10T15:00:00Z')
   })
 
   it('keeps the current list and confirmation on archive failure so it can be retried', async () => {

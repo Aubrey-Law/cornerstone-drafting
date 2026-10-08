@@ -22,10 +22,6 @@ function sources(summary: IntakeFormTemplateSummary): IntakeFormVersionRow[] {
     .filter((row, index, rows) => rows.findIndex(other => other.id === row.id) === index)
     .sort((a, b) => b.version - a.version)
 }
-function modified(summary: IntakeFormTemplateSummary): string {
-  return [summary.template.updated_at, ...sources(summary).map(row => row.updated_at)].sort().at(-1)!
-}
-
 function TemplateRows({ items, busy, onCreate, onArchive }: {
   items: IntakeFormTemplateSummary[]
   busy: boolean
@@ -34,7 +30,7 @@ function TemplateRows({ items, busy, onCreate, onArchive }: {
 }) {
   return items.map(summary => {
     const { template, draft, latestPublished, latestVersion } = summary
-    const updatedAt = modified(summary)
+    const updatedAt = summary.lastModifiedAt
     return (
       <article key={template.id} aria-labelledby={`form-${template.id}`} className="flex flex-wrap items-start justify-between gap-4 rounded-lg border bg-card p-4">
         <div className="min-w-0 space-y-2">
@@ -140,7 +136,11 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
         setError('Could not update the form. The current list is preserved. Try again or reload the list to check its status.')
         return
       }
-      setTemplates(current => current.map(summary => summary.template.id === result.template.id ? { ...summary, template: result.template } : summary))
+      setTemplates(current => current.map(summary => summary.template.id === result.template.id ? {
+        ...summary, template: result.template,
+        lastModifiedAt: Date.parse(result.template.updated_at) > Date.parse(summary.lastModifiedAt)
+          ? result.template.updated_at : summary.lastModifiedAt,
+      } : summary))
       setPendingArchive(null)
     } catch {
       setError('Could not reach the server. The current list is preserved. Check your connection and try again.')

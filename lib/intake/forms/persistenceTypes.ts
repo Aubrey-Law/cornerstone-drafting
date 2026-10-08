@@ -19,6 +19,7 @@ export type IntakeFormAuditEventRow = Omit<Database['public']['Tables']['intake_
 
 export interface IntakeFormTemplateSummary {
   template: IntakeFormTemplateRow
+  lastModifiedAt: string
   draft: IntakeFormVersionRow | null
   latestPublished: IntakeFormVersionRow | null
   latestVersion: IntakeFormVersionRow | null
