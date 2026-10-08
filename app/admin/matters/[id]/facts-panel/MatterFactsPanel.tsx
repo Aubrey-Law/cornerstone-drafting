@@ -96,6 +96,8 @@ export interface MatterFactsPanelProps {
   lastSavedAt: string | null
   error: string | null
   onOpenTab: (tab: MatterTab) => void
+  /** Matter number, status and engagement rows, rendered first in the Matter section. */
+  adminRows?: ReactNode
 }
 
 // Shared registry vocabulary (all six values) so a status the intake portal
@@ -186,6 +188,7 @@ export function MatterFactsPanel({
   lastSavedAt,
   error,
   onOpenTab,
+  adminRows,
 }: MatterFactsPanelProps) {
   const token = useAccessToken()
   const { open, toggle, collapseAll, setSectionOpen } = useSectionState()
@@ -481,6 +484,144 @@ export function MatterFactsPanel({
 
       {!simplified && <MatterReadinessDial items={readinessItems} className="p-4" />}
 
+      {/* Matter — administrative fields first, then practice, plan, fees and source. */}
+      <PanelSection
+        id="facts-matter"
+        title="Matter"
+        open={open.matter}
+        onToggle={() => toggle('matter')}
+        hint={!open.matter && openedAt
+          ? `Opened ${formatDate(openedAt)}${lastContactAt ? ` · last contact ${formatDate(lastContactAt)}` : ''}`
+          : undefined}
+      >
+        {adminRows}
+        <InlineSelect
+          label="Practice area"
+          value={practiceArea}
+          options={PRACTICE_AREA_OPTIONS}
+          onSave={next => onSaveField('practice_area', next)}
+        />
+        {/* The design sheet owns plan composition — read-only, link out to edit. */}
+        <ReadOnlyRow label="Plan">
+          <Link href={designHref} className="font-semibold text-primary hover:underline">
+            {planLabel}
+          </Link>
+        </ReadOnlyRow>
+        <InlineText
+          label="Flat fee"
+          tabular
+          hideWhenEmpty={hideWhenEmpty}
+          value={flatFee == null ? '' : String(flatFee)}
+          display={flatFee == null ? undefined : formatAssetCurrency(flatFee)}
+          onSave={next => onSaveField('flat_fee_amount', next ? Number(next.replace(/[^0-9.]/g, '')) : null)}
+        />
+        <InlineSelect
+          label="Lead source"
+          value={referralSource}
+          options={[...REFERRAL_SOURCE_OPTIONS]}
+          onSave={next => onSaveField('referral_source', next)}
+        />
+        {referralSource === 'other' && (
+          <InlineText
+            label="Lead source detail"
+            value={referralSourceOtherFallback(
+              details?.referral_source ?? matter.referral_source,
+              details?.referral_source_other,
+            )}
+            onSave={next => onSaveField('referral_source_other', next)}
+          />
+        )}
+        <ReadOnlyRow
+          label="Opened"
+          tabular
+          empty={!openedAt}
+          hideWhenEmpty={hideWhenEmpty}
+        >
+          {openedAt ? formatDate(openedAt) : '—'}
+        </ReadOnlyRow>
+        <ReadOnlyRow
+          label="Last contact"
+          tabular
+          empty={!lastContactAt}
+          hideWhenEmpty={hideWhenEmpty}
+          onClick={() => onOpenTab('communications')}
+        >
+          {lastContactAt ? formatDate(lastContactAt) : '—'}
+        </ReadOnlyRow>
+
+        {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}
+        {!simplified && <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+          <div className="bg-card px-2.5 py-2">
+            <div className="text-micro text-muted-foreground">Gross estate est.</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
+              {formatAssetCurrency(estate.grossEstateEstimate)}
+            </div>
+          </div>
+          <div className="bg-amber-bg px-2.5 py-2">
+            <div className="text-micro text-amber">Estimated MA tax</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-amber tabular-nums">
+              {formatAssetCurrency(estate.estimatedMaTax)}
+            </div>
+          </div>
+          <div className="bg-card px-2.5 py-2">
+            <div className="text-micro text-muted-foreground">With credit shelter</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
+              {formatAssetCurrency(estate.maTaxWithCreditShelter)}
+            </div>
+          </div>
+          <div className="bg-card px-2.5 py-2">
+            <div className="text-micro text-muted-foreground">Difference</div>
+            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-green tabular-nums">
+              {formatAssetCurrency(estate.creditShelterSavings)}
+            </div>
+          </div>
+        </div>}
+        {simplified && <Button variant="link" size="sm" onClick={() => onOpenTab('assets')}>Review estate values and tax estimates in Assets</Button>}
+
+      </PanelSection>
+
+      {/* Plan flags — what the plan has to cover. Chips read from the design
+          sheet; the ones the design sheet owns link back to it to change. */}
+      <PanelSection
+        id="facts-flags"
+        title="Plan flags"
+        open={open.flags}
+        onToggle={() => toggle('flags')}
+        hint={
+          !open.flags
+            ? planFlagChips.filter(chip => chip.on).map(chip => chip.label).join(' · ') || undefined
+            : undefined
+        }
+      >
+        <div className="flex flex-wrap gap-1.5 px-1.5 pb-1">
+          {planFlagChips.map(chip => {
+            const className = cn(
+              'rounded-full border px-1.5 py-0.5 text-micro font-semibold',
+              chip.on
+                ? 'border-primary/30 bg-primary/10 text-primary'
+                : 'border-border bg-muted text-muted-foreground',
+            )
+            const label = chip.on ? chip.label : `No ${chip.label.toLowerCase()}`
+            if (!chip.field) {
+              return <span key={chip.label} className={className}>{label}</span>
+            }
+            const field = chip.field
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                aria-pressed={chip.on}
+                onClick={() => void onSaveField(field, !chip.on)}
+                className={cn(className, 'hover:brightness-95')}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="px-1.5 pt-1 text-xs text-muted-foreground">Edit document choices in <Link href={designHref} className="text-primary underline underline-offset-4">the design sheet</Link>.</p>
+      </PanelSection>
+
       {/* Contact */}
       <PanelSection
         id="facts-contact"
@@ -657,145 +798,6 @@ export function MatterFactsPanel({
           )}
         </PanelSection>
       )}
-
-      {/* Matter details */}
-      <PanelSection
-        id="facts-matter"
-        title="Practice and fees"
-        open={open.matter}
-        onToggle={() => toggle('matter')}
-        hint={!open.matter && openedAt
-          ? `Opened ${formatDate(openedAt)}${lastContactAt ? ` · last contact ${formatDate(lastContactAt)}` : ''}`
-          : undefined}
-      >
-        <InlineSelect
-          label="Practice area"
-          value={practiceArea}
-          options={PRACTICE_AREA_OPTIONS}
-          onSave={next => onSaveField('practice_area', next)}
-        />
-        <ReadOnlyRow
-          label="Opened"
-          tabular
-          empty={!openedAt}
-          hideWhenEmpty={hideWhenEmpty}
-        >
-          {openedAt ? formatDate(openedAt) : '—'}
-        </ReadOnlyRow>
-        <ReadOnlyRow
-          label="Last contact"
-          tabular
-          empty={!lastContactAt}
-          hideWhenEmpty={hideWhenEmpty}
-          onClick={() => onOpenTab('communications')}
-        >
-          {lastContactAt ? formatDate(lastContactAt) : '—'}
-        </ReadOnlyRow>
-        {/* The design sheet owns plan composition — read-only, link out to edit. */}
-        <ReadOnlyRow label="Plan">
-          <Link href={designHref} className="font-semibold text-primary hover:underline">
-            {planLabel}
-          </Link>
-        </ReadOnlyRow>
-        <InlineSelect
-          label="Lead source"
-          value={referralSource}
-          options={[...REFERRAL_SOURCE_OPTIONS]}
-          onSave={next => onSaveField('referral_source', next)}
-        />
-        {referralSource === 'other' && (
-          <InlineText
-            label="Lead source detail"
-            value={referralSourceOtherFallback(
-              details?.referral_source ?? matter.referral_source,
-              details?.referral_source_other,
-            )}
-            onSave={next => onSaveField('referral_source_other', next)}
-          />
-        )}
-
-        {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}
-        {!simplified && <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
-          <div className="bg-card px-2.5 py-2">
-            <div className="text-micro text-muted-foreground">Gross estate est.</div>
-            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
-              {formatAssetCurrency(estate.grossEstateEstimate)}
-            </div>
-          </div>
-          <div className="bg-amber-bg px-2.5 py-2">
-            <div className="text-micro text-amber">Estimated MA tax</div>
-            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-amber tabular-nums">
-              {formatAssetCurrency(estate.estimatedMaTax)}
-            </div>
-          </div>
-          <div className="bg-card px-2.5 py-2">
-            <div className="text-micro text-muted-foreground">With credit shelter</div>
-            <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
-              {formatAssetCurrency(estate.maTaxWithCreditShelter)}
-            </div>
-          </div>
-          <div className="bg-card px-2.5 py-2">
-            <div className="text-micro text-muted-foreground">Difference</div>
-            <div className="mt-px text-sm font-bold tracking-[-0.016em] text-green tabular-nums">
-              {formatAssetCurrency(estate.creditShelterSavings)}
-            </div>
-          </div>
-        </div>}
-        {simplified && <Button variant="link" size="sm" onClick={() => onOpenTab('assets')}>Review estate values and tax estimates in Assets</Button>}
-
-        <div className="mx-1.5 mt-2">
-          <InlineText
-            label="Flat fee"
-            tabular
-            hideWhenEmpty={hideWhenEmpty}
-            value={flatFee == null ? '' : String(flatFee)}
-            display={flatFee == null ? undefined : formatAssetCurrency(flatFee)}
-            onSave={next => onSaveField('flat_fee_amount', next ? Number(next.replace(/[^0-9.]/g, '')) : null)}
-          />
-        </div>
-      </PanelSection>
-
-      {/* Plan flags — what the plan has to cover. Chips read from the design
-          sheet; the ones the design sheet owns link back to it to change. */}
-      <PanelSection
-        id="facts-flags"
-        title="Plan flags"
-        open={open.flags}
-        onToggle={() => toggle('flags')}
-        hint={
-          !open.flags
-            ? planFlagChips.filter(chip => chip.on).map(chip => chip.label).join(' · ') || undefined
-            : undefined
-        }
-      >
-        <div className="flex flex-wrap gap-1.5 px-1.5 pb-1">
-          {planFlagChips.map(chip => {
-            const className = cn(
-              'rounded-full border px-1.5 py-0.5 text-micro font-semibold',
-              chip.on
-                ? 'border-primary/30 bg-primary/10 text-primary'
-                : 'border-border bg-muted text-muted-foreground',
-            )
-            const label = chip.on ? chip.label : `No ${chip.label.toLowerCase()}`
-            if (!chip.field) {
-              return <span key={chip.label} className={className}>{label}</span>
-            }
-            const field = chip.field
-            return (
-              <button
-                key={chip.label}
-                type="button"
-                aria-pressed={chip.on}
-                onClick={() => void onSaveField(field, !chip.on)}
-                className={cn(className, 'hover:brightness-95')}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-        <p className="px-1.5 pt-1 text-xs text-muted-foreground">Edit document choices in <Link href={designHref} className="text-primary underline underline-offset-4">the design sheet</Link>.</p>
-      </PanelSection>
 
       {/* Dates */}
       <PanelSection

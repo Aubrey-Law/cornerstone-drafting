@@ -115,7 +115,18 @@ export function MatterWorkspaceHeader({
             ))}
             {(matterNumber || openedOn) && (
               <span className="pl-1 text-muted-foreground tabular-nums">
-                {[matterNumber ? `#${matterNumber}` : null, openedOn ? `Opened ${openedOn}` : null].filter(Boolean).join(' · ')}
+                {/* Finds this matter in the list, closed matters included. */}
+                {matterNumber && (
+                  <Link
+                    href={`/admin/matters/list?${new URLSearchParams({ search: matterNumber, closed: '1' })}`}
+                    className="hover:text-foreground hover:underline"
+                    title="Show in matter list"
+                  >
+                    #{matterNumber}
+                  </Link>
+                )}
+                {matterNumber && openedOn && ' · '}
+                {openedOn && `Opened ${openedOn}`}
               </span>
             )}
             {meta}

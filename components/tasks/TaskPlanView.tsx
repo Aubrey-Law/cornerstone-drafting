@@ -434,6 +434,9 @@ export function TaskPlanView({
   const [anchors, setAnchors] = useState<SlaAnchors | null>(null)
   const [matter, setMatter] = useState<PlanMatter | null>(null)
   const [savingAnchors, setSavingAnchors] = useState(false)
+  // Stage cards the user folded away. Kept across reloads so finishing a task
+  // or skipping a stage leaves the board exactly as it was.
+  const [collapsedPhases, setCollapsedPhases] = useState<ReadonlySet<SlaPhase | 'unphased'>>(new Set())
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -442,7 +445,10 @@ export function TaskPlanView({
 
   const load = useCallback(async () => {
     if (!authHeaders) return
-    setLoading(true)
+    // `loading` starts true and is never set again: the skeleton is for the
+    // first load only. Showing it on every refresh unmounted the board,
+    // collapsed the page and threw the scroll back to the top after each
+    // checkbox or "Not applicable".
     try {
       const res = await fetch(`/api/matters/${matterId}/tasks`, { headers: authHeaders })
       const body = await res.json()
@@ -603,6 +609,14 @@ export function TaskPlanView({
     ].filter(section => section.groups.length > 0)
   }, [byPhase])
 
+  const allCollapsed = byPhase.size > 0 && [...byPhase.keys()].every(phase => collapsedPhases.has(phase))
+  const togglePhase = (phase: SlaPhase | 'unphased') => setCollapsedPhases(current => {
+    const next = new Set(current)
+    if (next.has(phase)) next.delete(phase)
+    else next.add(phase)
+    return next
+  })
+
   return (
     <div className="space-y-4">
       {loading ? (
@@ -661,6 +675,20 @@ export function TaskPlanView({
               )}
 
               {presentation !== 'list' && <TaskPresentationView tasks={tasks} presentation={presentation} renderDetails={task => <ul><PlanTaskRow matterId={matterId} matterName={matter?.name ?? null} showMatter={showMatter} task={task} busy={busyId === task.id} onStatus={status => void patchTask(task.id, { status })} onNotes={notes => void patchTask(task.id, { notes })} onPause={paused => void patchTask(task.id, { paused })} /></ul>} />}
+              {presentation === 'list' && byPhase.size > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setCollapsedPhases(allCollapsed ? new Set() : new Set(byPhase.keys()))}
+                  >
+                    {allCollapsed ? <ChevronDown className="size-3.5" aria-hidden /> : <ChevronRight className="size-3.5" aria-hidden />}
+                    {allCollapsed ? 'Expand all' : 'Collapse all'}
+                  </Button>
+                </div>
+              )}
               {presentation === 'list' && sections.map(section => (
                 <section key={section.key} aria-labelledby={`plan-${section.key}-heading`} className="space-y-4">
                   <h3
@@ -669,11 +697,23 @@ export function TaskPlanView({
                   >
                     {section.title}
                   </h3>
-                  {section.groups.map(([phase, phaseTasks]) => (
+                  {section.groups.map(([phase, phaseTasks]) => {
+                    const phaseOpen = !collapsedPhases.has(phase)
+                    const phaseLabel = phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]
+                    return (
                     <Card key={phase}>
-                      <CardHeader className="border-b [.border-b]:pb-3">
+                      <CardHeader className={cn(phaseOpen && 'border-b [.border-b]:pb-3')}>
                         <CardTitle className="text-sm">
-                          {phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]}
+                          <button
+                            type="button"
+                            onClick={() => togglePhase(phase)}
+                            aria-expanded={phaseOpen}
+                            aria-controls={`plan-phase-${phase}`}
+                            className="-ml-1 inline-flex items-center gap-1 rounded px-1 hover:bg-accent"
+                          >
+                            {phaseOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
+                            {phaseLabel}
+                          </button>
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">
                           {phaseTasks.filter(task => task.status === 'done').length} of{' '}
@@ -688,7 +728,7 @@ export function TaskPlanView({
                           />
                         </CardAction>
                       </CardHeader>
-                      <CardContent className="px-0">
+                      {phaseOpen && <CardContent id={`plan-phase-${phase}`} className="px-0">
                         <ul className="divide-y divide-border">
                           {phaseTasks.map(task => (
                             <PlanTaskRow
@@ -704,9 +744,10 @@ export function TaskPlanView({
                             />
                           ))}
                         </ul>
-                      </CardContent>
+                      </CardContent>}
                     </Card>
-                  ))}
+                    )
+                  })}
                 </section>
               ))}
             </>

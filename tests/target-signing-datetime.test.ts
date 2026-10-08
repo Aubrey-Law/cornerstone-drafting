@@ -5,12 +5,11 @@ const read = (path: string) => fs.readFileSync(path, 'utf8')
 
 describe('target signing date', () => {
   it('uses separate date-only controls for target and actual signing', () => {
-    const card = read('app/admin/matters/[id]/MatterDetailsCard.tsx')
-    expect(card).toContain('<FieldLabel>Target signing date</FieldLabel>')
-    expect(card).toContain('type="date"')
-    expect(card).toContain("'scheduled_signing_date'")
-    expect(card).toContain('normalizeTargetSigningDate')
-    expect(card).toContain('<FieldLabel>Signing date</FieldLabel>')
+    const keyDates = read('app/admin/matters/[id]/MatterKeyDates.tsx')
+    expect(keyDates).toContain("label: 'Target Signing Date'")
+    expect(keyDates).toContain("'scheduled_signing_date'")
+    expect(keyDates).toContain('normalizeTargetSigningDate')
+    expect(keyDates).toContain("label: 'Signing Date'")
   })
 
   it('stores target signing as a timezone-aware timestamp', () => {

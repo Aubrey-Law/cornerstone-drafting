@@ -222,7 +222,6 @@ export function MatterWorkspaceFrame({ data, active, children }: {
               onOpenTab: tab => router.push(matterWorkspaceHref(matterId, tab)),
             }}
             admin={{
-              matter,
               matterId,
               matterNumber: facts.matterNumber,
               matterNumberManual: data.matterNumberManual,
@@ -230,17 +229,12 @@ export function MatterWorkspaceFrame({ data, active, children }: {
               onStatusChange: status => void actions.handleStatusChange(status),
               statusSaving: actions.statusSaving,
               details: facts.details,
-              designSheetPlanType: data.designSheetPlanType,
               onSaveField: facts.saveField,
-              savingField: facts.savingField,
-              lastSavedAt: facts.lastSavedAt,
-              error: facts.error,
               esignEnabled: data.esignEnabled,
               engagementSending: actions.sendingEngagement,
               onSendEngagement: () => void actions.handleSendEngagement(),
               onDraftEngagement: () => void actions.handleDraftEngagement(),
             }}
-            onOpenIntake={() => void intake.openSheet()}
           />
         </ResponsiveDetailRail>
       </div>
