@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved in conversation; written specification awaiting user review
+**Status:** approved by the user; implementation planning in progress
 
 **Scope:** administrator-only visual authoring and synthetic preview over the
 Phase 2A intake-form persistence and lifecycle foundation
