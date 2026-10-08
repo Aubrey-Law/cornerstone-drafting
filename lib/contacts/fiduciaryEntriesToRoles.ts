@@ -30,6 +30,7 @@ export type FiduciaryRole = 'personal_rep' | 'trustee' | 'poa' | 'hcp' | 'guardi
 export type FiduciaryForParty = 'client' | 'spouse'
 
 export interface FiduciaryRoleEntry {
+  contact_id?: string
   role: FiduciaryRole
   for_party: FiduciaryForParty
   priority: number
@@ -80,6 +81,7 @@ export function fiduciaryEntriesToRoles(input: unknown): FiduciaryRoleEntry[] {
       if (!first_name && !last_name) return
 
       out.push({
+        ...(trimString(raw.contact_id) ? { contact_id: trimString(raw.contact_id) } : {}),
         role: slotInfo.role,
         for_party: slotInfo.for_party,
         priority,

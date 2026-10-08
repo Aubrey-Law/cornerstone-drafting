@@ -810,7 +810,10 @@ export async function POST(req: Request) {
     const admin = getAdminClient()
     const fiduciaryRoles = fiduciaryEntriesToRoles(body.fiduciary_entries)
     if (fiduciaryRoles.length > 0 || fiduciaryEntriesTouchesManagedRoles(body.fiduciary_entries)) {
-      await persistFiduciaryRoles(admin, recordId, fiduciaryRoles)
+      const { data: matter, error: matterError } = await admin
+        .from('matters').select('id').eq('client_intake_id', recordId).maybeSingle()
+      if (matterError) throw new Error(matterError.message)
+      if (matter?.id) await persistFiduciaryRoles(admin, matter.id, fiduciaryRoles)
     }
   } catch (e) {
     console.error('[intake POST bearer] fiduciary roles persist error:', e)

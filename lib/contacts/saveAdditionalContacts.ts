@@ -61,9 +61,7 @@ export async function saveAdditionalContacts(
   const claimed = new Set<string>()
   const newNames = new Set<string>()
   const newIds = new Set<string>()
-  const named: Record<string, unknown>[] = (nominees ?? []).filter(
-    (c: Record<string, unknown>) => String(c.first_name ?? '').trim() && String(c.last_name ?? '').trim(),
-  )
+  const named = nominees ?? []
   const matches: Array<string | null> = []
   const insertIds: Array<string | undefined> = []
   // Validate the entire replacement before any mutation. A supplied ID is
@@ -84,6 +82,12 @@ export async function saveAdditionalContacts(
     if (localId) newIds.add(localId)
     if (matched) claimed.add(matched)
     else newNames.add(name)
+    // An incomplete retained row is an edit, not a removal. Reject the whole
+    // replacement before writes (including id-less legacy rows whose identity
+    // cannot be recovered from an incomplete name). Only omitted rows delete.
+    if (!String(entry.first_name ?? '').trim() || !String(entry.last_name ?? '').trim()) {
+      throw new AdditionalContactInputError('Enter a first and last name for each contact before saving')
+    }
     matches.push(matched)
     insertIds.push(localId)
   }
