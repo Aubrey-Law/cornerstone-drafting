@@ -30,12 +30,12 @@ export function TodayBillingCard({ billing }: { billing: TodayBilling }) {
   if (!billing.error && billing.unbilledCount === 0 && overdue.length === 0 && exceptionCount === 0) return null
 
   return (
-    <section className="rounded-lg border border-border bg-card">
-      <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+    <section className="rounded-xl border border-border bg-card">
+      <header className="flex items-center gap-2 border-b border-border px-4 py-3">
         <ReceiptText className="h-4 w-4 text-muted-foreground" aria-hidden />
         <h2 className="text-sm font-semibold text-foreground">Billing</h2>
       </header>
-      {billing.error && <p role="alert" className="p-3 text-sm text-destructive">{billing.error} <Link href="/admin/billing" className="underline">Retry billing</Link></p>}
+      {billing.error && <p role="alert" className="p-4 text-sm text-muted-foreground">{billing.error} <Link href="/admin/billing" className="underline">Open Billing</Link></p>}
       <ul className="divide-y divide-border">
         {milestonesReadyCount > 0 ? (
           <li><Link href="/admin/billing?filter=to_invoice" className="block px-3 py-2 text-sm hover:bg-accent">

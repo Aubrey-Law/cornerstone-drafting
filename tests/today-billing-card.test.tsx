@@ -35,6 +35,13 @@ function overdue(index: number, daysPastDue: number) {
 describe('TodayBillingCard', () => {
   afterEach(cleanup)
 
+  it('labels billing navigation honestly when data is unavailable', () => {
+    render(<TodayBillingCard billing={billing({ error: 'Billing is unavailable. Please retry.' })} />)
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open Billing' }).getAttribute('href')).toBe('/admin/billing')
+    expect(screen.queryByText('Retry billing')).toBeNull()
+  })
+
   it('renders nothing when there is no money to chase', () => {
     // Today is a queue. A card that always shows is a card you stop reading.
     const { container } = render(<TodayBillingCard billing={billing()} />)

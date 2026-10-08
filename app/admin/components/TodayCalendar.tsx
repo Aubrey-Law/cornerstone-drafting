@@ -7,13 +7,13 @@ import type { TodayAppointment } from '@/lib/queries/today'
 import { RefreshTodayCalendar } from './RefreshTodayCalendar'
 const time = new Intl.DateTimeFormat('en-US', { hour:'numeric',minute:'2-digit',timeZone:FIRM_TIMEZONE })
 export function TodayCalendarCard({ rows, status }: { rows: TodayAppointment[]; status: string }) {
-  return <section className="rounded-lg border border-border bg-card">
-    <header className="flex items-center gap-2 border-b border-border px-3 py-2.5"><CalendarClock className="size-4" /><h2 className="text-sm font-semibold">Your day</h2></header>
-    <p className="px-3 pt-2 text-xs text-muted-foreground">{status}</p>
+  return <section className="rounded-xl border border-border bg-card">
+    <header className="flex items-center gap-2 border-b border-border px-4 py-3"><CalendarClock className="size-4" /><h2 className="text-sm font-semibold">Schedule</h2></header>
+    <p className="px-4 py-3 text-xs text-muted-foreground">{status}</p>
     {rows.length > 0 && <ul className="divide-y divide-border">{rows.slice(0,4).map(row => <li key={row.id}><Link href={row.href} className="block px-3 py-2 text-sm hover:bg-accent">
       <span className="font-medium">{row.is_all_day ? 'All day' : time.format(new Date(row.next_appointment))}</span> · {row.client_name ?? 'Appointment'}{row.next_appointment_type && ` · ${row.next_appointment_type}`}
     </Link></li>)}</ul>}
-    <div className="flex justify-between border-t px-3 py-2"><Link href="/admin/calendar" className="text-xs underline">Open calendar{rows.length > 4 ? ` (${rows.length} events)` : ''}</Link><RefreshTodayCalendar /></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3"><Link href="/admin/calendar" className="text-xs underline">Open calendar{rows.length > 4 ? ` (${rows.length} events)` : ''}</Link><RefreshTodayCalendar /></div>
   </section>
 }
 export async function TodayCalendar({ appointments, excludeIds, appointmentsError = false }: { appointments: TodayAppointment[]; excludeIds: string[]; appointmentsError?: boolean }) {
