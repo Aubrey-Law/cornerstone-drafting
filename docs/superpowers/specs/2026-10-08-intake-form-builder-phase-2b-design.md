@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved by the user; implementation planning in progress
+**Status:** implemented and verified locally; controller whole-branch review and separately authorized release remain pending
 
 **Scope:** administrator-only visual authoring and synthetic preview over the
 Phase 2A intake-form persistence and lifecycle foundation
@@ -451,3 +451,134 @@ changed. A UI rollback does not require deleting templates or versions.
 - Every successful lifecycle mutation leaves a durable actor-and-time audit
   event; mutation and event commit or roll back together.
 - Published versions and existing intakes are never silently changed.
+
+## Phase 2B local verification record — 2026-10-08
+
+Implemented the administrator-only list, visual editor, synthetic preview,
+optimistic-lock recovery, lifecycle history, and transactional audit log.
+The final accessibility pass added selected-node semantics and stable,
+contextual drag/move names when editable labels repeat. It did not change
+ordering behavior or visible editable copy.
+
+All commands used Node **24.20.0** from
+`/Users/scottaubrey/.nvm/versions/node/v24.20.0/bin`:
+
+```sh
+VITEST_INTAKE_FORM_TEST_DB_URL=postgresql://postgres:postgres@127.0.0.1:55422/postgres npx vitest run tests/intake-form-builder-schema.test.ts tests/intake-form-admin-service.test.ts tests/intake-form-admin-routes.test.ts tests/intake-form-builder-catalog.test.ts tests/intake-form-editor-state.test.ts tests/intake-form-preview-scenarios.test.ts tests/settings-nav.test.ts tests/intake-form-builder-pages.test.tsx tests/intake-form-builder-list.test.tsx tests/intake-form-builder-editor.test.tsx tests/intake-form-builder-save.test.tsx tests/intake-form-builder-lifecycle.test.tsx tests/intake-form-builder-preview.test.tsx tests/intake-compiled-sections.test.tsx tests/intake-form-legacy-parity.test.ts
+npm run lint
+npm run typecheck
+npm test
+git diff --check origin/main...HEAD
+git diff --check
+```
+
+The exact focused suite passed **15 files / 421 tests**, including real local
+database tests, with no accessibility warning. Lint and typecheck exited 0.
+The full suite exited 0: **916 files passed, 2 skipped; 10,151 tests passed,
+26 skipped** (266.84 seconds). It emitted seven jsdom
+`Not implemented: navigation to another Document` notices, with no failed
+tests. Both diff checks passed. No failure was classified as pre-existing;
+a clean-baseline failure comparison was therefore not needed.
+The compared `origin/main` SHA was
+`718f5089e6bfd2a2319fa9e1015007ca38bcea88`.
+
+The five Review Focus cases were rerun in their owning suites: stale save and
+publish recovery; saving a structurally valid missing-review draft while
+publication remains blocked; retaining a moved condition and focusing its
+diagnostic target; zero preview network/auth writes, including disabled
+compound controls; and exactly one surviving actor/time/version discard audit
+event after the draft row is deleted.
+
+### Local database and browser acceptance
+
+Only disposable project `intake-form-foundation-phase2a` was used:
+API `http://127.0.0.1:55421`, database `127.0.0.1:55422`.
+
+```sh
+SUPABASE_AUTH_SITE_URL=http://localhost:3002 npx supabase db reset --db-url 'postgresql://postgres:postgres@127.0.0.1:55422/postgres?sslmode=disable' --yes
+npm run seed:browser-fixture
+npm run dev
+```
+
+Reset, fixture seed, and development-server startup succeeded. The local
+database contains **290 migrations through 20270130090002**, including the
+audit migration. The reset removed only reproducible disposable fixture data.
+The CLI's generic explicit-URL output calls this target “remote”; its actual
+address was loopback. No `--linked` operation was used.
+
+Actual Chrome acceptance passed at **1440×1000** and **390×1000**, with only
+the documented local fixture accounts. The attorney fixture was temporarily
+made an administrator for builder acceptance, then restored to attorney for
+fresh non-admin sign-ins. Temporary intake-track and standing-link fixture
+changes were restored after smoke checks.
+
+At both widths, acceptance covered blank creation, approved fields/blocks,
+real pointer drag and move-button reordering, incomplete-draft save and
+blocked publication, diagnostic repair, Married/Family conditional preview,
+client/staff preview, disabled answer controls and zero preview writes,
+save/publish, immutable published state, and creation of the next draft.
+Two browser sessions demonstrated HTTP 409 conflict, retained local edits,
+valid local JSON export, and confirmed reload of the winning definition.
+Duplicate, retire, archive, restore, and discard all passed with live version
+and audit queries. Catalog/dialog focus return, cancelled dirty navigation,
+native beforeunload dismissal, and narrow inline inspector placement passed;
+narrow build/preview screenshots were visually inspected without document
+horizontal overflow.
+
+Exact successful editor URLs:
+
+- `http://127.0.0.1:3002/admin/settings/intake-forms/fa5ece71-9cd4-44de-8e9d-0cefc3f4183b` (desktop).
+- `http://127.0.0.1:3002/admin/settings/intake-forms/f602c0bc-621f-4931-8739-dbd6d8801f2e` (narrow).
+- `http://127.0.0.1:3002/admin/settings/intake-forms` (list and creation).
+
+Each original template had exactly ten successful lifecycle events, plus one
+event on its independent duplicate. Only retired version 1 remained on each
+original. Each discarded version 2 retained exactly one event with actor
+`303720e7-a784-4516-b729-d6b858d7b179`, version number 2, and a null
+version foreign key. Discard timestamps were
+`2026-10-08 22:11:09.339056+00` (desktop) and
+`2026-10-08 22:12:05.872671+00` (narrow).
+
+At both widths, fresh attorney sessions saw the custom not-found page on both
+builder routes. List/detail GET, create POST, and metadata PATCH returned
+403. Existing estate and college client, public-invitation, and staff intake
+smoke checks passed, as did clicking the existing Drafting entry:
+
+- `http://127.0.0.1:3002/intake`.
+- `http://127.0.0.1:3002/intake/auth?invite=<local-fixture-token>`.
+  This registered-account fixture correctly showed “Continue your intake”
+  and the sign-in link; no anonymous questionnaire completion is claimed.
+  The full ephemeral URL is retained only in local acceptance evidence.
+- `http://127.0.0.1:3002/admin/crm/opportunities/170d0332-63bb-4328-8802-86f706ea8803?tab=intake`.
+- `http://127.0.0.1:3002/admin/drafting/26aa73dd-3954-43dc-890e-d8ce9906afe4`.
+  The existing Quick draft entry was visible; drafting internals were not edited.
+
+Before and after builder/preview and final smoke, `client_intake` contained
+exactly `060369b8-45e6-4753-a402-29a56a8cb43b` and
+`170d0332-63bb-4328-8802-86f706ea8803`, both with
+`form_version_id = null`. No intake was created or repinned.
+
+Observed console notices were unused local font/CSS preloads, a favicon
+aspect-ratio warning, and a loopback realtime WebSocket handshake returning
+503 on matter/drafting surfaces. The server also logged the optional local
+Google Calendar connection as unavailable. No uncaught page error occurred;
+these notices did not prevent the required assertions. They are recorded as
+observations, not asserted to be proven pre-existing defects. Early harness
+selectors and pre-hydration navigation timing were corrected before the
+successful acceptance runs.
+
+Local evidence is retained at
+`/private/tmp/intake-phase2b-task9-browser-evidence.json`,
+`/private/tmp/intake-phase2b-task9-guards-evidence.json`, and
+`/private/tmp/intake-phase2b-task9-smoke-evidence.json`.
+The complete full-suite log is
+`/private/tmp/intake-phase2b-task9-final-full-test.log`.
+
+### Remaining release boundaries
+
+Whole-branch review (Task 9 Step 6) is pending with the controller after the
+Task 9 implementation/review handoff. Phase 2C runtime activation and intake
+pinning, Phase 3 detailed intake enhancements, production bundled-form
+installation, and all drafting changes remain excluded. No push, pull
+request, linked migration deployment, shared-database mutation, or
+authenticated production QA was performed or is claimed by this record.

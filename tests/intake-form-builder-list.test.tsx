@@ -51,11 +51,15 @@ describe('intake form settings list', () => {
     expect(screen.getByRole('button', { name: 'New blank form' })).toBeTruthy()
   })
 
-  it.each(['New blank form', 'Archive'])('returns keyboard focus to %s after cancelling', async action => {
-    render(<IntakeFormsListClient initialTemplates={[summary()]} />)
+  it.each(['New blank form', 'Duplicate', 'Archive', 'Restore'])('labels and describes %s and returns keyboard focus after cancelling', async action => {
+    render(<IntakeFormsListClient initialTemplates={[summary('active', action === 'Restore')]} />)
     const trigger = screen.getByRole('button', { name: action })
     trigger.focus()
     fireEvent.click(trigger)
+    const dialog = screen.getByRole(action === 'Archive' || action === 'Restore' ? 'alertdialog' : 'dialog')
+    for (const attribute of ['aria-labelledby', 'aria-describedby']) {
+      expect(document.getElementById(dialog.getAttribute(attribute)!)?.textContent?.trim()).toBeTruthy()
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(document.activeElement).toBe(trigger))
     expect(fetchMock).not.toHaveBeenCalled()

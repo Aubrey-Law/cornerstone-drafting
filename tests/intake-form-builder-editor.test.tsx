@@ -56,6 +56,31 @@ describe('visual intake editor', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
+  it('identifies the current outline node for assistive technology as selection changes', () => {
+    mount()
+    for (const name of ['Select form', 'Select section Family', 'Select item Your name']) {
+      click(name)
+      const selected = screen.getByRole('button', { name })
+      expect(selected.getAttribute('aria-current') === 'true' || selected.getAttribute('aria-selected') === 'true').toBe(true)
+      expect(document.querySelectorAll('[aria-current="true"], [aria-selected="true"]')).toHaveLength(1)
+    }
+  })
+
+  it('gives drag and move controls unique names even when editable labels collide', () => {
+    const data = fixture()
+    for (const section of data.draft!.definition.sections) {
+      section.title = 'Repeated label'
+      for (const item of section.items) {
+        if (item.kind === 'field') item.labelOverride = 'Repeated label'
+        else item.titleOverride = 'Repeated label'
+      }
+    }
+    mount(data)
+    const controls = screen.getAllByRole('button', { name: /^(Drag|Move) / })
+    const names = controls.map(control => control.getAttribute('aria-label'))
+    expect(new Set(names).size).toBe(names.length)
+  })
+
   it('edits section and field presentation while enforcing the field baseline', () => {
     mount(); click('Select section Family')
     change('Section title', 'Household'); change('Subtitle', 'People close to you')
@@ -112,6 +137,39 @@ describe('visual intake editor', () => {
     click('Cancel'); await waitFor(() => expect(document.activeElement).toBe(remove))
     const add = screen.getByRole('button', { name: 'Add item to Family' }); add.focus(); fireEvent.click(add)
     click('Close'); await waitFor(() => expect(document.activeElement).toBe(add))
+  })
+
+  it.each(['Remove Your name', 'Publish', 'Discard draft', 'Retire', 'Intake forms', 'Reload latest'])('labels and describes the %s confirmation and restores focus after cancellation', async action => {
+    const data = fixture()
+    if (action === 'Retire') { data.draft = null; data.versions[0].status = 'published' }
+    mount(data)
+    if (action === 'Intake forms' || action === 'Reload latest') change('Form title', 'Unsaved title')
+    if (action === 'Reload latest') {
+      vi.mocked(fetch).mockResolvedValue({ ok: false, status: 409, json: async () => ({ code: 'INTAKE_FORM_CONFLICT', error: 'Draft changed; refresh and try again' }) } as Response)
+      click('Save draft')
+      await screen.findByRole('button', { name: 'Reload latest' })
+    }
+    const trigger = screen.getByRole(action === 'Intake forms' ? 'link' : 'button', { name: action })
+    trigger.focus(); fireEvent.click(trigger)
+    const dialog = screen.getByRole('alertdialog')
+    for (const attribute of ['aria-labelledby', 'aria-describedby']) {
+      const target = document.getElementById(dialog.getAttribute(attribute)!)
+      expect(target?.textContent?.trim()).toBeTruthy()
+    }
+    click('Cancel')
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
+  it('labels the catalog search and drawer and announces changing diagnostics', () => {
+    mount(); click('Add item to Family')
+    const dialog = screen.getByRole('dialog', { name: 'Add approved item' })
+    expect(document.getElementById(dialog.getAttribute('aria-describedby')!)?.textContent).toContain('Family')
+    expect(within(dialog).getByRole('combobox', { name: 'Search approved catalog' })).toBeTruthy()
+    click('Close')
+    const checks = within(screen.getByRole('region', { name: 'Form checks' }))
+    expect(checks.getByRole('status').textContent).toBe('No form issues found')
+    click('Move Relationship down')
+    expect(checks.getByRole('status').textContent).toMatch(/issues? to resolve before publishing/)
   })
 
   it('places the inspector under the selected node on a narrow layout and only once in a wide layout', () => {

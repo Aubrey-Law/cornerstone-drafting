@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntakeFormEditorClient } from '@/app/admin/settings/intake-forms/[templateId]/IntakeFormEditorClient'
@@ -115,6 +115,20 @@ describe('intake form preview', () => {
     expect(preview().getByRole('alert')).toBeTruthy()
     expect(preview().queryByLabelText('Your first name')).toBeNull()
     expect(screen.getByRole('region', { name: 'Form checks' }).textContent).toMatch(/title/i)
+    expect(fetch).not.toHaveBeenCalled(); expect(auth).not.toHaveBeenCalled()
+  })
+
+  it('supports keyboard audience selection and returns focus after dismissing the scenario picker', async () => {
+    mount(); click('Preview')
+    const scenarios = screen.getByRole('combobox', { name: 'Sample scenario' })
+    await userEvent.click(scenarios)
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(document.activeElement).toBe(scenarios))
+    const client = screen.getByRole('tab', { name: 'Client' })
+    client.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Staff' }).getAttribute('aria-selected')).toBe('true'))
+    expect(preview().getByRole('heading', { name: 'Internal' })).toBeTruthy()
     expect(fetch).not.toHaveBeenCalled(); expect(auth).not.toHaveBeenCalled()
   })
 
