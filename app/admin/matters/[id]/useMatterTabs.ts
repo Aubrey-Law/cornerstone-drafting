@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   type AssetView,
@@ -38,7 +38,15 @@ export function useMatterTabs() {
   const documentScope: DocumentScope = scopeParam === 'unreviewed' || scopeParam === 'shared' || scopeParam === 'client' ? scopeParam : 'all'
   const deepLinkedDocumentId = searchParams.get('document')
 
+  // `?details=1` keeps the Details panel open across reloads. State leads and
+  // every URL write applies it, so a write built from a not-yet-updated
+  // searchParams cannot resurrect a panel that was just closed.
+  const [detailsOpen, setDetailsOpenState] = useState(searchParams.get('details') === '1')
+  const detailsRef = useRef(detailsOpen)
+
   const replace = useCallback((params: URLSearchParams) => {
+    if (detailsRef.current) params.set('details', '1')
+    else params.delete('details')
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [pathname, router])
@@ -95,11 +103,18 @@ export function useMatterTabs() {
     if (scope === 'all') params.delete('scope')
     else params.set('scope', scope)
     params.delete('document')
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [pathname, router, searchParams])
+    replace(params)
+  }, [replace, searchParams])
+
+  const setDetailsOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    const open = typeof next === 'function' ? next(detailsRef.current) : next
+    detailsRef.current = open
+    setDetailsOpenState(open)
+    replace(new URLSearchParams(searchParams.toString()))
+  }, [replace, searchParams])
 
   return {
     activeTab, communicationChannel, taskView, assetView, documentView, documentScope, deepLinkedDocumentId,
-    setActiveTab, setTaskView, setTabView, setDocumentScope,
+    setActiveTab, setTaskView, setTabView, setDocumentScope, detailsOpen, setDetailsOpen,
   }
 }

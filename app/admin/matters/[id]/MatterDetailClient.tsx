@@ -47,7 +47,7 @@ import { MatterOverviewSidebar } from './MatterOverviewSidebar'
 import { MatterKeyDates } from './MatterKeyDates'
 import { MatterOverviewComposer } from './MatterOverviewComposer'
 import { MatterOverviewWork } from './MatterOverviewWork'
-import { MatterDetailHeader } from './MatterDetailHeader'
+import { MatterWorkspaceHeader } from '@/components/matter/MatterWorkspaceHeader'
 import { MatterDetailsPanel } from './MatterDetailsPanel'
 import { MatterDialogs } from './MatterDialogs'
 import { MatterDocumentsWorkspace } from './MatterDocumentsWorkspace'
@@ -107,6 +107,8 @@ interface MatterDetailClientProps {
   esignDocumentsEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
   initialTaskCounts?: RecordTaskCounts
+  /** Undecided field-audit blocker findings, for the Reviews tab count. */
+  reviewBlockerCount?: number
   taskPreview?: Array<{ key: string; title: string; href: string }>
   workSummary?: import('@/lib/work/recordSummary').RecordWorkSummary | null
 }
@@ -162,6 +164,7 @@ function MatterDetailClientInner({
   esignDocumentsEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   initialTaskCounts = { open: 0, overdue: 0 },
+  reviewBlockerCount = 0,
   workSummary = null,
   taskPreview = [],
 }: MatterDetailClientProps) {
@@ -173,6 +176,7 @@ function MatterDetailClientInner({
   const {
     activeTab, communicationChannel, taskView, assetView, documentView, documentScope, deepLinkedDocumentId,
     setActiveTab, setTaskView, setTabView, setDocumentScope,
+    detailsOpen: factsRailOpen, setDetailsOpen: setFactsRailOpen,
   } = useMatterTabs()
 
   const [matter, setMatter] = useState(initialMatter)
@@ -193,7 +197,6 @@ function MatterDetailClientInner({
   const [matterTypeSaving, setMatterTypeSaving] = useState(false)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
-  const [factsRailOpen, setFactsRailOpen] = useState(false)
   const [datesRequest, setDatesRequest] = useState(0)
   const [stageHistoryOpen, setStageHistoryOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
@@ -461,7 +464,7 @@ function MatterDetailClientInner({
         onValueChange={v => setActiveTab(v as MatterTab)}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
-        <MatterDetailHeader
+        <MatterWorkspaceHeader
           matter={matter}
           matterNumber={matterNum}
           planLabel={designPlanTypeLabel(designSheetPlanType ?? planMirror.planType) || null}
@@ -492,7 +495,7 @@ function MatterDetailClientInner({
               history={initialStageHistory}
             />
           )}
-          navigation={<MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
+          navigation={<MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, reviews: reviewBlockerCount, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
             if (section === 'drafting') router.push(draftingHref)
             else setActiveTab(section)
           }} />}

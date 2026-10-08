@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownAZ,
+  Check,
   ChevronRight,
   Combine,
   Download,
@@ -1118,6 +1119,22 @@ export function MatterDocumentsTab({
                       {busy === `view:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
                       View
                     </Button>
+                    {/* Reviewing needs the file opened first, so the review records the revision seen. */}
+                    {isDocumentUnreviewed(doc) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-xs"
+                        disabled={busy === `review:${doc.id}` || !viewedRevisions[doc.id]}
+                        title={viewedRevisions[doc.id] ? undefined : 'View the file before marking it reviewed'}
+                        aria-label={`Mark ${doc.name} reviewed`}
+                        onClick={() => void handleMarkReviewed(doc)}
+                      >
+                        {busy === `review:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        Mark reviewed
+                      </Button>
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Actions for ${doc.name}`}>
@@ -1125,14 +1142,6 @@ export function MatterDocumentsTab({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {isDocumentUnreviewed(doc) && (
-                          <DropdownMenuItem
-                            disabled={busy === `review:${doc.id}` || !viewedRevisions[doc.id]}
-                            onSelect={() => void handleMarkReviewed(doc)}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />Mark reviewed
-                          </DropdownMenuItem>
-                        )}
                         {isDocumentPdf(doc) && (
                           <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
                             <FileSearch className="mr-2 h-4 w-4" />Open original

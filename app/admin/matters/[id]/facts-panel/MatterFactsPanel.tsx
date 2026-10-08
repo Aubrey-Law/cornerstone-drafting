@@ -344,6 +344,7 @@ export function MatterFactsPanel({
   const draftsReview = resolveDraftingDate(details, 'drafts_review')
   const revisions = resolveDraftingDate(details, 'revisions')
   const designHref = `/admin/drafting/${matterId}?step=design`
+  const openedAt = matter.opened_at || matter.matter_created || null
   // Real estate and pets are the firm's own answer and drive which items the
   // stage-task checklist carries, so they toggle. Credit shelter and minor
   // children are read-only: the design sheet and the household own those.
@@ -663,25 +664,23 @@ export function MatterFactsPanel({
         title="Practice and fees"
         open={open.matter}
         onToggle={() => toggle('matter')}
-        hint={
-          <Link
-            href={`/admin/drafting/${matterId}?step=design`}
-            className="font-semibold text-primary hover:underline"
-            onClick={event => event.stopPropagation()}
-          >
-            Open design
-          </Link>
-        }
+        hint={!open.matter && openedAt
+          ? `Opened ${formatDate(openedAt)}${lastContactAt ? ` · last contact ${formatDate(lastContactAt)}` : ''}`
+          : undefined}
       >
+        <InlineSelect
+          label="Practice area"
+          value={practiceArea}
+          options={PRACTICE_AREA_OPTIONS}
+          onSave={next => onSaveField('practice_area', next)}
+        />
         <ReadOnlyRow
           label="Opened"
           tabular
-          empty={!matter.opened_at && !matter.matter_created}
+          empty={!openedAt}
           hideWhenEmpty={hideWhenEmpty}
         >
-          {matter.opened_at || matter.matter_created
-            ? formatDate((matter.opened_at || matter.matter_created)!)
-            : '—'}
+          {openedAt ? formatDate(openedAt) : '—'}
         </ReadOnlyRow>
         <ReadOnlyRow
           label="Last contact"
@@ -692,12 +691,6 @@ export function MatterFactsPanel({
         >
           {lastContactAt ? formatDate(lastContactAt) : '—'}
         </ReadOnlyRow>
-        <InlineSelect
-          label="Practice area"
-          value={practiceArea}
-          options={PRACTICE_AREA_OPTIONS}
-          onSave={next => onSaveField('practice_area', next)}
-        />
         {/* The design sheet owns plan composition — read-only, link out to edit. */}
         <ReadOnlyRow label="Plan">
           <Link href={designHref} className="font-semibold text-primary hover:underline">

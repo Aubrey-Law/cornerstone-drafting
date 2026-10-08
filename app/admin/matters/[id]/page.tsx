@@ -1,5 +1,7 @@
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { notFound } from 'next/navigation'
+import { reviewClient } from '@/lib/review/staff'
+import { loadUnresolvedBlockers } from '@/lib/runs/advisory'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { fetchMatterAgingSummary, fetchMatterEstateSnapshot } from '@/lib/queries/matterOverview'
 import { fetchMatterStageHistory } from '@/lib/queries/matterStageHistory'
@@ -257,6 +259,7 @@ export default async function MatterDetailPage({ params }: Params) {
       intakeSnapshot, matterActivity, stageHistory, initialTaskCounts, context,
       documentSignaturesEnabled,
       workGraph,
+      reviewBlockerCount,
     ] = await Promise.all([
       measure('core', () => fetchMatter(id)),
       measure('contacts', () => fetchMatterContacts(id)),
@@ -275,6 +278,11 @@ export default async function MatterDetailPage({ params }: Params) {
         const auth = await getCachedClaims()
         return fetchWorkGraphForUser(auth?.id ?? null)
       }),
+      // The Reviews tab count: field-audit blocker findings nobody has decided.
+      // A count is advisory, so a failed lookup shows none rather than failing the page.
+      measure('review-blockers', () => loadUnresolvedBlockers(reviewClient())
+        .then(blockers => blockers.find(blocker => blocker.matterId === id)?.ruleNumbers.length ?? 0)
+        .catch(() => 0)),
     ])
     if (!matter) notFound()
 
@@ -331,6 +339,7 @@ export default async function MatterDetailPage({ params }: Params) {
         planMirror={planMirror}
         initialEstateSnapshot={initialEstateSnapshot}
         unreviewedUploadCounts={unreviewedUploadCounts}
+        reviewBlockerCount={reviewBlockerCount}
         initialNotes={notes as MatterNoteRow[]}
         initialMatterLinkedNotes={mapMatterNoteRows(notes)}
         initialLeadNotes={[

@@ -29,7 +29,7 @@ import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import type { PipelineMatter } from '@/types/database'
 
-interface MatterDetailHeaderProps {
+export interface MatterWorkspaceHeaderProps {
   matter: PipelineMatter
   matterNumber: string | null
   intakeCompleted: boolean
@@ -53,7 +53,12 @@ interface MatterDetailHeaderProps {
   navigation?: ReactNode
 }
 
-export function MatterDetailHeader({
+/**
+ * The matter workspace header shared by the matter page and the drafting
+ * route: identity, Call / Email / Details / Actions, then the stage and tab
+ * rows the caller passes in.
+ */
+export function MatterWorkspaceHeader({
   matter,
   matterNumber,
   intakeCompleted,
@@ -74,7 +79,7 @@ export function MatterDetailHeader({
   matterTypeLabel,
   stage,
   navigation,
-}: MatterDetailHeaderProps) {
+}: MatterWorkspaceHeaderProps) {
   const clientName = matter.client_name || matter.matter_name || 'Matter'
   const identityChips = [
     matter.practice_area ? practiceAreaLabel(matter.practice_area) : null,
