@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
@@ -21,7 +22,7 @@ export default async function IntakeFormsPage() {
       <div className="space-y-4">
         <PageHeader title="Intake forms" />
         <p role="alert" className="text-sm text-destructive">Could not load intake forms. Please try again.</p>
-        <Button asChild variant="outline"><a href="/admin/settings/intake-forms">Retry loading intake forms</a></Button>
+        <Button asChild variant="outline"><Link href="/admin/settings/intake-forms">Retry loading intake forms</Link></Button>
       </div>
     )
   }
