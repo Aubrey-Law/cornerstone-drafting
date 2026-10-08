@@ -16,9 +16,10 @@ vi.mock('@/components/intake/formEngine/CompiledIntakeSections', () => ({
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('compiled submit with the real autosave hook', () => {
-  it('cannot submit or overwrite the latest answer while an older debounce save is running', async () => {
+  it.each([false, true])('cannot submit or overwrite the latest answer while an older debounce save is running (teardown: %s)', async (teardown) => {
     vi.useFakeTimers()
     let finishOlder!: () => void
+    let finishKeepalive!: () => void
     let persistedName = 'Ada'
     const events: string[] = []
     const request = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -26,6 +27,7 @@ describe('compiled submit with the real autosave hook', () => {
       if (body.status === 'submitted') events.push(`submit:${persistedName}`)
       else {
         if (body.first_name === 'Older') await new Promise<void>((resolve) => { finishOlder = resolve })
+        if (init?.keepalive) await new Promise<void>((resolve) => { finishKeepalive = resolve })
         persistedName = body.first_name
         events.push(`save:${persistedName}`)
       }
@@ -42,15 +44,23 @@ describe('compiled submit with the real autosave hook', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
     expect(request).toHaveBeenCalledTimes(1)
     fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Latest' } })
+    if (teardown) act(() => { window.dispatchEvent(new Event('pagehide')); expect(request).toHaveBeenCalledTimes(2) })
     fireEvent.click(screen.getByRole('button', { name: /Review questionnaire/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Submit questionnaire' }))
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledTimes(teardown ? 2 : 1)
     expect(events).toEqual([])
     await act(async () => { finishOlder(); await vi.advanceTimersByTimeAsync(0) })
-    expect(events).toEqual(['save:Older', 'save:Latest', 'submit:Latest'])
+    if (teardown) {
+      // A resumed-page submit must also wait for the independent keepalive
+      // request, not merely drain the old ordinary request and race it.
+      expect(events).toEqual(['save:Older'])
+      expect(request).toHaveBeenCalledTimes(2)
+      await act(async () => { finishKeepalive(); await vi.advanceTimersByTimeAsync(0) })
+    }
+    expect(events).toEqual(teardown ? ['save:Older', 'save:Latest', 'save:Latest', 'submit:Latest'] : ['save:Older', 'save:Latest', 'submit:Latest'])
     expect(persistedName).toBe('Latest')
     await act(async () => { await vi.advanceTimersByTimeAsync(1600) })
-    expect(request).toHaveBeenCalledTimes(3)
+    expect(request).toHaveBeenCalledTimes(teardown ? 4 : 3)
   })
 })

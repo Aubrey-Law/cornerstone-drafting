@@ -21,11 +21,12 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef<Record<string, unknown> | null>(null)
   const saveTailRef = useRef<Promise<boolean> | null>(null)
+  const sessionTokenRef = useRef<string | null>(null)
 
   const persistSnapshot = useCallback(
     async (
       data: Record<string, unknown>,
-      opts?: { keepalive?: boolean },
+      opts?: { keepalive?: boolean; preserveDirty?: boolean },
     ): Promise<boolean> => {
       const payload: Record<string, unknown> = {}
       const financialDetails: Record<string, unknown> = {}
@@ -151,13 +152,18 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         // Public token-based auth — no Supabase session required
         headers['X-Intake-Token'] = publicIntakeToken
       } else {
-        const { data: { session } } = await supabase.auth.getSession()
-        const sessionToken = session?.access_token
+        // A teardown event cannot wait for another asynchronous auth lookup.
+        // Reuse this hook's last resolved bearer only for its keepalive save;
+        // ordinary saves still resolve the current session as before.
+        const sessionToken = opts?.keepalive && sessionTokenRef.current
+          ? sessionTokenRef.current
+          : (await supabase.auth.getSession()).data.session?.access_token
         if (!sessionToken) {
           setStatus('error')
           console.error('Auto-save error: no auth session')
           return false
         }
+        sessionTokenRef.current = sessionToken
         headers['Authorization'] = `Bearer ${sessionToken}`
       }
 
@@ -184,24 +190,28 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         console.error('Auto-save error:', err)
         return false
       }
-      setStatus(latestRef.current && latestRef.current !== data ? 'dirty' : 'saved')
+      setStatus(opts?.preserveDirty || (latestRef.current && latestRef.current !== data) ? 'dirty' : 'saved')
       return true
     },
     [intakeId, publicIntakeToken]
   )
 
   // A snapshot may already be on the wire when the next debounce/flush starts.
-  // Serialize every hook-owned save so an older response can never land after
-  // the final latest snapshot (or race the submitted-status request).
+  // Serialize ordinary saves so an older response cannot land after the final
+  // latest snapshot or submitted-status request. Teardown must dispatch now,
+  // independently; join it into the tail so a resumed-page flush still drains
+  // both requests before replaying any potentially overtaken latest snapshot.
   const persist = useCallback((data: Record<string, unknown>, opts?: { keepalive?: boolean }): Promise<boolean> => {
-    const run = () => persistSnapshot(data, opts).catch((error) => {
+    const previous = saveTailRef.current
+    const run = () => persistSnapshot(data, { ...opts, preserveDirty: Boolean(opts?.keepalive && previous) }).catch((error) => {
       setStatus('error')
       toast.error('Failed to save your progress. Please try again.')
       console.error('Auto-save error:', error)
       return false
     })
-    const previous = saveTailRef.current
-    const pending = previous ? previous.then(run, run) : run()
+    const pending = opts?.keepalive
+      ? Promise.all([previous ?? Promise.resolve(true), run()]).then(([, ok]) => ok)
+      : previous ? previous.then(run, run) : run()
     saveTailRef.current = pending
     void pending.then(() => {
       if (saveTailRef.current === pending) saveTailRef.current = null
@@ -257,8 +267,12 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
       const pending = latestRef.current
+      const mayBeOvertaken = saveTailRef.current !== null
       void persist(pending, { keepalive: true }).then((ok) => {
-        if (ok && latestRef.current === pending) latestRef.current = null
+        // With an older request outstanding, keep the latest answer dirty:
+        // best-effort teardown delivery cannot guarantee server write order.
+        // A resumed-page flush/submit replays it after draining all requests.
+        if (ok && !mayBeOvertaken && latestRef.current === pending) latestRef.current = null
       })
     }
 
