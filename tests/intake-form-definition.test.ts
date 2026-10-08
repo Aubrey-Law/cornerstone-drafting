@@ -106,7 +106,7 @@ describe('intake form definition parsing', () => {
     rejected({ ...definition(), sections: [{ ...section(), items: [...items, { ...field(), id: 'extra' }] }] }, 'sections.0.items')
   })
 
-  it.each([() => true, undefined, Number.NaN, Number.POSITIVE_INFINITY, new Date(), 1n])('rejects non-JSON block config values %#', (value) => {
+  it.each([() => true, undefined, Number.NaN, Number.POSITIVE_INFINITY, new Date(), BigInt(1)])('rejects non-JSON block config values %#', (value) => {
     expect(parseIntakeFormDefinition({ ...definition(), sections: [{ ...section(), items: [{ kind: 'block', id: 'spouse', blockId: 'spouse_details', config: { nested: { value } } }] }] }).success).toBe(false)
   })
 
