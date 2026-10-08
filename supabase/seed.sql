@@ -62,6 +62,7 @@ REVOKE ALL ON TABLE
   public.document_template_publications,
   public.document_template_versions,
   public.intake_invite_audit,
+  public.intake_form_audit_events,
   public.intake_form_templates,
   public.intake_form_versions,
   public.integration_entity_leases,
@@ -78,6 +79,11 @@ FROM anon, authenticated;
 REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLE
   public.intake_form_templates,
   public.intake_form_versions
+FROM service_role;
+
+-- Audit events stay append-only after the local baseline grants above.
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  public.intake_form_audit_events
 FROM service_role;
 
 -- ── Exception 2: authenticated may read, never write ─────────────────────────
