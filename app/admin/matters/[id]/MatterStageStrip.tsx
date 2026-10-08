@@ -139,8 +139,9 @@ export function MatterStageStrip({
         </div>
         <div className="shrink-0 text-right text-xs leading-snug text-muted-foreground">
           <p>
-            {currentIndex >= 0 && <><strong className="font-semibold text-selected-foreground">{STAGES[currentIndex].label}</strong>{' · '}</>}
-            {agingSummary ? `${agingSummary.daysInStage} business days in stage` : 'Stage age unavailable'}
+            {/* Below sm the "Current stage" text on the left already names it. */}
+            {currentIndex >= 0 && <span className="hidden sm:inline"><strong className="font-semibold text-selected-foreground">{STAGES[currentIndex].label}</strong>{' · '}</span>}
+            {agingSummary ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage` : 'Stage age unavailable'}
           </p>
           <p>
             {targetSigning && <>Target signing {formatDate(targetSigning)}{' · '}</>}

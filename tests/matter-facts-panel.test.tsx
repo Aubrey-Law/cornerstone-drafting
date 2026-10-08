@@ -241,6 +241,11 @@ describe('MatterFactsPanel', () => {
     expect(onOpenTab).toHaveBeenCalledWith('communications')
   })
 
+  it('names the channel of the last contact', async () => {
+    renderPanel({ lastContactAt: '2026-07-28T19:12:00.000Z', lastContactChannel: 'email' })
+    expect(await screen.findByRole('button', { name: /Last contact.*7\/28\/2026 · Email/i })).toBeTruthy()
+  })
+
   it('hides rows with no value until empty fields are shown', async () => {
     const user = userEvent.setup()
     renderPanel()

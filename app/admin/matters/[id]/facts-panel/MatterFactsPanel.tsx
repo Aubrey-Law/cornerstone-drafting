@@ -23,6 +23,7 @@ import {
   referralSourceOtherFallback,
 } from '@/lib/matter/referralSource'
 import { cn, formatDate } from '@/lib/utils'
+import type { CommChannel } from '@/lib/comms/thread'
 import type { MatterTab } from '@/lib/matterPageTabs'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
@@ -79,6 +80,8 @@ export interface MatterFactsPanelProps {
   planMirror?: MatterPlanMirror
   /** max(communications.created_at) — the quiet chip is derived, never stored. */
   lastContactAt?: string | null
+  /** Which timeline channel that last contact was on. */
+  lastContactChannel?: CommChannel | null
   estate: MatterEstateSnapshot
   /** Kept from the previous rail — the panel must not drop the readiness dial. */
   simplified?: boolean
@@ -104,6 +107,8 @@ export interface MatterFactsPanelProps {
 // stored — separated, domestic partner — renders instead of showing '—' and
 // being silently overwritten on the next edit. Lowercase to match the row's
 // muted inline style.
+const CHANNEL_LABEL: Record<CommChannel, string> = { portal: 'Portal', sms: 'Text', email: 'Email' }
+
 const MARITAL_OPTIONS = [
   { value: '', label: '—' },
   ...MARITAL_STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label.toLowerCase() })),
@@ -173,6 +178,7 @@ export function MatterFactsPanel({
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
   lastContactAt = null,
+  lastContactChannel = null,
   estate,
   simplified = false,
   readinessItems,
@@ -348,6 +354,9 @@ export function MatterFactsPanel({
   const revisions = resolveDraftingDate(details, 'revisions')
   const designHref = `/admin/drafting/${matterId}?step=design`
   const openedAt = matter.opened_at || matter.matter_created || null
+  const lastContactLabel = lastContactAt
+    ? `${formatDate(lastContactAt)}${lastContactChannel ? ` · ${CHANNEL_LABEL[lastContactChannel]}` : ''}`
+    : null
   // Real estate and pets are the firm's own answer and drive which items the
   // stage-task checklist carries, so they toggle. Credit shelter and minor
   // children are read-only: the design sheet and the household own those.
@@ -491,7 +500,7 @@ export function MatterFactsPanel({
         open={open.matter}
         onToggle={() => toggle('matter')}
         hint={!open.matter && openedAt
-          ? `Opened ${formatDate(openedAt)}${lastContactAt ? ` · last contact ${formatDate(lastContactAt)}` : ''}`
+          ? `Opened ${formatDate(openedAt)}${lastContactLabel ? ` · last contact ${lastContactLabel}` : ''}`
           : undefined}
       >
         {adminRows}
@@ -546,7 +555,7 @@ export function MatterFactsPanel({
           hideWhenEmpty={hideWhenEmpty}
           onClick={() => onOpenTab('communications')}
         >
-          {lastContactAt ? formatDate(lastContactAt) : '—'}
+          {lastContactLabel ?? '—'}
         </ReadOnlyRow>
 
         {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}

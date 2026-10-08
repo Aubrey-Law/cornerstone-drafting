@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ExternalLink, Maximize2, Minimize2, PanelRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,12 +23,9 @@ import { useMatterFacts } from './useMatterFacts'
 import { useMatterHeaderActions } from './useMatterHeaderActions'
 import { useMatterIntake } from './useMatterIntake'
 import { useMatterStage } from './useMatterStage'
+import { useCollapseOnScroll } from './useCollapseOnScroll'
 
 const noop = () => {}
-
-/** Scroll distance in the body before the header collapses, and the point it returns. */
-const COLLAPSE_AT = 48
-const EXPAND_AT = 4
 
 function typingInField(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -65,22 +62,8 @@ export function MatterWorkspaceFrame({ data, active, children }: {
     window.open(`${pathname}?${params.toString()}`, '_blank', 'noopener')
   }
 
-  // The header folds to one row once the page body scrolls (the design sheet
-  // scrolls in its own pane, so listen in the capture phase), and returns at the top.
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    const body = bodyRef.current
-    if (!body) return
-    const onScroll = (event: Event) => {
-      const target = event.target
-      if (!(target instanceof HTMLElement)) return
-      if (target.scrollTop > COLLAPSE_AT) setCollapsed(true)
-      else if (target.scrollTop <= EXPAND_AT) setCollapsed(false)
-    }
-    body.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    return () => body.removeEventListener('scroll', onScroll, { capture: true })
-  }, [])
+  // The header folds to one row once the page body (or the design sheet inside it) scrolls.
+  const { ref: bodyRef, collapsed } = useCollapseOnScroll<HTMLDivElement>()
 
   useEffect(() => {
     if (!focus) return
@@ -164,7 +147,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
           <Button type="button" size="sm" variant="outline" onClick={() => setFocus(true)} title="Hide the surrounding chrome so the page fills the window">
             <Maximize2 className="size-3.5" aria-hidden /><span className="hidden sm:inline">Focus</span>
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={popOut} aria-label="Open in a new window" title="Open in a new window">
+          <Button type="button" size="sm" variant="outline" className="hidden sm:inline-flex" onClick={popOut} aria-label="Open in a new window" title="Open in a new window">
             <ExternalLink className="size-3.5" aria-hidden />
           </Button>
         </>}
