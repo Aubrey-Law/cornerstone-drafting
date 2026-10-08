@@ -96,6 +96,7 @@ export function RecordTasksTab({
   const [sourceFilter, setSourceFilter] = useState<TaskSource | 'all'>('all')
   const [composerOpen, setComposerOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
+  const [stageOpen, setStageOpen] = useState(true)
   const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
   const [assignees, setAssignees] = useState<TaskAssigneeOption[]>([])
 
@@ -171,6 +172,16 @@ export function RecordTasksTab({
   }, [view, open, done, stageTask, sourceFilter])
 
   const cadences = useMemo(() => open.filter(t => t.recurrence), [open])
+
+  // The stage task card and the Done list are the queue's two folds; one
+  // button opens or closes both.
+  const showStageCard = presentation !== 'table' && Boolean(stageTask) && view === 'open'
+  const showDoneFold = view === 'open' && done.length > 0
+  const allCollapsed = (!showStageCard || !stageOpen) && (!showDoneFold || !doneOpen)
+  const setAllOpen = (next: boolean) => {
+    setStageOpen(next)
+    setDoneOpen(next)
+  }
 
   const appliedTemplates = useMemo(() => {
     const byTemplate = new Map<string, { name: string; total: number; done: number }>()
@@ -301,10 +312,23 @@ export function RecordTasksTab({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {(showStageCard || showDoneFold) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto h-7 text-xs"
+              onClick={() => setAllOpen(allCollapsed)}
+            >
+              {allCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+              {allCollapsed ? 'Expand all' : 'Collapse all'}
+            </Button>
+          )}
+
           <Button
             type="button"
             size="sm"
-            className="ml-auto h-7 text-xs"
+            className={cn('h-7 text-xs', !(showStageCard || showDoneFold) && 'ml-auto')}
             onClick={() => setComposerOpen(prev => !prev)}
           >
             <Plus className="size-3.5" />
@@ -322,8 +346,14 @@ export function RecordTasksTab({
           />
         )}
 
-        {presentation !== 'table' && stageTask && view === 'open' && (
-          <StageTaskCard task={stageTask} onToggleItem={toggleChecklistItem} onComplete={() => void toggle(stageTask)} />
+        {showStageCard && stageTask && (
+          <StageTaskCard
+            task={stageTask}
+            open={stageOpen}
+            onOpenChange={setStageOpen}
+            onToggleItem={toggleChecklistItem}
+            onComplete={() => void toggle(stageTask)}
+          />
         )}
 
         {loadError && (
@@ -332,7 +362,9 @@ export function RecordTasksTab({
             <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void load()}>Retry</Button>
           </div>
         )}
-        {presentation !== 'list' && !loading && !loadError ? <TaskPresentationView tasks={[...(stageTask && view === 'open' && presentation === 'table' ? [stageTask] : []), ...listed]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
+        {/* A background reload keeps the rows on screen: unmounting them on
+            every checkbox collapsed the page and threw the scroll to the top. */}
+        {presentation !== 'list' && !(loading && tasks.length === 0) && !loadError ? <TaskPresentationView tasks={[...(stageTask && view === 'open' && presentation === 'table' ? [stageTask] : []), ...listed]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
           const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
           if (updated?.status === 'done' && task.stage_key) onStageTaskCompleted?.()
           return updated
@@ -558,10 +590,14 @@ function RailCard({ title, empty = false, children }: { title: string; empty?: b
 
 function StageTaskCard({
   task,
+  open,
+  onOpenChange,
   onToggleItem,
   onComplete,
 }: {
   task: TaskRow
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onToggleItem: (task: TaskRow, index: number, checked: boolean) => void
   onComplete: () => void
 }) {
@@ -572,12 +608,23 @@ function StageTaskCard({
   return (
     <div className="rounded-lg border border-amber-border bg-amber-bg p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-micro font-semibold uppercase tracking-wide text-amber-orange">
-            Stage task · {engineStageLabel(task.stage_key ?? '')}
-          </p>
-          <p className="mt-1 text-sm font-medium text-foreground">{task.title}</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(!open)}
+          aria-expanded={open}
+          aria-controls={`record-stage-${task.id}-body`}
+          className="-m-1 flex min-w-0 items-start gap-1.5 rounded p-1 text-left hover:bg-accent"
+        >
+          {open
+            ? <ChevronDown className="mt-0.5 size-4 shrink-0 text-amber-orange" aria-hidden />
+            : <ChevronRight className="mt-0.5 size-4 shrink-0 text-amber-orange" aria-hidden />}
+          <span className="min-w-0">
+            <span className="block text-micro font-semibold uppercase tracking-wide text-amber-orange">
+              Stage task · {engineStageLabel(task.stage_key ?? '')}
+            </span>
+            <span className="mt-1 block text-sm font-medium text-foreground">{task.title}</span>
+          </span>
+        </button>
         <div className="text-right text-xs">
           {task.soft_due_at && <p className="text-muted-foreground">Due {formatTaskDate(task.soft_due_at)}</p>}
           {task.hard_due_at && (
@@ -600,8 +647,8 @@ function StageTaskCard({
         </span>
       </div>
 
-      {task.checklist.length > 0 ? (
-        <ul className="mt-3 grid gap-2 @min-[560px]:grid-cols-2">
+      {!open ? null : task.checklist.length > 0 ? (
+        <ul id={`record-stage-${task.id}-body`} className="mt-3 grid gap-2 @min-[560px]:grid-cols-2">
           {task.checklist.map((item, index) => (
             <li key={index} className="flex items-start gap-2 text-sm">
               <Checkbox
@@ -620,7 +667,7 @@ function StageTaskCard({
           ))}
         </ul>
       ) : (
-        <Button type="button" size="sm" variant="outline" className="mt-3 h-7 text-xs" onClick={onComplete}>
+        <Button id={`record-stage-${task.id}-body`} type="button" size="sm" variant="outline" className="mt-3 h-7 text-xs" onClick={onComplete}>
           Mark complete
         </Button>
       )}

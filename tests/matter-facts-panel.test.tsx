@@ -203,8 +203,8 @@ afterEach(() => {
 describe('MatterFactsPanel', () => {
   it('renders every section', async () => {
     renderPanel()
-    for (const label of ['Client contact', 'Spouse', 'Practice and fees', 'Matter dates', 'Notes', 'Activity']) {
-      expect(await screen.findByRole('button', { name: new RegExp(label, 'i') })).toBeTruthy()
+    for (const name of [/^Matter(?! dates)/i, /Client contact/i, /Spouse/i, /Matter dates/i, /Notes/i, /Activity/i]) {
+      expect(await screen.findByRole('button', { name })).toBeTruthy()
     }
   })
 

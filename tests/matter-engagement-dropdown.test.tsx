@@ -4,30 +4,11 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { MatterDetailsCard } from '@/app/admin/matters/[id]/MatterDetailsCard'
-import type { PipelineMatter } from '@/types/database'
+import { MatterAdminRows } from '@/app/admin/matters/[id]/facts-panel/MatterAdminRows'
 
-if (!HTMLElement.prototype.hasPointerCapture) {
-  Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', { value: () => false })
-}
-if (!HTMLElement.prototype.scrollIntoView) {
-  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: () => undefined })
-}
-
-const matter = {
-  matter_id: 'm1',
-  client_name: 'Jane Doe',
-  practice_area: 'EP',
-  plan_type: 'TBD',
-  signing_date: null,
-  fee_amount: 4500,
-  referral_source: null,
-} as unknown as PipelineMatter
-
-function renderCard(details: Record<string, unknown> | null, onSaveField = vi.fn()) {
+function renderRows(details: Record<string, unknown> | null, onSaveField = vi.fn().mockResolvedValue(undefined)) {
   render(
-    <MatterDetailsCard
-      matter={matter}
+    <MatterAdminRows
       matterId="m1"
       matterNumber={null}
       matterStatus="active"
@@ -40,50 +21,40 @@ function renderCard(details: Record<string, unknown> | null, onSaveField = vi.fn
   return onSaveField
 }
 
+const engagementSelect = () => screen.getByRole('combobox', { name: 'Engagement status' }) as HTMLSelectElement
+
 afterEach(() => cleanup())
 
-describe('matter essentials engagement dropdown', () => {
-  it('shows the derived status in the read view', () => {
-    renderCard({ engagement_status: 'draft' })
-    expect(screen.getByText('Draft')).toBeTruthy()
+describe('matter details engagement dropdown', () => {
+  it('shows the derived status', () => {
+    renderRows({ engagement_status: 'draft' })
+    expect(engagementSelect().value).toBe('draft')
   })
 
   it('shows Signed when only the legacy boolean is set', () => {
-    renderCard({ engagement_signed: true })
-    expect(screen.getByText('Signed')).toBeTruthy()
+    renderRows({ engagement_signed: true })
+    expect(engagementSelect().value).toBe('signed')
   })
 
   it('saves a manually chosen status through the dropdown', async () => {
     const user = userEvent.setup()
-    const onSaveField = renderCard({ engagement_sent_at: '2026-07-01T00:00:00Z' })
+    const onSaveField = renderRows({ engagement_sent_at: '2026-07-01T00:00:00Z' })
 
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
-    const trigger = screen.getByRole('combobox', { name: 'Engagement status' })
-    expect(trigger.textContent).toContain('Sent')
-
-    await user.click(trigger)
-    await user.click(await screen.findByRole('option', { name: 'Signed' }))
+    expect(engagementSelect().value).toBe('sent')
+    await user.selectOptions(engagementSelect(), 'signed')
 
     expect(onSaveField).toHaveBeenCalledWith('engagement_status', 'signed')
   })
 
-  it('offers exactly the four manual statuses', async () => {
-    const user = userEvent.setup()
-    renderCard(null)
-
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
-    await user.click(screen.getByRole('combobox', { name: 'Engagement status' }))
-
-    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
+  it('offers exactly the four manual statuses', () => {
+    renderRows(null)
+    expect(Array.from(engagementSelect().options).map(option => option.textContent)).toEqual([
       'Not sent', 'Draft', 'Sent', 'Signed',
     ])
   })
 
-  it('hides the send buttons once signed', async () => {
-    const user = userEvent.setup()
-    renderCard({ engagement_status: 'signed', engagement_signed: true })
-
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
+  it('hides the send buttons once signed', () => {
+    renderRows({ engagement_status: 'signed', engagement_signed: true })
     expect(screen.queryByRole('button', { name: /send engagement/i })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Draft engagement' })).toBeNull()
   })
