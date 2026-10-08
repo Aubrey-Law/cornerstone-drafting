@@ -673,6 +673,25 @@ export function MatterFactsPanel({
           </Link>
         }
       >
+        <ReadOnlyRow
+          label="Opened"
+          tabular
+          empty={!matter.opened_at && !matter.matter_created}
+          hideWhenEmpty={hideWhenEmpty}
+        >
+          {matter.opened_at || matter.matter_created
+            ? formatDate((matter.opened_at || matter.matter_created)!)
+            : '—'}
+        </ReadOnlyRow>
+        <ReadOnlyRow
+          label="Last contact"
+          tabular
+          empty={!lastContactAt}
+          hideWhenEmpty={hideWhenEmpty}
+          onClick={() => onOpenTab('communications')}
+        >
+          {lastContactAt ? formatDate(lastContactAt) : '—'}
+        </ReadOnlyRow>
         <InlineSelect
           label="Practice area"
           value={practiceArea}

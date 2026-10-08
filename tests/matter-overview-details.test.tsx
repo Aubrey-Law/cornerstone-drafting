@@ -10,7 +10,7 @@ afterEach(cleanup)
 function setup(status: string) {
   const onDetails = vi.fn()
   render(<MatterOverviewFacts matter={{ client_name: 'Alex Client', marital_status: status, spouse_name: 'Sam Client', spouse_email: 'sam@example.com', spouse_phone: '617-555-0111', spouse_address: '20 Main Street' } as PipelineMatter}
-    details={null} plan={EMPTY_PLAN_MIRROR} estate={{ assetCount: 0 } as MatterEstateSnapshot} lastContactAt={null} onDetails={onDetails} />)
+    details={null} plan={EMPTY_PLAN_MIRROR} estate={{ assetCount: 0 } as MatterEstateSnapshot} onDetails={onDetails} />)
   return onDetails
 }
 it('shows married client and spouse identities and contacts with an Edit action', () => {
@@ -19,6 +19,17 @@ it('shows married client and spouse identities and contacts with an Edit action'
   for (const text of ['Alex Client', 'Sam Client', 'sam@example.com', '617-555-0111', '20 Main Street']) expect(screen.getByText(text)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
   expect(edit).toHaveBeenCalledOnce()
+})
+it('leaves opened and last-contact dates to the details panel', () => {
+  render(<MatterOverviewFacts
+    matter={{ client_name: 'Alex Client', marital_status: 'single', opened_at: '2026-06-18T13:02:00.000Z' } as PipelineMatter}
+    details={null}
+    plan={EMPTY_PLAN_MIRROR}
+    estate={{ assetCount: 0 } as MatterEstateSnapshot}
+    onDetails={vi.fn()}
+  />)
+  expect(screen.queryByText('Opened')).toBeNull()
+  expect(screen.queryByText('Last contact')).toBeNull()
 })
 it('does not display stale spouse details for an unmarried client', () => {
   setup('divorced')

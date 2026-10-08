@@ -37,4 +37,15 @@ describe('matter overview frame', () => {
     expect(client).toContain('className="w-full gap-4"')
     expect(client).not.toContain('className="mx-auto w-full max-w-6xl gap-4"')
   })
+
+  it('composes stage and navigation into the header and docks details on the right', () => {
+    const client = fs.readFileSync(path.join(routeDir, 'MatterDetailClient.tsx'), 'utf8')
+
+    expect(client).toContain('stage={')
+    expect(client).toContain('navigation={<MatterWorkspaceNav')
+    expect(client).toContain('side="right"')
+    expect(client).toContain('collapseBelow="lg"')
+    expect(client).not.toContain('<ResponsiveDetailRail\n          drawer')
+    expect(client.indexOf('<ResponsiveDetailRail')).toBeGreaterThan(client.indexOf('<div className="flex min-w-0 flex-1 flex-col overflow-y-auto">'))
+  })
 })

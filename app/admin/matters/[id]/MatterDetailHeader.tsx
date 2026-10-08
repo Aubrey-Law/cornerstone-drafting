@@ -7,7 +7,7 @@ import {
   Loader as Loader2,
   Mail,
   MoreHorizontal,
-  PanelLeft,
+  PanelRight,
   PenLine,
   Phone,
   Trash2,
@@ -15,6 +15,7 @@ import {
   Clock as UnlockIcon,
   Sparkles,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -44,6 +45,10 @@ interface MatterDetailHeaderProps {
   onPushToStatular?: () => void
   pushingToStatular?: boolean
   onDelete: () => void
+  planLabel?: string | null
+  matterTypeLabel?: string | null
+  stage?: ReactNode
+  navigation?: ReactNode
 }
 
 export function MatterDetailHeader({
@@ -63,27 +68,44 @@ export function MatterDetailHeader({
   onPushToStatular,
   pushingToStatular = false,
   onDelete,
+  planLabel,
+  matterTypeLabel,
+  stage,
+  navigation,
 }: MatterDetailHeaderProps) {
   const clientName = matter.client_name || matter.matter_name || 'Matter'
+  const identityChips = [
+    matter.practice_area ? practiceAreaLabel(matter.practice_area) : null,
+    planLabel,
+    matterTypeLabel,
+  ].filter((value): value is string => Boolean(value))
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-      <div className="min-w-0 flex-1 basis-48">
-        <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-3.5" aria-hidden />Matters
-        </Link>
-        <h1 className="mt-1 min-w-0">
-          <MatterSwitcher matterId={matter.matter_id} label={clientName} className="max-w-full px-0 text-xl sm:text-2xl" />
-        </h1>
-        <p className="mt-1 text-xs tabular-nums text-muted-foreground">{[matterNumber ? `#${matterNumber}` : null, matter.practice_area ? practiceAreaLabel(matter.practice_area) : null].filter(Boolean).join(' · ')}</p>
-      </div>
+    <header className="shrink-0 border-b border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
+        <div className="min-w-0 flex-1 basis-48">
+          <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-3.5" aria-hidden />Matters
+          </Link>
+          <h1 className="mt-1 min-w-0">
+            <MatterSwitcher matterId={matter.matter_id} label={clientName} className="max-w-full px-0 text-xl sm:text-2xl" />
+          </h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {identityChips.map(label => (
+              <span key={label} className="rounded-full border border-border bg-muted px-2 py-0.5 font-medium text-foreground">
+                {label}
+              </span>
+            ))}
+            {matterNumber && <span className="tabular-nums">#{matterNumber}</span>}
+          </div>
+        </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
         {matter.client_phone && <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild><CallPhoneLink phone={matter.client_phone} label="Call" icon={<Phone className="size-3.5" />} /></Button>}
         <Button variant="outline" size="sm" className="hidden sm:inline-flex" disabled={!matter.client_email} onClick={onEmail}><Mail className="size-3.5" />Email</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onToggleFactsRail}
+        <Button type="button" size="sm" variant={factsRailOpen ? 'secondary' : 'ghost'} onClick={onToggleFactsRail}
           aria-pressed={factsRailOpen} aria-label={factsRailOpen ? 'Hide matter details' : 'Show matter details'}>
-          <PanelLeft className="size-4" aria-hidden />
+          <PanelRight className="size-4" aria-hidden />
           <span className="hidden sm:inline">Details</span>
         </Button>
         <DropdownMenu>
@@ -157,7 +179,7 @@ export function MatterDetailHeader({
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={onToggleFactsRail}>
-              <PanelLeft className="mr-2 size-3.5" />
+              <PanelRight className="mr-2 size-3.5" />
               {factsRailOpen ? 'Hide details' : 'Open details'}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
@@ -167,6 +189,9 @@ export function MatterDetailHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      </div>
+      {stage && <div className="border-t border-border px-4 py-2.5 md:px-6">{stage}</div>}
+      {navigation && <div className="border-t border-border">{navigation}</div>}
     </header>
   )
 }

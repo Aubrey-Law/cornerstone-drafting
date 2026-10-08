@@ -225,6 +225,22 @@ describe('MatterFactsPanel', () => {
     }
   })
 
+  it('shows the existing opened and derived last-contact dates in the details panel', async () => {
+    const user = userEvent.setup()
+    const onOpenTab = vi.fn()
+    renderPanel({
+      matter: matter({ opened_at: '2026-06-18T13:02:00.000Z' }),
+      lastContactAt: '2026-07-28T19:12:00.000Z',
+      onOpenTab,
+    })
+
+    expect(await screen.findByText('Opened')).toBeTruthy()
+    expect(screen.getByText('6/18/2026')).toBeTruthy()
+    const lastContact = screen.getByRole('button', { name: /Last contact.*7\/28\/2026/i })
+    await user.click(lastContact)
+    expect(onOpenTab).toHaveBeenCalledWith('communications')
+  })
+
   it('hides rows with no value until empty fields are shown', async () => {
     const user = userEvent.setup()
     renderPanel()

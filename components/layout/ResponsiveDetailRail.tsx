@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 
 const MOBILE_QUERY = '(max-width: 767px)'
+const BELOW_LG_QUERY = '(max-width: 1023px)'
 
 export function isMobileDetailViewport(): boolean {
   return typeof window !== 'undefined'
@@ -22,18 +23,22 @@ export function useIsMobileDetailViewport(): boolean {
 }
 
 function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(false)
+  return useMatches(MOBILE_QUERY)
+}
+
+function useMatches(query: string): boolean {
+  const [matches, setMatches] = useState(false)
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
-    const media = window.matchMedia(MOBILE_QUERY)
-    const update = () => setMobile(media.matches)
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
     update()
     media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
-  }, [])
+  }, [query])
 
-  return mobile
+  return matches
 }
 
 type ResponsiveDetailRailProps = {
@@ -45,6 +50,8 @@ type ResponsiveDetailRailProps = {
   /** Escape hatch for docked positioning that depends on a runtime offset. */
   desktopStyle?: CSSProperties
   drawer?: boolean
+  side?: 'left' | 'right'
+  collapseBelow?: 'md' | 'lg'
   /** Disable when an editor owns Escape to cancel its draft. */
   blurOnEscape?: boolean
   mobileClassName?: string
@@ -59,19 +66,23 @@ export function ResponsiveDetailRail({
   desktopStyle,
   mobileClassName,
   drawer = false,
+  side = 'left',
+  collapseBelow = 'md',
   blurOnEscape = true,
 }: ResponsiveDetailRailProps) {
-  const mobile = useIsMobile()
+  const collapsed = useMatches(collapseBelow === 'lg' ? BELOW_LG_QUERY : MOBILE_QUERY)
+  const sheetSide = drawer ? 'right' : side
+  const protectInlineEdits = drawer || side === 'right'
 
-  if (mobile || drawer) {
+  if (collapsed || drawer) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
-          side={drawer ? "right" : "left"}
+          side={sheetSide}
           className={cn('w-[min(30rem,100vw)] gap-0 p-0 sm:max-w-none', mobileClassName)}
-          onInteractOutside={event => { if (drawer) event.preventDefault() }}
+          onInteractOutside={event => { if (protectInlineEdits) event.preventDefault() }}
           onEscapeKeyDown={event => {
-            if (!drawer) return
+            if (!protectInlineEdits) return
             const field = document.activeElement
             if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
               // Inline fields save on blur. Let that finish before dismissing.
@@ -100,7 +111,11 @@ export function ResponsiveDetailRail({
     <aside
       aria-label={label}
       style={desktopStyle}
-      className={cn('hidden min-h-0 shrink-0 md:flex', desktopClassName)}
+      className={cn(
+        'hidden min-h-0 shrink-0',
+        collapseBelow === 'lg' ? 'lg:flex' : 'md:flex',
+        desktopClassName,
+      )}
     >
       {children}
     </aside>
