@@ -7,6 +7,9 @@ import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIn
 import { type IntakeRow } from '@/lib/intakeSections'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
+import { getIntakeTrack } from '@/lib/intakeTrack'
+import { compileBundledIntakeForm } from '@/lib/intake/forms/definitions'
+import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
 import GuidedInterview from '@/components/intake/GuidedInterview'
 import { RequestUnlockButton } from './RequestUnlockButton'
 
@@ -70,11 +73,20 @@ export default async function IntakeHomePage() {
     )
   }
 
+  const rendererMode = resolveIntakeRendererMode(process.env)
+  const compiled = compileBundledIntakeForm(getIntakeTrack(intakeRow), 'client')
+  if (!compiled.success) {
+    console.error('Invalid bundled intake form', compiled.errors)
+    return <p role="alert">This questionnaire is temporarily unavailable. Please contact the firm.</p>
+  }
+
   return (
     <GuidedInterview
       initialData={intakeRow as Record<string, unknown>}
       intakeId={intake.id as string}
       mode="client"
+      rendererMode={rendererMode}
+      compiledForm={compiled.form}
     />
   )
 }

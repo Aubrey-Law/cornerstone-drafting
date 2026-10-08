@@ -33,12 +33,12 @@ interface FiduciaryEntry {
   [key: string]: unknown
 }
 
-async function callContactsApi(token: string, body: Record<string, unknown>) {
+async function callContactsApi(token: string, body: Record<string, unknown>, publicToken = false) {
   const res = await fetch('/api/intake/contacts', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(publicToken ? { 'X-Intake-Token': token } : { Authorization: `Bearer ${token}` }),
     },
     body: JSON.stringify(body),
   })
@@ -49,24 +49,28 @@ async function callContactsApi(token: string, body: Record<string, unknown>) {
   return res.json()
 }
 
-export function useContacts(intakeId: string) {
+export function useContacts(intakeId: string, options: { throwOnError?: boolean; publicIntakeToken?: string } = {}) {
+  const { throwOnError = false, publicIntakeToken } = options
   const getToken = useCallback(async () => {
+    if (publicIntakeToken) return publicIntakeToken
     const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token && throwOnError) throw new Error('Your session has expired. Please refresh and try again.')
     return session?.access_token ?? null
-  }, [])
+  }, [publicIntakeToken, throwOnError])
 
   const saveSpouse = useCallback(
     async (data: SpouseData) => {
       const token = await getToken()
       if (!token) return
       try {
-        await callContactsApi(token, { action: 'save_spouse', intakeId, data: formatPhoneFieldsDeep(data) })
+        await callContactsApi(token, { action: 'save_spouse', intakeId, data: formatPhoneFieldsDeep(data) }, !!publicIntakeToken)
       } catch (err) {
         console.error('Save spouse error:', err)
         toast.error('Failed to save spouse information.')
+        if (throwOnError) throw err
       }
     },
-    [intakeId, getToken]
+    [intakeId, getToken, publicIntakeToken, throwOnError]
   )
 
   const saveChildren = useCallback(
@@ -74,13 +78,14 @@ export function useContacts(intakeId: string) {
       const token = await getToken()
       if (!token) return
       try {
-        await callContactsApi(token, { action: 'save_children', intakeId, children })
+        await callContactsApi(token, { action: 'save_children', intakeId, children }, !!publicIntakeToken)
       } catch (err) {
         console.error('Save children error:', err)
         toast.error('Failed to save children information.')
+        if (throwOnError) throw err
       }
     },
-    [intakeId, getToken]
+    [intakeId, getToken, publicIntakeToken, throwOnError]
   )
 
   const saveFiduciaries = useCallback(
@@ -92,13 +97,14 @@ export function useContacts(intakeId: string) {
       const token = await getToken()
       if (!token) return
       try {
-        await callContactsApi(token, { action: 'save_fiduciaries', intakeId, entries: formatPhoneFieldsDeep(entries), role, forParty })
+        await callContactsApi(token, { action: 'save_fiduciaries', intakeId, entries: formatPhoneFieldsDeep(entries), role, forParty }, !!publicIntakeToken)
       } catch (err) {
         console.error('Save fiduciaries error:', err)
         toast.error('Failed to save fiduciary information.')
+        if (throwOnError) throw err
       }
     },
-    [intakeId, getToken]
+    [intakeId, getToken, publicIntakeToken, throwOnError]
   )
 
   const saveAdditionalContacts = useCallback(
@@ -110,13 +116,14 @@ export function useContacts(intakeId: string) {
           action: 'save_additional_contacts',
           intakeId,
           contacts: formatPhoneFieldsDeep(contactsPayload),
-        })
+        }, !!publicIntakeToken)
       } catch (err) {
         console.error('Save additional contacts error:', err)
         toast.error('Failed to save additional contacts.')
+        if (throwOnError) throw err
       }
     },
-    [intakeId, getToken]
+    [intakeId, getToken, publicIntakeToken, throwOnError]
   )
 
   return { saveSpouse, saveChildren, saveFiduciaries, saveAdditionalContacts }

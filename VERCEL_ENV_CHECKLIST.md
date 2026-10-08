@@ -24,6 +24,14 @@
 
 `@aubrey-law/estate-fields` lives at `packages/estate-fields/` and is owned by this repository — it is a workspace member, not a vendored mirror, so there is nothing to sync inward and no sibling checkout to arrange. Registry changes land here first; see that package's `SYNC.md` for how other applications consume it.
 
+## Temporary intake renderer rollback
+
+`INTAKE_RENDERER_MODE=legacy|compiled` is server-only. During Phase 1, absent,
+empty, or invalid values choose `legacy`; set `compiled` to exercise the
+schema-driven questionnaire. The server compiles and audience-filters bundled
+forms before delivery in either mode. Keep this temporary rollback control
+until production parity acceptance; remove it only after that acceptance.
+
 ## Auth / OAuth (recommended)
 
 | Variable | Purpose |

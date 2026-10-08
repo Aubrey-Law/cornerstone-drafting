@@ -199,6 +199,15 @@ const SAVE_ROLES: Partial<Record<IntakeBlockId, readonly (readonly [string, 'cli
   college_agents: [['poa', 'client'], ['hcp', 'client']],
 }
 
+/** Fixed domain keys let the shell track edits without relying on section IDs. */
+export function getIntakeBlockPersistenceSnapshot(id: IntakeBlockId, data: IntakeRow): string {
+  const keys = id === 'spouse_details' ? ['_spouse']
+    : id === 'children' ? ['_children']
+    : id === 'additional_contacts' || id === 'college_parents' ? ['_additional_contacts']
+    : (SAVE_ROLES[id] ?? []).map(([role, party]) => `_fid_${role}_${party}`)
+  return JSON.stringify(keys.map((key) => data[key]))
+}
+
 export async function persistIntakeBlockOnLeave(id: IntakeBlockId, data: IntakeRow, context: IntakeBlockPersistenceContext): Promise<void> {
   if (!getIntakeBlock(id).persistOnLeave) return
   if (id === 'spouse_details' && data._spouse) await context.saveSpouse(record(data._spouse))

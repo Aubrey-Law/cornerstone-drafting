@@ -15,10 +15,13 @@ export interface CompiledIntakeSectionsProps extends Omit<IntakeBlockRendererPro
   showValidation?: boolean
   /** The interview shell may render its own progress rail using this same evaluation. */
   showProgress?: boolean
+  /** The attorney shell may prepend its existing plan/document cards. */
+  numberOffset?: number
+  onLastContinue?: (sectionId: string) => void
 }
 
 /** Evaluation owns active ordering, completion, issues, estimates and progress. */
-export function CompiledIntakeSections({ form, evaluation, mode = 'client', openId, onToggle, onContinue, showValidation = true, showProgress = false, ...itemProps }: CompiledIntakeSectionsProps) {
+export function CompiledIntakeSections({ form, evaluation, mode = 'client', openId, onToggle, onContinue, onLastContinue, numberOffset = 0, showValidation = true, showProgress = false, ...itemProps }: CompiledIntakeSectionsProps) {
   const isStaff = mode === 'attorney' || mode === 'staff'
   return (
     <div aria-label={`${form.title} sections`} className="space-y-4">
@@ -37,12 +40,13 @@ export function CompiledIntakeSections({ form, evaluation, mode = 'client', open
             key={section.id}
             {...itemProps}
             section={section}
-            number={index + 1}
+            number={index + 1 + numberOffset}
             open={openId === section.id}
             disabled={isStaff && section.audience === 'client_and_staff'}
             showValidation={showValidation}
             onToggle={() => onToggle(section.id)}
-            onContinue={next && onContinue ? () => onContinue(section.id, next.id) : undefined}
+            onContinue={next && onContinue ? () => onContinue(section.id, next.id) : !next && onLastContinue ? () => onLastContinue(section.id) : undefined}
+            continueLabel={onLastContinue ? next ? `Continue to ${next.title}${next.timeEstimate ? ` · ~${next.timeEstimate} min` : ''}` : 'Review questionnaire' : undefined}
           />
         )
       })}

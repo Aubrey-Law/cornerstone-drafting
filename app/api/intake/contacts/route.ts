@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
@@ -68,28 +69,45 @@ function makeUserClient(token: string) {
 
 export async function POST(req: Request) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // Verify the user is authenticated
-  const userClient = makeUserClient(token)
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+  const publicToken = req.headers.get('x-intake-token')
+  if (!token && !publicToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let bearerUserId: string | undefined
+  if (!publicToken) {
+    const userClient = makeUserClient(token!)
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    bearerUserId = user.id
+  }
   const admin = getAdminClient()
   const body = await req.json()
   const { action, intakeId } = body
 
   if (!intakeId) return NextResponse.json({ error: 'intakeId required' }, { status: 400 })
 
-  // Verify the intake belongs to this user (either portal ownership column).
-  const ownedOrClause = `user_id.eq.${user.id},client_user_id.eq.${user.id}`
-  const { data: intake } = await admin
-    .from('client_intake')
-    .select('id')
-    .eq('id', intakeId)
-    .or(ownedOrClause)
-    .maybeSingle()
-  if (!intake) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (publicToken) {
+    // Public capability is restricted to its unregistered, editable household.
+    // Never fall back to a bearer session when an invite fails validation.
+    const intake = await resolveIntakeByInviteToken(admin, publicToken)
+    if (!intake || intake.id !== intakeId || intake.user_id || intake.client_user_id) {
+      return NextResponse.json({ error: 'Invalid or expired intake token' }, { status: 401 })
+    }
+    if (intake.status === 'submitted' || intake.status === 'approved') {
+      return NextResponse.json({ error: 'Intake is locked. Contact your attorney to make changes.' }, { status: 409 })
+    }
+    if (!['save_spouse', 'save_children', 'save_additional_contacts', 'save_fiduciaries'].includes(action)) {
+      return NextResponse.json({ error: 'Unsupported public contact action' }, { status: 403 })
+    }
+  } else {
+    // Verify the intake belongs to this user (either portal ownership column).
+    const ownedOrClause = `user_id.eq.${bearerUserId},client_user_id.eq.${bearerUserId}`
+    const { data: intake } = await admin
+      .from('client_intake')
+      .select('id')
+      .eq('id', intakeId)
+      .or(ownedOrClause)
+      .maybeSingle()
+    if (!intake) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     if (action === 'upsert_contact') {

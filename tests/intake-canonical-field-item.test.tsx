@@ -13,6 +13,49 @@ function item(fieldId: CanonicalFieldRenderItem['fieldId'], extra: Partial<Canon
 }
 
 describe('canonical scalar field item', () => {
+  it.each([
+    [{}, true], [{ is_us_citizen: true }, true], [{ is_us_citizen: false }, false],
+    [{ citizenship_status: 'us_citizen', is_us_citizen: false }, true],
+    [{ citizenship_status: 'permanent_resident' }, false],
+    [{ citizenship_status: 'nonresident_alien' }, false],
+    [{ citizenship_status: 'non_us_unspecified' }, false],
+    [{ citizenship_status: 'other' }, false], [{ citizenship_status: 'unknown' }, true],
+  ])('preserves college citizenship checked semantics without mount writes: %j', async (answer, checked) => {
+    const update = vi.fn()
+    render(<CanonicalFieldItem item={item('client_citizenship')} data={{ intake_track: 'college_prep', ...answer }} update={update} />)
+    const control = screen.getByRole('switch', { name: 'U.S. citizen' }) as HTMLButtonElement
+    expect(control.getAttribute('aria-checked')).toBe(String(checked))
+    expect(update).not.toHaveBeenCalled()
+    await userEvent.click(control)
+    expect(update).toHaveBeenCalledWith('citizenship_status', checked ? 'non_us_unspecified' : 'us_citizen')
+    expect(update).toHaveBeenCalledWith('is_us_citizen', !checked)
+  })
+
+  it.each([undefined, true, false])('preserves college comfort-care default %s without mount writes', async (value) => {
+    const update = vi.fn()
+    render(<CanonicalFieldItem item={item('college_comfort_always')} data={{ intake_track: 'college_prep', college_comfort_always: value }} update={update} />)
+    const control = screen.getByRole('switch', { name: /Provide pain relief/ })
+    expect(control.getAttribute('aria-checked')).toBe(String(value ?? true))
+    expect(update).not.toHaveBeenCalled()
+    await userEvent.click(control)
+    expect(update).toHaveBeenCalledWith('college_comfort_always', !(value ?? true))
+  })
+
+  it('honors compiled plain-text copy on the college toggle profile', () => {
+    render(<CanonicalFieldItem item={item('client_citizenship', { label: 'Student citizenship', helpText: 'Confirm the student is a citizen.' })} data={{ intake_track: 'college_prep' }} update={vi.fn()} />)
+    expect(screen.getByRole('switch', { name: 'Student citizenship' })).toBeDefined()
+    expect(screen.getByText('Confirm the student is a citizen.')).toBeDefined()
+  })
+
+  it.each(['client_citizenship', 'college_comfort_always'] as const)('guards read-only college default control %s', async (fieldId) => {
+    const update = vi.fn()
+    render(<CanonicalFieldItem item={item(fieldId)} data={{ intake_track: 'college_prep' }} update={update} disabled />)
+    const control = screen.getByRole('switch')
+    expect(control.matches(':disabled')).toBe(true)
+    fireEvent.click(control)
+    expect(update).not.toHaveBeenCalled()
+  })
+
   it('labels the county select and writes the canonical county key', async () => {
     const update = vi.fn()
     render(<CanonicalFieldItem item={item('county', { label: 'County of residence', helpText: 'Choose your Massachusetts county.', effectiveRequirement: 'required' })} data={{ county: '' }} update={update} />)

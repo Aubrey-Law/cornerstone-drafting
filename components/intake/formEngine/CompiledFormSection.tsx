@@ -13,14 +13,15 @@ export interface CompiledFormSectionProps extends Omit<IntakeBlockRendererProps,
   showValidation?: boolean
   onToggle: () => void
   onContinue?: () => void
+  continueLabel?: string
 }
 
-export function CompiledFormSection({ section, number, open, disabled = false, showValidation = true, onToggle, onContinue, ...itemProps }: CompiledFormSectionProps) {
+export function CompiledFormSection({ section, number, open, disabled = false, showValidation = true, onToggle, onContinue, continueLabel, ...itemProps }: CompiledFormSectionProps) {
   const time = section.timeEstimate > 0 ? `~${section.timeEstimate} min` : undefined
   const subtitle = [section.subtitle, time].filter(Boolean).join(' · ') || undefined
   const issues = showValidation ? section.issues : []
   return (
-    <GuidedSection id={`intake-section-${section.id}`} number={number} title={section.title} subtitle={subtitle} complete={section.complete} open={open} onToggle={onToggle} onContinue={onContinue}>
+    <GuidedSection id={`intake-section-${section.id}`} number={number} title={section.title} subtitle={subtitle} complete={section.complete} open={open} onToggle={onToggle} onContinue={onContinue} continueLabel={continueLabel}>
       {issues.length > 0 ? (
         <div role={issues.some((issue) => issue.severity === 'error') ? 'alert' : 'status'} className="my-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
           <ul className="list-disc pl-4">

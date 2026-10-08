@@ -34,6 +34,16 @@ function fixture(data: Record<string, unknown> = {}, source = definition) {
 }
 
 describe('compiled intake sections', () => {
+  it('continues to the review modal from the final display section and offsets attorney numbering', async () => {
+    const props = fixture()
+    props.evaluation.activeSections = props.evaluation.activeSections.filter((section) => section.id !== 'review')
+    const review = vi.fn()
+    render(<CompiledIntakeSections {...props} update={vi.fn()} openId="personal" onToggle={vi.fn()} onLastContinue={review} numberOffset={2} />)
+    expect(screen.getByRole('button', { name: /3 Personal Information/ })).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /Review questionnaire/ }))
+    expect(review).toHaveBeenCalledWith('personal')
+  })
+
   it('renders only evaluated sections/items with canonical copy, block configuration and estimates', () => {
     render(<CompiledIntakeSections {...fixture()} update={vi.fn()} openId="personal" onToggle={vi.fn()} onContinue={vi.fn()} showProgress />)
     expect(screen.getByRole('heading', { name: 'Personal Information' })).toBeDefined()
