@@ -1192,6 +1192,7 @@ function MatterDetailClientInner({
           label="Matter details"
           side="right"
           collapseBelow="lg"
+          collapseWithAdminRail
           desktopClassName="w-[21rem] border-l border-border bg-card xl:w-96"
           mobileClassName="bg-card"
         >

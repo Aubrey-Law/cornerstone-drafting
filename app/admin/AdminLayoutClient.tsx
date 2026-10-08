@@ -43,6 +43,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
 import { AdminRail, RailToggleButton, useAdminRail } from '@/components/rail/AdminRail'
+import { AdminRailVisibilityContext } from '@/components/rail/AdminRailVisibilityContext'
 import { useMatterDisplayName } from './components/useMatterDisplayName'
 import {
   EMPTY_SIDEBAR_COUNTS,
@@ -335,15 +336,17 @@ export default function AdminLayoutClient({
             </DropdownMenu>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1">
-          <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
-          <AdminRail
-            rail={rail}
-            matterDisplayName={matterDisplayName}
-            assistantModelLabel={assistantModelLabel}
-            tasksOverdue={badgeCounts.tasksOverdueCount}
-          />
-        </div>
+        <AdminRailVisibilityContext.Provider value={rail.visible}>
+          <div className="flex min-h-0 flex-1">
+            <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
+            <AdminRail
+              rail={rail}
+              matterDisplayName={matterDisplayName}
+              assistantModelLabel={assistantModelLabel}
+              tasksOverdue={badgeCounts.tasksOverdueCount}
+            />
+          </div>
+        </AdminRailVisibilityContext.Provider>
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
+import { AdminRailVisibilityContext } from '@/components/rail/AdminRailVisibilityContext'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
 import type { PipelineMatter } from '@/types/database'
@@ -92,6 +93,27 @@ describe('responsive admin detail layout', () => {
       >
         <p>Matter facts</p>
       </ResponsiveDetailRail>,
+    )
+
+    expect(screen.queryByRole('complementary', { name: 'Matter details' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Matter details' })).toBeTruthy()
+    expect(screen.getAllByText('Matter facts')).toHaveLength(1)
+  })
+
+  it('keeps the matter workspace usable when the admin rail is already visible', () => {
+    render(
+      <AdminRailVisibilityContext.Provider value>
+        <ResponsiveDetailRail
+          open
+          onOpenChange={vi.fn()}
+          label="Matter details"
+          side="right"
+          collapseBelow="lg"
+          collapseWithAdminRail
+        >
+          <p>Matter facts</p>
+        </ResponsiveDetailRail>
+      </AdminRailVisibilityContext.Provider>,
     )
 
     expect(screen.queryByRole('complementary', { name: 'Matter details' })).toBeNull()

@@ -7,6 +7,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import { useAdminRailVisible } from '@/components/rail/AdminRailVisibilityContext'
 
 const MOBILE_QUERY = '(max-width: 767px)'
 const BELOW_LG_QUERY = '(max-width: 1023px)'
@@ -52,6 +53,8 @@ type ResponsiveDetailRailProps = {
   drawer?: boolean
   side?: 'left' | 'right'
   collapseBelow?: 'md' | 'lg'
+  /** Use a sheet when the global admin rail already occupies the right edge. */
+  collapseWithAdminRail?: boolean
   /** Disable when an editor owns Escape to cancel its draft. */
   blurOnEscape?: boolean
   mobileClassName?: string
@@ -68,9 +71,12 @@ export function ResponsiveDetailRail({
   drawer = false,
   side = 'left',
   collapseBelow = 'md',
+  collapseWithAdminRail = false,
   blurOnEscape = true,
 }: ResponsiveDetailRailProps) {
+  const adminRailVisible = useAdminRailVisible()
   const collapsed = useMatches(collapseBelow === 'lg' ? BELOW_LG_QUERY : MOBILE_QUERY)
+    || (collapseWithAdminRail && adminRailVisible)
   const sheetSide = drawer ? 'right' : side
   const protectInlineEdits = drawer || side === 'right'
 
