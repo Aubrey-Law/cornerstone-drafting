@@ -169,6 +169,13 @@ export async function duplicateTemplateRow(input: Actor & {
     p_description: (input.description ?? null) as unknown as string,
     p_expected_lock_version: source.lock_version, p_expected_definition_hash: source.definition_hash,
     p_definition: definition as unknown as Json, p_definition_hash: hashIntakeFormDefinition(definition),
+  }).catch((error: unknown) => {
+    // A source discarded after our read is the same stale-source conflict as a changed source.
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error &&
+      error.code === 'P0001' && error.message === 'Source version required') {
+      throw Object.assign(new Error('Source changed; refresh and try again'), { code: '40001' })
+    }
+    throw error
   }), definition)
   const template = await getTemplateRow(draft.template_id)
   if (!template) throw new Error('Created intake form template is unavailable')

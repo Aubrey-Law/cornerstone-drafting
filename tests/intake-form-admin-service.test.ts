@@ -269,6 +269,39 @@ describe('intake form repository boundary', () => {
       await expect(real.duplicateTemplateRow(input)).rejects.toThrow('Stored intake form version version-1 is invalid')
     } finally { spy.mockRestore() }
   })
+
+  it('turns a source discarded after the read into the existing source conflict', async () => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
+    try {
+      await expect(real.duplicateTemplateRow({ sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toMatchObject({ code: '40001', message: 'Source changed; refresh and try again' })
+    } finally { spy.mockRestore() }
+  })
+
+  it.each([
+    { code: 'P0001', message: 'Other database validation failed' },
+    { code: 'XX000', message: 'Source version required' },
+    { code: 'P0001', message: 'Source version required with unexpected detail' },
+  ])('preserves unrelated duplicate RPC errors: $code / $message', async (failure) => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: failure })
+    try {
+      await expect(real.duplicateTemplateRow({ sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toBe(failure)
+    } finally { spy.mockRestore() }
+  })
+
+  it('maps the raced duplicate RPC rejection through the real repository to a typed service conflict', async () => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
+    vi.mocked(repository.duplicateTemplateRow).mockImplementation(real.duplicateTemplateRow)
+    try {
+      await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1',
+        actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toMatchObject({ code: 'INTAKE_FORM_CONFLICT', message: 'Source changed; refresh and try again' })
+    } finally { spy.mockRestore() }
+  })
 })
 const auditEvent = () => ({
   id: '11111111-1111-4111-8111-111111111111', template_id: '22222222-2222-4222-8222-222222222222',

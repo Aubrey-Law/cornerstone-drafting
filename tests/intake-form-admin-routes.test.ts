@@ -14,6 +14,9 @@ vi.mock('@/lib/intake/forms/adminService', async (importOriginal) => {
 
 import * as service from '@/lib/intake/forms/adminService'
 import * as repository from '@/lib/intake/forms/repository'
+import * as adminClient from '@/lib/supabaseAdmin'
+import { hashIntakeFormDefinition } from '@/lib/intake/forms/hash'
+import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 import * as list from '@/app/api/admin/settings/intake-forms/route'
 import * as template from '@/app/api/admin/settings/intake-forms/[templateId]/route'
 import * as draft from '@/app/api/admin/settings/intake-forms/[templateId]/draft/route'
@@ -207,9 +210,32 @@ it('returns 409 when the next draft already exists through the real service', as
   } finally { read.mockRestore(); create.mockRestore() }
 })
 
-it('sanitizes a raced duplicate source conflict without exposing persistence text', async () => {
-  vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockRejectedValue(new service.IntakeFormConflictError('Source changed; refresh and try again'))
-  const response = await duplicate.POST(request('POST', { sourceVersionId: versionId, key: 'copy', name: 'Copy' }), context())
-  expect(response.status).toBe(409)
-  expect(await response.json()).toEqual({ error: 'Draft changed; refresh and try again', code: 'INTAKE_FORM_CONFLICT' })
+it('sanitizes the discarded-source RPC rejection through the real repository and service as 409', async () => {
+  const actual = await vi.importActual<typeof service>('@/lib/intake/forms/adminService')
+  const sourceDefinition: IntakeFormDefinition = { schemaVersion: 1, key: 'test', title: 'Test', sections: [
+    { id: 'personal', title: 'Personal', audience: 'client_and_staff', items: [
+      { kind: 'field', id: 'name', fieldId: 'client_first_name' },
+    ] },
+    { id: 'review', title: 'Review', audience: 'client_and_staff', items: [
+      { kind: 'block', id: 'submit', blockId: 'review_submit' },
+    ] },
+  ] }
+  const source = { id: versionId, template_id: templateId, version: 1, status: 'draft' as const, definition: sourceDefinition,
+    definition_hash: hashIntakeFormDefinition(sourceDefinition), lock_version: 3, created_by: actorId,
+    published_by: null, created_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z', published_at: null }
+  const sourceTemplate = { id: templateId, key: 'test', name: 'Test', description: null, archived_at: null,
+    created_by: actorId, created_at: source.created_at, updated_at: source.updated_at }
+  const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: source, error: null }) }
+  const client = { from: () => query, rpc: vi.fn().mockResolvedValue({ data: null,
+    error: { code: 'P0001', message: 'Source version required' } }) }
+  const database = vi.spyOn(adminClient, 'getAdminClient').mockReturnValue(client as unknown as ReturnType<typeof adminClient.getAdminClient>)
+  const readVersion = vi.spyOn(repository, 'getVersionRow').mockResolvedValue(source)
+  const readTemplate = vi.spyOn(repository, 'getTemplateRow').mockResolvedValue(sourceTemplate)
+  try {
+    vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockImplementation(actual.duplicateIntakeFormTemplateFromTemplate)
+    const response = await duplicate.POST(request('POST', { sourceVersionId: versionId, key: 'copy', name: 'Copy' }), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Draft changed; refresh and try again', code: 'INTAKE_FORM_CONFLICT' })
+  } finally { database.mockRestore(); readVersion.mockRestore(); readTemplate.mockRestore() }
 })
