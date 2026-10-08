@@ -13349,7 +13349,11 @@ export type Database = {
       duplicate_intake_form_template: {
         Args: {
           p_actor_id: string
+          p_definition: Json
+          p_definition_hash: string
           p_description: string
+          p_expected_definition_hash: string
+          p_expected_lock_version: number
           p_key: string
           p_name: string
           p_source_version_id: string

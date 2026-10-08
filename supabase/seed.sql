@@ -82,9 +82,10 @@ REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLE
 FROM service_role;
 
 -- Audit events stay append-only after the local baseline grants above.
-REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+REVOKE ALL ON TABLE
   public.intake_form_audit_events
 FROM service_role;
+GRANT SELECT, INSERT ON TABLE public.intake_form_audit_events TO service_role;
 
 -- ── Exception 2: authenticated may read, never write ─────────────────────────
 -- The estate clause library and its review trail. Writes go through the

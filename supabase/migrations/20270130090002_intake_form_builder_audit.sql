@@ -185,7 +185,9 @@ END;
 $$;
 
 CREATE FUNCTION public.duplicate_intake_form_template(
-  p_actor_id uuid, p_source_version_id uuid, p_key text, p_name text, p_description text
+  p_actor_id uuid, p_source_version_id uuid, p_key text, p_name text, p_description text,
+  p_expected_lock_version integer, p_expected_definition_hash text,
+  p_definition jsonb, p_definition_hash text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_source public.intake_form_versions%ROWTYPE;
@@ -198,11 +200,19 @@ BEGIN
   SELECT * INTO v_source FROM public.intake_form_versions
     WHERE id = p_source_version_id AND status IN ('draft', 'published', 'retired') FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Source version required'; END IF;
+  IF v_source.lock_version IS DISTINCT FROM p_expected_lock_version
+    OR v_source.definition_hash IS DISTINCT FROM p_expected_definition_hash THEN
+    RAISE EXCEPTION 'Source changed; refresh and try again' USING ERRCODE = '40001';
+  END IF;
+  IF p_definition IS NULL OR p_key IS NULL
+    OR p_definition->'key' IS DISTINCT FROM to_jsonb(p_key) THEN
+    RAISE EXCEPTION 'Definition key must match template key';
+  END IF;
   INSERT INTO public.intake_form_templates (key, name, description, created_by)
     VALUES (p_key, p_name, p_description, p_actor_id) RETURNING id INTO v_template_id;
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_template_id::text, 0));
   INSERT INTO public.intake_form_versions (template_id, version, status, definition, definition_hash, created_by)
-    VALUES (v_template_id, 1, 'draft', v_source.definition, v_source.definition_hash, p_actor_id)
+    VALUES (v_template_id, 1, 'draft', p_definition, p_definition_hash, p_actor_id)
     RETURNING * INTO v_row;
   INSERT INTO public.intake_form_audit_events (template_id, version_id, version_number, action, actor_id, metadata)
     VALUES (v_row.template_id, v_row.id, v_row.version, 'duplicate', p_actor_id,
@@ -218,7 +228,7 @@ REVOKE ALL ON FUNCTION public.publish_intake_form_draft(uuid, uuid, integer, tex
 REVOKE ALL ON FUNCTION public.retire_intake_form_version(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.archive_intake_form_template(uuid, uuid, boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.discard_intake_form_draft(uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.duplicate_intake_form_template(uuid, uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.duplicate_intake_form_template(uuid, uuid, text, text, text, integer, text, jsonb, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_intake_form_template(uuid, text, text, text, jsonb, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.save_intake_form_draft(uuid, uuid, integer, jsonb, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.create_next_intake_form_draft(uuid, uuid) TO service_role;
@@ -226,4 +236,4 @@ GRANT EXECUTE ON FUNCTION public.publish_intake_form_draft(uuid, uuid, integer, 
 GRANT EXECUTE ON FUNCTION public.retire_intake_form_version(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.archive_intake_form_template(uuid, uuid, boolean) TO service_role;
 GRANT EXECUTE ON FUNCTION public.discard_intake_form_draft(uuid, uuid, integer) TO service_role;
-GRANT EXECUTE ON FUNCTION public.duplicate_intake_form_template(uuid, uuid, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.duplicate_intake_form_template(uuid, uuid, text, text, text, integer, text, jsonb, text) TO service_role;

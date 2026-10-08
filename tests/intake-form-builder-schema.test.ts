@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
+import { hashIntakeFormDefinition } from '@/lib/intake/forms/hash'
+import { compileIntakeForm } from '@/lib/intake/forms/compiler'
 
 const migrations = resolve(process.cwd(), 'supabase/migrations')
 const files = readdirSync(migrations).filter((name) => name.endsWith('_intake_form_builder_foundation.sql'))
@@ -80,6 +82,12 @@ const localDatabaseUrl = process.env.VITEST_INTAKE_FORM_TEST_DB_URL
 const admin = '10000000-0000-4000-8000-000000000001'
 const attorney = '10000000-0000-4000-8000-000000000002'
 const hash = 'a'.repeat(64)
+const duplicateSource = {
+  schemaVersion: 1, key: 'audit_source', title: 'Source', sections: [
+    { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'submit', blockId: 'review_submit' }] },
+  ],
+}
+const duplicateSourceHash = hashIntakeFormDefinition(duplicateSource)
 const fixture = `
   BEGIN;
   INSERT INTO auth.users (id, email) VALUES
@@ -168,23 +176,31 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
     `)
   })
 
-  it('duplicates draft, published, and retired definitions atomically with only source identifiers in metadata', () => {
+  it('duplicates draft, published, and retired sources with a new readable, publishable identity and canonical hash', () => {
+    const copies = ['draft', 'published', 'retired'].map((state) => {
+      const definition = { ...duplicateSource, key: `copy_${state}` }
+      expect(compileIntakeForm(definition, 'client').success).toBe(true)
+      expect(compileIntakeForm(definition, 'staff').success).toBe(true)
+      return { state, definition, hash: hashIntakeFormDefinition(definition) }
+    })
     checkDatabase(`
       SET LOCAL ROLE service_role;
       DO $test$
-      DECLARE source jsonb; copied jsonb; source_v uuid; source_t uuid; new_v uuid; new_t uuid; state text; count_before bigint;
+      DECLARE source jsonb; copied jsonb; source_v uuid; source_t uuid; new_v uuid; new_t uuid; state text; copy_definition jsonb; copy_hash text; count_before bigint;
       BEGIN
-        source := public.create_intake_form_template('${admin}', 'audit_source', 'Source', 'Source description', '{"private":"definition"}', '${hash}');
+        source := public.create_intake_form_template('${admin}', 'audit_source', 'Source', 'Source description', '${JSON.stringify(duplicateSource)}', '${duplicateSourceHash}');
         source_v := (source->>'id')::uuid; source_t := (source->>'template_id')::uuid;
         FOREACH state IN ARRAY ARRAY['draft', 'published', 'retired'] LOOP
-          IF state = 'published' THEN PERFORM public.publish_intake_form_draft('${admin}', source_v, 0, '${hash}'); END IF;
+          IF state = 'published' THEN PERFORM public.publish_intake_form_draft('${admin}', source_v, 0, '${duplicateSourceHash}'); END IF;
           IF state = 'retired' THEN PERFORM public.retire_intake_form_version('${admin}', source_v); END IF;
-          copied := public.duplicate_intake_form_template('${admin}', source_v, 'copy_' || state, 'Copy ' || state, 'New description');
+          ${copies.map((copy) => `IF state = '${copy.state}' THEN copy_definition := '${JSON.stringify(copy.definition)}'; copy_hash := '${copy.hash}'; END IF;`).join('\n')}
+          copied := public.duplicate_intake_form_template('${admin}', source_v, 'copy_' || state, 'Copy ' || state, 'New description', 0, '${duplicateSourceHash}', copy_definition, copy_hash);
           new_v := (copied->>'id')::uuid; new_t := (copied->>'template_id')::uuid;
           IF new_t = source_t OR new_v = source_v OR copied ? 'definition'
             OR copied->>'status' <> 'draft' OR (copied->>'version')::integer <> 1 OR (copied->>'lock_version')::integer <> 0
-            OR copied->>'created_by' <> '${admin}' OR copied->>'definition_hash' <> '${hash}'
-            OR (SELECT definition FROM public.intake_form_versions WHERE id = new_v) <> '{"private":"definition"}'::jsonb
+            OR copied->>'created_by' <> '${admin}' OR copied->>'definition_hash' <> copy_hash
+            OR (SELECT definition FROM public.intake_form_versions WHERE id = new_v) <> copy_definition
+            OR (SELECT definition->>'key' FROM public.intake_form_versions WHERE id = new_v) <> (SELECT key FROM public.intake_form_templates WHERE id = new_t)
             OR (SELECT description FROM public.intake_form_templates WHERE id = new_t) <> 'New description' THEN
             RAISE EXCEPTION 'Duplicate copy is incorrect for %', state;
           END IF;
@@ -195,11 +211,40 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
             RAISE EXCEPTION 'Duplicate audit metadata incorrect';
           END IF;
           SELECT count(*) INTO count_before FROM public.intake_form_audit_events;
-          PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL)', '${admin}', source_v, 'copy_' || state, 'Collision'), 'duplicate key value violates unique constraint%');
+          PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,0,%L,%L,%L)', '${admin}', source_v, 'copy_' || state, 'Collision', '${duplicateSourceHash}', copy_definition, copy_hash), 'duplicate key value violates unique constraint%');
           IF (SELECT count(*) FROM public.intake_form_audit_events) <> count_before THEN RAISE EXCEPTION 'Failed duplicate wrote an event'; END IF;
+          copied := public.publish_intake_form_draft('${admin}', new_v, 0, copy_hash);
+          IF copied->>'status' <> 'published' THEN RAISE EXCEPTION 'Duplicate could not publish'; END IF;
         END LOOP;
-        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL)', '${admin}', gen_random_uuid(), 'missing_copy', 'Missing'), 'Source version required');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,0,%L,%L,%L)', '${admin}', gen_random_uuid(), 'missing_copy', 'Missing', '${duplicateSourceHash}', '{"key":"missing_copy"}', '${hash}'), 'Source version required');
         IF EXISTS (SELECT 1 FROM public.intake_form_templates WHERE key = 'missing_copy') THEN RAISE EXCEPTION 'Missing source created a template'; END IF;
+      END;
+      $test$;
+    `)
+  })
+
+  it('rejects stale duplicate guards and mismatched identities without creating templates, versions, or audit events', () => {
+    checkDatabase(`
+      SET LOCAL ROLE service_role;
+      DO $test$
+      DECLARE source jsonb; v uuid; template_count bigint; version_count bigint; event_count bigint;
+      BEGIN
+        source := public.create_intake_form_template('${admin}', 'audit_source', 'Source', NULL, '${JSON.stringify(duplicateSource)}', '${duplicateSourceHash}');
+        v := (source->>'id')::uuid;
+        PERFORM public.save_intake_form_draft('${admin}', v, 0, '${JSON.stringify(duplicateSource)}', '${hash}');
+        SELECT count(*) INTO template_count FROM public.intake_form_templates;
+        SELECT count(*) INTO version_count FROM public.intake_form_versions;
+        SELECT count(*) INTO event_count FROM public.intake_form_audit_events;
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,0,%L,%L,%L)', '${admin}', v, 'stale_copy', 'Stale', '${hash}', '{"key":"stale_copy"}', '${hash}'), 'Source changed; refresh and try again');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,1,%L,%L,%L)', '${admin}', v, 'stale_hash_copy', 'Stale hash', '${duplicateSourceHash}', '{"key":"stale_hash_copy"}', '${hash}'), 'Source changed; refresh and try again');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,NULL,%L,%L,%L)', '${admin}', v, 'null_guard_copy', 'Null guard', '${hash}', '{"key":"null_guard_copy"}', '${hash}'), 'Source changed; refresh and try again');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,1,%L,%L,%L)', '${admin}', v, 'wrong_identity_copy', 'Wrong identity', '${hash}', '${JSON.stringify(duplicateSource)}', '${hash}'), 'Definition key must match template key');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,1,%L,%L,%L)', '${admin}', v, 'missing_identity_copy', 'Missing identity', '${hash}', '{}', '${hash}'), 'Definition key must match template key');
+        IF (SELECT count(*) FROM public.intake_form_templates) <> template_count
+          OR (SELECT count(*) FROM public.intake_form_versions) <> version_count
+          OR (SELECT count(*) FROM public.intake_form_audit_events) <> event_count THEN
+          RAISE EXCEPTION 'Rejected duplicate created records';
+        END IF;
       END;
       $test$;
     `)
@@ -223,7 +268,7 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
           OR (SELECT definition FROM public.intake_form_versions WHERE id = v) <> '{}'::jsonb THEN RAISE EXCEPTION 'Failed audit committed save'; END IF;
         PERFORM pg_temp.expect_failure(format('SELECT public.discard_intake_form_draft(%L,%L,0)', '${admin}', v), 'Audit write rejected');
         IF NOT EXISTS (SELECT 1 FROM public.intake_form_versions WHERE id = v) THEN RAISE EXCEPTION 'Failed audit committed discard'; END IF;
-        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL)', '${admin}', v, 'failed_copy', 'Failed copy'), 'Audit write rejected');
+        PERFORM pg_temp.expect_failure(format('SELECT public.duplicate_intake_form_template(%L,%L,%L,%L,NULL,0,%L,%L,%L)', '${admin}', v, 'failed_copy', 'Failed copy', '${hash}', '{"key":"failed_copy"}', '${hash}'), 'Audit write rejected');
         PERFORM pg_temp.expect_failure(format('SELECT public.create_intake_form_template(%L,%L,%L,NULL,%L,%L)', '${admin}', 'failed_create', 'Failed create', '{}', '${hash}'), 'Audit write rejected');
         IF EXISTS (SELECT 1 FROM public.intake_form_templates WHERE key IN ('failed_copy', 'failed_create'))
           OR (SELECT count(*) FROM public.intake_form_audit_events) <> count_before THEN RAISE EXCEPTION 'Failed audit committed creation'; END IF;
@@ -241,7 +286,11 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
         FOREACH privilege_name IN ARRAY ARRAY['SELECT', 'INSERT'] LOOP
           IF NOT pg_catalog.has_table_privilege(current_user, 'public.intake_form_audit_events', privilege_name) THEN RAISE EXCEPTION 'Missing audit privilege %', privilege_name; END IF;
         END LOOP;
-        FOREACH privilege_name IN ARRAY ARRAY['UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] LOOP
+        FOR privilege_name IN
+          SELECT acl.privilege_type FROM pg_catalog.pg_class c
+          CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))) acl
+          WHERE c.oid = 'public.intake_form_audit_events'::regclass AND acl.privilege_type NOT IN ('SELECT', 'INSERT')
+        LOOP
           IF pg_catalog.has_table_privilege(current_user, 'public.intake_form_audit_events', privilege_name) THEN RAISE EXCEPTION 'Unsafe audit privilege %', privilege_name; END IF;
         END LOOP;
       END;
@@ -356,7 +405,7 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
       `public.retire_intake_form_version(ACTOR, gen_random_uuid())`,
       `public.archive_intake_form_template(ACTOR, gen_random_uuid())`,
       `public.discard_intake_form_draft(ACTOR, gen_random_uuid(), 0)`,
-      `public.duplicate_intake_form_template(ACTOR, gen_random_uuid(), 'duplicate_test', 'Duplicate', NULL)`,
+      `public.duplicate_intake_form_template(ACTOR, gen_random_uuid(), 'duplicate_test', 'Duplicate', NULL, 0, '${hash}', '{"key":"duplicate_test"}', '${hash}')`,
     ]
     const checks = calls.flatMap((call) => ['NULL', `'${attorney}'`, 'gen_random_uuid()'].map((actor) => {
       const query = `SELECT ${call.replace('ACTOR', actor)}`.replaceAll("'", "''")
@@ -386,7 +435,7 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
       END;
       $test$;
       SELECT pg_temp.expect_failure('SELECT public.create_intake_form_template(NULL, NULL, NULL, NULL, NULL, NULL)', 'permission denied for function create_intake_form_template');
-      SELECT pg_temp.expect_failure('SELECT public.duplicate_intake_form_template(NULL, NULL, NULL, NULL, NULL)', 'permission denied for function duplicate_intake_form_template');
+      SELECT pg_temp.expect_failure('SELECT public.duplicate_intake_form_template(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)', 'permission denied for function duplicate_intake_form_template');
     `)
   })
 })
