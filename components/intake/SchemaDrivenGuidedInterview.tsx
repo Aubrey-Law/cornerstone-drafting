@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { guidedFontClass } from '@/lib/clientFonts'
 import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
 import { useContacts } from '@/hooks/useContacts'
-import { formatSubmissionIssueList, type IntakeRow } from '@/lib/intakeSections'
+import { formatSubmissionIssueList, getActiveSteps, getStepIssues, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeReadinessFlags } from '@/lib/intakeReadiness'
 import { getLegalReviewFlags } from '@/lib/intakeLegalFlags'
 import { intakePlanTypeLabel, normalizeIntakePlanType } from '@/lib/intakePlanType'
@@ -260,7 +260,7 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
           </aside>
         </div>
       </div>
-      {reviewOpen && <ReviewModal data={data} title={isCollegePrep ? 'Review your College Preparation Plan intake' : 'Review your estate plan organizer'} intakeId={intakeId} publicIntakeToken={publicIntakeToken} isAttorney={isAttorney} matterLabel={matterLabel} legalFlags={legalFlags} readinessFlags={readinessFlags.map((flag) => flag.message)} selectedDocKeys={selectedDocKeys} submitting={submitting} canSubmit={!isAttorney && !submitted} onEdit={(id) => { setReviewOpen(false); if (id) setOpenSection(id) }} onClose={() => setReviewOpen(false)} onSubmit={handleSubmit} />}
+      {reviewOpen && <ReviewModal reviewSelectors={{ getActiveSteps, getStepIssues }} data={data} title={isCollegePrep ? 'Review your College Preparation Plan intake' : 'Review your estate plan organizer'} intakeId={intakeId} publicIntakeToken={publicIntakeToken} isAttorney={isAttorney} matterLabel={matterLabel} legalFlags={legalFlags} readinessFlags={readinessFlags.map((flag) => flag.message)} selectedDocKeys={selectedDocKeys} submitting={submitting} canSubmit={!isAttorney && !submitted} onEdit={(id) => { setReviewOpen(false); if (id) setOpenSection(id) }} onClose={() => setReviewOpen(false)} onSubmit={handleSubmit} />}
     </div>
   )
 }

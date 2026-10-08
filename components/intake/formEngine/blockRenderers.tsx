@@ -13,10 +13,10 @@ import {
   FinancialAssetsBlock,
   GuardianBlock,
   PlanningObjectivesBlock,
-  ReviewSubmitBlock,
   SpouseFiduciariesBlock,
   type StepProps,
 } from '@/components/intake/IntakeWizard'
+import { IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
 import {
   CollegeAgentsBlock,
   CollegeHipaaRecipientsBlock,
@@ -32,6 +32,8 @@ export interface IntakeBlockRendererProps extends StepProps {
   config?: Record<string, unknown>
   onAttorneySave?: (patch: { plan_type?: string; document_inclusions?: Record<string, boolean> }) => Promise<void>
 }
+
+const ReviewSubmitBlock = IntakeQuestionnaireReview
 
 export {
   AdditionalContactsBlock, ChildrenBlock, ClientFiduciariesBlock,

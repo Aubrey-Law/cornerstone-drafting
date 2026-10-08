@@ -9,7 +9,8 @@ import { Check, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { composedAddressOneLine, wizardStreetLine } from '@/lib/intakeContactAddress'
 import { ContactPickerField } from '@/components/intake/FiduciaryContactPicker'
-import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
+import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReviewContent'
+import { getActiveSteps, getStepIssues } from '@/lib/intake/legacySections'
 import { formatPhoneInput } from '@/lib/phone'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -1728,6 +1729,7 @@ export function StepReview({
 }) {
   return (
     <IntakeQuestionnaireReview
+      selectors={{ getActiveSteps, getStepIssues }}
       data={data}
       intakeId={intakeId}
       publicIntakeToken={publicIntakeToken}

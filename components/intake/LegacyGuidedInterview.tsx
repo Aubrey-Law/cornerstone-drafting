@@ -37,7 +37,7 @@ import {
 import { getIntakeTrack } from '@/lib/intakeTrack'
 import { unpackInitialIntakeData } from '@/lib/intake/unpackInitialData'
 import { GuidedSection } from './GuidedSection'
-import { IntakeQuestionnaireReview } from './IntakeQuestionnaireReview'
+import { IntakeQuestionnaireReview, type IntakeReviewSelectors } from './IntakeQuestionnaireReviewContent'
 import {
   IntakeSectionProgressList,
   type IntakeSectionProgressItem,
@@ -718,6 +718,7 @@ export function ReviewModal(props: {
   onEdit: (id?: string) => void
   onClose: () => void
   onSubmit: () => void
+  reviewSelectors?: IntakeReviewSelectors
 }) {
   const {
     data,
@@ -753,6 +754,7 @@ export function ReviewModal(props: {
 
         <div style={{ padding: '20px 28px', maxHeight: 'min(70vh, 720px)', overflowY: 'auto' }}>
           <IntakeQuestionnaireReview
+            selectors={props.reviewSelectors ?? { getActiveSteps, getStepIssues }}
             data={data}
             onEditSection={(id) => onEdit(id)}
             intakeId={props.intakeId}
