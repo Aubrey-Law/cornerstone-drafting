@@ -569,9 +569,11 @@ checkout comparison.
 - Answers remain in canonical domain stores, not in form-definition JSON.
 - Hidden questions retain their data.
 - Client/public delivery is server-compiled and excludes staff-only content.
-- Phase 1 implements the catalog, bundled definitions, compiler/evaluator,
+- Phase 1 implemented the catalog, bundled definitions, compiler/evaluator,
   shared renderer, compatibility selectors, and explicit legacy rollback mode.
-  Later phases depend on these contracts and are not included in this branch.
+  The Phase 2A persistence foundation is also implemented in this branch; its
+  verification record follows the Phase 1 record below. Phase 2B's visual builder,
+  Phase 2C's runtime activation and intake pinning, and Phase 3 are not included.
 
 ## Phase 1 verification record — 2026-10-08
 
@@ -682,6 +684,13 @@ existing unavailable-localStorage failures under unsupported Node 26 (the
 package requires Node `>=22 <26`). The approved run had no filesystem or
 loopback-listener `EPERM` failures. This is baseline-only failure evidence,
 not a claim that the full repository suite is green on a supported runtime.
+
+After review, the controller reran the final full `npm test` under supported
+Node 22.22.2. It passed cleanly with 906 files passed and 2 skipped, 9,966 tests
+passed and 21 skipped, and exit code 0. The Node 26 result above remains
+historical, environment-specific baseline evidence. This supported-runtime
+result verifies the local suite; it does not establish deployment or runtime
+activation.
 
 Database verification used only disposable project
 `intake-form-foundation-phase2a` at
