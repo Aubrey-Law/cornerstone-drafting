@@ -29,7 +29,7 @@ export interface IntakeBlockDefinition<Config = Record<string, unknown>> {
 }
 
 const EMPTY_CONFIG = z.object({}).strict()
-const ADDRESS_CONFIG = z.object({ profile: z.enum(['estate', 'college']).optional() }).strict()
+const ADDRESS_CONFIG = z.object({ profile: z.enum(['estate', 'college']).optional(), includeCounty: z.boolean().optional() }).strict()
 const SHARED_AUDIENCES = ['client_and_staff', 'staff_only'] as const
 
 function record(value: unknown): Record<string, unknown> {
@@ -105,8 +105,8 @@ export const INTAKE_BLOCK_REGISTRY = {
     for (const [key, label] of [['city', 'city'], ['state', 'state'], ['zip', 'ZIP code']] as const) {
       if (!text(data, key)) issues.push(issue(`Enter ${college ? 'the' : 'your'} ${label}.`))
     }
-    if (!text(data, 'county')) issues.push(issue(college ? 'Select the Massachusetts county of the permanent address.' : 'Select your Massachusetts county.'))
-    else {
+    if (config.includeCounty !== false && !text(data, 'county')) issues.push(issue(college ? 'Select the Massachusetts county of the permanent address.' : 'Select your Massachusetts county.'))
+    else if (config.includeCounty !== false) {
       const error = validateIntakeField('county', data.county)
       if (error) issues.push(issue(error))
     }

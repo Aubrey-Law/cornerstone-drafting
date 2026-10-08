@@ -44,6 +44,14 @@ describe('canonical intake block catalog', () => {
       .toEqual({ complete: true, issues: [] })
   })
 
+  it('can leave county to a separate canonical item without weakening the default address profile', () => {
+    const address = { street_address: '1 Main', city: 'Boston', state: 'MA', zip: '02108' }
+    expect(evaluateIntakeBlock('address', { includeCounty: false }, address)).toEqual({ complete: true, issues: [] })
+    expect(evaluateIntakeBlock('address', {}, address).complete).toBe(false)
+    expect(evaluateIntakeBlock('address', { includeCounty: true }, address).complete).toBe(false)
+    expect(getIntakeBlock('address').configSchema.safeParse({ includeCounty: 'no' }).success).toBe(false)
+  })
+
   it('evaluates hydrated spouse and child contacts without changing them', () => {
     const spouse = { id: 'matter-spouse', first_name: 'Pat', last_name: 'Example', date_of_birth: '1980-01-01' }
     const child = { id: 'matter-child', first_name: 'Lee', last_name: 'Example' }

@@ -56,7 +56,7 @@ export function AddressBlock({ data, update, config }: IntakeBlockRendererProps)
         city={str(data, 'city')}
         state={str(data, 'state') || 'MA'}
         zip={str(data, 'zip')}
-        county={str(data, 'county')}
+        county={config?.includeCounty === false ? undefined : str(data, 'county')}
         onStreetChange={(value) => update('street_address', value)}
         onCityChange={(value) => update('city', value)}
         onStateChange={(value) => update('state', value)}

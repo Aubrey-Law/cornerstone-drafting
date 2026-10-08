@@ -1,10 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { compileBundledIntakeForm } from '@/lib/intake/forms/definitions'
+import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
+import type { CompiledIntakeForm } from '@/lib/intake/forms/compiler'
+import { getIntakeTrack } from '@/lib/intakeTrack'
+import { getActiveSteps, getRequiredSteps, type IntakeRow } from '@/lib/intakeSections'
 
 import {
   captureLegacyIntakeResult,
   CONTACT_ONLY,
+  COMPLETE_COLLEGE,
+  COMPLETE_ESTATE,
   INTAKE_PARITY_CASES,
+  type IntakeParityResult,
 } from '@/tests/fixtures/intakeFormParity'
+
+const EXTENDED_PARITY_CASES = [
+  { name: 'estate adult child without DOB', data: { ...COMPLETE_ESTATE, has_children: true, has_minor_children: false, _children: [{ first_name: 'Adult', last_name: 'Child' }] } },
+  { name: 'estate stored review choices', data: { ...CONTACT_ONLY, marital_status: 'married', has_minor_children: true, review_choices: { fiduciaries: 'discuss_with_attorney', spouse_fiduciaries: 'not_provided_yet', guardian: 'discuss_with_attorney' } } },
+  { name: 'college blank DPOA powers after selection', data: { ...COMPLETE_COLLEGE, college_dpoa_powers: [], college_organ_donation: '' } },
+  { name: 'college FERPA and HIPAA dependencies unanswered', data: { ...COMPLETE_COLLEGE, college_ferpa_records: [], college_hipaa_scope: 'all_except', college_hipaa_expiration: 'date', college_hipaa_expiration_date: '' } },
+  { name: 'college discuss choices', data: { ...CONTACT_ONLY, intake_track: 'college_prep', college_dpoa_effective: 'discuss', college_living_will_include: 'discuss', review_choices: { cp_agents: 'discuss_with_attorney' } } },
+  { name: 'college nested stored details', data: {
+    ...Object.fromEntries(Object.entries(COMPLETE_COLLEGE).filter(([key]) => !key.startsWith('college_'))),
+    college_prep_details: Object.fromEntries(Object.entries(COMPLETE_COLLEGE).filter(([key]) => key.startsWith('college_')).map(([key, value]) => [key.slice('college_'.length), value])),
+  } },
+  { name: 'estate submitted', data: { ...COMPLETE_ESTATE, status: 'submitted' } },
+  { name: 'college approved', data: { ...COMPLETE_COLLEGE, status: 'approved', college_hcp_limits: 'Discuss care', college_concerns: 'Moving abroad' } },
+]
+
+function captureCompiledIntakeResult(form: CompiledIntakeForm, data: IntakeRow): IntakeParityResult {
+  const result = evaluateCompiledIntakeForm(form, data)
+  return {
+    activeIds: result.activeSections.map((section) => section.id),
+    requiredIds: result.requiredSections.map((section) => section.id),
+    completionById: Object.fromEntries(result.activeSections.map((section) => [section.id, section.complete])),
+    issuesById: Object.fromEntries(result.activeSections.map((section) => [section.id, section.issues.map(({ message, severity, blocksSubmission }) => ({ message, severity, blocksSubmission: blocksSubmission === true }))])),
+    submissionErrors: result.submissionErrors.map(({ sectionId, message }) => ({ sectionId, message })),
+  }
+}
 
 describe('legacy intake behavior parity matrix', () => {
   afterEach(() => {
@@ -18,6 +51,19 @@ describe('legacy intake behavior parity matrix', () => {
     expect(result.requiredIds.every((id) => result.activeIds.includes(id))).toBe(true)
     expect(Object.keys(result.completionById)).toEqual(result.activeIds)
     expect(Object.keys(result.issuesById)).toEqual(result.activeIds)
+  })
+
+  it.each([...INTAKE_PARITY_CASES, ...EXTENDED_PARITY_CASES])('$name matches the compiled definition and progress', ({ data }) => {
+    const compiled = compileBundledIntakeForm(getIntakeTrack(data), 'client')
+    expect(compiled.success).toBe(true)
+    if (!compiled.success) return
+    expect(captureCompiledIntakeResult(compiled.form, data)).toEqual(captureLegacyIntakeResult(data))
+    const required = getRequiredSteps(data)
+    const completed = required.filter((step) => step.isComplete(data)).length
+    const result = evaluateCompiledIntakeForm(compiled.form, data)
+    expect(result.completedRequired).toBe(completed)
+    expect(result.percentComplete).toBe(required.length ? Math.round(completed / required.length * 100) : 0)
+    expect(result.remainingMinutes).toBe(getActiveSteps(data).filter((step) => !step.isComplete(data)).reduce((minutes, step) => minutes + step.timeEstimate, 0))
   })
 
   it('keeps spouse, spouse fiduciary, child, and guardian steps conditional', () => {

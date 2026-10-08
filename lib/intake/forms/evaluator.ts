@@ -86,7 +86,14 @@ function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, fiel
     || (item.fieldId === 'college_school_city' && activeFields.has('college_school_state') && !set(readBuilderFieldValue('college_school_state', data)))
   const severity = blocking || item.effectiveRequirement === 'required' || item.fieldId === 'client_dob' || item.fieldId === 'county' ? 'error' : 'warning'
   const issues: IntakeSectionIssueDraft[] = []
-  if (missing && (blocking || item.effectiveRequirement !== 'optional')) issues.push({ message: missingMessage(item.fieldId, college, field.label), severity, ...(blocking ? { blocksSubmission: true } : {}) })
+  // The powers question remains visible before timing is chosen, but its
+  // existing nudge applies only after a timing answer. Keep this canonical
+  // cross-field rule in code, independently of form visibility/requiredness.
+  const requirementActive = item.fieldId !== 'college_dpoa_powers'
+    || item.effectiveRequirement !== 'recommended'
+    || !activeFields.has('college_dpoa_effective')
+    || set(readBuilderFieldValue('college_dpoa_effective', data))
+  if (missing && requirementActive && (blocking || item.effectiveRequirement !== 'optional')) issues.push({ message: missingMessage(item.fieldId, college, field.label), severity, ...(blocking ? { blocksSubmission: true } : {}) })
   if (!missing) {
     // Use catalog validation, including retired values; no user-defined format rules.
     const error = validateBuilderValue(field, item.fieldId, value)

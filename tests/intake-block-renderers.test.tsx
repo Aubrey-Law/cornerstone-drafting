@@ -27,6 +27,15 @@ describe('canonical block renderers', () => {
     expect(Object.keys(INTAKE_BLOCK_RENDERERS).sort()).toEqual(Object.keys(INTAKE_BLOCK_REGISTRY).sort())
   })
 
+  it('renders county by default and omits it when a separate canonical county item owns it', () => {
+    const Block = INTAKE_BLOCK_RENDERERS.address
+    const view = render(<Block data={{ county: 'Suffolk' }} update={vi.fn()} />)
+    expect(screen.getByText('County')).toBeDefined()
+    view.rerender(<Block data={{ county: 'Suffolk' }} update={vi.fn()} config={{ includeCounty: false }} />)
+    expect(screen.queryByText('County')).toBeNull()
+    expect(screen.getByText('Street Address')).toBeDefined()
+  })
+
   it('edits hydrated spouse fields without dropping the contact identity', () => {
     const update = vi.fn()
     const Block = INTAKE_BLOCK_RENDERERS.spouse_details

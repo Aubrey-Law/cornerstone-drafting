@@ -237,7 +237,7 @@ export function ContactAddressFields({
   city: string
   state: string
   zip: string
-  county: string
+  county: string | undefined
   onStreetChange: (value: string) => void
   onCityChange: (value: string) => void
   onStateChange: (value: string) => void
