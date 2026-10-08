@@ -159,16 +159,18 @@ export function IntakeField({
   }
 
   const inputType = inputTypeForControl(def.control)
+  const preserveEditingText = def.builderEnabled && def.control === 'text'
   return (
     <input
       id={id}
       {...controlA11y}
       type={inputType}
-      value={display}
+      value={preserveEditingText ? stringValue(value) : display}
       required={required}
       maxLength={def.maxLength}
       placeholder={placeholder ?? def.placeholder}
-      onChange={(e) => commit(e.target.value)}
+      onChange={(event) => preserveEditingText ? onChange(event.target.value) : commit(event.target.value)}
+      onBlur={preserveEditingText ? (event) => commit(event.target.value) : undefined}
       className={classNames?.input ?? defaultControlClass}
     />
   )

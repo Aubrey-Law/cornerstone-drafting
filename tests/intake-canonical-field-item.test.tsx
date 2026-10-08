@@ -100,4 +100,25 @@ describe('canonical scalar field item', () => {
     expect(notes.value).toBe('Please discuss trusts.')
     expect(writes.at(-1)).toBe('Please discuss trusts.')
   })
+
+  it.each([
+    ['client_first_name', 'first_name', 'Mary Ann'],
+    ['referral_name', 'referral_name', 'Boston University'],
+    ['college_school_name', 'college_school_name', 'Boston University'],
+    ['college_school_city', 'college_school_city', 'New York'],
+  ] as const)('preserves editing spaces for %s and normalizes on blur', async (fieldId, key, text) => {
+    const writes: [string, unknown][] = []
+    function Controlled() {
+      const [data, setData] = React.useState<Record<string, unknown>>({ [key]: '' })
+      return <CanonicalFieldItem item={item(fieldId)} data={data} update={(field, value) => { writes.push([field, value]); setData((old) => ({ ...old, [field]: value })) }} />
+    }
+    render(<Controlled />)
+    const control = screen.getByRole('textbox') as HTMLInputElement
+    await userEvent.type(control, `  ${text}  `)
+    expect(control.value).toBe(`  ${text}  `)
+    expect(writes.at(-1)).toEqual([key, `  ${text}  `])
+    await userEvent.tab()
+    expect(control.value).toBe(text)
+    expect(writes.at(-1)).toEqual([key, text])
+  })
 })
