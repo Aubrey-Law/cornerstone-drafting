@@ -28,8 +28,9 @@
 
 `INTAKE_RENDERER_MODE=legacy|compiled` is server-only. During Phase 1, absent,
 empty, or invalid values choose `legacy`; set `compiled` to exercise the
-schema-driven questionnaire. The server compiles and audience-filters bundled
-forms before delivery in either mode. Keep this temporary rollback control
+schema-driven questionnaire. In compiled mode only, the server compiles and
+audience-filters bundled forms before delivery. Legacy mode deliberately bypasses
+compiled initialization so rollback remains available. Keep this temporary rollback control
 until production parity acceptance; remove it only after that acceptance.
 
 ## Auth / OAuth (recommended)
