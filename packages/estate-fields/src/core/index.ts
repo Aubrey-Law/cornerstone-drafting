@@ -1,5 +1,6 @@
 export * from './designSheetKeys'
 export * from './types'
+export * from './intakeCatalog'
 export * from './options'
 export * from './normalize'
 export * from './registry'
