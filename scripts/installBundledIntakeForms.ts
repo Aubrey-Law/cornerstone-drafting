@@ -91,9 +91,11 @@ export async function runBundledIntakeFormInstall(options: BundledIntakeFormInst
   // Validate both bundles before importing a persistence module or making a DB call.
   buildBundledIntakeFormInstallPlan([])
   const service = await import('../lib/intake/forms/adminService')
-  const templates = await service.listIntakeFormTemplates()
-  const existing = await Promise.all(templates.filter(({ key }) => key === 'estate' || key === 'college_prep')
-    .map(async (template) => ({ template, versions: await service.listIntakeFormVersions(template.id) })))
+  const bundles = await Promise.all((['estate', 'college_prep'] as const).map(async (key) => {
+    const template = await service.getIntakeFormTemplateByKey(key)
+    return template ? { template, versions: await service.listIntakeFormVersions(template.id) } : null
+  }))
+  const existing = bundles.filter((bundle): bundle is ExistingBundledIntakeForm => bundle !== null)
   // Build the entire plan before the first mutation, including the second key.
   const plan = buildBundledIntakeFormInstallPlan(existing)
   if (!options.apply) return plan

@@ -8,7 +8,7 @@ import * as service from '@/lib/intake/forms/adminService'
 import * as adminClient from '@/lib/supabaseAdmin'
 
 vi.mock('@/lib/intake/forms/repository', () => ({
-  listTemplateRows: vi.fn(), getTemplateRow: vi.fn(), getVersionRow: vi.fn(), getDraftRow: vi.fn(), listVersionRows: vi.fn(),
+  listTemplateRows: vi.fn(), getTemplateRow: vi.fn(), getTemplateRowByKey: vi.fn(), getVersionRow: vi.fn(), getDraftRow: vi.fn(), listVersionRows: vi.fn(),
   createTemplateRow: vi.fn(), saveDraftRow: vi.fn(), createNextDraftRow: vi.fn(), publishDraftRow: vi.fn(),
   retireVersionRow: vi.fn(), archiveTemplateRow: vi.fn(), discardDraftRow: vi.fn(),
 }))
@@ -26,7 +26,7 @@ const template = (overrides: Partial<IntakeFormTemplateRow> = {}): IntakeFormTem
 describe('intake form repository boundary', () => {
   async function adapter(response: { data: unknown; error: unknown }, rpcData?: unknown) {
     const query = {
-      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), range: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue(response),
       then: (resolve: (value: unknown) => unknown) => Promise.resolve(response).then(resolve),
     }
@@ -35,6 +35,40 @@ describe('intake form repository boundary', () => {
     const real = await vi.importActual<typeof repository>('@/lib/intake/forms/repository')
     return { real, client, query, spy }
   }
+
+  it('filters a template by its unique key before the API row limit and preserves parsing', async () => {
+    const college = template({ key: 'college_prep' })
+    const database = [...Array.from({ length: 1_001 }, (_, i) => template({ id: `custom-${i}`, key: `a_custom_${i}` })), college]
+    const { real, spy, query } = await adapter({ data: null, error: null })
+    let keyFilter: string | undefined
+    query.eq.mockImplementation((column, value) => { if (column === 'key') keyFilter = value; return query })
+    query.maybeSingle.mockImplementation(async () => ({ data: database.filter(({ key }) => key === keyFilter)[0] ?? null, error: null }))
+    try {
+      await expect(real.getTemplateRowByKey('college_prep')).resolves.toEqual(college)
+      await expect(real.getTemplateRowByKey('estate')).resolves.toBeNull()
+      query.maybeSingle.mockResolvedValue({ data: { ...college, unknown: true }, error: null })
+      await expect(real.getTemplateRowByKey('college_prep')).rejects.toThrow('Invalid intake form lifecycle response')
+    } finally { spy.mockRestore() }
+  })
+
+  it('reads all version pages including a draft beyond the first API page', async () => {
+    const rows = Array.from({ length: 1_001 }, (_, i) => version(definition(), {
+      id: `version-${i + 1}`, version: i + 1, status: i === 1_000 ? 'draft' : 'published',
+    }))
+    let from = 0; let to = 999
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
+      range: vi.fn((start: number, end: number) => { from = start; to = end; return query }),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: rows.slice(from, Math.min(to + 1, from + 1_000)), error: null, count: rows.length }).then(resolve),
+    }
+    const spy = vi.spyOn(adminClient, 'getAdminClient').mockReturnValue({ from: () => query } as unknown as ReturnType<typeof adminClient.getAdminClient>)
+    const real = await vi.importActual<typeof repository>('@/lib/intake/forms/repository')
+    try {
+      const result = await real.listVersionRows('template-1')
+      expect(result).toHaveLength(1_001)
+      expect(result.at(-1)).toMatchObject({ id: 'version-1001', version: 1_001, status: 'draft' })
+    } finally { spy.mockRestore() }
+  })
 
   it('parses stored versions and rejects malformed definitions without fallback', async () => {
     const { real, spy } = await adapter({ data: { ...version(), definition: { schemaVersion: 1 } }, error: null })

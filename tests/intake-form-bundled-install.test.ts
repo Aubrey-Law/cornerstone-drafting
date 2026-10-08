@@ -9,7 +9,7 @@ import {
 } from '@/scripts/installBundledIntakeForms'
 
 vi.mock('@/lib/intake/forms/repository', () => ({
-  listTemplateRows: vi.fn(), listVersionRows: vi.fn(), getVersionRow: vi.fn(), getTemplateRow: vi.fn(), getDraftRow: vi.fn(),
+  listTemplateRows: vi.fn(), getTemplateRowByKey: vi.fn(), listVersionRows: vi.fn(), getVersionRow: vi.fn(), getTemplateRow: vi.fn(), getDraftRow: vi.fn(),
   createTemplateRow: vi.fn(), publishDraftRow: vi.fn(),
 }))
 
@@ -84,7 +84,7 @@ describe('bundled intake form install planner', () => {
 })
 
 describe('bundled installer command', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.resetAllMocks() })
 
   it('defaults to dry-run and requires an explicit UUID actor only for apply', () => {
     expect(parseBundledIntakeFormInstallArgs([])).toEqual({ apply: false })
@@ -105,9 +105,9 @@ describe('bundled installer command', () => {
       calls.push(`${(definition as { key: string }).key}:${audience}`)
       return actualCompile(definition, audience)
     })
-    vi.mocked(repository.listTemplateRows).mockImplementation(async () => {
+    vi.mocked(repository.getTemplateRowByKey).mockImplementation(async () => {
       expect(calls).toEqual(['estate:client', 'estate:staff', 'college_prep:client', 'college_prep:staff'])
-      return []
+      return null
     })
     try {
       expect((await runBundledIntakeFormInstall({ apply: false })).map(({ action }) => action))
@@ -123,6 +123,7 @@ describe('bundled installer command', () => {
     try {
       await expect(runBundledIntakeFormInstall({ apply: true, actorId: ACTOR })).rejects.toThrow('Invalid bundled intake form college_prep')
       expect(repository.listTemplateRows).not.toHaveBeenCalled()
+      expect(repository.getTemplateRowByKey).not.toHaveBeenCalled()
       expect(repository.createTemplateRow).not.toHaveBeenCalled()
     } finally { COLLEGE_PREP_INTAKE_FORM.sections = sections }
   })
@@ -131,21 +132,47 @@ describe('bundled installer command', () => {
     await expect(runBundledIntakeFormInstall({ apply: true })).rejects.toThrow('Apply requires an explicit UUID --actor-id')
     await expect(runBundledIntakeFormInstall({ apply: true, actorId: 'admin' })).rejects.toThrow('actor-id must be a UUID')
     expect(repository.listTemplateRows).not.toHaveBeenCalled()
+    expect(repository.getTemplateRowByKey).not.toHaveBeenCalled()
   })
 
   it('checks all persisted bundles before writing when the second bundle differs', async () => {
     const college = existing('college_prep')
     college.versions[0].definition_hash = '0'.repeat(64)
-    vi.mocked(repository.listTemplateRows).mockResolvedValue([college.template])
+    vi.mocked(repository.getTemplateRowByKey).mockImplementation(async (key) => key === 'college_prep' ? college.template : null)
     vi.mocked(repository.listVersionRows).mockResolvedValue(college.versions)
     await expect(runBundledIntakeFormInstall({ apply: true, actorId: ACTOR })).rejects.toThrow('Published bundled form differs')
     expect(repository.createTemplateRow).not.toHaveBeenCalled()
     expect(repository.publishDraftRow).not.toHaveBeenCalled()
   })
 
+  it.each(['published_drift', 'draft', 'missing_versions'])
+    ('finds a hidden bundled %s beyond 1,000 unrelated templates and makes zero writes', async (state) => {
+      const college = existing('college_prep')
+      if (state === 'published_drift') college.versions[0].definition_hash = '0'.repeat(64)
+      if (state === 'draft') Object.assign(college.versions[0], { status: 'draft', published_by: null, published_at: null })
+      if (state === 'missing_versions') college.versions = []
+      const unrelated = Array.from({ length: 1_001 }, (_, i) => ({
+        ...college.template, id: `custom-${i}`, key: `a_custom_${String(i).padStart(4, '0')}`,
+      }))
+      const database = [...unrelated, college.template]
+      // Model the API's global ordered-list cap while exact-key reads remain complete.
+      vi.mocked(repository.listTemplateRows).mockResolvedValue(database.slice(0, 1_000))
+      vi.mocked(repository.getTemplateRowByKey).mockImplementation(async (key) => database.find((row) => row.key === key) ?? null)
+      vi.mocked(repository.listVersionRows).mockResolvedValue(college.versions)
+      vi.mocked(repository.createTemplateRow).mockRejectedValue(new Error('Unexpected first write'))
+      await expect(runBundledIntakeFormInstall({ apply: true, actorId: ACTOR })).rejects.toThrow(
+        state === 'published_drift' ? 'Published bundled form differs' : 'Bundled form installation state is inconsistent',
+      )
+      expect(repository.listTemplateRows).not.toHaveBeenCalled()
+      expect(repository.getTemplateRowByKey).toHaveBeenCalledWith('estate')
+      expect(repository.getTemplateRowByKey).toHaveBeenCalledWith('college_prep')
+      expect(repository.createTemplateRow).not.toHaveBeenCalled()
+      expect(repository.publishDraftRow).not.toHaveBeenCalled()
+    })
+
   it('uses the real lifecycle service to publish version one, then reruns as exactly two no-ops', async () => {
     const stored: ExistingBundledIntakeForm[] = []
-    vi.mocked(repository.listTemplateRows).mockImplementation(async () => stored.map(({ template }) => template))
+    vi.mocked(repository.getTemplateRowByKey).mockImplementation(async (key) => stored.find(({ template }) => template.key === key)?.template ?? null)
     vi.mocked(repository.listVersionRows).mockImplementation(async (id) => stored.find(({ template }) => template.id === id)!.versions)
     vi.mocked(repository.getVersionRow).mockImplementation(async (id) => stored.flatMap(({ versions }) => versions).find((version) => version.id === id) ?? null)
     vi.mocked(repository.createTemplateRow).mockImplementation(async (input) => {

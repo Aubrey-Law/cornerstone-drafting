@@ -61,6 +61,12 @@ export async function getTemplateRow(templateId: string): Promise<IntakeFormTemp
   if (error) throw error
   return data === null ? null : parseTemplate(data)
 }
+/** A unique-key lookup cannot lose a template behind an unrelated-row API limit. */
+export async function getTemplateRowByKey(key: string): Promise<IntakeFormTemplateRow | null> {
+  const { data, error } = await getAdminClient().from('intake_form_templates').select('*').eq('key', key).maybeSingle()
+  if (error) throw error
+  return data === null ? null : parseTemplate(data)
+}
 export async function getVersionRow(versionId: string): Promise<IntakeFormVersionRow | null> {
   const { data, error } = await getAdminClient().from('intake_form_versions').select('*').eq('id', versionId).maybeSingle()
   if (error) throw error
@@ -73,9 +79,20 @@ export async function getDraftRow(templateId: string): Promise<IntakeFormVersion
   return data === null ? null : parseVersion(data)
 }
 export async function listVersionRows(templateId: string): Promise<IntakeFormVersionRow[]> {
-  const { data, error } = await getAdminClient().from('intake_form_versions').select('*').eq('template_id', templateId).order('version')
-  if (error) throw error
-  return (data ?? []).map(parseVersion)
+  const versions: IntakeFormVersionRow[] = []
+  let expectedCount: number | undefined
+  for (;;) {
+    const { data, error, count } = await getAdminClient().from('intake_form_versions').select('*', { count: 'exact' })
+      .eq('template_id', templateId).order('version').range(versions.length, versions.length + 99)
+    if (error) throw error
+    const page = (data ?? []).map(parseVersion)
+    if (count === null || !Number.isSafeInteger(count) || count < 0) throw new Error('Invalid intake form lifecycle response')
+    if (expectedCount !== undefined && count !== expectedCount) throw new Error('Stored intake form version list changed; retry')
+    expectedCount = count
+    versions.push(...page)
+    if (versions.length === count) return versions
+    if (!page.length || versions.length > count) throw new Error('Incomplete intake form version list')
+  }
 }
 
 type Actor = { actorId: string }

@@ -59,6 +59,7 @@ async function requireVersion(versionId: string): Promise<IntakeFormVersionRow> 
 
 export const listIntakeFormTemplates = repository.listTemplateRows
 export const getIntakeFormTemplate = repository.getTemplateRow
+export const getIntakeFormTemplateByKey = repository.getTemplateRowByKey
 export const getIntakeFormVersion = repository.getVersionRow
 export const getIntakeFormDraft = repository.getDraftRow
 export const listIntakeFormVersions = repository.listVersionRows
