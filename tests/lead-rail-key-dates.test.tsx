@@ -60,6 +60,7 @@ describe('opportunity rail key dates', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lead details and dates' }))
     fireEvent.change(screen.getByLabelText('Discovery date'), { target: { value: '2026-08-03' } })
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(

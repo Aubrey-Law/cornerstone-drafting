@@ -46,6 +46,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); rout
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
 function showTab(name: 'Overview' | 'Intake' | 'Tasks' | 'People' | 'Assets' | 'Documents' | 'Messages' | 'Notes') {
+  if (screen.queryByRole('dialog', { name: 'Lead details' })) fireEvent.click(screen.getByRole('button', { name: 'Close' }))
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }
@@ -65,11 +66,11 @@ function header() {
 }
 
 describe('lead detail page', () => {
-  it('changes the active record section from the mobile selector', async () => {
+  it('changes the active record section from the single-line tabs', async () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Lead section' }), 'documents')
+    await user.click(screen.getByRole('tab', { name: 'Documents' }))
 
     expect(router.replace).toHaveBeenCalledWith('/admin/leads/l1?tab=documents', { scroll: false })
   })
@@ -88,21 +89,20 @@ describe('lead detail page', () => {
     }
   })
 
-  it('pins one next-action ribbon above the tabbed workspace beside the field rail', () => {
+  it('keeps one actionable next step in Up next with details closed', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     const ribbon = screen.getByRole('status')
     const main = ribbon.closest('main')
-    expect(main?.firstElementChild?.firstElementChild).toBe(ribbon)
+    expect(within(screen.getByRole('complementary', { name: 'Up next' })).getByRole('status')).toBe(ribbon)
     expect(within(ribbon).getByText('1')).toBeTruthy()
     expect(within(ribbon).getByText('Send intake to get the facts')).toBeTruthy()
     for (const action of ['Send intake', 'Fill it myself', 'Import', 'Snooze']) {
       expect(screen.getAllByRole('button', { name: action })).toHaveLength(1)
     }
     // The rail is a sibling of the workspace, not a column inside it.
-    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
-    expect(main?.previousElementSibling).toBe(screen.getByRole('complementary', { name: 'Lead details' }))
+    expect(screen.queryByRole('dialog', { name: 'Lead details' })).toBeNull()
     expect(main?.querySelector('.xl\\:grid-cols-\\[1\\.6fr_1fr\\]')).toBeNull()
     expect(screen.getByRole('tab', { name: 'Intake' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('data-state')).toBe('active')
@@ -226,15 +226,13 @@ describe('lead detail page', () => {
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
-  it('keeps the rail ahead of the workspace and the ribbon ahead of the tabs', () => {
+  it('opens full lead details from Overview Edit', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    const rail = screen.getByRole('complementary', { name: 'Lead details' })
-    const ribbon = screen.getByRole('status')
-    const tabs = screen.getByRole('tablist')
-    const precedes = (first: Element, second: Element) =>
-      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(precedes(rail, ribbon)).toBe(true)
-    expect(precedes(ribbon, tabs)).toBe(true)
+    expect(screen.queryByRole('dialog', { name: 'Lead details' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('dialog', { name: 'Lead details' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy()
   })
 
   it('fetches nothing while the workspace is on its opening tab', () => {
@@ -327,16 +325,14 @@ describe('lead detail page', () => {
     expect(screen.getByRole('menuitem', { name: 'Mark lost' })).toBeTruthy()
   })
 
-  it('collapses and restores the field rail from the header toggle', async () => {
+  it('opens the details flyout from the header toggle', async () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
-
+    expect(screen.queryByRole('dialog', { name: 'Lead details' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
-    expect(screen.queryByRole('complementary', { name: 'Lead details' })).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
-    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Lead details' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'Lead details' })).toBeNull()
   })
 
   it('opens one-off email with the lead contact details', async () => {
@@ -802,6 +798,7 @@ describe('lead detail page', () => {
 
   it('renders the readiness dial, grouped rows and dashed add pills instead of the meter and chip row', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     // 9 of 14 fields plus the intake and engagement gates.
     expect(screen.getByLabelText('Intake completeness 56 percent').textContent).toBe('Intake completeness')
@@ -809,7 +806,7 @@ describe('lead detail page', () => {
     expect(screen.queryByText('9 of 14 complete')).toBeNull()
     expect(screen.queryByRole('progressbar', { name: 'Lead details completeness' })).toBeNull()
 
-    const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    const rail = screen.getByRole('dialog', { name: 'Lead details' })
     openRailGroup('Household'); openRailGroup('Qualification')
     for (const group of ['Contact', 'Household', 'Qualification']) {
       expect(within(rail).getByRole('heading', { name: group })).toBeTruthy()
@@ -846,8 +843,9 @@ describe('lead detail page', () => {
       qualification_notes: null,
     }
     render(<LeadDetailClient lead={sparseLead} spouse={null} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
-    const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    const rail = screen.getByRole('dialog', { name: 'Lead details' })
     openRailGroup('Household'); openRailGroup('Qualification')
     // Middle and preferred name are optional, so their pills wait behind "+ More"
     // rather than reading as two unfinished fields on every lead.
@@ -880,6 +878,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={missingLastNameLead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     expect(screen.getAllByRole('button', { name: 'Add Last name' })).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Add Last name' }))
@@ -931,10 +930,12 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={hydratedLead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     showTab('Intake')
     expect(screen.getByLabelText('Household: complete')).toBeTruthy()
     expect(screen.getByLabelText('Fiduciaries: complete')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details rail' }))
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
     const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
@@ -955,6 +956,7 @@ describe('lead detail page', () => {
         initialActivity={[]}
       />,
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     for (const label of ['First name', 'Middle name', 'Last name', 'Preferred name']) {
       expect(screen.getByRole('button', { name: `Edit ${label}` })).toBeTruthy()
@@ -971,8 +973,9 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
-    expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
+    expect(within(screen.getByRole('dialog', { name: 'Lead details' })).queryByText('—')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Show middle and preferred name' }))
     await user.click(screen.getByRole('button', { name: 'Add Middle name' }))
     await user.type(screen.getByRole('textbox', { name: 'Middle name' }), 'Quincy{Enter}')
@@ -993,8 +996,9 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
-    expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
+    expect(within(screen.getByRole('dialog', { name: 'Lead details' })).queryByText('—')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Show middle and preferred name' }))
     await user.click(screen.getByRole('button', { name: 'Add Preferred name' }))
     await user.type(screen.getByRole('textbox', { name: 'Preferred name' }), 'Janie{Enter}')
@@ -1014,6 +1018,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1064,6 +1069,7 @@ describe('lead detail page', () => {
         lastTouchAt="2026-07-15T12:00:00Z"
       />,
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     expect(screen.getByText('Follow up with this lead')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
@@ -1099,6 +1105,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1121,6 +1128,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1138,6 +1146,7 @@ describe('lead detail page', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1157,6 +1166,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1186,6 +1196,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
@@ -1210,12 +1221,13 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const topControls = ['Call', 'Email', 'Add note', 'Schedule', 'More actions']
-      .map(name => within(header()).getByRole('button', { name })) as HTMLButtonElement[]
+      .map(name => within(header()).getByRole('button', { name, hidden: true })) as HTMLButtonElement[]
     const ribbonControls = ['Send intake', 'Fill it myself', 'Import', 'Snooze']
-      .map(name => screen.getByRole('button', { name })) as HTMLButtonElement[]
+      .map(name => screen.getByRole('button', { name, hidden: true })) as HTMLButtonElement[]
     for (const control of topControls) expect(control.disabled).toBe(true)
     for (const control of ribbonControls) expect(control.disabled).toBe(true)
 
@@ -1299,6 +1311,7 @@ describe('lead detail page', () => {
     } as Response)
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
     const phone = screen.getByRole('textbox', { name: 'Phone' })
     await user.clear(phone)
@@ -1323,6 +1336,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     await user.click(screen.getByRole('button', { name: 'Edit Address' }))
     const street = screen.getByRole('textbox', { name: 'Address line 1' })
@@ -1356,6 +1370,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -1379,6 +1394,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -1411,6 +1427,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -1452,6 +1469,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -1492,6 +1510,7 @@ describe('lead detail page', () => {
     })
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 
     openRailGroup('Household')
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -1522,6 +1541,31 @@ describe('lead detail page', () => {
 
 
 describe('lead overview workflow improvements', () => {
+  it('executes a lifecycle action directly when the work summary links to this lead', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ activity: [] }) } as Response)
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} workSummary={{
+      recordType: 'lead', recordId: 'l1', workKey: 'lead:l1', sourceType: 'lead_action',
+      title: 'Send intake to get the facts', actionLabel: 'Send intake', href: '/admin/leads/l1',
+      owner: 'firm', state: 'open', priorityBand: 1, priorityReasons: [], dueAt: null,
+      estimateMinutes: 15, itemCount: 1, attentionCount: 1,
+    }} />)
+    const next = screen.getByRole('complementary', { name: 'Up next' })
+    expect(within(next).queryByRole('link', { name: 'Send intake' })).toBeNull()
+    fireEvent.click(within(next).getByRole('button', { name: 'Fill it myself' }))
+    expect(await screen.findByRole('dialog', { name: /Intake — Jane Doe/ })).toBeTruthy()
+  })
+
+  it('keeps a higher-priority task destination instead of substituting the lifecycle action', () => {
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} workSummary={{
+      recordType: 'lead', recordId: 'l1', workKey: 'task:t1', sourceType: 'task',
+      title: 'Review urgent follow-up', actionLabel: 'Open task', href: '/admin/tasks?task=t1',
+      owner: 'firm', state: 'open', priorityBand: 0, priorityReasons: [], dueAt: null,
+      estimateMinutes: 15, itemCount: 2, attentionCount: 2,
+    }} />)
+    expect(screen.getByRole('link', { name: 'Open task' }).getAttribute('href')).toBe('/admin/tasks?task=t1')
+    expect(screen.queryByRole('button', { name: 'Send intake' })).toBeNull()
+  })
+
   it('starts on Overview with an accessible client heading', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('data-state')).toBe('active')
@@ -1532,7 +1576,6 @@ describe('lead overview workflow improvements', () => {
   it('reveals the closed rail when quoting a fee from the next action', async () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={{ ...lead, intake_completed_at: '2026-07-25T00:00:00Z', engagement_fee_quoted: null }} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
     expect(screen.queryByRole('complementary', { name: 'Lead details' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Quote fee' }))
     expect(await screen.findByRole('spinbutton', { name: 'Quoted fee' })).toBeTruthy()

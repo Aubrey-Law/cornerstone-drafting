@@ -45,6 +45,8 @@ type ResponsiveDetailRailProps = {
   /** Escape hatch for docked positioning that depends on a runtime offset. */
   desktopStyle?: CSSProperties
   drawer?: boolean
+  /** Disable when an editor owns Escape to cancel its draft. */
+  blurOnEscape?: boolean
   mobileClassName?: string
 }
 
@@ -57,6 +59,7 @@ export function ResponsiveDetailRail({
   desktopStyle,
   mobileClassName,
   drawer = false,
+  blurOnEscape = true,
 }: ResponsiveDetailRailProps) {
   const mobile = useIsMobile()
 
@@ -73,7 +76,7 @@ export function ResponsiveDetailRail({
             if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
               // Inline fields save on blur. Let that finish before dismissing.
               event.preventDefault()
-              field.blur()
+              if (blurOnEscape) field.blur()
             }
           }}
           // Focus the sheet itself, not its first field: on the matter facts

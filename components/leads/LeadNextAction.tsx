@@ -6,12 +6,14 @@ import type { NextAction } from '@/lib/leads/nextAction'
 type LeadNextActionProps = {
   action: NextAction
   busy: boolean
+  context?: string
   onIntent: (intent: string) => void
 }
 
 export function LeadNextAction({
   action,
   busy,
+  context,
   onIntent,
 }: LeadNextActionProps) {
   if (action.key === 'nothing') return null
@@ -19,7 +21,7 @@ export function LeadNextAction({
   return (
     <section
       aria-label="Next action"
-      className="flex flex-col gap-4 rounded-lg border border-primary/45 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4"
       role="status"
     >
       <div className="flex min-w-0 items-start gap-3">
@@ -30,11 +32,12 @@ export function LeadNextAction({
           1
         </span>
         <div className="min-w-0">
+          {context && <p className="mb-1 text-xs font-medium text-muted-foreground">{context}</p>}
           <h2 className="text-sm font-semibold">{action.title}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{action.detail}</p>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+      <div className="flex shrink-0 flex-wrap gap-2">
         {action.actions.map(item => (
           <Button
             key={item.intent}
