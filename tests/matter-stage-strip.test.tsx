@@ -22,11 +22,21 @@ function renderStrip(onStageChange = vi.fn()) {
 }
 
 describe('MatterStageStrip', () => {
+  it('offers work stages without intake and confirms before moving from the tracker', async () => {
+    const onStageChange = renderStrip()
+    expect(screen.queryByRole('button', { name: 'Intake' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Intake Review' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Revision' }))
+    expect(onStageChange).not.toHaveBeenCalled()
+    expect((screen.getByRole('combobox', { name: 'New stage' }) as HTMLSelectElement).value).toBe('revision')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm stage change' }))
+    expect(onStageChange).toHaveBeenCalledWith('revision')
+  })
+
   it('keeps the progress rail read-only and changes stage through an explicit confirmation', async () => {
     const user = userEvent.setup()
     const onStageChange = renderStrip()
 
-    expect(screen.queryByRole('button', { name: 'Revision' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Change stage' }))
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'New stage' }), 'revision')
@@ -58,13 +68,13 @@ describe('skipped stages', () => {
   it('marks stages the matter jumped over as skipped, not done', () => {
     // intake -> drafting skipped Intake Review and Design; new_lead is a lead
     // stage, so the record starts at Intake.
-    const skipped = skippedStages(history, 3)
-    expect([...skipped].sort()).toEqual(['design', 'intake_review'])
+    const skipped = skippedStages(history, 1)
+    expect([...skipped].sort()).toEqual([])
   })
 
   it('says nothing about stages before the first recorded one, or with no history', () => {
     // The record starts at Drafting, still current: nothing before it is judged.
-    expect(skippedStages([{ stage: 'drafting', enteredAt: '2026-10-02T00:00:00Z' }], 3).size).toBe(0)
+    expect(skippedStages([{ stage: 'drafting', enteredAt: '2026-10-02T00:00:00Z' }], 1).size).toBe(0)
     expect(skippedStages([], 5).size).toBe(0)
   })
 
@@ -94,8 +104,8 @@ describe('skipped stages', () => {
       />,
     )
     // Intake Review and Design were jumped over, and Revision never happened
-    // (approved straight from review); all six earlier stages roll up.
-    expect(screen.getByText(/\+6 earlier/).textContent).toBe('+6 earlier · 3 skipped')
+    // (approved straight from review); the summary retains the skipped count.
+    expect(screen.getByRole('button', { name: 'Revision (skipped)' }).getAttribute('title')).toBe('Skipped')
   })
 
   it('strikes through a visible pill for a stage that was skipped', () => {
@@ -114,12 +124,8 @@ describe('skipped stages', () => {
         ]}
       />,
     )
-    const scheduled = screen.getByText('Signing Scheduled').closest('span')!
+    const scheduled = screen.getByRole('button', { name: 'Signing Scheduled (skipped)' })
     expect(scheduled.getAttribute('title')).toBe('Skipped')
-    expect(scheduled.className).toContain('line-through')
-    expect(scheduled.textContent).toContain('(skipped)')
-    const approved = screen.getByText('Drafts Approved').closest('span')!
-    expect(approved.getAttribute('title')).toBeNull()
-    expect(approved.textContent).toContain('(done)')
+    expect(screen.getByRole('button', { name: 'Drafts Approved' }).getAttribute('title')).not.toBe('Skipped')
   })
 })

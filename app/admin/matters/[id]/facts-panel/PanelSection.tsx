@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
- * One collapsible card in the facts panel. A controlled disclosure rather than
+ * One collapsible section in the facts panel. A controlled disclosure rather than
  * a native <details> — open state lives in useSectionState so it can persist.
  */
 export function PanelSection({
@@ -24,14 +24,14 @@ export function PanelSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card shadow-sm">
+    <section className="bg-card">
       <h3>
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
           aria-controls={`${id}-content`}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span className="text-micro font-semibold uppercase tracking-[0.07em] text-muted-foreground">
             {title}

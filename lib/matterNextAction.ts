@@ -90,28 +90,6 @@ export function computeMatterNextAction(
   const requirements = evaluateMatterRequirements(matter, engagement, reviewFlags)
   const unmet = new Map(requirements.filter(item => !item.satisfied).map(item => [item.key, item]))
 
-  if (unmet.has('matter.intake_sent')) {
-    return {
-      kind: 'send-intake',
-      title: 'Send intake questionnaire',
-      detail: 'Email the client a secure link to complete their intake before drafting.',
-      href: `/admin/matters/${matter.matter_id}`,
-      cta: 'Send intake',
-      tone: 'warning',
-    }
-  }
-
-  if (unmet.has('matter.intake_complete')) {
-    return {
-      kind: 'waiting-intake',
-      title: 'Waiting for client intake',
-      detail: 'The invite is out — follow up if the questionnaire is still incomplete.',
-      href: `/admin/matters/${matter.matter_id}`,
-      cta: 'Resend intake',
-      tone: 'default',
-    }
-  }
-
   const engagementUnsigned = unmet.has('matter.engagement_signed')
   if (engagement && engagementUnsigned && (!engagement.sentAt || engagement.status === 'declined')) {
     return {

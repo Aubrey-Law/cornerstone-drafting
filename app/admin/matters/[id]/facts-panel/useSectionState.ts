@@ -69,6 +69,10 @@ export function useSectionState() {
     }
   }, [hydrated, open])
 
+  const setSectionOpen = useCallback((section: FactsPanelSection, value: boolean) => {
+    setOpen(current => ({ ...current, [section]: value }))
+  }, [])
+
   const toggle = useCallback((section: FactsPanelSection) => {
     setOpen(current => ({ ...current, [section]: !current[section] }))
   }, [])
@@ -80,7 +84,7 @@ export function useSectionState() {
     ))
   }, [])
 
-  return { open, toggle, collapseAll, hydrated, restored }
+  return { setSectionOpen, open, toggle, collapseAll, hydrated, restored }
 }
 
 /**

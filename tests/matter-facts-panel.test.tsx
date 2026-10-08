@@ -203,7 +203,7 @@ afterEach(() => {
 describe('MatterFactsPanel', () => {
   it('renders every section', async () => {
     renderPanel()
-    for (const label of ['Contact', 'Spouse', 'Matter details', 'Dates', 'Notes', 'Activity']) {
+    for (const label of ['Client contact', 'Spouse', 'Practice and fees', 'Matter dates', 'Notes', 'Activity']) {
       expect(await screen.findByRole('button', { name: new RegExp(label, 'i') })).toBeTruthy()
     }
   })
@@ -219,7 +219,7 @@ describe('MatterFactsPanel', () => {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     // Dates ships collapsed by default, so open it before asserting its rows.
-    await user.click(screen.getByRole('button', { name: /^dates/i }))
+    await user.click(screen.getByRole('button', { name: /^Matter dates/i }))
     for (const label of ['Engagement signed', 'Target signing', 'Design meeting']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
@@ -229,19 +229,17 @@ describe('MatterFactsPanel', () => {
     const user = userEvent.setup()
     renderPanel()
     await screen.findByText('margaret.chen@example.com')
-    // County is unset on this matter, so it starts out of the rail entirely.
-    expect(screen.queryByText('County')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^Matter dates/i }))
+    expect(screen.queryByText('Plan signed')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Show empty fields' }))
-    expect(screen.getAllByText('County').length).toBeGreaterThan(0)
     // Dates the matter has not reached come back with it.
-    await user.click(screen.getByRole('button', { name: /^dates/i }))
     for (const label of ['Drafts due', 'Drafts review', 'Revisions', 'Plan signed']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
 
     await user.click(screen.getByRole('button', { name: 'Hide empty fields' }))
-    expect(screen.queryByText('County')).toBeNull()
+    expect(screen.queryByText('Plan signed')).toBeNull()
   })
 
   it('lists the extra emails a client carries and saves an added one', async () => {
@@ -280,10 +278,10 @@ describe('MatterFactsPanel', () => {
     expect(patchCalls()).toHaveLength(0)
   })
 
-  it('keeps rows that carry a value while empty ones are hidden', async () => {
-    renderPanel({ details: { ...DETAILS, jurisdiction_county: 'Middlesex' } })
-    expect(await screen.findByText('Middlesex')).toBeTruthy()
-    expect(screen.getAllByText('County').length).toBeGreaterThan(0)
+  it('removes county, trust name and matter type from the flyout', async () => {
+    renderPanel({ simplified: true, details: { ...DETAILS, jurisdiction_county: 'Middlesex' } })
+    await screen.findByText('margaret.chen@example.com')
+    for (const label of ['County', 'Trust name', 'Matter type']) expect(screen.queryByText(label)).toBeNull()
   })
 
   it('hides the Spouse section when the client is not married', async () => {
@@ -335,11 +333,11 @@ describe('MatterFactsPanel', () => {
     const user = userEvent.setup()
     const { onSaveField } = renderPanel()
     await user.click(await screen.findByRole('button', { name: 'Show empty fields' }))
-    await user.click(await screen.findByRole('button', { name: /County/ }))
-    const input = screen.getByLabelText('County')
+    await user.click(await screen.findByRole('button', { name: /Flat fee/ }))
+    const input = screen.getByLabelText('Flat fee')
     await user.clear(input)
-    await user.type(input, 'Middlesex{Enter}')
-    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith('jurisdiction_county', 'Middlesex'))
+    await user.type(input, '5200{Enter}')
+    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith('flat_fee_amount', 5200))
   })
 
   it('picks the lead source from the enum rather than free text', async () => {
@@ -366,13 +364,12 @@ describe('MatterFactsPanel', () => {
     const { onSaveField } = renderPanel({
       details: { ...DETAILS, jurisdiction_county: 'Middlesex' },
     })
-    await user.click(await screen.findByRole('button', { name: /County/ }))
-    const input = screen.getByLabelText('County')
+    await user.click(await screen.findByRole('button', { name: /Flat fee/ }))
+    const input = screen.getByLabelText('Flat fee')
     await user.clear(input)
     await user.type(input, 'Nope{Escape}')
     expect(onSaveField).not.toHaveBeenCalled()
-    // County reads twice: editable in Contact, echoed read-only under Plan flags.
-    expect((await screen.findAllByText('Middlesex')).length).toBe(2)
+    expect(await screen.findByText('$4,800')).toBeTruthy()
   })
 
   it('keeps failed contact text for retry and broadcasts only successful saves', async () => {
@@ -585,4 +582,14 @@ describe('MatterFactsPanel', () => {
     renderPanel({ error: 'Failed to save referral_source' })
     expect((await screen.findByRole('alert')).textContent).toContain('Failed to save')
   })
+})
+
+it('consolidates key dates with drafting dates without duplicate date editors', async () => {
+  const user = userEvent.setup()
+  renderPanel({ simplified: true, keyDates: <div>Shared key date editors</div> })
+  await user.click(await screen.findByRole('button', { name: /^Matter dates/i }))
+  expect(screen.getByText('Shared key date editors')).toBeTruthy()
+  for (const label of ['Drafts due', 'Drafts review', 'Revisions', 'Next action']) expect(screen.getByText(label)).toBeTruthy()
+  expect(screen.queryByText('Plan signed')).toBeNull()
+  expect(screen.queryByText('Target signing')).toBeNull()
 })

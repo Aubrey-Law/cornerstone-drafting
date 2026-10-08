@@ -213,6 +213,7 @@ export function RecordTasksTab({
         )}
         <TaskPresentationSwitch value={presentation} onChange={selectPresentation} />
         <TaskPlanView
+          showKeyDates={recordKind === 'lead'}
           presentation={presentation}
           matterId={planMatter}
           enabled

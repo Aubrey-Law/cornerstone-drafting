@@ -19,9 +19,13 @@ function Dot({ className }: { className?: string }) {
  */
 export function ProbateStageStrip({ details }: { details: MatterDetailsRow | null }) {
   const reading = readProbateStage(details, firmTodayKey())
+  const current = reading.steps.find(step => step.state === 'current')
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2" data-testid="probate-stage-strip">
-      <ol aria-label="Probate progress" className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 [&>li]:shrink-0">
+      <p className="text-sm"><span className="text-muted-foreground">Current stage</span>{' '}<strong>{current?.label ?? 'Opening'}</strong></p>
+      <details className="order-last w-full">
+        <summary className="w-fit cursor-pointer rounded py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">Full lifecycle</summary>
+      <ol aria-label="Probate progress" className="mt-2 flex w-full flex-wrap items-center gap-1 pb-2">
         {reading.steps.map(step => {
           const when = step.reachedOn && step.reachedOn !== 'recorded' ? formatDate(step.reachedOn) : null
           return (
@@ -51,6 +55,7 @@ export function ProbateStageStrip({ details }: { details: MatterDetailsRow | nul
           )
         })}
       </ol>
+      </details>
       <p className="text-micro text-muted-foreground">
         {reading.gaps.length > 0 && (
           <span className="text-amber">

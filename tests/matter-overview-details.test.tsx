@@ -1,0 +1,27 @@
+// @vitest-environment jsdom
+import React from 'react'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { MatterOverviewFacts } from '@/app/admin/matters/[id]/MatterOverviewFacts'
+import { EMPTY_PLAN_MIRROR } from '@/lib/matter/planMirror'
+import type { PipelineMatter } from '@/types/database'
+import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
+afterEach(cleanup)
+function setup(status: string) {
+  const onDetails = vi.fn()
+  render(<MatterOverviewFacts matter={{ client_name: 'Alex Client', marital_status: status, spouse_name: 'Sam Client', spouse_email: 'sam@example.com', spouse_phone: '617-555-0111', spouse_address: '20 Main Street' } as PipelineMatter}
+    details={null} plan={EMPTY_PLAN_MIRROR} estate={{ assetCount: 0 } as MatterEstateSnapshot} lastContactAt={null} onDetails={onDetails} />)
+  return onDetails
+}
+it('shows married client and spouse identities and contacts with an Edit action', () => {
+  const edit = setup('married')
+  expect(screen.getByRole('heading', { name: 'Matter Details' })).toBeTruthy()
+  for (const text of ['Alex Client', 'Sam Client', 'sam@example.com', '617-555-0111', '20 Main Street']) expect(screen.getByText(text)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(edit).toHaveBeenCalledOnce()
+})
+it('does not display stale spouse details for an unmarried client', () => {
+  setup('divorced')
+  expect(screen.queryByRole('heading', { name: 'Spouse' })).toBeNull()
+  expect(screen.queryByText('Sam Client')).toBeNull()
+})

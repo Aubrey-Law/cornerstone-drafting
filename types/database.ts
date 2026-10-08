@@ -167,6 +167,9 @@ export const STAGES: StageInfo[] = [
   { key: 'closed', label: 'Closed', group: 'closed' },
 ]
 
+/** Active matter work starts after lead intake; keep STAGES for historical records. */
+export const MATTER_WORK_STAGES = STAGES.filter(stage => stage.key !== 'intake' && stage.key !== 'intake_review')
+
 export const GROUP_COLORS: Record<StageGroup, { dot: string; bg: string; text: string }> = {
   early:  { dot: 'var(--stage-early)',  bg: 'var(--stage-early-bg)',  text: 'var(--stage-early-text)' },
   active: { dot: 'var(--stage-active)', bg: 'var(--stage-active-bg)', text: 'var(--stage-active-text)' },

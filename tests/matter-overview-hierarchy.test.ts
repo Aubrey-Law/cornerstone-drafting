@@ -5,10 +5,11 @@ import { describe, expect, it } from 'vitest'
 const matterDir = path.join(process.cwd(), 'app/admin/matters/[id]')
 
 describe('matter overview hierarchy', () => {
-  it('renders the progress timeline without a top-level count strip', () => {
+  it('uses the action overview without repeating the progress timeline', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
 
-    expect(client).toContain('MatterProgressTimeline')
+    expect(client).toContain('MatterOverviewWork')
+    expect(client).not.toContain('MatterProgressTimeline')
     expect(client).not.toContain('MatterOverviewSummaryCards')
   })
 

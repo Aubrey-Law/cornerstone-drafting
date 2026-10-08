@@ -33,3 +33,10 @@ describe('firm-timezone calendar days for appointments', () => {
     expect(FIRM_TIMEZONE).toBe('America/New_York')
   })
 })
+
+it('does not invent an epoch date for missing values or shift calendar-only dates', () => {
+  expect(firmDateKey(null)).toBeNull()
+  expect(firmDateKey(undefined)).toBeNull()
+  expect(firmDateKey('')).toBeNull()
+  expect(firmDateKey('2026-10-07')).toBe('2026-10-07')
+})

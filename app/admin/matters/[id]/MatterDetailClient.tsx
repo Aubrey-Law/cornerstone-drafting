@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { listenForMatterContacts } from '@/lib/matters/contactEvents'
@@ -72,25 +73,17 @@ import {
 } from '@/app/actions/adminIntake'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
-import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
 import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
-import { MatterOverviewHero } from './MatterOverviewHero'
-import { MatterOperationalBrief } from './MatterOperationalBrief'
-import { matterOperationalBrief } from '@/lib/lifecycle/matter'
-import { MatterOverviewStats } from './MatterOverviewStats'
 import { MatterDetailsCard } from './MatterDetailsCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
-import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterReviewsTab } from './MatterReviewsTab'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
-import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
-import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterStageHistoryCard } from './MatterStageHistoryCard'
 import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
@@ -103,24 +96,26 @@ import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
+import { MatterOverviewFacts } from './MatterOverviewFacts'
+import { MatterKeyDates } from './MatterKeyDates'
+import { MatterOverviewComposer } from './MatterOverviewComposer'
+import { MatterOverviewWork } from './MatterOverviewWork'
 import { MatterDetailHeader } from './MatterDetailHeader'
 import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
 import { usePushToStatular } from '@/hooks/usePushToStatular'
 import { MatterFactsPanel } from './facts-panel/MatterFactsPanel'
 import {
-  isMobileDetailViewport,
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
 import { ProbateStageStrip } from './ProbateStageStrip'
 import { EstateLedgerCard } from './EstateLedgerCard'
-import { MatterBlockerBanner } from './MatterBlockerBanner'
 import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
 import { MatterWorkspaceNav } from '@/components/matter/MatterWorkspaceNav'
-import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -129,12 +124,6 @@ const DOCUMENT_VIEW_OPTIONS: readonly ViewSwitchOption<DocumentView>[] = [
   { value: 'files', label: 'Files', icon: FileText },
   { value: 'signing', label: 'Signing', icon: Signature },
 ]
-
-/** Whether the work-graph strip and the overview's next action name the same thing. */
-function sameActionTitle(a: string | null | undefined, b: string | null | undefined): boolean {
-  const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-  return Boolean(normalize(a)) && normalize(a) === normalize(b)
-}
 
 type StageLifecyclePreflight = {
   stage: MatterStage
@@ -189,6 +178,7 @@ interface MatterDetailClientProps {
   esignDocumentsEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
   initialTaskCounts?: RecordTaskCounts
+  taskPreview?: Array<{ key: string; title: string; href: string }>
   workSummary?: import('@/lib/work/recordSummary').RecordWorkSummary | null
 }
 
@@ -237,7 +227,6 @@ function MatterDetailClientInner({
   initialStageHistory = [],
   designSheetSeeded = false,
   reviewFlags = [],
-  resyncPreviewCount = 0,
   smsEnabled = false,
   emailSendEnabled = false,
   esignEnabled = false,
@@ -245,6 +234,7 @@ function MatterDetailClientInner({
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   initialTaskCounts = { open: 0, overdue: 0 },
   workSummary = null,
+  taskPreview = [],
 }: MatterDetailClientProps) {
   usePrimaryReady('Matter detail', matterId)
   const token = useAccessToken()
@@ -274,8 +264,6 @@ function MatterDetailClientInner({
   const [stageSaving, setStageSaving] = useState(false)
   const [stagePreflight, setStagePreflight] = useState<StageLifecyclePreflight | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
-  const [sendingIntake, setSendingIntake] = useState(false)
-  const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const { documents, folders: documentFolders, signatureRequests, loading: docsLoading, documentsError, foldersError, reload: loadDocuments } = useMatterDocuments(matter.matter_id, activeTab === 'documents')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -292,11 +280,9 @@ function MatterDetailClientInner({
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
+  const [datesRequest, setDatesRequest] = useState(0)
   const [stageHistoryOpen, setStageHistoryOpen] = useState(false)
 
-  useEffect(() => {
-    if (!isMobileDetailViewport()) setFactsRailOpen(true)
-  }, [])
 
   const {
     portalDraft,
@@ -377,7 +363,7 @@ function MatterDetailClientInner({
       options?: { manual?: boolean },
     ) => {
       await saveMatterDetailField(field, value, options)
-      if (field === 'signing_date' && typeof value === 'string') {
+      if (field === 'signing_date' && (typeof value === 'string' || value === null)) {
         setMatter(current => ({ ...current, signing_date: value }))
       }
       if (field === 'practice_area' && typeof value === 'string') {
@@ -471,10 +457,6 @@ function MatterDetailClientInner({
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [pathname, router, searchParams])
 
-  const scrollToIntakeActions = useCallback(() => {
-    document.getElementById('matter-intake-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
-
   useEffect(() => {
     if (activeTab === 'assets') setAssetsTabVisited(true)
     if (activeTab === 'billing') setBillingTabVisited(true)
@@ -518,6 +500,7 @@ function MatterDetailClientInner({
     setNoteType,
     cancelEditingNote,
     handleAddNote,
+    handleLogCall,
     handleDeleteNote,
     handleUpdateNote,
     startEditingNote,
@@ -760,39 +743,6 @@ function MatterDetailClientInner({
     }
   }, [closingMatter, handleStageChange])
 
-  const handleSendIntake = async () => {
-    if (!token) {
-      toast.error('Not signed in')
-      return
-    }
-    setSendingIntake(true)
-    setIntakeUrl(null)
-    try {
-      const res = await fetch('/api/admin/intake/send', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ matterId: matter.matter_id }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not send intake')
-      if (typeof body.url === 'string') setIntakeUrl(body.url)
-      setMatter(m => ({
-        ...m,
-        intake_sent_at: new Date().toISOString(),
-        intake_status: m.intake_status === 'completed' ? m.intake_status : 'sent',
-      }))
-      toast.success('Intake link ready')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send intake')
-    } finally {
-      setSendingIntake(false)
-    }
-  }
-
   const [sendingEngagement, setSendingEngagement] = useState(false)
   const handleSendEngagement = async () => {
     if (!token) {
@@ -837,16 +787,6 @@ function MatterDetailClientInner({
       toast.error(e instanceof Error ? e.message : 'Could not open engagement draft')
     } finally {
       setSendingEngagement(false)
-    }
-  }
-
-  const copyIntakeUrl = async () => {
-    if (!intakeUrl) return
-    try {
-      await navigator.clipboard.writeText(intakeUrl)
-      toast.success('Intake link copied')
-    } catch {
-      toast.error('Could not copy link')
     }
   }
 
@@ -907,20 +847,6 @@ function MatterDetailClientInner({
           : undefined,
         reviewFlags,
       ),
-    [matter, matterDetails, esignEnabled, reviewFlags],
-  )
-  const operationalBrief = useMemo(
-    () => matterOperationalBrief(
-      matter,
-      esignEnabled
-        ? {
-            signed: Boolean(matterDetails?.engagement_signed),
-            sentAt: matterDetails?.engagement_sent_at ?? null,
-            status: matterDetails?.engagement_status ?? null,
-          }
-        : undefined,
-      reviewFlags,
-    ),
     [matter, matterDetails, esignEnabled, reviewFlags],
   )
   // max(communications.created_at) — the rail's quiet chip is derived from the
@@ -1003,13 +929,21 @@ function MatterDetailClientInner({
 
       <div className="flex min-h-0 flex-1">
         <ResponsiveDetailRail
+          drawer
           open={factsRailOpen}
-          onOpenChange={setFactsRailOpen}
-          label="Matter facts"
-          desktopClassName="w-[352px] border-r border-border bg-card"
+          onOpenChange={open => {
+            if (!open && savingField) return
+            setFactsRailOpen(open)
+          }}
+          label="Matter details"
+          desktopClassName="w-72 xl:w-80 border-r border-border bg-card"
           mobileClassName="bg-card"
         >
+          <div className="h-full overflow-y-auto pt-8">
           <MatterFactsPanel
+            datesRequest={datesRequest}
+            keyDates={<MatterKeyDates matterId={matterId} details={{ ...matterDetails, signing_date: matterDetails?.signing_date ?? matter.signing_date }} onSaveField={handleSaveMatterDetailField} />}
+            simplified
             matter={matter}
             matterId={matterId}
             matterType={matterType}
@@ -1032,118 +966,9 @@ function MatterDetailClientInner({
             savingField={savingField}
             lastSavedAt={lastSavedAt}
             error={matterDetailsError}
-            onOpenTab={tab => setActiveTab(tab)}
+            onOpenTab={tab => { setFactsRailOpen(false); setActiveTab(tab) }}
           />
-        </ResponsiveDetailRail>
-
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="border-b border-border bg-card px-4 py-2">
-            {showProbate ? (
-              <ProbateStageStrip details={matterDetails} />
-            ) : (
-              <MatterStageStrip
-                stage={matter.stage}
-                details={matterDetails}
-                agingSummary={agingSummary}
-                stageSaving={stageSaving}
-                onStageChange={stage => void handleStageChange(stage)}
-                history={initialStageHistory}
-              />
-            )}
-          </div>
-
-          {workSummary && <RecordWorkStrip summary={workSummary} />}
-
-          <MatterBlockerBanner
-            matterId={matterId}
-            reviewFlags={reviewFlags}
-            unreviewedUploadCounts={unreviewedUploadCounts}
-            unreadPortalCount={unreadPortalCount}
-            draftingHref={draftingHref}
-            onReviewIntakeUploads={() => void openIntakeSheet()}
-            activeTab={activeTab}
-          />
-
-          <div className="flex-1 px-4 py-4">
-            <Tabs
-              value={activeTab}
-              onValueChange={v => setActiveTab(v as MatterTab)}
-              className="w-full gap-4"
-            >
-              {taskCounts.error && (
-                <p role="status" className="text-sm text-destructive">
-                  {taskCounts.error}{' '}
-                  <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
-                </p>
-              )}
-              <MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.overdue, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
-                if (section === 'drafting') router.push(draftingHref)
-                else setActiveTab(section)
-              }} />
-
-              <TabsContent value="overview">
-                {/* The facts rail moved to the persistent left column, so Overview
-                    is a single stack rather than a two-column grid. */}
-                <div className="space-y-4">
-                <MatterOverviewHero
-                  matter={matter}
-                  nextAction={nextAction}
-                  currentTask={nextAction.kind === 'closed' ? null : currentEngineStageTask}
-                  unreadPortalCount={unreadPortalCount}
-                  unreviewedUploadCounts={unreviewedUploadCounts}
-                  reviewFlags={reviewFlags}
-                  lastPortalMessage={lastPortalMessage}
-                  onIntakeActionClick={scrollToIntakeActions}
-                  onEngagementActionClick={() => void handleSendEngagement()}
-                  onUnreadClick={() => setActiveTab('communications', undefined, 'portal')}
-                  onReviewFlagsClick={scrollToIntakeActions}
-                  onReviewUploads={handleReviewUploads}
-                  actionShownAbove={sameActionTitle(workSummary?.title, nextAction.title)}
-                  quickPrompts={
-                    <MatterAssistantQuickPrompts
-                      className="flex flex-wrap gap-2"
-                      prompts={[
-                        { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                        { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-                      ]}
-                    />
-                  }
-                />
-                <MatterOperationalBrief brief={operationalBrief} />
-                {/* Action first, then the facts that support it. */}
-                <MatterOverviewStats
-                  taskCounts={taskCounts}
-                  uploads={unreviewedUploadCounts}
-                  aging={agingSummary ?? null}
-                  signingDate={matterDetails?.scheduled_signing_date ?? null}
-                  nextAppointment={matter.next_appointment ?? null}
-                  onOpenTasks={() => setActiveTab('tasks')}
-                  onOpenDocuments={() => {
-                    if (unreviewedUploadCounts.intake > 0) void openIntakeSheet()
-                    else setActiveTab('documents', undefined, undefined, 'unreviewed')
-                  }}
-                  onOpenStageHistory={() => {
-                    setStageHistoryOpen(true)
-                    document.getElementById('matter-stage-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }}
-                  onOpenDate={day => {
-                    if (day) router.push(`/admin/calendar?date=${day}`)
-                    else setBookForClientOpen(true)
-                  }}
-                />
-                <MatterProgressTimeline
-                  matter={matter}
-                  details={matterDetails}
-                  intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
-                />
-                {/* The milestone rail above shows where the matter is; this shows
-                    how it got there and how long each stage took. */}
-                <MatterStageHistoryCard
-                  entries={initialStageHistory}
-                  open={stageHistoryOpen}
-                  onOpenChange={setStageHistoryOpen}
-                />
-                {/* Supporting details follow the action and progress summary. */}
+<details className="border-t p-4"><summary className="cursor-pointer text-sm font-medium">Administrative settings</summary>
                 <MatterDetailsCard
                   matter={matter}
                   matterId={matterId}
@@ -1163,16 +988,64 @@ function MatterDetailClientInner({
                   onSendEngagement={() => void handleSendEngagement()}
                   onDraftEngagement={() => void handleDraftEngagement()}
                 />
-                <IntakeSyncStatusCard
-                  matterId={matterId}
-                  intakeCompleted={intakeCompleted}
-                  designSheetSeeded={designSheetSeeded}
-                  reviewFlags={reviewFlags}
-                  resyncPreviewCount={resyncPreviewCount}
-                  sendingIntake={sendingIntake}
-                  intakeUrl={intakeUrl}
-                  onSendIntake={() => void handleSendIntake()}
-                  onCopyIntakeUrl={() => void copyIntakeUrl()}
+<Button variant="outline" onClick={() => void openIntakeSheet()}>Review / update intake</Button>
+</details></div>
+        </ResponsiveDetailRail>
+
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <div className="border-b border-border bg-card px-4 py-2">
+            {showProbate ? (
+              <ProbateStageStrip details={matterDetails} />
+            ) : (
+              <MatterStageStrip
+                stage={matter.stage}
+                details={matterDetails}
+                agingSummary={agingSummary}
+                stageSaving={stageSaving}
+                onStageChange={stage => void handleStageChange(stage)}
+                history={initialStageHistory}
+              />
+            )}
+          </div>
+
+
+
+          <div className="flex-1 px-4 py-4">
+            <Tabs
+              value={activeTab}
+              onValueChange={v => setActiveTab(v as MatterTab)}
+              className="w-full gap-4"
+            >
+              {taskCounts.error && (
+                <p role="status" className="text-sm text-destructive">
+                  {taskCounts.error}{' '}
+                  <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
+                </p>
+              )}
+              <MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
+                if (section === 'drafting') router.push(draftingHref)
+                else setActiveTab(section)
+              }} />
+
+              <TabsContent value="overview">
+                <MatterOverviewWork
+                  matter={matter} nextAction={nextAction} workSummary={workSummary}
+                  engagement={esignEnabled ? { signed: Boolean(matterDetails?.engagement_signed), sentAt: matterDetails?.engagement_sent_at ?? null, status: matterDetails?.engagement_status ?? null } : undefined}
+                  reviewFlags={reviewFlags} unreadCount={unreadPortalCount} uploadCount={unreviewedUploadCounts.total}
+                  details={matterDetails} onDates={() => { setDatesRequest(value => value + 1); setFactsRailOpen(true) }} activity={activity}
+                  onEngagement={() => void handleSendEngagement()} onUploads={handleReviewUploads}
+                  onMessages={() => setActiveTab('communications', undefined, 'portal')}
+                  onActivity={() => setActiveTab('activity')}
+                  facts={<MatterOverviewFacts matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot} lastContactAt={lastContactAt} onDetails={() => setFactsRailOpen(true)} />}
+                  composer={<MatterOverviewComposer
+                    matterId={matterId} clientName={matter.client_name ?? 'Client'} clientEmail={matter.client_email ?? null}
+                    clientPhone={matter.client_phone ?? null} smsEnabled={smsEnabled} emailEnabled={emailSendEnabled}
+                    noteText={noteText} onNoteChange={setNoteText} noteSaving={noteSaving} onAddNote={() => handleAddNote('Internal')}
+                    portalDraft={portalDraft} onPortalChange={setPortalDraft} onSend={sendOnChannel}
+                    smsRecipient={smsRecipient} onSmsRecipientChange={setSmsRecipient}
+                    onLogCall={handleLogCall} onEmailSent={() => { void retryMessages(); router.refresh() }}
+                  />}
+                  tasks={<><div className="mb-3 flex items-center justify-between text-sm"><span>Tasks · {taskCounts.open} open</span><Button variant="link" size="sm" onClick={() => setActiveTab('tasks')}>View all</Button></div>{taskPreview.some(task => task.key !== workSummary?.workKey) ? <ul className="space-y-3">{taskPreview.filter(task => task.key !== workSummary?.workKey).map(task => <li key={task.key}><Link className="block text-sm underline-offset-4 hover:underline" href={task.href}>{task.title}</Link></li>)}</ul> : currentEngineStageTask && workSummary?.workKey !== `task:${currentEngineStageTask.id}` ? <MatterEngineStageTaskCard compact task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} /> : <p className="text-xs text-muted-foreground">{taskCounts.open ? 'View all tasks for the full list.' : 'No open tasks.'}</p>}</>}
                 />
                 {showProbate && (
                   <MatterProbateEssentialsCard
@@ -1184,18 +1057,10 @@ function MatterDetailClientInner({
                   />
                 )}
                 {showFiduciaryLedger && <EstateLedgerCard matterId={matterId} trust={practiceArea === 'TA'} />}
-                {currentEngineStageTask && (
-                  <div id="matter-open-task" className="scroll-mt-24">
-                    <MatterEngineStageTaskCard
-                      task={currentEngineStageTask}
-                      onUpdated={handleEngineStageTaskUpdated}
-                    />
-                  </div>
-                )}
-                </div>
               </TabsContent>
 
               <TabsContent value="tasks" className="space-y-4">
+                {currentEngineStageTask && <MatterEngineStageTaskCard task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} />}
                 <RecordTabHeader
                   title="Tasks"
                   description="Firm work on this matter, by due date or by stage."
@@ -1370,6 +1235,7 @@ function MatterDetailClientInner({
                   title="Activity"
                   description="Stage changes, intake, communications, and drafting events, newest first."
                 />
+                <MatterStageHistoryCard entries={initialStageHistory} open={stageHistoryOpen} onOpenChange={setStageHistoryOpen} />
                 <MatterActivityTab
                   activity={activity}
                   loading={activityLoading}

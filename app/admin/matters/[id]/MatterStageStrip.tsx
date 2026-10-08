@@ -10,15 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, formatDate } from '@/lib/utils'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
-import { STAGES, stageGroupColor, type MatterStage } from '@/types/database'
+import { MATTER_WORK_STAGES as STAGES, type MatterStage } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
-
-/** Visible pill budget, counting the `+N earlier` roll-up as one. */
-const MAX_PILLS = 7
 
 interface MatterStageStripProps {
   stage: MatterStage
@@ -53,14 +49,6 @@ export function skippedStages(
   )
 }
 
-function Dot({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', className)} style={style} />
-}
-
-const PILL_CLASS =
-  'inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-micro font-semibold transition-opacity ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60'
-
 export function MatterStageStrip({
   stage,
   details,
@@ -71,13 +59,7 @@ export function MatterStageStrip({
 }: MatterStageStripProps) {
   const [changeOpen, setChangeOpen] = useState(false)
   const [selectedStage, setSelectedStage] = useState<MatterStage>(stage)
-  const currentIndex = Math.max(0, STAGES.findIndex(s => s.key === stage))
-  // Only a *completed* run may roll up, so an early-stage matter shows the full
-  // strip (wrapping) rather than hiding stages it has not reached yet.
-  const collapsible = Math.min(currentIndex, STAGES.length - (MAX_PILLS - 1))
-  const collapseCount = collapsible >= 2 ? collapsible : 0
-  const collapsed = STAGES.slice(0, collapseCount)
-  const visible = STAGES.slice(collapseCount)
+  const currentIndex = STAGES.findIndex(s => s.key === stage)
   const targetSigning = details?.scheduled_signing_date ?? null
   const editableStages = STAGES.filter(entry => entry.key !== 'closed')
   // Stages entered on this visit, until the refreshed history includes them.
@@ -86,11 +68,10 @@ export function MatterStageStrip({
     setSeenStages(current => (current.includes(stage) ? current : [...current, stage]))
   }, [stage])
   const skipped = skippedStages(history, currentIndex, seenStages)
-  const collapsedSkipped = collapsed.filter(s => skipped.has(s.key)).length
 
   function setDialogOpen(open: boolean) {
     setChangeOpen(open)
-    if (open) setSelectedStage(stage === 'closed' ? 'funding' : stage)
+    if (open) setSelectedStage(stage === 'closed' ? 'funding' : currentIndex < 0 ? 'design' : stage)
   }
 
   function confirmStageChange() {
@@ -101,86 +82,33 @@ export function MatterStageStrip({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        {/*
-          Twelve stages wrapped to four rows on a phone, three beside the facts
-          rail at 820px and two at 1440px. The strip is one row that scrolls
-          sideways instead; the current stage sits right after the "+N earlier"
-          roll-up, so it is on screen without scrolling.
-        */}
-        <ol
-          aria-label="Matter progress"
-          className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 [&>li]:shrink-0"
-        >
-        {collapsed.length > 0 && (
-          <li>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  tabIndex={0}
-                  className={cn(PILL_CLASS, 'cursor-default bg-green-bg text-green')}
-                >
-                  <Dot className="bg-green" />
-                  +{collapsed.length} earlier
-                  {collapsedSkipped > 0 && ` · ${collapsedSkipped} skipped`}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {collapsed.map(s => (skipped.has(s.key) ? `${s.label} (skipped)` : s.label)).join(' · ')}
-              </TooltipContent>
-            </Tooltip>
-          </li>
-        )}
-        {visible.map(entry => {
-          const index = STAGES.findIndex(s => s.key === entry.key)
-          const isCurrent = index === currentIndex
-          const isSkipped = skipped.has(entry.key)
-          const isComplete = index < currentIndex && !isSkipped
-          const colors = stageGroupColor(entry.key)
-
-          return (
-            <li key={entry.key}>
-              <span
-                aria-current={isCurrent ? 'step' : undefined}
-                title={isSkipped ? 'Skipped' : undefined}
-                className={cn(
-                  PILL_CLASS,
-                  isComplete && 'bg-green-bg text-green',
-                  !isComplete && !isCurrent && 'bg-muted text-muted-foreground',
-                  isSkipped && 'line-through decoration-muted-foreground/60',
-                )}
-                style={isCurrent ? { background: colors.bg, color: colors.text } : undefined}
-              >
-                <Dot
-                  className={cn(
-                    isComplete && 'bg-green',
-                    !isComplete && !isCurrent && 'bg-border-strong',
-                  )}
-                  style={isCurrent ? { background: colors.dot } : undefined}
-                />
-                {entry.label}
-                {isComplete && <span className="sr-only"> (done)</span>}
-                {isSkipped && <span className="sr-only"> (skipped)</span>}
-              </span>
-            </li>
-          )
-        })}
-        </ol>
-        <div className="ml-auto flex items-center gap-3">
-          <p className="text-micro text-muted-foreground">
-            {agingSummary
-              ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage`
-              : 'Stage age unavailable'}
-            {targetSigning && ` · target signing ${formatDate(targetSigning)}`}
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={stageSaving || stage === 'closed'}
-            onClick={() => setDialogOpen(true)}
-          >
-            {stageSaving ? 'Saving stage…' : 'Change stage'}
+      <div className="flex items-end gap-4 py-2">
+        <p className="min-w-0 flex-1 text-sm sm:hidden"><span className="block text-xs text-muted-foreground">Current stage</span><strong>{STAGES[currentIndex]?.label ?? 'Choose work stage'}</strong></p>
+        <div className="hidden min-w-0 flex-1 overflow-x-auto pb-1 sm:block">
+          <ol aria-label="Matter progress" className="flex min-w-[880px] gap-1">
+            {STAGES.map((entry, index) => {
+              const isCurrent = index === currentIndex
+              const isSkipped = skipped.has(entry.key)
+              const visited = history.some(item => item.stage === entry.key) || seenStages.includes(entry.key)
+              return <li key={entry.key} className="min-w-max flex-1">
+                <button type="button" aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`${entry.label}${isSkipped ? ' (skipped)' : ''}`}
+                  title={entry.key === 'closed' ? 'Close from Billing after close-out checks' : isSkipped ? 'Skipped' : `Change stage to ${entry.label}`}
+                  disabled={stageSaving || stage === 'closed' || entry.key === 'closed'}
+                  onClick={() => { setSelectedStage(entry.key); setChangeOpen(true) }}
+                  className={cn('w-full rounded-sm text-left text-micro focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default', isCurrent ? 'font-semibold text-selected-foreground' : 'text-muted-foreground')}>
+                  <span className="block whitespace-nowrap pb-2 pr-2">{entry.label}</span>
+                  <span aria-hidden className={cn('block h-1 rounded-full', isCurrent ? 'bg-selected-border' : index < currentIndex && visited ? 'bg-muted-foreground' : 'bg-border')} />
+                </button>
+              </li>
+            })}
+          </ol>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs text-muted-foreground">{agingSummary ? `${agingSummary.daysInStage} business days in stage` : 'Stage age unavailable'}</p>
+          {targetSigning && <p className="text-xs text-muted-foreground">Signing {formatDate(targetSigning)}</p>}
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-0 text-xs" disabled={stageSaving || stage === 'closed'} onClick={() => setDialogOpen(true)}>
+            {currentIndex < 0 ? 'Choose work stage' : 'Change stage'}
           </Button>
         </div>
       </div>

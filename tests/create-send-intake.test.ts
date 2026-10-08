@@ -20,7 +20,7 @@ describe('create and send intake wizard', () => {
     const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailClient.tsx'), 'utf8')
     const header = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailHeader.tsx'), 'utf8')
     expect(header).toContain('Import intake — paste text or upload Word')
-    expect(header).toContain('Update intake')
+    expect(header).toContain('Review / update intake')
     expect(detail).toContain('ImportIntakeDialog')
   })
 })

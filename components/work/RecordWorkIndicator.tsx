@@ -65,7 +65,7 @@ export function RecordWorkIndicator({
 }
 
 /** The record-page form of the same summary shown in list rows and cards. */
-export function RecordWorkStrip({ summary }: { summary: RecordWorkSummary | null | undefined }) {
+export function RecordWorkStrip({ summary, prominent = false }: { summary: RecordWorkSummary | null | undefined; prominent?: boolean }) {
   if (!summary) return null
   const reasons = summary.priorityReasons.map(reason => reason.label).join(' · ')
   return (
@@ -74,11 +74,12 @@ export function RecordWorkStrip({ summary }: { summary: RecordWorkSummary | null
       className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-3 md:px-6"
     >
       <div className="min-w-0 flex-1">
+        {prominent && <p className="mb-1 text-xs text-muted-foreground">Next action</p>}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn('text-micro', BAND_CLASS[summary.priorityBand])}>
             {ownerLabel(summary)}
           </Badge>
-          <p className="font-medium text-foreground">{summary.title}</p>
+          <p className={cn("font-medium text-foreground", prominent && "text-lg font-semibold")}>{summary.title}</p>
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock3 className="size-3.5" aria-hidden />
             {summary.estimateMinutes} minutes

@@ -20,13 +20,12 @@ function renderHeader() {
   )
 }
 
-it('keeps the full action row for wide screens only, so it cannot push the client name out', () => {
+it('keeps matter identity visible with one actions menu at every width', () => {
   renderHeader()
-  const fullRow = screen.getByRole('button', { name: 'Intake actions' }).parentElement!
-  expect(fullRow.className).toContain('xl:flex')
-  expect(fullRow.className).not.toMatch(/(^|\s)md:flex/)
-  const compact = screen.getByRole('button', { name: 'Matter actions' }).closest('div')!
-  expect(compact.className).toContain('xl:hidden')
+  expect(screen.getByRole('heading', { name: 'Jordan Client' })).toBeTruthy()
+  expect(screen.getAllByRole('button', { name: 'Matter actions' })).toHaveLength(1)
+  expect(screen.getByRole('button', { name: 'Show matter details' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Intake actions' })).toBeNull()
 })
 
 it('offers everything from the compact menu, Open in Assistant included', async () => {

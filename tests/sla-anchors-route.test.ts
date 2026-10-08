@@ -66,7 +66,8 @@ describe('plan view key dates', () => {
     'utf8',
   )
 
-  it('offers every anchor plus the fit decision', () => {
+  it('keeps the shared anchors and lead fit decision available', () => {
+    const tab = fs.readFileSync(path.join(process.cwd(), 'components/tasks/KeyDatesCard.tsx'), 'utf8')
     for (const key of ['discoveryCallAt', 'pmpsAt', 'recommendationsSentAt', 'engagementSignedAt']) {
       expect(tab, key).toContain(`key: '${key}'`)
     }

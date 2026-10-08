@@ -237,9 +237,10 @@ export function buildWorkGraph(
     items.push(taskItem(task, todayKey))
   }
 
-  items.push(...sources.today.waitingOnYou.map(agingItem))
-  items.push(...sources.today.waitingOnClient.map(agingItem))
-  items.push(...sources.today.snoozed.map(row => ({
+  const currentMatterWork = (row: (typeof sources.today.waitingOnYou)[number]) => row.entity !== 'matter' || !['send-intake', 'waiting-intake'].includes(row.action?.kind ?? '')
+  items.push(...sources.today.waitingOnYou.filter(currentMatterWork).map(agingItem))
+  items.push(...sources.today.waitingOnClient.filter(currentMatterWork).map(agingItem))
+  items.push(...sources.today.snoozed.filter(currentMatterWork).map(row => ({
     ...agingItem(row),
     state: 'snoozed' as const,
     priorityBand: 4 as const,
@@ -311,27 +312,6 @@ export function buildWorkGraph(
       priorityReasons: [{ code: 'document_review_ready', label: 'Client documents await review' }],
       estimateMinutes: 20,
       actionKey: 'matter.review-documents',
-    })
-  }
-
-  for (const matter of sources.today.intakeToSend) {
-    const href = `/admin/matters/${matter.matter_id}`
-    items.push({
-      workKey: `matter:${matter.matter_id}:send-intake`,
-      sourceType: 'matter_action',
-      sourceIds: [matter.matter_id],
-      evidence: evidence('matter_action', matter.matter_id, href),
-      record: { type: 'matter', id: matter.matter_id, name: matter.client_name ?? matter.matter_name ?? 'Matter' },
-      title: 'Send intake questionnaire',
-      actionLabel: 'Send intake',
-      href,
-      owner: 'firm',
-      state: 'open',
-      priorityBand: 1,
-      priorityReasons: [{ code: 'intake_unsent', label: 'Intake has not been sent' }],
-      estimateMinutes: 10,
-      actionKey: 'matter.send-intake',
-      staleSince: matter.matter_created ?? undefined,
     })
   }
 

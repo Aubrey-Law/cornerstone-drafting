@@ -27,10 +27,10 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
   const [editingNoteType, setEditingNoteType] = useState<EditableNoteType>('Internal')
   const [noteMutatingId, setNoteMutatingId] = useState<string | null>(null)
 
-  const handleAddNote = async () => {
+  const handleAddNote = async (typeOverride?: EditableNoteType) => {
     const text = noteText.trim()
     if (!text) return
-    const dbType = noteType === 'Internal' ? 'internal' : 'client_comm'
+    const dbType = (typeOverride ?? noteType) === 'Internal' ? 'internal' : 'client_comm'
     const optimistic: MatterNoteRow = {
       id: `opt-${Date.now()}`,
       matter_id: matterId,
@@ -67,6 +67,26 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
       if (activity) onActivityLogged?.(activity)
     } catch {
       // Activity is best-effort.
+    }
+  }
+
+  const handleLogCall = async (outcome: string, detail: string): Promise<boolean> => {
+    const body = `Call — ${outcome}${detail.trim() ? `\n${detail.trim()}` : ''}`
+    try {
+      const saved = await addMatterNote(matterId, body, 'client_comm')
+      setNotes(previous => [saved, ...previous])
+      // The durable communication note is the source of truth; activity is best-effort.
+      try {
+        const entry = await logMatterActivity(matterId, 'note_added', 'Call logged', {
+          detail: body, metadata: { type: 'client_comm', channel: 'call', outcome, note_id: saved.id },
+        })
+        if (entry) onActivityLogged?.(entry)
+      } catch { /* Do not retry a persisted call because its activity failed. */ }
+      toast.success('Call logged')
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not log call')
+      return false
     }
   }
 
@@ -158,6 +178,7 @@ export function useMatterNotes({ initialNotes, matterId, onActivityLogged }: Use
     setNoteType,
     cancelEditingNote,
     handleAddNote,
+    handleLogCall,
     handleDeleteNote,
     handleUpdateNote,
     startEditingNote,

@@ -64,19 +64,6 @@ const GlobalSearch = dynamic(
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
-/**
- * Record-first routes that run the nav as a bare icon rail so the page owns the
- * horizontal budget. `/admin/matters/[id]` only — the design sub-route and the
- * matters list keep the user's own sidebar preference.
- */
-// The matter detail page only. `new` and `list` are ordinary full-width pages —
-// `list` in particular is the matters list, which needs the expanded sidebar.
-const ICON_RAIL_ROUTES = [/^\/admin\/matters\/(?!new$|list$)[^/]+$/]
-
-function isIconRailRoute(pathname: string): boolean {
-  return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))
-}
-
 export type AdminNavGroup = 'Today' | 'Clients' | 'Work' | 'Operations' | 'Tools'
 export const adminNavItems: {
   href: string
@@ -111,12 +98,7 @@ interface AdminLayoutClientProps {
   userName: string
   userInitials: string
   assistantModelLabel?: string | null
-  /**
-   * Forces the compact icon rail and hides the collapse toggle without writing
-   * to localStorage, so the user's own preference survives the visit. Left
-   * undefined it falls back to the route match — `app/admin/layout.tsx` is a
-   * server component and cannot read the pathname to pass this itself.
-   */
+  /** Optional presentation override; ordinary pages respect the saved preference. */
   forceCollapsed?: boolean
 }
 
@@ -224,7 +206,7 @@ export default function AdminLayoutClient({
   // in the trail costs no extra request.
   const crumbs = adminBreadcrumbs(pathname, { recordLabel: matterDisplayName })
 
-  const railForced = forceCollapsed ?? isIconRailRoute(pathname)
+  const railForced = forceCollapsed ?? false
   // Forced collapse is presentational only — `collapsed` (and localStorage)
   // still holds the preference the user gets back on every other route.
   const compact = railForced || collapsed

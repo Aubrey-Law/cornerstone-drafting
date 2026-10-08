@@ -28,14 +28,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { KeyDatesCard, type SlaAnchors } from './KeyDatesCard'
+export type { SlaAnchors } from './KeyDatesCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -66,6 +60,7 @@ interface PlanMatter {
 }
 
 interface TaskPlanViewProps {
+  showKeyDates?: boolean
   presentation?: TaskPresentation
   matterId: string
   /** False until the view is first opened, so its data loads lazily. */
@@ -413,83 +408,6 @@ function PlanTaskRow({
   )
 }
 
-/** The dates the plan's schedule hangs off. */
-export interface SlaAnchors {
-  discoveryCallAt: string | null
-  pmpsAt: string | null
-  recommendationsSentAt: string | null
-  engagementSignedAt: string | null
-  fitDecision: string | null
-}
-
-const ANCHOR_FIELDS: { key: keyof SlaAnchors; label: string; hint: string }[] = [
-  { key: 'discoveryCallAt', label: 'Discovery call', hint: 'Starts the soft clock' },
-  { key: 'pmpsAt', label: 'Planning session', hint: 'Dates the organizer and prep tasks' },
-  { key: 'recommendationsSentAt', label: 'Recommendations sent', hint: 'Drives the follow-up nudges' },
-  { key: 'engagementSignedAt', label: 'Engagement signed', hint: 'Day 0 — starts the 28-day clock' },
-]
-
-/**
- * The dates the plan hangs off. Until one is set the tasks waiting on it have no
- * due date, so this is what turns the checklist into a schedule — which is why
- * it sits above the plan rather than on a settings screen.
- */
-function KeyDatesCard({
-  anchors,
-  saving,
-  onSave,
-}: {
-  anchors: SlaAnchors
-  saving: boolean
-  onSave: (patch: Partial<SlaAnchors>) => void
-}) {
-  return (
-    <Card>
-      <CardHeader className="border-b [.border-b]:pb-3">
-        <CardTitle className="text-sm">Key dates</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Setting a date schedules the tasks waiting on it.
-        </p>
-      </CardHeader>
-      <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
-        {ANCHOR_FIELDS.map(field => (
-          <label key={field.key} className="space-y-1">
-            <span className="text-xs font-medium text-foreground">{field.label}</span>
-            <Input
-              type="date"
-              className="h-9"
-              disabled={saving}
-              defaultValue={(anchors[field.key] as string | null) ?? ''}
-              onChange={event => onSave({ [field.key]: event.target.value || null })}
-            />
-            <span className="block text-micro text-muted-foreground">{field.hint}</span>
-          </label>
-        ))}
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-foreground">Fit decision</span>
-          <Select
-            value={anchors.fitDecision ?? 'undecided'}
-            disabled={saving}
-            onValueChange={value =>
-              onSave({ fitDecision: value === 'undecided' ? null : value })
-            }
-          >
-            <SelectTrigger className="h-9" aria-label="Fit decision"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="undecided">Not decided</SelectItem>
-              <SelectItem value="fit">Proceed — good fit</SelectItem>
-              <SelectItem value="not_a_fit">Not a fit</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="block text-micro text-muted-foreground">
-            Gates the organizer and planning-session tasks
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 /**
  * The matter's plan: the same `tasks` rows the queue shows, grouped by pipeline
  * phase with the SLA clock on top, plus the key dates the schedule hangs off.
@@ -504,6 +422,7 @@ export function TaskPlanView({
   onTasksChanged,
   showMatter = true,
   presentation = 'list',
+  showKeyDates = false,
 }: TaskPlanViewProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<PlanTask[]>([])
@@ -697,7 +616,7 @@ export function TaskPlanView({
         </Card>
       ) : (
         <>
-          {anchors && (
+          {showKeyDates && anchors && (
             <KeyDatesCard anchors={anchors} saving={savingAnchors} onSave={saveAnchors} />
           )}
           {tasks.length === 0 ? (
