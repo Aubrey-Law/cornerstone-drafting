@@ -62,6 +62,8 @@ REVOKE ALL ON TABLE
   public.document_template_publications,
   public.document_template_versions,
   public.intake_invite_audit,
+  public.intake_form_templates,
+  public.intake_form_versions,
   public.integration_entity_leases,
   public.integration_external_records,
   public.integration_settings,
@@ -70,6 +72,13 @@ REVOKE ALL ON TABLE
   public.user_mcp_connectors,
   public.user_mcp_oauth_tokens
 FROM anon, authenticated;
+
+-- The form lifecycle guards protect UPDATE/DELETE, so service_role must not
+-- retain blanket TRUNCATE/TRIGGER privileges that could bypass those guards.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  public.intake_form_templates,
+  public.intake_form_versions
+FROM service_role;
 
 -- ── Exception 2: authenticated may read, never write ─────────────────────────
 -- The estate clause library and its review trail. Writes go through the
