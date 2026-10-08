@@ -1,7 +1,7 @@
 'use client'
 
 import { listenForMatterContacts, notifyMatterContactsChanged } from '@/lib/matters/contactEvents'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
-import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType, type MatterType } from '@/lib/matter/matterType'
+import { isCoupleMatter, type MatterType } from '@/lib/matter/matterType'
 import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 import {
   REFERRAL_SOURCE_OPTIONS,
@@ -67,6 +67,8 @@ interface ContactRecord {
 }
 
 export interface MatterFactsPanelProps {
+  datesRequest?: number
+  keyDates?: ReactNode
   matter: PipelineMatter
   matterId: string
   matterType: MatterType | null
@@ -79,6 +81,7 @@ export interface MatterFactsPanelProps {
   lastContactAt?: string | null
   estate: MatterEstateSnapshot
   /** Kept from the previous rail — the panel must not drop the readiness dial. */
+  simplified?: boolean
   readinessItems: MatterReadinessItem[]
   activity: MatterActivity[]
   noteText: string
@@ -159,15 +162,17 @@ function minorChildrenLabel(children: ContactRecord[], flag: boolean | null | un
  * People tab already uses. No field here owns its own API surface.
  */
 export function MatterFactsPanel({
+  datesRequest = 0,
+  keyDates,
   matter,
   matterId,
   matterType,
-  matterTypeSaving = false,
   details,
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
   lastContactAt = null,
   estate,
+  simplified = false,
   readinessItems,
   activity,
   noteText,
@@ -177,14 +182,19 @@ export function MatterFactsPanel({
   noteCount,
   latestNoteAt,
   onSaveField,
-  onSaveMatterType,
   savingField,
   lastSavedAt,
   error,
   onOpenTab,
 }: MatterFactsPanelProps) {
   const token = useAccessToken()
-  const { open, toggle, collapseAll } = useSectionState()
+  const { open, toggle, collapseAll, setSectionOpen } = useSectionState()
+  useEffect(() => {
+    if (!datesRequest) return
+    setSectionOpen('dates', true)
+    const frame = requestAnimationFrame(() => document.getElementById('facts-dates-content')?.scrollIntoView({ block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [datesRequest, setSectionOpen])
   const { showEmpty, toggleShowEmpty } = useShowEmptyFields()
   // Passed to every optional row: an empty one disappears until the operator
   // asks to see it. Rows the rail is built around (address, target signing)
@@ -322,12 +332,11 @@ export function MatterFactsPanel({
     || matter.spouse_name
     || ''
   const spouseDob = spouse?.date_of_birth ?? matter.spouse_dob ?? null
-  // Matter type, not marital status, decides whether the spouse surfaces show.
-  const isCouple = isCoupleMatter(matterType)
+  // Contact editing includes married clients even when only one spouse is represented.
+  const isCouple = maritalStatus.toLowerCase() === 'married' || isCoupleMatter(matterType)
   const planLabel = designSheetPlanType || planMirror.planType
     ? designPlanTypeLabel(designSheetPlanType ?? planMirror.planType)
     : '—'
-  const county = details?.jurisdiction_county ?? ''
   const referralSource = normalizeReferralSource(details?.referral_source ?? matter.referral_source)
   // Derived from the communications timeline — never a stored last_client_contact.
   const quiet = quietDays(lastContactAt)
@@ -375,9 +384,9 @@ export function MatterFactsPanel({
   )
 
   return (
-    <div className="flex h-full w-full flex-col gap-2.5 overflow-y-auto bg-background p-3">
+    <div className={cn("flex w-full flex-col divide-y divide-border bg-card", !simplified && "h-full overflow-y-auto")}>
       {/* Identity */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3.5 shadow-sm">
+      <div className="px-4 py-4">
         <div className="flex items-center gap-3">
           <div className="grid size-9.5 shrink-0 place-items-center rounded-full bg-muted text-compact font-bold text-muted-foreground">
             {initialsFor(clientName) || '—'}
@@ -469,12 +478,12 @@ export function MatterFactsPanel({
         </div>
       </div>
 
-      <MatterReadinessDial items={readinessItems} className="rounded-xl border border-border bg-card p-3 shadow-sm" />
+      {!simplified && <MatterReadinessDial items={readinessItems} className="p-4" />}
 
       {/* Contact */}
       <PanelSection
         id="facts-contact"
-        title="Contact"
+        title="Client contact"
         open={open.contact}
         onToggle={() => toggle('contact')}
         hint={!open.contact ? client?.email ?? matter.client_email : undefined}
@@ -551,12 +560,6 @@ export function MatterFactsPanel({
                 {formatDobWithAge(dob)}
               </p>
             )}
-            <InlineText
-              label="County"
-              hideWhenEmpty={hideWhenEmpty}
-              value={county}
-              onSave={next => onSaveField('jurisdiction_county', next)}
-            />
             <ReadOnlyRow
               label="Minor children"
               empty={minorChildrenLabel(children, client?.has_minor_children ?? matter.has_minor_children) === '—'}
@@ -657,7 +660,7 @@ export function MatterFactsPanel({
       {/* Matter details */}
       <PanelSection
         id="facts-matter"
-        title="Matter details"
+        title="Practice and fees"
         open={open.matter}
         onToggle={() => toggle('matter')}
         hint={
@@ -700,7 +703,7 @@ export function MatterFactsPanel({
         )}
 
         {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}
-        <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+        {!simplified && <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
           <div className="bg-card px-2.5 py-2">
             <div className="text-micro text-muted-foreground">Gross estate est.</div>
             <div className="mt-px text-sm font-bold tracking-[-0.016em] tabular-nums">
@@ -725,7 +728,8 @@ export function MatterFactsPanel({
               {formatAssetCurrency(estate.creditShelterSavings)}
             </div>
           </div>
-        </div>
+        </div>}
+        {simplified && <Button variant="link" size="sm" onClick={() => onOpenTab('assets')}>Review estate values and tax estimates in Assets</Button>}
 
         <div className="mx-1.5 mt-2">
           <InlineText
@@ -778,40 +782,13 @@ export function MatterFactsPanel({
             )
           })}
         </div>
-        <ReadOnlyRow label="Trust name" empty={!planMirror.trustName} hideWhenEmpty={hideWhenEmpty}>
-          {planMirror.trustName ? (
-            <Link href={designHref} className="font-semibold text-primary hover:underline">
-              {planMirror.trustName}
-            </Link>
-          ) : (
-            '—'
-          )}
-        </ReadOnlyRow>
-        <InlineSelect
-          label="Matter type"
-          accent
-          value={normalizeMatterType(matterType) ?? ''}
-          options={[
-            { value: '', label: 'Confirm…' },
-            ...MATTER_TYPE_OPTIONS,
-          ]}
-          disabled={matterTypeSaving}
-          onSave={next => next ? onSaveMatterType(next as MatterType) : undefined}
-        />
-        <ReadOnlyRow label="County" empty={!county} hideWhenEmpty={hideWhenEmpty}>
-          {county || '—'}
-        </ReadOnlyRow>
-        <p className="px-1.5 pt-1 text-micro leading-snug text-muted-foreground">
-          Matter type — not marital status — decides whether the spouse section and
-          second-death provisions appear. Trust name, plan and credit shelter are
-          read-only mirrors of the design sheet.
-        </p>
+        <p className="px-1.5 pt-1 text-xs text-muted-foreground">Edit document choices in <Link href={designHref} className="text-primary underline underline-offset-4">the design sheet</Link>.</p>
       </PanelSection>
 
       {/* Dates */}
       <PanelSection
         id="facts-dates"
-        title="Dates"
+        title="Matter dates"
         open={open.dates}
         onToggle={() => toggle('dates')}
         hint={
@@ -820,6 +797,8 @@ export function MatterFactsPanel({
             : undefined
         }
       >
+        {keyDates}
+        {!keyDates && <>
         <InlineDate
           label="Engagement signed"
           hideWhenEmpty={hideWhenEmpty}
@@ -841,8 +820,9 @@ export function MatterFactsPanel({
           value={toDateInputValue(details?.design_meeting_date ?? null)}
           onSave={next => onSaveField('design_meeting_date', next || null)}
         />
+        </>}
         {/* Drafts due has no column — it is derived from target signing or nothing. */}
-        <ReadOnlyRow label="Drafts due" empty={!draftsDue.value} hideWhenEmpty={hideWhenEmpty}>
+        <ReadOnlyRow label="Drafts due" empty={!draftsDue.value} hideWhenEmpty={keyDates ? false : hideWhenEmpty}>
           <span className="tabular-nums">
             {draftsDue.value ? formatDate(draftsDue.value) : '—'}
           </span>
@@ -855,23 +835,23 @@ export function MatterFactsPanel({
         <InlineDate
           label="Drafts review"
           derived={draftsReview.derived}
-          hideWhenEmpty={hideWhenEmpty}
+          hideWhenEmpty={keyDates ? false : hideWhenEmpty}
           value={draftsReview.value}
           onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.drafts_review!, next || null)}
         />
         <InlineDate
           label="Revisions"
           derived={revisions.derived}
-          hideWhenEmpty={hideWhenEmpty}
+          hideWhenEmpty={keyDates ? false : hideWhenEmpty}
           value={revisions.value}
           onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.revisions!, next || null)}
         />
-        <InlineDate
+        {!keyDates && <InlineDate
           label="Plan signed"
           hideWhenEmpty={hideWhenEmpty}
           value={toDateInputValue(details?.signing_date ?? matter.signing_date ?? null)}
           onSave={next => onSaveField('signing_date', next || null)}
-        />
+        />}
         {/* Not part of the plan timeline — this is what drives the header pill
             and the weekly board, so it sits below a rule. */}
         <div className="mx-1.5 mt-1.5 border-t border-dashed border-border pt-1.5">
@@ -884,6 +864,7 @@ export function MatterFactsPanel({
         </div>
       </PanelSection>
 
+      {!simplified && <>
       {/* Notes */}
       <PanelSection
         id="facts-notes"
@@ -931,6 +912,7 @@ export function MatterFactsPanel({
         <PanelActivity activity={activity} onOpenTab={() => onOpenTab('activity')} />
       </PanelSection>
 
+      </>}
       {saveStatus && (
         <p
           role={error ? 'alert' : 'status'}

@@ -20,7 +20,7 @@ describe('matter overview frame', () => {
     const hero = fs.readFileSync(path.join(routeDir, 'MatterOverviewHero.tsx'), 'utf8')
     const stageStrip = fs.readFileSync(path.join(routeDir, 'MatterStageStrip.tsx'), 'utf8')
 
-    expect(header).toContain('Intake actions')
+    expect(header).toContain('Matter actions')
     expect(header).toContain('Import intake — paste text or upload Word')
     expect(header).toContain('Unlock intake for client editing')
     expect(header).not.toContain('aria-label="Matter stage"')

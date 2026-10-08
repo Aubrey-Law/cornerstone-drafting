@@ -2,7 +2,7 @@ import type { LeadEditableField } from '@/lib/leads/details'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import type { MatterStage } from '@/types/database'
 
-export const LIFECYCLE_REGISTRY_VERSION = 'practice-areas-v3'
+export const LIFECYCLE_REGISTRY_VERSION = 'practice-areas-v4'
 
 export type LifecycleRecordType = 'lead' | 'matter'
 export type RequirementSeverity = 'information' | 'warning' | 'blocking'
@@ -206,20 +206,6 @@ const FROM_EXECUTION: readonly MatterStage[] = ['signing_complete', 'post_execut
 
 function matterRequirements(practiceAreas: readonly string[]): readonly RequirementDefinition[] {
   return [
-  {
-    key: 'matter.intake_sent', recordType: 'matter', label: 'Intake questionnaire sent',
-    source: { kind: 'record', field: 'intake_sent_at/status', confirmation: 'recorded' },
-    applicability: { practiceAreas, stages: EARLY_MATTER_STAGES, condition: 'Matter is in intake.' },
-    severity: 'blocking', owner: 'firm', resolution: 'external_action', blocksStage: true,
-    requiredBeforeStages: FROM_INTAKE_REVIEW,
-  },
-  {
-    key: 'matter.intake_complete', recordType: 'matter', label: 'Client intake complete',
-    source: { kind: 'client_submission', field: 'intake_completed_at/status', confirmation: 'submitted' },
-    applicability: { practiceAreas, stages: EARLY_MATTER_STAGES, condition: 'Intake was sent.' },
-    severity: 'blocking', owner: 'client', resolution: 'client_fact', blocksStage: true,
-    requiredBeforeStages: FROM_DESIGN,
-  },
   {
     key: 'matter.engagement_signed', recordType: 'matter', label: 'Engagement agreement signed',
     source: { kind: 'engagement', field: 'engagement_signed/status', confirmation: 'recorded' },

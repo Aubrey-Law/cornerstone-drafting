@@ -173,7 +173,7 @@ describe('lifecycle preflight', () => {
         intake_sent_at: null,
         intake_submitted_at: null,
       },
-      engagement: undefined,
+      engagement: { signed: false, sentAt: null, status: null },
       reviewFlags: [],
     }
   }
@@ -189,7 +189,7 @@ describe('lifecycle preflight', () => {
 
     expect(res.status).toBe(409)
     expect(body.lifecycle.blockers.map((blocker: { key: string }) => blocker.key)).toEqual([
-      'matter.intake_sent', 'matter.intake_complete',
+      'matter.engagement_signed',
     ])
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -207,7 +207,7 @@ describe('lifecycle preflight', () => {
           stage: 'design',
           confirmBlockers: true,
           lifecycleVersion,
-          confirmedBlockerKeys: ['matter.intake_sent', 'matter.intake_complete'],
+          confirmedBlockerKeys: ['matter.engagement_signed'],
         }),
       }),
       { params: Promise.resolve({ id: MATTER }) },

@@ -693,14 +693,14 @@ export function LeadsClient({
             role="group"
             aria-label="View mode"
           >
-            <button type="button" aria-pressed={view === 'grid'} onClick={() => selectView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-card shadow-sm')}>Grid</button>
+            <button type="button" aria-pressed={view === 'grid'} onClick={() => selectView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border')}>Grid</button>
             <button
               type="button"
               aria-pressed={view === 'table'}
               onClick={() => selectView('table')}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                view === 'table' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Table2 className="h-3.5 w-3.5" aria-hidden />
@@ -712,7 +712,7 @@ export function LeadsClient({
               onClick={() => selectView('board')}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                view === 'board' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Columns3 className="h-3.5 w-3.5" aria-hidden />

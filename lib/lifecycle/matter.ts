@@ -22,13 +22,6 @@ export interface MatterLifecycleContext {
   targetStage?: MatterStage
 }
 
-function intakeState(matter: PipelineMatter) {
-  const status = matter.intake_status?.toLowerCase() ?? ''
-  const complete = ['completed', 'approved', 'submitted'].includes(status)
-    || Boolean(matter.intake_submitted_at)
-  return { sent: Boolean(matter.intake_sent_at) || status === 'sent' || complete, complete }
-}
-
 function requirementApplies(
   requirement: RequirementDefinition,
   context: MatterLifecycleContext,
@@ -43,17 +36,8 @@ function evaluate(
   context: MatterLifecycleContext,
 ): EvaluatedRequirement | null {
   const { matter, engagement, reviewFlags } = context
-  const intake = intakeState(matter)
 
   switch (requirement.key) {
-    case 'matter.intake_sent':
-      return { ...requirement, satisfied: intake.sent }
-    case 'matter.intake_complete':
-      return {
-        ...requirement,
-        satisfied: intake.complete,
-        owner: intake.sent ? 'client' : 'firm',
-      }
     case 'matter.engagement_signed':
       if (engagement === undefined) return null
       return {
@@ -100,8 +84,10 @@ export function evaluateMatterRequirements(
 }
 
 export function nextMatterStage(stage: MatterStage): MatterStage | null {
-  const index = STAGES.findIndex(entry => entry.key === stage)
-  return index >= 0 && index < STAGES.length - 1 ? STAGES[index + 1].key : null
+  const stages = STAGES.filter(entry => entry.key !== 'intake' && entry.key !== 'intake_review')
+  if (stage === 'intake' || stage === 'intake_review') return 'design'
+  const index = stages.findIndex(entry => entry.key === stage)
+  return index >= 0 && index < stages.length - 1 ? stages[index + 1].key : null
 }
 
 export function matterStageTransitionPreflight(

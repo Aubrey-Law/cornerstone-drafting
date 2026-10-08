@@ -61,29 +61,32 @@ describe('MatterDetailHeader communication actions', () => {
     const onText = vi.fn()
     renderHeader({}, { onEmail })
 
-    await user.click(screen.getAllByRole('button', { name: 'Email' })[0])
+    await user.click(screen.getByRole('button', { name: 'Matter actions' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Email client' }))
     expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
 
     expect(onEmail).toHaveBeenCalled()
     expect(onText).not.toHaveBeenCalled()
   })
 
-  it('disables Email without an address', () => {
+  it('disables Email without an address', async () => {
     renderHeader(
       { client_email: '', client_phone: '' },
       { onEmail: vi.fn() },
     )
 
-    expect((screen.getAllByRole('button', { name: 'Email' })[0] as HTMLButtonElement).disabled).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Matter actions' }))
+    expect(screen.getByRole('menuitem', { name: 'Email client' }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.queryByRole('button', { name: 'Text' })).toBeNull()
   })
 })
 
 describe('MatterDetailHeader hands the matter to the Assistant', () => {
-  it('links to an Assistant chat already pointed at this matter', () => {
+  it('links to an Assistant chat already pointed at this matter', async () => {
     renderHeader({}, { onEmail: vi.fn() })
 
-    const link = screen.getByRole('link', { name: /open in assistant/i })
+    await userEvent.click(screen.getByRole('button', { name: 'Matter actions' }))
+    const link = screen.getByRole('menuitem', { name: /open in assistant/i })
     expect(link.getAttribute('href')).toBe('/admin/assistant?matter=m-1')
   })
 })

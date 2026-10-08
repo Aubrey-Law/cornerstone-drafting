@@ -6,7 +6,10 @@ export function firmTodayKey(now: Date = new Date()): string {
 }
 
 /** Any timestamp's calendar date in the firm's timezone as YYYY-MM-DD. */
-export function firmDateKey(iso: string): string | null {
+export function firmDateKey(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  // A date-only value already identifies a calendar day; do not shift it through UTC.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return Number.isNaN(Date.parse(iso)) ? null : iso
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return null
   return date.toLocaleDateString('en-CA', { timeZone: FIRM_TIMEZONE })

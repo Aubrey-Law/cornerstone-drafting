@@ -93,9 +93,9 @@ describe('matter sections', () => {
 
     const [lifecycle] = (await loadMatterDossier('matter-1', ['lifecycle'])).sections
 
-    expect(lifecycle.next_action).toMatchObject({ kind: 'send-intake' })
+    expect(lifecycle.next_action).toMatchObject({ kind: 'draft' })
     expect(lifecycle.operational_brief).toMatchObject({
-      blockers: [expect.objectContaining({ key: 'matter.intake_sent' })],
+      blockers: [],
     })
   })
 

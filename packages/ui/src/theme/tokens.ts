@@ -10,8 +10,8 @@
  *
  * Current theme: zinc neutrals (shadcnuikit CRM), Outfit UI face, with
  * `brand.navy` / `brand.teal` carrying Aubrey Law's own two colours again.
- * They are an accent — headings, marks, the invoice, a selected surface — not
- * a repaint: buttons, body text and every surface stay neutral.
+ * Navy anchors primary actions; an independent blue identifies selection and focus.
+ * Content surfaces stay neutral so urgency remains easy to distinguish.
  *
  * Every pair listed in `contrastPairs`, `statusContrastPairs` and
  * `uiContrastPairs` below is enforced by tests/theme-contrast.test.ts. A value
@@ -76,8 +76,8 @@ export type SemanticTokens = {
    * `bg-muted` in the design sheet index, `bg-primary/10` in the drafting
    * stepper, `bg-primary/5` on a selected day. Four of them are visible on one
    * screen and nothing ranked them, because with a near-black primary every
-   * "this one" collapses to a grey. These carry the firm's teal so selection is
-   * the one thing on screen wearing a colour.
+   * "this one" collapses to a grey. Selection uses a restrained blue independent of firm branding, with
+   * a visible marker alongside the tint.
    */
   selection: {
     bg: string
@@ -134,38 +134,31 @@ export const primitives = {
 
 const lightSemantic: SemanticTokens = {
   bg: {
-    // `canvas` is the page; `elevated` is what sits on it. They were both
-    // #ffffff, so every card in the app was the same colour as its background
-    // and the only thing marking its edge was a 1.27:1 hairline. Tinting the
-    // canvas is what makes a card a card — the border stays decorative.
-    canvas: '#f4f4f5',
-    subtle: '#ebebed',
+    // Keep a subtle step between the near-white canvas and white content.
+    // Decorative dividers stay light; input and focus boundaries stay strong.
+    canvas: '#f8f9fb',
+    subtle: '#f1f3f5',
     // Must stay distinguishable from `elevated`: `bg-muted` is overwhelmingly
     // drawn *on* a card, so it is one step below the card, not one below the
     // page.
-    muted: '#e9e9ec',
+    muted: '#eef1f4',
     elevated: '#ffffff',
     inverse: primitives.brandNavy,
   },
   text: {
     default: '#27272b',
     secondary: '#3f3f46',
-    // Was #737373: 4.74:1 on white but 4.35:1 on `muted` and 4.32:1 on the
-    // sidebar, and the app draws it at 10px and 11px. Darkening `muted` made
-    // that near-miss a real one, so the text moves with it — 5.05:1 on the new
-    // `muted`, 6.12:1 on a card.
+    // Metadata remains readable on every neutral surface.
     muted: '#61616b',
     inverse: '#fafafb',
     onBrand: primitives.white,
   },
   border: {
-    default: '#d4d4d8',
+    default: '#dfe3e8',
     strong: '#71717b',
-    focus: '#27272b',
-    // WCAG 1.4.11: an input is a UI component, so its boundary owes 3:1 — and
-    // the design sheet and the client interview are almost entirely inputs.
-    // #d4d4da gave 1.48:1. This is 3.42:1 on a card and 3.11:1 on the canvas,
-    // measured both ways because inputs appear on both.
+    // Deep blue keeps existing 60% focus halos above 3:1.
+    focus: '#243f73',
+    // Input boundaries retain at least 3:1 on both cards and the canvas.
     input: '#8a8a94',
   },
   brand: {
@@ -186,19 +179,19 @@ const lightSemantic: SemanticTokens = {
     infoFg: primitives.white,
   },
   interactive: {
-    primary: primitives.brandBlue,
+    primary: primitives.firmNavy,
     primaryFg: primitives.white,
-    secondary: '#d4d4da',
+    secondary: '#eef1f4',
     secondaryFg: '#27272b',
-    accent: '#e0e0e4',
+    accent: '#e9edf1',
     accentFg: '#27272b',
     destructive: '#e7000b',
     destructiveFg: primitives.white,
   },
   selection: {
-    bg: '#e2efef',
-    fg: '#14444a',   // 8.99:1 on the fill
-    border: primitives.firmTeal,
+    bg: '#eff4ff',
+    fg: '#244578',
+    border: '#4568ad',
   },
   sidebar: {
     // White, like the admin shell's own aside (which uses `bg-card`), so the
@@ -206,12 +199,12 @@ const lightSemantic: SemanticTokens = {
     // dissolving into it.
     bg: '#ffffff',
     fg: '#61616b',
-    primary: primitives.brandBlue,
+    primary: primitives.firmNavy,
     primaryFg: primitives.white,
-    accent: '#e0e0e4',
+    accent: '#e9edf1',
     accentFg: '#09090b',
     border: '#d4d4d8',
-    ring: '#27272b',
+    ring: '#243f73',
   },
 }
 
@@ -242,7 +235,7 @@ const darkSemantic: SemanticTokens = {
     // matter stage strip, both of which carry progress state on their own. That
     // puts them under 1.4.11 too. 4.26:1 on a card.
     strong: '#7a7a85',
-    focus: '#e4e4e8',
+    focus: '#9dbaff',
     // 3.46:1 against the new `elevated`, 3.76:1 against `canvas`. Was #3f3f46
     // at 1.91:1.
     input: '#6b6b76',
@@ -277,8 +270,8 @@ const darkSemantic: SemanticTokens = {
     infoFg: '#0a0a0c',
   },
   interactive: {
-    primary: '#fafafb',
-    primaryFg: '#18181b',
+    primary: '#b8c8f0',
+    primaryFg: '#172448',
     // Was #71717b, which put its own label at 3.81:1. A secondary button in
     // dark is a dark fill with a light label, not a mid grey with either.
     secondary: '#3f3f46',
@@ -291,19 +284,19 @@ const darkSemantic: SemanticTokens = {
     destructiveFg: '#0a0a0c',
   },
   selection: {
-    bg: '#16302f',
-    fg: '#a8dfe2',   // 9.58:1 on the fill
-    border: primitives.firmTealDark,
+    bg: '#1c2942',
+    fg: '#c6d7ff',
+    border: '#9dbaff',
   },
   sidebar: {
     bg: '#101013',
     fg: '#e4e4e8',
-    primary: '#fafafb',
-    primaryFg: '#18181b',
+    primary: '#b8c8f0',
+    primaryFg: '#172448',
     accent: '#24242a',
     accentFg: '#e4e4e8',
     border: '#2e2e34',
-    ring: '#e4e4e8',
+    ring: '#9dbaff',
   },
 }
 

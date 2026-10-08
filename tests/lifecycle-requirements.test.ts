@@ -53,7 +53,7 @@ function lead(overrides: Partial<LeadDetailRecord> = {}): LeadDetailRecord {
 
 describe('versioned lifecycle requirement registry', () => {
   it('declares the source, applicability, severity, ownership, resolution and stage policy', () => {
-    expect(LIFECYCLE_REGISTRY_VERSION).toBe('practice-areas-v3')
+    expect(LIFECYCLE_REGISTRY_VERSION).toBe('practice-areas-v4')
     expect(LEAD_REQUIRED_FIELD_KEYS).toEqual([
       'firstName', 'email', 'address', 'maritalStatus', 'spouse', 'practiceArea', 'fee',
     ])
@@ -83,9 +83,9 @@ describe('versioned lifecycle requirement registry', () => {
     const requirements = evaluateMatterRequirements(record)
     const action = computeMatterNextAction(record)
     const brief = matterOperationalBrief(record)
-    expect(requirements.find(item => item.key === 'matter.intake_sent')?.satisfied).toBe(false)
-    expect(action.kind).toBe('send-intake')
-    expect(brief.blockers.map(item => item.key)).toContain('matter.intake_sent')
+    expect(requirements.find(item => item.key === 'matter.intake_sent')).toBeUndefined()
+    expect(action.kind).toBe('draft')
+    expect(brief.blockers.map(item => item.key)).not.toContain('matter.intake_sent')
   })
 
   it('distinguishes client-owned missing data from attorney judgment and conflicts', () => {
@@ -133,10 +133,8 @@ describe('versioned lifecycle requirement registry', () => {
   it('applies the same operational stage gates to College Preparation matters', () => {
     const record = matter({ practice_area: 'CP', stage: 'intake' })
     const requirements = evaluateMatterRequirements(record)
-    expect(requirements.map(item => item.key)).toContain('matter.intake_sent')
-    expect(matterStageTransitionPreflight(record, 'design').blockers.map(item => item.key)).toEqual([
-      'matter.intake_sent', 'matter.intake_complete',
-    ])
+    expect(requirements.map(item => item.key)).not.toContain('matter.intake_sent')
+    expect(matterStageTransitionPreflight(record, 'design').blockers.map(item => item.key)).toEqual([])
   })
 
   it('keeps ordinary client data gaps out of the conflicts section', () => {
@@ -154,10 +152,8 @@ describe('lifecycle parity and safety', () => {
   it('returns blockers before a forward stage transition and none for a correction backward', () => {
     const record = matter({ stage: 'intake' })
     const forward = matterStageTransitionPreflight(record, 'design')
-    expect(forward.requiresConfirmation).toBe(true)
-    expect(forward.blockers.map(item => item.key)).toEqual([
-      'matter.intake_sent', 'matter.intake_complete',
-    ])
+    expect(forward.requiresConfirmation).toBe(false)
+    expect(forward.blockers.map(item => item.key)).toEqual([])
     expect(matterStageTransitionPreflight({ ...record, stage: 'design' }, 'intake').blockers).toEqual([])
   })
 

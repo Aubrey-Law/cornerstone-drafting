@@ -44,11 +44,11 @@ function baseMatter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
 }
 
 describe('matter next action', () => {
-  it('prompts send intake when invite not sent', () => {
+  it('opens matter work without resending historical intake', () => {
     const action = computeMatterNextAction(baseMatter())
-    expect(action.cta).toBe('Send intake')
-    expect(action.kind).toBe('send-intake')
-    expect(action.href).toBe('/admin/matters/m1')
+    expect(action.cta).toBe('Open drafting')
+    expect(action.kind).toBe('draft')
+    expect(action.href).toBe('/admin/drafting/m1')
   })
 
   it('opens drafting after intake review', () => {
@@ -73,13 +73,13 @@ describe('matter next action — engagement', () => {
     intake_sent_at: new Date().toISOString(),
   }
 
-  it('keeps send-intake as the top priority', () => {
+  it('checks engagement without requiring a new intake invitation', () => {
     const action = computeMatterNextAction(baseMatter(), {
       signed: false,
       sentAt: null,
       status: null,
     })
-    expect(action.kind).toBe('send-intake')
+    expect(action.kind).toBe('send-engagement')
   })
 
   it('prompts send-engagement once intake is out but engagement never sent', () => {
@@ -133,13 +133,13 @@ describe('matter next action — engagement', () => {
     expect(action.kind).toBe('draft')
   })
 
-  it('waits for incomplete intake before prompting for engagement', () => {
+  it('does not wait for intake metadata on a hired matter', () => {
     const action = computeMatterNextAction(baseMatter(intakeSent), {
       signed: false,
       sentAt: null,
       status: null,
     })
-    expect(action.kind).toBe('waiting-intake')
+    expect(action.kind).toBe('send-engagement')
   })
 
   it('prioritizes review flags over generic drafting', () => {

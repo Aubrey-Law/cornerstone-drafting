@@ -25,7 +25,7 @@ import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { updateMatterStage } from '@/lib/drafting/updateMatterStage'
 import {
   GROUP_COLORS,
-  STAGES,
+  MATTER_WORK_STAGES as STAGES,
   stageGroupColor,
   stageInfo,
   stageLabel,
@@ -277,7 +277,7 @@ function BoardCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52">
-              {STAGE_GROUP_ORDER.map((group, groupIndex) => (
+              {STAGE_GROUP_ORDER.filter(group => STAGES.some(stage => stage.group === group)).map((group, groupIndex) => (
                 <DropdownMenuGroup key={group}>
                   {groupIndex > 0 && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="text-micro uppercase tracking-wide text-muted-foreground">

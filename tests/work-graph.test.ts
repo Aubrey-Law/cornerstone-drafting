@@ -38,7 +38,7 @@ function aging(overrides: Partial<TodayQueueRow> = {}): TodayQueueRow {
     snooze_id: null, snoozed_until: null, snooze_reason: null, is_snoozed: false,
     stage_visits: 1, cumulative_days: 20, cumulative_sla_days: null,
     is_cumulative_overdue: false, is_scheduled: false, stage_clock_suspect: false,
-    action: { kind: 'send-intake', label: 'Send intake', href: '/admin/matters/10000000-0000-4000-8000-000000000001' },
+    action: { kind: 'send-engagement', label: 'Send engagement', href: '/admin/matters/10000000-0000-4000-8000-000000000001' },
     nudge_matter_id: null,
     ...overrides,
   }
@@ -105,15 +105,14 @@ describe('canonical work graph', () => {
     }))
   })
 
-  it('collapses identical stable obligations and retains both evidence sources', () => {
-    const base = aging()
+  it('ignores obsolete matter intake sending signals from both sources', () => {
+    const base = aging({ action: { kind: 'send-intake', label: 'Send intake', href: '/admin/matters/m1' } })
     const graph = buildWorkGraph({ today: today({
       waitingOnYou: [base],
       intakeToSend: [{ matter_id: base.id, client_name: 'A Client', matter_name: null, matter_created: '2026-09-01T12:00:00.000Z' } as never],
     }) }, NOW)
     const item = graph.items.find(candidate => candidate.workKey === `matter:${base.id}:send-intake`)
-    expect(item).toBeTruthy()
-    expect(item?.evidence).toHaveLength(2)
+    expect(item).toBeUndefined()
   })
 
   it('uses every documented tie-break before the stable key', () => {

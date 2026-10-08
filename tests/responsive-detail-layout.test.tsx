@@ -153,8 +153,8 @@ describe('responsive admin detail layout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Matter actions' }))
 
-    expect(screen.getByRole('menuitem', { name: 'Create intake' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Review / update intake' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Open drafting' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Open facts' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Open details' })).toBeTruthy()
   })
 })

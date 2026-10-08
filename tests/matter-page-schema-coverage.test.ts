@@ -140,11 +140,13 @@ describe('design-sheet-owned fields', () => {
 })
 
 describe('matter page surfaces', () => {
-  it('leads Overview with the next action, above metrics and Matter details', () => {
+  it('uses a facts and activity center with a separate next-action panel', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
-    expect(client.indexOf('<MatterOverviewHero')).toBeGreaterThan(-1)
-    expect(client.indexOf('<MatterOverviewHero')).toBeLessThan(client.indexOf('<MatterOverviewStats'))
-    expect(client.indexOf('<MatterOverviewStats')).toBeLessThan(client.indexOf('<MatterDetailsCard'))
+    const overview = fs.readFileSync(path.join(matterDir, 'MatterOverviewWork.tsx'), 'utf8')
+    expect(client).toContain('<MatterOverviewWork')
+    expect(client).toContain('<MatterOverviewFacts')
+    expect(client).not.toContain('<MatterOverviewStats')
+    expect(overview).toContain('aria-label="Up next"')
   })
 
   it('drops the portal uploads card', () => {

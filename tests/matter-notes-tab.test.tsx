@@ -74,6 +74,15 @@ describe('matter notes tab on a touch screen', () => {
 })
 
 describe('adding a matter note', () => {
+  it('keeps the overview composer internal even after choosing a communication note elsewhere', async () => {
+    mocks.add.mockResolvedValue(saved)
+    mocks.log.mockResolvedValue(null)
+    const { result } = renderHook(() => useMatterNotes({ initialNotes: [], matterId: 'matter-1' }))
+    act(() => { result.current.setNoteType('Client comm.'); result.current.setNoteText('Staff working note') })
+    await act(() => result.current.handleAddNote('Internal'))
+    expect(mocks.add).toHaveBeenCalledWith('matter-1', 'Staff working note', 'internal')
+  })
+
   it('puts the text back and says so when the save fails', async () => {
     mocks.add.mockRejectedValue(new Error('Offline'))
     const { result } = renderHook(() => useMatterNotes({ initialNotes: [], matterId: 'matter-1' }))
@@ -92,5 +101,33 @@ describe('adding a matter note', () => {
     await act(() => result.current.handleAddNote())
     expect(result.current.notes.map(note => note.id)).toEqual(['note-1'])
     expect(result.current.noteSaving).toBe(false)
+  })
+})
+
+ describe('Overview call logging', () => {
+  it('persists a communication note and publishes its activity without sending', async () => {
+    mocks.add.mockResolvedValue({ ...saved, note_type: 'client_comm' })
+    mocks.log.mockResolvedValue({ id: 'activity-1' })
+    const onActivityLogged = vi.fn()
+    const { result } = renderHook(() => useMatterNotes({ initialNotes: [], matterId: 'matter-1', onActivityLogged }))
+    await act(async () => { expect(await result.current.handleLogCall('Left voicemail', 'Please call back')).toBe(true) })
+    expect(mocks.add).toHaveBeenCalledWith('matter-1', 'Call — Left voicemail\nPlease call back', 'client_comm')
+    expect(result.current.notes).toHaveLength(1)
+    expect(onActivityLogged).toHaveBeenCalledWith({ id: 'activity-1' })
+  })
+  it('does not duplicate a saved call when activity logging fails', async () => {
+    mocks.add.mockResolvedValue(saved)
+    mocks.log.mockRejectedValue(new Error('Activity unavailable'))
+    const { result } = renderHook(() => useMatterNotes({ initialNotes: [], matterId: 'matter-1' }))
+    await act(async () => { expect(await result.current.handleLogCall('Connected', 'Discussed timing')).toBe(true) })
+    expect(mocks.add).toHaveBeenCalledTimes(1)
+    expect(result.current.notes).toHaveLength(1)
+  })
+  it('reports persistence failure without adding a call', async () => {
+    mocks.add.mockRejectedValue(new Error('Save failed'))
+    const { result } = renderHook(() => useMatterNotes({ initialNotes: [], matterId: 'matter-1' }))
+    await act(async () => { expect(await result.current.handleLogCall('No answer', '')).toBe(false) })
+    expect(result.current.notes).toHaveLength(0)
+    expect(mocks.log).not.toHaveBeenCalled()
   })
 })

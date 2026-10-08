@@ -44,6 +44,7 @@ type ResponsiveDetailRailProps = {
   desktopClassName?: string
   /** Escape hatch for docked positioning that depends on a runtime offset. */
   desktopStyle?: CSSProperties
+  drawer?: boolean
   mobileClassName?: string
 }
 
@@ -55,15 +56,26 @@ export function ResponsiveDetailRail({
   desktopClassName,
   desktopStyle,
   mobileClassName,
+  drawer = false,
 }: ResponsiveDetailRailProps) {
   const mobile = useIsMobile()
 
-  if (mobile) {
+  if (mobile || drawer) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
-          side="left"
-          className={cn('w-[min(22rem,100vw)] gap-0 p-0 sm:max-w-none', mobileClassName)}
+          side={drawer ? "right" : "left"}
+          className={cn('w-[min(30rem,100vw)] gap-0 p-0 sm:max-w-none', mobileClassName)}
+          onInteractOutside={event => { if (drawer) event.preventDefault() }}
+          onEscapeKeyDown={event => {
+            if (!drawer) return
+            const field = document.activeElement
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+              // Inline fields save on blur. Let that finish before dismissing.
+              event.preventDefault()
+              field.blur()
+            }
+          }}
           // Focus the sheet itself, not its first field: on the matter facts
           // that is the client's name, which then opened selected for editing
           // and raised the phone keyboard over the panel.

@@ -348,6 +348,7 @@ export default async function MatterDetailPage({ params }: Params) {
         esignDocumentsEnabled={documentSignaturesEnabled}
         emailSendEnabled={isGoogleConfigured() || Boolean(process.env.RESEND_API_KEY)}
         workSummary={buildRecordWorkSummaries(workGraph.items, 'matter')[id] ?? null}
+        taskPreview={workGraph.items.filter(item => item.sourceType === 'task' && item.record.id === id && item.owner === 'firm').slice(0, 3).map(item => ({ key: item.workKey, title: item.title, href: item.href }))}
       />
     )
   })

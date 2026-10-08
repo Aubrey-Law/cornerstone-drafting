@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { ChevronsUpDown, Pin } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -8,7 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useSharedSidebarMatters } from '@/lib/matters/SidebarMattersContext'
 import { useMatterSearch } from '@/lib/matters/useMatterSearch'
 
-export function MatterSwitcher({ matterId, label }: { matterId: string; label: string }) {
+export function MatterSwitcher({ matterId, label, className }: { matterId: string; label: string; className?: string }) {
   const shortcuts = useSharedSidebarMatters()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -18,7 +19,7 @@ export function MatterSwitcher({ matterId, label }: { matterId: string; label: s
   return (
     <Popover open={open} onOpenChange={value => { setOpen(value); if (!value) setQuery('') }}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={`Switch matter: ${label}`} className="inline-flex min-w-0 items-center gap-1 rounded px-1 py-1 text-sm font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <button type="button" aria-label={`Switch matter: ${label}`} className={cn("inline-flex min-w-0 items-center gap-1 rounded px-1 py-1 text-sm font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}>
           <span className="truncate">{label}</span><ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </PopoverTrigger>
