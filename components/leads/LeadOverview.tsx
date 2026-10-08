@@ -92,7 +92,7 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   const completed = segments.filter(segment => segment.complete).length
   return (
     <section aria-label="Lead overview" className="space-y-4">
-      <div className="grid gap-3 @[640px]:grid-cols-2 @[1100px]:grid-cols-4">
+      <div className="space-y-4">
         <OverviewFact label="Next meeting" value={leadNextMeetingDate(nextAppointmentAt, timeZone)}>
           <Button variant="link" className="h-auto p-0" onClick={onSchedule}>Schedule meeting</Button>
         </OverviewFact>
@@ -122,15 +122,15 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
           <Button variant="link" className="h-auto p-0" onClick={onTasks}>View tasks ({taskCount})</Button>
         </OverviewFact>
       </div>
-      <dl className="grid gap-3 rounded-lg border border-border bg-muted p-4 text-sm @[640px]:grid-cols-3">
+      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Contact history</summary><dl className="mt-3 space-y-3">
         <div><dt className="text-xs text-muted-foreground">Last client contact</dt><dd className="mt-1">{leadDisplayDate(lastContactAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Last client response</dt><dd className="mt-1">{leadDisplayDate(lastResponseAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Record updated</dt><dd className="mt-1">{leadDisplayDate(updatedAt, timeZone)}</dd></div>
-      </dl>
+      </dl></details>
     </section>
   )
 }
 
 function OverviewFact({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
-  return <div className="min-w-0 rounded-lg border border-border bg-card p-4"><h2 className="text-xs font-medium text-muted-foreground">{label}</h2><p className="my-2 break-words text-sm font-semibold">{value}</p><div className="space-y-1">{children}</div></div>
+  return <div className="min-w-0 border-b border-border pb-4"><h2 className="text-xs font-medium text-muted-foreground">{label}</h2><p className="my-2 break-words text-sm font-semibold">{value}</p><div className="space-y-1">{children}</div></div>
 }
