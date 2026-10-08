@@ -51,6 +51,13 @@ interface DraftingWorkspaceProps {
   intakeSnapshot: IntakeSnapshot | null
   hubMatter: DraftingHubMatter | null
   sharedDrafts: MatterDocument[]
+  /**
+   * Rendered under the matter workspace header (the drafting route's layout).
+   * That header already names the matter and links back to it, so the
+   * breadcrumb row is dropped and the steps, save status and Quick draft share
+   * one compact bar. Owner-approved exception to the drafting policy, Oct 2026.
+   */
+  embeddedInWorkspace?: boolean
 }
 
 export default function DraftingWorkspace({
@@ -62,6 +69,7 @@ export default function DraftingWorkspace({
   intakeSnapshot,
   hubMatter,
   sharedDrafts,
+  embeddedInWorkspace = false,
 }: DraftingWorkspaceProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -158,8 +166,99 @@ export default function DraftingWorkspace({
   const previousStep = STEPS[stepIndex - 1]
   const nextStep = STEPS[stepIndex + 1]
 
+  const stepper = (className?: string) => (
+    <nav className={cn('hidden items-center gap-1 overflow-x-auto md:flex', className)} aria-label="Drafting steps">
+      {STEPS.map((s, idx) => {
+        const active = step === s.id
+        const status = stepStatus[s.id]
+        const Icon = s.icon
+        return (
+          <div key={s.id} className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => void setStep(s.id)}
+              disabled={preparing}
+              aria-current={active ? 'step' : undefined}
+              className={cn(
+                'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
+                active
+                  ? 'border-selected-border bg-selected text-selected-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              <span className={cn(
+                'flex h-5 w-5 items-center justify-center rounded-full text-micro font-semibold',
+                status === 'complete' ? 'bg-success/15 text-success'
+                  : active ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground',
+              )}>
+                {status === 'complete' ? <CheckCircle2 className="h-3 w-3" /> : idx + 1}
+              </span>
+              <Icon className="h-3.5 w-3.5" />
+              <span>{s.label}</span>
+            </button>
+            {idx < STEPS.length - 1 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+          </div>
+        )
+      })}
+    </nav>
+  )
+  const mobileStepper = (className?: string) => (
+    <nav className={cn('flex items-center gap-2 md:hidden', className)} aria-label="Drafting steps">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-10 w-10 shrink-0"
+        aria-label="Previous drafting step"
+        disabled={!previousStep || preparing}
+        onClick={() => previousStep && setStep(previousStep.id)}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <div className="min-w-0 flex-1 text-center">
+        <p className="truncate text-sm font-semibold">{currentStep.label}</p>
+        <p className="text-micro text-muted-foreground">Step {stepIndex + 1} of {STEPS.length}</p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-10 w-10 shrink-0"
+        aria-label="Next drafting step"
+        disabled={!nextStep || preparing}
+        onClick={() => nextStep && setStep(nextStep.id)}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </nav>
+  )
+  const saveStatus = (
+    <>
+      {preparing ? 'Saving your latest decisions…' : designState.saveStatusText}
+      {transitionError && <p className="mt-1 text-destructive" role="alert">{transitionError}</p>}
+    </>
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+      {embeddedInWorkspace ? (
+        <div className="shrink-0 border-b border-border bg-card px-4 py-2 md:px-6">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {stepper()}
+            <div className="min-w-0 flex-1">{mobileStepper()}</div>
+            {/* The design sheet's toolbar carries its own save pill; repeat it here only off Design or mid-transition. */}
+            <div className="ml-auto text-xs text-muted-foreground" role="status" aria-live="polite">{step !== 'design' || preparing || transitionError ? saveStatus : null}</div>
+            <Link
+              href={`/admin/drafting/${matterId}/quick`}
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Quick draft
+            </Link>
+          </div>
+        </div>
+      ) : <>
       {/* Workspace header */}
       <div className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex items-center justify-between gap-2 md:gap-4">
@@ -215,71 +314,9 @@ export default function DraftingWorkspace({
           </DropdownMenu>
         </div>
 
-        <nav className="mt-3 flex items-center gap-2 md:hidden" aria-label="Drafting steps">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 shrink-0"
-            aria-label="Previous drafting step"
-            disabled={!previousStep || preparing}
-            onClick={() => previousStep && setStep(previousStep.id)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0 flex-1 text-center">
-            <p className="truncate text-sm font-semibold">{currentStep.label}</p>
-            <p className="text-micro text-muted-foreground">Step {stepIndex + 1} of {STEPS.length}</p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 shrink-0"
-            aria-label="Next drafting step"
-            disabled={!nextStep || preparing}
-            onClick={() => nextStep && setStep(nextStep.id)}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </nav>
+        {mobileStepper('mt-3')}
 
-        {/* Stepper */}
-        <nav className="mt-3 hidden items-center gap-1 overflow-x-auto md:flex" aria-label="Drafting steps">
-          {STEPS.map((s, idx) => {
-            const active = step === s.id
-            const status = stepStatus[s.id]
-            const Icon = s.icon
-            return (
-              <div key={s.id} className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => void setStep(s.id)}
-                  disabled={preparing}
-                  aria-current={active ? 'step' : undefined}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
-                    active
-                      ? 'border-selected-border bg-selected text-selected-foreground'
-                      : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
-                  )}
-                >
-                  <span className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-full text-micro font-semibold',
-                    status === 'complete' ? 'bg-success/15 text-success'
-                      : active ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground',
-                  )}>
-                    {status === 'complete' ? <CheckCircle2 className="h-3 w-3" /> : idx + 1}
-                  </span>
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{s.label}</span>
-                </button>
-                {idx < STEPS.length - 1 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-              </div>
-            )
-          })}
-        </nav>
+        {stepper('mt-3')}
       </div>
 
       {step !== 'design' && designState.conflict && <DesignSheetConflictDialog
@@ -290,9 +327,9 @@ export default function DraftingWorkspace({
         onReload={() => designState.reloadConflictLatest()}
       />}
       <div className="shrink-0 border-b px-4 py-2 text-xs md:px-6" role="status" aria-live="polite">
-        {preparing ? 'Saving your latest decisions…' : designState.saveStatusText}
-        {transitionError && <p className="mt-1 text-destructive" role="alert">{transitionError}</p>}
+        {saveStatus}
       </div>
+      </>}
       {/* Step body */}
       <div className={cn(
         'min-h-0 flex-1',
