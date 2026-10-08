@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   captureLegacyIntakeResult,
@@ -7,6 +7,10 @@ import {
 } from '@/tests/fixtures/intakeFormParity'
 
 describe('legacy intake behavior parity matrix', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it.each(INTAKE_PARITY_CASES)('captures the $name intake result', ({ data }) => {
     const result = captureLegacyIntakeResult(data)
 
@@ -23,8 +27,11 @@ describe('legacy intake behavior parity matrix', () => {
     expect(result.activeIds).toContain('spouse_fiduciaries')
     expect(result.activeIds).toContain('children')
     expect(result.activeIds).toContain('guardian')
-    expect(captureLegacyIntakeResult(CONTACT_ONLY).activeIds).not.toContain('spouse')
-    expect(captureLegacyIntakeResult(CONTACT_ONLY).activeIds).not.toContain('guardian')
+    const contactOnlyIds = captureLegacyIntakeResult(CONTACT_ONLY).activeIds
+    expect(contactOnlyIds).not.toContain('spouse')
+    expect(contactOnlyIds).not.toContain('spouse_fiduciaries')
+    expect(contactOnlyIds).not.toContain('children')
+    expect(contactOnlyIds).not.toContain('guardian')
   })
 
   it('keeps the estate and college tracks isolated', () => {
@@ -56,6 +63,9 @@ describe('legacy intake behavior parity matrix', () => {
   })
 
   it('warns without blocking when a college student is under eighteen', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-08T12:00:00'))
+
     const result = captureLegacyIntakeResult(INTAKE_PARITY_CASES[6].data)
     const warning = result.issuesById.cp_student.find((issue) => issue.message.includes('under 18'))
 
