@@ -95,61 +95,63 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
           overflow: 'hidden',
         }}
       >
-        <button
-          type="button"
-          onClick={onToggle}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: '17px 22px',
-            cursor: 'pointer',
-            width: '100%',
-            background: 'transparent',
-            border: 'none',
-            textAlign: 'left',
-          }}
-          aria-expanded={open}
-          aria-controls={bodyId}
-        >
-          <span style={complete
-            ? {
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                background: 'var(--gi-teal)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }
-            : {
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                border: '2px solid var(--gi-teal)',
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                font: '700 13px/1 var(--gi-sans)',
-                color: 'var(--gi-teal)',
-              }}>
-            {complete ? <Check size={14} strokeWidth={3} /> : number}
-          </span>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ margin: 0, font: '600 16px/1.3 var(--gi-sans)', color: 'var(--gi-ink)' }}>{title}</h2>
-            {subtitle && (
-              <div style={{ font: '400 12.5px/1.4 var(--gi-sans)', color: 'var(--gi-faint)' }}>
-                {subtitle}
-              </div>
-            )}
-          </div>
-          <span style={{ font: '600 13px/1 var(--gi-sans)', color: 'var(--gi-teal)' }}>
-            {open ? 'Close' : 'Edit'}
-          </span>
-        </button>
+        <h2 aria-label={title} style={{ margin: 0 }}>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: '17px 22px',
+              cursor: 'pointer',
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              textAlign: 'left',
+            }}
+            aria-expanded={open}
+            aria-controls={bodyId}
+          >
+            <span style={complete
+              ? {
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  background: 'var(--gi-teal)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }
+              : {
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  border: '2px solid var(--gi-teal)',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  font: '700 13px/1 var(--gi-sans)',
+                  color: 'var(--gi-teal)',
+                }}>
+              {complete ? <Check size={14} strokeWidth={3} /> : number}
+            </span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', font: '600 16px/1.3 var(--gi-sans)', color: 'var(--gi-ink)' }}>{title}</span>
+              {subtitle && (
+                <span style={{ display: 'block', font: '400 12.5px/1.4 var(--gi-sans)', color: 'var(--gi-faint)' }}>
+                  {subtitle}
+                </span>
+              )}
+            </span>
+            <span style={{ font: '600 13px/1 var(--gi-sans)', color: 'var(--gi-teal)' }}>
+              {open ? 'Close' : 'Edit'}
+            </span>
+          </button>
+        </h2>
         {open && (
           <div id={bodyId} style={{ padding: '4px 22px 22px', borderTop: '1px solid var(--gi-divider)' }}>
             {children}

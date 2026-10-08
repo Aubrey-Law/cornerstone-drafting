@@ -24,6 +24,7 @@ export function CompiledFormItem({ item, disabled = false, ...props }: CompiledF
           {item.helpText ? <p id={helpId} className="text-sm text-muted-foreground">{item.helpText}</p> : null}
           <Block
             {...props}
+            disabled={disabled}
             config={item.config}
             update={(field, value) => { if (!disabled) props.update(field, value) }}
             onAttorneySave={disabled ? undefined : props.onAttorneySave}

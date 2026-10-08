@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CompiledIntakeSections } from '@/components/intake/formEngine/CompiledIntakeSections'
@@ -10,7 +10,9 @@ import { compileIntakeForm } from '@/lib/intake/forms/compiler'
 import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
-afterEach(cleanup)
+vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'test-session' } } }) } } }))
+
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 const definition: IntakeFormDefinition = {
   schemaVersion: 1, key: 'renderer-test', title: 'Test intake', sections: [
@@ -131,6 +133,54 @@ describe('compiled intake sections', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
+  it.each(['staff', 'attorney'] as const)('prevents direct document upload writes in disabled %s mode even on synthetic file change', async (mode) => {
+    const source: IntakeFormDefinition = { ...definition, sections: [
+      { id: 'documents', title: 'Documents', audience: 'client_and_staff', items: [{ kind: 'block', id: 'uploads', blockId: 'existing_document_uploads' }] },
+      definition.sections[2],
+    ] }
+    const fetchRead = vi.fn(async (_url: RequestInfo | URL) => ({ ok: true, json: async () => ({ documents: [] }) }))
+    vi.stubGlobal('fetch', fetchRead)
+    const open = vi.spyOn(XMLHttpRequest.prototype, 'open')
+    const send = vi.spyOn(XMLHttpRequest.prototype, 'send').mockImplementation(() => undefined)
+    const view = render(<CompiledIntakeSections {...fixture({ has_existing_plan: true }, source)} intakeId="intake-1" publicIntakeToken="test-public-token" update={vi.fn()} mode={mode} openId="documents" onToggle={vi.fn()} />)
+    await waitFor(() => expect(screen.queryByText('Loading uploads…')).toBeNull())
+    const input = view.container.querySelector('input[type=file]') as HTMLInputElement
+    expect(input.matches(':disabled')).toBe(true)
+    fireEvent.change(input, { target: { files: [new File(['doc'], 'will.pdf', { type: 'application/pdf' })] } })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(open).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(fetchRead.mock.calls.every((call) => String(call[0]).includes('/api/intake/documents?'))).toBe(true)
+  })
+
+  it.each(['client', 'public_link'] as const)('keeps ordinary document uploads working in %s mode', async (mode) => {
+    const source: IntakeFormDefinition = { ...definition, sections: [
+      { id: 'documents', title: 'Documents', audience: 'client_and_staff', items: [{ kind: 'block', id: 'uploads', blockId: 'existing_document_uploads' }] },
+      definition.sections[2],
+    ] }
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ documents: [] }) })))
+    const open = vi.spyOn(XMLHttpRequest.prototype, 'open')
+    const headers = vi.spyOn(XMLHttpRequest.prototype, 'setRequestHeader')
+    const send = vi.spyOn(XMLHttpRequest.prototype, 'send').mockImplementation(function (this: XMLHttpRequest) {
+      Object.defineProperty(this, 'status', { value: 200 })
+      Object.defineProperty(this, 'responseText', { value: JSON.stringify({ document: { id: 'doc-1', name: 'will.pdf', size: 3 } }) })
+      this.onload?.(new ProgressEvent('load'))
+    })
+    const view = render(<CompiledIntakeSections {...fixture({ has_existing_plan: true }, source)} intakeId="intake-1" publicIntakeToken={mode === 'public_link' ? 'test-public-token' : undefined} update={vi.fn()} mode={mode} openId="documents" onToggle={vi.fn()} />)
+    await waitFor(() => expect(screen.queryByText('Loading uploads…')).toBeNull())
+    const input = view.container.querySelector('input[type=file]') as HTMLInputElement
+    expect(input.matches(':disabled')).toBe(false)
+    const file = new File(['doc'], 'will.pdf', { type: 'application/pdf' })
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByText('will.pdf')).toBeDefined())
+    expect(open).toHaveBeenCalledWith('POST', '/api/intake/documents')
+    expect(headers).toHaveBeenCalledWith(mode === 'public_link' ? 'X-Intake-Token' : 'Authorization', mode === 'public_link' ? 'test-public-token' : 'Bearer test-session')
+    const body = send.mock.calls[0][0] as FormData
+    expect(body.get('intakeId')).toBe('intake-1')
+    expect(body.get('kind')).toBe('existing_plan')
+    expect((body.get('file') as File).name).toBe('will.pdf')
+  })
+
   it('preserves existing GuidedSection navigation and stable disclosure identifiers', async () => {
     const toggle = vi.fn()
     const next = vi.fn()
@@ -138,7 +188,11 @@ describe('compiled intake sections', () => {
     const button = screen.getByRole('button', { name: /Legacy section/ })
     const controls = button.getAttribute('aria-controls')
     expect(controls).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Legacy section' }).style.margin).toBe('0px')
+    const heading = screen.getByRole('heading', { name: 'Legacy section' })
+    expect(heading.style.margin).toBe('0px')
+    expect(button.parentElement).toBe(heading)
+    expect(heading.children).toHaveLength(1)
+    expect(button.querySelector('h1,h2,h3,h4,h5,h6')).toBeNull()
     expect(document.getElementById(controls!)?.contains(screen.getByLabelText('Legacy answer'))).toBe(true)
     await userEvent.click(button)
     expect(toggle).toHaveBeenCalledOnce()

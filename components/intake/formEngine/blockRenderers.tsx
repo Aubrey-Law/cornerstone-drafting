@@ -28,6 +28,7 @@ import { setDocumentInclusion, type DesignDocumentKey } from '@/lib/designSheetD
 import { getIntakeAttorneyDocumentInclusions, type IntakeBlockId } from '@/lib/intake/forms/blockRegistry'
 
 export interface IntakeBlockRendererProps extends StepProps {
+  disabled?: boolean
   config?: Record<string, unknown>
   onAttorneySave?: (patch: { plan_type?: string; document_inclusions?: Record<string, boolean> }) => Promise<void>
 }

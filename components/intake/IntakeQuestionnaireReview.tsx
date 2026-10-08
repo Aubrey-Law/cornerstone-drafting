@@ -71,11 +71,13 @@ export function IntakeDocumentUpload({
   kind,
   label,
   publicIntakeToken,
+  disabled = false,
 }: {
   intakeId: string
   kind: IntakeDocumentKind
   label: string
   publicIntakeToken?: string
+  disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [uploads, setUploads] = useState<IntakeDocumentRow[]>([])
@@ -156,7 +158,7 @@ export function IntakeDocumentUpload({
   }
 
   async function handleFiles(files: FileList | null) {
-    if (!files?.length) return
+    if (disabled || !files?.length) return
     setUploading(true)
     setProgress(0)
     for (const file of Array.from(files)) {
@@ -195,8 +197,8 @@ export function IntakeDocumentUpload({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading || loading}
+          onClick={() => { if (!disabled) inputRef.current?.click() }}
+          disabled={disabled || uploading || loading}
           className="inline-flex items-center gap-2 rounded-md border border-accent bg-card px-3 py-2 text-sm font-medium text-accent hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -208,6 +210,7 @@ export function IntakeDocumentUpload({
         <input
           ref={inputRef}
           type="file"
+          disabled={disabled || uploading}
           multiple
           accept={ACCEPT_ATTR}
           className="hidden"

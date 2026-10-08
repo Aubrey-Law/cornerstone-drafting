@@ -1046,7 +1046,7 @@ function PlanningGoalsField({ data, update }: StepProps) {
   )
 }
 
-export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicIntakeToken }: StepProps) {
+export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicIntakeToken, disabled }: StepProps & { disabled?: boolean }) {
   return (
     <div className="space-y-6">
       <SectionDivider title="Additional Planning Information" />
@@ -1061,6 +1061,7 @@ export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicInt
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="existing_plan"
+            disabled={disabled}
             label="will, trust, or other estate planning documents"
             publicIntakeToken={publicIntakeToken}
           />
@@ -1077,6 +1078,7 @@ export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicInt
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="divorce_settlement"
+            disabled={disabled}
             label="divorce or property settlement order"
             publicIntakeToken={publicIntakeToken}
           />
@@ -1101,6 +1103,7 @@ export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicInt
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="gift_tax_return"
+            disabled={disabled}
             label="federal or state gift tax returns"
             publicIntakeToken={publicIntakeToken}
           />
