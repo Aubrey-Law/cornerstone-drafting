@@ -1,5 +1,6 @@
 'use client'
 import { TaskPresentationSwitch, TaskPresentationView, useTaskPresentation } from '@/components/tasks/TaskPresentation'
+import type { TaskPresentation } from '@/lib/tasks/presentation'
 
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -65,6 +66,8 @@ export interface RecordTasksTabProps {
   onViewChange?: (view: TaskView) => void
   /** The caller renders the Queue/Plan switch itself, in its own header. */
   hideViewSwitch?: boolean
+  /** List, board or table when the URL names none (the matter page opens on the board). */
+  defaultPresentation?: TaskPresentation
 }
 
 /**
@@ -81,8 +84,9 @@ export function RecordTasksTab({
   view: viewMode,
   onViewChange,
   hideViewSwitch = false,
+  defaultPresentation = 'list',
 }: RecordTasksTabProps) {
-  const { presentation, selectPresentation } = useTaskPresentation()
+  const { presentation, selectPresentation } = useTaskPresentation(defaultPresentation)
   const token = useAccessToken()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [templates, setTemplates] = useState<TemplateOption[]>([])
@@ -318,7 +322,7 @@ export function RecordTasksTab({
           />
         )}
 
-        {presentation === 'list' && stageTask && view === 'open' && (
+        {presentation !== 'table' && stageTask && view === 'open' && (
           <StageTaskCard task={stageTask} onToggleItem={toggleChecklistItem} onComplete={() => void toggle(stageTask)} />
         )}
 
@@ -328,9 +332,10 @@ export function RecordTasksTab({
             <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void load()}>Retry</Button>
           </div>
         )}
-        {presentation !== 'list' && !loading && !loadError ? <TaskPresentationView tasks={[...(stageTask && view === 'open' ? [stageTask] : []), ...listed]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
+        {presentation !== 'list' && !loading && !loadError ? <TaskPresentationView tasks={[...(stageTask && view === 'open' && presentation === 'table' ? [stageTask] : []), ...listed]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
           const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
           if (updated?.status === 'done' && task.stage_key) onStageTaskCompleted?.()
+          return updated
         }} /> : loading && tasks.length === 0 ? (
           <p className="px-1 text-sm text-muted-foreground">Loading tasks…</p>
         ) : loadError && tasks.length === 0 ? null : listed.length === 0 ? (

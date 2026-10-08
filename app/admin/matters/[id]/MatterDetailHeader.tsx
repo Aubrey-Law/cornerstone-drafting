@@ -16,7 +16,9 @@ import {
   Sparkles,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatFirmDate } from '@/lib/format'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,31 +81,35 @@ export function MatterDetailHeader({
     planLabel,
     matterTypeLabel,
   ].filter((value): value is string => Boolean(value))
+  const opened = matter.opened_at ?? matter.matter_created
+  const openedOn = opened ? formatFirmDate(opened, { month: 'short', day: 'numeric', year: 'numeric' }) : null
 
   return (
-    <header className="shrink-0 border-b border-border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
+    <header className="shrink-0 border-b border-border bg-card px-4 pt-5 md:px-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-48">
           <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" aria-hidden />Matters
           </Link>
           <h1 className="mt-1 min-w-0">
-            <MatterSwitcher matterId={matter.matter_id} label={clientName} className="max-w-full px-0 text-xl sm:text-2xl" />
+            <MatterSwitcher matterId={matter.matter_id} label={clientName} className="max-w-full px-0 text-xl font-semibold tracking-tight sm:text-2xl" />
           </h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             {identityChips.map(label => (
-              <span key={label} className="rounded-full border border-border bg-muted px-2 py-0.5 font-medium text-foreground">
-                {label}
-              </span>
+              <Badge key={label} variant="outline" className="rounded-md font-medium">{label}</Badge>
             ))}
-            {matterNumber && <span className="tabular-nums">#{matterNumber}</span>}
+            {(matterNumber || openedOn) && (
+              <span className="pl-1 text-muted-foreground tabular-nums">
+                {[matterNumber ? `#${matterNumber}` : null, openedOn ? `Opened ${openedOn}` : null].filter(Boolean).join(' · ')}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
         {matter.client_phone && <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild><CallPhoneLink phone={matter.client_phone} label="Call" icon={<Phone className="size-3.5" />} /></Button>}
         <Button variant="outline" size="sm" className="hidden sm:inline-flex" disabled={!matter.client_email} onClick={onEmail}><Mail className="size-3.5" />Email</Button>
-        <Button type="button" size="sm" variant={factsRailOpen ? 'secondary' : 'ghost'} onClick={onToggleFactsRail}
+        <Button type="button" size="sm" variant={factsRailOpen ? 'selected' : 'outline'} onClick={onToggleFactsRail}
           aria-pressed={factsRailOpen} aria-label={factsRailOpen ? 'Hide matter details' : 'Show matter details'}>
           <PanelRight className="size-4" aria-hidden />
           <span className="hidden sm:inline">Details</span>
@@ -190,8 +196,8 @@ export function MatterDetailHeader({
         </DropdownMenu>
       </div>
       </div>
-      {stage && <div className="border-t border-border px-4 py-2.5 md:px-6">{stage}</div>}
-      {navigation && <div className="border-t border-border">{navigation}</div>}
+      {stage && <div className="mt-5">{stage}</div>}
+      {navigation && <div className="-mx-4 mt-4 md:-mx-6">{navigation}</div>}
     </header>
   )
 }

@@ -79,7 +79,7 @@ describe('MatterDetailHeader communication actions', () => {
     expect(within(header).getByText('Estate Planning')).toBeTruthy()
     expect(within(header).getByText('Trust plan')).toBeTruthy()
     expect(within(header).getByText('Couple')).toBeTruthy()
-    expect(within(header).queryByText(/Opened/)).toBeNull()
+    expect(within(header).getByText(/#2026-001 · Opened /)).toBeTruthy()
   })
 
   it('keeps lifecycle status out of the identity and action header', () => {

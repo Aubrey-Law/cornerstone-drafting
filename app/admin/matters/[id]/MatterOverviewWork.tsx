@@ -2,16 +2,25 @@
 
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
+import { ArrowRight, Check } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { RecordWorkSummary } from '@/lib/work/recordSummary'
 import type { MatterNextAction } from '@/lib/matterNextAction'
 import { evaluateMatterRequirements, type EngagementState } from '@/lib/lifecycle/matter'
 import { resolveIntakeReviewTarget, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
-import { formatDate, formatDateDetail } from '@/lib/utils'
+import { cn, FIRM_TIMEZONE, formatDate } from '@/lib/utils'
 import { nextMatterMilestone } from '@/lib/matter/nextMilestone'
+import { matterMilestoneTrack, milestoneTrackProgress } from '@/lib/matter/milestoneTrack'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { PipelineMatter, MatterActivity } from '@/types/database'
-import { MatterActivityTab } from './MatterActivityTab'
+import { activityEventTitle, eventMetaFor } from './activityEventMeta'
 
 const NEED_LABELS: Record<string, string> = {
   'matter.design_ready': 'Approve the design sheet',
@@ -21,10 +30,41 @@ const NEED_LABELS: Record<string, string> = {
   'matter.documents_executed': 'Record document execution',
 }
 
-export function MatterOverviewWork({ matter, nextAction, workSummary, engagement, reviewFlags, unreadCount, uploadCount, details = null, onDates, activity, onEngagement, onUploads, onMessages, onActivity, facts, composer, tasks }: {
-  facts?: ReactNode
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const ACTIVITY_WHEN = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: FIRM_TIMEZONE })
+const shortDate = (key: string) => SHORT_DATE.format(new Date(`${key}T12:00:00Z`))
+
+type FeedFilter = 'all' | 'messages' | 'notes' | 'documents' | 'system'
+const FEED_FILTERS: FeedFilter[] = ['all', 'messages', 'notes', 'documents', 'system']
+const ACTIVITY_PREVIEW = 5
+
+interface PrepItem {
+  key: string
+  label: string
+  done: boolean
+  tag?: string
+  cta?: string
+  href?: string
+  onClick?: () => void
+}
+
+function relativeDays(daysAway: number) {
+  if (daysAway < 0) return `${Math.abs(daysAway)} day${daysAway === -1 ? '' : 's'} overdue`
+  if (daysAway === 0) return 'Today'
+  return `In ${daysAway} day${daysAway === 1 ? '' : 's'}`
+}
+
+/** Snoozing wakes the item at 8am local on the chosen day. */
+function wakeAt(days: number) {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  date.setHours(8, 0, 0, 0)
+  return date.toISOString()
+}
+
+export function MatterOverviewWork({ matter, nextAction, workSummary, engagement, reviewFlags, unreadCount, uploadCount, details = null, onDates, activity, onEngagement, onUploads, onMessages, onActivity, onSnooze, sidebar, composer }: {
+  sidebar?: ReactNode
   composer?: ReactNode
-  tasks?: ReactNode
   matter: PipelineMatter
   nextAction: MatterNextAction
   workSummary: RecordWorkSummary | null
@@ -40,8 +80,10 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
   onUploads: () => void
   onMessages: () => void
   onActivity: () => void
+  /** Snoozes the summarized work item until the given ISO time; omitted where snoozing is unsupported. */
+  onSnooze?: (workKey: string, until: string) => void | Promise<void>
 }) {
-  const [feedFilter, setFeedFilter] = useState<'all' | 'notes' | 'documents' | 'messages' | 'system'>('all')
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all')
   const feed = activity.filter(item => {
     const communication = /message|email|sms|call/.test(item.event_type) || item.metadata?.channel === 'call' || item.metadata?.type === 'client_comm'
     const document = /document|draft/.test(item.event_type)
@@ -57,81 +99,148 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
   const stateLabel = !useSummary && nextAction.kind === 'closed' ? 'Closed' : workState === 'blocked' ? 'Blocked' : workState === 'snoozed' ? 'Snoozed' : workState === 'waiting' ? 'Waiting' : 'Ready to work'
   const ownerLabel = useSummary ? workSummary.owner === 'client' ? 'Client' : workSummary.owner === 'automation' ? 'Automation' : 'Firm' : workState === 'waiting' ? 'Client' : 'Firm'
   const priorityLabel = useSummary && workState === 'open' ? ['Critical', 'Must do', 'Soon', 'Planned', 'Later'][workSummary.priorityBand] : null
+  const reasons = useSummary ? workSummary.priorityReasons.map(reason => reason.label).filter(label => label !== stateLabel) : []
   const primaryLabel = useSummary ? workState === 'open' ? workSummary.actionLabel : workState === 'blocked' ? 'Review blocker' : workState === 'snoozed' ? 'Review snoozed work' : 'Review status' : nextAction.cta
   const actionHref = useSummary ? workSummary.href : nextAction.href
-  const needs = evaluateMatterRequirements(matter, engagement, reviewFlags).filter(item => !item.satisfied && item.key !== 'matter.review_flags_resolved')
-  const milestone = nextMatterMilestone(matter, details)
-  const visibleNeeds = needs.filter(item => !(item.key === 'matter.engagement_signed' && engagementAction) && !(item.key === 'matter.design_ready' && actionHref.includes('/admin/drafting/')))
+  const dueAt = useSummary ? workSummary.dueAt : null
+  const eyebrow = `Next for ${ownerLabel === 'Automation' ? 'automation' : `the ${ownerLabel.toLowerCase()}`}${dueAt ? ` · due ${SHORT_DATE.format(new Date(dueAt))}` : ''}`
+  const canSnooze = Boolean(onSnooze && useSummary && workState === 'open')
+
+  const requirements = evaluateMatterRequirements(matter, engagement, reviewFlags).filter(item => item.key !== 'matter.review_flags_resolved')
+  const visibleRequirements = requirements.filter(item => !(item.key === 'matter.engagement_signed' && engagementAction) && !(item.key === 'matter.design_ready' && actionHref.includes('/admin/drafting/')))
   const showUploads = uploadCount > 0 && workSummary?.workKey !== `matter:${matter.matter_id}:review-uploads`
-  const hasAttention = reviewFlags.length > 0 || visibleNeeds.length > 0 || unreadCount > 0 || showUploads
-  const attentionCount = reviewFlags.length + visibleNeeds.length + (showUploads ? 1 : 0) + (unreadCount > 0 ? 1 : 0)
+  const prep: PrepItem[] = [
+    ...reviewFlags.map(flag => ({
+      key: flag.key, label: flag.label, done: false, tag: 'Needs data', cta: 'Fix',
+      href: resolveIntakeReviewTarget(flag).href(matter.matter_id),
+    })),
+    ...visibleRequirements.map(item => ({
+      key: item.key, label: NEED_LABELS[item.key] ?? item.label, done: item.satisfied,
+      cta: item.key === 'matter.engagement_signed' ? 'Review agreement' : 'Review',
+      href: item.key === 'matter.engagement_signed' ? '?tab=billing'
+        : item.key === 'matter.design_ready' ? `/admin/drafting/${matter.matter_id}?step=design`
+        : item.key === 'matter.drafts_shared' ? `/admin/drafting/${matter.matter_id}?step=review`
+        : '?tab=tasks',
+    })),
+    ...(showUploads ? [{ key: 'uploads', label: `${uploadCount} client upload${uploadCount === 1 ? '' : 's'} to review`, done: false, cta: 'Review uploads', onClick: onUploads }] : []),
+    ...(unreadCount > 0 ? [{ key: 'messages', label: `${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`, done: false, cta: 'Read messages', onClick: onMessages }] : []),
+  ]
+  const hasOpenPrep = prep.some(item => !item.done)
+
+  const milestone = nextMatterMilestone(matter, details)
+  const track = matterMilestoneTrack(matter, details)
+  const trackFill = milestoneTrackProgress(track)
+
   return <div className="@container/overview min-w-0">
   <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
     <div className="flex min-w-0 flex-col gap-5">
-      <section aria-label="Matter focus brief" className="rounded-lg border bg-card p-5 sm:p-6">
-        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <section aria-label="Next action" className="rounded-lg border bg-card px-6 py-5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span aria-hidden className="size-1.5 rounded-full bg-selected-border" />
-          Focus brief
+          {eyebrow}
         </div>
-        <section aria-label="Next action" className="mt-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded border border-border bg-muted px-2 py-1 font-medium text-foreground">{stateLabel}</span>
-            {priorityLabel && <span>{priorityLabel}</span>}
-            <span>Owner: {ownerLabel}</span>
-          </div>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">{useSummary ? workSummary.title : nextAction.title}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{useSummary ? workSummary.priorityReasons.map(reason => reason.label).join(' · ') : nextAction.detail}</p>
-          {useSummary && workSummary.dueAt && <p className="mt-3 text-sm"><span className="text-muted-foreground">Due </span><time dateTime={workSummary.dueAt}>{formatDateDetail(workSummary.dueAt)}</time></p>}
-          <div className="mt-4">{!useSummary && engagementAction ? <Button size="sm" onClick={onEngagement}>{nextAction.cta}</Button> : <Button size="sm" asChild><Link href={actionHref}>{primaryLabel}</Link></Button>}</div>
-        </section>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <Badge variant="outline" className={cn('rounded-sm font-medium', workState === 'blocked' && 'border-amber-border bg-amber-bg text-amber')}>{stateLabel}</Badge>
+          {priorityLabel && <span>{priorityLabel}</span>}
+          <span>· Owner: {ownerLabel}</span>
+          {reasons.length > 0 && <span>· {reasons.join(' · ')}</span>}
+        </div>
+        <h2 className="mt-1.5 text-xl font-semibold tracking-tight">{useSummary ? workSummary.title : nextAction.title}</h2>
+        {!useSummary && nextAction.detail && <p className="mt-1 text-muted-foreground">{nextAction.detail}</p>}
 
-        {hasAttention && <section aria-labelledby="matter-attention-title" className="mt-5 border-t pt-4">
-          <h2 id="matter-attention-title" className="text-sm font-semibold">Needs attention <span className="ml-1 text-xs font-normal text-muted-foreground">{attentionCount}</span></h2>
-          <ul className="mt-2 divide-y">
-            {reviewFlags.map(flag => <li key={flag.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{flag.label}</span><Link className="shrink-0 font-medium text-primary hover:underline" href={resolveIntakeReviewTarget(flag).href(matter.matter_id)}>Review</Link></li>)}
-            {visibleNeeds.map(item => <li key={item.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{NEED_LABELS[item.key] ?? item.label}<span className="mt-1 block text-xs text-muted-foreground">{item.owner === 'client' ? 'Waiting on client' : item.owner === 'attorney' ? 'Attorney' : 'Firm'}</span></span>{item.key === 'matter.engagement_signed' ? <Link className="shrink-0 font-medium text-primary hover:underline" href="?tab=billing">Review agreement</Link> : <Link className="shrink-0 font-medium text-primary hover:underline" href={item.key === 'matter.design_ready' ? `/admin/drafting/${matter.matter_id}?step=design` : item.key === 'matter.drafts_shared' ? `/admin/drafting/${matter.matter_id}?step=review` : `?tab=tasks`}>Review</Link>}</li>)}
-            {showUploads && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{uploadCount} client upload{uploadCount === 1 ? '' : 's'} to review</span><Button variant="link" onClick={onUploads}>Review uploads</Button></li>}
-            {unreadCount > 0 && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{unreadCount} unread message{unreadCount === 1 ? '' : 's'}</span><Button variant="link" onClick={onMessages}>Read messages</Button></li>}
-          </ul>
-        </section>}
+        {hasOpenPrep && <ul aria-label="Prep checklist" className="mt-4 divide-y rounded-lg border">
+          {prep.map(item => <li key={item.key} className="flex items-center gap-3 px-3.5 py-2.5">
+            <span aria-hidden className={cn('flex size-4 shrink-0 items-center justify-center rounded-sm', item.done ? 'bg-success text-success-foreground' : 'border-[1.5px] border-input')}>
+              {item.done && <Check className="size-2.5" strokeWidth={3} />}
+            </span>
+            <span className={cn('min-w-0 flex-1', item.done && 'text-muted-foreground line-through')}>
+              {item.label}{item.done && <span className="sr-only"> (done)</span>}
+            </span>
+            {item.tag && !item.done && <Badge variant="outline" className="border-amber-border bg-amber-bg text-micro text-amber">{item.tag}</Badge>}
+            {!item.done && item.cta && (item.href
+              ? <Link className="shrink-0 font-medium text-primary hover:underline" href={item.href}>{item.cta}</Link>
+              : <Button variant="link" className="h-auto p-0" onClick={item.onClick}>{item.cta}</Button>)}
+          </li>)}
+        </ul>}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!useSummary && engagementAction
+            ? <Button onClick={onEngagement}>{nextAction.cta}<ArrowRight aria-hidden className="size-3.5" /></Button>
+            : <Button asChild><Link href={actionHref}>{primaryLabel}<ArrowRight aria-hidden className="size-3.5" /></Link></Button>}
+          {canSnooze && workSummary && <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="outline">Snooze</Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => void onSnooze?.(workSummary.workKey, wakeAt(1))}>Until tomorrow</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void onSnooze?.(workSummary.workKey, wakeAt(3))}>For 3 days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void onSnooze?.(workSummary.workKey, wakeAt(7))}>For a week</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>}
+        </div>
       </section>
 
-      <section aria-label="Matter milestones" className="rounded-lg border bg-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <section aria-label="Matter milestones" className="rounded-lg border bg-card px-6 pb-5 pt-4">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Milestones</h2>
-          <Button variant="link" size="sm" className="h-auto p-0" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
+          <p className="text-compact text-muted-foreground">
+            {milestone ? <>
+              Next: <strong className="font-medium text-foreground">{milestone.label}</strong>
+              {' · '}<time dateTime={milestone.date}>{formatDate(milestone.date)}</time>
+              {' · '}<span className={milestone.daysAway < 0 ? 'font-medium text-destructive' : undefined}>{relativeDays(milestone.daysAway)}</span>
+              {milestone.derived ? ' · Calculated from target signing' : ''}
+              {' · '}
+            </> : <>No milestone scheduled. </>}
+            <Button variant="link" className="h-auto p-0 text-compact" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
+          </p>
         </div>
-        {milestone ? <div className="mt-4 flex items-start gap-3">
-          <span aria-hidden className="mt-1 size-3 shrink-0 rounded-full border-2 border-selected-border bg-card" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">{milestone.label}</p>
-            <p className="mt-1 text-sm"><time dateTime={milestone.date}>{formatDate(milestone.date)}</time></p>
-            <p className={milestone.daysAway < 0 ? 'mt-1 text-sm font-medium text-destructive' : 'mt-1 text-sm text-muted-foreground'}>
-              {milestone.daysAway < 0 ? `${Math.abs(milestone.daysAway)} day${milestone.daysAway === -1 ? '' : 's'} overdue` : milestone.daysAway === 0 ? 'Today' : `In ${milestone.daysAway} day${milestone.daysAway === 1 ? '' : 's'}`}
-              {milestone.derived ? ' · calculated from target signing' : ''}
-            </p>
-          </div>
-        </div> : <p className="mt-3 text-sm text-muted-foreground">No milestone scheduled.</p>}
+        <ol aria-label="Milestone track" className="relative grid grid-cols-5">
+          <span aria-hidden className="absolute inset-x-[10%] top-[7px] h-0.5 bg-border" />
+          <span aria-hidden className="absolute left-[10%] top-[7px] h-0.5 bg-primary" style={{ width: `${trackFill * 80}%` }} />
+          {track.map(point => <li key={point.label} className="relative flex min-w-0 flex-col items-center gap-1.5 text-center">
+            <span aria-hidden className={cn('block size-4 rounded-full',
+              point.state === 'done' && 'bg-primary',
+              point.state === 'next' && 'border-[3px] border-selected-border bg-card',
+              point.state === 'later' && 'border-2 border-border bg-card')} />
+            <span className="text-compact font-medium">{point.label}<span className="sr-only">{point.state === 'done' ? ' (done)' : point.state === 'next' ? ' (next)' : ''}</span></span>
+            <span className="-mt-1.5 text-xs text-muted-foreground">{point.date ? `${point.planned ? 'Planned ' : ''}${shortDate(point.date)}` : '—'}</span>
+          </li>)}
+        </ol>
       </section>
 
-      <section aria-label="Matter communication and activity" className="space-y-5">
-        {composer}
-        <section aria-label="Matter activity" className="rounded-lg border bg-card p-4 sm:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">Recent activity</h2>
-            <Button variant="link" size="sm" onClick={onActivity}>View all activity</Button>
+      <section aria-label="Matter communication and activity" className="overflow-hidden rounded-lg border bg-card">
+        {composer && <div className="border-b">{composer}</div>}
+        <div className="px-4 pb-2.5 pt-1.5">
+          <div role="group" aria-label="Activity filter" className="flex flex-wrap gap-1.5 pb-1 pt-2">
+            {FEED_FILTERS.map(filter => <button key={filter} type="button" aria-pressed={feedFilter === filter} onClick={() => setFeedFilter(filter)}
+              className={cn('rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                feedFilter === filter ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border bg-card text-muted-foreground hover:bg-accent')}>
+              {filter[0].toUpperCase() + filter.slice(1)}
+            </button>)}
           </div>
-          <div role="group" aria-label="Activity filter" className="mb-4 flex flex-wrap gap-2">
-            {(['all', 'messages', 'notes', 'documents', 'system'] as const).map(filter => <Button key={filter} size="sm" variant={feedFilter === filter ? 'secondary' : 'outline'} aria-pressed={feedFilter === filter} className="h-7 rounded-full px-3 text-xs" onClick={() => setFeedFilter(filter)}>{filter[0].toUpperCase() + filter.slice(1)}</Button>)}
-          </div>
-          {feed.length ? <MatterActivityTab activity={feed.slice(0, 8)} loading={false} /> : <p className="py-6 text-sm text-muted-foreground">{feedFilter === 'all' ? 'No activity recorded yet.' : 'No matching activity in this preview. Open all activity to explore the full history.'}</p>}
-        </section>
+          {feed.length ? <ul aria-label="Recent activity">
+            {feed.slice(0, ACTIVITY_PREVIEW).map(item => {
+              const meta = eventMetaFor(item.event_type)
+              const Icon = meta.icon
+              return <li key={item.id} className="flex gap-3 border-b border-surface-2 py-2.5">
+                <span role="img" aria-label={meta.label} className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+                  <Icon aria-hidden className="size-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between gap-3">
+                    <span className="break-words font-medium">{activityEventTitle(item)}</span>
+                    <time dateTime={item.created_at} className="shrink-0 whitespace-nowrap text-micro text-muted-foreground">{ACTIVITY_WHEN.format(new Date(item.created_at))}</time>
+                  </div>
+                  {item.detail && <p className="break-words text-compact text-muted-foreground">{item.detail}</p>}
+                </div>
+              </li>
+            })}
+          </ul> : <p className="py-6 text-sm text-muted-foreground">{feedFilter === 'all' ? 'No activity recorded yet.' : 'No matching activity in this preview. Open all activity to explore the full history.'}</p>}
+          <Button variant="link" className="h-auto px-0 pt-2.5" onClick={onActivity}>View all activity</Button>
+        </div>
       </section>
     </div>
 
-    <aside aria-label="Matter summary" className="space-y-4">
-      {facts}
-      {tasks && <section className="rounded-lg border bg-card p-4">{tasks}</section>}
+    <aside aria-label="Matter summary" className="min-w-0">
+      {sidebar}
     </aside>
   </div>
   </div>
