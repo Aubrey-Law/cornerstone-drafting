@@ -5,6 +5,7 @@ import {
   INTAKE_BLOCK_REGISTRY,
   evaluateIntakeBlock,
   getIntakeBlock,
+  getIntakeBlockPersistenceSnapshot,
   persistIntakeBlockOnLeave,
   type IntakeBlockPersistenceContext,
 } from '@/lib/intake/forms/blockRegistry'
@@ -153,5 +154,35 @@ describe('canonical block persistence on section leave', () => {
     await persistIntakeBlockOnLeave('financial_assets', { persistenceKey: 'other', _children: [{}] }, adapters)
     expect(writes).toEqual([])
     await expect(persistIntakeBlockOnLeave('children', { _children: [] }, { ...adapters, saveChildren: async () => { throw new Error('save failed') } })).rejects.toThrow('save failed')
+  })
+
+  it.each([
+    ['client_fiduciaries', 'trustee', 'client'], ['client_fiduciaries', 'personal_rep', 'client'],
+    ['client_fiduciaries', 'poa', 'client'], ['client_fiduciaries', 'hcp', 'client'],
+    ['spouse_fiduciaries', 'personal_rep', 'spouse'], ['spouse_fiduciaries', 'poa', 'spouse'],
+    ['spouse_fiduciaries', 'hcp', 'spouse'], ['college_agents', 'poa', 'client'],
+    ['college_agents', 'hcp', 'client'], ['guardian', 'guardian', 'client'],
+  ] as const)('persists explicit final nominee removal for %s/%s/%s and propagates a failed clear', async (id, role, party) => {
+    const { writes, adapters } = context()
+    const key = `_fid_${role}_${party}`
+    const previous = { [key]: [{ first_name: 'Pat', last_name: 'Example', priority: 1 }] }
+    const current = { [key]: [] }
+    const snapshot = getIntakeBlockPersistenceSnapshot(id, previous)
+    await persistIntakeBlockOnLeave(id, current, adapters, snapshot)
+    expect(writes).toEqual([['fiduciaries', [], role, party]])
+    await expect(persistIntakeBlockOnLeave(id, current, { ...adapters, saveFiduciaries: async () => { throw new Error('clear failed') } }, snapshot)).rejects.toThrow('clear failed')
+  })
+
+  it('does not rewrite untouched or absent fiduciary roles when another role changes', async () => {
+    const { writes, adapters } = context()
+    const previous = { _fid_poa_client: [{ first_name: 'Pat', priority: 1 }], _fid_hcp_client: [], _fid_trustee_client: [{ first_name: 'Lee', priority: 1 }] }
+    await persistIntakeBlockOnLeave('client_fiduciaries', { ...previous, _fid_poa_client: [] }, adapters, getIntakeBlockPersistenceSnapshot('client_fiduciaries', previous))
+    expect(writes).toEqual([['fiduciaries', [], 'poa', 'client']])
+  })
+
+  it('treats a present empty role as an explicit replacement when no saved baseline is supplied', async () => {
+    const { writes, adapters } = context()
+    await persistIntakeBlockOnLeave('college_agents', { _fid_poa_client: [] }, adapters)
+    expect(writes).toEqual([['fiduciaries', [], 'poa', 'client']])
   })
 })

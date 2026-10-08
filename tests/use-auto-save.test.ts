@@ -141,4 +141,43 @@ describe('useAutoSave', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('drains an older running debounce request before flushing a newer snapshot', async () => {
+    let finishOlder!: () => void
+    let storedName = ''
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body))
+      if (body.first_name === 'Older') await new Promise<void>((resolve) => { finishOlder = resolve })
+      storedName = body.first_name
+      return { ok: true, json: async () => ({}) }
+    })
+    const { result } = renderHook(() => useAutoSave('intake-1', 1500))
+    act(() => result.current.debouncedSave({ first_name: 'Older' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    act(() => result.current.debouncedSave({ first_name: 'Latest' }))
+    let flushed = false
+    let pending!: Promise<boolean>
+    await act(async () => {
+      pending = result.current.flush().then((ok) => { flushed = true; return ok })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(flushed).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => { finishOlder(); expect(await pending).toBe(true) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(storedName).toBe('Latest')
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains a failed explicit flush snapshot for retry', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'offline' }) })
+    const { result } = renderHook(() => useAutoSave('intake-1'))
+    act(() => result.current.trackForFlush({ first_name: 'Ada' }))
+    await act(async () => { expect(await result.current.flush()).toBe(false) })
+    await act(async () => { expect(await result.current.flush()).toBe(true) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).first_name).toBe('Ada')
+  })
 })

@@ -20,8 +20,9 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   const [status, setStatus] = useState<SaveStatus>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef<Record<string, unknown> | null>(null)
+  const saveTailRef = useRef<Promise<boolean> | null>(null)
 
-  const persist = useCallback(
+  const persistSnapshot = useCallback(
     async (
       data: Record<string, unknown>,
       opts?: { keepalive?: boolean },
@@ -183,11 +184,30 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         console.error('Auto-save error:', err)
         return false
       }
-      setStatus('saved')
+      setStatus(latestRef.current && latestRef.current !== data ? 'dirty' : 'saved')
       return true
     },
     [intakeId, publicIntakeToken]
   )
+
+  // A snapshot may already be on the wire when the next debounce/flush starts.
+  // Serialize every hook-owned save so an older response can never land after
+  // the final latest snapshot (or race the submitted-status request).
+  const persist = useCallback((data: Record<string, unknown>, opts?: { keepalive?: boolean }): Promise<boolean> => {
+    const run = () => persistSnapshot(data, opts).catch((error) => {
+      setStatus('error')
+      toast.error('Failed to save your progress. Please try again.')
+      console.error('Auto-save error:', error)
+      return false
+    })
+    const previous = saveTailRef.current
+    const pending = previous ? previous.then(run, run) : run()
+    saveTailRef.current = pending
+    void pending.then(() => {
+      if (saveTailRef.current === pending) saveTailRef.current = null
+    })
+    return pending
+  }, [persistSnapshot])
 
   const debouncedSave = useCallback(
     (data: Record<string, unknown>) => {
@@ -210,10 +230,13 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   )
 
   const saveNow = useCallback(
-    (data: Record<string, unknown>) => {
+    async (data: Record<string, unknown>) => {
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
-      return persist(data)
+      latestRef.current = data
+      const ok = await persist(data)
+      if (ok && latestRef.current === data) latestRef.current = null
+      return ok
     },
     [persist]
   )
@@ -234,8 +257,9 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
       const pending = latestRef.current
-      latestRef.current = null
-      void persist(pending, { keepalive: true })
+      void persist(pending, { keepalive: true }).then((ok) => {
+        if (ok && latestRef.current === pending) latestRef.current = null
+      })
     }
 
     function onVisibilityChange() {
@@ -251,16 +275,21 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   }, [persist])
 
   const flush = useCallback(async () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
+    for (;;) {
+      if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
+      // Recheck after each await: a debounce may have queued another snapshot
+      // while an older request was running. Flush must drain the complete tail.
+      while (saveTailRef.current) await saveTailRef.current
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = null
+      const pending = latestRef.current
+      if (!pending) return true
+      const ok = await persist(pending)
+      if (!ok) return false
+      if (latestRef.current === pending) latestRef.current = null
+      // A newer edit during this save remains pending and must also be saved.
     }
-    if (latestRef.current) {
-      const ok = await persist(latestRef.current)
-      latestRef.current = null
-      return ok
-    }
-    return true
   }, [persist])
 
   return { status, debouncedSave, saveNow, flush, trackForFlush }

@@ -28,7 +28,9 @@ vi.mock('@/components/intake/formEngine/CompiledIntakeSections', () => ({
       <button onClick={() => props.onToggle(section.id)}>{section.title}</button>
       {props.openId === section.id && section.items.map(({ item }) => item.kind === 'field'
         ? <input key={item.id} aria-label={item.label} disabled={props.mode === 'attorney'} value={String(props.data[item.fieldId === 'client_first_name' ? 'first_name' : item.fieldId === 'client_last_name' ? 'last_name' : item.fieldId === 'client_email' ? 'email' : item.fieldId === 'client_phone' ? 'phone' : item.fieldId] ?? '')} onChange={(e) => props.update(item.fieldId === 'client_first_name' ? 'first_name' : item.fieldId, e.target.value)} />
-        : <button key={item.id} disabled={props.mode === 'attorney'} onClick={() => props.update(item.blockId === 'children' ? '_children' : '_additional_contacts', [{ first_name: item.blockId === 'children' && props.data._children ? 'Updated' : 'New', last_name: 'Person' }])}>Edit {item.blockId}</button>)}
+        : item.blockId === 'client_fiduciaries' || item.blockId === 'college_agents' || item.blockId === 'spouse_fiduciaries'
+          ? <button key={item.id} onClick={() => props.update(item.blockId === 'spouse_fiduciaries' ? '_fid_poa_spouse' : '_fid_poa_client', [])}>Remove final nominee</button>
+          : <button key={item.id} disabled={props.mode === 'attorney'} onClick={() => props.update(item.blockId === 'children' ? '_children' : '_additional_contacts', [{ first_name: item.blockId === 'children' && props.data._children ? 'Updated' : 'New', last_name: 'Person' }])}>Edit {item.blockId}</button>)}
     </div>)}
   </div>,
 }))
@@ -58,6 +60,7 @@ beforeEach(() => {
   mocks.flush.mockResolvedValue(true)
   mocks.children.mockResolvedValue(undefined)
   mocks.additional.mockResolvedValue(undefined)
+  mocks.fiduciaries.mockResolvedValue(undefined)
   mocks.session.mockResolvedValue({ data: { session: { access_token: 'session-1' } } })
   vi.stubGlobal('fetch', submitFetch)
 })
@@ -120,6 +123,25 @@ describe('compiled interview workflow', () => {
     await submit()
     await waitFor(() => expect(mocks.error).toHaveBeenCalled())
     expect(submitFetch).not.toHaveBeenCalled()
+  })
+
+  it.each(['client_fiduciaries', 'spouse_fiduciaries', 'college_agents'] as const)('keeps final nominee removal dirty after a failed %s clear and retries before submit', async (blockId) => {
+    const compiled = compileIntakeForm({ schemaVersion: 1, key: blockId === 'college_agents' ? 'college_prep' : 'estate', title: 'Intake', sections: [
+      { id: 'fiduciaries', title: 'Fiduciaries', audience: 'client_and_staff', items: [{ kind: 'block', id: 'roles', blockId }] },
+      { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'review', blockId: 'review_submit' }] },
+    ] }, 'client')
+    if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
+    const party = blockId === 'spouse_fiduciaries' ? 'spouse' : 'client'
+    mount({ ...completeContact, [`_fid_poa_${party}`]: [{ first_name: 'Pat', last_name: 'Example', priority: 1 }], [`_fid_hcp_${party}`]: [] }, { compiledForm: compiled.form })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove final nominee' }))
+    mocks.fiduciaries.mockRejectedValueOnce(new Error('failed clear'))
+    await submit()
+    await waitFor(() => expect(mocks.fiduciaries).toHaveBeenCalledWith([], 'poa', party))
+    expect(submitFetch).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Submit questionnaire' }))
+    await waitFor(() => expect(submitFetch).toHaveBeenCalled())
+    expect(mocks.fiduciaries).toHaveBeenCalledTimes(2)
+    expect(mocks.fiduciaries).toHaveBeenLastCalledWith([], 'poa', party)
   })
 
   it('retains edited hidden block answers and skips their explicit persistence', async () => {

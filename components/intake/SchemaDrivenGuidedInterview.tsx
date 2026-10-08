@@ -111,7 +111,7 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
     const current = dataRef.current
     const snapshot = getIntakeBlockPersistenceSnapshot(id, current)
     if (savedBlocks.current.get(id) === snapshot) return
-    const pending = persistIntakeBlockOnLeave(id, current, contacts)
+    const pending = persistIntakeBlockOnLeave(id, current, contacts, savedBlocks.current.get(id))
     inFlight.current.set(id, pending)
     try {
       await pending
@@ -164,8 +164,8 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
       let stable = false
       for (let attempt = 0; attempt < 5; attempt++) {
         const snapshot = dataRef.current
-        // The legacy flush clears its pending ref after awaiting persistence.
-        // Re-track the current snapshot so a mid-save edit cannot be lost.
+        // Flush drains hook-owned saves; re-track the current data snapshot so
+        // retries and edits made during block persistence stay synchronized.
         trackForFlush(snapshot)
         if (!await flush()) {
           toast.error('We could not save your latest changes. Please try again before submitting.')

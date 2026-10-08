@@ -194,7 +194,7 @@ export async function POST(req: Request) {
 
       // Wipe existing roles of this type. delete().eq() chains operate on
       // the matching rows directly — no need to pre-fetch the ids.
-      const [, existingContacts] = await Promise.all([
+      const [deletedRoles, existingContacts] = await Promise.all([
         admin
           .from('contact_roles')
           .delete()
@@ -206,8 +206,10 @@ export async function POST(req: Request) {
               .from('contacts')
               .select('id, first_name, last_name')
               .eq('client_intake_id', intakeId)
-          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }> }),
+          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }>, error: null }),
       ])
+      if (deletedRoles.error) throw new Error(deletedRoles.error.message)
+      if (existingContacts.error) throw new Error(existingContacts.error.message)
 
       const contactRows =
         (existingContacts.data ?? []) as Array<{ id: string; first_name: string; last_name: string }>
@@ -314,11 +316,12 @@ export async function POST(req: Request) {
 
     if (action === 'save_additional_contacts') {
       const { contacts: nominees } = body
-      await admin
+      const { error: deleteError } = await admin
         .from('contacts')
         .delete()
         .eq('client_intake_id', intakeId)
         .eq('source', CLIENT_INTAKE_ADDITIONAL_SOURCE)
+      if (deleteError) throw new Error(deleteError.message)
 
       const rows = (nominees ?? [])
         .filter(

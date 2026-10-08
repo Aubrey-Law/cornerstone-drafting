@@ -208,13 +208,18 @@ export function getIntakeBlockPersistenceSnapshot(id: IntakeBlockId, data: Intak
   return JSON.stringify(keys.map((key) => data[key]))
 }
 
-export async function persistIntakeBlockOnLeave(id: IntakeBlockId, data: IntakeRow, context: IntakeBlockPersistenceContext): Promise<void> {
+export async function persistIntakeBlockOnLeave(id: IntakeBlockId, data: IntakeRow, context: IntakeBlockPersistenceContext, previousSnapshot?: string): Promise<void> {
   if (!getIntakeBlock(id).persistOnLeave) return
   if (id === 'spouse_details' && data._spouse) await context.saveSpouse(record(data._spouse))
   if (id === 'children' && data._children) await context.saveChildren(records(data._children))
   if (id === 'additional_contacts' || id === 'college_parents') await context.saveAdditionalContacts(records(data._additional_contacts))
-  for (const [role, party] of SAVE_ROLES[id] ?? []) {
-    const entries = records(data[`_fid_${role}_${party}`]).filter((entry) => text(entry, 'first_name') || text(entry, 'last_name'))
-    if (entries.length) await context.saveFiduciaries(entries as Array<Record<string, unknown> & { priority: number }>, role, party)
+  const previousValues: unknown[] | undefined = previousSnapshot === undefined ? undefined : JSON.parse(previousSnapshot)
+  for (const [index, [role, party]] of (SAVE_ROLES[id] ?? []).entries()) {
+    const value = data[`_fid_${role}_${party}`]
+    // An absent role is never a deletion request. In the compiled shell the
+    // saved baseline also distinguishes an edited clear from untouched []s.
+    if (!Array.isArray(value) || (previousValues && JSON.stringify(value) === JSON.stringify(previousValues[index]))) continue
+    const entries = records(value).filter((entry) => text(entry, 'first_name') || text(entry, 'last_name'))
+    await context.saveFiduciaries(entries as Array<Record<string, unknown> & { priority: number }>, role, party)
   }
 }
