@@ -92,6 +92,10 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
       const next = addItem(localDefinition, catalogSection, item)
       change(next); setSelection({ kind: 'item', sectionId: catalogSection, itemId: next.sections.find(section => section.id === catalogSection)!.items.at(-1)!.id }); setCatalogSection(null)
     }} />
+    <AlertDialog open={draft.confirmingDeparture} onOpenChange={open => { if (!open) draft.cancelDeparture() }}><AlertDialogContent onCloseAutoFocus={event => { event.preventDefault(); draft.restoreDepartureFocus() }}>
+      <AlertDialogHeader><AlertDialogTitle>Leave without saving?</AlertDialogTitle><AlertDialogDescription>You have unsaved intake form changes. Leave without saving them?</AlertDialogDescription></AlertDialogHeader>
+      <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={draft.confirmDeparture}>Leave</AlertDialogAction></AlertDialogFooter>
+    </AlertDialogContent></AlertDialog>
     <AlertDialog open={Boolean(removing)} onOpenChange={open => { if (!open) setRemoving(null) }}><AlertDialogContent onCloseAutoFocus={event => { event.preventDefault(); restoreFocus() }}>
       <AlertDialogHeader><AlertDialogTitle>Remove {removing?.kind === 'section' ? 'section and its items' : 'item'}?</AlertDialogTitle><AlertDialogDescription>This changes only this draft. Conditions elsewhere may need updating.</AlertDialogDescription></AlertDialogHeader>
       <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => {

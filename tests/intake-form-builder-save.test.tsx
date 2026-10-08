@@ -17,6 +17,12 @@ const click = (name: string) => fireEvent.click(screen.getByRole('button', { nam
 const edit = (title = 'Changed title') => fireEvent.change(screen.getByLabelText('Form title'), { target: { value: title } })
 const title = () => (screen.getByLabelText('Form title') as HTMLInputElement).value
 const mount = () => render(<IntakeFormEditorClient initialSnapshot={fixture()} catalog={getIntakeFormBuilderCatalog()} />)
+function observeDeparture() {
+  const assign = vi.fn()
+  // jsdom cannot navigate or replace Location.assign; keep the real DOM and intercept only that boundary.
+  vi.stubGlobal('window', new Proxy(window, { get: (target, key) => key === 'location' ? { ...target.location, assign } : Reflect.get(target, key, target) }))
+  return assign
+}
 
 describe('intake builder explicit save and recovery', () => {
   beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
@@ -89,8 +95,10 @@ describe('intake builder explicit save and recovery', () => {
   })
 
   it('keeps unload protection through saving, errors and conflicts, and cleans it up on unmount', async () => {
-    const { unmount } = mount(); edit()
+    const { unmount } = mount()
     const unload = () => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented }
+    expect(unload()).toBe(false); edit(); expect(unload()).toBe(true)
+    edit('Estate intake'); expect(unload()).toBe(false); edit()
     let resolve!: (value: Response) => void
     vi.mocked(fetch).mockReturnValueOnce(new Promise(done => { resolve = done })); click('Save draft'); expect(unload()).toBe(true)
     resolve(response({}, 500)); await screen.findByRole('button', { name: 'Retry save' }); expect(unload()).toBe(true)
@@ -109,19 +117,59 @@ describe('intake builder explicit save and recovery', () => {
     click('Copy local definition'); await waitFor(() => expect(download).toHaveBeenCalledOnce()); expect(create.mock.calls[0][0]).toBeInstanceOf(Blob); expect(revoke).toHaveBeenCalledWith('blob:local')
   })
 
-  it('protects dirty navigation but exempts new tabs, downloads, modifiers and same-page anchors', () => {
-    mount(); const unload = () => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented }
-    expect(unload()).toBe(false); edit(); expect(unload()).toBe(true)
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('cancels intercepted navigation without losing changes and restores link focus', async () => {
+    mount(); edit()
+    const assign = observeDeparture()
+    const link = screen.getByRole('link', { name: 'Intake forms' })
+    link.focus(); fireEvent.click(link)
+    expect(screen.getByRole('alertdialog').textContent).toContain('You have unsaved intake form changes. Leave without saving them?')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+    click('Cancel')
+    await waitFor(() => expect(document.activeElement).toBe(link))
+    expect(title()).toBe('Changed title'); expect(assign).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    fireEvent.click(link); expect(screen.getByRole('alertdialog')).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+    await waitFor(() => expect(document.activeElement).toBe(link))
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('leaves exactly once for the captured destination even if the link changes while confirming', () => {
+    mount(); edit()
+    const link = screen.getByRole('link', { name: 'Intake forms' })
+    link.setAttribute('href', '/admin/matters?filter=open#recent')
+    fireEvent.click(link)
+    link.setAttribute('href', '/admin/drafting')
+    fireEvent.click(link)
+    const leave = screen.getByRole('button', { name: 'Leave' })
+    const assign = observeDeparture()
+    fireEvent.click(leave); fireEvent.click(leave)
+    expect(assign).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}/admin/matters?filter=open#recent`)
+    const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload)
+    expect(unload.defaultPrevented).toBe(false)
+  })
+
+  it('exempts clean state, modified clicks, downloads, non-self targets and same-page anchors, then removes the capture listener', () => {
+    const { unmount } = mount()
     const link = document.createElement('a'); link.href = '/admin/matters'; document.body.append(link)
-    // Avoid jsdom's navigation implementation while observing the capture guard's decision.
-    let reachedTarget = false
-    link.addEventListener('click', event => { reachedTarget = true; event.preventDefault() })
-    const dispatch = (init: MouseEventInit = {}) => { reachedTarget = false; const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...init }); link.dispatchEvent(event); return !reachedTarget }
-    expect(dispatch()).toBe(true); expect(confirm).toHaveBeenCalledWith('You have unsaved intake form changes. Leave without saving them?')
-    confirm.mockReturnValue(true); expect(dispatch()).toBe(false); confirm.mockClear()
+    const target = vi.fn((event: Event) => event.preventDefault())
+    link.addEventListener('click', target)
+    const dispatch = (init: MouseEventInit = {}) => { target.mockClear(); fireEvent.click(link, init); expect(target).toHaveBeenCalledOnce(); expect(screen.queryByRole('alertdialog')).toBeNull() }
+    dispatch(); edit()
     for (const modifier of ['metaKey', 'ctrlKey', 'shiftKey', 'altKey']) dispatch({ [modifier]: true })
-    link.download = 'file'; dispatch(); link.removeAttribute('download'); link.target = '_blank'; dispatch(); link.target = ''; link.href = '#section'; dispatch()
-    expect(confirm).not.toHaveBeenCalled(); link.remove()
+    dispatch({ button: 1 })
+    link.download = 'file'; dispatch(); link.removeAttribute('download')
+    for (const destination of ['_blank', '_parent', 'named-frame']) { link.target = destination; dispatch() }
+    link.target = ''; link.href = '#section'; dispatch()
+    link.href = 'mailto:someone@example.com'; dispatch()
+    link.href = '/admin/matters'; unmount(); dispatch(); link.remove()
+  })
+
+  it('keeps protection for external links and cleans a pending dialog on unmount', () => {
+    const { unmount } = mount(); edit()
+    const link = screen.getByRole('link', { name: 'Intake forms' })
+    link.setAttribute('href', 'https://example.com/forms')
+    fireEvent.click(link); expect(screen.getByRole('alertdialog')).toBeTruthy()
+    unmount(); expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 })

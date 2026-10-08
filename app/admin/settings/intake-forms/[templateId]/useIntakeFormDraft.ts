@@ -70,6 +70,9 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
   const [serverDiagnostics, setServerDiagnostics] = useState<IntakeFormDiagnostic[]>([])
   const inFlight = useRef(false)
   const allowDeparture = useRef(false)
+  const departureDestination = useRef<string | null>(null)
+  const departureTrigger = useRef<HTMLElement | null>(null)
+  const [confirmingDeparture, setConfirmingDeparture] = useState(false)
   const dirty = definitionFingerprint(localDefinition) !== definitionFingerprint(savedDefinition)
   const saveStatus: IntakeFormSaveStatus = requestStatus === 'idle' ? dirty ? 'dirty' : 'clean' : requestStatus
   const busy = requestStatus === 'saving'
@@ -100,12 +103,32 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const destination = new URL(anchor.href, window.location.href)
       if (destination.protocol !== 'http:' && destination.protocol !== 'https:') return
       if (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.origin === window.location.origin) return
-      if (!window.confirm('You have unsaved intake form changes. Leave without saving them?')) { event.preventDefault(); event.stopPropagation() }
+      event.preventDefault(); event.stopPropagation()
+      if (departureDestination.current) return
+      departureDestination.current = destination.href
+      departureTrigger.current = anchor
+      setConfirmingDeparture(true)
     }
     window.addEventListener('beforeunload', beforeUnload)
     document.addEventListener('click', click, true)
     return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', click, true) }
   }, [unsafe])
+
+  function cancelDeparture() {
+    departureDestination.current = null
+    setConfirmingDeparture(false)
+  }
+  function confirmDeparture() {
+    const destination = departureDestination.current
+    if (!destination) return
+    departureDestination.current = null
+    allowDeparture.current = true
+    setConfirmingDeparture(false)
+    window.location.assign(destination)
+  }
+  function restoreDepartureFocus() {
+    if (!allowDeparture.current && departureTrigger.current?.isConnected) departureTrigger.current.focus()
+  }
 
   function changeDefinition(next: IntakeFormDefinition) {
     if (!readOnly && !inFlight.current) { setLocalDefinition(next); setServerDiagnostics([]); setNotice(null) }
@@ -214,5 +237,6 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     })
   }
   return { snapshot, version, localDefinition, changeDefinition, dirty, saveStatus, busy, readOnly, diagnostics, canPublish, error, notice,
+    confirmingDeparture, cancelDeparture, confirmDeparture, restoreDepartureFocus,
     saveDraft, reloadLatest, copyLocalDefinition, publishDraft, discardDraft, retireVersion, createNextDraft }
 }
