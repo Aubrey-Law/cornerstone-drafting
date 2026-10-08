@@ -32,8 +32,8 @@ it('shows blocked and done rows in their columns and excludes archived tasks', (
   const onStatus = vi.fn()
   const tasks = [taskFixture({ id: 'a', title: 'Call', status: 'blocked' }), taskFixture({ id: 'b', title: 'File', status: 'done' }), taskFixture({ id: 'c', title: 'Archived', status: 'archived' })]
   render(<TaskPresentationView tasks={tasks} presentation="board" onStatus={onStatus} />)
-  expect(within(screen.getByRole('heading', { name: 'Blocked · 1' }).closest('section')!).getByText('Call')).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: 'Done · 1' })).toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: 'Blocked column' })).getByText('Call')).toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: 'Done column' })).getByRole('heading').textContent).toMatch(/Done\s*·\s*1/)
   expect(screen.queryByText('Archived')).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole('combobox', { name: 'Status for Call' }), { target: { value: 'in_progress' } })
   expect(onStatus).toHaveBeenCalledWith(tasks[0], 'in_progress')

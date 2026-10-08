@@ -98,7 +98,7 @@ import { MatterBillingTab } from './tabs/billing'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
-import { MatterOverviewFacts } from './MatterOverviewFacts'
+import { MatterOverviewSidebar } from './MatterOverviewSidebar'
 import { MatterKeyDates } from './MatterKeyDates'
 import { MatterOverviewComposer } from './MatterOverviewComposer'
 import { MatterOverviewWork } from './MatterOverviewWork'
@@ -649,6 +649,23 @@ function MatterDetailClientInner({
     }
   }, [openIntakeSheet, setActiveTab, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
+  // Snoozing is a per-user work-graph override; the refreshed page picks the next item.
+  const handleSnoozeWork = useCallback(async (workKey: string, until: string) => {
+    try {
+      const res = await fetch('/api/admin/work-items/override', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ workKey, state: 'snoozed', snoozedUntil: until }),
+      })
+      const body = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) throw new Error(body.error ?? 'Could not snooze this work')
+      toast.success(`Snoozed until ${new Date(until).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`)
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not snooze this work')
+    }
+  }, [router, token])
+
   const handleStatusChange = async (status: MatterStatus) => {
     if (!token || status === (matter.status ?? 'active')) return
     setStatusSaving(true)
@@ -953,7 +970,7 @@ function MatterDetailClientInner({
 
         <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 px-4 py-4">
+          <div className="flex-1 p-4 md:p-6">
             <div className="w-full gap-4">
               {taskCounts.error && (
                 <p role="status" className="text-sm text-destructive">
@@ -971,7 +988,7 @@ function MatterDetailClientInner({
                   onEngagement={() => void handleSendEngagement()} onUploads={handleReviewUploads}
                   onMessages={() => setActiveTab('communications', undefined, 'portal')}
                   onActivity={() => setActiveTab('activity')}
-                  facts={<MatterOverviewFacts matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot} onDetails={() => setFactsRailOpen(true)} />}
+                  onSnooze={handleSnoozeWork}
                   composer={<MatterOverviewComposer
                     matterId={matterId} clientName={matter.client_name ?? 'Client'} clientEmail={matter.client_email ?? null}
                     clientPhone={matter.client_phone ?? null} smsEnabled={smsEnabled} emailEnabled={emailSendEnabled}
@@ -980,18 +997,23 @@ function MatterDetailClientInner({
                     smsRecipient={smsRecipient} onSmsRecipientChange={setSmsRecipient}
                     onLogCall={handleLogCall} onEmailSent={() => { void retryMessages(); router.refresh() }}
                   />}
-                  tasks={<><div className="mb-3 flex items-center justify-between text-sm"><span>Tasks · {taskCounts.open} open</span><Button variant="link" size="sm" onClick={() => setActiveTab('tasks')}>View all</Button></div>{taskPreview.some(task => task.key !== workSummary?.workKey) ? <ul className="space-y-3">{taskPreview.filter(task => task.key !== workSummary?.workKey).map(task => <li key={task.key}><Link className="block text-sm underline-offset-4 hover:underline" href={task.href}>{task.title}</Link></li>)}</ul> : currentEngineStageTask && workSummary?.workKey !== `task:${currentEngineStageTask.id}` ? <MatterEngineStageTaskCard compact task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} /> : <p className="text-xs text-muted-foreground">{taskCounts.open ? 'View all tasks for the full list.' : 'No open tasks.'}</p>}</>}
+                  sidebar={<MatterOverviewSidebar
+                    matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot}
+                    onPeople={() => setActiveTab('people')} onBilling={() => setActiveTab('billing')}
+                    tasks={<><div className="mb-2 flex items-center justify-between"><span>Tasks · {taskCounts.open} open</span><Button variant="link" className="h-auto p-0" onClick={() => setActiveTab('tasks')}>View all</Button></div>{taskPreview.some(task => task.key !== workSummary?.workKey) ? <ul>{taskPreview.filter(task => task.key !== workSummary?.workKey).map(task => <li key={task.key}><Link className="block py-1 underline-offset-4 hover:underline" href={task.href}>{task.title}</Link></li>)}</ul> : currentEngineStageTask && workSummary?.workKey !== `task:${currentEngineStageTask.id}` ? <MatterEngineStageTaskCard compact task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} /> : <p className="text-xs text-muted-foreground">{taskCounts.open ? 'View all tasks for the full list.' : 'No open tasks.'}</p>}</>}
+                  >
+                    {showProbate && (
+                      <MatterProbateEssentialsCard
+                        details={matterDetails}
+                        onSaveField={handleSaveMatterDetailField}
+                        savingField={savingField}
+                        lastSavedAt={lastSavedAt}
+                        error={matterDetailsError}
+                      />
+                    )}
+                    {showFiduciaryLedger && <EstateLedgerCard matterId={matterId} trust={practiceArea === 'TA'} />}
+                  </MatterOverviewSidebar>}
                 />
-                {showProbate && (
-                  <MatterProbateEssentialsCard
-                    details={matterDetails}
-                    onSaveField={handleSaveMatterDetailField}
-                    savingField={savingField}
-                    lastSavedAt={lastSavedAt}
-                    error={matterDetailsError}
-                  />
-                )}
-                {showFiduciaryLedger && <EstateLedgerCard matterId={matterId} trust={practiceArea === 'TA'} />}
               </TabsContent>
 
               <TabsContent value="tasks" className="space-y-4">
@@ -1007,6 +1029,7 @@ function MatterDetailClientInner({
                   recordId={matterId}
                   recordKind="matter"
                   recordName={matter.client_name ?? null}
+                  defaultPresentation="board"
                   onStageTaskCompleted={() => void refreshEngineStageTask()}
                   onTasksChanged={() => void taskCounts.refresh()}
                   view={taskView}
@@ -1193,7 +1216,7 @@ function MatterDetailClientInner({
           side="right"
           collapseBelow="lg"
           collapseWithAdminRail
-          desktopClassName="w-[21rem] border-l border-border bg-card xl:w-96"
+          desktopClassName="w-[340px] border-l border-border bg-card"
           mobileClassName="bg-card"
         >
           <div className="h-full overflow-y-auto">

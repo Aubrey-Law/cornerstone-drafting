@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { billingMoney } from '@/lib/billing/metrics'
+import { matterFeeProgress } from '@/lib/billing/feeProgress'
 import {
   FIRM_OPTIONAL_SERVICES,
   OPTIONAL_SERVICE_STATUSES,
@@ -386,11 +387,7 @@ export function LegalPlanClaimCard({
   )
 }
 
-/**
- * What is expected, what has arrived, and the gap. Balance due is derived on
- * every render — storing it would create a second truth that drifts the moment
- * a payment lands.
- */
+/** What is expected, what has arrived, and the gap (see `matterFeeProgress`). */
 export function MoneyInCard({
   details,
   onSaveField,
@@ -402,17 +399,7 @@ export function MoneyInCard({
   billed: number
   collected: number
 }) {
-  const isPlan = isLegalPlanBilling(details?.billing_type)
-  // A flat fee is quoted before the engagement seeds its ledger row, so the
-  // stated figure is the only answer until then. A plan claim has no such
-  // window — it exists once it is in the ledger, and the ledger is the answer.
-  // `flat_fee_amount` is dollars (4500 = $4,500); the ledger and
-  // billingMoney work in cents. Comparing the two unconverted printed a
-  // $4,500 fee as "$45" and subtracted cents from dollars for the balance.
-  const stated = isPlan ? null : details?.flat_fee_amount
-  const expected = typeof stated === 'number' && Number.isFinite(stated) ? Math.round(stated * 100) : billed
-  const balance = expected - collected
-  const percent = expected > 0 ? Math.max(0, Math.min(100, Math.round((collected / expected) * 100))) : 100
+  const { isPlan, expected, balance, percent } = matterFeeProgress(details, billed, collected)
   const linkSentAt = details?.payment_link_sent_at ?? null
 
   return (
