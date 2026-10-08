@@ -115,6 +115,26 @@ describe('intake form definition parsing', () => {
     config.self = config
     expect(parseIntakeFormDefinition({ ...definition(), sections: [{ ...section(), items: [{ kind: 'block', id: 'spouse', blockId: 'spouse_details', config }] }] }).success).toBe(false)
   })
+
+  it('rejects a root config accessor without invoking its throwing getter', () => {
+    let getterCalls = 0
+    const config = Object.defineProperty({}, 'enabled', {
+      enumerable: true,
+      get() {
+        getterCalls++
+        throw new Error('Config getter must not execute')
+      },
+    })
+    rejected({ ...definition(), sections: [{ ...section(), items: [{ kind: 'block', id: 'spouse', blockId: 'spouse_details', config }] }] }, 'sections.0.items.0.config')
+    expect(getterCalls).toBe(0)
+  })
+
+  it('rejects a class instance at the config root', () => {
+    class Config {
+      enabled = true
+    }
+    rejected({ ...definition(), sections: [{ ...section(), items: [{ kind: 'block', id: 'spouse', blockId: 'spouse_details', config: new Config() }] }] }, 'sections.0.items.0.config')
+  })
 })
 
 describe('intake conditions', () => {

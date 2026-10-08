@@ -54,6 +54,11 @@ function isJsonValue(value: unknown): value is JsonValue {
   return true
 }
 const jsonValueSchema = z.custom<JsonValue>(isJsonValue, 'Must be a serializable JSON value')
+// Inspect the root descriptors/prototype before record parsing reads its values.
+const configSchema = z.custom<Record<string, JsonValue>>(
+  (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && isJsonValue(value),
+  'Must be a serializable JSON object',
+).pipe(z.record(jsonValueSchema))
 
 const conditionSchema = conditionSchemaAtDepth(1)
 const itemSchema = z.discriminatedUnion('kind', [
@@ -65,7 +70,7 @@ const itemSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('block'), id: idSchema, blockId: z.enum(blockIds),
     titleOverride: titleSchema.optional(), helpText: helpSchema.optional(),
-    config: z.record(jsonValueSchema).optional(), condition: conditionSchema.optional(),
+    config: configSchema.optional(), condition: conditionSchema.optional(),
   }).strict(),
 ])
 
