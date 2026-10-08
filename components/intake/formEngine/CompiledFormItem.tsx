@@ -17,6 +17,7 @@ export function CompiledFormItem({ item, disabled = false, ...props }: CompiledF
     case 'field':
       return <CanonicalFieldItem item={item} data={props.data} update={props.update} disabled={disabled} />
     case 'block': {
+      if (item.blockId === 'review_submit' && props.previewReview !== undefined) return props.previewReview
       const Block = INTAKE_BLOCK_RENDERERS[item.blockId]
       return (
         <fieldset disabled={disabled} aria-describedby={item.helpText ? helpId : undefined} className="min-w-0 space-y-3 border-0 p-0">

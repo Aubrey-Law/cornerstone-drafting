@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved; Phase 1, Phase 2A persistence, and Phase 2B visual builder implemented and verified locally; controller whole-branch review, Phase 2C activation/pinning, and Phase 3 detailed enhancements remain
+**Status:** approved; Phase 1, Phase 2A persistence, and Phase 2B visual builder including whole-branch repairs implemented and verified locally; controller repair re-review, Phase 2C activation/pinning, and Phase 3 detailed enhancements remain
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 
@@ -756,10 +756,12 @@ git diff --check origin/main...HEAD
 git diff --check
 ```
 
-The exact focused suite passed **15 files / 421 tests**, including real local
+After the six review repairs, the exact focused suite passed **15 files / 446 tests**, including real local
 database tests, with no accessibility warning. Lint and typecheck exited 0.
-The full suite exited 0: **916 files passed, 2 skipped; 10,151 tests passed,
-26 skipped** (266.84 seconds). It emitted seven jsdom
+The full suite exited 0: **916 files passed, 2 skipped; 10,175 tests passed,
+27 skipped** (138.67 seconds). The additional skipped test is the new local
+database regression, which passed in the explicitly configured focused run.
+The full suite emitted seven jsdom
 `Not implemented: navigation to another Document` notices, with no failed
 tests. Both diff checks passed. No failure was classified as pre-existing;
 a clean-baseline failure comparison was therefore not needed.
@@ -855,13 +857,45 @@ Local evidence is retained at
 `/private/tmp/intake-phase2b-task9-browser-evidence.json`,
 `/private/tmp/intake-phase2b-task9-guards-evidence.json`, and
 `/private/tmp/intake-phase2b-task9-smoke-evidence.json`.
-The complete full-suite log is
+The initial Task 9 full-suite log is
 `/private/tmp/intake-phase2b-task9-final-full-test.log`.
+
+### Whole-branch review repair verification
+
+All six findings were reproduced against `215dd6d9` and repaired with focused
+RED-to-GREEN checks: imperative/history navigation, custom preview Review,
+historical selection and retirement, discard recency, list response validation,
+and catalog decision metadata. No drafting internals changed.
+
+The final repair Chrome run passed at **1440×1000** and **390×1000**. It covered
+Settings departure and native browser Back/Forward Cancel/Leave with retained
+edits and focus, no added history entries or replay loop; four-version history
+and retirement of v2 while preserving an unsaved v4; historical duplicate
+source selection; removed/reordered Review sections/items and changed
+requirements; inert synthetic controls with zero intake/auth requests;
+catalog type, baseline, and audience text; and discard list recency matching
+the durable actor/time/version event. Malformed create, duplicate, archive,
+and restore success responses preserved the list/dialog state. Fresh
+non-admin sessions were denied the list/editor and returned 403 for
+list/detail/create/archive APIs. The same two intakes retained null pins.
+
+The undeployed discard function was replaced only in the existing disposable
+loopback database to verify its one-line timestamp update. No schema signature
+changed, so type regeneration was unnecessary. Initial Task 9 reset/smoke
+evidence above remains a historical record, not a second reset or a new
+production-verification claim.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-final-fix-focused.log`,
+`/private/tmp/intake-phase2b-final-fix-full.log`, and
+`/private/tmp/intake-phase2b-final-fix-browser-evidence.json`.
+The final run recorded local unused-font preload and favicon aspect-ratio
+warnings, with no uncaught page error or failing acceptance assertion.
 
 ### Remaining release boundaries
 
-Whole-branch review (Task 9 Step 6) is pending with the controller after the
-Task 9 implementation/review handoff. Phase 2C runtime activation and intake
+The six whole-branch review findings are repaired and locally verified;
+controller repair re-review remains pending. Phase 2C runtime activation and intake
 pinning, Phase 3 detailed intake enhancements, production bundled-form
 installation, and all drafting changes remain excluded. No push, pull
 request, linked migration deployment, shared-database mutation, or

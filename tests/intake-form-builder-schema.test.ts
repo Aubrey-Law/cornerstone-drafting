@@ -122,6 +122,30 @@ function checkDatabase(statement: string) {
 }
 
 describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQL)', () => {
+  it('advances template recency atomically on discard and preserves it on stale or failed audit attempts', () => {
+    checkDatabase(`
+      CREATE FUNCTION pg_temp.reject_discard_audit() RETURNS trigger LANGUAGE plpgsql AS $test$
+      BEGIN RAISE EXCEPTION 'Discard audit rejected'; END; $test$;
+      DO $test$
+      DECLARE r jsonb; t uuid; v uuid; before_time timestamptz;
+      BEGIN
+        r := public.create_intake_form_template('${admin}', 'discard_recency', 'Discard recency', NULL, '{}', '${hash}');
+        t := (r->>'template_id')::uuid; v := (r->>'id')::uuid;
+        UPDATE public.intake_form_templates SET updated_at = '2026-01-01T00:00:00Z' WHERE id = t;
+        SELECT updated_at INTO before_time FROM public.intake_form_templates WHERE id = t;
+        PERFORM pg_temp.expect_failure(format('SELECT public.discard_intake_form_draft(%L,%L,1)', '${admin}', v), 'Draft changed; refresh and try again');
+        IF (SELECT updated_at FROM public.intake_form_templates WHERE id = t) <> before_time THEN RAISE EXCEPTION 'Stale discard changed recency'; END IF;
+        CREATE TRIGGER reject_discard_audit BEFORE INSERT ON public.intake_form_audit_events FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_discard_audit();
+        PERFORM pg_temp.expect_failure(format('SELECT public.discard_intake_form_draft(%L,%L,0)', '${admin}', v), 'Discard audit rejected');
+        IF (SELECT updated_at FROM public.intake_form_templates WHERE id = t) <> before_time
+          OR NOT EXISTS (SELECT 1 FROM public.intake_form_versions WHERE id = v) THEN RAISE EXCEPTION 'Failed audit changed recency or removed draft'; END IF;
+        DROP TRIGGER reject_discard_audit ON public.intake_form_audit_events;
+        PERFORM public.discard_intake_form_draft('${admin}', v, 0);
+        IF (SELECT updated_at FROM public.intake_form_templates WHERE id = t) <= before_time THEN RAISE EXCEPTION 'Successful discard did not advance recency'; END IF;
+        IF (SELECT count(*) FROM public.intake_form_audit_events WHERE template_id = t AND action = 'discard' AND version_id IS NULL AND version_number = 1 AND actor_id = '${admin}') <> 1 THEN RAISE EXCEPTION 'Discard identity was not retained'; END IF;
+      END; $test$;
+    `)
+  })
   it('records exactly one event per lifecycle call and retains discarded version identity', () => {
     checkDatabase(`
       CREATE FUNCTION pg_temp.expect_event(t uuid, a text, n integer, v uuid, total integer) RETURNS void

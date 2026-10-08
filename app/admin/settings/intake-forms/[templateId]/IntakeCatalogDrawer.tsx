@@ -1,17 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import type { IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { NewItem } from '@/lib/intake/forms/editorState'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
+const controlLabels = { text: 'Text', textarea: 'Long text', email: 'Email', tel: 'Phone', date: 'Date', select: 'Single choice', multiselect: 'Multiple choice', boolean: 'Yes/no' }
+const requirementLabels = { optional: 'Optional', recommended: 'Recommended', required: 'Required' }
+
 export function IntakeCatalogDrawer({ definition, catalog, sectionId, onClose, onAdd, onRestoreFocus }: {
   definition: IntakeFormDefinition; catalog: IntakeFormBuilderCatalog; sectionId: string | null
   onClose: () => void; onAdd: (item: NewItem) => void; onRestoreFocus: () => void
 }) {
   const [query, setQuery] = useState('')
+  const metadataId = useId()
   const section = definition.sections.find(value => value.id === sectionId)
   const used = new Set(definition.sections.flatMap(value => value.items.flatMap(item => item.kind === 'field' ? [item.fieldId] : [])))
   const entries = [
@@ -29,10 +33,16 @@ export function IntakeCatalogDrawer({ definition, catalog, sectionId, onClose, o
           <CommandEmpty>No matching approved items.</CommandEmpty>
           {groups.map(group => <CommandGroup key={group} heading={group}>{matches.filter(entry => entry.group === group).map(entry => <CommandItem
             key={`${entry.kind}:${entry.id}`} value={`${entry.kind}:${entry.id}`} disabled={Boolean(entry.reason)} aria-label={`${entry.label} ${entry.description} ${entry.id}${entry.reason ? ` ${entry.reason}` : ''}`}
+            aria-describedby={`${metadataId}-${entry.kind}-${entry.id}`}
             onSelect={() => { if (!entry.reason) { onAdd(entry.kind === 'field' ? { kind: 'field', fieldId: entry.id } : { kind: 'block', blockId: entry.id }); setQuery('') } }}
             className="flex-col items-start gap-1"
           >
             <span>{entry.label}</span><span className="text-xs text-muted-foreground">{entry.description}</span>
+            <span id={`${metadataId}-${entry.kind}-${entry.id}`} className="text-xs text-muted-foreground">
+              Type: {entry.kind === 'field' ? controlLabels[entry.control] : 'Compound block'}
+              {entry.kind === 'field' && <> · Baseline: {requirementLabels[entry.baselineRequirement]}</>}
+              {' · '}Audience: {entry.audiences.map(audience => audience === 'staff_only' ? 'Staff only' : 'Client and staff').join('; ')}
+            </span>
             <span className="text-xs text-muted-foreground">{entry.id}</span>
             {entry.reason && <span className="text-xs">{entry.reason}</span>}
           </CommandItem>)}</CommandGroup>)}

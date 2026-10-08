@@ -7,25 +7,12 @@ import { compileIntakeForm, type IntakeFormDiagnostic } from '@/lib/intake/forms
 import { createBlankDefinition, definitionFingerprint } from '@/lib/intake/forms/editorState'
 import { parseIntakeFormDefinition } from '@/lib/intake/forms/schema'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
+import { SETTINGS_NAVIGATION_EVENT, type SettingsNavigationRequest } from '../../navigation'
+import { parseSnapshot, parseVersion, invalidResponse } from '@/lib/intake/forms/responseParsing'
 
 export type IntakeFormSaveStatus = 'clean' | 'dirty' | 'saving' | 'error' | 'conflict'
 const diagnosticSchema = z.object({ path: z.string(), message: z.string() })
 const diagnosticsSchema = z.array(diagnosticSchema)
-const templateSchema = z.object({
-  id: z.string(), key: z.string(), name: z.string(), description: z.string().nullable(), archived_at: z.string().nullable(),
-  created_by: z.string(), created_at: z.string(), updated_at: z.string(),
-}).strict()
-const versionSchema = z.object({
-  id: z.string().min(1), template_id: z.string(), version: z.number().int().positive(), status: z.enum(['draft', 'published', 'retired']),
-  definition: z.unknown(), definition_hash: z.string().regex(/^[0-9a-f]{64}$/), lock_version: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  created_by: z.string(), created_at: z.string(), updated_at: z.string(), published_at: z.string().nullable(), published_by: z.string().nullable(),
-}).strict()
-const auditSchema = z.object({
-  id: z.string(), template_id: z.string(), version_id: z.string().nullable(), version_number: z.number().int().positive().nullable(),
-  action: z.enum(['create', 'save', 'create_next_draft', 'publish', 'retire', 'archive', 'restore', 'duplicate', 'discard']),
-  actor_id: z.string(), occurred_at: z.string(), metadata: z.record(z.unknown()),
-}).strict()
-const invalidResponse = () => new Error('The server returned an invalid intake form response. Your local changes are preserved; retry or reload latest.')
 class IntakeFormRequestError extends Error {
   constructor(readonly status: number, readonly body: unknown) { super('Unable to complete the intake form request') }
 }
@@ -35,26 +22,6 @@ async function responseJson(response: Response): Promise<unknown> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw invalidResponse()
   return body
 }
-function parseVersion(raw: unknown, template: IntakeFormEditorSnapshot['template'], status?: IntakeFormVersionRow['status'], id?: string): IntakeFormVersionRow {
-  const parsed = versionSchema.safeParse(raw)
-  if (!parsed.success) throw invalidResponse()
-  const definition = parseIntakeFormDefinition(parsed.data.definition)
-  if (!definition.success || parsed.data.template_id !== template.id || definition.data.key !== template.key ||
-    (status && parsed.data.status !== status) || (id && parsed.data.id !== id)) throw invalidResponse()
-  return { ...parsed.data, definition: definition.data }
-}
-function parseSnapshot(raw: unknown, expected: IntakeFormEditorSnapshot['template']): IntakeFormEditorSnapshot {
-  const envelope = z.object({ template: templateSchema, draft: z.unknown(), versions: z.array(z.unknown()), auditEvents: z.array(auditSchema) }).strict().safeParse(raw)
-  if (!envelope.success || envelope.data.template.id !== expected.id || envelope.data.template.key !== expected.key) throw invalidResponse()
-  const { template } = envelope.data
-  const versions = envelope.data.versions.map(value => parseVersion(value, template))
-  const draft = envelope.data.draft === null ? null : parseVersion(envelope.data.draft, template, 'draft')
-  const drafts = versions.filter(version => version.status === 'draft')
-  if (new Set(versions.map(version => version.id)).size !== versions.length || drafts.length !== (draft ? 1 : 0) ||
-    (draft && JSON.stringify(drafts[0]) !== JSON.stringify(draft)) || envelope.data.auditEvents.some(event => event.template_id !== template.id)) throw invalidResponse()
-  // JSON came through response.json; the schema above validates all event metadata before adoption.
-  return { template, versions, draft, auditEvents: envelope.data.auditEvents as IntakeFormEditorSnapshot['auditEvents'] }
-}
 function definitionFor(snapshot: IntakeFormEditorSnapshot) {
   return snapshot.draft?.definition ?? [...snapshot.versions].sort((a, b) => b.version - a.version)[0]?.definition ??
     createBlankDefinition({ key: snapshot.template.key, title: snapshot.template.name })
@@ -62,6 +29,7 @@ function definitionFor(snapshot: IntakeFormEditorSnapshot) {
 
 export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   const [localDefinition, setLocalDefinition] = useState(() => definitionFor(initialSnapshot))
   const [savedDefinition, setSavedDefinition] = useState(() => definitionFor(initialSnapshot))
   const [requestStatus, setRequestStatus] = useState<'idle' | 'saving' | 'error' | 'conflict'>('idle')
@@ -70,61 +38,123 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
   const [serverDiagnostics, setServerDiagnostics] = useState<IntakeFormDiagnostic[]>([])
   const inFlight = useRef(false)
   const allowDeparture = useRef(false)
-  const departureDestination = useRef<string | null>(null)
+  const departureAction = useRef<(() => void) | null>(null)
   const departureTrigger = useRef<HTMLElement | null>(null)
   const [confirmingDeparture, setConfirmingDeparture] = useState(false)
   const dirty = definitionFingerprint(localDefinition) !== definitionFingerprint(savedDefinition)
   const saveStatus: IntakeFormSaveStatus = requestStatus === 'idle' ? dirty ? 'dirty' : 'clean' : requestStatus
   const busy = requestStatus === 'saving'
-  const version = snapshot.draft ?? [...snapshot.versions].sort((a, b) => b.version - a.version)[0] ?? null
-  const readOnly = !snapshot.draft || Boolean(snapshot.template.archived_at) || busy
+  const version = snapshot.versions.find(value => value.id === selectedVersionId) ?? snapshot.draft ?? [...snapshot.versions].sort((a, b) => b.version - a.version)[0] ?? null
+  const viewingDraft = Boolean(snapshot.draft && version?.id === snapshot.draft.id)
+  const displayedDefinition = !viewingDraft && version ? version.definition : localDefinition
+  const readOnly = !viewingDraft || Boolean(snapshot.template.archived_at) || busy
   const diagnostics = useMemo(() => {
     const unique = new Map<string, IntakeFormDiagnostic>()
     for (const audience of ['client', 'staff'] as const) {
-      const result = compileIntakeForm(localDefinition, audience)
+      const result = compileIntakeForm(displayedDefinition, audience)
       if (!result.success) for (const diagnostic of result.errors) unique.set(JSON.stringify([diagnostic.path, diagnostic.message]), diagnostic)
     }
-    for (const diagnostic of serverDiagnostics) unique.set(JSON.stringify([diagnostic.path, diagnostic.message]), diagnostic)
+    if (viewingDraft) for (const diagnostic of serverDiagnostics) unique.set(JSON.stringify([diagnostic.path, diagnostic.message]), diagnostic)
     return [...unique.values()].sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true }) || a.message.localeCompare(b.message, 'en'))
-  }, [localDefinition, serverDiagnostics])
-  const canPublish = Boolean(snapshot.draft && !snapshot.template.archived_at && saveStatus === 'clean' && !diagnostics.length)
+  }, [displayedDefinition, viewingDraft, serverDiagnostics])
+  const canPublish = Boolean(viewingDraft && !snapshot.template.archived_at && saveStatus === 'clean' && !diagnostics.length)
   const unsafe = dirty || requestStatus !== 'idle'
 
   useEffect(() => {
-    if (!unsafe) return
+    // Next may restore this editor through an Activity boundary with refs intact.
+    // A prior confirmed departure authorizes only that departure, never the next.
+    allowDeparture.current = false
+    const samePage = (href: string) => {
+      const destination = new URL(href, window.location.href)
+      return destination.pathname === window.location.pathname && destination.search === window.location.search && destination.origin === window.location.origin
+    }
+    const askToLeave = (proceed: () => void, trigger: HTMLElement | null) => {
+      if (departureAction.current) return
+      departureAction.current = proceed
+      departureTrigger.current = trigger
+      setConfirmingDeparture(true)
+    }
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (allowDeparture.current) return
+      if (!unsafe || allowDeparture.current) return
       event.preventDefault(); event.returnValue = ''
     }
     const click = (event: MouseEvent) => {
-      if (allowDeparture.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      if (!unsafe || allowDeparture.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
       if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download') || (anchor.target && anchor.target !== '_self')) return
       const destination = new URL(anchor.href, window.location.href)
       if (destination.protocol !== 'http:' && destination.protocol !== 'https:') return
-      if (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.origin === window.location.origin) return
+      if (samePage(destination.href)) return
       event.preventDefault(); event.stopPropagation()
-      if (departureDestination.current) return
-      departureDestination.current = destination.href
-      departureTrigger.current = anchor
-      setConfirmingDeparture(true)
+      askToLeave(() => window.location.assign(destination.href), anchor)
+    }
+    const imperative = (event: Event) => {
+      const { destination, proceed, trigger } = (event as CustomEvent<SettingsNavigationRequest>).detail
+      if (!unsafe || allowDeparture.current || samePage(destination)) return
+      event.preventDefault(); askToLeave(proceed, trigger)
+    }
+    // Cancel traversals before Next observes popstate. No synthetic history entries,
+    // URL changes, or replay loops are needed in browsers with the Navigation API.
+    const navigation = (window as unknown as { navigation?: EventTarget & { traverseTo: (key: string) => unknown } }).navigation
+    const navigate = (event: Event) => {
+      const traversal = event as Event & { navigationType: string; destination: { url: string; key: string; sameDocument: boolean } }
+      if (!unsafe || allowDeparture.current || traversal.navigationType !== 'traverse' || !event.cancelable ||
+        !traversal.destination.sameDocument || samePage(traversal.destination.url)) return
+      event.preventDefault()
+      askToLeave(() => navigation?.traverseTo(traversal.destination.key), document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    }
+    // Older browsers: stamp existing app history state, preserving the router's
+    // own state. Restore a cancelled traversal before showing the same dialog.
+    const marker = '__cornerstoneIntakeHistoryIndex'
+    const originalPush = window.history.pushState
+    const originalReplace = window.history.replaceState
+    let index: number = window.history.state?.[marker] ?? 0
+    let currentHref = window.location.href
+    let restoring = false
+    let restored: (() => void) | null = null
+    const push: History['pushState'] = function (this: History, data, unused, url) { index += 1; originalPush.call(this, { ...data, [marker]: index }, unused, url); currentHref = window.location.href }
+    const replace: History['replaceState'] = function (this: History, data, unused, url) { originalReplace.call(this, { ...data, [marker]: index }, unused, url); currentHref = window.location.href }
+    const pop = (event: PopStateEvent) => {
+      if (restoring) { event.stopImmediatePropagation(); restoring = false; restored?.(); restored = null; return }
+      const nextIndex: number = event.state?.[marker] ?? index - 1
+      if (!unsafe || allowDeparture.current || samePage(currentHref)) { index = nextIndex; currentHref = window.location.href; return }
+      const delta = nextIndex - index
+      if (!delta) return
+      event.stopImmediatePropagation()
+      const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      restoring = true
+      restored = () => askToLeave(() => window.history.go(delta), trigger)
+      window.history.go(-delta)
+    }
+    if (navigation) navigation.addEventListener('navigate', navigate)
+    else {
+      originalReplace.call(window.history, { ...window.history.state, [marker]: index }, '')
+      window.history.pushState = push; window.history.replaceState = replace
+      window.addEventListener('popstate', pop, true)
     }
     window.addEventListener('beforeunload', beforeUnload)
+    window.addEventListener(SETTINGS_NAVIGATION_EVENT, imperative)
     document.addEventListener('click', click, true)
-    return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', click, true) }
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener(SETTINGS_NAVIGATION_EVENT, imperative); document.removeEventListener('click', click, true)
+      navigation?.removeEventListener('navigate', navigate)
+      window.removeEventListener('popstate', pop, true)
+      if (window.history.pushState === push) window.history.pushState = originalPush
+      if (window.history.replaceState === replace) window.history.replaceState = originalReplace
+    }
   }, [unsafe])
 
   function cancelDeparture() {
-    departureDestination.current = null
+    departureAction.current = null
     setConfirmingDeparture(false)
   }
   function confirmDeparture() {
-    const destination = departureDestination.current
-    if (!destination) return
-    departureDestination.current = null
+    const proceed = departureAction.current
+    if (!proceed) return
+    departureAction.current = null
     allowDeparture.current = true
     setConfirmingDeparture(false)
-    window.location.assign(destination)
+    proceed()
   }
   function restoreDepartureFocus() {
     if (!allowDeparture.current && departureTrigger.current?.isConnected) departureTrigger.current.focus()
@@ -134,7 +164,7 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     if (!readOnly && !inFlight.current) { setLocalDefinition(next); setServerDiagnostics([]); setNotice(null) }
   }
   function replaceSnapshot(next: IntakeFormEditorSnapshot, nextDiagnostics: IntakeFormDiagnostic[] = []) {
-    setSnapshot(next); const definition = definitionFor(next)
+    setSnapshot(next); setSelectedVersionId(null); const definition = definitionFor(next)
     setLocalDefinition(definition); setSavedDefinition(definition); setServerDiagnostics(nextDiagnostics)
     setError(null); setNotice(null); setRequestStatus('idle')
   }
@@ -214,14 +244,16 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     })
   }
   async function retireVersion() {
-    if (!version || version.status !== 'published' || busy || dirty || requestStatus === 'conflict') return
+    if (!version || version.status !== 'published' || busy || requestStatus === 'conflict') return
     await request(async () => {
       const envelope = z.object({ version: z.unknown() }).strict().safeParse(await jsonRequest(`/versions/${encodeURIComponent(version.id)}/retire`, 'POST', {}))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.version, snapshot.template, 'retired', version.id)
       if (next.version !== version.version || next.lock_version !== version.lock_version || next.definition_hash !== version.definition_hash ||
         definitionFingerprint(next.definition) !== definitionFingerprint(version.definition)) throw invalidResponse()
-      replaceVersion(next)
+      // Retiring history must never replace a newer draft or its unsaved buffer.
+      setSnapshot(current => ({ ...current, versions: current.versions.map(row => row.id === next.id ? next : row) }))
+      setRequestStatus('idle')
     })
   }
   async function createNextDraft() {
@@ -236,7 +268,7 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       replaceVersion(next, envelope.data.diagnostics)
     })
   }
-  return { snapshot, version, localDefinition, changeDefinition, dirty, saveStatus, busy, readOnly, diagnostics, canPublish, error, notice,
+  return { snapshot, version, localDefinition: displayedDefinition, selectVersion: setSelectedVersionId, changeDefinition, dirty, saveStatus, busy, readOnly, diagnostics, canPublish, error, notice,
     confirmingDeparture, cancelDeparture, confirmDeparture, restoreDepartureFocus,
     saveDraft, reloadLatest, copyLocalDefinition, publishDraft, discardDraft, retireVersion, createNextDraft }
 }

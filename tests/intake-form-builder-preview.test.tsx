@@ -7,6 +7,8 @@ import { IntakeFormEditorClient } from '@/app/admin/settings/intake-forms/[templ
 import { getIntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { IntakeFormEditorSnapshot } from '@/lib/intake/forms/persistenceTypes'
 import { ESTATE_INTAKE_FORM, COLLEGE_PREP_INTAKE_FORM } from '@/lib/intake/forms/definitions'
+import { IntakeFormPreview } from '@/app/admin/settings/intake-forms/[templateId]/IntakeFormPreview'
+import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
 const auth = vi.hoisted(() => vi.fn(async () => ({ data: { session: null } })))
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: auth } } }))
@@ -152,9 +154,33 @@ describe('intake form preview', () => {
     xhr.mockRestore()
   })
 
-  it('sets the track so a college review shows the college questionnaire', () => {
-    const data = fixture(); data.draft!.definition.key = 'college_prep'
-    mount(data); click('Preview'); click(/Review/)
-    expect(preview().getByText(/summary of everything entered in the College Preparation Plan questionnaire/)).toBeTruthy()
+  it('reviews only current compiled sections and items, in local order, with evaluated requirements and sample answers', async () => {
+    const definition: IntakeFormDefinition = { schemaVersion: 1, key: 'custom_review', title: 'Custom organizer', sections: [
+      { id: 'notes', title: 'Local notes', audience: 'client_and_staff', items: [{ id: 'notes-item', kind: 'field', fieldId: 'special_notes', labelOverride: 'Your priorities', requirement: 'required' }] },
+      { id: 'identity', title: 'Local identity', audience: 'client_and_staff', items: [{ id: 'last', kind: 'field', fieldId: 'client_last_name', labelOverride: 'Family name' }, { id: 'first', kind: 'field', fieldId: 'client_first_name', labelOverride: 'Given name' }] },
+      { id: 'final', title: 'Local review', audience: 'client_and_staff', items: [{ id: 'check', kind: 'block', blockId: 'review_submit' }] },
+    ] }
+    const { rerender } = render(<IntakeFormPreview localDefinition={definition} />)
+    await scenario('Single'); click(/Local review/)
+    const review = within(screen.getByRole('region', { name: 'Current form review' }))
+    expect(review.getAllByRole('heading', { level: 4 }).map(node => node.textContent)).toEqual(['Local notes', 'Local identity'])
+    expect(review.getByText("Answer anything else you'd like us to know?.")).toBeTruthy()
+    expect(review.queryByText('Personal Information')).toBeNull()
+    expect(review.getAllByRole('textbox').map(node => node.getAttribute('aria-label') ?? node.id)).toHaveLength(3)
+    expect((review.getByLabelText('Given name') as HTMLInputElement).value).toBe('Jordan')
+    expect(review.getByLabelText('Given name').matches(':disabled')).toBe(true)
+    const changed = structuredClone(definition)
+    changed.sections = [changed.sections[1], changed.sections[0], changed.sections[2]]
+    changed.sections[0].items = [changed.sections[0].items[1]]
+    const notes = changed.sections[1].items[0]
+    if (notes.kind === 'field') notes.requirement = 'optional'
+    rerender(<IntakeFormPreview localDefinition={changed} />)
+    expect(review.getAllByRole('heading', { level: 4 }).map(node => node.textContent)).toEqual(['Local identity', 'Local notes'])
+    expect(review.queryByLabelText('Family name')).toBeNull()
+    expect(review.queryByText("Answer anything else you'd like us to know?.")).toBeNull()
+    changed.sections = changed.sections.filter(section => section.id !== 'notes')
+    rerender(<IntakeFormPreview localDefinition={{ ...changed }} />)
+    expect(review.queryByText('Local notes')).toBeNull()
+    expect(fetch).not.toHaveBeenCalled(); expect(auth).not.toHaveBeenCalled()
   })
 })

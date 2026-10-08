@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntakeFormEditorClient } from '@/app/admin/settings/intake-forms/[templateId]/IntakeFormEditorClient'
 import { getIntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { IntakeFormEditorSnapshot } from '@/lib/intake/forms/persistenceTypes'
+import { SettingsNav } from '@/app/admin/settings/SettingsNavMenu'
+import { Activity } from 'react'
+
+const push = vi.hoisted(() => vi.fn())
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/admin/settings/intake-forms/t1', useSearchParams: () => new URLSearchParams() }))
 
 const date = '2026-10-08T12:00:00Z'
 function fixture(): IntakeFormEditorSnapshot {
@@ -25,7 +30,7 @@ function observeDeparture() {
 }
 
 describe('intake builder explicit save and recovery', () => {
-  beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
+  beforeEach(() => { push.mockClear(); vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
   it('never autosaves and sends the saved version lock only on Save draft', async () => {
@@ -132,6 +137,75 @@ describe('intake builder explicit save and recovery', () => {
     fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
     await waitFor(() => expect(document.activeElement).toBe(link))
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('guards Settings selection with the same dialog, restores focus on cancel, and proceeds once to the selected destination', async () => {
+    render(<><SettingsNav isAdministrator /><IntakeFormEditorClient initialSnapshot={fixture()} catalog={getIntakeFormBuilderCatalog()} /></>)
+    edit()
+    const select = screen.getByLabelText('Settings section')
+    select.focus(); fireEvent.change(select, { target: { value: '/admin/settings?tab=models' } })
+    expect(push).not.toHaveBeenCalled()
+    expect(screen.getByRole('alertdialog').textContent).toContain('You have unsaved intake form changes. Leave without saving them?')
+    click('Cancel'); await waitFor(() => expect(document.activeElement).toBe(select))
+    expect(title()).toBe('Changed title')
+    fireEvent.change(select, { target: { value: '/admin/settings?tab=models' } })
+    const leave = screen.getByRole('button', { name: 'Leave' }); fireEvent.click(leave); fireEvent.click(leave)
+    expect(push).toHaveBeenCalledExactlyOnceWith('/admin/settings?tab=models')
+  })
+
+  it.each(['back', 'forward'] as const)('guards real history %s, cancels without creating history entries, and proceeds once without a listener loop', async direction => {
+    const { unmount } = mount()
+    history.replaceState({}, '', '/admin/settings/intake-forms/t1')
+    history.pushState({}, '', '/admin/settings?tab=models')
+    if (direction === 'forward') {
+      await act(async () => { history.back(); await new Promise(resolve => window.addEventListener('popstate', resolve, { once: true })) })
+    }
+    const original = window.location.href
+    const size = history.length
+    edit(); screen.getByLabelText('Form title').focus()
+    act(() => { history[direction]() })
+    await screen.findByRole('alertdialog')
+    await waitFor(() => expect(window.location.href).toBe(original))
+    click('Cancel'); await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Form title')))
+    expect(title()).toBe('Changed title'); expect(history.length).toBe(size)
+    act(() => { history[direction]() }); await screen.findByRole('alertdialog')
+    click('Leave')
+    await waitFor(() => expect(window.location.href).not.toBe(original))
+    expect(screen.queryByRole('alertdialog')).toBeNull(); expect(history.length).toBe(size)
+    unmount()
+    const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('exempts same-page history anchors without dropping protection for a later route departure', async () => {
+    mount(); history.replaceState({}, '', '/admin/settings/intake-forms/t1'); history.pushState({}, '', '#details'); edit()
+    act(() => history.back())
+    await waitFor(() => expect(window.location.hash).toBe(''))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('cancels native navigation traversals before history changes and cleans the listener after unmount', async () => {
+    const navigation = Object.assign(new EventTarget(), { traverseTo: vi.fn() })
+    vi.stubGlobal('navigation', navigation)
+    const { unmount } = mount(); edit()
+    const traverse = () => {
+      const event = Object.assign(new Event('navigate', { cancelable: true }), { navigationType: 'traverse', destination: { url: `${window.location.origin}/admin/matters`, key: 'previous', sameDocument: true } })
+      act(() => { navigation.dispatchEvent(event) }); return event
+    }
+    expect(traverse().defaultPrevented).toBe(true)
+    click('Cancel'); expect(navigation.traverseTo).not.toHaveBeenCalled()
+    expect(traverse().defaultPrevented).toBe(true); click('Leave')
+    expect(navigation.traverseTo).toHaveBeenCalledExactlyOnceWith('previous')
+    unmount(); expect(traverse().defaultPrevented).toBe(false)
+  })
+
+  it('rearms protection when Next restores a cached editor after a confirmed departure', () => {
+    const editor = <IntakeFormEditorClient initialSnapshot={fixture()} catalog={getIntakeFormBuilderCatalog()} />
+    const { rerender } = render(<Activity mode="visible">{editor}</Activity>); edit()
+    observeDeparture(); fireEvent.click(screen.getByRole('link', { name: 'Intake forms' })); click('Leave')
+    rerender(<Activity mode="hidden">{editor}</Activity>); rerender(<Activity mode="visible">{editor}</Activity>)
+    fireEvent.click(screen.getByRole('link', { name: 'Intake forms' }))
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
   })
 
   it('leaves exactly once for the captured destination even if the link changes while confirming', () => {

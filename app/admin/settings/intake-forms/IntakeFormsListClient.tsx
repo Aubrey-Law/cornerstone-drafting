@@ -11,8 +11,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import type { IntakeFormTemplateSummary, IntakeFormVersionRow } from '@/lib/intake/forms/persistenceTypes'
+import { parseArchiveResponse, parseCreatedForm, parseSnapshot } from '@/lib/intake/forms/responseParsing'
+import { createBlankDefinition } from '@/lib/intake/forms/editorState'
 
-type Creation = { source: IntakeFormTemplateSummary | null; sourceVersionId: string; key: string; name: string; description: string }
+type Creation = { source: IntakeFormTemplateSummary | null; sourceVersions: IntakeFormVersionRow[]; sourceVersionId: string; key: string; name: string; description: string }
 const modificationDate = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York',
 })
@@ -63,6 +65,8 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
   const [creation, setCreation] = useState<Creation | null>(null)
   const [pendingArchive, setPendingArchive] = useState<IntakeFormTemplateSummary | null>(null)
   const [busy, setBusy] = useState(false)
+  const [loadingSource, setLoadingSource] = useState(false)
+  const sourceRequest = useRef(0)
   const [error, setError] = useState<string | null>(null)
   const opener = useRef<HTMLButtonElement | null>(null)
   const createButton = useRef<HTMLButtonElement | null>(null)
@@ -73,14 +77,26 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
     target?.focus()
   }
 
-  function startCreation(source: IntakeFormTemplateSummary | null, trigger: HTMLButtonElement) {
+  async function startCreation(source: IntakeFormTemplateSummary | null, trigger: HTMLButtonElement) {
     opener.current = trigger
     setError(null)
-    setCreation({ source, sourceVersionId: source ? sources(source)[0]?.id ?? '' : '', key: '', name: '', description: source?.template.description ?? '' })
+    const requestId = ++sourceRequest.current
+    setCreation({ source, sourceVersions: [], sourceVersionId: '', key: '', name: '', description: source?.template.description ?? '' })
+    setLoadingSource(Boolean(source))
+    if (!source) return
+    try {
+      const response = await fetch(`/api/admin/settings/intake-forms/${encodeURIComponent(source.template.id)}`, { cache: 'no-store' })
+      if (!response.ok) throw new Error('Unable to load history')
+      const detail = parseSnapshot(await response.json(), source.template)
+      const versions = [...detail.versions].sort((a, b) => b.version - a.version)
+      if (sourceRequest.current === requestId) setCreation(current => current?.source?.template.id === source.template.id ? { ...current, sourceVersions: versions, sourceVersionId: versions[0]?.id ?? '' } : current)
+    } catch {
+      if (sourceRequest.current === requestId) setError('Could not load the form version history. Close this dialog and try Duplicate again.')
+    } finally { if (sourceRequest.current === requestId) setLoadingSource(false) }
   }
 
   async function create() {
-    if (!creation || busy) return
+    if (!creation || busy || loadingSource) return
     const { source, sourceVersionId } = creation
     const key = creation.key.trim()
     const name = creation.name.trim()
@@ -93,7 +109,7 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       setError('Enter a name (up to 160 characters) and a description of up to 600 characters.')
       return
     }
-    if (source && !sources(source).some(row => row.id === sourceVersionId)) {
+    if (source && !creation.sourceVersions.some(row => row.id === sourceVersionId)) {
       setError('Choose an available source version and try again.')
       return
     }
@@ -113,11 +129,16 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
           : 'Could not create the form. Your entries are preserved. Check the details and try again.')
         return
       }
-      if (!result?.template?.id) {
-        setError('The server returned an incomplete result. Reload the list to check whether the form was created before trying again.')
+      let created
+      try {
+        const selected = creation.sourceVersions.find(row => row.id === sourceVersionId)
+        const definition = source && selected ? { ...selected.definition, key } : createBlankDefinition({ key, title: name, ...(description ? { description } : {}) })
+        created = parseCreatedForm(result, { key, name, description, definition, existingIds: templates.map(row => row.template.id) })
+      } catch {
+        setError('The server returned an invalid result. Your entries are preserved. Reload the list to check whether the form was created before trying again.')
         return
       }
-      router.push(`/admin/settings/intake-forms/${result.template.id}`)
+      router.push(`/admin/settings/intake-forms/${encodeURIComponent(created.template.id)}`)
     } catch {
       setError('Could not reach the server. Your entries are preserved. Check your connection and try again.')
     } finally { setBusy(false) }
@@ -132,14 +153,18 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
         body: JSON.stringify({ archived: !pendingArchive.template.archived_at }),
       })
       const result = await response.json().catch(() => null)
-      if (!response.ok || result?.template?.id !== pendingArchive.template.id) {
+      let template
+      try {
+        if (!response.ok) throw new Error('Request failed')
+        template = parseArchiveResponse(result, pendingArchive.template, !pendingArchive.template.archived_at)
+      } catch {
         setError('Could not update the form. The current list is preserved. Try again or reload the list to check its status.')
         return
       }
-      setTemplates(current => current.map(summary => summary.template.id === result.template.id ? {
-        ...summary, template: result.template,
-        lastModifiedAt: Date.parse(result.template.updated_at) > Date.parse(summary.lastModifiedAt)
-          ? result.template.updated_at : summary.lastModifiedAt,
+      setTemplates(current => current.map(summary => summary.template.id === template.id ? {
+        ...summary, template,
+        lastModifiedAt: Date.parse(template.updated_at) > Date.parse(summary.lastModifiedAt)
+          ? template.updated_at : summary.lastModifiedAt,
       } : summary))
       setPendingArchive(null)
     } catch {
@@ -167,19 +192,19 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       )}
       {archived.length > 0 && <section aria-label="Archived intake forms" className="space-y-3"><h2 className="text-base font-semibold">Archived</h2><TemplateRows items={archived} busy={busy} onCreate={startCreation} onArchive={startArchive} /></section>}
 
-      <Dialog open={creation !== null} onOpenChange={open => { if (!open && !busy) { setCreation(null); setError(null) } }}>
+      <Dialog open={creation !== null} onOpenChange={open => { if (!open && !busy) { sourceRequest.current += 1; setCreation(null); setError(null) } }}>
         <DialogContent onCloseAutoFocus={restoreFocus} showCloseButton={!busy}>
           <DialogHeader>
             <DialogTitle>{creation?.source ? 'Duplicate intake form' : 'New blank intake form'}</DialogTitle>
             <DialogDescription>{creation?.source ? 'Copy a version into an independent new form.' : 'Start an empty draft and add approved fields in the builder.'} The stable key cannot be changed after creation.</DialogDescription>
           </DialogHeader>
           {creation && <form noValidate onSubmit={event => { event.preventDefault(); void create() }} className="space-y-4">
-            {creation.source && <div className="space-y-1"><Label htmlFor="source-version">Source version</Label><select id="source-version" className="w-full rounded-md border bg-background p-2 text-sm" value={creation.sourceVersionId} disabled={busy} onChange={event => setCreation({ ...creation, sourceVersionId: event.target.value })}>{sources(creation.source).map(row => <option key={row.id} value={row.id}>Version {row.version} · {row.status}</option>)}</select></div>}
+            {creation.source && <div className="space-y-1"><Label htmlFor="source-version">Source version</Label><select id="source-version" className="w-full rounded-md border bg-background p-2 text-sm" value={creation.sourceVersionId} disabled={busy || loadingSource} onChange={event => setCreation({ ...creation, sourceVersionId: event.target.value })}>{creation.sourceVersions.map(row => <option key={row.id} value={row.id}>Version {row.version} · {row.status}</option>)}</select>{loadingSource && <p role="status" className="text-sm text-muted-foreground">Loading version history…</p>}</div>}
             <div className="space-y-1"><Label htmlFor="form-key">Stable key</Label><Input id="form-key" value={creation.key} disabled={busy} maxLength={80} autoComplete="off" onChange={event => setCreation({ ...creation, key: event.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="form-name">Name</Label><Input id="form-name" value={creation.name} disabled={busy} maxLength={160} onChange={event => setCreation({ ...creation, name: event.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="form-description">Description</Label><Textarea id="form-description" value={creation.description} disabled={busy} maxLength={600} onChange={event => setCreation({ ...creation, description: event.target.value })} /></div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => { setCreation(null); setError(null) }}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Creating…' : creation.source ? 'Duplicate form' : 'Create form'}</Button></DialogFooter>
+            <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => { sourceRequest.current += 1; setCreation(null); setError(null) }}>Cancel</Button><Button type="submit" disabled={busy || loadingSource || Boolean(creation.source && !creation.sourceVersionId)}>{busy ? 'Creating…' : creation.source ? 'Duplicate form' : 'Create form'}</Button></DialogFooter>
           </form>}
         </DialogContent>
       </Dialog>

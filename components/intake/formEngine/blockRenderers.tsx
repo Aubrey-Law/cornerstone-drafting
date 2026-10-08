@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import {
   ContactAddressFields,
 } from '@/components/intake/IntakeFormPrimitives'
@@ -32,6 +32,8 @@ export interface IntakeBlockRendererProps extends StepProps {
   config?: Record<string, unknown>
   /** In-memory review navigation; preview supplies a no-op to avoid live links. */
   onEditSection?: (sectionId: string) => void
+  /** Builder-only review, derived from the local compiled definition/evaluation. */
+  previewReview?: ReactNode
   onAttorneySave?: (patch: { plan_type?: string; document_inclusions?: Record<string, boolean> }) => Promise<void>
 }
 

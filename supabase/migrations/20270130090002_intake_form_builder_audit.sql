@@ -179,6 +179,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Draft changed; refresh and try again' USING ERRCODE = '40001'; END IF;
   INSERT INTO public.intake_form_audit_events (template_id, version_id, version_number, action, actor_id)
     VALUES (v_row.template_id, v_row.id, v_row.version, 'discard', p_actor_id);
+  UPDATE public.intake_form_templates SET updated_at = now() WHERE id = v_row.template_id;
   DELETE FROM public.intake_form_versions WHERE id = v_row.id;
   RETURN to_jsonb(v_row) - 'definition';
 END;

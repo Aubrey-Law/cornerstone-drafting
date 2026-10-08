@@ -160,6 +160,20 @@ describe('visual intake editor', () => {
     await waitFor(() => expect(document.activeElement).toBe(trigger))
   })
 
+  it('shows catalog type, baseline and supported audiences without changing option names or disabled explanations', () => {
+    mount(); fireEvent.click(screen.getByRole('button', { name: 'Add item to Family' }))
+    const field = screen.getByRole('option', { name: /^First name /i })
+    expect(field.textContent).toContain('Type: Text')
+    expect(field.textContent).toContain('Baseline: Required')
+    expect(field.textContent).toContain('Audience: Client and staff; Staff only')
+    const block = screen.getByRole('option', { name: /^Plan structure / })
+    expect(block.textContent).toContain('Type: Compound block')
+    expect(block.textContent).toContain('Audience: Staff only')
+    expect(block.getAttribute('aria-disabled')).toBe('true')
+    expect(block.textContent).toContain('Requires a staff-only section')
+    expect(document.getElementById(block.getAttribute('aria-describedby')!)?.textContent).toContain('Compound block')
+  })
+
   it('labels the catalog search and drawer and announces changing diagnostics', () => {
     mount(); click('Add item to Family')
     const dialog = screen.getByRole('dialog', { name: 'Add approved item' })

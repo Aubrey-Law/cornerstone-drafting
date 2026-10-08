@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** implemented and verified locally; controller whole-branch review and separately authorized release remain pending
+**Status:** implemented and verified locally, including all six whole-branch review repairs; controller repair re-review and separately authorized release remain pending
 
 **Scope:** administrator-only visual authoring and synthetic preview over the
 Phase 2A intake-form persistence and lifecycle foundation
@@ -77,6 +77,13 @@ The page provides two creation paths:
 2. **Duplicate** copies a selected version into version 1 of a new template
    with a new key, name, and independent history.
 
+Duplicate loads parsed version detail on demand and offers every historical
+version; the summary list does not carry all definitions. Create, duplicate,
+archive, and restore validate strict response shapes, identity, and expected
+state before navigation or local adoption. An invalid success response keeps
+the dialog and entered values intact and directs the administrator to reload
+and verify server state before retrying.
+
 Keys are chosen at creation, must satisfy the Phase 2A key contract, and are
 not editable afterward because the definition key and template identity must
 remain aligned.
@@ -106,6 +113,11 @@ the existing schema-driven renderer in an isolated preview adapter. The
 adapter serves synthetic answers and no-op or in-memory capabilities. It never
 creates an intake, calls an answer-persistence adapter, uploads a document, or
 submits a form.
+
+The preview Review block uses the current compiled sections, item order,
+evaluated synthetic answers, and requirement issues. It does not consult the
+bundled questionnaire's active-step or review-issue helpers. This override is
+preview-only; live intake review behavior is unchanged.
 
 ## Authoring model
 
@@ -203,6 +215,11 @@ not prevent saving an incomplete draft.
 Navigation away from a dirty editor requires confirmation. This covers links,
 in-app navigation, closing or reloading the tab, and lifecycle actions that
 would replace the local definition. A successful save clears the warning.
+The Settings selector and same-document Back/Forward use the same accessible
+Leave/Cancel dialog as links, with focus restored on cancellation and exactly
+one captured destination on confirmation. Same-page anchors and modified,
+download, and non-self link targets retain their exemptions. Tab closing and
+reloading retain the browser's native beforeunload protection.
 
 ### Concurrent-edit conflicts
 
@@ -219,6 +236,14 @@ uses the saved lock version and definition hash, so a stale editor cannot
 publish a definition it did not most recently save.
 
 ## Lifecycle actions
+
+### Version history
+
+The version selector exposes every available version. Published and retired
+versions are inspectable but immutable. Selecting history does not overwrite
+the current draft buffer. Any published historical version can be retired,
+including one behind a newer retired version or a newer unsaved draft; the
+draft and its unsaved changes remain available through Return to draft.
 
 ### Publish
 
@@ -242,6 +267,9 @@ surface does not yet expose it.
 Discard draft requires confirmation, sends the expected lock version, and
 returns the editor to the latest immutable version or template list. It never
 removes published or retired history.
+Successful discard also advances the template's authoritative modification
+timestamp in the same transaction as deletion and its append-only audit event.
+A stale or failed operation advances neither recency nor the audit trail.
 
 ### Retire, archive, and restore
 
@@ -472,10 +500,12 @@ git diff --check origin/main...HEAD
 git diff --check
 ```
 
-The exact focused suite passed **15 files / 421 tests**, including real local
+After the six review repairs, the exact focused suite passed **15 files / 446 tests**, including real local
 database tests, with no accessibility warning. Lint and typecheck exited 0.
-The full suite exited 0: **916 files passed, 2 skipped; 10,151 tests passed,
-26 skipped** (266.84 seconds). It emitted seven jsdom
+The full suite exited 0: **916 files passed, 2 skipped; 10,175 tests passed,
+27 skipped** (138.67 seconds). The additional skipped test is the new local
+database regression, which passed in the explicitly configured focused run.
+The full suite emitted seven jsdom
 `Not implemented: navigation to another Document` notices, with no failed
 tests. Both diff checks passed. No failure was classified as pre-existing;
 a clean-baseline failure comparison was therefore not needed.
@@ -571,13 +601,45 @@ Local evidence is retained at
 `/private/tmp/intake-phase2b-task9-browser-evidence.json`,
 `/private/tmp/intake-phase2b-task9-guards-evidence.json`, and
 `/private/tmp/intake-phase2b-task9-smoke-evidence.json`.
-The complete full-suite log is
+The initial Task 9 full-suite log is
 `/private/tmp/intake-phase2b-task9-final-full-test.log`.
+
+### Whole-branch review repair verification
+
+All six findings were reproduced against `215dd6d9` and repaired with focused
+RED-to-GREEN checks: imperative/history navigation, custom preview Review,
+historical selection and retirement, discard recency, list response validation,
+and catalog decision metadata. No drafting internals changed.
+
+The final repair Chrome run passed at **1440×1000** and **390×1000**. It covered
+Settings departure and native browser Back/Forward Cancel/Leave with retained
+edits and focus, no added history entries or replay loop; four-version history
+and retirement of v2 while preserving an unsaved v4; historical duplicate
+source selection; removed/reordered Review sections/items and changed
+requirements; inert synthetic controls with zero intake/auth requests;
+catalog type, baseline, and audience text; and discard list recency matching
+the durable actor/time/version event. Malformed create, duplicate, archive,
+and restore success responses preserved the list/dialog state. Fresh
+non-admin sessions were denied the list/editor and returned 403 for
+list/detail/create/archive APIs. The same two intakes retained null pins.
+
+The undeployed discard function was replaced only in the existing disposable
+loopback database to verify its one-line timestamp update. No schema signature
+changed, so type regeneration was unnecessary. Initial Task 9 reset/smoke
+evidence above remains a historical record, not a second reset or a new
+production-verification claim.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-final-fix-focused.log`,
+`/private/tmp/intake-phase2b-final-fix-full.log`, and
+`/private/tmp/intake-phase2b-final-fix-browser-evidence.json`.
+The final run recorded local unused-font preload and favicon aspect-ratio
+warnings, with no uncaught page error or failing acceptance assertion.
 
 ### Remaining release boundaries
 
-Whole-branch review (Task 9 Step 6) is pending with the controller after the
-Task 9 implementation/review handoff. Phase 2C runtime activation and intake
+The six whole-branch review findings are repaired and locally verified;
+controller repair re-review remains pending. Phase 2C runtime activation and intake
 pinning, Phase 3 detailed intake enhancements, production bundled-form
 installation, and all drafting changes remain excluded. No push, pull
 request, linked migration deployment, shared-database mutation, or

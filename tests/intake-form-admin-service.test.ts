@@ -658,6 +658,12 @@ describe('intake form lifecycle service', () => {
     await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([{ lastModifiedAt: '2026-10-10T15:00:00Z' }])
   })
 
+  it('retains discard recency when the latest draft no longer exists', async () => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template({ updated_at: '2026-10-10T15:00:00Z' })])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([version(definition(), { status: 'published', updated_at: '2026-10-09T15:00:00Z' })])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([{ draft: null, lastModifiedAt: '2026-10-10T15:00:00Z' }])
+  })
+
   it('returns a parsed editor snapshot with history and propagates storage errors', async () => {
     vi.mocked(repository.listVersionRows).mockResolvedValue([version()])
     vi.mocked(repository.listAuditEventRows).mockResolvedValue([auditEvent()] as never)

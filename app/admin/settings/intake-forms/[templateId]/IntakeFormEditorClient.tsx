@@ -63,13 +63,21 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
       <div><Link href="/admin/settings/intake-forms" className="text-sm text-muted-foreground underline">Intake forms</Link><h1 className="text-2xl font-semibold">{snapshot.template.name}</h1>{draft.version && <p className="text-sm text-muted-foreground">Version {draft.version.version} · {draft.version.status}</p>}</div>
       <p role="status" className="text-sm text-muted-foreground">{draft.busy ? 'Saving changes…' : dirty ? 'Unsaved changes' : readOnly ? 'Read-only version' : 'No unsaved changes'}</p>
     </div>
+    {snapshot.versions.length > 0 && <div className="max-w-sm space-y-1">
+      <label htmlFor="intake-version-history" className="text-sm font-medium">Version history</label>
+      <select id="intake-version-history" value={draft.version?.id ?? ''} disabled={draft.busy} className="w-full rounded-md border bg-background p-2 text-sm"
+        onChange={event => { draft.selectVersion(event.target.value); setSelection({ kind: 'form' }); setCatalogSection(null) }}>
+        {[...snapshot.versions].sort((a, b) => b.version - a.version).map(version => <option key={version.id} value={version.id}>Version {version.version} · {version.status}</option>)}
+      </select>
+    </div>}
     <div role="group" aria-label="Form actions" className="flex flex-wrap gap-2">
-      {snapshot.draft ? <>
+      {draft.version?.status === 'draft' ? <>
         <Button disabled={readOnly || draft.saveStatus === 'conflict' || (!dirty && draft.saveStatus !== 'error')} onClick={() => void draft.saveDraft()}>{draft.saveStatus === 'error' ? 'Retry save' : 'Save draft'}</Button>
         <Button variant="outline" disabled={!draft.canPublish} onClick={() => { rememberFocus(); setConfirming('publish') }}>Publish</Button>
         <Button variant="outline" disabled={draft.busy || Boolean(snapshot.template.archived_at)} onClick={() => { rememberFocus(); setConfirming('discard') }}>Discard draft</Button>
       </> : <>
-        <Button disabled={!draft.version || draft.busy || Boolean(snapshot.template.archived_at) || draft.saveStatus === 'conflict'} onClick={() => void draft.createNextDraft()}>Edit</Button>
+        {snapshot.draft ? <Button variant="outline" disabled={draft.busy} onClick={() => { draft.selectVersion(snapshot.draft!.id); setSelection({ kind: 'form' }) }}>Return to draft</Button> :
+          <Button disabled={!draft.version || draft.busy || Boolean(snapshot.template.archived_at) || draft.saveStatus === 'conflict'} onClick={() => void draft.createNextDraft()}>Edit</Button>}
         {draft.version?.status === 'published' && <Button variant="outline" disabled={draft.busy || draft.saveStatus === 'conflict'} onClick={() => { rememberFocus(); setConfirming('retire') }}>Retire</Button>}
       </>}
     </div>

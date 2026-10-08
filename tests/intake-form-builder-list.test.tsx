@@ -9,8 +9,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
 const date = '2026-10-08T12:00:00Z'
 function version(id: string, status: IntakeFormVersionRow['status'], number: number): IntakeFormVersionRow {
   return { id, status, version: number, template_id: 'active', created_at: date, updated_at: date,
-    created_by: 'admin', definition_hash: 'hash', lock_version: 1, published_at: null, published_by: null,
-    definition: { schemaVersion: 1, key: 'estate', title: 'Estate', sections: [] } }
+    created_by: 'admin', definition_hash: 'a'.repeat(64), lock_version: 1, published_at: null, published_by: null,
+    definition: { schemaVersion: 1, key: 'active', title: 'Estate', sections: [] } }
 }
 function summary(id = 'active', archived = false): IntakeFormTemplateSummary {
   const draft = version(`${id}-draft`, 'draft', 3)
@@ -23,6 +23,15 @@ function fields(key = 'special_needs', name = 'Special Needs Planning') {
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } })
 }
 const ok = (body: unknown) => ({ ok: true, json: async () => body })
+function detail() {
+  const item = summary()
+  return { template: item.template, draft: item.draft, versions: [item.draft!, item.latestPublished!, version('active-old', 'retired', 1)], auditEvents: [] }
+}
+function created(id = 'new-template', key = 'special_needs', name = 'Special Needs Planning', description: string | null = null) {
+  return { template: { ...summary().template, id, key, name, description },
+    draft: { ...version(`${id}-v1`, 'draft', 1), template_id: id, lock_version: 0,
+      definition: { schemaVersion: 1, key, title: name, ...(description ? { description } : {}), sections: [] } }, diagnostics: [] }
+}
 
 describe('intake form settings list', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('fetch', fetchMock) })
@@ -62,7 +71,8 @@ describe('intake form settings list', () => {
     }
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(document.activeElement).toBe(trigger))
-    expect(fetchMock).not.toHaveBeenCalled()
+    if (action === 'Duplicate') expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings/intake-forms/active', expect.objectContaining({ cache: 'no-store' }))
+    else expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('renders the service aggregate even when the newest change belongs to an unlisted version', () => {
@@ -70,6 +80,14 @@ describe('intake form settings list', () => {
     item.lastModifiedAt = '2026-10-09T15:00:00Z'
     render(<IntakeFormsListClient initialTemplates={[item]} />)
     expect(screen.getByText(/Last modified/).querySelector('time')?.dateTime).toBe('2026-10-09T15:00:00Z')
+  })
+
+  it('keeps a recent discard visible after its draft row has been removed', () => {
+    const item = summary(); item.draft = null; item.latestVersion = item.latestPublished
+    item.template.updated_at = item.lastModifiedAt = '2026-10-10T15:00:00Z'
+    render(<IntakeFormsListClient initialTemplates={[item]} />)
+    expect(screen.queryByText('Draft v3')).toBeNull()
+    expect(screen.getByText(/Last modified/).querySelector('time')?.dateTime).toBe('2026-10-10T15:00:00Z')
   })
 
   it('rejects invalid keys and blank names before making a request', async () => {
@@ -93,12 +111,12 @@ describe('intake form settings list', () => {
       definition: { schemaVersion: 1, key: 'special_needs', title: 'Special Needs Planning', sections: [] },
     }) }))
     expect(push).not.toHaveBeenCalled()
-    finish(ok({ template: { id: 'new-template' } }))
+    finish(ok(created()))
     await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/settings/intake-forms/new-template'))
   })
 
   it('includes a provided description in both metadata and blank definition', async () => {
-    fetchMock.mockResolvedValue(ok({ template: { id: 'new' } }))
+    fetchMock.mockResolvedValue(ok(created('new', 'special_needs', 'Special Needs Planning', 'Planning intake')))
     render(<IntakeFormsListClient initialTemplates={[]} />)
     fireEvent.click(screen.getByRole('button', { name: 'New blank form' })); fields()
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Planning intake' } })
@@ -110,15 +128,16 @@ describe('intake form settings list', () => {
   })
 
   it('duplicates the selected source version into a new template', async () => {
-    fetchMock.mockResolvedValue(ok({ template: { id: 'copy' } }))
+    const copy = created('copy', 'copy', 'Copy'); copy.draft.definition.title = 'Estate'
+    fetchMock.mockResolvedValueOnce(ok(detail())).mockResolvedValueOnce(ok(copy))
     render(<IntakeFormsListClient initialTemplates={[summary()]} />)
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate' })); fields('copy', 'Copy')
-    expect(screen.getAllByRole('option')).toHaveLength(2)
-    fireEvent.change(screen.getByLabelText('Source version'), { target: { value: 'active-published' } })
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3))
+    fireEvent.change(screen.getByLabelText('Source version'), { target: { value: 'active-old' } })
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate form' }))
     await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/settings/intake-forms/copy'))
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings/intake-forms/active/duplicate', expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ sourceVersionId: 'active-published', key: 'copy', name: 'Copy', description: null }),
+      method: 'POST', body: JSON.stringify({ sourceVersionId: 'active-old', key: 'copy', name: 'Copy', description: null }),
     }))
   })
 
@@ -167,6 +186,55 @@ describe('intake form settings list', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'active form', hidden: true })).toBeTruthy()
     expect(push).not.toHaveBeenCalled()
+  })
+
+  it.each(['shape', 'key', 'name', 'date', 'draft-identity', 'definition', 'lock', 'status', 'existing-id', 'extra'])('preserves blank creation input on a malformed success (%s)', async mismatch => {
+    const result = created()
+    if (mismatch === 'key') result.template.key = 'wrong'
+    if (mismatch === 'name') result.template.name = 'Wrong'
+    if (mismatch === 'date') result.template.updated_at = 'not a date'
+    if (mismatch === 'draft-identity') result.draft.template_id = 'wrong'
+    if (mismatch === 'definition') result.draft.definition.title = 'Unexpected'
+    if (mismatch === 'lock') result.draft.lock_version = 1
+    if (mismatch === 'status') result.draft.status = 'published'
+    if (mismatch === 'existing-id') result.template.id = 'active'
+    fetchMock.mockResolvedValue(ok(mismatch === 'shape' ? { template: { id: 'new' } } : mismatch === 'extra' ? { ...result, unexpected: true } : result))
+    render(<IntakeFormsListClient initialTemplates={[summary()]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New blank form' })); fields()
+    fireEvent.click(screen.getByRole('button', { name: 'Create form' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/invalid.*reload.*created/i))
+    expect(push).not.toHaveBeenCalled(); expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Special Needs Planning')
+    expect(screen.getByRole('heading', { name: 'active form', hidden: true })).toBeTruthy()
+  })
+
+  it.each([false, true])('preserves archive confirmation and the list for invalid successes (archived=%s)', async archived => {
+    const item = summary('active', archived)
+    for (const mismatch of ['shape', 'key', 'state', 'date']) {
+      const result = { ...item.template, archived_at: archived ? null : date }
+      if (mismatch === 'key') result.key = 'wrong'
+      if (mismatch === 'state') result.archived_at = item.template.archived_at
+      if (mismatch === 'date') result.updated_at = 'bad date'
+      fetchMock.mockResolvedValue(ok({ template: mismatch === 'shape' ? { id: 'active' } : result }))
+      render(<IntakeFormsListClient initialTemplates={[item]} />)
+      fireEvent.click(screen.getByRole('button', { name: archived ? 'Restore' : 'Archive' }))
+      fireEvent.click(screen.getByRole('button', { name: archived ? 'Restore form' : 'Archive form' }))
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/current list is preserved/i))
+      expect(screen.getByRole('alertdialog')).toBeTruthy()
+      expect(screen.getByRole('button', { name: archived ? 'Restore' : 'Archive', hidden: true })).toBeTruthy()
+      expect(push).not.toHaveBeenCalled(); cleanup()
+    }
+  })
+
+  it('rejects a malformed duplicate success without losing the historical source or identity entries', async () => {
+    fetchMock.mockResolvedValueOnce(ok(detail())).mockResolvedValueOnce(ok({ template: { id: 'copy' } }))
+    render(<IntakeFormsListClient initialTemplates={[summary()]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' })); fields('copy', 'Copy')
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3))
+    fireEvent.change(screen.getByLabelText('Source version'), { target: { value: 'active-old' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate form' }))
+    await screen.findByRole('alert')
+    expect(push).not.toHaveBeenCalled(); expect((screen.getByLabelText('Source version') as HTMLSelectElement).value).toBe('active-old')
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Copy')
   })
 
   it.each(['http', 'network'])('preserves creation input and existing rows on %s failure', async failure => {

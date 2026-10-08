@@ -103,4 +103,38 @@ describe('intake builder lifecycle', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Retire' })).toBeNull()); expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
     expect(fetch).toHaveBeenCalledWith('/api/admin/settings/intake-forms/t1/versions/v1/retire', expect.objectContaining({ method: 'POST', body: '{}' }))
   })
+
+  it('inspects every historical version and retires an older publication while preserving an unsaved newer draft', async () => {
+    const data = fixture()
+    data.draft!.id = 'v4'; data.draft!.version = 4
+    data.versions = [data.draft!, { ...fixture('retired').versions[0], id: 'v3', version: 3 },
+      { ...fixture('published').versions[0], id: 'v2', version: 2, definition: { ...data.draft!.definition, title: 'Second publication' } }, fixture('published').versions[0]]
+    mount(data)
+    fireEvent.change(screen.getByLabelText('Form title'), { target: { value: 'Unsaved draft work' } })
+    const history = screen.getByLabelText('Version history')
+    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Version 4 · draft', 'Version 3 · retired', 'Version 2 · published', 'Version 1 · published'])
+    fireEvent.change(history, { target: { value: 'v2' } })
+    expect((screen.getByLabelText('Form title') as HTMLInputElement).value).toBe('Second publication')
+    expect(disabled('Add section')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    const published = data.versions[2]
+    vi.mocked(fetch).mockResolvedValue(response({ version: { ...published, status: 'retired' } }))
+    click('Retire'); click('Confirm retire')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retire' })).toBeNull())
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/admin/settings/intake-forms/t1/versions/v2/retire', expect.objectContaining({ method: 'POST' }))
+    fireEvent.change(history, { target: { value: 'v4' } })
+    expect((screen.getByLabelText('Form title') as HTMLInputElement).value).toBe('Unsaved draft work')
+    expect(disabled('Save draft')).toBe(false)
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+  })
+
+  it('can select and retire a publication hidden behind a newer retired version', async () => {
+    const data = fixture('retired'); data.versions[0].version = 2; data.versions[0].id = 'v2'
+    data.versions.push(fixture('published').versions[0]); mount(data)
+    fireEvent.change(screen.getByLabelText('Version history'), { target: { value: 'v1' } })
+    vi.mocked(fetch).mockResolvedValue(response({ version: fixture('retired').versions[0] }))
+    click('Retire'); click('Confirm retire')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retire' })).toBeNull())
+    expect(screen.getByText('Version 1 · retired', { selector: 'p' })).toBeTruthy()
+  })
 })
