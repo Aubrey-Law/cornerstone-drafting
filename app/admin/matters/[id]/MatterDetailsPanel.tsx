@@ -1,27 +1,20 @@
 'use client'
 
-import type { ComponentProps } from 'react'
-import { Button } from '@/components/ui/button'
 import { MatterFactsPanel, type MatterFactsPanelProps } from './facts-panel/MatterFactsPanel'
-import { MatterDetailsCard } from './MatterDetailsCard'
+import { MatterAdminRows, type MatterAdminRowsProps } from './facts-panel/MatterAdminRows'
 
 /**
  * The Details panel body: the facts panel (always `simplified` here) with the
- * administrative settings folded underneath. The page owns the rail around it.
+ * matter's administrative fields folded into its Matter section, so every
+ * field has exactly one home. The page owns the rail around it.
  */
-export function MatterDetailsPanel({ facts, admin, onOpenIntake }: {
-  facts: Omit<MatterFactsPanelProps, 'simplified'>
-  admin: ComponentProps<typeof MatterDetailsCard>
-  onOpenIntake: () => void
+export function MatterDetailsPanel({ facts, admin }: {
+  facts: Omit<MatterFactsPanelProps, 'simplified' | 'adminRows'>
+  admin: MatterAdminRowsProps
 }) {
   return (
     <div className="h-full overflow-y-auto">
-      <MatterFactsPanel {...facts} simplified />
-      <details className="border-t p-4">
-        <summary className="cursor-pointer text-sm font-medium">Administrative settings</summary>
-        <MatterDetailsCard {...admin} />
-        <Button variant="outline" onClick={onOpenIntake}>Review / update intake</Button>
-      </details>
+      <MatterFactsPanel {...facts} simplified adminRows={<MatterAdminRows {...admin} />} />
     </div>
   )
 }

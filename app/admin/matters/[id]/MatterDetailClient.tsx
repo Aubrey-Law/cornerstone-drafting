@@ -708,7 +708,6 @@ function MatterDetailClientInner({
               onOpenTab: tab => { setFactsRailOpen(false); setActiveTab(tab) },
             }}
             admin={{
-              matter,
               matterId,
               matterNumber: matterNum,
               matterNumberManual,
@@ -716,17 +715,12 @@ function MatterDetailClientInner({
               onStatusChange: status => void actions.handleStatusChange(status),
               statusSaving: actions.statusSaving,
               details: matterDetails,
-              designSheetPlanType,
               onSaveField: handleSaveMatterDetailField,
-              savingField,
-              lastSavedAt,
-              error: matterDetailsError,
               esignEnabled,
               engagementSending: sendingEngagement,
               onSendEngagement: () => void handleSendEngagement(),
               onDraftEngagement: () => void handleDraftEngagement(),
             }}
-            onOpenIntake={() => void openIntakeSheet()}
           />
         </ResponsiveDetailRail>
         </div>

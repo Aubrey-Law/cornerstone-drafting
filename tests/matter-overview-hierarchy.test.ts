@@ -31,14 +31,15 @@ describe('matter overview hierarchy', () => {
     expect(client.indexOf('value="activity"')).toBeGreaterThan(client.indexOf('value="notes"'))
   })
 
-  it('uses read-first editable panels and exposes persistent save state', () => {
-    const essentials = fs.readFileSync(path.join(matterDir, 'MatterDetailsCard.tsx'), 'utf8')
+  it('folds the administrative fields into the facts panel and exposes persistent save state', () => {
+    const adminRows = fs.readFileSync(path.join(matterDir, 'facts-panel', 'MatterAdminRows.tsx'), 'utf8')
+    const detailsPanel = fs.readFileSync(path.join(matterDir, 'MatterDetailsPanel.tsx'), 'utf8')
     const saveHook = fs.readFileSync(path.join(matterDir, 'useMatterDetailsSave.ts'), 'utf8')
 
-    expect(essentials).toContain('ReadFirstPanel')
-    expect(essentials).toContain('fee_payment_status')
-    expect(essentials).toContain('normalizeTargetSigningDate')
-    expect(essentials).toContain("{ manual: false }")
+    expect(adminRows).toContain("{ manual: false }")
+    expect(adminRows).toContain("'engagement_status'")
+    expect(detailsPanel).toContain('adminRows={<MatterAdminRows')
+    expect(detailsPanel).not.toContain('Administrative settings')
     expect(saveHook).toContain('savingField')
     expect(saveHook).toContain('lastSavedAt')
     expect(saveHook).toContain('error')
