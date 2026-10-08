@@ -19,6 +19,7 @@ import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatFirmDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +52,12 @@ export interface MatterWorkspaceHeaderProps {
   matterTypeLabel?: string | null
   stage?: ReactNode
   navigation?: ReactNode
+  /** Extra items at the end of the chip row (Drafting puts its stage chip and work indicator here). */
+  meta?: ReactNode
+  /** Buttons before Details (Drafting's Focus). */
+  extraActions?: ReactNode
+  /** One slim row: name and actions only, with the tabs kept. Drafting collapses to this while the sheet scrolls. */
+  collapsed?: boolean
 }
 
 /**
@@ -79,6 +86,9 @@ export function MatterWorkspaceHeader({
   matterTypeLabel,
   stage,
   navigation,
+  meta,
+  extraActions,
+  collapsed = false,
 }: MatterWorkspaceHeaderProps) {
   const clientName = matter.client_name || matter.matter_name || 'Matter'
   const identityChips = [
@@ -90,16 +100,16 @@ export function MatterWorkspaceHeader({
   const openedOn = opened ? formatFirmDate(opened, { month: 'short', day: 'numeric', year: 'numeric' }) : null
 
   return (
-    <header className="shrink-0 border-b border-border bg-card px-4 pt-5 md:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <header data-collapsed={collapsed || undefined} className={cn('shrink-0 border-b border-border bg-card px-4 md:px-6', collapsed ? 'pt-2' : 'pt-5')}>
+      <div className={cn('flex flex-wrap justify-between gap-3', collapsed ? 'items-center' : 'items-start')}>
         <div className="min-w-0 flex-1 basis-48">
-          <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          {!collapsed && <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" aria-hidden />Matters
-          </Link>
-          <h1 className="mt-1 min-w-0">
-            <MatterSwitcher matterId={matter.matter_id} label={clientName} className="max-w-full px-0 text-xl font-semibold tracking-tight sm:text-2xl" />
+          </Link>}
+          <h1 className={cn('min-w-0', !collapsed && 'mt-1')}>
+            <MatterSwitcher matterId={matter.matter_id} label={clientName} className={cn('max-w-full px-0 font-semibold tracking-tight', collapsed ? 'text-lg' : 'text-xl sm:text-2xl')} />
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          {!collapsed && <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             {identityChips.map(label => (
               <Badge key={label} variant="outline" className="rounded-md font-medium">{label}</Badge>
             ))}
@@ -108,10 +118,12 @@ export function MatterWorkspaceHeader({
                 {[matterNumber ? `#${matterNumber}` : null, openedOn ? `Opened ${openedOn}` : null].filter(Boolean).join(' · ')}
               </span>
             )}
-          </div>
+            {meta}
+          </div>}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+        {extraActions}
         {matter.client_phone && <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild><CallPhoneLink phone={matter.client_phone} label="Call" icon={<Phone className="size-3.5" />} /></Button>}
         <Button variant="outline" size="sm" className="hidden sm:inline-flex" disabled={!matter.client_email} onClick={onEmail}><Mail className="size-3.5" />Email</Button>
         <Button type="button" size="sm" variant={factsRailOpen ? 'selected' : 'outline'} onClick={onToggleFactsRail}
@@ -201,8 +213,8 @@ export function MatterWorkspaceHeader({
         </DropdownMenu>
       </div>
       </div>
-      {stage && <div className="mt-5">{stage}</div>}
-      {navigation && <div className="-mx-4 mt-4 md:-mx-6">{navigation}</div>}
+      {stage && !collapsed && <div className="mt-5">{stage}</div>}
+      {navigation && <div className={cn('-mx-4 md:-mx-6', collapsed ? 'mt-1' : 'mt-4')}>{navigation}</div>}
     </header>
   )
 }

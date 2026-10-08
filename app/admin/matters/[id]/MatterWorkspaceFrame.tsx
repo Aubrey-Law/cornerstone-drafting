@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { ExternalLink, Maximize2, Minimize2, PanelRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { ResponsiveDetailRail } from '@/components/layout/ResponsiveDetailRail'
 import { MatterWorkspaceHeader } from '@/components/matter/MatterWorkspaceHeader'
@@ -24,6 +26,14 @@ import { useMatterStage } from './useMatterStage'
 
 const noop = () => {}
 
+/** Scroll distance in the body before the header collapses, and the point it returns. */
+const COLLAPSE_AT = 48
+const EXPAND_AT = 4
+
+function typingInField(target: EventTarget | null) {
+  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+}
+
 /**
  * The matter workspace chrome for routes that are tabs of the matter but not
  * the matter page itself — today, Drafting. It renders the same header, stage
@@ -37,6 +47,51 @@ export function MatterWorkspaceFrame({ data, active, children }: {
 }) {
   const token = useAccessToken()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  // `?mode=focus` hides the app and matter chrome so the page fills the window;
+  // a pop-out is the same URL in a new window. (`?focus=` belongs to the design sheet.)
+  const focus = searchParams.get('mode') === 'focus'
+  const setFocus = useCallback((on: boolean) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (on) params.set('mode', 'focus')
+    else params.delete('mode')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams])
+  const popOut = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('mode', 'focus')
+    window.open(`${pathname}?${params.toString()}`, '_blank', 'noopener')
+  }
+
+  // The header folds to one row once the page body scrolls (the design sheet
+  // scrolls in its own pane, so listen in the capture phase), and returns at the top.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (target.scrollTop > COLLAPSE_AT) setCollapsed(true)
+      else if (target.scrollTop <= EXPAND_AT) setCollapsed(false)
+    }
+    body.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => body.removeEventListener('scroll', onScroll, { capture: true })
+  }, [])
+
+  useEffect(() => {
+    if (!focus) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || typingInField(event.target)) return
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return
+      setFocus(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focus, setFocus])
   const [matter, setMatter] = useState(data.matter)
   const matterId = matter.matter_id
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -57,7 +112,21 @@ export function MatterWorkspaceFrame({ data, active, children }: {
   const practiceArea = normalizePracticeArea(facts.details?.practice_area ?? matter.practice_area)
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full min-h-0 flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
+    <div className={focus
+      ? 'fixed inset-0 z-40 flex flex-col bg-background text-foreground'
+      : '-mx-4 -mb-4 flex h-full min-h-0 flex-col bg-background text-foreground md:-mx-6 md:-mb-6'}>
+      {focus ? (
+        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-2 md:px-6">
+          <p className="min-w-0 flex-1 truncate text-sm"><span className="font-semibold">{matter.client_name || matter.matter_name || 'Matter'}</span><span className="text-muted-foreground"> · Drafting · focus mode</span></p>
+          <Button type="button" size="sm" variant={detailsOpen ? 'selected' : 'outline'} aria-pressed={detailsOpen} onClick={() => setDetailsOpen(open => !open)}>
+            <PanelRight className="size-4" aria-hidden />Details
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={popOut}><ExternalLink className="size-3.5" aria-hidden />New window</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setFocus(false)} title="Esc">
+            <Minimize2 className="size-3.5" aria-hidden />Exit focus
+          </Button>
+        </div>
+      ) : (
       <MatterWorkspaceHeader
         matter={matter}
         matterNumber={facts.matterNumber}
@@ -77,18 +146,28 @@ export function MatterWorkspaceFrame({ data, active, children }: {
         onPushToStatular={() => void actions.pushToStatular()}
         pushingToStatular={actions.pushingToStatular}
         onDelete={actions.deleteDialog.openDialog}
-        stage={practiceArea === 'Probate' ? (
-          <ProbateStageStrip details={facts.details} />
-        ) : (
-          <MatterStageStrip
+        collapsed={collapsed}
+        stage={practiceArea === 'Probate' ? <ProbateStageStrip details={facts.details} /> : undefined}
+        meta={<span className="flex flex-wrap items-center gap-2 pl-1">
+          {practiceArea !== 'Probate' && <MatterStageStrip
+            compact
             stage={matter.stage}
             details={facts.details}
             agingSummary={data.agingSummary}
             stageSaving={stage.stageSaving}
             onStageChange={next => void stage.handleStageChange(next)}
             history={data.stageHistory}
-          />
-        )}
+          />}
+          <RecordWorkIndicator summary={data.workSummary} compact />
+        </span>}
+        extraActions={<>
+          <Button type="button" size="sm" variant="outline" onClick={() => setFocus(true)} title="Hide the surrounding chrome so the page fills the window">
+            <Maximize2 className="size-3.5" aria-hidden /><span className="hidden sm:inline">Focus</span>
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={popOut} aria-label="Open in a new window" title="Open in a new window">
+            <ExternalLink className="size-3.5" aria-hidden />
+          </Button>
+        </>}
         navigation={<MatterWorkspaceNav
           matterId={matterId}
           active={active}
@@ -96,12 +175,10 @@ export function MatterWorkspaceFrame({ data, active, children }: {
           drafting={practiceArea !== 'Probate' && practiceArea !== 'TA'}
         />}
       />
-      <div className="shrink-0 border-b border-border bg-card px-4 py-2 md:px-6">
-        <RecordWorkIndicator summary={data.workSummary} compact />
-      </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</div>
+        <div ref={bodyRef} className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
         <ResponsiveDetailRail
           open={detailsOpen}
           onOpenChange={open => {
