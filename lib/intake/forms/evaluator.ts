@@ -78,7 +78,7 @@ function missingMessage(id: SharedFieldId, college: boolean, label: string): str
   return messages[id] ?? `Answer ${label.toLowerCase()}.`
 }
 
-function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, field: BuilderFieldDef, data: IntakeRow, activeFields: Set<SharedFieldId>): IntakeSectionIssueDraft[] {
+function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, field: BuilderFieldDef, data: IntakeRow, activeFields: Set<SharedFieldId>, activeFormFields: Set<SharedFieldId>): IntakeSectionIssueDraft[] {
   const value = readBuilderFieldValue(item.fieldId, data)
   const college = getIntakeTrack(data) === 'college_prep'
   const blocking = CONTACT_FIELDS.has(item.fieldId)
@@ -91,7 +91,7 @@ function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, fiel
   // cross-field rule in code, independently of form visibility/requiredness.
   const requirementActive = item.fieldId !== 'college_dpoa_powers'
     || item.effectiveRequirement !== 'recommended'
-    || !activeFields.has('college_dpoa_effective')
+    || !activeFormFields.has('college_dpoa_effective')
     || set(readBuilderFieldValue('college_dpoa_effective', data))
   if (missing && requirementActive && (blocking || item.effectiveRequirement !== 'optional')) issues.push({ message: missingMessage(item.fieldId, college, field.label), severity, ...(blocking ? { blocksSubmission: true } : {}) })
   if (!missing) {
@@ -109,13 +109,16 @@ function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, fiel
 /** One condition/validation result drives display, progress, review, and submit. */
 export function evaluateCompiledIntakeForm(form: CompiledIntakeForm, data: IntakeRow): IntakeFormEvaluation {
   const resolve = (fieldId: SharedFieldId) => readBuilderFieldValue(fieldId, data)
-  const activeSections = form.sections.filter((section) => evaluateIntakeCondition(section.condition, resolve)).map((section): EvaluatedIntakeSection => {
-    const activeItems = section.items.filter((item) => evaluateIntakeCondition(item.condition, resolve))
+  const activeContent = form.sections.filter((section) => evaluateIntakeCondition(section.condition, resolve)).map((section) => ({
+    section, activeItems: section.items.filter((item) => evaluateIntakeCondition(item.condition, resolve)),
+  }))
+  const activeFormFields = new Set(activeContent.flatMap(({ activeItems }) => activeItems.flatMap((item) => item.kind === 'field' ? [item.fieldId] : [])))
+  const activeSections = activeContent.map(({ section, activeItems }): EvaluatedIntakeSection => {
     const activeFields = new Set(activeItems.flatMap((item) => item.kind === 'field' ? [item.fieldId] : []))
     const items = activeItems.map((item): EvaluatedIntakeItem => {
       const result = item.kind === 'block' ? evaluateIntakeBlock(item.blockId, item.config, data) : (() => {
         const field = getBuilderField(item.fieldId)
-        const issues = scalarIssues(item, field, data, activeFields)
+        const issues = scalarIssues(item, field, data, activeFields, activeFormFields)
         return { issues, complete: issues.every((issue) => issue.severity !== 'error') }
       })()
       return { id: item.id, item, complete: result.complete, issues: result.issues.map((issue) => ({ sectionId: section.id, sectionTitle: section.title, ...issue })) }

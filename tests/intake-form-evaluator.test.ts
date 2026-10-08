@@ -148,4 +148,32 @@ describe('compiled intake evaluation', () => {
     expect(valid.activeSections[0].complete).toBe(true)
     expect(valid.remainingMinutes).toBe(2)
   })
+
+  it.each([
+    { name: 'blank active timing', timing: 'active', selected: undefined, requirement: 'recommended', expectedSeverity: undefined },
+    { name: 'chosen active timing', timing: 'active', selected: 'immediately', requirement: 'recommended', expectedSeverity: 'warning' },
+    { name: 'timing absent', timing: 'absent', selected: undefined, requirement: 'recommended', expectedSeverity: 'warning' },
+    { name: 'timing section hidden', timing: 'section_hidden', selected: undefined, requirement: 'recommended', expectedSeverity: 'warning' },
+    { name: 'timing item hidden', timing: 'item_hidden', selected: undefined, requirement: 'recommended', expectedSeverity: 'warning' },
+    { name: 'required powers with blank active timing', timing: 'active', selected: undefined, requirement: 'required', expectedSeverity: 'error' },
+  ] as const)('evaluates split-section DPOA dependency: $name', ({ timing, selected, requirement, expectedSeverity }) => {
+    const condition = { op: 'equals', fieldId: 'has_children', value: true } as const
+    const raw: IntakeFormDefinition = { schemaVersion: 1, key: 'split_dpoa', title: 'Split DPOA', sections: [
+      { id: 'controller', title: 'Controller', audience: 'client_and_staff', items: [{ kind: 'field', id: 'children', fieldId: 'has_children' }] },
+      ...(timing === 'absent' ? [] : [{ id: 'timing', title: 'Timing', audience: 'client_and_staff' as const,
+        ...(timing === 'section_hidden' ? { condition } : {}),
+        items: [{ kind: 'field' as const, id: 'effective', fieldId: 'college_dpoa_effective' as const,
+          ...(timing === 'item_hidden' ? { condition } : {}),
+        }],
+      }]),
+      { id: 'powers', title: 'Powers', audience: 'client_and_staff', items: [{ kind: 'field', id: 'powers', fieldId: 'college_dpoa_powers', requirement }] },
+      FORM.sections[6],
+    ] }
+    const data = Object.freeze({ intake_track: 'college_prep', has_children: false, college_dpoa_effective: selected })
+    const evaluated = evaluateCompiledIntakeForm(compiled(raw), data)
+    const issues = evaluated.activeSections.find((section) => section.id === 'powers')!.issues
+    expect(issues.map(({ message, severity }) => ({ message, severity }))).toEqual(expectedSeverity ? [{ message: 'Select the powers to grant, or choose “Discuss at the meeting” above.', severity: expectedSeverity }] : [])
+    expect(evaluated.submissionErrors).toEqual([])
+    expect(data.college_dpoa_effective).toBe(selected)
+  })
 })
