@@ -207,8 +207,8 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const envelope = z.object({ draft: z.unknown(), diagnostics: diagnosticsSchema }).strict().safeParse(await jsonRequest('/draft', 'POST', { sourceVersionId: version.id }))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.draft, snapshot.template, 'draft')
-      const nextVersionNumber = Math.max(...snapshot.versions.map(value => value.version)) + 1
-      if (next.version !== nextVersionNumber || snapshot.versions.some(value => value.id === next.id) || next.lock_version !== 0 ||
+      const highestKnownVersion = Math.max(...snapshot.versions.map(value => value.version))
+      if (next.version <= highestKnownVersion || snapshot.versions.some(value => value.id === next.id) || next.lock_version !== 0 ||
         next.definition_hash !== version.definition_hash || definitionFingerprint(next.definition) !== definitionFingerprint(version.definition)) throw invalidResponse()
       replaceVersion(next, envelope.data.diagnostics)
     })

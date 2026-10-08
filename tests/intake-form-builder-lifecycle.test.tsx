@@ -60,15 +60,26 @@ describe('intake builder lifecycle', () => {
       cleanup()
     }
   })
-  it.each(['definition', 'hash', 'lock', 'id', 'empty-id', 'version', 'template', 'status'])('rejects a next draft with mismatched %s and preserves immutable selection', async mismatch => {
+  it('accepts a newer draft when concurrent history advances beyond the local next version', async () => {
     mount(fixture('published')); click('Select section Review')
-    const returned: IntakeFormVersionRow = { ...fixture().draft!, id: 'v2', version: 2, lock_version: 0 }
+    const next = { ...fixture().draft!, id: 'v4', version: 4, lock_version: 0 }
+    vi.mocked(fetch).mockResolvedValueOnce(response({ draft: next, diagnostics: [] }, 201))
+    click('Edit'); await screen.findByRole('button', { name: 'Save draft' })
+    expect(disabled('Add section')).toBe(false)
+    expect(screen.queryByText('Read-only version')).toBeNull()
+    expect(fetch).toHaveBeenCalledWith('/api/admin/settings/intake-forms/t1/draft', expect.objectContaining({ method: 'POST', body: JSON.stringify({ sourceVersionId: 'v1' }) }))
+  })
+  it.each(['definition', 'hash', 'lock', 'id', 'empty-id', 'equal-version', 'lower-version', 'template', 'status'])('rejects a next draft with mismatched %s and preserves immutable selection', async mismatch => {
+    const source = fixture('published'); source.versions[0].version = 2
+    mount(source); click('Select section Review')
+    const returned: IntakeFormVersionRow = { ...fixture().draft!, id: 'v3', version: 3, lock_version: 0 }
     if (mismatch === 'definition') returned.definition = { ...returned.definition, title: 'Unexpected definition' }
     if (mismatch === 'hash') returned.definition_hash = 'b'.repeat(64)
     if (mismatch === 'lock') returned.lock_version = 1
     if (mismatch === 'id') returned.id = 'v1'
     if (mismatch === 'empty-id') returned.id = ''
-    if (mismatch === 'version') returned.version = 4
+    if (mismatch === 'equal-version') returned.version = 2
+    if (mismatch === 'lower-version') returned.version = 1
     if (mismatch === 'template') returned.template_id = 'other'
     if (mismatch === 'status') returned.status = 'published'
     vi.mocked(fetch).mockResolvedValueOnce(response({ draft: returned, diagnostics: [] }))
