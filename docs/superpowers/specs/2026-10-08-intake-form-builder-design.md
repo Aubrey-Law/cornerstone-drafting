@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved in conversation; awaiting written-spec review
+**Status:** approved; Phase 1 implemented, with automated verification recorded below and manual compiled-mode acceptance pending
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 
@@ -562,5 +562,45 @@ checkout comparison.
 - Answers remain in canonical domain stores, not in form-definition JSON.
 - Hidden questions retain their data.
 - Client/public delivery is server-compiled and excludes staff-only content.
-- Phase 1 is the next implementation target; later phases depend on its
-  contracts but are not bundled into its implementation branch.
+- Phase 1 implements the catalog, bundled definitions, compiler/evaluator,
+  shared renderer, compatibility selectors, and explicit legacy rollback mode.
+  Later phases depend on these contracts and are not included in this branch.
+
+## Phase 1 verification record — 2026-10-08
+
+The estate and college-preparation bundled definitions compile. Automated
+old/new parity compares ordered active and required sections, completion,
+issue messages/severity/submission blocking, progress, and submission errors.
+The historical-answer policy preserves presence-only validation for the exact
+legacy select questions that never checked option membership; county, marital
+status, estate value, missing required questions, and approved retired-value
+handling keep their existing validation. Definitions still reject unapproved
+condition values and cannot configure this catalog policy.
+
+Verification commands use Node 24.20.0:
+
+```sh
+npx vitest run tests/intake-*.test.ts tests/intake-*.test.tsx tests/college-prep-intake.test.ts tests/lead-intake-progress.test.ts tests/lead-intake-contact-progress.test.ts tests/public-intake-start-form.test.tsx tests/admin-intake-sheet-form.test.tsx
+npm run lint
+npm run typecheck
+npm test
+git diff --check origin/main...HEAD
+```
+
+The intake-focused run passed 43 files / 502 tests. Lint, typecheck,
+touched-file lint, and diff checks passed. The full run passed 893 files /
+9,565 tests (22 skipped) with only the two established sandbox loopback-listener
+failures in `db-columns-check` and `db-rpc-check` (`listen EPERM 127.0.0.1`).
+Both suites passed separately with approved local-listener permission: 2 files /
+21 tests. No new failing test was observed.
+
+Manual compiled-mode estate and college-preparation browser smoke checks are
+**unperformed**. A read-only local check found a listener at `127.0.0.1:3002`,
+but this does not prove the Supabase fixture, configured renderer mode, client
+session, or the requested edit/refresh/review/submit flows. Browser
+authentication requires separate user approval and was not performed. Phase 1
+is therefore not yet marked fully verified or accepted for a production mode
+change; the server flag retains legacy as its default and rollback mode.
+
+Phase 2 builder database/UI and Phase 3 matter Intake tab, answer attribution,
+shared-person enhancements, and asset enhancements remain unimplemented.

@@ -54,6 +54,9 @@ export interface SharedFieldDef {
 export interface BuilderFieldDef extends SharedFieldDef {
   builderEnabled: true
   baselineRequirement: 'optional' | 'recommended' | 'required'
+  /** Historical intake selects that were presence-checked only keep that
+   * behavior. The compiler still restricts definitions to approved options. */
+  intakeOptionValidation?: 'legacy_presence'
   read: (data: Readonly<Record<string, unknown>>) => unknown
   write: (value: unknown, update: (field: string, value: unknown) => void) => void
 }

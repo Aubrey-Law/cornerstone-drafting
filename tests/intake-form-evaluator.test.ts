@@ -135,16 +135,16 @@ describe('compiled intake evaluation', () => {
 
   it('keeps an optional section incomplete when a supplied select answer is invalid', () => {
     const raw: IntakeFormDefinition = { ...FORM, sections: [
-      { id: 'referral', title: 'Referral', optional: true, timeEstimateMinutes: 3, audience: 'client_and_staff', items: [{ kind: 'field', id: 'source', fieldId: 'referral_source' }] }, FORM.sections[6],
+      { id: 'estate', title: 'Estate', optional: true, timeEstimateMinutes: 3, audience: 'client_and_staff', items: [{ kind: 'field', id: 'value', fieldId: 'estate_value' }] }, FORM.sections[6],
     ] }
-    const result = evaluateCompiledIntakeForm(compiled(raw), { referral_source: 'not-an-option' })
+    const result = evaluateCompiledIntakeForm(compiled(raw), { estate_value: 'not-an-option' })
     expect(result.activeSections[0].items[0].complete).toBe(false)
     expect(result.activeSections[0].complete).toBe(false)
     expect(result.activeSections[0].issues).toEqual([expect.objectContaining({ severity: 'error' })])
     expect(result.remainingMinutes).toBe(5)
     expect(result.submissionErrors).toEqual([])
     expect(evaluateCompiledIntakeForm(compiled(raw), {}).activeSections[0].complete).toBe(false)
-    const valid = evaluateCompiledIntakeForm(compiled(raw), { referral_source: 'Referral' })
+    const valid = evaluateCompiledIntakeForm(compiled(raw), { estate_value: 'under_500k' })
     expect(valid.activeSections[0].complete).toBe(true)
     expect(valid.remainingMinutes).toBe(2)
   })

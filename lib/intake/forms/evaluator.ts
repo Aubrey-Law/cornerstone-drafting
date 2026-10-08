@@ -38,6 +38,7 @@ function answered(field: BuilderFieldDef, value: unknown): boolean {
 }
 
 function validateBuilderValue(field: BuilderFieldDef, id: SharedFieldId, value: unknown): string | null {
+  if (field.control === 'select' && field.intakeOptionValidation === 'legacy_presence') return null
   if (field.control === 'select' && field.options?.length) {
     const normalized = field.normalize ? field.normalize(value) : value
     return [...field.options.map((option) => option.value), ...(field.legacyValues ?? [])].includes(String(normalized))

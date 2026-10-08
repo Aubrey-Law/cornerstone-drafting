@@ -3,7 +3,7 @@ import { compileBundledIntakeForm } from '@/lib/intake/forms/definitions'
 import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
 import type { CompiledIntakeForm } from '@/lib/intake/forms/compiler'
 import { getIntakeTrack } from '@/lib/intakeTrack'
-import { getActiveSteps, getRequiredSteps, type IntakeRow } from '@/lib/intakeSections'
+import { getActiveSteps, getRequiredSteps, getStepById, getStepIssues, getSubmissionErrors, type IntakeRow } from '@/lib/intakeSections'
 
 import {
   captureLegacyIntakeResult,
@@ -13,8 +13,18 @@ import {
   INTAKE_PARITY_CASES,
   type IntakeParityResult,
 } from '@/tests/fixtures/intakeFormParity'
+import { getStepIssues as getLegacyStepIssues, getStepById as getLegacyStepById } from '@/lib/intake/legacySections'
 
 const EXTENDED_PARITY_CASES = [
+  { name: 'estate historical referral option', data: { ...COMPLETE_ESTATE, referral_source: 'Former website source' } },
+  { name: 'estate historical legal insurance and suffix options', data: { ...COMPLETE_ESTATE, referral_source: 'Legal Insurance', legal_insurance_plan: 'Former provider', suffix: 'Former suffix' } },
+  { name: 'college historical optional CPR option', data: { ...COMPLETE_COLLEGE, college_cpr: 'Former treatment preference' } },
+  { name: 'college historical required timing option', data: { ...COMPLETE_COLLEGE, college_dpoa_effective: 'Former timing preference' } },
+  { name: 'college historical select preferences', data: { ...COMPLETE_COLLEGE, college_hipaa_scope: 'Former scope', college_hipaa_expiration: 'Former expiration', college_life_support: 'Former support', college_artificial_nutrition: 'Former nutrition', college_ventilation: 'Former ventilation', college_organ_donation: 'Former donation' } },
+  { name: 'college historical nested CPR preference', data: { ...COMPLETE_COLLEGE, college_prep_details: { cpr: 'Former treatment preference' } } },
+  { name: 'college missing required timing', data: { ...COMPLETE_COLLEGE, college_dpoa_effective: '' } },
+  { name: 'estate approved retired value', data: { ...COMPLETE_ESTATE, estate_value: 'under_2m' } },
+  { name: 'estate invalid required options', data: { ...COMPLETE_ESTATE, marital_status: 'unknown', estate_value: 'unknown', county: 'unknown' } },
   { name: 'estate adult child without DOB', data: { ...COMPLETE_ESTATE, has_children: true, has_minor_children: false, _children: [{ first_name: 'Adult', last_name: 'Child' }] } },
   { name: 'estate stored review choices', data: { ...CONTACT_ONLY, marital_status: 'married', has_minor_children: true, review_choices: { fiduciaries: 'discuss_with_attorney', spouse_fiduciaries: 'not_provided_yet', guardian: 'discuss_with_attorney' } } },
   { name: 'college blank DPOA powers after selection', data: { ...COMPLETE_COLLEGE, college_dpoa_powers: [], college_organ_donation: '' } },
@@ -27,6 +37,17 @@ const EXTENDED_PARITY_CASES = [
   { name: 'estate submitted', data: { ...COMPLETE_ESTATE, status: 'submitted' } },
   { name: 'college approved', data: { ...COMPLETE_COLLEGE, status: 'approved', college_hcp_limits: 'Discuss care', college_concerns: 'Moving abroad' } },
 ]
+
+function captureProductionIntakeResult(data: IntakeRow): IntakeParityResult {
+  const active = getActiveSteps(data)
+  return {
+    activeIds: active.map((step) => step.id),
+    requiredIds: getRequiredSteps(data).map((step) => step.id),
+    completionById: Object.fromEntries(active.map((step) => [step.id, step.isComplete(data)])),
+    issuesById: Object.fromEntries(active.map((step) => [step.id, getStepIssues(step.id, data).map(({ message, severity, blocksSubmission }) => ({ message, severity, blocksSubmission: blocksSubmission === true }))])),
+    submissionErrors: getSubmissionErrors(data).map(({ sectionId, message }) => ({ sectionId, message })),
+  }
+}
 
 function captureCompiledIntakeResult(form: CompiledIntakeForm, data: IntakeRow): IntakeParityResult {
   const result = evaluateCompiledIntakeForm(form, data)
@@ -58,12 +79,32 @@ describe('legacy intake behavior parity matrix', () => {
     expect(compiled.success).toBe(true)
     if (!compiled.success) return
     expect(captureCompiledIntakeResult(compiled.form, data)).toEqual(captureLegacyIntakeResult(data))
+    expect(captureProductionIntakeResult(data)).toEqual(captureLegacyIntakeResult(data))
     const required = getRequiredSteps(data)
     const completed = required.filter((step) => step.isComplete(data)).length
     const result = evaluateCompiledIntakeForm(compiled.form, data)
     expect(result.completedRequired).toBe(completed)
     expect(result.percentComplete).toBe(required.length ? Math.round(completed / required.length * 100) : 0)
     expect(result.remainingMinutes).toBe(getActiveSteps(data).filter((step) => !step.isComplete(data)).reduce((minutes, step) => minutes + step.timeEstimate, 0))
+  })
+
+  it('re-evaluates compatibility steps with the supplied row after completion changes', () => {
+    const step = getActiveSteps(CONTACT_ONLY).find((entry) => entry.id === 'personal')!
+    expect(step.isComplete(COMPLETE_ESTATE)).toBe(true)
+    expect(step.isComplete(CONTACT_ONLY)).toBe(false)
+    const school = getStepById('cp_school')!
+    expect(school.isComplete(COMPLETE_COLLEGE)).toBe(true)
+    expect(school.isComplete({ intake_track: 'college_prep' })).toBe(false)
+  })
+
+  it('preserves direct lookup for hidden sections while active submission skips them', () => {
+    const data = { ...CONTACT_ONLY, marital_status: 'single', has_minor_children: false }
+    for (const id of ['spouse', 'spouse_fiduciaries', 'guardian']) {
+      expect(getStepIssues(id, data)).toEqual(getLegacyStepIssues(id, data))
+      expect(getStepById(id)?.isComplete(data)).toBe(getLegacyStepById(id)?.isComplete(data))
+      expect(getActiveSteps(data).map(({ id: activeId }) => activeId)).not.toContain(id)
+    }
+    expect(getSubmissionErrors(data)).toEqual([])
   })
 
   it('keeps spouse, spouse fiduciary, child, and guardian steps conditional', () => {

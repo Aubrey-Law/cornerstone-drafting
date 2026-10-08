@@ -1,4 +1,4 @@
-import { getStepById, type IntakeRow } from '@/lib/intakeSections'
+import { getActiveSteps, getStepById, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeTrack } from '@/lib/intakeTrack'
 
 export type LeadIntakeSegment = {
@@ -22,8 +22,8 @@ export type LeadIntakeSegment = {
 function activeStepComplete(intake: IntakeRow, id: string): boolean {
   const step = getStepById(id)
   if (!step) throw new Error(`Unknown intake step: ${id}`)
-  if (step.condition && !step.condition(intake)) return true
-  return step.isComplete(intake)
+  const active = getActiveSteps(intake).find((entry) => entry.id === id)
+  return active ? active.isComplete(intake) : true
 }
 
 function estateWithoutRealPropertyComplete(intake: IntakeRow): boolean {

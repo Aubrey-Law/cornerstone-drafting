@@ -194,6 +194,17 @@ export const BUILDER_FIELD_IDS: readonly SharedFieldId[] = [
   ...Object.keys(INTAKE_SCALAR_FIELD_DEFS) as IntakeCatalogFieldId[],
 ]
 
+// These existing intake questions never validated supplied option membership.
+// Preserve stored answers without relaxing the validated county, marital-status,
+// or estate-value vocabularies. New catalog fields default to strict validation.
+const LEGACY_PRESENCE_SELECTS = new Set<SharedFieldId>([
+  'client_suffix', 'client_pronouns', 'client_citizenship',
+  'referral_source', 'legal_insurance_plan',
+  'college_dpoa_effective', 'college_hipaa_scope', 'college_hipaa_expiration',
+  'college_living_will_include', 'college_life_support', 'college_cpr',
+  'college_artificial_nutrition', 'college_ventilation', 'college_organ_donation',
+])
+
 /** Only this code decides where an answer is read or written. */
 export function createBuilderField(def: SharedFieldDef): BuilderFieldDef {
   const key = def.intakeKey
@@ -206,6 +217,7 @@ export function createBuilderField(def: SharedFieldDef): BuilderFieldDef {
     : ['client_dob', 'client_email', 'client_phone', 'county'].includes(def.id) ? 'recommended' : 'optional'
   const builder: BuilderFieldDef = {
     ...def, builderEnabled: true, baselineRequirement, validationProfile,
+    ...(LEGACY_PRESENCE_SELECTS.has(def.id as SharedFieldId) ? { intakeOptionValidation: 'legacy_presence' as const } : {}),
     // Goal options were missing from the shared display definition; retain its
     // normalizer and mappings while supplying the existing intake vocabulary.
     ...(def.id === 'planning_goals' ? { options: PLANNING_GOAL_OPTIONS } : {}),

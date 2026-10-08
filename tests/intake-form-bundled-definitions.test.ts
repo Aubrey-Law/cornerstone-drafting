@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { COLLEGE_PREP_STEPS } from '@/lib/collegePrepSections'
-import { INTAKE_STEPS } from '@/lib/intakeSections'
+import { COLLEGE_PREP_STEPS } from '@/lib/intake/legacyCollegePrepSections'
+import { INTAKE_STEPS } from '@/lib/intake/legacySections'
 import { COLLEGE_PREP_INTAKE_FORM, ESTATE_INTAKE_FORM, compileBundledIntakeForm, evaluateBundledIntakeForm, getBundledIntakeForm } from '@/lib/intake/forms/definitions'
 import { INTAKE_PARITY_CASES } from '@/tests/fixtures/intakeFormParity'
 import { compileIntakeForm } from '@/lib/intake/forms/compiler'

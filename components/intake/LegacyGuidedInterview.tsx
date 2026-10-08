@@ -18,7 +18,7 @@ import {
   formatSubmissionIssueList,
   type IntakeRow,
   type IntakeStep,
-} from '@/lib/intakeSections'
+} from '@/lib/intake/legacySections'
 import { getIntakeReadinessFlags } from '@/lib/intakeReadiness'
 import { getLegalReviewFlags, type LegalReviewFlag } from '@/lib/intakeLegalFlags'
 import {

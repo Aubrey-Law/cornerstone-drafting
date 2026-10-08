@@ -48,4 +48,11 @@ describe('intake submission requires only contact information', () => {
   it('blocks submission on an invalid email', () => {
     expect(isReadyToReview({ ...CONTACT, email: 'not-an-email' })).toBe(false)
   })
+
+  it('keeps malformed noncontact selections visible without blocking contact-only submission', () => {
+    const data = { ...CONTACT, marital_status: 'unknown', estate_value: 'unknown' }
+    expect(getStepErrors('family', data).map(({ message }) => message)).toContain('Select a valid marital status.')
+    expect(getStepErrors('estate', data).map(({ message }) => message)).toContain('Select a valid estimated total estate value.')
+    expect(getSubmissionErrors(data)).toEqual([])
+  })
 })

@@ -4,7 +4,7 @@ import {
   getStepIssues,
   getSubmissionErrors,
   type IntakeRow,
-} from '@/lib/intakeSections'
+} from '@/lib/intake/legacySections'
 
 export interface IntakeParityCase {
   name: string
