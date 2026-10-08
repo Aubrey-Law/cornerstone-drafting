@@ -26,6 +26,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from: (table: s
     insert: () => { call.verb = 'insert'; return chain },
     update: () => { call.verb = 'update'; return chain },
     eq: (key: string, value: unknown) => { call.filters.push([key, value]); return chain },
+    in: (key: string, values: unknown[]) => { call.filters.push([key, values]); return chain },
     or: () => chain,
     maybeSingle: async () => ({ data: { id: 'intake-1' }, error: null }),
     then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve),
@@ -55,12 +56,19 @@ describe.each([undefined, 'invite-1'])('contact replacement database errors (%s)
     expect(await response.json()).toMatchObject({ error: 'contact read failed' })
     expect(state.calls.filter((call) => call.verb === 'insert' || call.verb === 'update')).toEqual([])
   })
-  it.each([{ entries: [] }, { entries: [nominee] }])('rejects failed additional-contact DELETE for replacement %j before inserting contacts', async ({ entries }) => {
+  it('rejects failed additional-contact DELETE for an explicitly removed contact', async () => {
     state.additionalDeleteError = { message: 'additional deletion failed' }
-    const response = await POST(request('save_additional_contacts', entries, publicToken))
+    const response = await POST(request('save_additional_contacts', [], publicToken))
     expect(response.status).toBe(500)
     expect(await response.json()).toMatchObject({ error: 'additional deletion failed' })
     expect(state.calls.filter((call) => call.verb === 'insert')).toEqual([])
+  })
+  it('rejects failed additional-contact SELECT before any mutations', async () => {
+    state.contactSelectError = { message: 'contact read failed' }
+    const response = await POST(request('save_additional_contacts', [nominee], publicToken))
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ error: 'contact read failed' })
+    expect(state.calls.filter((call) => call.verb !== 'select')).toEqual([])
   })
   it('acknowledges an empty fiduciary replacement only after the scoped DELETE succeeds', async () => {
     expect((await POST(request('save_fiduciaries', [], publicToken))).status).toBe(200)
@@ -69,10 +77,11 @@ describe.each([undefined, 'invite-1'])('contact replacement database errors (%s)
   })
   it('acknowledges an empty additional-contact replacement only after its scoped DELETE succeeds', async () => {
     expect((await POST(request('save_additional_contacts', [], publicToken))).status).toBe(200)
-    const deletes = state.calls.filter((call) => call.table === 'contacts')
+    const deletes = state.calls.filter((call) => call.table === 'contacts' && call.verb === 'delete')
     expect(deletes).toHaveLength(1)
     expect(deletes[0].verb).toBe('delete')
     expect(deletes[0].filters).toContainEqual(['client_intake_id', 'intake-1'])
     expect(deletes[0].filters.some(([key]) => key === 'source')).toBe(true)
+    expect(deletes[0].filters).toContainEqual(['id', ['contact-1']])
   })
 })

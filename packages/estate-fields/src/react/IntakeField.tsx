@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import {
   getSharedField,
   getBuilderField,
@@ -56,6 +57,7 @@ export function IntakeField({
   'aria-describedby': ariaDescribedBy,
   classNames,
 }: IntakeFieldProps) {
+  const radioName = useId()
   const sharedDef = getSharedField(fieldId)
   const def = sharedDef.builderEnabled ? getBuilderField(fieldId) : sharedDef
   const options = def.optionsFor ? def.optionsFor(context ?? {}) : def.options ?? []
@@ -129,9 +131,14 @@ export function IntakeField({
   }
 
   if (def.control === 'boolean') {
-    // Requiredness means answering the question; a false answer is valid.
-    // Native checkbox `required` would incorrectly demand a true answer.
-    return <input id={id} {...controlA11y} type="checkbox" checked={value === true} aria-required={required} onChange={(event) => onChange(event.target.checked)} />
+    // Neither choice is selected for an unanswered question; No is a complete
+    // answer in its own right, reachable in one action and by native radio keys.
+    return <fieldset id={id} {...controlA11y} role="radiogroup" aria-required={required} className="flex gap-4">
+      {[true, false].map((answer) => <label key={String(answer)} className="flex items-center gap-2">
+        <input type="radio" name={radioName} value={String(answer)} disabled={disabled} checked={value === answer} onChange={() => { if (!disabled) onChange(answer) }} />
+        {answer ? 'Yes' : 'No'}
+      </label>)}
+    </fieldset>
   }
 
   if (def.control === 'multiselect') {

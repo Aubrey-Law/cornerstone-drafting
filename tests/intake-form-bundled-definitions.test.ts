@@ -28,7 +28,8 @@ describe('bundled canonical intake definitions', () => {
     expect(ESTATE_INTAKE_FORM.sections.map((section) => section.id)).toEqual(['referral', 'personal', 'family', 'spouse', 'children', 'estate', 'goals', 'additional_contacts', 'fiduciaries', 'spouse_fiduciaries', 'guardian', 'review'])
     expect(COLLEGE_PREP_INTAKE_FORM.sections.map((section) => section.id)).toEqual(['cp_student', 'cp_school', 'cp_parents', 'cp_agents', 'cp_dpoa', 'cp_healthcare', 'cp_hipaa', 'cp_living_will', 'cp_other', 'review'])
     for (const [id, fieldId, value] of [['spouse', 'marital_status', 'married'], ['spouse_fiduciaries', 'marital_status', 'married'], ['children', 'has_children', true], ['guardian', 'has_minor_children', true]]) {
-      expect(ESTATE_INTAKE_FORM.sections.find((section) => section.id === id)?.condition).toEqual({ op: 'equals', fieldId, value })
+      expect(evaluateBundledIntakeForm('estate', 'client', { [fieldId as string]: value }).activeSections.map((section) => section.id)).toContain(id)
+      expect(evaluateBundledIntakeForm('estate', 'client', {}).activeSections.map((section) => section.id)).not.toContain(id)
     }
   })
 

@@ -13,7 +13,7 @@ vi.mock('@/lib/intake/forms/evaluator', () => {
   throw new Error('Compiled evaluation is unavailable')
 })
 
-import { ReviewModal } from '@/components/intake/LegacyGuidedInterview'
+import { ReviewModal } from '@/components/intake/GuidedInterview'
 import { StepReview } from '@/components/intake/IntakeWizard'
 
 afterEach(cleanup)

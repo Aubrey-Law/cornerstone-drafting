@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
-import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
+import { AdditionalContactInputError, saveAdditionalContacts } from '@/lib/contacts/saveAdditionalContacts'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneForStorage } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
@@ -315,60 +315,13 @@ export async function POST(req: Request) {
     }
 
     if (action === 'save_additional_contacts') {
-      const { contacts: nominees } = body
-      const { error: deleteError } = await admin
-        .from('contacts')
-        .delete()
-        .eq('client_intake_id', intakeId)
-        .eq('source', CLIENT_INTAKE_ADDITIONAL_SOURCE)
-      if (deleteError) throw new Error(deleteError.message)
-
-      const rows = (nominees ?? [])
-        .filter(
-          (c: Record<string, unknown>) =>
-            String(c.first_name ?? '').trim() && String(c.last_name ?? '').trim(),
-        )
-        .map((c: Record<string, unknown>) => {
-          const patch = contactPayloadFromEntry({
-            middle_name: c.middle_name,
-            street: c.street,
-            city: c.city,
-            state: c.state,
-            zip: c.zip,
-            relationship: c.relationship,
-            phone: c.phone,
-            email: c.email,
-            address: c.address,
-          })
-          return {
-            client_intake_id: intakeId,
-            relationship_type: normalizeContactRelationshipType('other'),
-            first_name: String(c.first_name).trim(),
-            last_name: String(c.last_name).trim(),
-            suffix:
-              typeof c.suffix === 'string' && c.suffix.trim() ? c.suffix.trim() : null,
-            ...patch,
-            source: CLIENT_INTAKE_ADDITIONAL_SOURCE,
-            created_by_client_at: new Date().toISOString(),
-          }
-        })
-
-      if (rows.length > 0) {
-        const { data: created, error } = await admin
-          .from('contacts').insert(rows).select('id, relationship_type')
-        if (error) throw error
-        const additionalMatterId = await matterIdForIntake(admin, intakeId)
-        for (const row of (created ?? []) as Array<{ id: string; relationship_type: string | null }>) {
-          await attachContactToMatter(admin, additionalMatterId, row.id, {
-            relationship_type: row.relationship_type ?? 'other',
-          })
-        }
-      }
+      await saveAdditionalContacts(admin, intakeId, body.contacts ?? [])
       return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err) {
+    if (err instanceof AdditionalContactInputError) return NextResponse.json({ error: err.message }, { status: 400 })
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[intake/contacts] ${action} error:`, err)
     return NextResponse.json({ error: msg }, { status: 500 })

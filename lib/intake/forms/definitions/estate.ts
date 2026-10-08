@@ -78,7 +78,7 @@ export const ESTATE_INTAKE_FORM: IntakeFormDefinition = {
       items: [{ kind: 'block', id: 'spouse_fiduciaries', blockId: 'spouse_fiduciaries' }],
     },
     {
-      id: 'guardian', title: 'Guardian for Minors', subtitle: 'Care for minor children', timeEstimateMinutes: 2, audience: 'client_and_staff', condition: { op: 'equals', fieldId: 'has_minor_children', value: true },
+      id: 'guardian', title: 'Guardian for Minors', subtitle: 'Care for minor children', timeEstimateMinutes: 2, audience: 'client_and_staff', condition: { op: 'all', conditions: [{ op: 'not_equals', fieldId: 'has_children', value: false }, { op: 'equals', fieldId: 'has_minor_children', value: true }] },
       items: [{ kind: 'block', id: 'guardian', blockId: 'guardian' }],
     },
     {

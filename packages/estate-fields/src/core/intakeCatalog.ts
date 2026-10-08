@@ -234,9 +234,8 @@ export function createBuilderField(def: SharedFieldDef): BuilderFieldDef {
     write: (value, update) => update(key, value),
   }
   if (def.id === 'client_citizenship') {
-    // The newer status vocabulary accepts Other; keep a stored answer visible
-    // without changing the original shared options or legacy metadata.
-    builder.legacyValues = [...(def.legacyValues ?? []), 'Other']
+    // Other is part of the current canonical status vocabulary.
+    builder.options = [...(def.options ?? []), { value: 'Other', label: 'Other' }]
     builder.read = (data) => citizenshipDesignLabel(normalizeCitizenshipStatus(
       data.citizenship_status, typeof data.is_us_citizen === 'boolean' ? data.is_us_citizen : null,
     ))

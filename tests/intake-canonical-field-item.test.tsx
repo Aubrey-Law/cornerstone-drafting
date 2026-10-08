@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CanonicalFieldItem, type CanonicalFieldRenderItem } from '@/components/intake/formEngine/CanonicalFieldItem'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 function item(fieldId: CanonicalFieldRenderItem['fieldId'], extra: Partial<CanonicalFieldRenderItem> = {}): CanonicalFieldRenderItem {
   return { kind: 'field', fieldId, effectiveRequirement: 'optional', ...extra }
@@ -69,7 +69,7 @@ describe('canonical scalar field item', () => {
   it('toggles a real boolean and writes a narrative through its adapter', async () => {
     const update = vi.fn()
     render(<><CanonicalFieldItem item={item('has_existing_plan')} data={{ has_existing_plan: false }} update={update} /><CanonicalFieldItem item={item('special_notes')} data={{ special_notes: '' }} update={update} /></>)
-    await userEvent.click(screen.getByRole('checkbox', { name: /existing estate plan/i }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
     expect(update).toHaveBeenCalledWith('has_existing_plan', true)
     const notes = screen.getByRole('textbox', { name: /Anything else/ })
     expect(notes.tagName).toBe('TEXTAREA')
@@ -99,11 +99,11 @@ describe('canonical scalar field item', () => {
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('under_2m')
   })
 
-  it('keeps an existing Other citizenship status visible and selected', () => {
+  it('keeps an existing Other citizenship status visible and selectable', () => {
     render(<CanonicalFieldItem item={item('client_citizenship')} data={{ citizenship_status: 'other', is_us_citizen: null }} update={() => undefined} />)
     const option = screen.getByRole('option', { name: 'Other' }) as HTMLOptionElement
     expect(option.selected).toBe(true)
-    expect(option.disabled).toBe(true)
+    expect(option.disabled).toBe(false)
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('Other')
   })
 
@@ -115,7 +115,7 @@ describe('canonical scalar field item', () => {
   it('disables controls and prevents updates', async () => {
     const update = vi.fn()
     render(<CanonicalFieldItem item={item('has_existing_plan')} data={{}} update={update} disabled />)
-    const control = screen.getByRole('checkbox') as HTMLInputElement
+    const control = screen.getByRole('radio', { name: 'Yes' }) as HTMLInputElement
     expect(control.disabled).toBe(true)
     await userEvent.click(control)
     expect(update).not.toHaveBeenCalled()
@@ -123,10 +123,38 @@ describe('canonical scalar field item', () => {
 
   it('allows false as an answer to a required boolean question', () => {
     render(<CanonicalFieldItem item={item('has_children', { effectiveRequirement: 'required' })} data={{ has_children: false }} update={() => undefined} />)
-    const control = screen.getByRole('checkbox') as HTMLInputElement
-    expect(control.checked).toBe(false)
+    const control = screen.getByRole('radio', { name: 'No' }) as HTMLInputElement
+    expect(control.checked).toBe(true)
     expect(control.checkValidity()).toBe(true)
-    expect(control.getAttribute('aria-required')).toBe('true')
+    expect(screen.getByRole('radiogroup').getAttribute('aria-required')).toBe('true')
+  })
+
+  it('records an initially unanswered No in one action and supports keyboard Yes selection', async () => {
+    // jsdom omits CSS.escape, which user-event uses for the native radio group.
+    vi.stubGlobal('CSS', { escape: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '\\$&') })
+    const writes: [string, unknown][] = []
+    function Controlled() {
+      const [data, setData] = React.useState<Record<string, unknown>>({})
+      return <CanonicalFieldItem item={item('has_children', { effectiveRequirement: 'required', helpText: 'Include adult children.' })} data={data} update={(key, value) => { writes.push([key, value]); setData((old) => ({ ...old, [key]: value })) }} />
+    }
+    render(<Controlled />)
+    const group = screen.getByRole('radiogroup', { name: 'Do you have children?' })
+    expect(group.getAttribute('aria-describedby')).toBe(screen.getByText('Include adult children.').id)
+    expect((screen.getByRole('radio', { name: 'No' }) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByRole('radio', { name: 'Yes' }) as HTMLInputElement).checked).toBe(false)
+    expect(writes).toEqual([])
+    await userEvent.click(screen.getByRole('radio', { name: 'No' }))
+    expect(writes).toEqual([['has_children', false]])
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(writes.at(-1)).toEqual(['has_children', true])
+    expect((screen.getByRole('radio', { name: 'Yes' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('allows a new Other citizenship answer and writes both canonical compatibility keys', async () => {
+    const update = vi.fn()
+    render(<CanonicalFieldItem item={item('client_citizenship')} data={{}} update={update} />)
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'Other')
+    expect(update.mock.calls).toEqual([['citizenship_status', 'other'], ['is_us_citizen', null]])
   })
 
   it('preserves spaces during narrative entry and normalizes on blur', async () => {
