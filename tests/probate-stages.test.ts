@@ -97,7 +97,9 @@ describe('the checklist files under probate stages', () => {
 describe('where it shows', () => {
   it('replaces the estate-planning strip on a probate matter only', () => {
     const detail = read('app/admin/matters/[id]/MatterDetailClient.tsx')
-    expect(detail).toContain('{showProbate ? (\n              <ProbateStageStrip details={matterDetails} />')
+    expect(detail).toContain('stage={showProbate ? (')
+    expect(detail).toContain('<ProbateStageStrip details={matterDetails} />')
+    expect(detail).toContain('<MatterStageStrip')
   })
 
   it('gives the portal the same stages, each complete only on its own date', () => {

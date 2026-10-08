@@ -82,10 +82,10 @@ export function MatterStageStrip({
 
   return (
     <>
-      <div className="flex items-end gap-4 py-2">
+      <div className="flex items-end gap-4">
         <p className="min-w-0 flex-1 text-sm sm:hidden"><span className="block text-xs text-muted-foreground">Current stage</span><strong>{STAGES[currentIndex]?.label ?? 'Choose work stage'}</strong></p>
         <div className="hidden min-w-0 flex-1 overflow-x-auto pb-1 sm:block">
-          <ol aria-label="Matter progress" className="flex min-w-[880px] gap-1">
+          <ol aria-label="Matter progress" className="flex min-w-[880px]">
             {STAGES.map((entry, index) => {
               const isCurrent = index === currentIndex
               const isSkipped = skipped.has(entry.key)
@@ -97,8 +97,25 @@ export function MatterStageStrip({
                   disabled={stageSaving || stage === 'closed' || entry.key === 'closed'}
                   onClick={() => { setSelectedStage(entry.key); setChangeOpen(true) }}
                   className={cn('w-full rounded-sm text-left text-micro focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default', isCurrent ? 'font-semibold text-selected-foreground' : 'text-muted-foreground')}>
-                  <span className="block whitespace-nowrap pb-2 pr-2">{entry.label}</span>
-                  <span aria-hidden className={cn('block h-1 rounded-full', isCurrent ? 'bg-selected-border' : index < currentIndex && visited ? 'bg-muted-foreground' : 'bg-border')} />
+                  <span className={cn('block whitespace-nowrap pb-2 pr-2', isSkipped && 'line-through decoration-muted-foreground/60')}>{entry.label}</span>
+                  <span aria-hidden className="flex items-center">
+                    <span className={cn(
+                      'size-2.5 shrink-0 rounded-full border-2 bg-card',
+                      isCurrent
+                        ? 'border-selected-border bg-selected-border ring-2 ring-selected-border/20'
+                        : index < currentIndex && visited
+                          ? 'border-muted-foreground bg-muted-foreground'
+                          : isSkipped
+                            ? 'border-dashed border-muted-foreground'
+                            : 'border-border',
+                    )} />
+                    {index < STAGES.length - 1 && (
+                      <span className={cn(
+                        'h-px flex-1',
+                        index < currentIndex && visited ? 'bg-muted-foreground' : 'bg-border',
+                      )} />
+                    )}
+                  </span>
                 </button>
               </li>
             })}

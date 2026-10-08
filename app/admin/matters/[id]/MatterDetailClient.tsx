@@ -23,7 +23,8 @@ import {
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
-import type { MatterType } from '@/lib/matter/matterType'
+import { matterTypeLabel, type MatterType } from '@/lib/matter/matterType'
+import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import { Button } from '@/components/ui/button'
 import {
@@ -891,24 +892,47 @@ function MatterDetailClientInner({
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       {messagesError && <p role="alert" className="px-4 text-sm text-destructive">{messagesError} <Button variant="link" onClick={() => void retryMessages()}>Retry messages</Button></p>}
-      <MatterDetailHeader
-        matter={matter}
-        matterNumber={matterNum}
-        intakeCompleted={intakeCompleted}
-        intakeId={liveIntakeId}
-        unlocking={unlocking}
-        factsRailOpen={factsRailOpen}
-        onToggleFactsRail={() => setFactsRailOpen(open => !open)}
-        onEmail={() => setComposerChannel('email')}
-        onOpenIntake={() => void openIntakeSheet()}
-        onImportIntake={() => setImportIntakeOpen(true)}
-        onUnlockIntake={() => void handleUnlockIntake()}
-        onPushToLawmatics={() => void pushToLawmatics()}
-        pushingToLawmatics={pushingToLawmatics}
-        onPushToStatular={() => void pushToStatular()}
-        pushingToStatular={pushingToStatular}
-        onDelete={() => setDeleteOpen(true)}
-      />
+      <Tabs
+        value={activeTab}
+        onValueChange={v => setActiveTab(v as MatterTab)}
+        className="flex min-h-0 flex-1 flex-col gap-0"
+      >
+        <MatterDetailHeader
+          matter={matter}
+          matterNumber={matterNum}
+          planLabel={designPlanTypeLabel(designSheetPlanType ?? planMirror.planType) || null}
+          matterTypeLabel={matterType ? matterTypeLabel(matterType) : null}
+          intakeCompleted={intakeCompleted}
+          intakeId={liveIntakeId}
+          unlocking={unlocking}
+          factsRailOpen={factsRailOpen}
+          onToggleFactsRail={() => setFactsRailOpen(open => !open)}
+          onEmail={() => setComposerChannel('email')}
+          onOpenIntake={() => void openIntakeSheet()}
+          onImportIntake={() => setImportIntakeOpen(true)}
+          onUnlockIntake={() => void handleUnlockIntake()}
+          onPushToLawmatics={() => void pushToLawmatics()}
+          pushingToLawmatics={pushingToLawmatics}
+          onPushToStatular={() => void pushToStatular()}
+          pushingToStatular={pushingToStatular}
+          onDelete={() => setDeleteOpen(true)}
+          stage={showProbate ? (
+            <ProbateStageStrip details={matterDetails} />
+          ) : (
+            <MatterStageStrip
+              stage={matter.stage}
+              details={matterDetails}
+              agingSummary={agingSummary}
+              stageSaving={stageSaving}
+              onStageChange={stage => void handleStageChange(stage)}
+              history={initialStageHistory}
+            />
+          )}
+          navigation={<MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
+            if (section === 'drafting') router.push(draftingHref)
+            else setActiveTab(section)
+          }} />}
+        />
 
       {showUnlockBanner && (
         <div className="border-b border-amber-border bg-amber-bg px-4 py-3 text-sm text-amber-strong md:px-6">
@@ -927,105 +951,16 @@ function MatterDetailClientInner({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
-        <ResponsiveDetailRail
-          drawer
-          open={factsRailOpen}
-          onOpenChange={open => {
-            if (!open && savingField) return
-            setFactsRailOpen(open)
-          }}
-          label="Matter details"
-          desktopClassName="w-72 xl:w-80 border-r border-border bg-card"
-          mobileClassName="bg-card"
-        >
-          <div className="h-full overflow-y-auto pt-8">
-          <MatterFactsPanel
-            datesRequest={datesRequest}
-            keyDates={<MatterKeyDates matterId={matterId} details={{ ...matterDetails, signing_date: matterDetails?.signing_date ?? matter.signing_date }} onSaveField={handleSaveMatterDetailField} />}
-            simplified
-            matter={matter}
-            matterId={matterId}
-            matterType={matterType}
-            matterTypeSaving={matterTypeSaving}
-            details={matterDetails}
-            designSheetPlanType={designSheetPlanType}
-            planMirror={planMirror}
-            lastContactAt={lastContactAt}
-            estate={initialEstateSnapshot}
-            readinessItems={readinessItems}
-            activity={activity}
-            noteText={noteText}
-            onNoteTextChange={setNoteText}
-            onAddNote={() => void handleAddNote()}
-            noteSaving={noteSaving}
-            noteCount={linkedNotes.length}
-            latestNoteAt={linkedNotes[0]?.created_at ?? null}
-            onSaveField={handleSaveMatterDetailField}
-            onSaveMatterType={handleSaveMatterType}
-            savingField={savingField}
-            lastSavedAt={lastSavedAt}
-            error={matterDetailsError}
-            onOpenTab={tab => { setFactsRailOpen(false); setActiveTab(tab) }}
-          />
-<details className="border-t p-4"><summary className="cursor-pointer text-sm font-medium">Administrative settings</summary>
-                <MatterDetailsCard
-                  matter={matter}
-                  matterId={matterId}
-                  matterNumber={matterNum}
-                  matterNumberManual={matterNumberManual}
-                  matterStatus={matter.status ?? 'active'}
-                  onStatusChange={status => void handleStatusChange(status)}
-                  statusSaving={statusSaving}
-                  details={matterDetails}
-                  designSheetPlanType={designSheetPlanType}
-                  onSaveField={handleSaveMatterDetailField}
-                  savingField={savingField}
-                  lastSavedAt={lastSavedAt}
-                  error={matterDetailsError}
-                  esignEnabled={esignEnabled}
-                  engagementSending={sendingEngagement}
-                  onSendEngagement={() => void handleSendEngagement()}
-                  onDraftEngagement={() => void handleDraftEngagement()}
-                />
-<Button variant="outline" onClick={() => void openIntakeSheet()}>Review / update intake</Button>
-</details></div>
-        </ResponsiveDetailRail>
-
+        <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="border-b border-border bg-card px-4 py-2">
-            {showProbate ? (
-              <ProbateStageStrip details={matterDetails} />
-            ) : (
-              <MatterStageStrip
-                stage={matter.stage}
-                details={matterDetails}
-                agingSummary={agingSummary}
-                stageSaving={stageSaving}
-                onStageChange={stage => void handleStageChange(stage)}
-                history={initialStageHistory}
-              />
-            )}
-          </div>
-
-
-
           <div className="flex-1 px-4 py-4">
-            <Tabs
-              value={activeTab}
-              onValueChange={v => setActiveTab(v as MatterTab)}
-              className="w-full gap-4"
-            >
+            <div className="w-full gap-4">
               {taskCounts.error && (
                 <p role="status" className="text-sm text-destructive">
                   {taskCounts.error}{' '}
                   <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
                 </p>
               )}
-              <MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
-                if (section === 'drafting') router.push(draftingHref)
-                else setActiveTab(section)
-              }} />
 
               <TabsContent value="overview">
                 <MatterOverviewWork
@@ -1036,7 +971,7 @@ function MatterDetailClientInner({
                   onEngagement={() => void handleSendEngagement()} onUploads={handleReviewUploads}
                   onMessages={() => setActiveTab('communications', undefined, 'portal')}
                   onActivity={() => setActiveTab('activity')}
-                  facts={<MatterOverviewFacts matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot} lastContactAt={lastContactAt} onDetails={() => setFactsRailOpen(true)} />}
+                  facts={<MatterOverviewFacts matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot} onDetails={() => setFactsRailOpen(true)} />}
                   composer={<MatterOverviewComposer
                     matterId={matterId} clientName={matter.client_name ?? 'Client'} clientEmail={matter.client_email ?? null}
                     clientPhone={matter.client_phone ?? null} smsEnabled={smsEnabled} emailEnabled={emailSendEnabled}
@@ -1244,10 +1179,79 @@ function MatterDetailClientInner({
                   onLoadOlder={() => void loadOlderActivity()}
                 />
               </TabsContent>
-            </Tabs>
+            </div>
           </div>
         </div>
-      </div>
+
+        <ResponsiveDetailRail
+          open={factsRailOpen}
+          onOpenChange={open => {
+            if (!open && savingField) return
+            setFactsRailOpen(open)
+          }}
+          label="Matter details"
+          side="right"
+          collapseBelow="lg"
+          collapseWithAdminRail
+          desktopClassName="w-[21rem] border-l border-border bg-card xl:w-96"
+          mobileClassName="bg-card"
+        >
+          <div className="h-full overflow-y-auto">
+            <MatterFactsPanel
+              datesRequest={datesRequest}
+              keyDates={<MatterKeyDates matterId={matterId} details={{ ...matterDetails, signing_date: matterDetails?.signing_date ?? matter.signing_date }} onSaveField={handleSaveMatterDetailField} />}
+              simplified
+              matter={matter}
+              matterId={matterId}
+              matterType={matterType}
+              matterTypeSaving={matterTypeSaving}
+              details={matterDetails}
+              designSheetPlanType={designSheetPlanType}
+              planMirror={planMirror}
+              lastContactAt={lastContactAt}
+              estate={initialEstateSnapshot}
+              readinessItems={readinessItems}
+              activity={activity}
+              noteText={noteText}
+              onNoteTextChange={setNoteText}
+              onAddNote={() => void handleAddNote()}
+              noteSaving={noteSaving}
+              noteCount={linkedNotes.length}
+              latestNoteAt={linkedNotes[0]?.created_at ?? null}
+              onSaveField={handleSaveMatterDetailField}
+              onSaveMatterType={handleSaveMatterType}
+              savingField={savingField}
+              lastSavedAt={lastSavedAt}
+              error={matterDetailsError}
+              onOpenTab={tab => { setFactsRailOpen(false); setActiveTab(tab) }}
+            />
+            <details className="border-t p-4">
+              <summary className="cursor-pointer text-sm font-medium">Administrative settings</summary>
+              <MatterDetailsCard
+                matter={matter}
+                matterId={matterId}
+                matterNumber={matterNum}
+                matterNumberManual={matterNumberManual}
+                matterStatus={matter.status ?? 'active'}
+                onStatusChange={status => void handleStatusChange(status)}
+                statusSaving={statusSaving}
+                details={matterDetails}
+                designSheetPlanType={designSheetPlanType}
+                onSaveField={handleSaveMatterDetailField}
+                savingField={savingField}
+                lastSavedAt={lastSavedAt}
+                error={matterDetailsError}
+                esignEnabled={esignEnabled}
+                engagementSending={sendingEngagement}
+                onSendEngagement={() => void handleSendEngagement()}
+                onDraftEngagement={() => void handleDraftEngagement()}
+              />
+              <Button variant="outline" onClick={() => void openIntakeSheet()}>Review / update intake</Button>
+            </details>
+          </div>
+        </ResponsiveDetailRail>
+        </div>
+      </Tabs>
 
       <ImportIntakeDialog
         open={importIntakeOpen}

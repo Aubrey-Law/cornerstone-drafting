@@ -7,18 +7,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
+import { AdminRailVisibilityContext } from '@/components/rail/AdminRailVisibilityContext'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
 import type { PipelineMatter } from '@/types/database'
 
-const mediaState = vi.hoisted(() => ({ mobile: false }))
+const mediaState = vi.hoisted(() => ({ mobile: false, tablet: false }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 function installMatchMedia() {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches: query === '(max-width: 767px)' ? mediaState.mobile : !mediaState.mobile,
+      matches: query === '(max-width: 767px)'
+        ? mediaState.mobile
+        : query === '(max-width: 1023px)'
+          ? mediaState.tablet || mediaState.mobile
+          : false,
       media: query,
       onchange: null,
       addEventListener: vi.fn(),
@@ -32,6 +37,7 @@ function installMatchMedia() {
 
 beforeEach(() => {
   mediaState.mobile = false
+  mediaState.tablet = false
   installMatchMedia()
 })
 
@@ -72,6 +78,47 @@ describe('responsive admin detail layout', () => {
     expect(screen.queryByRole('complementary', { name: 'Lead details' })).toBeNull()
     expect(screen.getByRole('dialog', { name: 'Lead details' })).toBeTruthy()
     expect(screen.getAllByLabelText('Client name')).toHaveLength(1)
+  })
+
+  it('collapses a right-side matter rail into a sheet below lg', () => {
+    mediaState.tablet = true
+
+    render(
+      <ResponsiveDetailRail
+        open
+        onOpenChange={vi.fn()}
+        label="Matter details"
+        side="right"
+        collapseBelow="lg"
+      >
+        <p>Matter facts</p>
+      </ResponsiveDetailRail>,
+    )
+
+    expect(screen.queryByRole('complementary', { name: 'Matter details' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Matter details' })).toBeTruthy()
+    expect(screen.getAllByText('Matter facts')).toHaveLength(1)
+  })
+
+  it('keeps the matter workspace usable when the admin rail is already visible', () => {
+    render(
+      <AdminRailVisibilityContext.Provider value>
+        <ResponsiveDetailRail
+          open
+          onOpenChange={vi.fn()}
+          label="Matter details"
+          side="right"
+          collapseBelow="lg"
+          collapseWithAdminRail
+        >
+          <p>Matter facts</p>
+        </ResponsiveDetailRail>
+      </AdminRailVisibilityContext.Provider>,
+    )
+
+    expect(screen.queryByRole('complementary', { name: 'Matter details' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Matter details' })).toBeTruthy()
+    expect(screen.getAllByText('Matter facts')).toHaveLength(1)
   })
 
   it('opens the mobile sheet focused on itself, not on its first field', async () => {

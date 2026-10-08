@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -48,6 +48,40 @@ function renderHeader(
 afterEach(cleanup)
 
 describe('MatterDetailHeader communication actions', () => {
+  it('composes identity, lifecycle, and workspace navigation in one header', () => {
+    render(
+      <MatterDetailHeader
+        matter={matter({
+          practice_area: 'EP',
+          opened_at: '2026-10-01T12:00:00.000Z',
+        })}
+        matterNumber="2026-001"
+        planLabel="Trust plan"
+        matterTypeLabel="Couple"
+        intakeCompleted={false}
+        intakeId={null}
+        unlocking={false}
+        factsRailOpen={false}
+        onToggleFactsRail={vi.fn()}
+        onOpenIntake={vi.fn()}
+        onImportIntake={vi.fn()}
+        onUnlockIntake={vi.fn()}
+        onDelete={vi.fn()}
+        onEmail={vi.fn()}
+        stage={<div aria-label="Matter stage">Stage controls</div>}
+        navigation={<nav aria-label="Matter workspace">Workspace tabs</nav>}
+      />,
+    )
+
+    const header = screen.getByRole('banner')
+    expect(within(header).getByLabelText('Matter stage')).toBeTruthy()
+    expect(within(header).getByRole('navigation', { name: 'Matter workspace' })).toBeTruthy()
+    expect(within(header).getByText('Estate Planning')).toBeTruthy()
+    expect(within(header).getByText('Trust plan')).toBeTruthy()
+    expect(within(header).getByText('Couple')).toBeTruthy()
+    expect(within(header).queryByText(/Opened/)).toBeNull()
+  })
+
   it('keeps lifecycle status out of the identity and action header', () => {
     renderHeader({}, { onEmail: vi.fn() })
 
