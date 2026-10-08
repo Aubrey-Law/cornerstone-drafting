@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { AlertTriangle, CalendarCheck, PauseCircle, RefreshCw, RotateCcw, Search } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, PauseCircle, RefreshCw, RotateCcw } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
@@ -11,6 +11,7 @@ import { engineStageLabel } from '@/lib/stage-engine/labels'
 import type { MatterAgingRow, MatterAgingTiles } from '@/lib/queries/pipelineAging'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/PageHeader'
+import { SearchField } from '@/components/SearchField'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -58,8 +59,9 @@ function SummaryTile({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        'rounded-lg border bg-card px-4 py-3 text-left transition-colors',
+        'rounded-xl border bg-card px-4 py-3 text-left transition-colors duration-150 ease-out motion-reduce:transition-none',
         active ? 'border-primary ring-1 ring-primary/30' : 'border-border hover:bg-accent',
       )}
     >
@@ -217,42 +219,46 @@ function SnoozeDialog({
       return
     }
     const n = Number(days)
-    if (!Number.isFinite(n) || n < 1) {
-      toast.error('Enter a valid number of days')
+    if (!Number.isInteger(n) || n < 1) {
+      toast.error('Enter a whole number of days, at least 1')
       return
     }
     const until = new Date()
     until.setDate(until.getDate() + n)
 
     startTransition(async () => {
-      const res = await fetch('/api/admin/pipeline/aging/snooze', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entity: target.entity,
-          entity_id: target.id,
-          stage_key: target.current_stage,
-          snoozed_until: until.toISOString(),
-          reason: reason.trim() || null,
-        }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        toast.error(body.error ?? 'Snooze failed')
-        return
+      try {
+        const res = await fetch('/api/admin/pipeline/aging/snooze', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            entity: target.entity,
+            entity_id: target.id,
+            stage_key: target.current_stage,
+            snoozed_until: until.toISOString(),
+            reason: reason.trim() || null,
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          toast.error(body.error ?? 'Snooze failed')
+          return
+        }
+        toast.success(`Snoozed until ${formatDate(until.toISOString())}`)
+        invalidateSidebarCountsClient()
+        onOpenChange(false)
+        onSaved()
+      } catch {
+        toast.error('Could not snooze. Please retry.')
       }
-      toast.success(`Snoozed until ${formatDate(until.toISOString())}`)
-      invalidateSidebarCountsClient()
-      onOpenChange(false)
-      onSaved()
     })
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next) }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Snooze aging alert</DialogTitle>
@@ -297,7 +303,7 @@ function SnoozeDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={() => void save()} disabled={pending}>
@@ -321,6 +327,8 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
   const [healthFilter, setHealthFilter] = useState<HealthFilter>('attention')
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [unsnoozing, setUnsnoozing] = useState<string | null>(null)
   const [snoozeRow, setSnoozeRow] = useState<MatterAgingRow | null>(null)
 
   const refresh = useCallback(async () => {
@@ -331,35 +339,45 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
-        toast.error('Could not refresh aging data')
+        setRefreshError('Could not refresh aging data. The last loaded results are still shown.')
         return
       }
       const body = await res.json()
+      setRefreshError(null)
       setRows(body.rows ?? [])
       setTiles(body.tiles ?? initialTiles)
+    } catch {
+      setRefreshError('Could not refresh aging data. The last loaded results are still shown.')
     } finally {
       setRefreshing(false)
     }
   }, [token, initialTiles])
 
   const unsnooze = async (row: MatterAgingRow) => {
-    if (!token || !row.snooze_id) return
-    const res = await fetch('/api/admin/pipeline/aging/snooze', {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ snooze_id: row.snooze_id }),
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      toast.error(body.error ?? 'Could not unsnooze')
-      return
+    if (!token || !row.snooze_id || unsnoozing) return
+    setUnsnoozing(`${row.entity}:${row.id}`)
+    try {
+      const res = await fetch('/api/admin/pipeline/aging/snooze', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ snooze_id: row.snooze_id }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body.error ?? 'Could not unsnooze')
+        return
+      }
+      toast.success('Snooze cleared')
+      invalidateSidebarCountsClient()
+      await refresh()
+    } catch {
+      toast.error('Could not clear snooze. Please retry.')
+    } finally {
+      setUnsnoozing(null)
     }
-    toast.success('Snooze cleared')
-    invalidateSidebarCountsClient()
-    await refresh()
   }
 
   const needsAttentionCount = tiles.red + tiles.amber
@@ -371,7 +389,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
       if (healthFilter === 'on-track' && (r.health !== 'green' || r.is_snoozed)) return false
       if (healthFilter === 'snoozed' && !r.is_snoozed) return false
       if (!q) return true
-      const hay = [r.client_name, r.client_email, r.current_stage, r.entity]
+      const hay = [r.client_name, r.client_email, r.current_stage, engineStageLabel(r.current_stage), r.entity]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -382,12 +400,11 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Pipeline aging"
+        title="Aging"
+        eyebrow="Firm work"
         description={
           <>
-            {tiles.active} active pipeline record{tiles.active === 1 ? '' : 's'} across leads and
-            matters, oldest risk first. Snooze anything that&apos;s waiting on something out of your
-            hands.
+            {tiles.active} active records across leads and matters, oldest risk first. Snooze alerts while waiting on someone else.
           </>
         }
         actions={
@@ -433,32 +450,29 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
         />
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Search leads and matters…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
+      <section aria-label="Aging filters" className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+        <SearchField value={search} onValueChange={setSearch} placeholder="Search name, email, or stage…" aria-label="Search aging records" containerClassName="w-full sm:w-80" />
+        <p role="status" className="text-xs text-muted-foreground">{filtered.length} of {rows.length} records · {healthFilter === 'attention' ? 'Needs attention' : healthFilter === 'on-track' ? 'On track' : healthFilter === 'snoozed' ? 'Snoozed' : 'All'}</p>
+        {(search || healthFilter !== 'all') && <Button type="button" size="sm" variant="ghost" className="sm:ml-auto" onClick={() => { setSearch(''); setHealthFilter('all') }}>Show all records</Button>}
+      </section>
+      {refreshError && <div role="alert" className="rounded-xl border border-destructive/30 bg-red-bg p-4 text-sm text-destructive">{refreshError} <Button type="button" variant="ghost" size="sm" disabled={refreshing || !token} onClick={() => void refresh()}>Retry</Button></div>}
 
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           {healthFilter === 'attention' && !search.trim()
-            ? 'Nothing needs attention — every active lead and matter is on track.'
+            ? 'No unsnoozed records need attention. Review Snoozed to see paused alerts.'
             : 'No leads or matters match your filters.'}
         </p>
       ) : (
-        <div className="rounded-lg border border-border">
+        <div className="rounded-xl border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8" />
+                <TableHead className="hidden w-8 sm:table-cell"><span className="sr-only">Health</span></TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Waiting on</TableHead>
+                <TableHead className="hidden lg:table-cell">Type</TableHead>
+                <TableHead className="hidden md:table-cell">Stage</TableHead>
+                <TableHead className="hidden md:table-cell">Waiting on</TableHead>
                 <TableHead>Days in stage</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
@@ -466,7 +480,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
             <TableBody>
               {filtered.map(row => (
                 <TableRow key={`${row.entity}:${row.id}`} className={row.is_snoozed ? 'opacity-70' : undefined}>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <span
                       className={cn(
                         'inline-block h-2.5 w-2.5 rounded-full',
@@ -483,14 +497,16 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                       }
                     />
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="whitespace-normal font-medium">
+
                     <Link href={row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`} className="hover:underline">
                       {row.client_name ?? '—'}
                     </Link>
+                    <p className="mt-1 text-xs font-normal text-muted-foreground md:hidden">{engineStageLabel(row.current_stage)} · Waiting on {row.owner === 'attorney' ? 'you' : 'client'}</p>
                   </TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{row.entity}</Badge></TableCell>
-                  <TableCell>{engineStageLabel(row.current_stage)}</TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell"><Badge variant="outline" className="capitalize">{row.entity}</Badge></TableCell>
+                  <TableCell className="hidden md:table-cell">{engineStageLabel(row.current_stage)}</TableCell>
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
                     {row.owner === 'attorney' ? 'You' : 'Client'}
                   </TableCell>
                   <TableCell>
@@ -498,12 +514,12 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                   </TableCell>
                   <TableCell>
                     {row.is_snoozed ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => void unsnooze(row)}>
+                      <Button type="button" variant="ghost" size="sm" disabled={Boolean(unsnoozing) || !token} onClick={() => void unsnooze(row)}>
                         <PauseCircle className="mr-1 h-3.5 w-3.5" />
                         Unsnooze
                       </Button>
                     ) : (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSnoozeRow(row)}>
+                      <Button type="button" variant="ghost" size="sm" disabled={!token} onClick={() => setSnoozeRow(row)}>
                         <PauseCircle className="mr-1 h-3.5 w-3.5" />
                         Snooze
                       </Button>

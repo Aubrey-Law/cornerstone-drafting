@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -40,10 +40,12 @@ export function leadProgressLabel(lead: LeadDetailRecord, agreementStatus?: stri
 
 export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastResponseAt, updatedAt,
   agreementStatus, timeZone, taskCount, tasksVersion, onIntake, onEngagement, onTasks, onSchedule,
-  engagementSentOutside, onEngagementSentOutside,
+  engagementSentOutside, onEngagementSentOutside, nextAppointmentLabel = 'Next meeting', readiness,
 }: {
   lead: LeadDetailRecord
   nextAppointmentAt: string | null
+  nextAppointmentLabel?: string
+  readiness?: ReactNode
   lastContactAt: string | null
   lastResponseAt: string | null
   updatedAt: string | null
@@ -66,7 +68,7 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   const sentOutsideId = useId()
   const [savingSentOutside, setSavingSentOutside] = useState(false)
   // A signed engagement is not un-sent from here: that would clear the signature too.
-  const engagementSigned = agreementStatus === 'signed' || agreementStatus === 'completed'
+  const engagementSigned = Boolean(lead.engagement_signed_at) || agreementStatus === 'signed' || agreementStatus === 'completed'
   const showSentOutside = engagementSentOutside !== undefined && Boolean(onEngagementSentOutside) && !engagementSigned
   const [nextTask, setNextTask] = useState<TaskRow | null>(null)
   const [taskError, setTaskError] = useState(false)
@@ -90,16 +92,12 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   }, [lead.id, token, taskCount, tasksVersion, retry])
   const segments = getLeadIntakeProgress(lead)
   const completed = segments.filter(segment => segment.complete).length
-  return (
-    <section aria-label="Lead overview" className="space-y-4">
-      <div className="space-y-4">
-        <OverviewFact label="Next meeting" value={leadNextMeetingDate(nextAppointmentAt, timeZone)}>
-          <Button variant="link" className="h-auto p-0" onClick={onSchedule}>Schedule meeting</Button>
-        </OverviewFact>
-        <OverviewFact label="Intake" value={`${completed} of ${segments.length} sections complete`}>
+  const intakeReceived = Boolean(lead.intake_completed_at)
+    || ['submitted', 'approved', 'completed'].includes(String(lead.status ?? lead.intake_status ?? '').toLowerCase())
+  const intakeStep = (<OverviewFact label="Intake" value={intakeReceived ? 'Intake received' : `${completed} of ${segments.length} sections complete`}>
           <Button variant="link" className="h-auto p-0" onClick={onIntake}>Review intake</Button>
-        </OverviewFact>
-        <OverviewFact label="Engagement" value={agreementStatus ? (agreementStatus.charAt(0).toUpperCase() + agreementStatus.slice(1)).replaceAll('_', ' ') : 'Not prepared'}>
+        </OverviewFact>)
+  const engagementStep = (<OverviewFact label="Engagement" value={engagementSigned ? 'Signed' : agreementStatus ? (agreementStatus.charAt(0).toUpperCase() + agreementStatus.slice(1)).replaceAll('_', ' ') : 'Not prepared'}>
           {showSentOutside && (
             <div className="flex items-center gap-2 py-1">
               <Checkbox
@@ -115,13 +113,27 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
             </div>
           )}
           <Button variant="link" className="h-auto p-0" onClick={onEngagement}>View engagement details</Button>
+        </OverviewFact>)
+  const meetingDate = leadNextMeetingDate(nextAppointmentAt, timeZone)
+  return (
+    <section aria-label="Lead overview" className="space-y-4">
+      <div className="space-y-4">
+        <OverviewFact label={meetingDate === 'No meeting scheduled' ? 'Next meeting' : nextAppointmentLabel} value={meetingDate}>
+          <Button variant="link" className="h-auto p-0" onClick={onSchedule}>Schedule meeting</Button>
         </OverviewFact>
+        {readiness}
+        {!intakeReceived && intakeStep}
+        {!engagementSigned && engagementStep}
         <OverviewFact label="Next task" value={taskLoading ? 'Loading…' : taskError ? 'Task status unavailable' : nextTask?.title ?? (taskCount > 0 ? 'Open the task queue' : 'No open tasks')}>
           {nextTask && !taskError && <p className="text-xs text-muted-foreground">{nextTask.assignee_name || 'Unassigned'} · {formatTaskDate(nextTask.due_at ?? nextTask.soft_due_at)}</p>}
           {taskError && <button className="text-sm underline" onClick={() => setRetry(value => value + 1)}>Couldn’t load tasks. Retry</button>}
           <Button variant="link" className="h-auto p-0" onClick={onTasks}>View tasks ({taskCount})</Button>
         </OverviewFact>
       </div>
+      {(intakeReceived || engagementSigned) && <details className="rounded-lg border border-border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">Completed steps ({Number(intakeReceived) + Number(engagementSigned)})</summary>
+        <div className="mt-3 space-y-3">{intakeReceived && intakeStep}{engagementSigned && engagementStep}</div>
+      </details>}
       <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Contact history</summary><dl className="mt-3 space-y-3">
         <div><dt className="text-xs text-muted-foreground">Last client contact</dt><dd className="mt-1">{leadDisplayDate(lastContactAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Last client response</dt><dd className="mt-1">{leadDisplayDate(lastResponseAt, timeZone)}</dd></div>

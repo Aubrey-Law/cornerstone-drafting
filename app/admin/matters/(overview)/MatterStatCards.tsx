@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlarmClock, Briefcase, FileSignature, Inbox, type LucideIcon } from 'lucide-react'
+import { AlarmClock, Briefcase, FileSignature, type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import type { MatterDashboardSnapshot, MatterTotal } from '@/lib/matters/dashboard'
 import type { MatterAgingTiles } from '@/lib/queries/pipelineAging'
@@ -67,19 +67,12 @@ export function MatterStatCards({
   aging: MatterAgingTiles
 }) {
   return (
-    <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
       <StatCard
         icon={Briefcase}
         label="Open matters"
         value={snapshot.open.count}
         caption={<MonthDelta total={snapshot.open} />}
-        href="/admin/matters/list"
-      />
-      <StatCard
-        icon={Inbox}
-        label="Awaiting intake"
-        value={snapshot.awaitingIntake}
-        caption="Intake not yet submitted"
         href="/admin/matters/list"
       />
       <StatCard

@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -14,7 +13,6 @@ import { cn } from '@/lib/utils'
 import { stageInfo } from '@/types/database'
 import {
   formatLastMilestone,
-  matterIntakeBadge,
   matterLastMilestoneAt,
   matterRecencyTone,
   matterSubtitle,
@@ -24,12 +22,6 @@ import { matterHref } from '@/lib/matters/matterActions'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { RecordWorkIndicator } from '@/components/work/RecordWorkIndicator'
 import type { RecordWorkSummary } from '@/lib/work/recordSummary'
-
-const BADGE_TONE: Record<string, string> = {
-  success: 'border-green/40 bg-green-bg text-green',
-  warning: 'border-amber-border bg-amber-bg text-amber',
-  muted: 'border-border bg-muted text-muted-foreground',
-}
 
 export function RecentMattersTable({
   matters,
@@ -63,14 +55,12 @@ export function RecentMattersTable({
                 <TableRow>
                   <TableHead>Client</TableHead>
                   <TableHead>Stage</TableHead>
-                  <TableHead>Intake</TableHead>
                   <TableHead>Next action</TableHead>
                   <TableHead className="text-right">Last milestone</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {matters.map(matter => {
-                  const badge = matterIntakeBadge(matter)
                   const milestone = matterLastMilestoneAt(matter)
                   return (
                     <TableRow key={matter.matter_id}>
@@ -87,14 +77,6 @@ export function RecentMattersTable({
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {stageInfo(matter.stage).label}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn('text-micro capitalize', BADGE_TONE[badge.tone])}
-                        >
-                          {badge.label}
-                        </Badge>
                       </TableCell>
                       <TableCell className="max-w-[18rem]">
                         <RecordWorkIndicator summary={workSummaries[matter.matter_id]} />

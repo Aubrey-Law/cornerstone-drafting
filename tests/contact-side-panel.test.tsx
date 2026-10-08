@@ -151,3 +151,15 @@ describe('ContactSidePanel', () => {
     expect(screen.getByText(/no way to reach this contact/i)).toBeTruthy()
   })
 })
+
+it('focuses the contact panel and restores the directory control on close', () => {
+  const trigger = document.createElement('button')
+  trigger.textContent = 'Details'
+  document.body.appendChild(trigger)
+  trigger.focus()
+  const view = render(<ContactSidePanel contact={standalone} smsEnabled={false} onClose={vi.fn()} />)
+  expect(document.activeElement).toBe(screen.getByRole('complementary', { name: 'Rita Referrer contact details' }))
+  view.unmount()
+  expect(document.activeElement).toBe(trigger)
+  trigger.remove()
+})

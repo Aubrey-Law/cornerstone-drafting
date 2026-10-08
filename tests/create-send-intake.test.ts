@@ -3,11 +3,11 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('create and send intake wizard', () => {
-  it('chains create matter with optional intake send', () => {
+  it('creates hired matters without sending another intake invitation', () => {
     const matters = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/MattersClient.tsx'), 'utf8')
-    expect(matters).toContain('sendIntakeOnCreate')
-    expect(matters).toContain('/api/admin/intake/send')
-    expect(matters).toContain('createdIntakeUrl')
+    expect(matters).not.toContain('sendIntakeOnCreate')
+    expect(matters).not.toContain('/api/admin/intake/send')
+    expect(matters).toContain('Open matter')
     expect(matters).toContain("searchParams.get('create') === '1'")
   })
 

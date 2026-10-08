@@ -73,6 +73,8 @@ describe('the opportunity key date field', () => {
     expect(onSaveKeyDate).not.toHaveBeenCalled()
 
     fireEvent.change(input, { target: { value: '2026-09-02' } })
+    expect(onSaveKeyDate).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
     await waitFor(() => expect(onSaveKeyDate).toHaveBeenCalledWith('discoveryCallAt', '2026-09-02'))
     expect(onSaveKeyDate).toHaveBeenCalledTimes(1)
   })

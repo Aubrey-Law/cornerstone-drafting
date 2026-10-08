@@ -2,7 +2,7 @@ import { getCachedClaims } from '@/lib/supabaseServer'
 import { fetchMatterDashboard } from '@/lib/queries/matterDashboard'
 import { loadMatterCloseoutSummary } from '@/lib/matters/closeout'
 import { reviewClient } from '@/lib/review/staff'
-import { PageHeader } from '@/components/PageHeader'
+import Link from 'next/link'
 import { MatterCloseoutCard } from '@/app/admin/matters/(overview)/MatterCloseoutCard'
 import { MatterSliceCard } from '@/app/admin/matters/(overview)/MatterSliceCard'
 import { MatterStatCards } from '@/app/admin/matters/(overview)/MatterStatCards'
@@ -24,11 +24,11 @@ export async function MattersOverviewSection() {
   const canonicalSnapshot = { ...snapshot, needsAttention: attentionRecordIds(workSummaries).length }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Matters"
-        description="Where the firm's open work stands, and what is waiting on you."
-      />
+    <section aria-labelledby="overview-matters" className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><h2 id="overview-matters" className="scroll-mt-20 text-lg font-semibold">Matters</h2><p className="text-sm text-muted-foreground">Open work, attention, and close-out.</p></div>
+        <Link href="/admin/matters/list" className="shrink-0 text-sm font-medium hover:underline">View all matters</Link>
+      </div>
 
       {/*
         Reported rather than thrown, the way the CRM dashboard does it: a failed
@@ -45,6 +45,9 @@ export async function MattersOverviewSection() {
 
       <MatterStatCards snapshot={canonicalSnapshot} aging={aging} />
 
+      <details className="rounded-xl border border-border bg-card p-4">
+        <summary className="cursor-pointer text-sm font-medium">Stage and practice breakdown</summary>
+        <div className="mt-4">
       <div className="grid min-w-0 gap-3 lg:grid-cols-2">
         <MatterSliceCard
           title="By stage"
@@ -59,10 +62,12 @@ export async function MattersOverviewSection() {
           emptyLabel="No open matters."
         />
       </div>
+        </div>
+      </details>
 
       <MatterCloseoutCard summary={closeout} />
 
       <RecentMattersTable matters={canonicalSnapshot.recent} workSummaries={workSummaries} />
-    </div>
+    </section>
   )
 }

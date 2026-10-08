@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { MatterAgingRow, MatterAgingTiles } from '@/lib/queries/pipelineAging'
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
+vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'test-token' }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 
 import MatterAgingClient from '@/app/admin/pipeline/aging/MatterAgingClient'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks() })
 
 const TILES: MatterAgingTiles = { active: 1, red: 0, amber: 1, green: 0, overdue: 0, snoozed: 1 }
 
@@ -192,5 +193,55 @@ describe('a lead whose clock has not started', () => {
 
     expect(screen.getByText('Check the date')).toBeTruthy()
     expect(screen.getByText(/measured from creation instead/)).toBeTruthy()
+  })
+})
+
+
+describe('aging controls and request recovery', () => {
+  it('searches by readable stage name and clears both filters', async () => {
+    const user = userEvent.setup()
+    board(agingRow())
+    await user.type(screen.getByRole('searchbox', { name: 'Search aging records' }), 'Client Review')
+    expect(screen.getByRole('link', { name: 'Dana Reyes' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Show all records' }))
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('')
+    expect(screen.getByRole('button', { name: /^1 All$/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('keeps loaded rows visible after a network failure and offers retry', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ ok: true, json: async () => ({ rows: [agingRow()], tiles: TILES }) })
+    vi.stubGlobal('fetch', request)
+    board(agingRow())
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('last loaded results'))
+    expect(screen.getByRole('link', { name: 'Dana Reyes' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  })
+
+  it('keeps a failed snooze open for retry and rejects fractional days', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockRejectedValue(new Error('Offline'))
+    vi.stubGlobal('fetch', request)
+    board(agingRow())
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+    const dialog = screen.getByRole('dialog')
+    const days = within(dialog).getByRole('spinbutton')
+    await user.clear(days)
+    await user.type(days, '1.5')
+    await user.click(within(dialog).getByRole('button', { name: 'Snooze' }))
+    expect(request).not.toHaveBeenCalled()
+    await user.clear(days)
+    await user.type(days, '3')
+    await user.click(within(dialog).getByRole('button', { name: 'Snooze' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not snooze. Please retry.'))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'Snooze' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('does not claim all records are on track when some are snoozed', () => {
+    board(agingRow({ is_snoozed: true }))
+    expect(screen.getByText(/Review Snoozed to see paused alerts/)).toBeTruthy()
   })
 })

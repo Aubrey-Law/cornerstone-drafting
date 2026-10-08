@@ -255,6 +255,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       actorNames={actorNames}
       firmTimezone={schedulingSettings.timezone}
       nextAppointmentAt={nextAppointmentAt}
+      nextAppointmentLabel={appointment?.start_time ? 'Scheduled meeting'
+        : nextAppointmentAt && nextAppointmentAt === anchorRow?.pmps_at ? 'Planning Session'
+        : nextAppointmentAt && nextAppointmentAt === anchorRow?.discovery_call_at ? 'Discovery Call'
+        : 'Next meeting'}
       lastTouchAt={lastTouchAt}
       lastClientResponseAt={lastClientResponseAt}
       recordUpdatedAt={recordUpdatedAt}

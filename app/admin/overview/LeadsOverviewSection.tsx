@@ -1,6 +1,6 @@
 import { getCachedClaims } from '@/lib/supabaseServer'
 import { fetchCrmDashboard } from '@/lib/queries/crmDashboard'
-import { PageHeader } from '@/components/PageHeader'
+import Link from 'next/link'
 import { CrmPipelineCard } from '@/app/admin/crm/CrmPipelineCard'
 import { CrmStatCards } from '@/app/admin/crm/CrmStatCards'
 import { LeadSourcesCard } from '@/app/admin/crm/LeadSourcesCard'
@@ -14,11 +14,11 @@ export async function LeadsOverviewSection() {
   const { snapshot, truncated, peopleCeiling, error } = await fetchCrmDashboard(auth?.id ?? null)
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Leads"
-        description="People, pipeline, and follow-up across the firm's whole book."
-      />
+    <section aria-labelledby="overview-leads" className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><h2 id="overview-leads" className="scroll-mt-20 text-lg font-semibold">Leads</h2><p className="text-sm text-muted-foreground">Pipeline and client follow-up.</p></div>
+        <Link href="/admin/crm/opportunities" className="shrink-0 text-sm font-medium hover:underline">View all leads</Link>
+      </div>
 
       {error && (
         <div
@@ -38,12 +38,20 @@ export async function LeadsOverviewSection() {
 
       <CrmStatCards snapshot={snapshot} />
 
+      <details className="rounded-xl border border-border bg-card p-4">
+        <summary className="cursor-pointer text-sm font-medium">Pipeline and sources</summary>
+        <div className="mt-4">
       <div className="grid min-w-0 gap-3 lg:grid-cols-2">
         <LeadSourcesCard sources={snapshot.leadSources} />
         <CrmPipelineCard stages={snapshot.pipeline} />
       </div>
+        </div>
+      </details>
 
-      <RecentPeopleTable people={snapshot.recentPeople} />
-    </div>
+      <details className="rounded-xl border border-border bg-card p-4">
+        <summary className="cursor-pointer text-sm font-medium">Recent people</summary>
+        <div className="mt-4"><RecentPeopleTable people={snapshot.recentPeople} /></div>
+      </details>
+    </section>
   )
 }
