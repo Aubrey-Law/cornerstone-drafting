@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { AdditionalContactInputError, saveAdditionalContacts } from '@/lib/contacts/saveAdditionalContacts'
+import { IntakeFiduciaryInputError, validateIntakeFiduciaryInput } from '@/lib/contacts/intakeFiduciaryInput'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneForStorage } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
@@ -186,33 +187,20 @@ export async function POST(req: Request) {
     }
 
     if (action === 'save_fiduciaries') {
-      const { entries, role, forParty } = body
-
-      const validEntries: Array<Record<string, unknown>> = (entries ?? []).filter(
-        (e: Record<string, unknown>) => e.first_name || e.last_name
-      )
-
-      // Wipe existing roles of this type. delete().eq() chains operate on
-      // the matching rows directly — no need to pre-fetch the ids.
-      const [deletedRoles, existingContacts] = await Promise.all([
-        admin
-          .from('contact_roles')
-          .delete()
-          .eq('client_intake_id', intakeId)
-          .eq('role', role)
-          .eq('for_party', forParty),
-        validEntries.length > 0
+      const { role, forParty } = body
+      const validEntries = validateIntakeFiduciaryInput(body)
+      // Validate semantics and every scoped identity before the first mutation.
+      const existingContacts = validEntries.length > 0
           ? admin
               .from('contacts')
               .select('id, first_name, last_name')
               .eq('client_intake_id', intakeId)
-          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }>, error: null }),
-      ])
-      if (deletedRoles.error) throw new Error(deletedRoles.error.message)
-      if (existingContacts.error) throw new Error(existingContacts.error.message)
+          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }>, error: null })
+      const contactsResult = await existingContacts
+      if (contactsResult.error) throw new Error(contactsResult.error.message)
 
       const contactRows =
-        (existingContacts.data ?? []) as Array<{ id: string; first_name: string; last_name: string }>
+        (contactsResult.data ?? []) as Array<{ id: string; first_name: string; last_name: string }>
 
       const byName = new Map<string, string>()
       const intakeContactIds = new Set<string>()
@@ -220,6 +208,12 @@ export async function POST(req: Request) {
         byName.set(contactKey(c.first_name, c.last_name), c.id)
         intakeContactIds.add(c.id)
       }
+      for (const entry of validEntries) {
+        if (entry.contact_id && !intakeContactIds.has(entry.contact_id as string)) throw new IntakeFiduciaryInputError('Fiduciary contact does not belong to this intake')
+      }
+      const { error: deleteError } = await admin.from('contact_roles').delete()
+        .eq('client_intake_id', intakeId).eq('role', role).eq('for_party', forParty)
+      if (deleteError) throw new Error(deleteError.message)
 
       const updates: Array<Promise<unknown>> = []
       const inserts: Array<{ entry: Record<string, unknown>; payload: Record<string, unknown> }> = []
@@ -321,7 +315,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err) {
-    if (err instanceof AdditionalContactInputError) return NextResponse.json({ error: err.message }, { status: 400 })
+    if (err instanceof AdditionalContactInputError || err instanceof IntakeFiduciaryInputError) return NextResponse.json({ error: err.message }, { status: 400 })
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[intake/contacts] ${action} error:`, err)
     return NextResponse.json({ error: msg }, { status: 500 })

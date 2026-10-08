@@ -59,7 +59,8 @@ vi.mock('@/lib/supabaseAdmin', () => ({ ADMIN_EMAIL: 'staff@example.com', getAdm
     if (verb === 'insert') {
       const incoming = Array.isArray(payload) ? payload : [payload]
       if (incoming.some((row) => row.id && rows.some((existing) => existing.id === row.id))) return result = { data: [], error: { message: 'duplicate key' } }
-      returned = incoming.map((row) => ({ ...row, id: row.id ?? `created-${rows.length}` }))
+      // Model the existing contact-role household -> matter trigger.
+      returned = incoming.map((row) => ({ ...(table === 'contact_roles' && row.client_intake_id === 'intake' ? { matter_id: 'matter' } : {}), ...row, id: row.id ?? `created-${rows.length}` }))
       rows.push(...returned)
     }
     return result = { data: returned, error: null }
@@ -89,7 +90,11 @@ function request(contacts: Row[], publicToken?: string) {
 function autosave(body: Row, publicToken?: string) {
   return saveIntake(new Request('http://localhost/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(publicToken ? { 'X-Intake-Token': publicToken } : { Authorization: 'Bearer session' }) }, body: JSON.stringify({ existingId: 'intake', ...body }) }))
 }
+function fiduciaries(body: Row, publicToken?: string) {
+  return POST(new Request('http://localhost/api/intake/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(publicToken ? { 'X-Intake-Token': publicToken } : { Authorization: 'Bearer session' }) }, body: JSON.stringify({ action: 'save_fiduciaries', intakeId: 'intake', role: 'poa', forParty: 'client', entries: [parent], ...body }) }))
+}
 beforeEach(() => {
+  vi.stubEnv('INTAKE_RENDERER_MODE', 'compiled')
   state.contacts = [{ ...parent, relationship_type: 'other', client_intake_id: 'intake', source: 'client_intake_additional' }, { id: foreignId, first_name: 'Other', last_name: 'Person', client_intake_id: 'other-intake', source: 'client_intake_additional' }]
   state.roles = roles.map((role) => ({ contact_id: parentId, matter_id: 'matter', is_coagent: false, client_intake_id: 'intake', role, for_party: 'client', priority: 1 }))
   state.joins = [{ matter_id: 'matter', contact_id: parentId }]
@@ -108,9 +113,64 @@ beforeEach(() => {
     return response
   })
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 describe.each([undefined, 'invite'])('contact identity through intake save (%s)', (publicToken) => {
+  it.each([
+    { role: 'beneficiary' }, { role: 'arbitrary' }, { forParty: 'other' }, { role: 'guardian', forParty: 'spouse' },
+    { entries: null }, { entries: {} }, { entries: [null] }, { entries: ['Pat'] },
+    ...[undefined, 0, -1, 1.5, '1', 6].map((priority) => ({ entries: [{ ...parent, priority }] })),
+    { entries: [{ ...parent, is_coagent: 'false' }] }, { entries: [{ ...parent, contact_id: 'not-a-uuid' }] },
+    { entries: [{ ...parent, contact_id: null }] }, { entries: [{ ...parent, contact_id: foreignId }] },
+    { entries: [{ ...parent, email: { bad: true } }] }, { entries: [{ ...parent, first_name: [] }] },
+    { entries: [parent, parent] }, { role: 'hcp', entries: [{ ...parent, is_coagent: true }] },
+  ])('rejects invalid fiduciary semantics without any mutation: %j', async (body) => {
+    expect((await fiduciaries(body, publicToken)).status).toBe(400)
+    expect(state.mutations).toEqual([])
+    expect(state.roles).toHaveLength(5)
+  })
+
+  it.each([
+    ['trustee', 'client'], ['personal_rep', 'client'], ['poa', 'client'], ['hcp', 'client'], ['guardian', 'client'],
+    ['trustee', 'spouse'], ['personal_rep', 'spouse'], ['poa', 'spouse'], ['hcp', 'spouse'],
+  ])('accepts the canonical %s / %s combination', async (role, forParty) => {
+    expect((await fiduciaries({ role, forParty }, publicToken)).status).toBe(200)
+    expect(state.roles.some((row) => row.role === role && row.for_party === forParty && row.contact_id === parentId)).toBe(true)
+  })
+
+  it.each([false, true])('preserves primary/coagent/alternate through strict save, scalar autosave and snapshot-skipped submit (college: %s)', async (college) => {
+    const coagentId = '33333333-3333-4333-8333-333333333333'
+    const alternateId = '44444444-4444-4444-8444-444444444444'
+    const entries = [parent, { ...parent, id: coagentId, contact_id: coagentId, first_name: 'Coagent', is_coagent: true }, { ...parent, id: alternateId, contact_id: alternateId, first_name: 'Alternate', priority: 2 }]
+    for (const entry of entries.slice(1)) {
+      state.contacts.push({ ...entry, client_intake_id: 'intake', relationship_type: 'other' })
+      state.joins.push({ matter_id: 'matter', contact_id: entry.contact_id })
+    }
+    expect((await fiduciaries({ entries }, publicToken)).status).toBe(200)
+    const expected = () => expect(state.roles.filter((row) => row.role === 'poa').map((row) => [row.contact_id, row.priority, row.is_coagent]).sort()).toEqual([[parentId, 1, false], [coagentId, 1, true], [alternateId, 2, false]].sort())
+    expected()
+    const compiled = compileIntakeForm({ schemaVersion: 1, key: college ? 'college_prep' : 'estate', title: 'Intake', sections: [
+      { id: 'personal', title: 'Personal', audience: 'client_and_staff', items: [{ kind: 'field', id: 'phone', fieldId: 'client_phone' }] },
+      { id: 'fiduciaries', title: 'Fiduciaries', audience: 'client_and_staff', items: [{ kind: 'block', id: 'fiduciaries', blockId: college ? 'college_agents' : 'client_fiduciaries' }] },
+      { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'review', blockId: 'review_submit' }] },
+    ] }, 'client')
+    if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
+    render(<SchemaDrivenGuidedInterview intakeId="intake" initialData={{ intake_track: college ? 'college_prep' : 'estate', first_name: 'Jane', last_name: 'Example', email: 'jane@example.com', phone: '', fiduciary_entries: { fid_poa_client: entries } }} compiledForm={compiled.form} publicIntakeToken={publicToken} />)
+    fireEvent.change(screen.getByRole('textbox', { name: /phone/i }), { target: { value: '(617) 555-0199' } })
+    fireEvent.click(screen.getAllByRole('button', { name: /Review questionnaire/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Submit questionnaire' }))
+    await waitFor(() => expect(state.submits).toBe(1))
+    expected()
+    expect(state.requests).toHaveLength(0) // unchanged fiduciary blocks skipped
+  })
+
+  it('retains index fallback for legacy entries without appointment metadata', async () => {
+    await autosave({ fiduciary_entries: { fid_poa_client: [{ first_name: 'Pat', last_name: 'Example' }, { first_name: 'Alternate', last_name: 'Legacy' }] } }, publicToken)
+    const poa = state.roles.filter((row) => row.role === 'poa')
+    expect(poa.map((row) => [row.priority, row.is_coagent])).toEqual([[1, false], [2, false]])
+    expect(poa[0].contact_id).toBe(parentId)
+    expect(state.contacts.find((row) => row.id === poa[1].contact_id)?.first_name).toBe('Alternate')
+  })
   it.each(['first_name', 'last_name'])('retains a temporarily empty %s through autosave, failed section leave and retry', async (field) => {
     const incomplete = { ...parent, [field]: '' }
     expect((await autosave({ additional_contacts: [incomplete] }, publicToken)).status).toBe(200)

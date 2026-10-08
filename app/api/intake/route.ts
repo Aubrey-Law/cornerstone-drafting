@@ -5,7 +5,8 @@ import { sendEmail } from '@/lib/email/send'
 import { appUrl } from '@/lib/urls'
 import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 import { intakePayloadTouchesLead, syncLeadFromIntake } from '@/lib/syncLeadFromIntake'
-import { getSubmissionErrors, type IntakeRow } from '@/lib/intakeSections'
+import type { IntakeRow } from '@/lib/intake/legacySections'
+import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
 import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
@@ -153,6 +154,17 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Load validation only after selecting the server's rollout mode. Broken
+  // compiled definitions must not prevent the rollback API from initializing.
+  let getSubmissionErrors: typeof import('@/lib/intake/legacySections').getSubmissionErrors
+  try {
+    ;({ getSubmissionErrors } = resolveIntakeRendererMode(process.env) === 'legacy'
+      ? await import('@/lib/intake/legacySections')
+      : await import('@/lib/intakeSections'))
+  } catch (error) {
+    console.error('[intake POST] validation unavailable:', error)
+    return NextResponse.json({ error: 'Intake validation is temporarily unavailable.' }, { status: 503 })
+  }
   const authHeader = req.headers.get('authorization')
   const publicIntakeToken = req.headers.get('x-intake-token')
 
