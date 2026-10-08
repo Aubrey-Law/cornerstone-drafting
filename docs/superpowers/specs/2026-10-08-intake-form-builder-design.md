@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved; Phase 1 implemented, with automated verification recorded below and manual compiled-mode acceptance pending
+**Status:** approved; Phase 1 implemented and verified locally, with the builder and detailed enhancements reserved for later phases
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 
@@ -594,13 +594,27 @@ failures in `db-columns-check` and `db-rpc-check` (`listen EPERM 127.0.0.1`).
 Both suites passed separately with approved local-listener permission: 2 files /
 21 tests. No new failing test was observed.
 
-Manual compiled-mode estate and college-preparation browser smoke checks are
-**unperformed**. A read-only local check found a listener at `127.0.0.1:3002`,
-but this does not prove the Supabase fixture, configured renderer mode, client
-session, or the requested edit/refresh/review/submit flows. Browser
-authentication requires separate user approval and was not performed. Phase 1
-is therefore not yet marked fully verified or accepted for a production mode
-change; the server flag retains legacy as its default and rollback mode.
+Manual compiled-mode browser acceptance was completed against fresh local
+Supabase fixtures at `127.0.0.1:3002`. For the estate track, changing marital
+status hid and restored the spouse sections, retained a spouse answer while the
+section was hidden, persisted that answer across refresh, produced the expected
+review issues, and completed client submission. For the college-preparation
+track, no estate sections appeared; FERPA and HIPAA dependent questions showed
+and hid from their canonical answers, the HIPAA selections persisted across
+refresh, the college-specific review summary appeared, and client submission
+completed. The submitted college intake also produced the expected review flags
+in the attorney matter workflow.
+
+The acceptance pass exposed a missing accessible description on the shared
+review dialog. A focused regression test reproduced the Radix accessibility
+warning, and the dialog now supplies a semantic description for assistive
+technology. This was the only intake-specific browser warning found. Follow-up
+verification passed the focused accessibility test, lint, typecheck, and the
+full suite (900 files / 9,717 tests passed; 2 files / 15 tests skipped).
+
+These checks verify the local compiled renderer, not a production deployment or
+a production mode change. The server flag retains legacy as its default and
+rollback mode.
 
 Phase 2 builder database/UI and Phase 3 matter Intake tab, answer attribution,
 shared-person enhancements, and asset enhancements remain unimplemented.
