@@ -73,4 +73,5 @@ it('composes the focus brief, authoritative milestone, communication activity, a
   expect(screen.getByText('Read-only matter facts')).toBeTruthy()
   expect(screen.getByText('Existing composer')).toBeTruthy()
   expect(screen.getByText('Existing task preview')).toBeTruthy()
+  expect(screen.getByRole('complementary', { name: 'Matter summary' }).parentElement?.className).toContain('@min-[960px]/overview:grid-cols')
 })

@@ -65,7 +65,8 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
   const showUploads = uploadCount > 0 && workSummary?.workKey !== `matter:${matter.matter_id}:review-uploads`
   const hasAttention = reviewFlags.length > 0 || visibleNeeds.length > 0 || unreadCount > 0 || showUploads
   const attentionCount = reviewFlags.length + visibleNeeds.length + (showUploads ? 1 : 0) + (unreadCount > 0 ? 1 : 0)
-  return <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+  return <div className="@container/overview min-w-0">
+  <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
     <div className="flex min-w-0 flex-col gap-5">
       <section aria-label="Matter focus brief" className="rounded-lg border bg-card p-5 sm:p-6">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -132,5 +133,6 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
       {facts}
       {tasks && <section className="rounded-lg border bg-card p-4">{tasks}</section>}
     </aside>
+  </div>
   </div>
 }
