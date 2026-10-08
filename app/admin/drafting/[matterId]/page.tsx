@@ -36,6 +36,7 @@ export default async function DraftingWorkspacePage({
       intakeSnapshot={ctx.intakeSnapshot}
       hubMatter={hubResult.matter}
       sharedDrafts={(sharedDraftRows ?? []) as import('@/types/database').MatterDocument[]}
+      embeddedInWorkspace
     />
   )
 }

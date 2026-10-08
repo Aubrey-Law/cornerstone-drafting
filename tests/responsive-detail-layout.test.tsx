@@ -9,7 +9,7 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { AdminRailVisibilityContext } from '@/components/rail/AdminRailVisibilityContext'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
-import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
+import { MatterWorkspaceHeader } from '@/components/matter/MatterWorkspaceHeader'
 import type { PipelineMatter } from '@/types/database'
 
 const mediaState = vi.hoisted(() => ({ mobile: false, tablet: false }))
@@ -182,7 +182,7 @@ describe('responsive admin detail layout', () => {
     } as unknown as PipelineMatter
 
     render(
-      <MatterDetailHeader
+      <MatterWorkspaceHeader
         matter={matter}
         matterNumber="1024"
         intakeCompleted={false}

@@ -27,7 +27,7 @@ describe('matter overview hierarchy', () => {
     expect(client).not.toContain('Documents {documents.length}')
     expect(client).toContain('<MatterPeopleTab')
     expect(client).toContain('<MatterAssetsTabContent')
-    expect(client).toContain('<MatterDocumentsTab')
+    expect(client).toContain('<MatterDocumentsWorkspace')
     expect(client.indexOf('value="activity"')).toBeGreaterThan(client.indexOf('value="notes"'))
   })
 

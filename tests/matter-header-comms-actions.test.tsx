@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
-import { MatterDetailHeader } from '@/app/admin/matters/[id]/MatterDetailHeader'
+import { MatterWorkspaceHeader } from '@/components/matter/MatterWorkspaceHeader'
 import type { PipelineMatter } from '@/types/database'
 
 function matter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
@@ -28,7 +28,7 @@ function renderHeader(
   handlers: { onEmail: () => void },
 ) {
   return render(
-    <MatterDetailHeader
+    <MatterWorkspaceHeader
       matter={matter(over)}
       matterNumber="2026-001"
       intakeCompleted={false}
@@ -47,10 +47,10 @@ function renderHeader(
 
 afterEach(cleanup)
 
-describe('MatterDetailHeader communication actions', () => {
+describe('MatterWorkspaceHeader communication actions', () => {
   it('composes identity, lifecycle, and workspace navigation in one header', () => {
     render(
-      <MatterDetailHeader
+      <MatterWorkspaceHeader
         matter={matter({
           practice_area: 'EP',
           opened_at: '2026-10-01T12:00:00.000Z',
@@ -115,7 +115,7 @@ describe('MatterDetailHeader communication actions', () => {
   })
 })
 
-describe('MatterDetailHeader hands the matter to the Assistant', () => {
+describe('MatterWorkspaceHeader hands the matter to the Assistant', () => {
   it('links to an Assistant chat already pointed at this matter', async () => {
     renderHeader({}, { onEmail: vi.fn() })
 

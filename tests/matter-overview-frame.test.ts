@@ -16,8 +16,7 @@ describe('matter overview frame', () => {
   })
 
   it('retains intake operations while keeping stage changes in the progress strip', () => {
-    const header = fs.readFileSync(path.join(routeDir, 'MatterDetailHeader.tsx'), 'utf8')
-    const hero = fs.readFileSync(path.join(routeDir, 'MatterOverviewHero.tsx'), 'utf8')
+    const header = fs.readFileSync(path.join(process.cwd(), 'components/matter/MatterWorkspaceHeader.tsx'), 'utf8')
     const stageStrip = fs.readFileSync(path.join(routeDir, 'MatterStageStrip.tsx'), 'utf8')
 
     expect(header).toContain('Matter actions')
@@ -26,8 +25,9 @@ describe('matter overview frame', () => {
     expect(header).not.toContain('aria-label="Matter stage"')
     expect(stageStrip).toContain('Change stage')
     expect(stageStrip).toContain('Confirm stage change')
-    expect(hero).not.toContain('Matter Status: Hired')
-    expect(hero).not.toContain('Aging {agingHealth}')
+    for (const retired of ['MatterOverviewHero', 'MatterOverviewStats', 'MatterProgressTimeline']) {
+      expect(fs.existsSync(path.join(routeDir, `${retired}.tsx`))).toBe(false)
+    }
   })
 
   it('uses the full available admin content width with shared workspace edges', () => {

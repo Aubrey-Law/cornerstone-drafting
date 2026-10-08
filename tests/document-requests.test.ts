@@ -152,7 +152,9 @@ describe('the firm’s side', () => {
     expect(one).toContain("case 'waive'")
     expect(one).toContain("case 'reopen'")
     const detail = fs.readFileSync('app/admin/matters/[id]/MatterDetailClient.tsx', 'utf8')
-    expect(detail).toContain('<RequestedDocumentsCard matterId={matterId} onChanged={loadDocuments} probate={showProbate} />')
+    const workspace = fs.readFileSync('app/admin/matters/[id]/MatterDocumentsWorkspace.tsx', 'utf8')
+    expect(detail).toContain('probate={showProbate}')
+    expect(workspace).toContain('<RequestedDocumentsCard matterId={matterId} onChanged={reload} probate={probate} />')
   })
 
   it('keeps the table staff-writable and client-readable, and describes it in the generated types', () => {

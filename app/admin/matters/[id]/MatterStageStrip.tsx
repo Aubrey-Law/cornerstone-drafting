@@ -24,6 +24,8 @@ interface MatterStageStripProps {
   onStageChange: (stage: MatterStage) => void
   /** Recorded stage history, to tell a stage passed through from one skipped. */
   history?: Pick<MatterStageHistoryEntry, 'stage' | 'enteredAt'>[]
+  /** A single stage chip that opens the change-stage dialog, for routes that need the height (Drafting). */
+  compact?: boolean
 }
 
 /**
@@ -56,6 +58,7 @@ export function MatterStageStrip({
   stageSaving,
   onStageChange,
   history = [],
+  compact = false,
 }: MatterStageStripProps) {
   const [changeOpen, setChangeOpen] = useState(false)
   const [selectedStage, setSelectedStage] = useState<MatterStage>(stage)
@@ -80,8 +83,23 @@ export function MatterStageStrip({
     setChangeOpen(false)
   }
 
+  const stageSummary = `${STAGES[currentIndex]?.label ?? 'Choose work stage'}${agingSummary ? ` · ${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage` : ''}`
+
   return (
     <>
+      {compact ? (
+        <button
+          type="button"
+          disabled={stageSaving || stage === 'closed'}
+          onClick={() => setDialogOpen(true)}
+          title={targetSigning ? `Target signing ${formatDate(targetSigning)} · change stage` : 'Change stage'}
+          aria-label={`Stage: ${stageSummary}. Change stage`}
+          className="inline-flex items-center gap-1.5 rounded-md border border-selected-border/40 bg-selected px-2 py-0.5 text-xs font-medium text-selected-foreground hover:bg-accent disabled:cursor-default"
+        >
+          <span aria-hidden className="size-2 rounded-full border-2 border-selected-border bg-card" />
+          {stageSummary}
+        </button>
+      ) : (
       <div className="flex items-center gap-5">
         <p className="min-w-0 flex-1 text-sm sm:hidden"><span className="block text-xs text-muted-foreground">Current stage</span><strong>{STAGES[currentIndex]?.label ?? 'Choose work stage'}</strong></p>
         <div className="hidden min-w-0 flex-1 overflow-x-auto sm:block">
@@ -132,6 +150,7 @@ export function MatterStageStrip({
           </p>
         </div>
       </div>
+      )}
 
       <Dialog open={changeOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

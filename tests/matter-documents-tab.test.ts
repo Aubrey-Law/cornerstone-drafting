@@ -5,14 +5,17 @@ import { describe, expect, it } from 'vitest'
 const matterRoute = path.join(process.cwd(), 'app/admin/matters/[id]')
 const tabPath = path.join(matterRoute, 'MatterDocumentsTab.tsx')
 const clientPath = path.join(matterRoute, 'MatterDetailClient.tsx')
+const workspacePath = path.join(matterRoute, 'MatterDocumentsWorkspace.tsx')
 
 describe('matter documents tab', () => {
   it('is wired into the matter page', () => {
     const client = readFileSync(clientPath, 'utf8')
-    expect(client).toContain("import { MatterDocumentsTab } from './MatterDocumentsTab'")
-    expect(client).toContain('<MatterDocumentsTab')
-    expect(client).toContain('documents={documents}')
-    expect(client).toContain('onDocumentsChanged={loadDocuments}')
+    const workspace = readFileSync(workspacePath, 'utf8')
+    expect(client).toContain('<MatterDocumentsWorkspace')
+    expect(workspace).toContain("import { MatterDocumentsTab } from './MatterDocumentsTab'")
+    expect(workspace).toContain('<MatterDocumentsTab')
+    expect(workspace).toContain('documents={documents}')
+    expect(workspace).toContain('onDocumentsChanged={reload}')
   })
 
   it('shares with a toggle and keeps the surviving document actions', () => {

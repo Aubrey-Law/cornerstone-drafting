@@ -62,7 +62,7 @@ describe('next action date', () => {
 
   it('drives the weekly board without duplicating a status pill in the matter header', () => {
     const header = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailHeader.tsx'),
+      path.join(process.cwd(), 'components/matter/MatterWorkspaceHeader.tsx'),
       'utf8',
     )
     const board = fs.readFileSync(
