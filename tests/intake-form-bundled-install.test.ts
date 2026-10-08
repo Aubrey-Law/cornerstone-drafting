@@ -173,6 +173,7 @@ describe('bundled installer command', () => {
   it('uses the real lifecycle service to publish version one, then reruns as exactly two no-ops', async () => {
     const stored: ExistingBundledIntakeForm[] = []
     vi.mocked(repository.getTemplateRowByKey).mockImplementation(async (key) => stored.find(({ template }) => template.key === key)?.template ?? null)
+    vi.mocked(repository.getTemplateRow).mockImplementation(async (id) => stored.find(({ template }) => template.id === id)?.template ?? null)
     vi.mocked(repository.listVersionRows).mockImplementation(async (id) => stored.find(({ template }) => template.id === id)!.versions)
     vi.mocked(repository.getVersionRow).mockImplementation(async (id) => stored.flatMap(({ versions }) => versions).find((version) => version.id === id) ?? null)
     vi.mocked(repository.createTemplateRow).mockImplementation(async (input) => {

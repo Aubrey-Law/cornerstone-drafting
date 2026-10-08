@@ -6,7 +6,7 @@ import { hashIntakeFormDefinition } from '@/lib/intake/forms/hash'
 import { IntakeFormUnavailableError, resolveIntakeForm } from '@/lib/intake/forms/resolver'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
-const database = vi.hoisted(() => ({ read: vi.fn(), filters: [] as [string, unknown][], tables: [] as string[] }))
+const database = vi.hoisted(() => ({ read: vi.fn(), templateRead: vi.fn(), filters: [] as [string, unknown][], tables: [] as string[] }))
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
     from: (table: string) => {
@@ -14,7 +14,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
       const query = {
         select: () => query,
         eq: (column: string, value: unknown) => { database.filters.push([column, value]); return query },
-        maybeSingle: database.read,
+        maybeSingle: table === 'intake_form_templates' ? database.templateRead : database.read,
       }
       return query
     },
@@ -48,20 +48,26 @@ function version(status: 'published' | 'retired' | 'draft' = 'published', form =
 beforeEach(() => {
   database.read.mockReset()
   database.read.mockResolvedValue({ data: version(), error: null })
+  database.templateRead.mockReset()
+  database.templateRead.mockResolvedValue({ data: {
+    id: 'template-1', key: 'pinned_form', name: 'Pinned form', description: null, archived_at: null,
+    created_by: 'admin-1', created_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z',
+  }, error: null })
   database.filters.length = 0
   database.tables.length = 0
 })
 
-async function expectUnavailable(formVersionId = 'version-1') {
+async function expectUnavailable(formVersionId = 'version-1', withTemplate = false) {
   const error = await resolveIntakeForm({ formVersionId, track: 'estate', audience: 'client' }).catch((error: unknown) => error)
   expect(error).toBeInstanceOf(IntakeFormUnavailableError)
   expect(error).toMatchObject({ name: 'IntakeFormUnavailableError', message: 'Pinned intake form version is unavailable' })
   expect(Object.keys(error as object)).toEqual(['name'])
   expect((error as Error).cause).toBeUndefined()
   expect(String(error)).not.toMatch(/Private|secret|SELECT|version-1|definition/)
-  expect(database.tables).toEqual(['intake_form_versions'])
-  expect(database.filters).toEqual([['id', formVersionId]])
+  expect(database.tables).toEqual(withTemplate ? ['intake_form_versions', 'intake_form_templates'] : ['intake_form_versions'])
+  expect(database.filters).toEqual(withTemplate ? [['id', formVersionId], ['id', 'template-1']] : [['id', formVersionId]])
   expect(database.read).toHaveBeenCalledTimes(1)
+  expect(database.templateRead).toHaveBeenCalledTimes(withTemplate ? 1 : 0)
 }
 
 describe('persistent intake form resolver', () => {
@@ -86,8 +92,8 @@ describe('persistent intake form resolver', () => {
         { id: 'review', items: [{ kind: 'block', blockId: 'review_submit' }] },
       ],
     } })
-    expect(database.tables).toEqual(['intake_form_versions'])
-    expect(database.filters).toEqual([['id', 'version-1']])
+    expect(database.tables).toEqual(['intake_form_versions', 'intake_form_templates'])
+    expect(database.filters).toEqual([['id', 'version-1'], ['id', 'template-1']])
     expect(database.read).toHaveBeenCalledTimes(1)
     expect(result).not.toHaveProperty('definition')
   })
@@ -121,6 +127,28 @@ describe('persistent intake form resolver', () => {
     await expectUnavailable()
   })
 
+  it('rejects a hash-valid definition whose identity differs from its owning template', async () => {
+    const form = definition()
+    form.key = 'other_form'
+    database.read.mockResolvedValue({ data: version('published', form), error: null })
+    await expectUnavailable('version-1', true)
+  })
+
+  it('rejects a missing owning template', async () => {
+    database.templateRead.mockResolvedValue({ data: null, error: null })
+    await expectUnavailable('version-1', true)
+  })
+
+  it('sanitizes an invalid owning-template record', async () => {
+    database.templateRead.mockResolvedValue({ data: { id: 'template-1', key: 'pinned_form', secret: 'Private template' }, error: null })
+    await expectUnavailable('version-1', true)
+  })
+
+  it('sanitizes owning-template database failures', async () => {
+    database.templateRead.mockResolvedValue({ data: null, error: { code: 'XX000', message: 'SELECT secret FROM Private template' } })
+    await expectUnavailable('version-1', true)
+  })
+
   it('sanitizes a structurally invalid stored definition', async () => {
     database.read.mockResolvedValue({ data: { ...version(), definition: { schemaVersion: 1, secret: 'Private stored definition' } }, error: null })
     await expectUnavailable()
@@ -135,7 +163,7 @@ describe('persistent intake form resolver', () => {
     const form = definition()
     form.sections = form.sections.filter(({ id }) => id !== 'review')
     database.read.mockResolvedValue({ data: version('published', form), error: null })
-    await expectUnavailable()
+    await expectUnavailable('version-1', true)
   })
 
   it('sanitizes database failures without retaining their details or cause', async () => {
@@ -149,7 +177,35 @@ describe('persistent intake form resolver', () => {
   })
 })
 
+function resolverReferences(filename: string, contents: string): string[] {
+  const violations: string[] = []
+  const source = ts.createSourceFile(filename, contents, ts.ScriptTarget.Latest, true)
+  function visit(node: ts.Node) {
+    if (ts.isStringLiteralLike(node)) {
+      const modulePath = node.text.startsWith('@/') ? path.resolve(node.text.slice(2))
+        : node.text.startsWith('.') ? path.resolve(path.dirname(filename), node.text) : null
+      if (modulePath?.replace(/\.[cm]?[jt]s$/, '') === path.resolve('lib/intake/forms/resolver')) {
+        violations.push(path.relative(process.cwd(), filename))
+      }
+    }
+    if (ts.isIdentifier(node) && node.text === 'resolveIntakeForm') violations.push(path.relative(process.cwd(), filename))
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return violations
+}
+
 describe('persistent rendering remains dormant', () => {
+  it.each([
+    "import { resolveIntakeForm as load } from '@/lib/intake/forms/resolver'; export const wrapped = load",
+    "export { resolveIntakeForm as load } from './forms/resolver'",
+    "export * from '@/lib/intake/forms/resolver'",
+    "const form = import('./forms/resolver.ts')",
+    "const form = require('@/lib/intake/forms/resolver')",
+  ])('detects indirect or renamed resolver use in a runtime helper: %s', (contents) => {
+    expect(resolverReferences(path.resolve('lib/intake/helper.ts'), contents)).toContain('lib/intake/helper.ts')
+  })
+
   it('has no resolver imports in current pages, intake/public routes, or intake components', () => {
     function sourceFiles(directory: string): string[] {
       return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -157,26 +213,14 @@ describe('persistent rendering remains dormant', () => {
         return entry.isDirectory() ? sourceFiles(filename) : /\.[cm]?[jt]sx?$/.test(entry.name) ? [filename] : []
       })
     }
-    const files = [...sourceFiles(path.resolve('app')), ...sourceFiles(path.resolve('components/intake'))]
+    const files = ['app', 'components', 'lib', 'hooks'].flatMap((root) => sourceFiles(path.resolve(root)))
+      .filter((filename) => filename !== path.resolve('lib/intake/forms/resolver.ts'))
     expect(files).toContain(path.resolve('components/intake/SchemaDrivenGuidedInterview.tsx'))
     expect(files).toContain(path.resolve('app/intake/(shell)/page.tsx'))
     expect(files).toContain(path.resolve('app/api/intake/route.ts'))
-    const violations: string[] = []
-    for (const filename of files) {
-      const source = ts.createSourceFile(filename, readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true)
-      function visit(node: ts.Node) {
-        if (ts.isStringLiteralLike(node)) {
-          const modulePath = node.text.startsWith('@/') ? path.resolve(node.text.slice(2))
-            : node.text.startsWith('.') ? path.resolve(path.dirname(filename), node.text) : null
-          if (modulePath?.replace(/\.[cm]?[jt]s$/, '') === path.resolve('lib/intake/forms/resolver')) {
-            violations.push(path.relative(process.cwd(), filename))
-          }
-        }
-        if (ts.isIdentifier(node) && node.text === 'resolveIntakeForm') violations.push(path.relative(process.cwd(), filename))
-        ts.forEachChild(node, visit)
-      }
-      visit(source)
-    }
+    expect(files).toContain(path.resolve('lib/intake/getOrCreateClientIntake.ts'))
+    expect(files).toContain(path.resolve('components/AdminIntakeSheet.tsx'))
+    const violations = files.flatMap((filename) => resolverReferences(filename, readFileSync(filename, 'utf8')))
     expect(violations).toEqual([])
   })
 })

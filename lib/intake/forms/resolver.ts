@@ -2,7 +2,7 @@ import 'server-only'
 import type { IntakeTrack } from '@/lib/intakeTrack'
 import { compileIntakeForm, type CompiledIntakeForm } from './compiler'
 import { compileBundledIntakeForm } from './definitions'
-import { getVersionRow } from './repository'
+import { getTemplateRow, getVersionRow } from './repository'
 
 /** Delivery errors deliberately carry neither stored data nor persistence details. */
 export class IntakeFormUnavailableError extends Error {
@@ -29,6 +29,8 @@ export async function resolveIntakeForm(input: {
     if (!version || (version.status !== 'published' && version.status !== 'retired')) {
       throw new IntakeFormUnavailableError()
     }
+    const template = await getTemplateRow(version.template_id)
+    if (!template || version.definition.key !== template.key) throw new IntakeFormUnavailableError()
     const compiled = compileIntakeForm(version.definition, input.audience)
     if (!compiled.success) throw new IntakeFormUnavailableError()
     return { source: 'persistent', versionId: input.formVersionId, form: compiled.form }

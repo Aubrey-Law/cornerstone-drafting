@@ -222,6 +222,43 @@ beforeEach(() => {
 })
 
 describe('intake form lifecycle service', () => {
+  it('rejects definition-key drift before saving a draft', async () => {
+    const raw = definition(); raw.key = 'other_form'
+    await expect(save(raw)).rejects.toMatchObject({
+      code: 'INTAKE_FORM_VALIDATION', message: 'Definition key must match the template key',
+    })
+    expect(repository.getTemplateRow).toHaveBeenCalledWith('template-1')
+    expect(repository.saveDraftRow).not.toHaveBeenCalled()
+  })
+
+  it('rejects a pre-existing hash-valid identity mismatch before publication', async () => {
+    const raw = definition(); raw.key = 'other_form'
+    vi.mocked(repository.getVersionRow).mockResolvedValue(version(raw))
+    await expect(publish({ expectedDefinitionHash: hashIntakeFormDefinition(raw) })).rejects.toMatchObject({
+      code: 'INTAKE_FORM_VALIDATION', message: 'Definition key must match the template key',
+    })
+    expect(repository.getTemplateRow).toHaveBeenCalledWith('template-1')
+    expect(repository.publishDraftRow).not.toHaveBeenCalled()
+  })
+
+  it('rejects save and publish when the owning template is missing', async () => {
+    vi.mocked(repository.getTemplateRow).mockResolvedValue(null)
+    await expect(save(definition())).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    await expect(publish()).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    expect(repository.saveDraftRow).not.toHaveBeenCalled()
+    expect(repository.publishDraftRow).not.toHaveBeenCalled()
+  })
+
+  it.each([null, version(definition(), { status: 'published' }), version(definition(), { lock_version: 4 })])(
+    'preserves save conflicts for a missing, immutable, or stale draft before identity validation', async (row) => {
+      vi.mocked(repository.getVersionRow).mockResolvedValue(row)
+      const raw = definition(); raw.key = 'other_form'
+      await expect(save(raw)).rejects.toBeInstanceOf(service.IntakeFormConflictError)
+      expect(repository.saveDraftRow).not.toHaveBeenCalled()
+      expect(repository.getTemplateRow).not.toHaveBeenCalled()
+    },
+  )
+
   it('saves and discards the current draft identified by its template', async () => {
     vi.mocked(repository.getDraftRow).mockResolvedValue(version())
     vi.mocked(repository.discardDraftRow).mockResolvedValue(version())

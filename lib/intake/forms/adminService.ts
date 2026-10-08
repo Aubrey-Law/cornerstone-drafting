@@ -56,6 +56,11 @@ async function requireVersion(versionId: string): Promise<IntakeFormVersionRow> 
   if (!row) throw new IntakeFormNotFoundError('Intake form version not found')
   return row
 }
+async function requireDefinitionIdentity(templateId: string, definition: IntakeFormDefinition): Promise<void> {
+  const template = await repository.getTemplateRow(templateId)
+  if (!template) throw new IntakeFormNotFoundError('Intake form template not found')
+  if (definition.key !== template.key) throw new IntakeFormValidationError('Definition key must match the template key')
+}
 
 export const listIntakeFormTemplates = repository.listTemplateRows
 export const getIntakeFormTemplate = repository.getTemplateRow
@@ -85,6 +90,9 @@ export async function createIntakeFormTemplate(input: CreateIntakeFormTemplateIn
 export async function saveIntakeFormDraft(input: VersionInput & { expectedLockVersion: number; definition: unknown }) {
   requireActor(input.actorId); requireLock(input.expectedLockVersion)
   const definition = parseDefinition(input.definition)
+  const row = await repository.getVersionRow(input.versionId)
+  if (!row || row.status !== 'draft' || row.lock_version !== input.expectedLockVersion) throw new IntakeFormConflictError()
+  await requireDefinitionIdentity(row.template_id, definition)
   const diagnostics = compileDiagnostics(definition)
   const draft = await mutate(() => repository.saveDraftRow({ ...input, definition, definitionHash: hashIntakeFormDefinition(definition) }))
   return { draft, diagnostics }
@@ -103,6 +111,7 @@ export async function publishIntakeFormDraft(input: VersionInput & { expectedLoc
   if (row.definition_hash !== input.expectedDefinitionHash || hashIntakeFormDefinition(row.definition) !== row.definition_hash) {
     throw new IntakeFormConflictError('Definition changed; refresh and try again')
   }
+  await requireDefinitionIdentity(row.template_id, row.definition)
   const diagnostics = compileDiagnostics(row.definition)
   if (diagnostics.length) throw new IntakeFormValidationError('Intake form cannot be published until compiler diagnostics are resolved', diagnostics)
   return mutate(() => repository.publishDraftRow(input))
