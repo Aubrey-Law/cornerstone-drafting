@@ -64,60 +64,75 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
   const visibleNeeds = needs.filter(item => !(item.key === 'matter.engagement_signed' && engagementAction) && !(item.key === 'matter.design_ready' && actionHref.includes('/admin/drafting/')))
   const showUploads = uploadCount > 0 && workSummary?.workKey !== `matter:${matter.matter_id}:review-uploads`
   const hasAttention = reviewFlags.length > 0 || visibleNeeds.length > 0 || unreadCount > 0 || showUploads
-  return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-    <div className="order-2 flex min-w-0 flex-col gap-5 xl:order-first">
-      {facts && <div className="order-2 xl:order-1">{facts}</div>}
-      {composer && <div className="order-1 xl:order-2">{composer}</div>}
-      <section aria-label="Matter activity" className="order-3 rounded-lg border bg-card p-4 sm:p-5">
-        <h2 className="mb-3 text-sm font-semibold">Recent activity</h2>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div role="group" aria-label="Activity filter" className="flex flex-wrap gap-2">
-            {(['all', 'messages', 'notes', 'documents', 'system'] as const).map(filter => <Button key={filter} size="sm" variant={feedFilter === filter ? 'default' : 'outline'} aria-pressed={feedFilter === filter} className="h-7 rounded-full px-3 text-xs" onClick={() => setFeedFilter(filter)}>{filter[0].toUpperCase() + filter.slice(1)}</Button>)}
-          </div>
-          <Button variant="link" size="sm" onClick={onActivity}>View all activity</Button>
+  const attentionCount = reviewFlags.length + visibleNeeds.length + (showUploads ? 1 : 0) + (unreadCount > 0 ? 1 : 0)
+  return <div className="@container/overview min-w-0">
+  <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="flex min-w-0 flex-col gap-5">
+      <section aria-label="Matter focus brief" className="rounded-lg border bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span aria-hidden className="size-1.5 rounded-full bg-selected-border" />
+          Focus brief
         </div>
-        {feed.length ? <MatterActivityTab activity={feed.slice(0, 8)} loading={false} /> : <p className="py-6 text-sm text-muted-foreground">{feedFilter === 'all' ? 'No activity recorded yet.' : 'No matching activity in this preview. Open all activity to explore the full history.'}</p>}
+        <section aria-label="Next action" className="mt-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded border border-border bg-muted px-2 py-1 font-medium text-foreground">{stateLabel}</span>
+            {priorityLabel && <span>{priorityLabel}</span>}
+            <span>Owner: {ownerLabel}</span>
+          </div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">{useSummary ? workSummary.title : nextAction.title}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{useSummary ? workSummary.priorityReasons.map(reason => reason.label).join(' · ') : nextAction.detail}</p>
+          {useSummary && workSummary.dueAt && <p className="mt-3 text-sm"><span className="text-muted-foreground">Due </span><time dateTime={workSummary.dueAt}>{formatDateDetail(workSummary.dueAt)}</time></p>}
+          <div className="mt-4">{!useSummary && engagementAction ? <Button size="sm" onClick={onEngagement}>{nextAction.cta}</Button> : <Button size="sm" asChild><Link href={actionHref}>{primaryLabel}</Link></Button>}</div>
+        </section>
+
+        {hasAttention && <section aria-labelledby="matter-attention-title" className="mt-5 border-t pt-4">
+          <h2 id="matter-attention-title" className="text-sm font-semibold">Needs attention <span className="ml-1 text-xs font-normal text-muted-foreground">{attentionCount}</span></h2>
+          <ul className="mt-2 divide-y">
+            {reviewFlags.map(flag => <li key={flag.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{flag.label}</span><Link className="shrink-0 font-medium text-primary hover:underline" href={resolveIntakeReviewTarget(flag).href(matter.matter_id)}>Review</Link></li>)}
+            {visibleNeeds.map(item => <li key={item.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{NEED_LABELS[item.key] ?? item.label}<span className="mt-1 block text-xs text-muted-foreground">{item.owner === 'client' ? 'Waiting on client' : item.owner === 'attorney' ? 'Attorney' : 'Firm'}</span></span>{item.key === 'matter.engagement_signed' ? <Link className="shrink-0 font-medium text-primary hover:underline" href="?tab=billing">Review agreement</Link> : <Link className="shrink-0 font-medium text-primary hover:underline" href={item.key === 'matter.design_ready' ? `/admin/drafting/${matter.matter_id}?step=design` : item.key === 'matter.drafts_shared' ? `/admin/drafting/${matter.matter_id}?step=review` : `?tab=tasks`}>Review</Link>}</li>)}
+            {showUploads && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{uploadCount} client upload{uploadCount === 1 ? '' : 's'} to review</span><Button variant="link" onClick={onUploads}>Review uploads</Button></li>}
+            {unreadCount > 0 && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{unreadCount} unread message{unreadCount === 1 ? '' : 's'}</span><Button variant="link" onClick={onMessages}>Read messages</Button></li>}
+          </ul>
+        </section>}
+      </section>
+
+      <section aria-label="Matter milestones" className="rounded-lg border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Milestones</h2>
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
+        </div>
+        {milestone ? <div className="mt-4 flex items-start gap-3">
+          <span aria-hidden className="mt-1 size-3 shrink-0 rounded-full border-2 border-selected-border bg-card" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">{milestone.label}</p>
+            <p className="mt-1 text-sm"><time dateTime={milestone.date}>{formatDate(milestone.date)}</time></p>
+            <p className={milestone.daysAway < 0 ? 'mt-1 text-sm font-medium text-destructive' : 'mt-1 text-sm text-muted-foreground'}>
+              {milestone.daysAway < 0 ? `${Math.abs(milestone.daysAway)} day${milestone.daysAway === -1 ? '' : 's'} overdue` : milestone.daysAway === 0 ? 'Today' : `In ${milestone.daysAway} day${milestone.daysAway === 1 ? '' : 's'}`}
+              {milestone.derived ? ' · calculated from target signing' : ''}
+            </p>
+          </div>
+        </div> : <p className="mt-3 text-sm text-muted-foreground">No milestone scheduled.</p>}
+      </section>
+
+      <section aria-label="Matter communication and activity" className="space-y-5">
+        {composer}
+        <section aria-label="Matter activity" className="rounded-lg border bg-card p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Recent activity</h2>
+            <Button variant="link" size="sm" onClick={onActivity}>View all activity</Button>
+          </div>
+          <div role="group" aria-label="Activity filter" className="mb-4 flex flex-wrap gap-2">
+            {(['all', 'messages', 'notes', 'documents', 'system'] as const).map(filter => <Button key={filter} size="sm" variant={feedFilter === filter ? 'secondary' : 'outline'} aria-pressed={feedFilter === filter} className="h-7 rounded-full px-3 text-xs" onClick={() => setFeedFilter(filter)}>{filter[0].toUpperCase() + filter.slice(1)}</Button>)}
+          </div>
+          {feed.length ? <MatterActivityTab activity={feed.slice(0, 8)} loading={false} /> : <p className="py-6 text-sm text-muted-foreground">{feedFilter === 'all' ? 'No activity recorded yet.' : 'No matching activity in this preview. Open all activity to explore the full history.'}</p>}
+        </section>
       </section>
     </div>
-    <aside aria-label="Up next" className="contents xl:order-last xl:block xl:space-y-6 xl:border-l xl:bg-card xl:p-5">
-      <div className="order-first space-y-3 rounded-lg border bg-card p-4 xl:border-0 xl:bg-transparent xl:p-0">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Up next</h2>
-      <section aria-label="Next action" className="rounded-lg bg-primary p-4 text-primary-foreground">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded border border-current/30 px-2 py-1 font-medium">{stateLabel}</span>
-          {priorityLabel && <span>{priorityLabel}</span>}
-        </div>
-        <p className="mb-2 text-xs opacity-80">Owner: {ownerLabel}</p>
-        <h3 className="text-base font-semibold">{useSummary ? workSummary.title : nextAction.title}</h3>
-        <p className="mt-2 text-xs leading-relaxed opacity-80">{useSummary ? workSummary.priorityReasons.map(reason => reason.label).join(' · ') : nextAction.detail}</p>
-        {useSummary && workSummary.dueAt && <p className="mt-3 border-t border-current/20 pt-3 text-sm"><span className="opacity-80">Due </span><time dateTime={workSummary.dueAt}>{formatDateDetail(workSummary.dueAt)}</time></p>}
-        <div className="mt-4">{!useSummary && engagementAction ? <Button variant="secondary" size="sm" onClick={onEngagement}>{nextAction.cta}</Button> : <Button variant="secondary" size="sm" asChild><Link href={actionHref}>{primaryLabel}</Link></Button>}</div>
-      </section>
-      </div>
-      <div className="order-3 space-y-5 rounded-lg border bg-card p-4 xl:border-0 xl:bg-transparent xl:p-0">
-    {hasAttention && <section aria-labelledby="matter-attention-title">
-      <h2 id="matter-attention-title" className="text-sm font-semibold">Needs attention <span className="ml-1 text-xs font-normal text-muted-foreground">{reviewFlags.length + visibleNeeds.length + (showUploads ? 1 : 0) + (unreadCount > 0 ? 1 : 0)}</span></h2>
-      <ul className="mt-3 divide-y">
-        {reviewFlags.map(flag => <li key={flag.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{flag.label}</span><Link className="shrink-0 text-primary underline underline-offset-4" href={resolveIntakeReviewTarget(flag).href(matter.matter_id)}>Review</Link></li>)}
-        {visibleNeeds.map(item => <li key={item.key} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{NEED_LABELS[item.key] ?? item.label}<span className="mt-1 block text-xs text-muted-foreground">{item.owner === 'client' ? 'Waiting on client' : item.owner === 'attorney' ? 'Attorney' : 'Firm'}</span></span>{item.key === 'matter.engagement_signed' ? <Link className="shrink-0 text-primary underline underline-offset-4" href="?tab=billing">Review agreement</Link> : <Link className="shrink-0 text-primary underline underline-offset-4" href={item.key === 'matter.design_ready' ? `/admin/drafting/${matter.matter_id}?step=design` : item.key === 'matter.drafts_shared' ? `/admin/drafting/${matter.matter_id}?step=review` : `?tab=tasks`}>Review</Link>}</li>)}
-        {showUploads && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{uploadCount} client upload{uploadCount === 1 ? '' : 's'} to review</span><Button variant="link" onClick={onUploads}>Review uploads</Button></li>}
-        {unreadCount > 0 && <li className="flex items-center justify-between gap-4 py-3 text-sm"><span>{unreadCount} unread message{unreadCount === 1 ? '' : 's'}</span><Button variant="link" onClick={onMessages}>Read messages</Button></li>}
-      </ul>
-    </section>}
-    <section aria-labelledby="matter-upcoming-title">
-      <h2 id="matter-upcoming-title" className="text-sm font-semibold">Next milestone</h2>
-      {milestone ? <div className="mt-3 space-y-1">
-        <p className="text-sm font-medium">{milestone.label}</p>
-        <p className="text-sm"><time dateTime={milestone.date}>{formatDate(milestone.date)}</time></p>
-        <p className={milestone.daysAway < 0 ? 'text-sm font-medium text-destructive' : 'text-sm text-muted-foreground'}>
-          {milestone.daysAway < 0 ? `${Math.abs(milestone.daysAway)} day${milestone.daysAway === -1 ? '' : 's'} overdue` : milestone.daysAway === 0 ? 'Today' : `In ${milestone.daysAway} day${milestone.daysAway === 1 ? '' : 's'}`}
-        </p>
-        {milestone.derived && <p className="text-xs text-muted-foreground">Calculated from target signing</p>}
-      </div> : <p className="mt-2 text-sm text-muted-foreground">No milestone scheduled.</p>}
-      <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
-    </section>
-    {tasks && <section className="border-t pt-5">{tasks}</section>}
-      </div>
+
+    <aside aria-label="Matter summary" className="space-y-4">
+      {facts}
+      {tasks && <section className="rounded-lg border bg-card p-4">{tasks}</section>}
     </aside>
+  </div>
   </div>
 }

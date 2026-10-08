@@ -53,3 +53,25 @@ it('opens the date editor from the empty milestone state', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Set date' }))
   expect(onDates).toHaveBeenCalledOnce()
 })
+
+it('composes the focus brief, authoritative milestone, communication activity, and summary areas', () => {
+  render(<MatterOverviewWork
+    {...props}
+    details={{ scheduled_signing_date: '2026-11-12' }}
+    facts={<p>Read-only matter facts</p>}
+    composer={<p>Existing composer</p>}
+    tasks={<p>Existing task preview</p>}
+  />)
+
+  expect(screen.getByRole('region', { name: 'Matter focus brief' })).toBeTruthy()
+  expect(screen.getByRole('region', { name: 'Matter milestones' })).toBeTruthy()
+  expect(screen.getByRole('region', { name: 'Matter communication and activity' })).toBeTruthy()
+  expect(screen.getByRole('complementary', { name: 'Matter summary' })).toBeTruthy()
+  expect(screen.getByText('Drafts due')).toBeTruthy()
+  expect(screen.getByText(/calculated from target signing/i)).toBeTruthy()
+  expect(screen.queryByText('Engaged')).toBeNull()
+  expect(screen.getByText('Read-only matter facts')).toBeTruthy()
+  expect(screen.getByText('Existing composer')).toBeTruthy()
+  expect(screen.getByText('Existing task preview')).toBeTruthy()
+  expect(screen.getByRole('complementary', { name: 'Matter summary' }).parentElement?.className).toContain('@min-[960px]/overview:grid-cols')
+})

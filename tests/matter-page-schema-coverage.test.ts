@@ -140,13 +140,16 @@ describe('design-sheet-owned fields', () => {
 })
 
 describe('matter page surfaces', () => {
-  it('uses a facts and activity center with a separate next-action panel', () => {
+  it('uses the focus brief with communication activity and a read-only summary', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
     const overview = fs.readFileSync(path.join(matterDir, 'MatterOverviewWork.tsx'), 'utf8')
     expect(client).toContain('<MatterOverviewWork')
     expect(client).toContain('<MatterOverviewFacts')
     expect(client).not.toContain('<MatterOverviewStats')
-    expect(overview).toContain('aria-label="Up next"')
+    expect(overview).toContain('aria-label="Matter focus brief"')
+    expect(overview).toContain('aria-label="Matter communication and activity"')
+    expect(overview).toContain('aria-label="Matter summary"')
+    expect(overview).toContain('nextMatterMilestone(matter, details)')
   })
 
   it('drops the portal uploads card', () => {
