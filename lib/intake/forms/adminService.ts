@@ -134,3 +134,42 @@ export async function duplicateIntakeFormTemplate(input: Actor & { sourceVersion
   return createIntakeFormTemplate({ key: input.key, name: input.name, description: input.description,
     definition, actorId: input.actorId })
 }
+
+type TemplateInput = Actor & { templateId: string }
+async function requireTemplateDraft(input: TemplateInput & { versionId: string }): Promise<IntakeFormVersionRow> {
+  requireActor(input.actorId)
+  const draft = await repository.getDraftRow(input.templateId)
+  if (!draft || draft.template_id !== input.templateId || draft.status !== 'draft') throw new IntakeFormNotFoundError()
+  if (draft.id !== input.versionId) throw new IntakeFormConflictError()
+  return draft
+}
+async function requireTemplateVersion(input: TemplateInput, versionId: string): Promise<void> {
+  requireActor(input.actorId)
+  const version = await requireVersion(versionId)
+  if (version.template_id !== input.templateId) throw new IntakeFormNotFoundError()
+}
+
+/** Resolve the single draft within the requested template before the guarded RPC. */
+export async function saveIntakeFormTemplateDraft(input: TemplateInput & { versionId: string; expectedLockVersion: number; definition: unknown }) {
+  const draft = await requireTemplateDraft(input)
+  return saveIntakeFormDraft({ versionId: draft.id, actorId: input.actorId,
+    expectedLockVersion: input.expectedLockVersion, definition: input.definition })
+}
+export async function discardIntakeFormTemplateDraft(input: TemplateInput & { versionId: string; expectedLockVersion: number }) {
+  const draft = await requireTemplateDraft(input)
+  return discardIntakeFormDraft({ versionId: draft.id, actorId: input.actorId, expectedLockVersion: input.expectedLockVersion })
+}
+export async function publishIntakeFormTemplateDraft(input: TemplateInput & { versionId: string; expectedLockVersion: number; expectedDefinitionHash: string }) {
+  const draft = await requireTemplateDraft(input)
+  return publishIntakeFormDraft({ versionId: draft.id, actorId: input.actorId,
+    expectedLockVersion: input.expectedLockVersion, expectedDefinitionHash: input.expectedDefinitionHash })
+}
+export async function duplicateIntakeFormTemplateFromTemplate(input: TemplateInput & { sourceVersionId: string; key: string; name: string; description?: string | null }) {
+  await requireTemplateVersion(input, input.sourceVersionId)
+  return duplicateIntakeFormTemplate({ sourceVersionId: input.sourceVersionId, key: input.key,
+    name: input.name, description: input.description, actorId: input.actorId })
+}
+export async function retireIntakeFormTemplateVersion(input: TemplateInput & { versionId: string }) {
+  await requireTemplateVersion(input, input.versionId)
+  return retireIntakeFormVersion({ versionId: input.versionId, actorId: input.actorId })
+}

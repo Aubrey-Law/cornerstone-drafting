@@ -188,6 +188,76 @@ beforeEach(() => {
 })
 
 describe('intake form lifecycle service', () => {
+  it('saves and discards the current draft identified by its template', async () => {
+    vi.mocked(repository.getDraftRow).mockResolvedValue(version())
+    vi.mocked(repository.discardDraftRow).mockResolvedValue(version())
+    await expect(service.saveIntakeFormTemplateDraft({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3,
+      definition: definition() })).resolves.toMatchObject({ draft: { lock_version: 4 } })
+    await service.discardIntakeFormTemplateDraft({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3 })
+    expect(repository.saveDraftRow).toHaveBeenCalledWith(expect.objectContaining({ versionId: 'version-1' }))
+    expect(repository.discardDraftRow).toHaveBeenCalledWith({ versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3 })
+  })
+
+  it('publishes the template current draft using both caller concurrency guards', async () => {
+    vi.mocked(repository.getDraftRow).mockResolvedValue(version())
+    vi.mocked(repository.publishDraftRow).mockResolvedValue(version(definition(), { status: 'published' }))
+    await expect(service.publishIntakeFormTemplateDraft({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3,
+      expectedDefinitionHash: version().definition_hash })).resolves.toMatchObject({ status: 'published' })
+    expect(repository.publishDraftRow).toHaveBeenCalledWith({ versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3,
+      expectedDefinitionHash: version().definition_hash })
+  })
+
+  it.each([null, version(definition(), { template_id: 'other-template' }), version(definition(), { status: 'published' })])('rejects a missing or mismatched current draft before mutation', async (row) => {
+    vi.mocked(repository.getDraftRow).mockResolvedValue(row)
+    const input = { templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 3 }
+    await expect(service.saveIntakeFormTemplateDraft({ ...input, definition: definition() })).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    await expect(service.discardIntakeFormTemplateDraft(input)).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    await expect(service.publishIntakeFormTemplateDraft({ ...input, expectedDefinitionHash: version().definition_hash })).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    expect(repository.saveDraftRow).not.toHaveBeenCalled()
+    expect(repository.discardDraftRow).not.toHaveBeenCalled()
+    expect(repository.publishDraftRow).not.toHaveBeenCalled()
+  })
+
+  it.each([null, version(definition(), { template_id: 'other-template', status: 'published' })])('rejects missing or cross-template duplicate and retirement sources', async (row) => {
+    vi.mocked(repository.getVersionRow).mockResolvedValue(row)
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1',
+      key: 'copy', name: 'Copy' })).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
+      .rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    expect(repository.createTemplateRow).not.toHaveBeenCalled()
+    expect(repository.retireVersionRow).not.toHaveBeenCalled()
+  })
+
+  it('duplicates and retires a selected version belonging to the requested template', async () => {
+    vi.mocked(repository.getVersionRow).mockResolvedValue(version(definition(), { status: 'published' }))
+    vi.mocked(repository.retireVersionRow).mockResolvedValue(version(definition(), { status: 'retired' }))
+    vi.mocked(repository.createTemplateRow).mockResolvedValue({ template: template({ key: 'copy' }), draft: version() })
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+      .resolves.toMatchObject({ template: { key: 'copy' } })
+    await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
+      .resolves.toMatchObject({ status: 'retired' })
+  })
+
+  it('rejects missing actor before scoped service reads', async () => {
+    await expect(service.saveIntakeFormTemplateDraft({ templateId: 'template-1', versionId: 'version-1', actorId: '', expectedLockVersion: 3, definition: definition() }))
+      .rejects.toBeInstanceOf(service.IntakeFormValidationError)
+    await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: '' }))
+      .rejects.toBeInstanceOf(service.IntakeFormValidationError)
+    expect(repository.getDraftRow).not.toHaveBeenCalled()
+    expect(repository.getVersionRow).not.toHaveBeenCalled()
+  })
+
+  it('conflicts when a replacement draft resets the old lock counter', async () => {
+    vi.mocked(repository.getDraftRow).mockResolvedValue(version(definition(), { id: 'replacement', lock_version: 0 }))
+    const input = { templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1', expectedLockVersion: 0 }
+    await expect(service.saveIntakeFormTemplateDraft({ ...input, definition: definition() })).rejects.toBeInstanceOf(service.IntakeFormConflictError)
+    await expect(service.discardIntakeFormTemplateDraft(input)).rejects.toBeInstanceOf(service.IntakeFormConflictError)
+    await expect(service.publishIntakeFormTemplateDraft({ ...input, expectedDefinitionHash: version().definition_hash })).rejects.toBeInstanceOf(service.IntakeFormConflictError)
+    expect(repository.saveDraftRow).not.toHaveBeenCalled()
+    expect(repository.discardDraftRow).not.toHaveBeenCalled()
+    expect(repository.publishDraftRow).not.toHaveBeenCalled()
+  })
+
   it('saves structurally valid incomplete drafts with deduplicated diagnostics', async () => {
     const raw = definition(); raw.sections.pop()
     await expect(save(raw)).resolves.toMatchObject({ draft: { lock_version: 4 }, diagnostics: [
