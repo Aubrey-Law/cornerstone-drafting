@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useRef, type ReactNode } from 'react'
+import { forwardRef, useId, useImperativeHandle, useRef, type ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 
 export interface GuidedSectionHandle {
@@ -36,6 +36,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
     children,
   }, ref) {
     const rootRef = useRef<HTMLDivElement>(null)
+    const bodyId = useId()
 
     useImperativeHandle(ref, () => ({
       scrollIntoView() {
@@ -109,6 +110,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
             textAlign: 'left',
           }}
           aria-expanded={open}
+          aria-controls={bodyId}
         >
           <span style={complete
             ? {
@@ -137,7 +139,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
             {complete ? <Check size={14} strokeWidth={3} /> : number}
           </span>
           <div style={{ flex: 1 }}>
-            <div style={{ font: '600 16px/1.3 var(--gi-sans)', color: 'var(--gi-ink)' }}>{title}</div>
+            <h2 style={{ margin: 0, font: '600 16px/1.3 var(--gi-sans)', color: 'var(--gi-ink)' }}>{title}</h2>
             {subtitle && (
               <div style={{ font: '400 12.5px/1.4 var(--gi-sans)', color: 'var(--gi-faint)' }}>
                 {subtitle}
@@ -149,7 +151,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
           </span>
         </button>
         {open && (
-          <div style={{ padding: '4px 22px 22px', borderTop: '1px solid var(--gi-divider)' }}>
+          <div id={bodyId} style={{ padding: '4px 22px 22px', borderTop: '1px solid var(--gi-divider)' }}>
             {children}
             {onContinue && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--gi-divider)' }}>
