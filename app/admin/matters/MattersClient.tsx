@@ -731,7 +731,15 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                         />
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {m.matter_number || '—'}
+                        {m.matter_number ? (
+                          <Link
+                            href={`/admin/matters/${m.matter_id}`}
+                            className="tabular-nums hover:text-foreground hover:underline"
+                            aria-label={`Open matter ${m.matter_number}`}
+                          >
+                            {m.matter_number}
+                          </Link>
+                        ) : '—'}
                       </TableCell>
                       <TableCell>
                         <Link

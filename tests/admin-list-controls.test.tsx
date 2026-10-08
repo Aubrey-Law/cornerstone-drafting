@@ -225,11 +225,19 @@ function visibleMatterNames(list: 'table' | 'phone' = 'table'): string[] {
   const container = list === 'table' ? screen.getByRole('table') : screen.getByRole('list', { name: 'Matters' })
   return within(container).getAllByRole('link')
     .filter(link => link.getAttribute('href')?.startsWith('/admin/matters/'))
+    // The matter number links to the same matter; the title is the name.
+    .filter(link => !link.getAttribute('aria-label')?.startsWith('Open matter '))
     .map(link => link.textContent ?? '')
     .filter(Boolean)
 }
 
 describe('matter list controls', () => {
+  it('links the matter number to the matter', () => {
+    render(<MattersClient matters={matterRows} />)
+    const link = within(screen.getByRole('table')).getByRole('link', { name: 'Open matter 2026-EP-003' })
+    expect(link.getAttribute('href')).toMatch(/^\/admin\/matters\/[^/]+$/)
+  })
+
   it('sorts the filtered matter rows from the Sort by control', async () => {
     const user = userEvent.setup()
     render(<MattersClient matters={matterRows} />)
