@@ -145,7 +145,7 @@ describe('visual intake editor', () => {
     }
     expect(itemOrder()).toEqual(['Your name', 'Relationship'])
     click('Preview')
-    click('Condition field "marital_status" must be available earlier in the form')
+    fireEvent.click(screen.getByRole('button', { name: /Condition field "marital_status" must be available earlier in the form/ }))
     await waitFor(() => expect(document.activeElement?.id).toBe('intake-builder-item-condition'))
     expect(screen.getByRole('button', { name: 'Build' }).getAttribute('aria-pressed')).toBe('true')
     expect((screen.getByLabelText('Item ID') as HTMLInputElement).value).toBe('name')
@@ -170,6 +170,8 @@ describe('visual intake editor', () => {
   it('limits condition fields, operators and approved select values', () => {
     mount(); click('Select item Your name')
     expect(within(screen.getByLabelText('Condition operator')).getAllByRole('option').map(o => o.textContent)).toEqual(['Equals', 'Not equals', 'Is set', 'All', 'Any'])
+    expect((within(screen.getByLabelText('Condition operator')).getByRole('option', { name: 'Equals' }) as HTMLOptionElement).disabled).toBe(false)
+    expect((within(screen.getByLabelText('Condition operator')).getByRole('option', { name: 'Not equals' }) as HTMLOptionElement).disabled).toBe(false)
     expect(within(screen.getByLabelText('Condition field')).getAllByRole('option').map(o => (o as HTMLOptionElement).value)).toEqual(['marital_status'])
     expect(within(screen.getByLabelText('Condition value')).getAllByRole('option').map(o => (o as HTMLOptionElement).value)).toEqual(catalog.fields.find(f => f.id === 'marital_status')!.options!.map(o => o.value))
     change('Condition operator', 'is_set')
@@ -186,7 +188,64 @@ describe('visual intake editor', () => {
     data.draft!.definition.sections[0].items.unshift({ kind: 'field', id: 'bool', fieldId: boolean.id }, { kind: 'field', id: 'multi', fieldId: multi.id })
     mount(data); click('Select item Your name'); change('Condition field', boolean.id)
     expect(within(screen.getByLabelText('Condition value')).getAllByRole('option').map(o => (o as HTMLOptionElement).value)).toEqual(['true', 'false'])
+    expect((within(screen.getByLabelText('Condition operator')).getByRole('option', { name: 'Equals' }) as HTMLOptionElement).disabled).toBe(false)
+    expect((within(screen.getByLabelText('Condition operator')).getByRole('option', { name: 'Not equals' }) as HTMLOptionElement).disabled).toBe(false)
     expect(within(screen.getByLabelText('Condition field')).queryByRole('option', { name: multi.label })).toBeNull()
+  })
+
+  it.each(['text', 'date'] as const)('authors only is-set leaves for %s controllers, including new group children', control => {
+    const data = fixture(); const controller = catalog.fields.find(f => f.control === control)!
+    data.draft!.definition.sections[0].items = [
+      { kind: 'field', id: 'controller', fieldId: controller.id, labelOverride: 'Controller' },
+      { kind: 'block', id: 'dependent', blockId: 'children', titleOverride: 'Dependent' },
+    ]
+    mount(data); click('Select item Dependent'); click('Add visibility condition')
+    expect((screen.getByLabelText('Condition operator') as HTMLSelectElement).value).toBe('is_set')
+    for (const name of ['Equals', 'Not equals']) expect((within(screen.getByLabelText('Condition operator')).getByRole('option', { name }) as HTMLOptionElement).disabled).toBe(true)
+    expect(screen.queryByLabelText('Condition value')).toBeNull()
+    change('Condition operator', 'all'); click('Add condition')
+    expect(screen.getAllByLabelText('Condition operator').map(input => (input as HTMLSelectElement).value)).toEqual(['all', 'is_set', 'is_set'])
+  })
+
+  it('switches to is-set when an authored comparison changes to a text controller and preserves stored unsupported comparisons for repair', () => {
+    const data = fixture()
+    data.draft!.definition.sections[0].items.unshift({ kind: 'field', id: 'text', fieldId: 'client_last_name' })
+    data.draft!.definition.sections[0].items[2].condition = { op: 'equals', fieldId: 'client_last_name', value: 'Preserve me' }
+    mount(data); click('Select item Your name')
+    expect((screen.getByLabelText('Condition operator') as HTMLSelectElement).value).toBe('equals')
+    expect((screen.getByLabelText('Condition value') as HTMLInputElement).value).toBe('Preserve me')
+    expect((screen.getByLabelText('Condition value') as HTMLInputElement).readOnly).toBe(true)
+    expect(screen.getByText('No unsaved changes')).toBeTruthy()
+    change('Condition field', 'marital_status')
+    expect((screen.getByLabelText('Condition operator') as HTMLSelectElement).value).toBe('equals')
+    change('Condition field', 'client_last_name')
+    expect((screen.getByLabelText('Condition operator') as HTMLSelectElement).value).toBe('is_set')
+    expect(screen.queryByLabelText('Condition value')).toBeNull()
+  })
+
+  it('labels repeated diagnostics by their form, section and item context and navigates each target independently', async () => {
+    const data = fixture()
+    data.draft!.definition.sections[0].condition = { op: 'is_set', fieldId: 'client_email' }
+    data.draft!.definition.sections[0].items[0].condition = { op: 'is_set', fieldId: 'client_email' }
+    data.draft!.definition.sections[0].items[1].condition = { op: 'is_set', fieldId: 'client_email' }
+    data.draft!.definition.sections[1].items = []
+    mount(data)
+    const checks = screen.getByRole('region', { name: 'Form checks' })
+    expect(within(checks).getAllByRole('button', { name: /Condition field "client_email" must be available earlier/ })).toHaveLength(3)
+    const targets = [
+      { context: /^Section: Family \(family\)/, control: 'intake-builder-section-condition', id: 'family', label: 'Section ID' },
+      { context: /Item: Relationship \(marital\)/, control: 'intake-builder-item-condition', id: 'marital', label: 'Item ID' },
+      { context: /Item: Your name \(name\)/, control: 'intake-builder-item-condition', id: 'name', label: 'Item ID' },
+    ]
+    for (const target of targets) {
+      expect(within(checks).getByRole('heading', { name: target.context })).toBeTruthy()
+      click('Preview')
+      fireEvent.click(within(checks).getByRole('button', { name: target.context }))
+      await waitFor(() => expect(document.activeElement?.id).toBe(target.control))
+      expect((screen.getByLabelText(target.label) as HTMLInputElement).value).toBe(target.id)
+    }
+    fireEvent.click(within(checks).getByRole('button', { name: /Form: Estate intake \(estate\).*shared unconditional review/ }))
+    await waitFor(() => expect(document.activeElement?.id).toBe('intake-builder-form-heading'))
   })
 
   it('blocks new groups at maximum condition depth', () => {

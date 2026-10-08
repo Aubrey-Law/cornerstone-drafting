@@ -78,7 +78,7 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
         onAddItem={id => { rememberFocus(); setCatalogSection(id) }} onRemove={target => { rememberFocus(); setRemoving(target) }} onMoveSection={(id, index) => change(moveSection(localDefinition, id, index))} onMoveItem={move} />
       {wide && <div className="sticky top-4 min-w-0 max-h-[calc(100vh-2rem)] overflow-auto">{inspector}</div>}
     </div> : <section aria-label="Form preview" className="rounded-lg border p-4"><h2 className="font-medium">Preview</h2><p className="text-sm text-muted-foreground">The read-only questionnaire preview is coming in the next builder step.</p></section>}
-    <IntakeFormDiagnostics diagnostics={diagnostics} onNavigate={navigate} />
+    <IntakeFormDiagnostics diagnostics={diagnostics} definition={localDefinition} catalog={catalog} onNavigate={navigate} />
     <IntakeCatalogDrawer definition={localDefinition} catalog={catalog} sectionId={catalogSection} onRestoreFocus={restoreFocus} onClose={() => setCatalogSection(null)} onAdd={item => {
       if (!catalogSection) return
       const next = addItem(localDefinition, catalogSection, item)

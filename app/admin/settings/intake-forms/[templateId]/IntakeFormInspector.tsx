@@ -21,8 +21,14 @@ function TextControl({ id, label, value, onChange, long = false, readOnly = fals
   return <Control id={id} label={label}>{long ? <Textarea {...props} /> : <Input {...props} />}</Control>
 }
 
-function defaultLeaf(field: BuilderCatalogField): Extract<IntakeCondition, { op: 'equals' }> {
-  return { op: 'equals', fieldId: field.id, value: field.control === 'boolean' ? true : field.options?.[0]?.value ?? '' }
+function supportsComparison(field: BuilderCatalogField | undefined): boolean {
+  return Boolean(field && (field.control === 'boolean' || field.options?.length))
+}
+
+function defaultLeaf(field: BuilderCatalogField): Exclude<IntakeCondition, { op: 'all' | 'any' }> {
+  return supportsComparison(field)
+    ? { op: 'equals', fieldId: field.id, value: field.control === 'boolean' ? true : field.options![0].value }
+    : { op: 'is_set', fieldId: field.id }
 }
 
 function ConditionNode({ condition, fields, id, onChange, depth = 1 }: {
@@ -30,19 +36,22 @@ function ConditionNode({ condition, fields, id, onChange, depth = 1 }: {
 }) {
   const compound = 'conditions' in condition
   const field = !compound ? fields.find(value => value.id === condition.fieldId) : undefined
+  const nextLeafField = compound ? fields[0] : field
+  const canCompare = supportsComparison(nextLeafField)
   function changeOperator(op: IntakeCondition['op']) {
     if (op === 'all' || op === 'any') {
       if (depth >= 5) return
       onChange({ op, conditions: compound ? condition.conditions : [condition] })
     } else {
+      if (op !== 'is_set' && !canCompare) return
       const leaf = compound ? fields[0] && defaultLeaf(fields[0]) : condition
       if (!leaf || 'conditions' in leaf) return
-      onChange(op === 'is_set' ? { op, fieldId: leaf.fieldId } : { op, fieldId: leaf.fieldId, value: 'value' in leaf ? leaf.value : field?.control === 'boolean' ? true : field?.options?.[0]?.value ?? '' })
+      onChange(op === 'is_set' ? { op, fieldId: leaf.fieldId } : { op, fieldId: leaf.fieldId, value: 'value' in leaf ? leaf.value : nextLeafField?.control === 'boolean' ? true : nextLeafField!.options![0].value })
     }
   }
   return <div className="space-y-3 rounded border p-3">
     <Control id={`${id}-operator`} label="Condition operator"><select id={`${id}-operator`} className={selectClass} value={condition.op} onChange={event => changeOperator(event.target.value as IntakeCondition['op'])}>
-      <option value="equals" disabled={compound && !fields.length}>Equals</option><option value="not_equals" disabled={compound && !fields.length}>Not equals</option><option value="is_set" disabled={compound && !fields.length}>Is set</option>
+      <option value="equals" disabled={!canCompare}>Equals</option><option value="not_equals" disabled={!canCompare}>Not equals</option><option value="is_set" disabled={compound && !fields.length}>Is set</option>
       <option value="all" disabled={depth >= 5}>All</option><option value="any" disabled={depth >= 5}>Any</option>
     </select></Control>
     {compound ? <div className="space-y-3">
@@ -56,7 +65,7 @@ function ConditionNode({ condition, fields, id, onChange, depth = 1 }: {
         const next = fields.find(value => value.id === event.target.value)
         if (!next) return
         const leaf = defaultLeaf(next)
-        onChange(condition.op === 'is_set' ? { op: 'is_set', fieldId: next.id } : { ...leaf, op: condition.op })
+        onChange(condition.op === 'is_set' || leaf.op === 'is_set' ? { op: 'is_set', fieldId: next.id } : { ...leaf, op: condition.op })
       }}>
         {!field && <option value={condition.fieldId} disabled>{condition.fieldId} (no longer eligible)</option>}
         {fields.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}
@@ -65,11 +74,12 @@ function ConditionNode({ condition, fields, id, onChange, depth = 1 }: {
         {field?.control === 'boolean' ? <select id={`${id}-value`} className={selectClass} value={typeof condition.value === 'boolean' ? String(condition.value) : `invalid:${condition.value}`} onChange={event => onChange({ ...condition, value: event.target.value === 'true' })}>
           {typeof condition.value !== 'boolean' && <option disabled value={`invalid:${condition.value}`}>{String(condition.value)} (invalid value)</option>}
           <option value="true">True</option><option value="false">False</option>
-        </select> : field?.options ? <select id={`${id}-value`} className={selectClass} value={String(condition.value)} onChange={event => onChange({ ...condition, value: event.target.value })}>
+        </select> : field?.options?.length ? <select id={`${id}-value`} className={selectClass} value={String(condition.value)} onChange={event => onChange({ ...condition, value: event.target.value })}>
           {!field.options.some(option => option.value === condition.value) && <option disabled value={String(condition.value)}>{String(condition.value)} (not an approved option)</option>}
           {field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select> : <Input id={`${id}-value`} value={String(condition.value)} readOnly={!field} onChange={event => onChange({ ...condition, value: event.target.value })} />}
+        </select> : <Input id={`${id}-value`} value={String(condition.value)} readOnly />}
       </Control>}
+      {field && condition.op !== 'is_set' && !canCompare && <p className="text-sm text-muted-foreground">This stored comparison is preserved. Choose Is set or a field with approved comparison values to repair it.</p>}
       {!field && <p className="text-sm text-muted-foreground">This stored condition is preserved. Move its field earlier or select an eligible field.</p>}
     </>}
   </div>
