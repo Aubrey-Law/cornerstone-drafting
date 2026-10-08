@@ -39,6 +39,44 @@ describe('intake builder lifecycle', () => {
     click('Edit'); await screen.findByRole('button', { name: 'Save draft' }); expect(disabled('Add section')).toBe(false)
     expect(fetch).toHaveBeenCalledWith('/api/admin/settings/intake-forms/t1/draft', expect.objectContaining({ method: 'POST', body: JSON.stringify({ sourceVersionId: 'v1' }) }))
   })
+  it.each(['publish', 'retire'] as const)('preserves source state and selection for malformed %s transitions', async action => {
+    for (const mismatch of ['lock', 'definition', 'hash', 'id', 'version', 'template', 'status']) {
+      const source = fixture(action === 'publish' ? 'draft' : 'published')
+      mount(source); click('Select section Review')
+      const returned = { ...fixture(action === 'publish' ? 'published' : 'retired').versions[0] }
+      if (mismatch === 'lock') returned.lock_version = 3
+      if (mismatch === 'definition') returned.definition = { ...returned.definition, title: 'Unexpected definition' }
+      if (mismatch === 'hash') returned.definition_hash = 'b'.repeat(64)
+      if (mismatch === 'id') returned.id = 'other'
+      if (mismatch === 'version') returned.version = 2
+      if (mismatch === 'template') returned.template_id = 'other'
+      if (mismatch === 'status') returned.status = source.versions[0].status
+      vi.mocked(fetch).mockResolvedValueOnce(response({ version: returned }))
+      click(action === 'publish' ? 'Publish' : 'Retire'); click(`Confirm ${action}`)
+      await screen.findByText(/server returned an invalid/)
+      expect((screen.getByLabelText('Section title') as HTMLInputElement).value).toBe('Review')
+      expect(screen.getByRole('button', { name: action === 'publish' ? 'Discard draft' : 'Retire' })).toBeTruthy()
+      expect(disabled('Add section')).toBe(action === 'retire')
+      cleanup()
+    }
+  })
+  it.each(['definition', 'hash', 'lock', 'id', 'empty-id', 'version', 'template', 'status'])('rejects a next draft with mismatched %s and preserves immutable selection', async mismatch => {
+    mount(fixture('published')); click('Select section Review')
+    const returned: IntakeFormVersionRow = { ...fixture().draft!, id: 'v2', version: 2, lock_version: 0 }
+    if (mismatch === 'definition') returned.definition = { ...returned.definition, title: 'Unexpected definition' }
+    if (mismatch === 'hash') returned.definition_hash = 'b'.repeat(64)
+    if (mismatch === 'lock') returned.lock_version = 1
+    if (mismatch === 'id') returned.id = 'v1'
+    if (mismatch === 'empty-id') returned.id = ''
+    if (mismatch === 'version') returned.version = 4
+    if (mismatch === 'template') returned.template_id = 'other'
+    if (mismatch === 'status') returned.status = 'published'
+    vi.mocked(fetch).mockResolvedValueOnce(response({ draft: returned, diagnostics: [] }))
+    click('Edit'); await screen.findByText(/server returned an invalid/)
+    expect((screen.getByLabelText('Section title') as HTMLInputElement).value).toBe('Review')
+    expect(screen.getByText('Read-only version')).toBeTruthy(); expect(disabled('Add section')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Discard draft' })).toBeNull()
+  })
   it('prevents creating the next draft for an archived template', () => {
     const data = fixture('published'); data.template.archived_at = date; mount(data); expect(disabled('Edit')).toBe(true); click('Edit'); expect(fetch).not.toHaveBeenCalled()
   })

@@ -16,7 +16,7 @@ const templateSchema = z.object({
   created_by: z.string(), created_at: z.string(), updated_at: z.string(),
 }).strict()
 const versionSchema = z.object({
-  id: z.string(), template_id: z.string(), version: z.number().int().positive(), status: z.enum(['draft', 'published', 'retired']),
+  id: z.string().min(1), template_id: z.string(), version: z.number().int().positive(), status: z.enum(['draft', 'published', 'retired']),
   definition: z.unknown(), definition_hash: z.string().regex(/^[0-9a-f]{64}$/), lock_version: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   created_by: z.string(), created_at: z.string(), updated_at: z.string(), published_at: z.string().nullable(), published_by: z.string().nullable(),
 }).strict()
@@ -140,10 +140,14 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     const draft = snapshot.draft
     if (!draft || readOnly || requestStatus === 'conflict') return
     await request(async () => {
-      const envelope = z.object({ draft: z.unknown(), diagnostics: diagnosticsSchema }).strict().safeParse(await jsonRequest('/draft', 'PUT', { versionId: draft.id, expectedLockVersion: draft.lock_version, definition: localDefinition }))
+      const submitted = parseIntakeFormDefinition(localDefinition)
+      if (!submitted.success) throw invalidResponse()
+      const submittedFingerprint = definitionFingerprint(submitted.data)
+      const envelope = z.object({ draft: z.unknown(), diagnostics: diagnosticsSchema }).strict().safeParse(await jsonRequest('/draft', 'PUT', { versionId: draft.id, expectedLockVersion: draft.lock_version, definition: submitted.data }))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.draft, snapshot.template, 'draft', draft.id)
-      if (next.version !== draft.version || next.lock_version <= draft.lock_version) throw invalidResponse()
+      if (next.version !== draft.version || next.lock_version !== draft.lock_version + 1 ||
+        definitionFingerprint(next.definition) !== submittedFingerprint) throw invalidResponse()
       replaceVersion(next, envelope.data.diagnostics)
     })
   }
@@ -168,7 +172,8 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const envelope = z.object({ version: z.unknown() }).strict().safeParse(await jsonRequest('/publish', 'POST', { versionId: draft.id, expectedLockVersion: draft.lock_version, expectedDefinitionHash: draft.definition_hash }))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.version, snapshot.template, 'published', draft.id)
-      if (next.version !== draft.version || next.definition_hash !== draft.definition_hash || definitionFingerprint(next.definition) !== definitionFingerprint(savedDefinition)) throw invalidResponse()
+      if (next.version !== draft.version || next.lock_version !== draft.lock_version || next.definition_hash !== draft.definition_hash ||
+        definitionFingerprint(next.definition) !== definitionFingerprint(draft.definition)) throw invalidResponse()
       replaceVersion(next)
     })
   }
@@ -191,7 +196,8 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const envelope = z.object({ version: z.unknown() }).strict().safeParse(await jsonRequest(`/versions/${encodeURIComponent(version.id)}/retire`, 'POST', {}))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.version, snapshot.template, 'retired', version.id)
-      if (next.version !== version.version || next.definition_hash !== version.definition_hash || definitionFingerprint(next.definition) !== definitionFingerprint(savedDefinition)) throw invalidResponse()
+      if (next.version !== version.version || next.lock_version !== version.lock_version || next.definition_hash !== version.definition_hash ||
+        definitionFingerprint(next.definition) !== definitionFingerprint(version.definition)) throw invalidResponse()
       replaceVersion(next)
     })
   }
@@ -201,7 +207,9 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const envelope = z.object({ draft: z.unknown(), diagnostics: diagnosticsSchema }).strict().safeParse(await jsonRequest('/draft', 'POST', { sourceVersionId: version.id }))
       if (!envelope.success) throw invalidResponse()
       const next = parseVersion(envelope.data.draft, snapshot.template, 'draft')
-      if (next.version <= version.version || snapshot.versions.some(value => value.id === next.id)) throw invalidResponse()
+      const nextVersionNumber = Math.max(...snapshot.versions.map(value => value.version)) + 1
+      if (next.version !== nextVersionNumber || snapshot.versions.some(value => value.id === next.id) || next.lock_version !== 0 ||
+        next.definition_hash !== version.definition_hash || definitionFingerprint(next.definition) !== definitionFingerprint(version.definition)) throw invalidResponse()
       replaceVersion(next, envelope.data.diagnostics)
     })
   }

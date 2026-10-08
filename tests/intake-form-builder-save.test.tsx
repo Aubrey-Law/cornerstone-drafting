@@ -27,11 +27,32 @@ describe('intake builder explicit save and recovery', () => {
     const saved = { ...fixture().draft!, lock_version: 3, definition_hash: 'b'.repeat(64), definition: { ...fixture().draft!.definition, title: 'Changed title' } }
     vi.mocked(fetch).mockResolvedValue(response({ draft: saved, diagnostics: [] }))
     click('Save draft'); await screen.findByText('No unsaved changes')
-    expect(fetch).toHaveBeenCalledWith('/api/admin/settings/intake-forms/t1/draft', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ versionId: 'v1', expectedLockVersion: 2, definition: saved.definition }) }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/settings/intake-forms/t1/draft', expect.objectContaining({ method: 'PUT' }))
+    expect(JSON.parse(vi.mocked(fetch).mock.lastCall![1]!.body as string)).toEqual({ versionId: 'v1', expectedLockVersion: 2, definition: saved.definition })
     vi.mocked(fetch).mockResolvedValue(response({ draft: { ...saved, lock_version: 4, definition: { ...saved.definition, title: 'Next edit' } }, diagnostics: [] }))
     edit('Next edit'); click('Save draft')
     await screen.findByText('No unsaved changes')
     expect(JSON.parse(vi.mocked(fetch).mock.lastCall![1]!.body as string)).toEqual({ versionId: 'v1', expectedLockVersion: 3, definition: { ...saved.definition, title: 'Next edit' } })
+  })
+
+  it.each(['definition', 'jumped-lock', 'unchanged-lock', 'version', 'id'])('rejects a shape-valid save with mismatched %s without losing edits or selection', async mismatch => {
+    mount(); click('Select section Review')
+    fireEvent.change(screen.getByLabelText('Section title'), { target: { value: 'Local review' } })
+    const definition = { ...fixture().draft!.definition, sections: [{ ...fixture().draft!.definition.sections[0], title: 'Local review' }] }
+    const returned = { ...fixture().draft!, lock_version: 3, definition }
+    if (mismatch === 'definition') returned.definition = fixture().draft!.definition
+    if (mismatch === 'jumped-lock') returned.lock_version = 5
+    if (mismatch === 'unchanged-lock') returned.lock_version = 2
+    if (mismatch === 'version') returned.version = 2
+    if (mismatch === 'id') returned.id = 'other'
+    vi.mocked(fetch).mockResolvedValueOnce(response({ draft: returned, diagnostics: [] }))
+    click('Save draft'); await screen.findByText(/server returned an invalid/)
+    expect((screen.getByLabelText('Section title') as HTMLInputElement).value).toBe('Local review')
+    expect(screen.queryByText('No unsaved changes')).toBeNull()
+    const valid = { ...fixture().draft!, lock_version: 3, definition }
+    vi.mocked(fetch).mockResolvedValueOnce(response({ draft: valid, diagnostics: [] }))
+    click('Retry save'); await screen.findByText('No unsaved changes')
+    expect(JSON.parse(vi.mocked(fetch).mock.lastCall![1]!.body as string).expectedLockVersion).toBe(2)
   })
 
   it.each(['network', '500', 'malformed', 'wrong-template', 'wrong-status'])('retains edits after a %s failure and offers retry', async failure => {
