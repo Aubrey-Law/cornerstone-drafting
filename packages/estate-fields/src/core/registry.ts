@@ -13,9 +13,11 @@ import {
   LEGACY_ESTATE_VALUE_OPTIONS,
 } from './assets'
 import { normalizeCitizenship, normalizeCounty, normalizeMaritalStatus, trimString } from './normalize'
-import type { SharedFieldDef, SharedFieldId } from './types'
+import { BUILDER_FIELD_IDS, INTAKE_SCALAR_FIELD_DEFS, createBuilderField } from './intakeCatalog'
+import type { BuilderFieldDef, SharedFieldDef, SharedFieldId } from './types'
 
 const defs: Record<SharedFieldId, SharedFieldDef> = {
+  ...INTAKE_SCALAR_FIELD_DEFS,
   client_name: {
     id: 'client_name',
     label: 'Full Legal Name',
@@ -328,3 +330,28 @@ export const SHARED_PREFILLED_DESIGN_KEYS = new Set(
 )
 
 export const SHARED_FIELD_IDS = Object.keys(defs) as SharedFieldId[]
+
+const builderDefs = new Map<string, BuilderFieldDef>(
+  BUILDER_FIELD_IDS.map((id) => {
+    const builder = createBuilderField(defs[id])
+    // Annotate the shared definition without replacing existing mapping data.
+    defs[id].builderEnabled = true
+    defs[id].baselineRequirement = builder.baselineRequirement
+    defs[id].validationProfile = builder.validationProfile
+    return [id, builder]
+  }),
+)
+
+export function getBuilderField(id: string): BuilderFieldDef {
+  const field = builderDefs.get(id)
+  if (!field) throw new Error(`Unknown builder field: ${id}`)
+  return field
+}
+
+export function readBuilderFieldValue(id: string, data: Readonly<Record<string, unknown>>): unknown {
+  return getBuilderField(id).read(data)
+}
+
+export function writeBuilderFieldValue(id: string, value: unknown, update: (field: string, value: unknown) => void): void {
+  getBuilderField(id).write(value, update)
+}

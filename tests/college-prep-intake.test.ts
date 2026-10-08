@@ -63,6 +63,13 @@ function completeCollegePrepIntake(overrides: IntakeRow = {}): IntakeRow {
 }
 
 describe('intake track resolution', () => {
+  it('keeps contact-only college submission and validation isolated from estate rules', () => {
+    const data = { ...COLLEGE_TRACK, first_name: 'Rowan', last_name: 'Delgado', email: 'rowan@example.com', phone: '(617) 555-0142' }
+    expect(getSubmissionErrors(data)).toEqual([])
+    expect(isReadyToReview(data)).toBe(true)
+    expect(getRequiredSteps(data).map(({ id }) => id)).toEqual(['cp_student', 'cp_school', 'cp_parents', 'cp_agents', 'cp_dpoa', 'cp_hipaa', 'cp_living_will'])
+    expect(getStepErrors('cp_living_will', data).map(({ message }) => message)).toEqual(['Choose whether to include a living will.'])
+  })
   it('defaults to the estate questionnaire', () => {
     expect(getIntakeTrack({})).toBe('estate')
     expect(getIntakeTrack({ intake_track: 'nonsense' })).toBe('estate')

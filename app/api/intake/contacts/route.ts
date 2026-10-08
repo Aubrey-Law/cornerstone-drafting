@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
-import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
+import { AdditionalContactInputError, saveAdditionalContacts } from '@/lib/contacts/saveAdditionalContacts'
+import { IntakeFiduciaryInputError, validateIntakeFiduciaryInput } from '@/lib/contacts/intakeFiduciaryInput'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneForStorage } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
@@ -68,28 +70,45 @@ function makeUserClient(token: string) {
 
 export async function POST(req: Request) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // Verify the user is authenticated
-  const userClient = makeUserClient(token)
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+  const publicToken = req.headers.get('x-intake-token')
+  if (!token && !publicToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let bearerUserId: string | undefined
+  if (!publicToken) {
+    const userClient = makeUserClient(token!)
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    bearerUserId = user.id
+  }
   const admin = getAdminClient()
   const body = await req.json()
   const { action, intakeId } = body
 
   if (!intakeId) return NextResponse.json({ error: 'intakeId required' }, { status: 400 })
 
-  // Verify the intake belongs to this user (either portal ownership column).
-  const ownedOrClause = `user_id.eq.${user.id},client_user_id.eq.${user.id}`
-  const { data: intake } = await admin
-    .from('client_intake')
-    .select('id')
-    .eq('id', intakeId)
-    .or(ownedOrClause)
-    .maybeSingle()
-  if (!intake) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (publicToken) {
+    // Public capability is restricted to its unregistered, editable household.
+    // Never fall back to a bearer session when an invite fails validation.
+    const intake = await resolveIntakeByInviteToken(admin, publicToken)
+    if (!intake || intake.id !== intakeId || intake.user_id || intake.client_user_id) {
+      return NextResponse.json({ error: 'Invalid or expired intake token' }, { status: 401 })
+    }
+    if (intake.status === 'submitted' || intake.status === 'approved') {
+      return NextResponse.json({ error: 'Intake is locked. Contact your attorney to make changes.' }, { status: 409 })
+    }
+    if (!['save_spouse', 'save_children', 'save_additional_contacts', 'save_fiduciaries'].includes(action)) {
+      return NextResponse.json({ error: 'Unsupported public contact action' }, { status: 403 })
+    }
+  } else {
+    // Verify the intake belongs to this user (either portal ownership column).
+    const ownedOrClause = `user_id.eq.${bearerUserId},client_user_id.eq.${bearerUserId}`
+    const { data: intake } = await admin
+      .from('client_intake')
+      .select('id')
+      .eq('id', intakeId)
+      .or(ownedOrClause)
+      .maybeSingle()
+    if (!intake) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     if (action === 'upsert_contact') {
@@ -168,31 +187,20 @@ export async function POST(req: Request) {
     }
 
     if (action === 'save_fiduciaries') {
-      const { entries, role, forParty } = body
-
-      const validEntries: Array<Record<string, unknown>> = (entries ?? []).filter(
-        (e: Record<string, unknown>) => e.first_name || e.last_name
-      )
-
-      // Wipe existing roles of this type. delete().eq() chains operate on
-      // the matching rows directly — no need to pre-fetch the ids.
-      const [, existingContacts] = await Promise.all([
-        admin
-          .from('contact_roles')
-          .delete()
-          .eq('client_intake_id', intakeId)
-          .eq('role', role)
-          .eq('for_party', forParty),
-        validEntries.length > 0
+      const { role, forParty } = body
+      const validEntries = validateIntakeFiduciaryInput(body)
+      // Validate semantics and every scoped identity before the first mutation.
+      const existingContacts = validEntries.length > 0
           ? admin
               .from('contacts')
               .select('id, first_name, last_name')
               .eq('client_intake_id', intakeId)
-          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }> }),
-      ])
+          : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string }>, error: null })
+      const contactsResult = await existingContacts
+      if (contactsResult.error) throw new Error(contactsResult.error.message)
 
       const contactRows =
-        (existingContacts.data ?? []) as Array<{ id: string; first_name: string; last_name: string }>
+        (contactsResult.data ?? []) as Array<{ id: string; first_name: string; last_name: string }>
 
       const byName = new Map<string, string>()
       const intakeContactIds = new Set<string>()
@@ -200,6 +208,12 @@ export async function POST(req: Request) {
         byName.set(contactKey(c.first_name, c.last_name), c.id)
         intakeContactIds.add(c.id)
       }
+      for (const entry of validEntries) {
+        if (entry.contact_id && !intakeContactIds.has(entry.contact_id as string)) throw new IntakeFiduciaryInputError('Fiduciary contact does not belong to this intake')
+      }
+      const { error: deleteError } = await admin.from('contact_roles').delete()
+        .eq('client_intake_id', intakeId).eq('role', role).eq('for_party', forParty)
+      if (deleteError) throw new Error(deleteError.message)
 
       const updates: Array<Promise<unknown>> = []
       const inserts: Array<{ entry: Record<string, unknown>; payload: Record<string, unknown> }> = []
@@ -295,59 +309,13 @@ export async function POST(req: Request) {
     }
 
     if (action === 'save_additional_contacts') {
-      const { contacts: nominees } = body
-      await admin
-        .from('contacts')
-        .delete()
-        .eq('client_intake_id', intakeId)
-        .eq('source', CLIENT_INTAKE_ADDITIONAL_SOURCE)
-
-      const rows = (nominees ?? [])
-        .filter(
-          (c: Record<string, unknown>) =>
-            String(c.first_name ?? '').trim() && String(c.last_name ?? '').trim(),
-        )
-        .map((c: Record<string, unknown>) => {
-          const patch = contactPayloadFromEntry({
-            middle_name: c.middle_name,
-            street: c.street,
-            city: c.city,
-            state: c.state,
-            zip: c.zip,
-            relationship: c.relationship,
-            phone: c.phone,
-            email: c.email,
-            address: c.address,
-          })
-          return {
-            client_intake_id: intakeId,
-            relationship_type: normalizeContactRelationshipType('other'),
-            first_name: String(c.first_name).trim(),
-            last_name: String(c.last_name).trim(),
-            suffix:
-              typeof c.suffix === 'string' && c.suffix.trim() ? c.suffix.trim() : null,
-            ...patch,
-            source: CLIENT_INTAKE_ADDITIONAL_SOURCE,
-            created_by_client_at: new Date().toISOString(),
-          }
-        })
-
-      if (rows.length > 0) {
-        const { data: created, error } = await admin
-          .from('contacts').insert(rows).select('id, relationship_type')
-        if (error) throw error
-        const additionalMatterId = await matterIdForIntake(admin, intakeId)
-        for (const row of (created ?? []) as Array<{ id: string; relationship_type: string | null }>) {
-          await attachContactToMatter(admin, additionalMatterId, row.id, {
-            relationship_type: row.relationship_type ?? 'other',
-          })
-        }
-      }
+      await saveAdditionalContacts(admin, intakeId, body.contacts ?? [])
       return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err) {
+    if (err instanceof AdditionalContactInputError || err instanceof IntakeFiduciaryInputError) return NextResponse.json({ error: err.message }, { status: 400 })
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[intake/contacts] ${action} error:`, err)
     return NextResponse.json({ error: msg }, { status: 500 })

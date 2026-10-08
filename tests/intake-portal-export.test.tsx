@@ -305,7 +305,7 @@ describe('portal review export — wiring', () => {
 
   it('sends the portal caller\'s own credentials with the download', () => {
     const review = fs.readFileSync(
-      path.join(process.cwd(), 'components/intake/IntakeQuestionnaireReview.tsx'),
+      path.join(process.cwd(), 'components/intake/IntakeQuestionnaireReviewContent.tsx'),
       'utf8',
     )
 

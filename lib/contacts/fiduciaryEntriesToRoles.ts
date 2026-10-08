@@ -16,12 +16,12 @@
  *     fid_hcp_spouse:          [...],
  *   }
  *
- * The slot key encodes role + for_party. The array index encodes priority
- * (index 0 -> priority 1 = primary, index 1 -> priority 2 = alternate).
+ * The slot key encodes role + for_party. Explicit priority/coagent metadata
+ * takes precedence; array order is a fallback only for legacy entries.
  *
  * F1 only handles the 5 admin-managed roles at priorities 1-2 and treats
- * every entry as `is_coagent: false`. Co-agents and higher priorities are
- * F2+ territory.
+ * only principals as `is_coagent: false`. Co-agents and higher priorities are
+ * owned by the strict contact endpoint and must be left untouched here.
  */
 
 import { FIDUCIARY_INTAKE_SLOT_MAP } from '@/lib/sharedFields/fiduciaries'
@@ -30,6 +30,7 @@ export type FiduciaryRole = 'personal_rep' | 'trustee' | 'poa' | 'hcp' | 'guardi
 export type FiduciaryForParty = 'client' | 'spouse'
 
 export interface FiduciaryRoleEntry {
+  contact_id?: string
   role: FiduciaryRole
   for_party: FiduciaryForParty
   priority: number
@@ -71,15 +72,16 @@ export function fiduciaryEntriesToRoles(input: unknown): FiduciaryRoleEntry[] {
     if (!Array.isArray(arr)) continue
 
     arr.forEach((raw, idx) => {
-      const priority = idx + 1
-      if (priority > MAX_PRIORITY) return
-
       if (!isPlainObject(raw)) return
+      if (raw.is_coagent === true) return
+      const priority = Object.prototype.hasOwnProperty.call(raw, 'priority') ? raw.priority : idx + 1
+      if (typeof priority !== 'number' || !Number.isInteger(priority) || priority < 1 || priority > MAX_PRIORITY) return
       const first_name = trimString(raw.first_name)
       const last_name = trimString(raw.last_name)
       if (!first_name && !last_name) return
 
       out.push({
+        ...(trimString(raw.contact_id) ? { contact_id: trimString(raw.contact_id) } : {}),
         role: slotInfo.role,
         for_party: slotInfo.for_party,
         priority,

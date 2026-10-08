@@ -9,7 +9,8 @@ import { Check, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { composedAddressOneLine, wizardStreetLine } from '@/lib/intakeContactAddress'
 import { ContactPickerField } from '@/components/intake/FiduciaryContactPicker'
-import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
+import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReviewContent'
+import { getActiveSteps, getStepIssues } from '@/lib/intake/legacySections'
 import { formatPhoneInput } from '@/lib/phone'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -748,7 +749,23 @@ function AssetSummary({ assetKey, data, clientName, spouseName }: {
 
 // ─── StepEstate ────────────────────────────────────────────────
 
-export function StepEstate({ data, update }: StepProps) {
+export function StepEstate(props: StepProps) {
+  return (
+    <div className="space-y-6">
+      <FormField label="Estimated Total Estate Value">
+        <IntakeField
+          fieldId="estate_value"
+          value={props.data.estate_value}
+          onChange={(v) => props.update('estate_value', v)}
+          placeholder="Select a range"
+        />
+      </FormField>
+      <FinancialAssetsBlock {...props} />
+    </div>
+  )
+}
+
+export function FinancialAssetsBlock({ data, update }: StepProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null)
   const assetCheckboxId = useId()
 
@@ -841,15 +858,6 @@ export function StepEstate({ data, update }: StepProps) {
 
   return (
     <div className="space-y-6">
-      <FormField label="Estimated Total Estate Value">
-        <IntakeField
-          fieldId="estate_value"
-          value={data.estate_value}
-          onChange={(v) => update('estate_value', v)}
-          placeholder="Select a range"
-        />
-      </FormField>
-
       <FormField label="What types of assets do you own?">
         <p className="mb-2 text-xs text-muted-foreground">
           Check everything that applies. Tap &quot;Add details&quot; only if you want to share more now — it is optional.
@@ -924,15 +932,25 @@ export function StepEstate({ data, update }: StepProps) {
   )
 }
 
-export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepProps) {
-  const currentGoals = (data.planning_goals as string[]) ?? (data.goals as string[]) ?? []
-  function toggleGoal(goal: string) {
-    const updated = currentGoals.includes(goal)
-      ? currentGoals.filter((g) => g !== goal)
-      : [...currentGoals, goal]
-    update('planning_goals', updated)
-  }
+export function StepGoals(props: StepProps) {
+  return (
+    <div className="space-y-6">
+      <PlanningObjectivesBlock {...props} />
+      <PlanningGoalsField {...props} />
+      <ExistingDocumentUploadsBlock {...props} />
+      <FormField label="Anything else you'd like us to know?">
+        <Textarea
+          value={(props.data.special_notes as string) ?? ''}
+          onChange={(e) => props.update('special_notes', e.target.value)}
+          rows={4}
+          placeholder="Any specific concerns, questions, or wishes you'd like to share..."
+        />
+      </FormField>
+    </div>
+  )
+}
 
+export function PlanningObjectivesBlock({ data, update }: StepProps) {
   // Guard the shape: legacy rows can surface this as a JSON string or admin
   // free text; spreading a string would corrupt it into a char-indexed object.
   const rawObjectives = data.planning_objectives
@@ -982,6 +1000,16 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
         </WhyWeAsk>
       </FormField>
 
+    </div>
+  )
+}
+
+function PlanningGoalsField({ data, update }: StepProps) {
+  const currentGoals = (data.planning_goals as string[]) ?? (data.goals as string[]) ?? []
+  function toggleGoal(goal: string) {
+    update('planning_goals', currentGoals.includes(goal) ? currentGoals.filter((g) => g !== goal) : [...currentGoals, goal])
+  }
+  return (
       <FormField label="What are your estate planning goals?">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PLANNING_GOAL_OPTIONS.map((goal) => {
@@ -1016,7 +1044,12 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           })}
         </div>
       </FormField>
+  )
+}
 
+export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicIntakeToken, disabled }: StepProps & { disabled?: boolean }) {
+  return (
+    <div className="space-y-6">
       <SectionDivider title="Additional Planning Information" />
 
       <FormField label="Do you have a will, trust, or other estate planning document?">
@@ -1029,6 +1062,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="existing_plan"
+            disabled={disabled}
             label="will, trust, or other estate planning documents"
             publicIntakeToken={publicIntakeToken}
           />
@@ -1045,6 +1079,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="divorce_settlement"
+            disabled={disabled}
             label="divorce or property settlement order"
             publicIntakeToken={publicIntakeToken}
           />
@@ -1069,20 +1104,13 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           <IntakeDocumentUpload
             intakeId={intakeId}
             kind="gift_tax_return"
+            disabled={disabled}
             label="federal or state gift tax returns"
             publicIntakeToken={publicIntakeToken}
           />
         )}
       </FormField>
 
-      <FormField label="Anything else you'd like us to know?">
-        <Textarea
-          value={(data.special_notes as string) ?? ''}
-          onChange={(e) => update('special_notes', e.target.value)}
-          rows={4}
-          placeholder="Any specific concerns, questions, or wishes you'd like to share..."
-        />
-      </FormField>
     </div>
   )
 }
@@ -1701,9 +1729,16 @@ export function StepReview({
 }) {
   return (
     <IntakeQuestionnaireReview
+      selectors={{ getActiveSteps, getStepIssues }}
       data={data}
       intakeId={intakeId}
       publicIntakeToken={publicIntakeToken}
     />
   )
 }
+
+export const AdditionalContactsBlock = StepAdditionalContacts
+export const ClientFiduciariesBlock = StepFiduciaries
+export const SpouseFiduciariesBlock = StepSpouseFiduciaries
+export const GuardianBlock = StepGuardian
+export const ReviewSubmitBlock = StepReview

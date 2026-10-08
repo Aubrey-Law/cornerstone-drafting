@@ -133,10 +133,12 @@ describe('getLeadIntakeProgress', () => {
   it('requires active spouse and guardian fiduciaries', () => {
     expect(progressFor(completeSingleIntake).fiduciaries).toBe(true)
     expect(progressFor({ ...completeSingleIntake, marital_status: 'married' }).fiduciaries).toBe(false)
-    expect(progressFor({ ...completeSingleIntake, has_minor_children: true }).fiduciaries).toBe(false)
+    expect(progressFor({ ...completeSingleIntake, has_children: true, has_minor_children: true }).fiduciaries).toBe(false)
+    expect(progressFor({ ...completeSingleIntake, has_children: false, has_minor_children: true }).fiduciaries).toBe(true)
     expect(progressFor({
       ...completeSingleIntake,
       marital_status: 'married',
+      has_children: true,
       has_minor_children: true,
       _fid_personal_rep_spouse: [{ first_name: 'John', last_name: 'Representative' }],
       _fid_poa_spouse: [{ first_name: 'John', last_name: 'Agent' }],

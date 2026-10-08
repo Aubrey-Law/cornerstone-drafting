@@ -261,7 +261,23 @@ export function StepCollegeSchool({ data, update }: StepProps) {
 
 // ── C. Parents & guardians ───────────────────────────────────────────────────
 
-export function StepCollegeParents({ data, update }: StepProps) {
+export function StepCollegeParents(props: StepProps) {
+  return (
+    <div className="space-y-5">
+      <CollegeParentsBlock {...props} />
+      <SectionDivider />
+      <NotesField
+        label="Family circumstances we should know about"
+        hint="Divorce or separation, a parent living abroad, estrangement, a family member with health issues, or anything else that affects who should be named. This helps us avoid recommending someone the student would not actually want called."
+        value={str(props.data, 'college_family_circumstances')}
+        onChange={(v) => props.update('college_family_circumstances', v)}
+        rows={4}
+      />
+    </div>
+  )
+}
+
+export function CollegeParentsBlock({ data, update }: StepProps) {
   const parents = ((data._additional_contacts as AdditionalContactEntry[]) ?? []).filter(Boolean)
 
   function syncAddress(row: AdditionalContactEntry): AdditionalContactEntry {
@@ -411,23 +427,30 @@ export function StepCollegeParents({ data, update }: StepProps) {
       ))}
 
       <AddButton onClick={addParent} label="Add parent or guardian" />
-
-      <SectionDivider />
-
-      <NotesField
-        label="Family circumstances we should know about"
-        hint="Divorce or separation, a parent living abroad, estrangement, a family member with health issues, or anything else that affects who should be named. This helps us avoid recommending someone the student would not actually want called."
-        value={str(data, 'college_family_circumstances')}
-        onChange={(v) => update('college_family_circumstances', v)}
-        rows={4}
-      />
     </div>
   )
 }
 
 // ── D. Agent designations ────────────────────────────────────────────────────
 
-export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
+export function StepCollegeAgents(props: StepProps) {
+  return (
+    <div className="space-y-8">
+      <CollegeAgentsBlock {...props} />
+      <SectionDivider />
+      <CollegeHipaaRecipientsBlock {...props} />
+      <NotesField
+        label="Anyone who should specifically NOT receive access"
+        hint="Naming someone here is not an accusation — it is an instruction we can put in writing so a provider is never left guessing."
+        value={str(props.data, 'college_excluded_people')}
+        onChange={(v) => props.update('college_excluded_people', v)}
+        rows={3}
+      />
+    </div>
+  )
+}
+
+export function CollegeAgentsBlock({ data, update, intakeId }: StepProps) {
   const id = intakeId ?? ''
   const name = studentFirstName(data)
   const home = intakeResidentialAddress(data)
@@ -470,18 +493,6 @@ export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
   const allLocalContacts = [studentEntry, ...parentEntries, ...poaEntries, ...hcpEntries].filter(
     (entry) => entry.first_name && entry.last_name,
   )
-
-  const recipients = (data.college_hipaa_recipients as CollegeHipaaRecipient[]) ?? []
-
-  function setRecipients(next: CollegeHipaaRecipient[]) {
-    update('college_hipaa_recipients', next)
-  }
-
-  function patchRecipient(index: number, patch: Partial<CollegeHipaaRecipient>) {
-    const next = [...recipients]
-    next[index] = { ...next[index], ...patch }
-    setRecipients(next)
-  }
 
   return (
     <div className="space-y-8">
@@ -545,9 +556,22 @@ export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
         allLocalContacts={allLocalContacts}
         allowCoAgent={false}
       />
+    </div>
+  )
+}
 
-      <SectionDivider />
-
+export function CollegeHipaaRecipientsBlock({ data, update }: StepProps) {
+  const recipients = (data.college_hipaa_recipients as CollegeHipaaRecipient[]) ?? []
+  function setRecipients(next: CollegeHipaaRecipient[]) {
+    update('college_hipaa_recipients', next)
+  }
+  function patchRecipient(index: number, patch: Partial<CollegeHipaaRecipient>) {
+    const next = [...recipients]
+    next[index] = { ...next[index], ...patch }
+    setRecipients(next)
+  }
+  return (
+    <div className="space-y-8">
       <DocumentPrimer title="HIPAA authorization — who may receive medical information">
         <p>
           HIPAA requires providers to keep medical details private. In an emergency, though, you may
@@ -615,13 +639,6 @@ export function StepCollegeAgents({ data, update, intakeId }: StepProps) {
         />
       </div>
 
-      <NotesField
-        label="Anyone who should specifically NOT receive access"
-        hint="Naming someone here is not an accusation — it is an instruction we can put in writing so a provider is never left guessing."
-        value={str(data, 'college_excluded_people')}
-        onChange={(v) => update('college_excluded_people', v)}
-        rows={3}
-      />
     </div>
   )
 }

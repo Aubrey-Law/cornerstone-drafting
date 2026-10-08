@@ -1,4 +1,5 @@
 import type { DesignSheetKey } from './designSheetKeys'
+import type { IntakeCatalogFieldId } from './intakeCatalog'
 
 export type SharedFieldControl =
   | 'text'
@@ -22,6 +23,9 @@ export type SharedFieldContext = {
 }
 
 export interface SharedFieldDef {
+  builderEnabled?: boolean
+  baselineRequirement?: 'optional' | 'recommended' | 'required'
+  validationProfile?: 'none' | 'email' | 'phone' | 'ma_county' | 'date'
   /** Stable registry id, e.g. `marital_status`. */
   id: string
   label: string
@@ -47,7 +51,18 @@ export interface SharedFieldDef {
   intakeToDesign?: (raw: unknown, ctx?: SharedFieldContext) => string | null
 }
 
+export interface BuilderFieldDef extends SharedFieldDef {
+  builderEnabled: true
+  baselineRequirement: 'optional' | 'recommended' | 'required'
+  /** Historical intake selects that were presence-checked only keep that
+   * behavior. The compiler still restricts definitions to approved options. */
+  intakeOptionValidation?: 'legacy_presence'
+  read: (data: Readonly<Record<string, unknown>>) => unknown
+  write: (value: unknown, update: (field: string, value: unknown) => void) => void
+}
+
 export type SharedFieldId =
+  | IntakeCatalogFieldId
   | 'client_name'
   | 'client_pronouns'
   | 'client_dob'

@@ -35,8 +35,9 @@ function nameKey(first: unknown, last: unknown): string {
  * party's rows survive the wipe.
  *
  * Co-agents (is_coagent=true) and roles outside the managed set are LEFT
- * UNTOUCHED. Existing contact rows are reused by case-insensitive
- * (first_name, last_name) match; fill-mode updates never overwrite a
+ * UNTOUCHED. Existing contact rows are reused by scoped contact_id, or by
+ * case-insensitive (first_name, last_name) for legacy id-less entries;
+ * fill-mode updates never overwrite a
  * non-null email/phone.
  */
 export async function persistFiduciaryRoles(
@@ -58,40 +59,28 @@ export async function persistFiduciaryRoles(
   if (matterError) throw new Error(`${matterError.code ?? 'error'}: ${matterError.message}`)
   const intakeId = (matterRow as { client_intake_id?: string | null } | null)?.client_intake_id ?? null
 
-  // Step 1: wipe managed contact_roles for THIS MATTER. Scoping this to the
-  // intake would have a second engagement's fiduciary save wipe the first
-  // matter's appointments — the worst data-loss risk in the whole migration.
-  const { error: deleteError } = await admin
-    .from('contact_roles')
-    .delete()
-    .eq('matter_id', matterId)
-    .eq('is_coagent', false)
-    .in('role', MANAGED_ROLES as unknown as string[])
-    .in('priority', MANAGED_PRIORITIES as unknown as number[])
-    .in('for_party', parties)
-  if (deleteError) throw new Error(`${deleteError.code ?? 'error'}: ${deleteError.message}`)
-
-  if (entries.length === 0) return { contactIds: [] }
-
-  // Step 2: read the people already on this matter so we can reuse by
-  // (first, last) rather than minting a second copy of a named fiduciary.
-  const { data: existingJoins } = await admin
+  // Read the people already on this matter for identity authorization and
+  // legacy name matching rather than minting another copy of a fiduciary.
+  const { data: existingJoins, error: joinsError } = await admin
     .from('matter_contacts')
     .select('contact_id')
     .eq('matter_id', matterId)
+  if (joinsError) throw new Error(joinsError.message)
 
   const existingIds = ((existingJoins ?? []) as Array<{ contact_id: string }>).map(r => r.contact_id)
-  const { data: existing } = existingIds.length
+  const { data: existing, error: contactsError } = existingIds.length
     ? await admin
         .from('contacts')
         .select('id, first_name, last_name, email, phone, preferred_pronoun')
         .in('id', existingIds)
-    : { data: [] }
+    : { data: [], error: null }
+  if (contactsError) throw new Error(contactsError.message)
 
   const byName = new Map<
     string,
     { id: string; email: string | null; phone: string | null; preferred_pronoun: string | null }
   >()
+  const byId = new Map<string, { id: string; email: string | null; phone: string | null; preferred_pronoun: string | null }>()
   for (const c of (existing ?? []) as Array<{
     id: string
     first_name: string | null
@@ -106,16 +95,27 @@ export async function persistFiduciaryRoles(
       phone: c.phone,
       preferred_pronoun: c.preferred_pronoun,
     })
+    byId.set(c.id, c)
   }
 
-  // Step 3: for each entry — find or create the contact, fill-mode-update
+  // Identity is authoritative only after it is authorized through this
+  // matter's contact join. Validate all supplied IDs before any mutation,
+  // especially before replacing roles. Stale copied names never rename or
+  // clone a person whose scoped identity is known.
+  for (const entry of entries) {
+    if (entry.contact_id && !byId.has(entry.contact_id)) {
+      throw new Error('Fiduciary contact does not belong to this matter')
+    }
+  }
+
+  // For each entry — find or create the contact, fill-mode-update
   // missing email/phone, collect the contact id for the role insert.
-  const contactIds = new Map<string, string>()  // entry key -> contact_id
+  const contactIds = new Map<FiduciaryRoleEntry, string>()
   for (const e of entries) {
     const key = nameKey(e.first_name, e.last_name)
-    const found = byName.get(key)
+    const found = e.contact_id ? byId.get(e.contact_id) : byName.get(key)
     if (found) {
-      contactIds.set(key, found.id)
+      contactIds.set(e, found.id)
       // Fill mode: only overwrite NULL/empty fields.
       const patch: Record<string, unknown> = {}
       if (!found.email && e.email) patch.email = e.email
@@ -158,7 +158,7 @@ export async function persistFiduciaryRoles(
           relationship_label: e.relationship_label ?? null,
           for_party: e.for_party,
         })
-        contactIds.set(key, (created as { id: string }).id)
+        contactIds.set(e, (created as { id: string }).id)
         byName.set(key, {
           id: (created as { id: string }).id,
           email: e.email ?? null,
@@ -169,10 +169,21 @@ export async function persistFiduciaryRoles(
     }
   }
 
-  // Step 4: insert contact_roles for every entry that has a contact id.
+  // Wipe only after contact resolution succeeds, scoped to this matter.
+  const { error: deleteError } = await admin
+    .from('contact_roles')
+    .delete()
+    .eq('matter_id', matterId)
+    .eq('is_coagent', false)
+    .in('role', MANAGED_ROLES as unknown as string[])
+    .in('priority', MANAGED_PRIORITIES as unknown as number[])
+    .in('for_party', parties)
+  if (deleteError) throw new Error(`${deleteError.code ?? 'error'}: ${deleteError.message}`)
+
+  // Insert contact_roles for every entry that has a contact id.
   const roleRows = entries
     .map((e) => {
-      const contactId = contactIds.get(nameKey(e.first_name, e.last_name))
+      const contactId = contactIds.get(e)
       if (!contactId) return null
       return {
         matter_id: matterId,

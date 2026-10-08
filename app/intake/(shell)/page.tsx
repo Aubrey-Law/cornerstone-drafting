@@ -7,6 +7,8 @@ import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIn
 import { type IntakeRow } from '@/lib/intakeSections'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
+import { getIntakeTrack } from '@/lib/intakeTrack'
+import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
 import GuidedInterview from '@/components/intake/GuidedInterview'
 import { RequestUnlockButton } from './RequestUnlockButton'
 
@@ -70,11 +72,25 @@ export default async function IntakeHomePage() {
     )
   }
 
-  return (
-    <GuidedInterview
-      initialData={intakeRow as Record<string, unknown>}
-      intakeId={intake.id as string}
-      mode="client"
-    />
-  )
+  const rendererMode = resolveIntakeRendererMode(process.env)
+  if (rendererMode === 'legacy') {
+    return <GuidedInterview initialData={intakeRow as Record<string, unknown>} intakeId={intake.id as string} mode="client" rendererMode="legacy" />
+  }
+  try {
+    const { compileBundledIntakeForm } = await import('@/lib/intake/forms/definitions')
+    const compiled = compileBundledIntakeForm(getIntakeTrack(intakeRow), 'client')
+    if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
+    return (
+      <GuidedInterview
+        initialData={intakeRow as Record<string, unknown>}
+        intakeId={intake.id as string}
+        mode="client"
+        rendererMode={rendererMode}
+        compiledForm={compiled.form}
+      />
+    )
+  } catch (error) {
+    console.error('Invalid bundled intake form', error)
+    return <p role="alert">This questionnaire is temporarily unavailable. Please contact the firm.</p>
+  }
 }

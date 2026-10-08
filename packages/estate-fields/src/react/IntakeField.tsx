@@ -1,9 +1,11 @@
 'use client'
 
+import { useId } from 'react'
 import {
   getSharedField,
+  getBuilderField,
+  estateValueLabel,
   inputTypeForControl,
-  sharedFieldOptions,
   type SharedFieldContext,
   type SharedFieldId,
 } from '../core'
@@ -17,6 +19,9 @@ type IntakeFieldProps = {
   placeholder?: string
   id?: string
   required?: boolean
+  disabled?: boolean
+  'aria-label'?: string
+  'aria-describedby'?: string
   /** Merge classes for pill buttons and inputs. Default: portal intake styling. */
   classNames?: {
     pill?: (active: boolean) => string
@@ -47,11 +52,20 @@ export function IntakeField({
   placeholder,
   id,
   required,
+  disabled,
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
   classNames,
 }: IntakeFieldProps) {
-  const def = getSharedField(fieldId)
-  const options = sharedFieldOptions(fieldId, context ?? {})
+  const radioName = useId()
+  const sharedDef = getSharedField(fieldId)
+  const def = sharedDef.builderEnabled ? getBuilderField(fieldId) : sharedDef
+  const options = def.optionsFor ? def.optionsFor(context ?? {}) : def.options ?? []
   const display = def.normalize ? (def.normalize(value) ?? '') : stringValue(value).trim()
+  const raw = stringValue(value).trim()
+  const legacyValue = def.legacyValues?.includes(raw) && !options.some((option) => option.value === raw) ? raw : null
+  const legacyLabel = legacyValue && fieldId === 'estate_value' ? estateValueLabel(legacyValue) : legacyValue
+  const controlA11y = { disabled, 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }
 
   const commit = (next: string) => {
     const normalized = def.normalize ? def.normalize(next) : next.trim() || null
@@ -61,11 +75,13 @@ export function IntakeField({
   if (def.control === 'select' && variant === 'pills') {
     const pillClass = classNames?.pill ?? defaultPillClass
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={ariaLabel} aria-describedby={ariaDescribedBy}>
+        {legacyValue && <span>{legacyLabel}</span>}
         {options.map((opt) => (
           <button
             key={opt.value}
             type="button"
+            disabled={disabled}
             onClick={() => commit(opt.value)}
             aria-pressed={display === opt.value}
             className={pillClass(display === opt.value)}
@@ -81,14 +97,14 @@ export function IntakeField({
     return (
       <select
         id={id}
-        value={display}
+        value={legacyValue ?? display}
+        {...controlA11y}
         required={required}
         onChange={(e) => commit(e.target.value)}
         className={classNames?.select ?? defaultControlClass}
       >
-        {(placeholder ?? def.placeholder) && (
-          <option value="">{placeholder ?? def.placeholder}</option>
-        )}
+        <option value="">{placeholder ?? def.placeholder ?? 'Select an option'}</option>
+        {legacyValue && <option value={legacyValue} disabled>{legacyLabel}</option>}
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
@@ -98,15 +114,70 @@ export function IntakeField({
     )
   }
 
+  if (def.control === 'textarea') {
+    return (
+      <textarea
+        id={id}
+        {...controlA11y}
+        value={stringValue(value)}
+        required={required}
+        maxLength={def.maxLength}
+        placeholder={placeholder ?? def.placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
+        className={classNames?.input ?? defaultControlClass}
+      />
+    )
+  }
+
+  if (def.control === 'boolean') {
+    // Neither choice is selected for an unanswered question; No is a complete
+    // answer in its own right, reachable in one action and by native radio keys.
+    return <fieldset id={id} {...controlA11y} role="radiogroup" aria-required={required} className="flex gap-4">
+      {[true, false].map((answer) => <label key={String(answer)} className="flex items-center gap-2">
+        <input type="radio" name={radioName} value={String(answer)} disabled={disabled} checked={value === answer} onChange={() => { if (!disabled) onChange(answer) }} />
+        {answer ? 'Yes' : 'No'}
+      </label>)}
+    </fieldset>
+  }
+
+  if (def.control === 'multiselect') {
+    const selected = new Set(Array.isArray(value) ? value.map(String) : [])
+    return (
+      <fieldset id={id} {...controlA11y} aria-required={required} className="space-y-2">
+        {options.map((option) => (
+          <label key={option.value} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={selected.has(option.value)}
+              onChange={(event) => {
+                const next = new Set(selected)
+                if (event.target.checked) next.add(option.value)
+                else next.delete(option.value)
+                onChange([...next])
+              }}
+            />
+            {option.label}
+          </label>
+        ))}
+      </fieldset>
+    )
+  }
+
   const inputType = inputTypeForControl(def.control)
+  const preserveEditingText = def.builderEnabled && def.control === 'text'
   return (
     <input
       id={id}
+      {...controlA11y}
       type={inputType}
-      value={display}
+      value={preserveEditingText ? stringValue(value) : display}
       required={required}
+      maxLength={def.maxLength}
       placeholder={placeholder ?? def.placeholder}
-      onChange={(e) => commit(e.target.value)}
+      onChange={(event) => preserveEditingText ? onChange(event.target.value) : commit(event.target.value)}
+      onBlur={preserveEditingText ? (event) => commit(event.target.value) : undefined}
       className={classNames?.input ?? defaultControlClass}
     />
   )

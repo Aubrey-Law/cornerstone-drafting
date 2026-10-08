@@ -96,7 +96,11 @@ export function StepFamily({ data, update }: StepProps) {
   )
 }
 
-export function StepSpouse({ data, update }: StepProps) {
+export function StepSpouse(props: StepProps) {
+  return <SpouseDetailsBlock {...props} />
+}
+
+export function SpouseDetailsBlock({ data, update }: StepProps) {
   const spouse = (data._spouse as Record<string, string>) ?? {}
   const spouseCitizenshipStatus = normalizeCitizenshipStatus(
     spouse.citizenship_status,
