@@ -39,7 +39,11 @@ export interface ChildEntry {
   [key: string]: unknown
 }
 
-export function StepChildren({ data, update }: StepProps) {
+export function StepChildren(props: StepProps) {
+  return <ChildrenBlock {...props} />
+}
+
+export function ChildrenBlock({ data, update }: StepProps) {
   const children = (data._children as ChildEntry[]) ?? []
   const clientFirstName = (data.first_name as string) || 'Client'
   const spouse = data._spouse as Record<string, string> | undefined
