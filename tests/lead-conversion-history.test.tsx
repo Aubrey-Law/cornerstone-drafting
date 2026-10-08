@@ -87,9 +87,10 @@ describe('converted matter history', () => {
 
   it('surfaces core and intake loader query errors while treating linked history as optional', () => {
     const source = fs.readFileSync('app/admin/matters/[id]/page.tsx', 'utf8')
+    const shell = fs.readFileSync('lib/matters/matterShell.ts', 'utf8')
     expect(source).toContain('loadClientIntakeShell')
-    expect(source).toContain('if (base.error) throw new Error(`Could not load client intake: ${base.error.message}`)')
-    expect(source).toContain('Could not load client intake')
+    expect(shell).toContain('if (base.error) throw new Error(`Could not load client intake: ${base.error.message}`)')
+    expect(shell).toContain('Could not load client intake')
     expect(source).toContain('Linked lead history schema unavailable')
     expect(source).toContain('continuing without linked lead history')
   })

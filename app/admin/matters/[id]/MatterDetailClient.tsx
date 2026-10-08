@@ -28,7 +28,7 @@ import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTask
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
-import { useMatterDetailsSave } from './useMatterDetailsSave'
+import { useMatterFacts } from './useMatterFacts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterReviewsTab } from './MatterReviewsTab'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
@@ -192,9 +192,6 @@ function MatterDetailClientInner({
     initiallyCompleted: Boolean(clientIntakeRow?.intake_completed_at || initialMatter.intake_status === 'completed'),
     initialUploadCounts: initialUnreviewedUploadCounts,
   })
-  const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
-  const [matterType, setMatterType] = useState<MatterType | null>(initialMatterType)
-  const [matterTypeSaving, setMatterTypeSaving] = useState(false)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
   const [datesRequest, setDatesRequest] = useState(0)
@@ -246,58 +243,16 @@ function MatterDetailClientInner({
 
   const {
     details: matterDetails,
-    saveField: saveMatterDetailField,
     setDetails: setMatterDetails,
+    saveField: handleSaveMatterDetailField,
     savingField,
     lastSavedAt,
     error: matterDetailsError,
-  } = useMatterDetailsSave(matterId, initialMatterDetails)
-
-  const handleSaveMatterDetailField = useCallback(
-    async (
-      field: keyof MatterDetailsRow,
-      value: unknown,
-      options?: { manual?: boolean },
-    ) => {
-      await saveMatterDetailField(field, value, options)
-      if (field === 'signing_date' && (typeof value === 'string' || value === null)) {
-        setMatter(current => ({ ...current, signing_date: value }))
-      }
-      if (field === 'practice_area' && typeof value === 'string') {
-        setMatter(current => ({ ...current, practice_area: value }))
-      }
-      if (field === 'plan_type' && typeof value === 'string') {
-        setMatter(current => ({ ...current, plan_type: value }))
-      }
-      if (field === 'matter_number') {
-        setMatterNum(typeof value === 'string' && value.trim() ? value.trim() : null)
-      }
-    },
-    [saveMatterDetailField],
-  )
-
-  const handleSaveMatterType = useCallback(async (next: MatterType) => {
-    setMatterTypeSaving(true)
-    try {
-      const response = await fetch(`/api/admin/matters/${matterId}/matter-type`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ matterType: next }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? 'Could not save matter type')
-      setMatterType(next)
-      toast.success('Matter type saved', { id: 'matter-type-save', duration: 1200 })
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save matter type')
-      throw error
-    } finally {
-      setMatterTypeSaving(false)
-    }
-  }, [matterId, token])
+    matterNumber: matterNum,
+    matterType,
+    matterTypeSaving,
+    saveMatterType: handleSaveMatterType,
+  } = useMatterFacts({ matterId, token, setMatter, initialDetails: initialMatterDetails, initialMatterType, initialMatterNumber })
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
   const showProbate = practiceArea === 'Probate'
@@ -316,10 +271,6 @@ function MatterDetailClientInner({
   useEffect(() => {
     setContacts(initialContacts)
   }, [initialContacts])
-
-  useEffect(() => {
-    setMatterNum(initialMatterNumber)
-  }, [initialMatterNumber])
 
   const {
     editingNoteId,

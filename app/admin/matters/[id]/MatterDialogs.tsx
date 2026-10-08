@@ -59,8 +59,10 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, unlock, sta
     saving: boolean
     confirm: (preflight: StageLifecyclePreflight) => void
   }
-  leadNoteDelete: { target: LinkedMatterNote | null; setTarget: (note: LinkedMatterNote | null) => void; confirm: (note: LinkedMatterNote) => void | Promise<void> }
-  scheduling: { linkOpen: boolean; setLinkOpen: (open: boolean) => void; bookOpen: boolean; setBookOpen: (open: boolean) => void }
+  /** Matter page only: the lead-note delete confirmation. */
+  leadNoteDelete?: { target: LinkedMatterNote | null; setTarget: (note: LinkedMatterNote | null) => void; confirm: (note: LinkedMatterNote) => void | Promise<void> }
+  /** Matter page only: the scheduling-link and book-for-client dialogs. */
+  scheduling?: { linkOpen: boolean; setLinkOpen: (open: boolean) => void; bookOpen: boolean; setBookOpen: (open: boolean) => void }
   composer: { channel: 'email' | 'sms' | null; setChannel: (channel: 'email' | 'sms' | null) => void }
 }) {
   const router = useRouter()
@@ -103,17 +105,19 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, unlock, sta
         />
       )}
 
-      <SendSchedulingLinkDialog
-        target={{ kind: 'matter', id: matterId }}
-        open={scheduling.linkOpen}
-        onOpenChange={scheduling.setLinkOpen}
-      />
+      {scheduling && <>
+        <SendSchedulingLinkDialog
+          target={{ kind: 'matter', id: matterId }}
+          open={scheduling.linkOpen}
+          onOpenChange={scheduling.setLinkOpen}
+        />
 
-      <BookCalendlyDialog
-        target={{ kind: 'matter', id: matterId }}
-        open={scheduling.bookOpen}
-        onOpenChange={scheduling.setBookOpen}
-      />
+        <BookCalendlyDialog
+          target={{ kind: 'matter', id: matterId }}
+          open={scheduling.bookOpen}
+          onOpenChange={scheduling.setBookOpen}
+        />
+      </>}
 
       <Dialog open={deleteDialog.open} onOpenChange={open => (open ? deleteDialog.openDialog() : deleteDialog.close())}>
         <DialogContent className="sm:max-w-md">
@@ -160,26 +164,28 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, unlock, sta
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={leadNoteDelete.target !== null} onOpenChange={open => !open && leadNoteDelete.setTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const note = leadNoteDelete.target
-                leadNoteDelete.setTarget(null)
-                if (note) void leadNoteDelete.confirm(note)
-              }}
-            >
-              Delete note
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {leadNoteDelete && (
+        <AlertDialog open={leadNoteDelete.target !== null} onOpenChange={open => !open && leadNoteDelete.setTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+              <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const note = leadNoteDelete.target
+                  leadNoteDelete.setTarget(null)
+                  if (note) void leadNoteDelete.confirm(note)
+                }}
+              >
+                Delete note
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <AlertDialog open={unlock.open} onOpenChange={unlock.setOpen}>
         <AlertDialogContent>
