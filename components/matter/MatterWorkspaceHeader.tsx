@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { MatterSwitcher } from '@/components/matter/MatterSwitcher'
 import {
-  ArrowLeft,
   ClipboardList,
   CloudUpload,
   Loader as Loader2,
@@ -16,7 +15,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatFirmDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -28,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { practiceAreaLabel } from '@/lib/practiceArea'
+import { RecordDetailsButton, RecordWorkspaceHeader, recordTitleClass } from '@/components/workspace/RecordWorkspaceHeader'
 import type { PipelineMatter } from '@/types/database'
 
 export interface MatterWorkspaceHeaderProps {
@@ -100,48 +99,38 @@ export function MatterWorkspaceHeader({
   const openedOn = opened ? formatFirmDate(opened, { month: 'short', day: 'numeric', year: 'numeric' }) : null
 
   return (
-    <header data-collapsed={collapsed || undefined} className={cn('shrink-0 border-b border-border bg-card px-4 md:px-6', collapsed ? 'pt-2' : 'pt-5')}>
-      <div className={cn('flex flex-wrap justify-between gap-3', collapsed ? 'items-center' : 'items-start')}>
-        <div className="min-w-0 flex-1 basis-48">
-          {!collapsed && <Link href="/admin/matters" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="size-3.5" aria-hidden />Matters
-          </Link>}
-          <h1 className={cn('min-w-0', !collapsed && 'mt-1')}>
-            <MatterSwitcher matterId={matter.matter_id} label={clientName} className={cn('max-w-full px-0 font-semibold tracking-tight', collapsed ? 'text-lg' : 'text-xl sm:text-2xl')} />
-          </h1>
-          {!collapsed && <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-            {identityChips.map(label => (
-              <Badge key={label} variant="outline" className="rounded-md font-medium">{label}</Badge>
-            ))}
-            {(matterNumber || openedOn) && (
-              <span className="pl-1 text-muted-foreground tabular-nums">
-                {/* Finds this matter in the list, closed matters included. */}
-                {matterNumber && (
-                  <Link
-                    href={`/admin/matters/list?${new URLSearchParams({ search: matterNumber, closed: '1' })}`}
-                    className="hover:text-foreground hover:underline"
-                    title="Show in matter list"
-                  >
-                    #{matterNumber}
-                  </Link>
-                )}
-                {matterNumber && openedOn && ' · '}
-                {openedOn && `Opened ${openedOn}`}
-              </span>
+    <RecordWorkspaceHeader
+      backHref="/admin/matters"
+      backLabel="Matters"
+      collapsed={collapsed}
+      title={<MatterSwitcher matterId={matter.matter_id} label={clientName} className={cn('max-w-full px-0', recordTitleClass(collapsed))} />}
+      chips={identityChips}
+      meta={<>
+        {(matterNumber || openedOn) && (
+          <span className="pl-1 text-muted-foreground tabular-nums">
+            {/* Finds this matter in the list, closed matters included. */}
+            {matterNumber && (
+              <Link
+                href={`/admin/matters/list?${new URLSearchParams({ search: matterNumber, closed: '1' })}`}
+                className="hover:text-foreground hover:underline"
+                title="Show in matter list"
+              >
+                #{matterNumber}
+              </Link>
             )}
-            {meta}
-          </div>}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
+            {matterNumber && openedOn && ' · '}
+            {openedOn && `Opened ${openedOn}`}
+          </span>
+        )}
+        {meta}
+      </>}
+      stage={stage}
+      navigation={navigation}
+      actions={<>
         {extraActions}
         {matter.client_phone && <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild><CallPhoneLink phone={matter.client_phone} label="Call" icon={<Phone className="size-3.5" />} /></Button>}
         <Button variant="outline" size="sm" className="hidden sm:inline-flex" disabled={!matter.client_email} onClick={onEmail}><Mail className="size-3.5" />Email</Button>
-        <Button type="button" size="sm" variant={factsRailOpen ? 'selected' : 'outline'} onClick={onToggleFactsRail}
-          aria-pressed={factsRailOpen} aria-label={factsRailOpen ? 'Hide matter details' : 'Show matter details'}>
-          <PanelRight className="size-4" aria-hidden />
-          <span className="hidden sm:inline">Details</span>
-        </Button>
+        <RecordDetailsButton open={factsRailOpen} onToggle={onToggleFactsRail} record="matter" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -222,10 +211,7 @@ export function MatterWorkspaceHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      </div>
-      {stage && !collapsed && <div className="mt-5">{stage}</div>}
-      {navigation && <div className={cn('-mx-4 md:-mx-6', collapsed ? 'mt-1' : 'mt-4')}>{navigation}</div>}
-    </header>
+      </>}
+    />
   )
 }

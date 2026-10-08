@@ -135,7 +135,7 @@ describe('responsive admin detail layout', () => {
     expect(document.activeElement).not.toBe(screen.getByLabelText('Client name'))
   })
 
-  it('puts lead actions in a named mobile overflow menu', async () => {
+  it('puts lead actions in the named Actions menu, as on the matter page', async () => {
     const callbacks = {
       onDraft: vi.fn(),
       onConvert: vi.fn(),
@@ -164,11 +164,11 @@ describe('responsive admin detail layout', () => {
       />,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: 'More lead actions' }))
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
 
-    expect(screen.getByRole('menuitem', { name: 'Call' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Email' })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: 'Text' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Call client' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Email client' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /^Text/ })).toBeNull()
     expect(screen.getByRole('menuitem', { name: 'Open details' })).toBeTruthy()
   })
 

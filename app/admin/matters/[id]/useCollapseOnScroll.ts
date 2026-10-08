@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /** Scroll distance before the header collapses, and the point it returns. */
 const COLLAPSE_AT = 48
@@ -12,12 +12,13 @@ const EXPAND_AT = 4
  * so this listens in the capture phase. `media` limits it to a breakpoint.
  */
 export function useCollapseOnScroll<T extends HTMLElement>(media?: string) {
-  const ref = useRef<T>(null)
+  // A callback ref, so the listener attaches whenever the element mounts —
+  // not only if it already existed on the hook's first render.
+  const [root, ref] = useState<T | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {
-    const root = ref.current
     if (!root) return
-    const query = media ? window.matchMedia(media) : null
+    const query = media && typeof window.matchMedia === 'function' ? window.matchMedia(media) : null
     const onScroll = (event: Event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
@@ -32,6 +33,6 @@ export function useCollapseOnScroll<T extends HTMLElement>(media?: string) {
       root.removeEventListener('scroll', onScroll, { capture: true })
       query?.removeEventListener('change', onMedia)
     }
-  }, [media])
+  }, [media, root])
   return { ref, collapsed }
 }

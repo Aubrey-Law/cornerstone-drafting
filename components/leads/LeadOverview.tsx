@@ -28,16 +28,6 @@ export function leadNextMeetingDate(value: string | null | undefined, timeZone: 
   return past ? empty : leadDisplayDate(value, timeZone)
 }
 
-export function leadProgressLabel(lead: LeadDetailRecord, agreementStatus?: string | null): string {
-  if (lead.lead_status !== 'lead') return lead.lead_status === 'hired' ? 'Hired' : 'Closed'
-  const status = agreementStatus ?? lead.engagement_status
-  if (status === 'completed' || status === 'signed' || lead.engagement_signed_at) return 'Agreement signed'
-  if (['sent', 'sending', 'viewed', 'partially_signed'].includes(String(status))) return 'Awaiting signature'
-  if (status === 'draft' || status === 'ready' || status === 'failed') return 'Preparing engagement'
-  if (lead.intake_completed_at || ['submitted', 'approved'].includes(String(lead.status))) return 'Intake received'
-  return lead.intake_sent_at ? 'Awaiting intake' : 'New inquiry'
-}
-
 export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastResponseAt, updatedAt,
   agreementStatus, timeZone, taskCount, tasksVersion, onIntake, onEngagement, onTasks, onSchedule,
   engagementSentOutside, onEngagementSentOutside, nextAppointmentLabel = 'Next meeting', readiness,
@@ -130,11 +120,11 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
           <Button variant="link" className="h-auto p-0" onClick={onTasks}>View tasks ({taskCount})</Button>
         </OverviewFact>
       </div>
-      {(intakeReceived || engagementSigned) && <details className="rounded-lg border border-border p-3 text-sm">
+      {(intakeReceived || engagementSigned) && <details className="rounded-lg border bg-card px-4 py-3.5 text-sm">
         <summary className="cursor-pointer font-medium">Completed steps ({Number(intakeReceived) + Number(engagementSigned)})</summary>
         <div className="mt-3 space-y-3">{intakeReceived && intakeStep}{engagementSigned && engagementStep}</div>
       </details>}
-      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Contact history</summary><dl className="mt-3 space-y-3">
+      <details className="rounded-lg border bg-card px-4 py-3.5 text-xs text-muted-foreground"><summary className="cursor-pointer font-medium">Contact history</summary><dl className="mt-3 space-y-3">
         <div><dt className="text-xs text-muted-foreground">Last client contact</dt><dd className="mt-1">{leadDisplayDate(lastContactAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Last client response</dt><dd className="mt-1">{leadDisplayDate(lastResponseAt, timeZone)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Record updated</dt><dd className="mt-1">{leadDisplayDate(updatedAt, timeZone)}</dd></div>
@@ -143,6 +133,11 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   )
 }
 
+/** One fact as a matter-overview card: uppercase label, value, actions. */
 function OverviewFact({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
-  return <div className="min-w-0 border-b border-border pb-4"><h2 className="text-xs font-medium text-muted-foreground">{label}</h2><p className="my-2 break-words text-sm font-semibold">{value}</p><div className="space-y-1">{children}</div></div>
+  return <section className="min-w-0 rounded-lg border bg-card px-4 py-3.5">
+    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</h2>
+    <p className="mb-1.5 mt-2 break-words font-semibold">{value}</p>
+    <div className="space-y-1">{children}</div>
+  </section>
 }
