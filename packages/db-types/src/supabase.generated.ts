@@ -1661,6 +1661,7 @@ export type Database = {
           fiduciary_entries: Json | null
           financial_details: Json | null
           first_name: string | null
+          form_version_id: string | null
           full_name: string | null
           goals: Json | null
           has_business: boolean | null
@@ -1770,6 +1771,7 @@ export type Database = {
           fiduciary_entries?: Json | null
           financial_details?: Json | null
           first_name?: string | null
+          form_version_id?: string | null
           full_name?: string | null
           goals?: Json | null
           has_business?: boolean | null
@@ -1879,6 +1881,7 @@ export type Database = {
           fiduciary_entries?: Json | null
           financial_details?: Json | null
           first_name?: string | null
+          form_version_id?: string | null
           full_name?: string | null
           goals?: Json | null
           has_business?: boolean | null
@@ -1955,6 +1958,13 @@ export type Database = {
           zip?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_intake_form_version_id_fkey"
+            columns: ["form_version_id"]
+            isOneToOne: false
+            referencedRelation: "intake_form_versions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["matter_id"]
@@ -6324,6 +6334,114 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_form_templates: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          key: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          key: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          key?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_form_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_form_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          definition: Json
+          definition_hash: string
+          id: string
+          lock_version: number
+          published_at: string | null
+          published_by: string | null
+          status: string
+          template_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          definition: Json
+          definition_hash: string
+          id?: string
+          lock_version?: number
+          published_at?: string | null
+          published_by?: string | null
+          status: string
+          template_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          definition?: Json
+          definition_hash?: string
+          id?: string
+          lock_version?: number
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          template_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_form_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_form_versions_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_form_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "intake_form_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -12377,6 +12495,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      archive_intake_form_template: {
+        Args: {
+          p_actor_id: string
+          p_archived?: boolean
+          p_template_id: string
+        }
+        Returns: Json
+      }
       assert_billing_actor: { Args: { p_actor_id: string }; Returns: undefined }
       assert_lead_note_actor: { Args: { p_actor_id: string }; Returns: string }
       attach_invoice_documents: {
@@ -12889,6 +13015,17 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      create_intake_form_template: {
+        Args: {
+          p_actor_id: string
+          p_definition: Json
+          p_definition_hash: string
+          p_description: string
+          p_key: string
+          p_name: string
+        }
+        Returns: Json
+      }
       create_invoice_draft: {
         Args: {
           p_actor_id: string
@@ -13037,6 +13174,10 @@ export type Database = {
           matter_number: string
         }[]
       }
+      create_next_intake_form_draft: {
+        Args: { p_actor_id: string; p_source_version_id: string }
+        Returns: Json
+      }
       crm_current_user_is_staff: {
         Args: { p_admin_only?: boolean }
         Returns: boolean
@@ -13094,6 +13235,14 @@ export type Database = {
       delete_matter_contact: {
         Args: { p_contact_id: string; p_matter_id: string }
         Returns: number
+      }
+      discard_intake_form_draft: {
+        Args: {
+          p_actor_id: string
+          p_expected_lock_version: number
+          p_version_id: string
+        }
+        Returns: Json
       }
       discard_invoice_draft: {
         Args: { p_actor_id: string; p_invoice_id: string }
@@ -13699,6 +13848,15 @@ export type Database = {
         }
         Returns: Json
       }
+      publish_intake_form_draft: {
+        Args: {
+          p_actor_id: string
+          p_expected_definition_hash: string
+          p_expected_lock_version: number
+          p_version_id: string
+        }
+        Returns: Json
+      }
       rate_limit_consume: {
         Args: { p_bucket: string; p_key: string; p_window_seconds: number }
         Returns: number
@@ -13978,6 +14136,10 @@ export type Database = {
         }
         Returns: string
       }
+      retire_intake_form_version: {
+        Args: { p_actor_id: string; p_version_id: string }
+        Returns: Json
+      }
       retire_matter_estate_clause_override: {
         Args: {
           p_actor_id: string
@@ -14026,6 +14188,16 @@ export type Database = {
           p_target_revision_id: string
         }
         Returns: string
+      }
+      save_intake_form_draft: {
+        Args: {
+          p_actor_id: string
+          p_definition: Json
+          p_definition_hash: string
+          p_expected_lock_version: number
+          p_version_id: string
+        }
+        Returns: Json
       }
       self_contact_for_intake: {
         Args: { p_intake_id: string }
@@ -14186,6 +14358,7 @@ export type Database = {
           fiduciary_entries: Json | null
           financial_details: Json | null
           first_name: string | null
+          form_version_id: string | null
           full_name: string | null
           goals: Json | null
           has_business: boolean | null
@@ -14333,6 +14506,7 @@ export type Database = {
           fiduciary_entries: Json | null
           financial_details: Json | null
           first_name: string | null
+          form_version_id: string | null
           full_name: string | null
           goals: Json | null
           has_business: boolean | null
