@@ -53,7 +53,13 @@ it('gives drafting one bar, a focus mode and a header that folds while the sheet
   expect(workspace).toContain('Back to matter')
   // `?focus=` is the design sheet's; focus mode uses `?mode=focus`.
   expect(frame).toContain("searchParams.get('mode') === 'focus'")
-  expect(frame).toContain("addEventListener('scroll', onScroll, { capture: true, passive: true })")
+  const collapse = fs.readFileSync('app/admin/matters/[id]/useCollapseOnScroll.ts', 'utf8')
+  const client = fs.readFileSync('app/admin/matters/[id]/MatterDetailClient.tsx', 'utf8')
+  expect(collapse).toContain("addEventListener('scroll', onScroll, { capture: true, passive: true })")
+  expect(frame).toContain('useCollapseOnScroll<HTMLDivElement>()')
+  // The matter page folds its header only on a phone.
+  expect(client).toContain("useCollapseOnScroll<HTMLDivElement>('(max-width: 767px)')")
+  expect(client).toContain('collapsed={headerCollapsed}')
   expect(frame).toContain('collapsed={collapsed}')
   expect(frame).toContain('<MatterStageStrip\n            compact')
 })

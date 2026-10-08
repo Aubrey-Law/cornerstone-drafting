@@ -13,6 +13,7 @@ import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import type { MatterActivity, MatterContact, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import type { CommChannel } from '@/lib/comms/thread'
 import { matterTypeLabel, type MatterType } from '@/lib/matter/matterType'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
@@ -62,6 +63,7 @@ import { useMatterIntake } from './useMatterIntake'
 import { useMatterStage } from './useMatterStage'
 import { useMatterHeaderActions } from './useMatterHeaderActions'
 import { useMatterTabs } from './useMatterTabs'
+import { useCollapseOnScroll } from './useCollapseOnScroll'
 import { useLinkedMatterNotes, type LeadNoteRow } from './useLinkedMatterNotes'
 import { MatterWorkspaceNav } from '@/components/matter/MatterWorkspaceNav'
 
@@ -316,6 +318,8 @@ function MatterDetailClientInner({
   } = useMatterEngineStageTask(matterId, matter.stage)
 
   const taskCounts = useRecordTaskCounts(matterId, initialTaskCounts)
+  // On a phone the full header would hold ~40% of the screen; it folds while the page scrolls.
+  const { ref: scrollBodyRef, collapsed: headerCollapsed } = useCollapseOnScroll<HTMLDivElement>('(max-width: 767px)')
 
   const stageControl = useMatterStage({ matter, setMatter, token })
   const { stageSaving, handleStageChange, closingMatter, handleCloseMatter } = stageControl
@@ -370,13 +374,14 @@ function MatterDetailClientInner({
   )
   // max(communications.created_at) — the rail's quiet chip is derived from the
   // same timeline the Communications tab shows, never a stored column.
-  const lastContactAt = useMemo(
-    () => communicationItems.reduce<string | null>(
-      (latest, item) => (!latest || item.created_at > latest ? item.created_at : latest),
-      lastPortalMessage?.created_at ?? null,
+  const lastContact = useMemo(
+    () => communicationItems.reduce<{ at: string; channel: CommChannel } | null>(
+      (latest, item) => (!latest || item.created_at > latest.at ? { at: item.created_at, channel: item.channel } : latest),
+      lastPortalMessage?.created_at ? { at: lastPortalMessage.created_at, channel: 'portal' } : null,
     ),
     [communicationItems, lastPortalMessage],
   )
+  const lastContactAt = lastContact?.at ?? null
   const draftingHref = `/admin/drafting/${matter.matter_id}`
   const readinessItems = useMemo(
     () =>
@@ -434,6 +439,7 @@ function MatterDetailClientInner({
           onPushToStatular={() => void actions.pushToStatular()}
           pushingToStatular={actions.pushingToStatular}
           onDelete={actions.deleteDialog.openDialog}
+          collapsed={headerCollapsed}
           stage={showProbate ? (
             <ProbateStageStrip details={matterDetails} />
           ) : (
@@ -470,7 +476,7 @@ function MatterDetailClientInner({
       )}
 
         <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div ref={scrollBodyRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           <div className="flex-1 p-4 md:p-6">
             <div className="w-full gap-4">
               {taskCounts.error && (
@@ -691,6 +697,7 @@ function MatterDetailClientInner({
               designSheetPlanType,
               planMirror,
               lastContactAt,
+              lastContactChannel: lastContact?.channel ?? null,
               estate: initialEstateSnapshot,
               readinessItems,
               activity,
