@@ -58,6 +58,7 @@ import { getFirmConfig } from '@/lib/firmConfig'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { ChildEntry, FiduciaryEntry, AdditionalContactEntry, StepProps } from './IntakeWizard'
@@ -751,6 +752,9 @@ export function ReviewModal(props: {
           </DialogTitle>
           <button type="button" onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'rgba(232,237,245,.7)', cursor: 'pointer', padding: '4px 8px', fontSize: 24, lineHeight: 1 }}>×</button>
         </div>
+        <DialogDescription className="sr-only">
+          Review each questionnaire section and edit answers before submitting.
+        </DialogDescription>
 
         <div style={{ padding: '20px 28px', maxHeight: 'min(70vh, 720px)', overflowY: 'auto' }}>
           <IntakeQuestionnaireReview

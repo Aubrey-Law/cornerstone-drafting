@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -43,7 +44,10 @@ describe('intake overlays', () => {
       />,
     )
 
-    expect(screen.getByRole('dialog', { name: 'Review your estate plan organizer' })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: 'Review your estate plan organizer' })
+    expect(dialog).toHaveAccessibleDescription(
+      'Review each questionnaire section and edit answers before submitting.',
+    )
     await userEvent.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledOnce()
   })
