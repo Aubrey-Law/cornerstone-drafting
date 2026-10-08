@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved; Phase 1 implemented and verified locally, with the builder and detailed enhancements reserved for later phases
+**Status:** approved; Phase 1 and the Phase 2A persistence foundation implemented and verified locally; visual builder, activation/pinning, and detailed enhancements remain for later phases
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 
@@ -298,7 +298,9 @@ Phase 1 definitions remain bundled in code. Phase 2 adds two tables:
 `client_intake` gains a nullable `form_version_id` foreign key. Existing rows
 with `NULL` continue to resolve through their bundled estate or college-prep
 definition. This makes the migration additive and safe across deployment order.
-Once a database-backed version is published, newly created intakes pin its ID.
+Phase 2C will select a published version and pin its ID for newly created
+intakes. Phase 2A adds the nullable column but leaves all creation paths unset
+and current rendering on bundled definitions.
 
 A draft is mutable with compare-and-swap on `lock_version`. Publishing is one
 atomic status transition of a compiler-valid draft. A database guard prevents
@@ -449,6 +451,11 @@ the regression matrix.
 Exit criterion: an admin can reproduce and publish both existing form tracks
 using only approved catalog entries, and new intakes remain pinned to their
 starting version.
+
+Phase 2 ships in three slices: Phase 2A adds the persistence/lifecycle
+foundation and dormant resolver; Phase 2B adds the visual builder and preview;
+Phase 2C activates persistent selection and pins every intake creation path.
+The full Phase 2 exit criterion is not met by Phase 2A alone.
 
 ### Phase 3 — detailed intake enhancements
 
@@ -616,5 +623,106 @@ These checks verify the local compiled renderer, not a production deployment or
 a production mode change. The server flag retains legacy as its default and
 rollback mode.
 
-Phase 2 builder database/UI and Phase 3 matter Intake tab, answer attribution,
-shared-person enhancements, and asset enhancements remain unimplemented.
+At the Phase 1 verification boundary, the Phase 2 database/UI and Phase 3
+enhancements remained unimplemented. The subsequent Phase 2A evidence follows.
+
+## Phase 2A foundation verification record — 2026-10-08
+
+Phase 2A implements `intake_form_templates`, immutable published/retired
+`intake_form_versions`, and nullable `client_intake.form_version_id` in
+`20270130090001_intake_form_builder_foundation.sql`. Seven lifecycle RPCs and
+table CRUD are service-role-only; the RPCs verify an explicit administrator
+actor, use empty search paths, and enforce optimistic locks and publication
+immutability. The server repository strictly parses stored definitions and
+verifies deterministic hashes. Administrator-only lifecycle APIs permit
+structurally valid drafts with compiler diagnostics but reject publication
+until both audiences compile without diagnostics.
+
+The deterministic bundled installer defaults to dry-run, requires explicit
+`--apply --actor-id` for writes, and refuses known drift before any mutation.
+The dormant resolver uses bundled fallback only for a literal null pin; a
+non-null pin selects its exact published/retired version, validates its
+owning-template identity and definition/hash, compiles the requested audience,
+and fails closed on an unavailable or invalid version. Client output excludes
+staff-only content.
+
+Current intake creation and rendering still use bundled definitions and do
+not set `form_version_id`. Source checks found no runtime resolver import or
+call and no pin write in `app`, `components`, `lib`, or `hooks`; the automated
+dormancy guard covers those runtime directories. `INTAKE_RENDERER_MODE` retains
+its existing default and rollback behavior. No drafting internals,
+design-sheet generation, estate generator, or `AdminIntakeSheet` changed.
+
+Verification used Node 26.7.0 and pinned Supabase CLI 2.114.0:
+
+```sh
+npx vitest run tests/intake-form-*.test.ts tests/intake-form-*.test.tsx tests/intake-rollback-entry.test.tsx
+npm run lint
+npm run typecheck
+npm test
+npm run check:db-types
+git diff --check origin/main...HEAD
+```
+
+The focused source run passed 14 files / 401 tests, with six opt-in database
+tests skipped. After isolated replay and repository seed grants, the complete
+focused command with `VITEST_INTAKE_FORM_TEST_DB_URL` targeting only the
+disposable database passed all 14 files / 407 tests, with no skips. These
+database tests exercise positive service-role lifecycle operations, negative
+actor/table/RPC permissions, stale locks/hashes, immutable published/retired
+rows, one-draft uniqueness, and pinned foreign-key behavior. No accessibility
+or compiler warning was observed; Node emitted its established
+`module.register()` deprecation and unavailable-localStorage runtime warnings.
+Lint, typecheck, generated-type checks, and branch/working diff checks passed.
+
+The full suite exited 1: 898 files / 9,889 tests passed, 8 files / 77 tests
+failed, and 2 files / 21 tests skipped. All 77 failing file/test names exactly
+match the pre-Task-7 baseline; no failure was added or removed. They are the
+existing unavailable-localStorage failures under unsupported Node 26 (the
+package requires Node `>=22 <26`). The approved run had no filesystem or
+loopback-listener `EPERM` failures. This is baseline-only failure evidence,
+not a claim that the full repository suite is green on a supported runtime.
+
+Database verification used only disposable project
+`intake-form-foundation-phase2a` at
+`/private/tmp/intake-form-foundation.rXIikw`, with API `127.0.0.1:55421` and
+database `127.0.0.1:55422`:
+
+```sh
+npx supabase db reset --local --workdir /private/tmp/intake-form-foundation.rXIikw --no-seed
+psql -X --no-password --set ON_ERROR_STOP=1 postgresql://postgres:postgres@127.0.0.1:55422/postgres --file supabase/seed.sql
+npx supabase migration list --local --workdir /private/tmp/intake-form-foundation.rXIikw
+npm run intake:forms:install -- --dry-run
+npm run intake:forms:install -- --apply --actor-id 10000000-0000-4000-8000-000000000001
+npm run intake:forms:install -- --apply --actor-id 10000000-0000-4000-8000-000000000001
+```
+
+The installer commands received local credentials privately from validated
+disposable-project status; no credentials were printed. A synthetic local
+administrator was seeded after the transactional database tests. Full replay
+completed with all 289 migration entries aligned through `20270130090001` and
+the superseded timestamp absent. Dry-run selected two creates; first apply
+created exactly two published version-1 rows; second apply reported two
+no-ops. Catalog queries confirmed two templates, two versions, no drafts,
+enabled RLS, no `anon`/`authenticated` table or lifecycle execution privileges,
+service-role CRUD/execute only (no TRUNCATE/REFERENCES/TRIGGER), empty RPC search
+paths, and the nullable noncascading pin foreign key. A direct service-role
+definition update of an installed publication was rejected inside a rolled-back
+transaction. Estate and college hashes matched their committed snapshots.
+
+The installer preflight and separate lifecycle RPCs are not one transaction
+spanning both bundles. A mid-run operational failure can leave a draft that
+requires explicit review. Concurrent competing database sessions were not
+stress-tested. This verification does not add a live resolver caller, browser
+builder acceptance, or production acceptance.
+
+The visual composer, template/preview UI, production bundled installation,
+persistent runtime activation and intake pinning, all Phase 3 work (including
+the staff matter Intake tab), and drafting changes remain outside this slice.
+Migration deployment is separately authorized and was not performed. No linked
+reset, seed, push/apply, repair, or deployment occurred during this verification.
+Task 1's read-only linked dry-run selected exactly
+`20270130090001_intake_form_builder_foundation.sql`, with no seeds or roles;
+that earlier observation was not refreshed here. Merging migration changes to
+`main` triggers the repository's migration deployment workflow, so that merge
+also requires the separately authorized deployment/reconciliation path.
