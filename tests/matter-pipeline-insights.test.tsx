@@ -75,7 +75,8 @@ describe('MatterPipelineInsights', () => {
     // Two open matters — the closed one is out of every count.
     expect(screen.getByText('Open matters').closest('button')?.textContent).toContain('2')
     expect(screen.getByText('Uploads to review').closest('div')?.parentElement?.textContent).toContain('3')
-    expect(screen.getByText('1 awaiting intake')).toBeTruthy()
+    expect(screen.queryByText('1 awaiting intake')).toBeNull()
+    expect(screen.getByText('Active work for hired clients')).toBeTruthy()
 
     await user.click(screen.getByText('Needs attention'))
     expect(onToggleFilter).toHaveBeenCalledWith('attention')

@@ -33,6 +33,12 @@ interface ContactSidePanelProps {
 }
 
 export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePanelProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const previousFocus = document.activeElement
+    panelRef.current?.focus()
+    return () => { if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus() }
+  }, [contact.id])
   const router = useRouter()
   const token = useAccessToken()
   const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
@@ -158,8 +164,11 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
 
   return (
     <aside
+      id="contact-details-panel"
+      ref={panelRef}
+      tabIndex={-1}
       aria-label={`${contact.name} contact details`}
-      className="sticky top-4 flex h-[calc(100vh-6rem)] w-[400px] shrink-0 flex-col rounded-lg border border-border bg-card shadow lg:w-[460px] xl:w-[520px]"
+      className="order-first flex max-h-[calc(100dvh-6rem)] w-full shrink-0 flex-col rounded-xl border border-border bg-card shadow xl:sticky xl:top-4 xl:order-last xl:h-[calc(100dvh-6rem)] xl:w-[440px]"
     >
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <span

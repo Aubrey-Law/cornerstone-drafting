@@ -7,6 +7,7 @@ type LeadNextActionProps = {
   action: NextAction
   busy: boolean
   context?: string
+  urgency?: string
   onIntent: (intent: string) => void
 }
 
@@ -14,6 +15,7 @@ export function LeadNextAction({
   action,
   busy,
   context,
+  urgency,
   onIntent,
 }: LeadNextActionProps) {
   if (action.key === 'nothing') return null
@@ -32,6 +34,7 @@ export function LeadNextAction({
           1
         </span>
         <div className="min-w-0">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Firm action{urgency ? ` · ${urgency}` : ''}</p>
           {context && <p className="mb-1 text-xs font-medium text-muted-foreground">{context}</p>}
           <h2 className="text-sm font-semibold">{action.title}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{action.detail}</p>

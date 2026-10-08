@@ -37,7 +37,6 @@ import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from 
 import {
   formatLastMilestone,
   matterCustomName,
-  matterIntakeBadge,
   matterLastMilestoneAt,
   matterMetaFacts,
   matterQuietDays,
@@ -93,11 +92,6 @@ interface MattersClientProps {
 const FILTER_PARAM: Partial<Record<keyof MatterTableFilters, string>> = {
   stageGroup: 'stage',
   includeClosed: 'closed',
-}
-
-const INTAKE_BADGE_CLASS: Record<string, string> = {
-  submitted: 'border-green/40 bg-green-bg text-green',
-  in_progress: 'border-blue-strong-border bg-blue-bg text-blue',
 }
 
 export default function MattersClient(props: MattersClientProps) {
@@ -158,9 +152,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
   // acknowledged; without this the route reports them back as failures and
   // leaves them standing.
   const [deleteHired, setDeleteHired] = useState(false)
-  const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
   const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
-  const [createdIntakeUrl, setCreatedIntakeUrl] = useState<string | null>(null)
 
   const applySort = (key: MatterSortKey) => {
     setSortKey(key)
@@ -277,7 +269,6 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
     stage: m.stage,
     title: matterTitle(m),
     subtitle: matterSubtitle(m),
-    badge: matterIntakeBadge(m),
     quietDays: workSummaries[m.matter_id] ? null : matterQuietDays(m),
     href: `/admin/matters/${m.matter_id}`,
     meta: workSummaries[m.matter_id] ? [] : matterMetaFacts(m),
@@ -347,9 +338,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
     setClientEmail('')
     setClientPhone('')
     setPlanType('EP')
-    setSendIntakeOnCreate(true)
     setCreatedMatterId(null)
-    setCreatedIntakeUrl(null)
   }
 
   const handleCreate = async () => {
@@ -391,24 +380,9 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not create matter')
       const matterId = body.matterId as string
-      let intakeUrl: string | null = null
-      if (sendIntakeOnCreate) {
-        const sendRes = await fetch('/api/admin/intake/send', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ matterId }),
-        })
-        const sendBody = await sendRes.json().catch(() => ({}))
-        if (!sendRes.ok) throw new Error(sendBody.error ?? 'Matter created but intake invite failed')
-        if (typeof sendBody.url === 'string') intakeUrl = sendBody.url
-      }
       createRequestIdRef.current = null
       setCreatedMatterId(matterId)
-      setCreatedIntakeUrl(intakeUrl)
-      toast.success(sendIntakeOnCreate ? 'Matter created and intake invite sent' : 'Matter created')
+      toast.success('Matter created')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create matter')
@@ -611,8 +585,6 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                 <SelectItem value="practice_desc">Practice Z-A</SelectItem>
                 <SelectItem value="stage_asc">Stage (early first)</SelectItem>
                 <SelectItem value="stage_desc">Stage (late first)</SelectItem>
-                <SelectItem value="intake_asc">Intake A-Z</SelectItem>
-                <SelectItem value="intake_desc">Intake Z-A</SelectItem>
               </SelectContent>
             </Select>
             {hasActiveFilters && (
@@ -738,7 +710,6 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                   <SortableHead label="Client" asc="client_asc" desc="client_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Practice Area" asc="practice_asc" desc="practice_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Stage" asc="stage_asc" desc="stage_desc" sortKey={sortKey} onSort={applySort} />
-                  <SortableHead label="Intake" asc="intake_asc" desc="intake_desc" sortKey={sortKey} onSort={applySort} />
                   <SortableHead label="Last activity" asc="last_activity_oldest" desc="last_activity" sortKey={sortKey} onSort={applySort} />
                   <TableHead>Attention</TableHead>
                   <TableHead className="w-10" aria-label="Open matter" />
@@ -788,16 +759,6 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                           {stageLabel(m.stage)}
                         </span>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`text-micro capitalize ${
-                            INTAKE_BADGE_CLASS[m.intake_status ?? ''] ?? 'text-muted-foreground'
-                          }`}
-                        >
-                          {matterIntakeBadge(m).label}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {formatLastMilestone(activity)}
                       </TableCell>
@@ -837,32 +798,11 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
             <DialogTitle>{createdMatterId ? 'Matter ready' : 'Create Matter'}</DialogTitle>
             <DialogDescription>
               {createdMatterId
-                ? 'The matter is created. Copy the intake link or open the matter detail page.'
+                ? 'The matter is ready. Open it to review details and begin work.'
                 : 'Start a new estate planning matter with client contact details.'}
             </DialogDescription>
           </DialogHeader>
-          {createdMatterId ? (
-            <div className="grid gap-3 py-1">
-              {createdIntakeUrl && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="created-intake-url">Intake link</Label>
-                  <div className="flex gap-2">
-                    <Input id="created-intake-url" readOnly value={createdIntakeUrl} />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(createdIntakeUrl)
-                        toast.success('Intake link copied')
-                      }}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
+          {!createdMatterId && (
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
               <Label htmlFor="create-client-name">Client name</Label>
@@ -909,13 +849,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
                 </SelectContent>
               </Select>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={sendIntakeOnCreate}
-                onCheckedChange={checked => setSendIntakeOnCreate(checked === true)}
-              />
-              Send intake invite email
-            </label>
+
           </div>
           )}
           <DialogFooter>
@@ -934,7 +868,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
               Cancel
             </Button>
             <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
-              {creating ? 'Creating…' : sendIntakeOnCreate ? 'Create & send intake' : 'Create'}
+              {creating ? 'Creating…' : 'Create'}
             </Button>
               </>
             )}

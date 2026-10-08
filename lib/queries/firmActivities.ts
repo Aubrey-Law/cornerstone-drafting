@@ -27,7 +27,18 @@ export async function fetchFirmActivities(filters: ActivityFilters) {
   }
   if (filters.cursor) query = query.or(`occurred_at.lt.${filters.cursor.at},and(occurred_at.eq.${filters.cursor.at},id.lt.${filters.cursor.id})`)
   const { data, error } = await query
-  if (error) return { rows: [] as ActivityRow[], next: null, error: 'Activity history could not be loaded. Check that the firm activity migration has been applied, then retry.' }
+  if (error) {
+    // Keep database details out of the response and record only a diagnostic code.
+    console.error('fetchFirmActivities failed', { code: error.code || 'unknown' })
+    const missingView = error.code === 'PGRST205' || error.code === '42P01'
+    return {
+      rows: [] as ActivityRow[],
+      next: null,
+      error: missingView
+        ? 'Activity history is not set up in this environment. Apply the firm activity migration, then retry.'
+        : 'Activity history could not be loaded. Please retry. If this continues, contact your administrator.',
+    }
+  }
   const rows = (data ?? []).slice(0, ACTIVITY_PAGE_SIZE)
   return { rows, next: (data?.length ?? 0) > ACTIVITY_PAGE_SIZE ? activityCursor(rows[rows.length - 1]) : null, error: null }
 }

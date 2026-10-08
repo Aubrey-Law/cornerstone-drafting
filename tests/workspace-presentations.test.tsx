@@ -57,3 +57,9 @@ it('uses existing drafting routes and shows every workspace section in one row',
   expect(matterIdFromPath('/admin/drafting/real-estate-transfer')).toBeUndefined()
   expect(matterIdFromPath('/admin/matters/list')).toBeUndefined()
 })
+
+it('keeps legacy preparation records reachable without moving hired matters back to intake', async () => {
+  const { firstStageOfGroup, STAGE_GROUP_LABELS } = await import('@/lib/matter/stageGroups')
+  expect(firstStageOfGroup('early')).toBe('design')
+  expect(STAGE_GROUP_LABELS.early).toBe('Design preparation')
+})

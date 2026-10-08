@@ -608,7 +608,7 @@ export function TasksClient({
         eyebrow="Firm work"
         icon={ListTodo}
         title="Tasks"
-        description="Everything the firm owes someone — stage-engine tasks and tasks you added by hand, in one queue."
+        description="Assignments, deadlines, and follow-up across leads and matters."
         actions={
           <>
             <Button type="button" variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
@@ -633,17 +633,6 @@ export function TasksClient({
         }
       />
 
-      <TaskPresentationSwitch value={presentation} onChange={value => { clearSelection(); selectPresentation(value) }} />
-      {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
-        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : 'Groups below show this page.'}</span>
-        <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
-        <Button variant="outline" size="sm" disabled={pagination.params.page >= pageCount} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
-        {pagination.params.showDone && <div className="flex items-center gap-2">
-          <span>{pagination.doneTotal} completed today · page {pagination.params.donePage}</span>
-          <Button variant="outline" size="sm" disabled={pagination.params.donePage <= 1} onClick={() => navigate({ donePage: String(pagination.params.donePage - 1), page: String(pagination.params.page) })}>Previous completed</Button>
-          <Button variant="outline" size="sm" disabled={pagination.params.donePage * pagination.params.pageSize >= pagination.doneTotal} onClick={() => navigate({ donePage: String(pagination.params.donePage + 1), page: String(pagination.params.page) })}>Next completed</Button>
-        </div>}
-      </div>}
       {composerOpen && (
         <TaskComposer
           ref={composerRef}
@@ -659,8 +648,8 @@ export function TasksClient({
         />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <section aria-label="Task controls" className="space-y-3 rounded-xl border border-border bg-card p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={scope} onValueChange={value => { if (pagination) navigate({ scope: value }); else setScope(value as ScopeKey); setFocusId(null); clearSelection() }}>
             <TabsList>
               <TabsTrigger value="mine">Mine ({scopeCounts.mine})</TabsTrigger>
@@ -668,6 +657,11 @@ export function TasksClient({
               <TabsTrigger value="unassigned">Unassigned ({scopeCounts.unassigned})</TabsTrigger>
             </TabsList>
           </Tabs>
+      <TaskPresentationSwitch value={presentation} onChange={value => { clearSelection(); selectPresentation(value) }} />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+
 
           <FilterMenu
             label="Source"
@@ -723,12 +717,12 @@ export function TasksClient({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="sm" className="h-7 text-xs">
-                Group: {groupBy === 'matter' ? 'Matter' : groupBy === 'priority' ? 'Priority' : 'Due date'}
+                {presentation === 'list' ? 'Group' : 'Page order'}: {groupBy === 'matter' ? 'Matter' : groupBy === 'priority' ? 'Priority' : 'Due date'}
                 <ChevronDown className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel className="text-xs">Group by</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs">{presentation === 'list' ? 'Group by' : 'Order pages by'}</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => { setGroupBy('priority'); setFocusId(null) }}>
                 Priority
               </DropdownMenuItem>
@@ -740,7 +734,7 @@ export function TasksClient({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <span className="hidden items-center gap-1.5 text-micro text-muted-foreground lg:inline-flex">
+          {presentation === 'list' && <span className="hidden items-center gap-1.5 text-micro text-muted-foreground lg:inline-flex">
             <kbd className="rounded border border-border bg-muted px-1">J</kbd>
             <kbd className="rounded border border-border bg-muted px-1">K</kbd>
             move
@@ -756,10 +750,21 @@ export function TasksClient({
             <span aria-hidden>·</span>
             <kbd className="rounded border border-border bg-muted px-1">S</kbd>
             snooze
-          </span>
+          </span>}
         </div>
       </div>
+      </section>
 
+      {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
+        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : presentation === 'list' ? 'Groups below show this page.' : 'Showing tasks from this page.'}</span>
+        <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
+        <Button variant="outline" size="sm" disabled={pagination.params.page >= pageCount} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
+        {pagination.params.showDone && <div className="flex items-center gap-2">
+          <span>{pagination.doneTotal} completed today · page {pagination.params.donePage}</span>
+          <Button variant="outline" size="sm" disabled={pagination.params.donePage <= 1} onClick={() => navigate({ donePage: String(pagination.params.donePage - 1), page: String(pagination.params.page) })}>Previous completed</Button>
+          <Button variant="outline" size="sm" disabled={pagination.params.donePage * pagination.params.pageSize >= pagination.doneTotal} onClick={() => navigate({ donePage: String(pagination.params.donePage + 1), page: String(pagination.params.page) })}>Next completed</Button>
+        </div>}
+      </div>}
       {presentation !== 'list' ? <TaskPresentationView tasks={[...scoped, ...doneTodayScoped]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
         const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
         if (updated) { applyUpdate(updated); router.refresh() }

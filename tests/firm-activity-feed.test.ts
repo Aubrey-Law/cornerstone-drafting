@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ACTIVITY_PAGE_SIZE, activityCursor, activityFilters, type ActivityRow } from '@/lib/activities/feed'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), from: vi.fn() }))
 vi.mock('@/lib/review/staff', () => ({ requireStaffPage: mocks.auth }))
@@ -12,7 +12,8 @@ function query(data: ActivityRow[] = [], error: unknown = null) {
   mocks.from.mockReturnValue(chain)
   return chain
 }
-beforeEach(() => { vi.clearAllMocks(); mocks.auth.mockResolvedValue({ userId: id }) })
+beforeEach(() => { vi.clearAllMocks(); vi.spyOn(console, 'error').mockImplementation(() => {}); mocks.auth.mockResolvedValue({ userId: id }) })
+afterEach(() => { vi.restoreAllMocks() })
 it('preserves microsecond cursor precision and validates hostile cursors', () => {
   const row = { id: `matter:${id}`, occurred_at: '2026-10-07T12:30:00.123456+00:00' }
   expect(activityFilters({ cursor: activityCursor(row) }).cursor).toEqual({ at: row.occurred_at, id: row.id })
@@ -46,6 +47,23 @@ it('reports a failed read explicitly instead of presenting an empty history', as
   const result = await fetchFirmActivities(activityFilters({}))
   expect(result.error).toBeTruthy()
   expect(result.next).toBeNull()
+})
+it.each(['PGRST205', '42P01'])('identifies a missing activity view (%s)', async code => {
+  query([], { code, message: 'Internal database detail' })
+  const result = await fetchFirmActivities(activityFilters({}))
+  expect(result.error).toContain('Apply the firm activity migration')
+  expect(result.rows).toEqual([])
+  expect(result.next).toBeNull()
+  expect(console.error).toHaveBeenCalledWith('fetchFirmActivities failed', { code })
+  expect(result.error).not.toContain('Internal database detail')
+})
+it.each(['57014', '42501', ''])('does not misdiagnose other read failures (%s) as missing migrations', async code => {
+  query([], { code, message: 'Internal database detail' })
+  const result = await fetchFirmActivities(activityFilters({}))
+  expect(result.error).toContain('Please retry')
+  expect(result.error).not.toContain('migration')
+  expect(result.error).not.toContain('Internal database detail')
+  expect(console.error).toHaveBeenCalledWith('fetchFirmActivities failed', { code: code || 'unknown' })
 })
 it('applies both record scope and cursor without dropping either filter', async () => {
   const chain = query()

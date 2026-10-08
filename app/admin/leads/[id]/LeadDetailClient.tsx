@@ -35,6 +35,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { LeadHiringReadiness } from '@/components/leads/LeadHiringReadiness'
+import { leadFieldDefinition } from '@/lib/leads/fieldDefinitions'
 import { LeadOverviewDetails } from '@/components/leads/LeadOverviewDetails'
 import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTasksTab'
 import { ViewSwitch } from '@/components/ViewSwitch'
@@ -110,6 +112,7 @@ type LeadDetailClientProps = {
   actorNames?: Record<string, string>
   firmTimezone?: string
   nextAppointmentAt?: string | null
+  nextAppointmentLabel?: string
   lastTouchAt?: string | null
   actorError?: string | null
   currentUser?: { id: string; role: string }
@@ -189,6 +192,7 @@ export function LeadDetailClient({
   actorNames = {},
   firmTimezone = FIRM_TIMEZONE,
   nextAppointmentAt = null,
+  nextAppointmentLabel = 'Next meeting',
   lastTouchAt,
   lastClientResponseAt = null,
   recordUpdatedAt = null,
@@ -582,7 +586,7 @@ export function LeadDetailClient({
    * so the same write is available here without opening the SLA tab.
    */
   async function saveKeyDate(field: keyof LeadKeyDates, value: string | null) {
-    if (!lead.matter_id) return
+    if (!lead.matter_id) throw new Error('This lead has no linked record for key dates.')
     setKeyDatesSaving(true)
     try {
       const json = await call<{ anchors?: LeadKeyDates; rescheduled?: number }>(
@@ -602,8 +606,6 @@ export function LeadDetailClient({
       await refreshActivityBestEffort()
       tasksChanged()
       router.refresh()
-    } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : 'Could not save the key date')
     } finally {
       setKeyDatesSaving(false)
     }
@@ -803,13 +805,24 @@ export function LeadDetailClient({
     `/admin/leads/${lead.id}`, `/admin/crm/opportunities/${lead.id}`,
   ].includes(workSummary.href))))
   const operationalBrief = leadOperationalBrief({
-    lead,
+    lead: { ...lead, engagement_status: engagementStatus },
     spouse,
     nextAction: availableAction,
     nextAppointmentAt,
     conflictCheck,
   })
 
+
+  const hiringReadiness = (lead.lead_status === 'lead' && <LeadHiringReadiness
+                requirements={operationalBrief.blockers.filter(item => item.key !== 'lead.conflict_check')}
+                busy={interactionBusy}
+                onResolve={requirement => {
+                  const field = leadFieldDefinition(requirement.source.field as LeadEditableField)
+                  if (field) openField(field.key)
+                  else if (requirement.key.startsWith('lead.engagement_')) changeTab('documents')
+                  else changeTab('intake')
+                }}
+              />)
 
   const timeline = (
     <LeadTimelineCard
@@ -903,7 +916,7 @@ export function LeadDetailClient({
       <div className="flex min-h-0 flex-1">
         <ResponsiveDetailRail
           open={railOpen}
-          onOpenChange={open => { if (!open && interactionBusy) return; setRailOpen(open); if (!open) setActiveField(null) }}
+          onOpenChange={open => { if (!open && (interactionBusy || keyDatesSaving)) return; setRailOpen(open); if (!open) setActiveField(null) }}
           label="Lead details"
           drawer
           blurOnEscape={false}
@@ -998,11 +1011,15 @@ export function LeadDetailClient({
               <aside aria-label="Up next" className="contents xl:col-start-2 xl:row-start-1 xl:block xl:min-w-0 xl:space-y-4 xl:border-l xl:border-border xl:pl-5">
                 <div className="order-1 space-y-4">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Up next</h2>
-                {workSummary && !useLocalAction && <RecordWorkStrip summary={workSummary} prominent />}
+                {workSummary && !useLocalAction && <div>
+                  <p className="text-xs text-muted-foreground">Owner: {workSummary.owner === 'client' ? 'Client' : workSummary.owner === 'automation' ? 'Automation' : 'Firm'}</p>
+                  <RecordWorkStrip summary={workSummary} prominent />
+                </div>}
           {useLocalAction && visibleAction && (
             <div className="mb-4">
               <LeadNextAction
                 action={visibleAction}
+                urgency={workSummary ? ['Critical', 'Today', 'Soon', 'Planned', 'Waiting'][workSummary.priorityBand] : undefined}
                 context={workSummary?.priorityReasons.map(reason => reason.label).join(" · ")}
                 busy={interactionBusy}
                 onIntent={intent => void handleNextAction(intent)}
@@ -1017,7 +1034,7 @@ export function LeadDetailClient({
           )}
                 </div>
                 <div className="order-3 space-y-4">
-              <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt}
+              <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt} nextAppointmentLabel={nextAppointmentLabel} readiness={hiringReadiness}
                 lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
                 updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
                 agreementStatus={engagementStatus} timeZone={firmTimezone}

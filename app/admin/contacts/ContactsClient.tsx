@@ -142,6 +142,7 @@ export function ContactsClient({
         }
       />
 
+      <section aria-label="Directory controls" className="space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
           value={filters.search}
@@ -150,7 +151,7 @@ export function ContactsClient({
           aria-label="Search contacts"
           containerClassName="w-full sm:w-72"
         />
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Contact types">
           {KIND_FILTERS.map(option => (
             <FilterChip
               key={option.value}
@@ -177,7 +178,13 @@ export function ContactsClient({
         </div>
       </div>
 
-      <div className="flex items-start gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <p role="status" className="text-xs text-muted-foreground">{visible.length} of {contacts.length} people · Select Details to review a person.</p>
+        {(filters.search || filters.kind !== 'all') && <Button type="button" size="sm" variant="ghost" onClick={() => setFilters(EMPTY_CONTACT_TABLE_FILTERS)}>Clear filters</Button>}
+      </div>
+      </section>
+
+      <div className="flex flex-col items-stretch gap-4 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-4">
           {visible.length === 0 ? (
             <EmptyState
@@ -194,21 +201,21 @@ export function ContactsClient({
                     <Plus className="h-3.5 w-3.5" />
                     Add contact
                   </Button>
-                ) : undefined
+                ) : <Button type="button" size="sm" variant="outline" onClick={() => setFilters(EMPTY_CONTACT_TABLE_FILTERS)}>Clear filters</Button>
               }
             />
           ) : (
-            <div className="rounded-lg border border-border">
+            <div className="rounded-xl border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
+                    <TableHead className="hidden sm:table-cell">Type</TableHead>
+                    <TableHead className="hidden md:table-cell">Email</TableHead>
+                    <TableHead className="hidden md:table-cell">Phone</TableHead>
                     <TableHead className={cn('md:table-cell', selected ? 'hidden xl:table-cell' : 'hidden')}>Location</TableHead>
                     <TableHead className={cn(selected ? 'hidden' : 'hidden lg:table-cell')}>Practice</TableHead>
-                    <TableHead className="w-[76px] text-right">Reach</TableHead>
+                    <TableHead className="w-[76px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -222,7 +229,7 @@ export function ContactsClient({
                         className="cursor-pointer"
                         onClick={() => setSelectedId(current => (current === contact.id ? null : contact.id))}
                       >
-                        <TableCell>
+                        <TableCell className="whitespace-normal break-words">
                           {contact.href ? (
                             <Link
                               href={contact.href}
@@ -234,16 +241,21 @@ export function ContactsClient({
                           ) : (
                             <span className="font-medium">{contact.name}</span>
                           )}
+                          <div className="mt-1 sm:hidden"><KindBadge kind={contact.kind} /></div>
+                          <div className="mt-1 space-y-1 text-xs text-muted-foreground md:hidden">
+                            {contact.email && <a href={`mailto:${contact.email}`} className="block break-all hover:underline" onClick={event => event.stopPropagation()}>{contact.email}</a>}
+                            {contact.phone && (tel ? <a href={tel} className="block hover:underline" onClick={event => event.stopPropagation()}>{contact.phone}</a> : <span className="block">{contact.phone}</span>)}
+                          </div>
                           {(contact.relationship || contact.matter_number) && (
                             <div className="text-xs text-muted-foreground">
                               {contact.relationship ?? contact.matter_number}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <KindBadge kind={contact.kind} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {contact.email ? (
                             <a
                               href={`mailto:${contact.email}`}
@@ -256,7 +268,7 @@ export function ContactsClient({
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell className="hidden whitespace-nowrap md:table-cell">
                           {contact.phone ? (
                             tel ? (
                               <a
@@ -282,12 +294,13 @@ export function ContactsClient({
                         {/* Reach anyone without opening the panel first. Email
                             opens the panel, which hosts the composer. */}
                         <TableCell className="text-right whitespace-nowrap">
+                          <Button type="button" size="sm" variant="ghost" aria-label={`View details for ${contact.name}`} aria-expanded={selected?.id === contact.id} aria-controls={selected?.id === contact.id ? 'contact-details-panel' : undefined} onClick={event => { event.stopPropagation(); setSelectedId(current => current === contact.id ? null : contact.id) }}>Details</Button>
                           {contact.phone && (
                             <Button
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-7 w-7 p-0"
+                              className="hidden h-7 w-7 p-0 sm:inline-flex"
                               aria-label={`Call ${contact.name}`}
                               onClick={event => {
                                 event.stopPropagation()
@@ -302,7 +315,7 @@ export function ContactsClient({
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-7 w-7 p-0"
+                              className="hidden h-7 w-7 p-0 sm:inline-flex"
                               aria-label={`Email ${contact.name}`}
                               onClick={event => {
                                 event.stopPropagation()
@@ -321,11 +334,6 @@ export function ContactsClient({
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
-            {visible.length === contacts.length
-              ? `${contacts.length} contacts`
-              : `${visible.length} of ${contacts.length} contacts`}
-          </p>
         </div>
 
         {selected && (

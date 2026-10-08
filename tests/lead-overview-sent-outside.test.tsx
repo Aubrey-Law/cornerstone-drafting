@@ -38,3 +38,28 @@ describe('LeadOverview engagement sent outside the app', () => {
     expect(screen.queryByLabelText('Sent outside the app')).toBeNull()
   })
 })
+
+
+describe('LeadOverview next steps', () => {
+  it('keeps completed intake and engagement available behind a disclosure', async () => {
+    render(<LeadOverview {...props} lead={{ ...lead, intake_completed_at: '2026-09-01', engagement_signed_at: '2026-09-02' }} />)
+    const summary = screen.getByText('Completed steps (2)')
+    const details = summary.closest('details')!
+    expect(details.open).toBe(false)
+    expect(details.textContent).toContain('Intake received')
+    expect(details.textContent).toContain('Signed')
+    expect(details.textContent).not.toContain('Not prepared')
+    await userEvent.setup().click(summary)
+    expect(details.open).toBe(true)
+    expect(screen.getByRole('button', { name: 'Review intake' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'View engagement details' })).toBeTruthy()
+  })
+
+  it('uses the recorded meeting label only while that meeting is upcoming', () => {
+    const view = render(<LeadOverview {...props} nextAppointmentAt="2099-01-01" nextAppointmentLabel="Discovery Call" />)
+    expect(screen.getByRole('heading', { name: 'Discovery Call' })).toBeTruthy()
+    view.rerender(<LeadOverview {...props} nextAppointmentAt="2000-01-01" nextAppointmentLabel="Discovery Call" />)
+    expect(screen.queryByRole('heading', { name: 'Discovery Call' })).toBeNull()
+    expect(screen.getByText('No meeting scheduled')).toBeTruthy()
+  })
+})

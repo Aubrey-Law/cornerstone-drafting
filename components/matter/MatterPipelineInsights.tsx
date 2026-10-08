@@ -70,7 +70,6 @@ export function MatterPipelineInsights({
   const open = matters.filter(isOpenMatter)
   const attention = totals?.attention ?? open.filter(matter => matterNeedsAttention(matter)).length
   const signing = totals?.signing ?? open.filter(matter => signingSoon(matter)).length
-  const intakePending = totals?.intakePending ?? open.filter(awaitingIntake).length
   const unreviewed = totals?.unreviewed ?? open.reduce((total, matter) => total + (matter.unreviewed_upload_count ?? 0), 0)
 
   const insights: {
@@ -83,7 +82,7 @@ export function MatterPipelineInsights({
     {
       label: 'Open matters',
       value: String(totals?.open ?? open.length),
-      detail: `${intakePending} awaiting intake`,
+      detail: 'Active work for hired clients',
       icon: Briefcase,
       filter: 'open',
     },

@@ -62,6 +62,7 @@ describe('opportunity rail key dates', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit lead details and dates' }))
     fireEvent.change(screen.getByLabelText('Discovery date'), { target: { value: '2026-08-03' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       '/api/admin/matters/m-1/sla-anchors',
@@ -99,10 +100,11 @@ describe('opportunity rail key dates', () => {
     expect(onSaveKeyDate).not.toHaveBeenCalled()
 
     fireEvent.change(screen.getByLabelText('Discovery date'), { target: { value: '2026-08-03' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
     expect(onSaveKeyDate).toHaveBeenCalledWith('discoveryCallAt', '2026-08-03')
   })
 
-  it('clears a set anchor when the field is emptied and left', () => {
+  it('clears a set anchor only after explicit save', () => {
     const onSaveKeyDate = vi.fn().mockResolvedValue(undefined)
     render(
       <LeadKeyDatesCard
@@ -114,7 +116,35 @@ describe('opportunity rail key dates', () => {
     const pmps = screen.getByLabelText('PMPS date')
     fireEvent.change(pmps, { target: { value: '' } })
     fireEvent.blur(pmps)
+    expect(onSaveKeyDate).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
     expect(onSaveKeyDate).toHaveBeenCalledWith('pmpsAt', null)
+  })
+
+  it('validates past dates and lets the user cancel without saving', () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    render(<LeadKeyDatesCard keyDates={{ discoveryCallAt: '2026-08-03', pmpsAt: null }} onSaveKeyDate={save} />)
+    const input = screen.getByLabelText('Discovery date') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '02/30/2020' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
+    expect(screen.getByRole('alert').textContent).toContain('valid date')
+    expect(save).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(input.value).toBe('2026-08-03')
+    fireEvent.change(input, { target: { value: '04/12/1958' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
+    expect(save).toHaveBeenCalledWith('discoveryCallAt', '1958-04-12')
+  })
+
+  it('restores a rejected date visibly while preserving the other unsaved date', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('Network unavailable'))
+    render(<LeadKeyDatesCard keyDates={{ discoveryCallAt: '2026-08-03', pmpsAt: null }} onSaveKeyDate={save} />)
+    fireEvent.change(screen.getByLabelText('Discovery date'), { target: { value: '08/04/2026' } })
+    fireEvent.change(screen.getByLabelText('PMPS date'), { target: { value: '09/01/2026' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save date' })[0])
+    expect((await screen.findByRole('alert')).textContent).toContain('previous date has been restored')
+    expect((screen.getByLabelText('Discovery date') as HTMLInputElement).value).toBe('2026-08-03')
+    expect((screen.getByLabelText('PMPS date') as HTMLInputElement).value).toBe('09/01/2026')
   })
 
   it('keeps a rail date field open until the whole date is typed', async () => {

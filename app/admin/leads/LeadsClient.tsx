@@ -561,8 +561,8 @@ export function LeadsClient({
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Opportunities"
-        description="Prospective and historical client opportunities — manage intake, engagement, follow-up, and conversion from one pipeline."
+        title="Leads"
+        description="Intake, engagement, and follow-up for prospective clients."
         actions={
           <>
             <ExportCsvButton

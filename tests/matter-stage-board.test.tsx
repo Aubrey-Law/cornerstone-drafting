@@ -91,8 +91,8 @@ describe('matters list board view', () => {
     const drafting = screen.getByRole('region', { name: 'Drafting · 1' })
     expect(within(drafting).getByText('Zoe Beta')).toBeTruthy()
 
-    const intake = screen.getByRole('region', { name: 'Intake · 1' })
-    expect(within(intake).getByText('Aaron Gamma')).toBeTruthy()
+    const preparation = screen.getByRole('region', { name: 'Design preparation · 1' })
+    expect(within(preparation).getByText('Aaron Gamma')).toBeTruthy()
   })
 
   it('honours the active filters so both views show the same matters', async () => {
