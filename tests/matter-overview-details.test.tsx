@@ -13,11 +13,13 @@ function setup(status: string) {
     details={null} plan={EMPTY_PLAN_MIRROR} estate={{ assetCount: 0 } as MatterEstateSnapshot} onDetails={onDetails} />)
   return onDetails
 }
-it('shows married client and spouse identities and contacts with an Edit action', () => {
+it('shows compact read-only client and spouse cards with a details-panel action', () => {
   const edit = setup('married')
-  expect(screen.getByRole('heading', { name: 'Matter Details' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Matter summary' })).toBeTruthy()
+  expect(screen.getByRole('group', { name: 'Client summary' })).toBeTruthy()
+  expect(screen.getByRole('group', { name: 'Spouse summary' })).toBeTruthy()
   for (const text of ['Alex Client', 'Sam Client', 'sam@example.com', '617-555-0111', '20 Main Street']) expect(screen.getByText(text)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Open details' }))
   expect(edit).toHaveBeenCalledOnce()
 })
 it('leaves opened and last-contact dates to the details panel', () => {
