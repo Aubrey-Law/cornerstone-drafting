@@ -14,14 +14,11 @@ it('shows existing missing requirements and routes review to the selected requir
   const onResolve = vi.fn()
   render(<LeadHiringReadiness requirements={requirements} busy={false} onResolve={onResolve} />)
   expect(screen.getByRole('region', { name: 'Before hiring' })).toBeTruthy()
-  expect(screen.getAllByRole('button').filter(button => !button.closest('details'))).toHaveLength(3)
-  const disclosure = screen.getByText(`Show ${requirements.length - 3} more`).closest('details')!
-  expect(disclosure.open).toBe(false)
+  // A checklist like the matter page's: every open requirement, one Review each.
+  expect(screen.getAllByRole('button')).toHaveLength(requirements.length)
+  expect(screen.getAllByRole('listitem')).toHaveLength(requirements.length)
   fireEvent.click(screen.getByRole('button', { name: `Review ${requirements[0].label}` }))
   expect(onResolve).toHaveBeenCalledWith(requirements[0])
-  fireEvent.click(screen.getByText(`Show ${requirements.length - 3} more`))
-  expect(disclosure.open).toBe(true)
-  expect(screen.getAllByRole('button')).toHaveLength(requirements.length)
 })
 
 it('does not invent blockers when none are recorded', () => {

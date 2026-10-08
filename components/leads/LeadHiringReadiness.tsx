@@ -3,25 +3,30 @@
 import { Button } from '@/components/ui/button'
 import type { EvaluatedRequirement } from '@/lib/lifecycle/registry'
 
-/** Presentation of existing lifecycle requirements; does not add conversion gates. */
+/**
+ * Presentation of existing lifecycle requirements; does not add conversion
+ * gates. Drawn as the matter page's prep checklist inside the next-action card.
+ */
 export function LeadHiringReadiness({ requirements, busy, onResolve }: {
   requirements: EvaluatedRequirement[]
   busy: boolean
   onResolve: (requirement: EvaluatedRequirement) => void
 }) {
   if (!requirements.length) return null
-  function rows(items: EvaluatedRequirement[]) {
-    return <ul className="space-y-3">{items.map(item => <li key={item.key} className="flex items-start justify-between gap-3">
-      <div className="min-w-0"><p className="text-sm">{item.label}</p><p className="text-xs text-muted-foreground">
-        {item.owner === 'client' ? 'Client information or response' : item.owner === 'attorney' ? 'Attorney decision' : 'Firm follow-up'}
-      </p></div>
-      <Button variant="link" size="sm" className="h-auto shrink-0 p-0" disabled={busy}
-        aria-label={`Review ${item.label}`} onClick={() => onResolve(item)}>Review</Button>
-    </li>)}</ul>
-  }
-  return <section aria-label="Before hiring" className="space-y-3 border-b border-border pb-4">
-    <h2 className="text-sm font-semibold">Before hiring · {requirements.length}</h2>
-    {rows(requirements.slice(0, 3))}
-    {requirements.length > 3 && <details><summary className="cursor-pointer text-xs text-muted-foreground">Show {requirements.length - 3} more</summary><div className="mt-3">{rows(requirements.slice(3))}</div></details>}
+  return <section aria-label="Before hiring" className="mt-4">
+    <h3 className="mb-2 text-xs font-medium text-muted-foreground">Before hiring · {requirements.length}</h3>
+    <ul className="divide-y rounded-lg border">
+      {requirements.map(item => <li key={item.key} className="flex items-center gap-3 px-3.5 py-2.5">
+        <span aria-hidden className="size-4 shrink-0 rounded-sm border-[1.5px] border-input" />
+        <div className="min-w-0 flex-1">
+          <p>{item.label}</p>
+          <p className="text-xs text-muted-foreground">
+            {item.owner === 'client' ? 'Client information or response' : item.owner === 'attorney' ? 'Attorney decision' : 'Firm follow-up'}
+          </p>
+        </div>
+        <Button variant="link" className="h-auto shrink-0 p-0" disabled={busy}
+          aria-label={`Review ${item.label}`} onClick={() => onResolve(item)}>Review</Button>
+      </li>)}
+    </ul>
   </section>
 }

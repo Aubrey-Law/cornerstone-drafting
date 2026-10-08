@@ -16,7 +16,7 @@ describe('lead assets and document management', () => {
     expect(leadTabs).toContain("'people'")
     expect(leadTabs).not.toContain("people: 'intake'")
     expect(leadPage).toContain('fetchMatterContacts(lead.matter_id)')
-    expect(leadDetail).toContain('<TabsTrigger value="people">People</TabsTrigger>')
+    expect(leadDetail).toContain("['people', 'People']")
     expect(leadDetail).toContain('<MatterPeopleTabContent')
     expect(leadDetail).toContain('recordLabel="lead"')
   })
@@ -26,7 +26,7 @@ describe('lead assets and document management', () => {
     const leadTabs = read('lib/leads/leadPageTabs.ts')
 
     expect(leadTabs).toContain("'assets'")
-    expect(leadDetail).toContain('<TabsTrigger value="assets">Assets</TabsTrigger>')
+    expect(leadDetail).toContain("['assets', 'Assets']")
     expect(leadDetail).toContain('<MatterAssetsTab')
     expect(leadDetail).toContain('intakeId={liveIntakeId}')
   })
@@ -56,8 +56,9 @@ describe('the opportunity workspace after the intake consolidation', () => {
     // Intake is the landing tab, so it stays out of the URL like Plan did.
     expect(leadDetail).toContain("if (tab === 'overview') params.delete('tab')")
 
+    // The tab bar is drawn from one ordered list of [value, label] pairs.
     const order = ['overview', 'intake', 'tasks', 'people', 'assets', 'documents', 'communications', 'notes']
-      .map(tab => leadDetail.indexOf(`<TabsTrigger value="${tab}"`))
+      .map(tab => leadDetail.indexOf(`['${tab}', '`))
     expect(order.every(index => index > 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
   })
