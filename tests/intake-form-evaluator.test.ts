@@ -132,4 +132,20 @@ describe('compiled intake evaluation', () => {
     expect(result.requiredSections.map((section) => section.id)).toEqual(['personal'])
     expect(result.completedRequired).toBe(0)
   })
+
+  it('keeps an optional section incomplete when a supplied select answer is invalid', () => {
+    const raw: IntakeFormDefinition = { ...FORM, sections: [
+      { id: 'referral', title: 'Referral', optional: true, timeEstimateMinutes: 3, audience: 'client_and_staff', items: [{ kind: 'field', id: 'source', fieldId: 'referral_source' }] }, FORM.sections[6],
+    ] }
+    const result = evaluateCompiledIntakeForm(compiled(raw), { referral_source: 'not-an-option' })
+    expect(result.activeSections[0].items[0].complete).toBe(false)
+    expect(result.activeSections[0].complete).toBe(false)
+    expect(result.activeSections[0].issues).toEqual([expect.objectContaining({ severity: 'error' })])
+    expect(result.remainingMinutes).toBe(5)
+    expect(result.submissionErrors).toEqual([])
+    expect(evaluateCompiledIntakeForm(compiled(raw), {}).activeSections[0].complete).toBe(false)
+    const valid = evaluateCompiledIntakeForm(compiled(raw), { referral_source: 'Referral' })
+    expect(valid.activeSections[0].complete).toBe(true)
+    expect(valid.remainingMinutes).toBe(2)
+  })
 })

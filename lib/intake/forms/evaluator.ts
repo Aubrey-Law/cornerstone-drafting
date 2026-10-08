@@ -115,7 +115,7 @@ export function evaluateCompiledIntakeForm(form: CompiledIntakeForm, data: Intak
     })
     const issues = items.flatMap((item) => item.issues)
     const complete = section.optional && items.every((entry) => entry.item.kind === 'field' && entry.item.effectiveRequirement === 'optional')
-      ? items.some((entry) => entry.item.kind === 'field' && set(resolve(entry.item.fieldId)))
+      ? items.every((entry) => entry.complete) && items.some((entry) => entry.item.kind === 'field' && set(resolve(entry.item.fieldId)))
       : items.every((item) => item.complete)
     return { ...section, section, items, issues, complete, timeEstimate: section.timeEstimateMinutes ?? 0 }
   })
