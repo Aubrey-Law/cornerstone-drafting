@@ -30,6 +30,8 @@ import { getIntakeAttorneyDocumentInclusions, type IntakeBlockId } from '@/lib/i
 export interface IntakeBlockRendererProps extends StepProps {
   disabled?: boolean
   config?: Record<string, unknown>
+  /** In-memory review navigation; preview supplies a no-op to avoid live links. */
+  onEditSection?: (sectionId: string) => void
   onAttorneySave?: (patch: { plan_type?: string; document_inclusions?: Record<string, boolean> }) => Promise<void>
 }
 

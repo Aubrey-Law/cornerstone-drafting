@@ -4,10 +4,10 @@ import { clonePreviewScenarioAnswers, INTAKE_PREVIEW_SCENARIOS } from '@/lib/int
 describe('synthetic preview scenarios', () => {
   it('provides the controlling facts for empty, single, married, and family paths', () => {
     expect(clonePreviewScenarioAnswers('empty')).toEqual({})
-    expect(clonePreviewScenarioAnswers('single')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'Single', has_children: false })
-    expect(clonePreviewScenarioAnswers('married')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'Married', has_children: false,
+    expect(clonePreviewScenarioAnswers('single')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'single', has_children: false })
+    expect(clonePreviewScenarioAnswers('married')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'married', has_children: false,
       _spouse: { first_name: 'Morgan', last_name: 'Lee' } })
-    expect(clonePreviewScenarioAnswers('family')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'Married', has_children: true,
+    expect(clonePreviewScenarioAnswers('family')).toEqual({ first_name: 'Jordan', last_name: 'Lee', marital_status: 'married', has_children: true,
       has_minor_children: true, _spouse: { first_name: 'Morgan', last_name: 'Lee' },
       _children: [{ first_name: 'Riley', last_name: 'Lee', relationship_type: 'Child' }] })
   })

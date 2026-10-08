@@ -11,14 +11,14 @@ function deepFreeze<T>(value: T): DeepReadonly<T> {
 export const INTAKE_PREVIEW_SCENARIOS = deepFreeze({
   empty: { label: 'Empty', answers: {} },
   single: { label: 'Single', answers: {
-    first_name: 'Jordan', last_name: 'Lee', marital_status: 'Single', has_children: false,
+    first_name: 'Jordan', last_name: 'Lee', marital_status: 'single', has_children: false,
   } },
   married: { label: 'Married', answers: {
-    first_name: 'Jordan', last_name: 'Lee', marital_status: 'Married', has_children: false,
+    first_name: 'Jordan', last_name: 'Lee', marital_status: 'married', has_children: false,
     _spouse: { first_name: 'Morgan', last_name: 'Lee' },
   } },
   family: { label: 'Family with children', answers: {
-    first_name: 'Jordan', last_name: 'Lee', marital_status: 'Married',
+    first_name: 'Jordan', last_name: 'Lee', marital_status: 'married',
     has_children: true, has_minor_children: true,
     _spouse: { first_name: 'Morgan', last_name: 'Lee' },
     _children: [{ first_name: 'Riley', last_name: 'Lee', relationship_type: 'Child' }],
