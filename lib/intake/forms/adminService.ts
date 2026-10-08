@@ -4,7 +4,7 @@ import { compileIntakeForm, type IntakeFormDiagnostic } from './compiler'
 import { canonicalizeIntakeFormDefinition, hashIntakeFormDefinition } from './hash'
 import * as repository from './repository'
 import type { IntakeFormDefinition } from './types'
-import type { IntakeFormVersionRow } from './persistenceTypes'
+import type { IntakeFormEditorSnapshot, IntakeFormTemplateSummary, IntakeFormVersionRow } from './persistenceTypes'
 
 export class IntakeFormConflictError extends Error {
   readonly code = 'INTAKE_FORM_CONFLICT'
@@ -42,9 +42,13 @@ function compileDiagnostics(definition: IntakeFormDefinition): IntakeFormDiagnos
 async function mutate<T>(operation: () => Promise<T>): Promise<T> {
   try { return await operation() }
   catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error &&
+      error.code === 'P0001' && error.message === 'Template already has a draft') {
+      throw new IntakeFormConflictError()
+    }
     if (error && typeof error === 'object' && 'message' in error && 'code' in error && error.code === '40001') {
       const message = error.message
-      if (message === 'Draft changed; refresh and try again' || message === 'Definition changed; refresh and try again') {
+      if (message === 'Draft changed; refresh and try again' || message === 'Definition changed; refresh and try again' || message === 'Source changed; refresh and try again') {
         throw new IntakeFormConflictError(message)
       }
     }
@@ -68,6 +72,30 @@ export const getIntakeFormTemplateByKey = repository.getTemplateRowByKey
 export const getIntakeFormVersion = repository.getVersionRow
 export const getIntakeFormDraft = repository.getDraftRow
 export const listIntakeFormVersions = repository.listVersionRows
+export async function listIntakeFormAuditEvents(templateId: string, limit = 50) {
+  return repository.listAuditEventRows(templateId, limit)
+}
+
+function latestVersion(versions: IntakeFormVersionRow[], status?: IntakeFormVersionRow['status']): IntakeFormVersionRow | null {
+  return versions.reduce<IntakeFormVersionRow | null>((latest, row) =>
+    (!status || row.status === status) && (!latest || row.version > latest.version) ? row : latest, null)
+}
+export async function listIntakeFormTemplateSummaries(): Promise<IntakeFormTemplateSummary[]> {
+  const templates = await repository.listTemplateRows()
+  templates.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
+  return Promise.all(templates.map(async (template) => {
+    const versions = await repository.listVersionRows(template.id)
+    return { template, draft: latestVersion(versions, 'draft'), latestPublished: latestVersion(versions, 'published'), latestVersion: latestVersion(versions) }
+  }))
+}
+export async function getIntakeFormEditorSnapshot(templateId: string): Promise<IntakeFormEditorSnapshot | null> {
+  const template = await repository.getTemplateRow(templateId)
+  if (!template) return null
+  const [versions, auditEvents] = await Promise.all([
+    repository.listVersionRows(templateId), repository.listAuditEventRows(templateId),
+  ])
+  return { template, versions, draft: latestVersion(versions, 'draft'), auditEvents }
+}
 
 type Actor = { actorId: string }
 type VersionInput = Actor & { versionId: string }
@@ -134,15 +162,15 @@ export async function discardIntakeFormDraft(input: VersionInput & { expectedLoc
 }
 export async function duplicateIntakeFormTemplate(input: Actor & { sourceVersionId: string; key: string; name: string; description?: string | null }) {
   requireActor(input.actorId)
+  const metadata = metadataSchema.safeParse(input)
+  if (!metadata.success) throw new IntakeFormValidationError('Invalid intake form template metadata')
   const source = await requireVersion(input.sourceVersionId)
   const sourceTemplate = await repository.getTemplateRow(source.template_id)
   if (!sourceTemplate) throw new IntakeFormNotFoundError('Intake form template not found')
   if (input.key === sourceTemplate.key) throw new IntakeFormValidationError('Duplicate requires a new template key')
-  // Canonicalization creates an independent JSON tree before changing its identity.
-  const definition = parseDefinition(source.definition)
-  definition.key = input.key
-  return createIntakeFormTemplate({ key: input.key, name: input.name, description: input.description,
-    definition, actorId: input.actorId })
+  const result = await mutate(() => repository.duplicateTemplateRow({ ...metadata.data,
+    sourceVersionId: input.sourceVersionId, actorId: input.actorId }))
+  return { ...result, diagnostics: compileDiagnostics(result.draft.definition) }
 }
 
 type TemplateInput = Actor & { templateId: string }
@@ -157,6 +185,11 @@ async function requireTemplateVersion(input: TemplateInput, versionId: string): 
   requireActor(input.actorId)
   const version = await requireVersion(versionId)
   if (version.template_id !== input.templateId) throw new IntakeFormNotFoundError()
+}
+
+export async function createNextIntakeFormTemplateDraft(input: TemplateInput & { sourceVersionId: string }) {
+  await requireTemplateVersion(input, input.sourceVersionId)
+  return createNextIntakeFormDraft({ sourceVersionId: input.sourceVersionId, actorId: input.actorId })
 }
 
 /** Resolve the single draft within the requested template before the guarded RPC. */

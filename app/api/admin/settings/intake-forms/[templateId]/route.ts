@@ -30,9 +30,9 @@ export async function GET(req: Request, context: Context) {
   try {
     const route = paramsSchema.safeParse(await context.params)
     if (!route.success) return badRequest()
-    const result = await service.getIntakeFormTemplate(route.data.templateId)
+    const result = await service.getIntakeFormEditorSnapshot(route.data.templateId)
     if (!result) return failure(new service.IntakeFormNotFoundError())
-    return NextResponse.json({ template: result })
+    return NextResponse.json(result)
   } catch (error) { return failure(error) }
 }
 export async function PATCH(req: Request, context: Context) {

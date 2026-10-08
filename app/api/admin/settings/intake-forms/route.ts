@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   const { err } = await requireAdministrator(req)
   if (err) return err
   try {
-    const result = await service.listIntakeFormTemplates()
+    const result = await service.listIntakeFormTemplateSummaries()
     return NextResponse.json({ templates: result })
   } catch (error) { return failure(error) }
 }
