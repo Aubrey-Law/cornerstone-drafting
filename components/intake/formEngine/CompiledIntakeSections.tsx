@@ -41,6 +41,7 @@ export function CompiledIntakeSections({ form, evaluation, mode = 'client', read
             key={section.id}
             {...itemProps}
             section={section}
+            readOnlyMessage={form.purpose === 'discovery_call' ? 'Internal discovery answers (read-only). Corrections are recorded as amendments.' : undefined}
             number={index + 1 + numberOffset}
             open={openId === section.id}
             disabled={readOnly || (isStaff && section.audience === 'client_and_staff')}

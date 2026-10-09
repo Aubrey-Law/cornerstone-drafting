@@ -30,7 +30,7 @@ export async function resolveIntakeForm(input: {
       throw new IntakeFormUnavailableError()
     }
     const template = await getTemplateRow(version.template_id)
-    if (!template || version.definition.key !== template.key) throw new IntakeFormUnavailableError()
+    if (!template || template.purpose === 'discovery_call' || version.definition.purpose === 'discovery_call' || version.definition.key !== template.key) throw new IntakeFormUnavailableError()
     const compiled = compileIntakeForm(version.definition, input.audience)
     if (!compiled.success) throw new IntakeFormUnavailableError()
     return { source: 'persistent', versionId: input.formVersionId, form: compiled.form }

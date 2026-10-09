@@ -18,6 +18,7 @@ interface GuidedSectionProps {
   onToggle: () => void
   onContinue?: () => void
   continueLabel?: string
+  collapsedLabel?: string
   children?: ReactNode
 }
 
@@ -33,6 +34,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
     onToggle,
     onContinue,
     continueLabel = 'Continue to next section',
+    collapsedLabel = 'Edit',
     children,
   }, ref) {
     const rootRef = useRef<HTMLDivElement>(null)
@@ -148,7 +150,7 @@ export const GuidedSection = forwardRef<GuidedSectionHandle, GuidedSectionProps>
               )}
             </span>
             <span style={{ font: '600 13px/1 var(--gi-sans)', color: 'var(--gi-teal)' }}>
-              {open ? 'Close' : 'Edit'}
+              {open ? 'Close' : collapsedLabel}
             </span>
           </button>
         </h2>

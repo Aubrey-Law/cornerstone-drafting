@@ -1,3 +1,4 @@
+import { listCalls, availableTemplate } from '@/lib/discovery/service'
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { notFound, redirect } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -246,8 +247,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     next_appointment_at: scoringAppointmentAt(anchorRow?.discovery_call_at, anchorRow?.pmps_at),
   })
 
+  const [discoveryCalls, discoveryTemplate] = await Promise.all([listCalls(id).catch(() => []), availableTemplate().catch(() => null)])
   return (
     <LeadDetailClient
+      discoveryCalls={discoveryCalls}
+      discoveryAvailable={Boolean(discoveryTemplate)}
       lead={hydratedLead}
       initialTaskCounts={initialTaskCounts}
       initialIntakeUrl={initialIntakeUrl}

@@ -1,5 +1,7 @@
 'use client'
 
+import { DiscoveryEntry } from '@/components/discovery/DiscoveryEntry'
+
 import Link from 'next/link'
 import { Users } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -109,6 +111,8 @@ const EMPTY_NOTES: LeadTimelineNote[] = []
 const EMPTY_MEETINGS: LeadTimelineMeeting[] = []
 
 type LeadDetailClientProps = {
+  discoveryCalls?: import('@/lib/discovery/contracts').DiscoveryCall[]
+  discoveryAvailable?: boolean
   lead: LeadRecord
   spouse: LeadSpouse | null
   initialActivity: LeadActivityRow[]
@@ -189,6 +193,7 @@ function mergeHydratedLead(
 }
 
 export function LeadDetailClient({
+  discoveryCalls, discoveryAvailable,
   lead: initialLead,
   spouse: initialSpouse,
   initialActivity,
@@ -981,7 +986,8 @@ export function LeadDetailClient({
               </p>
             )}
 
-            <TabsContent value="overview" className="@container/overview min-w-0 data-[state=inactive]:hidden">
+            <TabsContent value="overview" className="@container/overview min-w-0 space-y-4 data-[state=inactive]:hidden">
+              <DiscoveryEntry leadId={lead.id} calls={discoveryCalls} available={discoveryAvailable} />
               <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
               <div className="flex min-w-0 flex-col gap-5">
                 {nextActionCard}
@@ -1047,6 +1053,7 @@ export function LeadDetailClient({
             </TabsContent>
 
             <TabsContent value="intake" className="space-y-4">
+              <DiscoveryEntry leadId={lead.id} calls={discoveryCalls} available={discoveryAvailable} />
               <RecordTabHeader
                 title="Intake"
                 description="The client questionnaire: send it, track its sections, or fill it in yourself."

@@ -6,6 +6,7 @@ import type { IntakeFormDefinition } from './types'
 
 const timestamp = z.string().datetime({ offset: true })
 export const templateSchema = z.object({
+  purpose: z.enum(['client_intake', 'discovery_call']).optional(),
   id: z.string().regex(/^[a-zA-Z0-9_-]+$/), key: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/), name: z.string().min(1).max(160), description: z.string().max(600).nullable(), archived_at: timestamp.nullable(),
   created_by: z.string().min(1), created_at: timestamp, updated_at: timestamp,
 }).strict()

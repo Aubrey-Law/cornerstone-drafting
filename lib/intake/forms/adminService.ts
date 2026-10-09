@@ -63,6 +63,7 @@ async function requireVersion(versionId: string): Promise<IntakeFormVersionRow> 
 async function requireDefinitionIdentity(templateId: string, definition: IntakeFormDefinition): Promise<void> {
   const template = await repository.getTemplateRow(templateId)
   if (!template) throw new IntakeFormNotFoundError('Intake form template not found')
+  if ((definition.purpose ?? 'client_intake') !== (template.purpose ?? 'client_intake')) throw new IntakeFormValidationError('Form purpose cannot change')
   if (definition.key !== template.key) throw new IntakeFormValidationError('Definition key must match the template key')
 }
 

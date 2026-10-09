@@ -1,11 +1,12 @@
 'use client'
+import { DiscoveryField } from '@/components/discovery/DiscoveryField'
+import { isDiscoveryField, type FormFieldId } from '@/lib/discovery/catalog'
 
 import { useId } from 'react'
 import {
   getBuilderField,
   readBuilderFieldValue,
   writeBuilderFieldValue,
-  type SharedFieldId,
   normalizeCitizenshipStatus,
 } from '@aubrey-law/estate-fields/core'
 import { IntakeField } from '@aubrey-law/estate-fields/react'
@@ -15,7 +16,7 @@ import { getIntakeTrack } from '@/lib/intakeTrack'
 /** The compiler resolves copy and requirements; storage remains catalog-owned. */
 export interface CanonicalFieldRenderItem {
   kind: 'field'
-  fieldId: SharedFieldId
+  fieldId: FormFieldId
   label?: string
   helpText?: string
   effectiveRequirement: 'optional' | 'recommended' | 'required'
@@ -30,6 +31,7 @@ type Props = {
 
 export function CanonicalFieldItem({ item, data, update, disabled }: Props) {
   const helpId = useId()
+  if (isDiscoveryField(item.fieldId)) return <DiscoveryField id={item.fieldId} label={item.label} value={data[item.fieldId]} required={item.effectiveRequirement === 'required'} disabled={disabled} helpText={item.helpText} onChange={value => { if (!disabled) update(item.fieldId, value) }} />
   const def = getBuilderField(item.fieldId)
   const label = item.label ?? def.label
   // Existing college controls have visual defaults only. Resolve canonical

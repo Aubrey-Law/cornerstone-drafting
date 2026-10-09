@@ -1,4 +1,4 @@
-import type { SharedFieldId } from '@aubrey-law/estate-fields/core'
+import type { FormFieldId } from '@/lib/discovery/catalog'
 
 export type IntakeAudience = 'client_and_staff' | 'staff_only'
 export type IntakeRequirement = 'optional' | 'recommended' | 'required'
@@ -21,16 +21,16 @@ export type IntakeBlockId =
   | 'attorney_documents'
 
 export type IntakeCondition =
-  | { op: 'equals'; fieldId: SharedFieldId; value: string | boolean }
-  | { op: 'not_equals'; fieldId: SharedFieldId; value: string | boolean }
-  | { op: 'is_set'; fieldId: SharedFieldId }
+  | { op: 'equals'; fieldId: FormFieldId; value: string | boolean }
+  | { op: 'not_equals'; fieldId: FormFieldId; value: string | boolean }
+  | { op: 'is_set'; fieldId: FormFieldId }
   | { op: 'all' | 'any'; conditions: IntakeCondition[] }
 
 export type IntakeFormItem =
   | {
       kind: 'field'
       id: string
-      fieldId: SharedFieldId
+      fieldId: FormFieldId
       labelOverride?: string
       helpText?: string
       requirement?: IntakeRequirement
@@ -58,6 +58,7 @@ export interface IntakeFormSection {
 }
 
 export interface IntakeFormDefinition {
+  purpose?: 'client_intake' | 'discovery_call'
   schemaVersion: 1
   key: string
   title: string

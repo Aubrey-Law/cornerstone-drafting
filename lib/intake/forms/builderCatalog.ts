@@ -1,12 +1,13 @@
+import { type FormFieldId, getFormField, DISCOVERY_FIELD_IDS } from '@/lib/discovery/catalog'
 import {
-  BUILDER_FIELD_IDS, getBuilderField,
-  type BuilderFieldDef, type FieldOption, type SharedFieldControl, type SharedFieldId,
+  BUILDER_FIELD_IDS,
+  type BuilderFieldDef, type FieldOption, type SharedFieldControl,
 } from '@aubrey-law/estate-fields/core'
 import { getIntakeBlock } from './blockRegistry'
 import type { IntakeAudience, IntakeBlockId, IntakeRequirement } from './types'
 
 export interface BuilderCatalogField {
-  id: SharedFieldId
+  id: FormFieldId
   label: string
   description: string
   group: string
@@ -65,7 +66,7 @@ const BLOCK_COPY = {
   attorney_documents: ['Documents to prepare', 'Attorney only', 'Attorney document inclusion selection.'],
 } as const satisfies Record<IntakeBlockId, readonly [string, string, string]>
 
-function fieldGroup(id: SharedFieldId): string {
+function fieldGroup(id: FormFieldId): string {
   if (id.startsWith('college_')) return 'College preparation'
   if (id.startsWith('client_') || ['street', 'city', 'state', 'zip', 'county', 'marital_status', 'marriage_date'].includes(id)) return 'Client and household'
   if (['estate_value', 'asset_types', 'planning_goals', 'special_notes'].includes(id)) return 'Estate planning'
@@ -73,10 +74,10 @@ function fieldGroup(id: SharedFieldId): string {
 }
 
 /** Explicit display-only projection. Never send executable registry definitions to the browser. */
-export function getIntakeFormBuilderCatalog(): IntakeFormBuilderCatalog {
+export function getIntakeFormBuilderCatalog(purpose: 'client_intake' | 'discovery_call' = 'client_intake'): IntakeFormBuilderCatalog {
   return {
-    fields: BUILDER_FIELD_IDS.map(id => {
-      const field = getBuilderField(id)
+    fields: (purpose === 'discovery_call' ? DISCOVERY_FIELD_IDS : BUILDER_FIELD_IDS).map(id => {
+      const field = getFormField(id)
       return {
         id,
         label: field.label,
@@ -86,10 +87,10 @@ export function getIntakeFormBuilderCatalog(): IntakeFormBuilderCatalog {
         baselineRequirement: field.baselineRequirement,
         validationProfile: field.validationProfile ?? 'none',
         ...(field.options ? { options: field.options.map(({ value, label }) => ({ value, label })) } : {}),
-        audiences: ['client_and_staff', 'staff_only'],
+        audiences: purpose === 'discovery_call' ? ['staff_only'] : ['client_and_staff', 'staff_only'],
       }
     }),
-    blocks: (Object.keys(BLOCK_COPY) as IntakeBlockId[]).map(id => {
+    blocks: purpose === 'discovery_call' ? [] : (Object.keys(BLOCK_COPY) as IntakeBlockId[]).map(id => {
       const [label, group, description] = BLOCK_COPY[id]
       return {
         id, label, group, description,

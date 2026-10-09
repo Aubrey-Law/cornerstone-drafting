@@ -14,7 +14,7 @@ import type { IntakeFormTemplateSummary, IntakeFormVersionRow } from '@/lib/inta
 import { parseArchiveResponse, parseCreatedForm, parseSnapshot } from '@/lib/intake/forms/responseParsing'
 import { createBlankDefinition } from '@/lib/intake/forms/editorState'
 
-type Creation = { source: IntakeFormTemplateSummary | null; sourceVersions: IntakeFormVersionRow[]; sourceVersionId: string; key: string; name: string; description: string }
+type Creation = { purpose?: 'client_intake' | 'discovery_call'; source: IntakeFormTemplateSummary | null; sourceVersions: IntakeFormVersionRow[]; sourceVersionId: string; key: string; name: string; description: string }
 const modificationDate = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York',
 })
@@ -40,6 +40,7 @@ function TemplateRows({ items, busy, onCreate, onArchive }: {
           <p className="break-all text-sm text-muted-foreground">{template.key}</p>
           {template.description && <p className="max-w-xl text-sm">{template.description}</p>}
           <div className="flex flex-wrap gap-2">
+            {template.purpose === 'discovery_call' && <Badge variant="outline">Staff discovery</Badge>}
             {draft && <Badge variant="secondary">Draft v{draft.version}</Badge>}
             {latestPublished && <Badge variant="outline">Published v{latestPublished.version}</Badge>}
             {latestVersion?.status === 'retired' && <Badge variant="outline">Retired v{latestVersion.version}</Badge>}
@@ -119,7 +120,7 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       const body = source && selected ? { sourceVersionId, expectedSourceLockVersion: selected.lock_version,
         expectedSourceDefinitionHash: selected.definition_hash, key, name, description } : {
         key, name, description,
-        definition: { schemaVersion: 1, key, title: name, ...(description ? { description } : {}), sections: [] },
+        definition: { ...(creation.purpose === 'discovery_call' ? { purpose: 'discovery_call' } : {}), schemaVersion: 1, key, title: name, ...(description ? { description } : {}), sections: [] },
       }
       const response = await fetch(source ? `/api/admin/settings/intake-forms/${source.template.id}/duplicate` : '/api/admin/settings/intake-forms', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -133,7 +134,7 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       }
       let created
       try {
-        const definition = source && selected ? { ...selected.definition, key } : createBlankDefinition({ key, title: name, ...(description ? { description } : {}) })
+        const definition = source && selected ? { ...selected.definition, key } : createBlankDefinition({ ...(creation.purpose === 'discovery_call' ? { purpose: 'discovery_call' } : {}), key, title: name, ...(description ? { description } : {}) })
         created = parseCreatedForm(result, { key, name, description, definition, existingIds: templates.map(row => row.template.id) })
       } catch {
         setError('The server returned an invalid result. Your entries are preserved. Reload the list to check whether the form was created before trying again.')
@@ -201,6 +202,7 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
           </DialogHeader>
           {creation && <form noValidate onSubmit={event => { event.preventDefault(); void create() }} className="space-y-4">
             {creation.source && <div className="space-y-1"><Label htmlFor="source-version">Source version</Label><select id="source-version" className="w-full rounded-md border bg-background p-2 text-sm" value={creation.sourceVersionId} disabled={busy || loadingSource} onChange={event => setCreation({ ...creation, sourceVersionId: event.target.value })}>{creation.sourceVersions.map(row => <option key={row.id} value={row.id}>Version {row.version} · {row.status}</option>)}</select>{loadingSource && <p role="status" className="text-sm text-muted-foreground">Loading version history…</p>}</div>}
+            {!creation.source && <div className="space-y-1"><Label htmlFor="form-purpose">Purpose</Label><select id="form-purpose" className="w-full rounded-md border bg-background p-2" value={creation.purpose ?? 'client_intake'} onChange={event => setCreation({ ...creation, purpose: event.target.value as 'client_intake' | 'discovery_call' })}><option value="client_intake">Client intake</option><option value="discovery_call">Internal discovery call</option></select></div>}
             <div className="space-y-1"><Label htmlFor="form-key">Stable key</Label><Input id="form-key" value={creation.key} disabled={busy} maxLength={80} autoComplete="off" onChange={event => setCreation({ ...creation, key: event.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="form-name">Name</Label><Input id="form-name" value={creation.name} disabled={busy} maxLength={160} onChange={event => setCreation({ ...creation, name: event.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="form-description">Description</Label><Textarea id="form-description" value={creation.description} disabled={busy} maxLength={600} onChange={event => setCreation({ ...creation, description: event.target.value })} /></div>

@@ -86,6 +86,7 @@ export type LeadTimelineItem = {
   actorId: string | null
   actorName: string
   occurredAt: string
+  discoveryCallId?: string
   editableNoteId?: string
 }
 
@@ -172,7 +173,8 @@ export function buildLeadTimeline(sources: LeadTimelineSources): LeadTimelineIte
       id: `system:${activity.id}`,
       kind: 'system',
       title: activity.title,
-      body: activity.detail ?? null,
+      ...(activity.event_type === 'discovery_call_completed' && /^[0-9a-f-]{36}$/i.test(activity.detail ?? '') ? { discoveryCallId: activity.detail! } : {}),
+      body: activity.event_type === 'discovery_call_completed' ? null : activity.detail ?? null,
       actorId: activity.actor_id ?? null,
       actorName: actorName(activity.actor_id, sources.actorNames),
       occurredAt: activity.created_at,
