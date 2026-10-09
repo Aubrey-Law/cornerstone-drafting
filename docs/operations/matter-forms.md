@@ -24,8 +24,49 @@ clients see all of it at **/forms** in the portal.
 - **Remove from matter** works as follows:
   - a questionnaire nobody has touched is deleted outright;
   - anything that was sent or started is only unlinked, so no answers are lost.
-- **Not yet:** drafting the student's documents from a linked questionnaire.
-  Drafting still reads only the primary intake.
+
+### Drafting a linked College Prep questionnaire
+
+Drafting reads only a matter's primary intake, and drafting internals are left
+alone (see `AGENTS.md`). So the student's package is drafted on a **companion
+matter** whose primary intake *is* the student's questionnaire.
+
+1. Once the student's College Prep questionnaire is submitted and the family
+   matter is hired, the Forms card shows **Draft College Prep package** on that
+   row. Before then the button is disabled and its tooltip says why.
+2. Confirming opens a hired College Prep matter for the student through the
+   same path as any hired lead (`createMatterFromIntake` →
+   `convert_lead_to_matter`). That gives it:
+   - the CP practice area and a CP matter number in the student's name;
+   - the design-sheet seed (`seedCollegePrep`) and the CP task plan;
+   - the conflict-check gate every hire goes through.
+3. It then takes you to `/admin/drafting/[matterId]` for the companion. POA, health care
+   proxy, HIPAA, FERPA and living will draft there exactly as on any College
+   Prep matter.
+
+How the two matters stay connected:
+
+- The link row on the family matter stays and records the companion
+  (`matter_linked_intakes.companion_matter_id`). The family matter's Forms card
+  shows **Drafting on** followed by the companion's matter number, and **Open drafting** for that row.
+- The companion's Forms card says which family matter it was opened from.
+- Both matters log a `college_prep_companion_opened` activity.
+- The action is idempotent: running it again returns the same companion.
+
+What changes for the student's questionnaire:
+
+- It becomes the companion's primary intake. Its `lead_status` becomes
+  `hired`, and an unlock request from the portal now routes to the companion.
+- Edit it from the companion matter. The family matter's Forms card keeps
+  **Email link**, **Copy link** and **Download answers**.
+- **Remove from matter** on the family matter only drops the cross-link. It
+  never deletes the questionnaire.
+- Billing is not copied. The companion opens without an engagement fee; bill
+  it there or on the family matter as agreed.
+
+The guard on `matter_linked_intakes` still stops one matter's primary intake
+being linked to an unrelated matter. The only exception is a link whose
+`companion_matter_id` is the matter that intake is primary on.
 
 ## Client forms (custom questions)
 
@@ -60,5 +101,9 @@ The migration `20270201090000_multiple_forms_per_matter.sql`:
 - adds `matter_linked_intakes` and `client_form_assignments`, both service-role
   only.
 
-The migration must be pushed deliberately (`npx supabase db push` from the
-linked main checkout). Merging does not apply it.
+`20270202090000_linked_intake_companion_matter.sql` adds
+`matter_linked_intakes.companion_matter_id` and relaxes the link guard for that
+one case. Push it together with the first one.
+
+The migrations must be pushed deliberately (`npx supabase db push` from the
+linked main checkout). Merging does not apply them.
