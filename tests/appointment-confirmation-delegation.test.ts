@@ -18,7 +18,7 @@ vi.mock('@/lib/actions/delegation', () => ({ resolveUnattendedActor: mocks.resol
 vi.mock('@/lib/actions/server', () => ({ createActionProposal: mocks.createActionProposal }))
 
 import { confirmationSummary, delegateAppointmentConfirmation } from '@/lib/appointments/delegateConfirmation'
-import { buildAppointmentConfirmationEmail } from '@/lib/appointments/confirmationEmail'
+import { attendeeFirstName, buildAppointmentConfirmationEmail } from '@/lib/appointments/confirmationEmail'
 import { defaultAutonomyForAction } from '@/lib/actions/autonomy'
 import { getActionDefinition } from '@/lib/actions/registry'
 
@@ -115,6 +115,36 @@ describe('one builder for the booking call and the action', () => {
     expect(withLink.subject).toMatch(/^Appointment confirmed: Discovery call/)
     expect(withoutLink.html).not.toContain('/book/manage/')
     expect(withoutLink.subject).toMatch(/^Appointment rescheduled/)
+  })
+
+  it('renders the branded layout for every format, escaped and personalized', () => {
+    const base = { startIso: '2026-10-12T14:00:00Z', timezone: 'America/New_York', officeAddress: null, meetingUrl: null, meetingProvider: null, manageToken: null }
+    const inPerson = buildAppointmentConfirmationEmail({ ...base, type: { label: 'Plan <Design>', locationType: 'in_person' }, event: 'booked', firstName: 'Margaret' })
+    expect(inPerson.html).toMatch(/^<!DOCTYPE html>/)
+    expect(inPerson.html).toContain("You're all set, Margaret.")
+    expect(inPerson.html).toContain('Plan &lt;Design&gt;')
+    expect(inPerson.html).not.toContain('Plan <Design>')
+    expect(inPerson.html).toContain('1329 Highland Ave, Needham, MA 02492')
+    expect(inPerson.html).toContain('Monday, October 12, 2026')
+    expect(inPerson.html).toContain('10:00 AM EDT')
+    const meet = buildAppointmentConfirmationEmail({ ...base, type: { label: 'Signing', locationType: 'teams' }, meetingUrl: 'https://meet.google.com/x?a=1&b=2', event: 'booked' })
+    expect(meet.html).toContain('Video call — Google Meet')
+    expect(meet.html).toContain('https://meet.google.com/x?a=1&amp;b=2')
+    expect(meet.html).toContain("You're all set.")
+    const noLink = buildAppointmentConfirmationEmail({ ...base, type: { label: 'Signing', locationType: 'teams' }, event: 'booked' })
+    expect(noLink.html).toContain('The meeting link is in your calendar invitation')
+    const msTeams = buildAppointmentConfirmationEmail({ ...base, type: { label: 'Review', locationType: 'phone' }, meetingUrl: 'https://teams.microsoft.com/l/x', meetingProvider: 'microsoft_teams', event: 'booked' })
+    expect(msTeams.html).toContain('Video call — Microsoft Teams')
+    const phone = buildAppointmentConfirmationEmail({ ...base, type: { label: 'Review', locationType: 'phone' }, event: 'rescheduled', firstName: 'Pat' })
+    expect(phone.html).toContain('We will call the number you provided')
+    expect(phone.html).toContain('Your new time is set, Pat.')
+    expect(phone.html).toContain('Appointment rescheduled')
+  })
+
+  it('takes the headline name from the attendee', () => {
+    expect(attendeeFirstName('  Margaret  Ann Smith ')).toBe('Margaret')
+    expect(attendeeFirstName('')).toBeNull()
+    expect(attendeeFirstName(null)).toBeNull()
   })
 
   it('is what the booking path falls back to, and what the action sends', () => {

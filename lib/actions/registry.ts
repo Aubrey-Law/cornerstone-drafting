@@ -1258,6 +1258,8 @@ const definitions: ActionDefinition[] = [
         cc: ctx.appointment.second_attendee_email ?? undefined,
         subject: email.subject,
         html: email.html,
+        // Send the previewed document as-is, never a stored template.
+        useStoredTemplate: false,
         leadId: ctx.appointment.linked_lead_id,
         matterId: ctx.appointment.linked_matter_id,
       })

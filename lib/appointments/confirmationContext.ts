@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadFirmSettings } from '@/lib/firmSettings'
-import { officeAddressLine, type ConfirmationEmailInput } from './confirmationEmail'
+import { attendeeFirstName, officeAddressLine, type ConfirmationEmailInput } from './confirmationEmail'
 import { getSchedulingSettings, listAppointmentTypes } from './settings'
 import type { AppointmentRow, AppointmentType } from './types'
 import { resolveLocationType } from './types'
@@ -37,6 +37,7 @@ export async function loadConfirmationContext(admin: SupabaseClient, appointment
       officeAddress: officeAddressLine(firm),
       meetingUrl: appointment.online_meeting_url,
       meetingProvider: appointment.online_meeting_provider ?? null,
+      firstName: attendeeFirstName(appointment.attendee_name),
     },
   }
 }
