@@ -237,7 +237,15 @@ describe('aging controls and request recovery', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Snooze' }))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not snooze. Please retry.'))
     expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(within(dialog).getByRole('button', { name: 'Snooze' }).hasAttribute('disabled')).toBe(false)
+    // The toast fires inside the transition; wait for React to commit its settled state.
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Snooze' }).hasAttribute('disabled')).toBe(false))
+    expect(request).toHaveBeenCalledTimes(1)
+    await user.clear(days)
+    await user.type(days, '7')
+    await user.click(within(dialog).getByRole('button', { name: 'Snooze' }))
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Snooze' }).hasAttribute('disabled')).toBe(false))
+    expect(screen.getByRole('dialog')).toBeTruthy()
   })
 
   it('does not claim all records are on track when some are snoozed', () => {
