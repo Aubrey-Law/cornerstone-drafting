@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useLayoutEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { resolveSettingsTab, settingsNavFor, settingsTabHref, type SettingsNavItem } from './settingsNav'
-import { navigateSettings } from './navigation'
+import { navigateSettings, retainSettingsHistoryTracking } from './navigation'
 
 function hrefFor(item: SettingsNavItem): string {
   return item.kind === 'tab' ? settingsTabHref(item.tab) : item.href
@@ -15,6 +16,7 @@ function hrefFor(item: SettingsNavItem): string {
  * on narrow ones (fifteen entries do not fit across a phone).
  */
 export function SettingsNav({ isAdministrator }: { isAdministrator: boolean }) {
+  useLayoutEffect(() => retainSettingsHistoryTracking(), [])
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()

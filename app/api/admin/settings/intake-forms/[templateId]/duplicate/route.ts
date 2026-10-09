@@ -24,6 +24,8 @@ type Context = { params: Promise<{ templateId: string }> }
 const paramsSchema = z.object({ templateId: z.string().uuid() })
 const duplicateSchema = z.object({
   sourceVersionId: z.string().uuid(),
+  expectedSourceLockVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  expectedSourceDefinitionHash: z.string().regex(/^[a-f0-9]{64}$/),
   key: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
   name: z.string().trim().min(1).max(160),
   description: z.string().max(600).nullable().optional(),

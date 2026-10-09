@@ -158,16 +158,18 @@ export async function createTemplateRow(input: CreateTemplateRowInput): Promise<
   return { template, draft }
 }
 export async function duplicateTemplateRow(input: Actor & {
-  sourceVersionId: string; key: string; name: string; description?: string | null
+  sourceVersionId: string; expectedSourceLockVersion: number; expectedSourceDefinitionHash: string; key: string; name: string; description?: string | null
 }): Promise<{ template: IntakeFormTemplateRow; draft: IntakeFormVersionRow }> {
   const source = await getVersionRow(input.sourceVersionId)
-  if (!source) throw Object.assign(new Error('Source changed; refresh and try again'), { code: '40001' })
+  if (!source || source.lock_version !== input.expectedSourceLockVersion || source.definition_hash !== input.expectedSourceDefinitionHash) {
+    throw Object.assign(new Error('Source changed; refresh and try again'), { code: '40001' })
+  }
   const definition = canonicalizeIntakeFormDefinition(source.definition)
   definition.key = input.key
   const draft = mutationVersion(await rpc('duplicate_intake_form_template', {
     p_actor_id: input.actorId, p_source_version_id: input.sourceVersionId, p_key: input.key, p_name: input.name,
     p_description: (input.description ?? null) as unknown as string,
-    p_expected_lock_version: source.lock_version, p_expected_definition_hash: source.definition_hash,
+    p_expected_lock_version: input.expectedSourceLockVersion, p_expected_definition_hash: input.expectedSourceDefinitionHash,
     p_definition: definition as unknown as Json, p_definition_hash: hashIntakeFormDefinition(definition),
   }).catch((error: unknown) => {
     // A source discarded after our read is the same stale-source conflict as a changed source.

@@ -35,6 +35,22 @@ function fixture(data: Record<string, unknown> = {}, source = definition) {
 }
 
 describe('compiled intake sections', () => {
+  it('keeps the normal Review body and its configured wrapper in live intake', () => {
+    const source = structuredClone(definition)
+    const block = source.sections[2].items[0]
+    if (block.kind !== 'block') throw new Error('Review fixture must be a block')
+    block.titleOverride = 'Check your planning details'
+    block.helpText = 'Please confirm names before submitting.'
+    render(<CompiledIntakeSections {...fixture({}, source)} mode="client" update={vi.fn()} openId="review" onToggle={vi.fn()} />)
+    const title = screen.getByRole('heading', { name: 'Check your planning details', level: 3 })
+    const wrapper = title.closest('fieldset')!
+    expect(wrapper.disabled).toBe(false)
+    expect(title.closest('legend')).toBeTruthy()
+    expect(document.getElementById(wrapper.getAttribute('aria-describedby')!)?.textContent).toBe('Please confirm names before submitting.')
+    expect(within(wrapper).queryByRole('region', { name: 'Current form review' })).toBeNull()
+    expect(within(wrapper).getByText('Personal Information')).toBeTruthy()
+  })
+
   it.each(['client', 'staff'] as const)('disables canonical and compound controls in read-only %s preview', async audience => {
     const source: IntakeFormDefinition = { ...definition, sections: [definition.sections[0],
       { id: 'internal', title: 'Internal', audience: 'staff_only', items: [{ kind: 'block', id: 'plan-choice', blockId: 'attorney_plan_structure' }] }, definition.sections[2]] }

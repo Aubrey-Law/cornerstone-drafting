@@ -183,4 +183,25 @@ describe('intake form preview', () => {
     expect(review.queryByText('Local notes')).toBeNull()
     expect(fetch).not.toHaveBeenCalled(); expect(auth).not.toHaveBeenCalled()
   })
+
+  it('keeps the Review block title, help text and disabled wrapper around the custom compiled summary', async () => {
+    const definition = fixture().draft!.definition
+    const block = definition.sections.at(-1)!.items[0]
+    if (block.kind !== 'block') throw new Error('Review fixture must be a block')
+    block.titleOverride = 'Check your planning details'
+    block.helpText = 'Please confirm names before submitting.'
+    render(<IntakeFormPreview localDefinition={definition} />)
+    click(/Review/)
+    const title = preview().getByRole('heading', { name: 'Check your planning details', level: 3 })
+    const wrapper = title.closest('fieldset')!
+    expect(wrapper.disabled).toBe(true)
+    expect(title.closest('legend')).toBeTruthy()
+    expect(document.getElementById(wrapper.getAttribute('aria-describedby')!)?.textContent).toBe('Please confirm names before submitting.')
+    expect(within(wrapper).getByRole('region', { name: 'Current form review' })).toBeTruthy()
+    for (const control of wrapper.querySelectorAll('input, select, textarea, button')) {
+      expect(control.matches(':disabled')).toBe(true)
+      await userEvent.click(control as HTMLElement)
+    }
+    expect(fetch).not.toHaveBeenCalled(); expect(auth).not.toHaveBeenCalled()
+  })
 })

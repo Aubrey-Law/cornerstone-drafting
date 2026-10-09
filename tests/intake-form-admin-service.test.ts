@@ -17,6 +17,7 @@ const definition = (): IntakeFormDefinition => ({ schemaVersion: 1, key: 'test',
   { id: 'personal', title: 'Personal', audience: 'client_and_staff', items: [{ kind: 'field', id: 'name', fieldId: 'client_first_name' }] },
   { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'submit', blockId: 'review_submit' }] },
 ] })
+const duplicateGuards = () => ({ expectedSourceLockVersion: 3, expectedSourceDefinitionHash: hashIntakeFormDefinition(definition()) })
 const template = (overrides: Partial<IntakeFormTemplateRow> = {}): IntakeFormTemplateRow => ({
   id: 'template-1', key: 'test', name: 'Test', description: null, archived_at: null,
   created_by: 'admin-1', created_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z', ...overrides,
@@ -245,7 +246,7 @@ describe('intake form repository boundary', () => {
     query.maybeSingle.mockResolvedValueOnce({ data: source, error: null })
       .mockResolvedValueOnce({ data: template({ id: 'copy-template', key: 'copy', name: 'Copy' }), error: null })
     try {
-      const result = await real.duplicateTemplateRow({ sourceVersionId: source.id, actorId: 'admin-1', key: 'copy', name: 'Copy' })
+      const result = await real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: source.id, actorId: 'admin-1', key: 'copy', name: 'Copy' })
       expect(result).toMatchObject({ template: { id: 'copy-template', key: 'copy' }, draft: { definition: copied, lock_version: 0 } })
       expect(client.rpc.mock.calls).toEqual([['duplicate_intake_form_template', {
         p_actor_id: 'admin-1', p_source_version_id: source.id, p_key: 'copy', p_name: 'Copy', p_description: null,
@@ -257,9 +258,21 @@ describe('intake form repository boundary', () => {
     } finally { spy.mockRestore() }
   })
 
+  it.each(['lock', 'hash'])('rejects duplicate %s changed since the dialog read before calling the RPC', async mismatch => {
+    const source = version()
+    const { real, spy, client } = await adapter({ data: source, error: null })
+    try {
+      await expect(real.duplicateTemplateRow({ sourceVersionId: source.id, actorId: 'admin-1', key: 'copy', name: 'Copy',
+        expectedSourceLockVersion: mismatch === 'lock' ? 2 : 3,
+        expectedSourceDefinitionHash: mismatch === 'hash' ? 'a'.repeat(64) : source.definition_hash }))
+        .rejects.toMatchObject({ code: '40001', message: 'Source changed; refresh and try again' })
+      expect(client.rpc).not.toHaveBeenCalled()
+    } finally { spy.mockRestore() }
+  })
+
   it('refuses invalid duplication sources and mismatched RPC hashes', async () => {
     const { real, spy, client, query } = await adapter({ data: { ...version(), definition: {} }, error: null })
-    const input = { sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }
+    const input = { ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }
     try {
       await expect(real.duplicateTemplateRow(input)).rejects.toThrow('Stored intake form version version-1 is invalid')
       expect(client.rpc).not.toHaveBeenCalled()
@@ -274,7 +287,7 @@ describe('intake form repository boundary', () => {
     const { real, spy, client } = await adapter({ data: version(), error: null })
     client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
     try {
-      await expect(real.duplicateTemplateRow({ sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+      await expect(real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
         .rejects.toMatchObject({ code: '40001', message: 'Source changed; refresh and try again' })
     } finally { spy.mockRestore() }
   })
@@ -287,7 +300,7 @@ describe('intake form repository boundary', () => {
     const { real, spy, client } = await adapter({ data: version(), error: null })
     client.rpc.mockResolvedValue({ data: null, error: failure })
     try {
-      await expect(real.duplicateTemplateRow({ sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+      await expect(real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
         .rejects.toBe(failure)
     } finally { spy.mockRestore() }
   })
@@ -297,7 +310,7 @@ describe('intake form repository boundary', () => {
     client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
     vi.mocked(repository.duplicateTemplateRow).mockImplementation(real.duplicateTemplateRow)
     try {
-      await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1',
+      await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1',
         actorId: 'admin-1', key: 'copy', name: 'Copy' }))
         .rejects.toMatchObject({ code: 'INTAKE_FORM_CONFLICT', message: 'Source changed; refresh and try again' })
     } finally { spy.mockRestore() }
@@ -396,7 +409,7 @@ describe('intake form lifecycle service', () => {
 
   it.each([null, version(definition(), { template_id: 'other-template', status: 'published' })])('rejects missing or cross-template duplicate and retirement sources', async (row) => {
     vi.mocked(repository.getVersionRow).mockResolvedValue(row)
-    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1',
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1',
       key: 'copy', name: 'Copy' })).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
     await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
       .rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
@@ -408,7 +421,7 @@ describe('intake form lifecycle service', () => {
     vi.mocked(repository.getVersionRow).mockResolvedValue(version(definition(), { status: 'published' }))
     vi.mocked(repository.retireVersionRow).mockResolvedValue(version(definition(), { status: 'retired' }))
     vi.mocked(repository.duplicateTemplateRow).mockResolvedValue({ template: template({ key: 'copy' }), draft: version() })
-    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
       .resolves.toMatchObject({ template: { key: 'copy' } })
     await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
       .resolves.toMatchObject({ status: 'retired' })
@@ -556,7 +569,7 @@ describe('intake form lifecycle service', () => {
       template: template({ id: 'template-2', key: input.key, name: input.name }),
       draft: version({ ...definition(), key: input.key }, { id: 'version-2', template_id: 'template-2', lock_version: 0 }),
     }))
-    const result = await service.duplicateIntakeFormTemplate({ sourceVersionId: source.id, key: 'copy', name: 'Copy', actorId: 'admin-1' })
+    const result = await service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: source.id, key: 'copy', name: 'Copy', actorId: 'admin-1' })
     expect(result).toMatchObject({ template: { id: 'template-2', key: 'copy' }, draft: {
       id: 'version-2', template_id: 'template-2', version: 1, status: 'draft', lock_version: 0, definition: { key: 'copy' },
     }, diagnostics: [] })
@@ -567,7 +580,7 @@ describe('intake form lifecycle service', () => {
   })
 
   it('rejects a duplicate reusing the original template key', async () => {
-    await expect(service.duplicateIntakeFormTemplate({ sourceVersionId: 'version-1', key: 'test', name: 'Copy', actorId: 'admin-1' }))
+    await expect(service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: 'version-1', key: 'test', name: 'Copy', actorId: 'admin-1' }))
       .rejects.toBeInstanceOf(service.IntakeFormValidationError)
     expect(repository.createTemplateRow).not.toHaveBeenCalled()
   })
@@ -697,7 +710,7 @@ describe('intake form lifecycle service', () => {
 
   it('maps a raced duplication source to a sanitized typed conflict', async () => {
     vi.mocked(repository.duplicateTemplateRow).mockRejectedValue({ code: '40001', message: 'Source changed; refresh and try again' })
-    await expect(service.duplicateIntakeFormTemplate({ sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+    await expect(service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
       .rejects.toMatchObject({ code: 'INTAKE_FORM_CONFLICT', message: 'Source changed; refresh and try again' })
   })
 })

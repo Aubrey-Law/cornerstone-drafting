@@ -269,6 +269,11 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
           OR (SELECT count(*) FROM public.intake_form_audit_events) <> event_count THEN
           RAISE EXCEPTION 'Rejected duplicate created records';
         END IF;
+        PERFORM public.duplicate_intake_form_template('${admin}', v, 'stale_copy', 'Available after conflict', NULL,
+          1, '${hash}', '${JSON.stringify({ ...duplicateSource, key: 'stale_copy' })}', '${hashIntakeFormDefinition({ ...duplicateSource, key: 'stale_copy' })}');
+        IF (SELECT count(*) FROM public.intake_form_templates WHERE key = 'stale_copy') <> 1 THEN
+          RAISE EXCEPTION 'Stale conflict consumed the requested key';
+        END IF;
       END;
       $test$;
     `)

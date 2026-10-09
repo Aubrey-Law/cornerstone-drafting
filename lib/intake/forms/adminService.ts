@@ -162,16 +162,23 @@ export async function discardIntakeFormDraft(input: VersionInput & { expectedLoc
   requireActor(input.actorId); requireLock(input.expectedLockVersion)
   return mutate(() => repository.discardDraftRow(input))
 }
-export async function duplicateIntakeFormTemplate(input: Actor & { sourceVersionId: string; key: string; name: string; description?: string | null }) {
-  requireActor(input.actorId)
+type DuplicateInput = Actor & { sourceVersionId: string; expectedSourceLockVersion: number; expectedSourceDefinitionHash: string;
+  key: string; name: string; description?: string | null }
+export async function duplicateIntakeFormTemplate(input: DuplicateInput) {
+  requireActor(input.actorId); requireLock(input.expectedSourceLockVersion)
+  if (!/^[a-f0-9]{64}$/.test(input.expectedSourceDefinitionHash)) throw new IntakeFormValidationError('Expected source definition hash is required')
   const metadata = metadataSchema.safeParse(input)
   if (!metadata.success) throw new IntakeFormValidationError('Invalid intake form template metadata')
   const source = await requireVersion(input.sourceVersionId)
+  if (source.lock_version !== input.expectedSourceLockVersion || source.definition_hash !== input.expectedSourceDefinitionHash) {
+    throw new IntakeFormConflictError('Source changed; refresh and try again')
+  }
   const sourceTemplate = await repository.getTemplateRow(source.template_id)
   if (!sourceTemplate) throw new IntakeFormNotFoundError('Intake form template not found')
   if (input.key === sourceTemplate.key) throw new IntakeFormValidationError('Duplicate requires a new template key')
   const result = await mutate(() => repository.duplicateTemplateRow({ ...metadata.data,
-    sourceVersionId: input.sourceVersionId, actorId: input.actorId }))
+    sourceVersionId: input.sourceVersionId, actorId: input.actorId,
+    expectedSourceLockVersion: input.expectedSourceLockVersion, expectedSourceDefinitionHash: input.expectedSourceDefinitionHash }))
   return { ...result, diagnostics: compileDiagnostics(result.draft.definition) }
 }
 
@@ -209,10 +216,11 @@ export async function publishIntakeFormTemplateDraft(input: TemplateInput & { ve
   return publishIntakeFormDraft({ versionId: draft.id, actorId: input.actorId,
     expectedLockVersion: input.expectedLockVersion, expectedDefinitionHash: input.expectedDefinitionHash })
 }
-export async function duplicateIntakeFormTemplateFromTemplate(input: TemplateInput & { sourceVersionId: string; key: string; name: string; description?: string | null }) {
+export async function duplicateIntakeFormTemplateFromTemplate(input: TemplateInput & DuplicateInput) {
   await requireTemplateVersion(input, input.sourceVersionId)
   return duplicateIntakeFormTemplate({ sourceVersionId: input.sourceVersionId, key: input.key,
-    name: input.name, description: input.description, actorId: input.actorId })
+    name: input.name, description: input.description, actorId: input.actorId,
+    expectedSourceLockVersion: input.expectedSourceLockVersion, expectedSourceDefinitionHash: input.expectedSourceDefinitionHash })
 }
 export async function retireIntakeFormTemplateVersion(input: TemplateInput & { versionId: string }) {
   await requireTemplateVersion(input, input.versionId)

@@ -7,7 +7,7 @@ import { compileIntakeForm, type IntakeFormDiagnostic } from '@/lib/intake/forms
 import { createBlankDefinition, definitionFingerprint } from '@/lib/intake/forms/editorState'
 import { parseIntakeFormDefinition } from '@/lib/intake/forms/schema'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
-import { SETTINGS_NAVIGATION_EVENT, type SettingsNavigationRequest } from '../../navigation'
+import { SETTINGS_NAVIGATION_EVENT, SETTINGS_HISTORY_CHANGE_EVENT, retainSettingsHistoryTracking, registerSettingsHistoryGuard, settingsHistoryPosition, type SettingsNavigationRequest } from '../../navigation'
 import { parseSnapshot, parseVersion, invalidResponse } from '@/lib/intake/forms/responseParsing'
 
 export type IntakeFormSaveStatus = 'clean' | 'dirty' | 'saving' | 'error' | 'conflict'
@@ -103,34 +103,43 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       event.preventDefault()
       askToLeave(() => navigation?.traverseTo(traversal.destination.key), document.activeElement instanceof HTMLElement ? document.activeElement : null)
     }
-    // Older browsers: stamp existing app history state, preserving the router's
-    // own state. Restore a cancelled traversal before showing the same dialog.
-    const marker = '__cornerstoneIntakeHistoryIndex'
-    const originalPush = window.history.pushState
-    const originalReplace = window.history.replaceState
-    let index: number = window.history.state?.[marker] ?? 0
+    // The Settings boundary indexes entries before the editor mounts. Retain a
+    // reference here too so a standalone or cached editor has the same boundary.
+    const releaseHistory = navigation ? undefined : retainSettingsHistoryTracking()
+    let currentState: unknown = window.history.state
+    let currentPosition = settingsHistoryPosition(currentState)
     let currentHref = window.location.href
     let restoring = false
     let restored: (() => void) | null = null
-    const push: History['pushState'] = function (this: History, data, unused, url) { index += 1; originalPush.call(this, { ...data, [marker]: index }, unused, url); currentHref = window.location.href }
-    const replace: History['replaceState'] = function (this: History, data, unused, url) { originalReplace.call(this, { ...data, [marker]: index }, unused, url); currentHref = window.location.href }
+    const rememberHistory = () => {
+      currentState = window.history.state
+      currentPosition = settingsHistoryPosition(currentState)
+      currentHref = window.location.href
+    }
     const pop = (event: PopStateEvent) => {
       if (restoring) { event.stopImmediatePropagation(); restoring = false; restored?.(); restored = null; return }
-      const nextIndex: number = event.state?.[marker] ?? index - 1
-      if (!unsafe || allowDeparture.current || samePage(currentHref)) { index = nextIndex; currentHref = window.location.href; return }
-      const delta = nextIndex - index
-      if (!delta) return
+      if (!unsafe || allowDeparture.current || samePage(currentHref)) { rememberHistory(); return }
       event.stopImmediatePropagation()
       const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const destination = window.location.href
+      const nextPosition = settingsHistoryPosition(event.state)
+      if (!nextPosition || !currentPosition || nextPosition.scope !== currentPosition.scope || nextPosition.index === currentPosition.index) {
+        // Legacy History exposes no index for an entry created outside Settings.
+        // Keep the local editor intact at this entry; a confirmed departure uses
+        // the captured URL and replaces this entry instead of guessing a delta.
+        window.history.replaceState(currentState, '', currentHref)
+        askToLeave(() => window.location.replace(destination), trigger)
+        return
+      }
+      const delta = nextPosition.index - currentPosition.index
       restoring = true
       restored = () => askToLeave(() => window.history.go(delta), trigger)
       window.history.go(-delta)
     }
+    const unregisterHistoryGuard = navigation ? undefined : registerSettingsHistoryGuard(pop)
     if (navigation) navigation.addEventListener('navigate', navigate)
     else {
-      originalReplace.call(window.history, { ...window.history.state, [marker]: index }, '')
-      window.history.pushState = push; window.history.replaceState = replace
-      window.addEventListener('popstate', pop, true)
+      window.addEventListener(SETTINGS_HISTORY_CHANGE_EVENT, rememberHistory)
     }
     window.addEventListener('beforeunload', beforeUnload)
     window.addEventListener(SETTINGS_NAVIGATION_EVENT, imperative)
@@ -138,9 +147,9 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     return () => {
       window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener(SETTINGS_NAVIGATION_EVENT, imperative); document.removeEventListener('click', click, true)
       navigation?.removeEventListener('navigate', navigate)
-      window.removeEventListener('popstate', pop, true)
-      if (window.history.pushState === push) window.history.pushState = originalPush
-      if (window.history.replaceState === replace) window.history.replaceState = originalReplace
+      unregisterHistoryGuard?.()
+      window.removeEventListener(SETTINGS_HISTORY_CHANGE_EVENT, rememberHistory)
+      releaseHistory?.()
     }
   }, [unsafe])
 

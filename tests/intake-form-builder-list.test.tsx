@@ -137,8 +137,24 @@ describe('intake form settings list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate form' }))
     await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/settings/intake-forms/copy'))
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings/intake-forms/active/duplicate', expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ sourceVersionId: 'active-old', key: 'copy', name: 'Copy', description: null }),
+      method: 'POST', body: JSON.stringify({ sourceVersionId: 'active-old', expectedSourceLockVersion: 1, expectedSourceDefinitionHash: 'a'.repeat(64), key: 'copy', name: 'Copy', description: null }),
     }))
+  })
+
+  it('submits the source guards loaded when Duplicate opens and preserves the dialog on a stale-source conflict', async () => {
+    const loaded = detail(); loaded.draft!.lock_version = 8; loaded.draft!.definition_hash = 'c'.repeat(64)
+    fetchMock.mockResolvedValueOnce(ok(loaded)).mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ code: 'INTAKE_FORM_CONFLICT' }) })
+    render(<IntakeFormsListClient initialTemplates={[summary()]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' })); fields('available_copy', 'My copy')
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate form' }))
+    await screen.findByRole('alert')
+    expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({ sourceVersionId: 'active-draft', expectedSourceLockVersion: 8,
+      expectedSourceDefinitionHash: 'c'.repeat(64), key: 'available_copy', name: 'My copy', description: null })
+    expect((screen.getByLabelText('Stable key') as HTMLInputElement).value).toBe('available_copy')
+    expect((screen.getByLabelText('Source version') as HTMLSelectElement).value).toBe('active-draft')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('disables duplication when no source version exists', () => {

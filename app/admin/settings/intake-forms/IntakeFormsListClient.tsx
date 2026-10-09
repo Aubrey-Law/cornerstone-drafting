@@ -109,13 +109,15 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       setError('Enter a name (up to 160 characters) and a description of up to 600 characters.')
       return
     }
-    if (source && !creation.sourceVersions.some(row => row.id === sourceVersionId)) {
+    const selected = creation.sourceVersions.find(row => row.id === sourceVersionId)
+    if (source && !selected) {
       setError('Choose an available source version and try again.')
       return
     }
     setBusy(true); setError(null)
     try {
-      const body = source ? { sourceVersionId, key, name, description } : {
+      const body = source && selected ? { sourceVersionId, expectedSourceLockVersion: selected.lock_version,
+        expectedSourceDefinitionHash: selected.definition_hash, key, name, description } : {
         key, name, description,
         definition: { schemaVersion: 1, key, title: name, ...(description ? { description } : {}), sections: [] },
       }
@@ -131,7 +133,6 @@ export function IntakeFormsListClient({ initialTemplates }: { initialTemplates: 
       }
       let created
       try {
-        const selected = creation.sourceVersions.find(row => row.id === sourceVersionId)
         const definition = source && selected ? { ...selected.definition, key } : createBlankDefinition({ key, title: name, ...(description ? { description } : {}) })
         created = parseCreatedForm(result, { key, name, description, definition, existingIds: templates.map(row => row.template.id) })
       } catch {

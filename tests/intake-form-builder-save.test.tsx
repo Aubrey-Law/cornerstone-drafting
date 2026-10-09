@@ -5,6 +5,7 @@ import { IntakeFormEditorClient } from '@/app/admin/settings/intake-forms/[templ
 import { getIntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { IntakeFormEditorSnapshot } from '@/lib/intake/forms/persistenceTypes'
 import { SettingsNav } from '@/app/admin/settings/SettingsNavMenu'
+import { SettingsHistoryBoundary } from '@/app/admin/settings/SettingsHistoryBoundary'
 import { Activity } from 'react'
 
 const push = vi.hoisted(() => vi.fn())
@@ -30,7 +31,7 @@ function observeDeparture() {
 }
 
 describe('intake builder explicit save and recovery', () => {
-  beforeEach(() => { push.mockClear(); vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
+  beforeEach(() => { push.mockClear(); vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); render(<SettingsHistoryBoundary />) })
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
   it('never autosaves and sends the saved version lock only on Save draft', async () => {
@@ -153,27 +154,115 @@ describe('intake builder explicit save and recovery', () => {
     expect(push).toHaveBeenCalledExactlyOnceWith('/admin/settings?tab=models')
   })
 
-  it.each(['back', 'forward'] as const)('guards real history %s, cancels without creating history entries, and proceeds once without a listener loop', async direction => {
+  it.each([-2, -1, 1, 2])('guards fallback history.go(%s) through Settings entries created before the editor mounts', async delta => {
+    vi.stubGlobal('navigation', undefined)
+    const originalPush = history.pushState
+    const originalReplace = history.replaceState
+    history.replaceState({ router: 'preserved' }, '', '/admin/settings?tab=models')
+    const navigation = render(<SettingsNav isAdministrator />)
+    history.pushState({ router: 'second' }, '', '/admin/settings?tab=notifications')
+    history.pushState({ router: 'editor' }, '', '/admin/settings/intake-forms/t1?inspect=review#details')
+    history.pushState({ router: 'fourth' }, '', '/admin/settings?tab=integrations')
+    history.pushState({ router: 'fifth' }, '', '/admin/settings?tab=users')
+    await act(async () => { history.go(-2); await new Promise(resolve => window.addEventListener('popstate', resolve, { once: true })) })
     const { unmount } = mount()
-    history.replaceState({}, '', '/admin/settings/intake-forms/t1')
-    history.pushState({}, '', '/admin/settings?tab=models')
-    if (direction === 'forward') {
-      await act(async () => { history.back(); await new Promise(resolve => window.addEventListener('popstate', resolve, { once: true })) })
-    }
     const original = window.location.href
+    const destination = `${window.location.origin}${delta === -2 ? '/admin/settings?tab=models' : delta === -1 ? '/admin/settings?tab=notifications' : delta === 1 ? '/admin/settings?tab=integrations' : '/admin/settings?tab=users'}`
     const size = history.length
     edit(); screen.getByLabelText('Form title').focus()
-    act(() => { history[direction]() })
+    act(() => { history.go(delta) })
     await screen.findByRole('alertdialog')
     await waitFor(() => expect(window.location.href).toBe(original))
+    expect(history.state.router).toBe('editor')
     click('Cancel'); await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Form title')))
     expect(title()).toBe('Changed title'); expect(history.length).toBe(size)
-    act(() => { history[direction]() }); await screen.findByRole('alertdialog')
-    click('Leave')
-    await waitFor(() => expect(window.location.href).not.toBe(original))
+    act(() => { history.go(delta) }); await screen.findByRole('alertdialog')
+    const leave = screen.getByRole('button', { name: 'Leave' }); fireEvent.click(leave); fireEvent.click(leave)
+    await waitFor(() => expect(window.location.href).toBe(destination))
     expect(screen.queryByRole('alertdialog')).toBeNull(); expect(history.length).toBe(size)
     unmount()
+    navigation.unmount()
+    expect(history.pushState).toBe(originalPush)
+    expect(history.replaceState).toBe(originalReplace)
     const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
+  })
+
+  it.each(['cancel', 'leave'])('handles an unknown fallback entry on %s without guessing history direction or distance', async action => {
+    vi.stubGlobal('navigation', undefined)
+    history.replaceState({}, '', '/admin/matters?filter=open')
+    history.pushState({ router: 'editor' }, '', '/admin/settings/intake-forms/t1?inspect=review#details')
+    mount(); edit(); screen.getByLabelText('Form title').focus()
+    const original = window.location.href
+    const go = vi.spyOn(history, 'go')
+    act(() => history.back())
+    await screen.findByRole('alertdialog')
+    expect(go).not.toHaveBeenCalled()
+    expect(window.location.href).toBe(original)
+    expect(history.state.router).toBe('editor')
+    if (action === 'cancel') {
+      click('Cancel'); await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Form title')))
+      expect(title()).toBe('Changed title')
+    } else {
+      const replace = vi.fn()
+      vi.stubGlobal('window', new Proxy(window, { get: (target, key) => key === 'location' ? { ...target.location, replace } : Reflect.get(target, key, target) }))
+      const leave = screen.getByRole('button', { name: 'Leave' }); fireEvent.click(leave); fireEvent.click(leave)
+      expect(replace).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}/admin/matters?filter=open`)
+      expect(go).not.toHaveBeenCalled()
+    }
+  })
+
+  it('rearms fallback traversal after restoring a cached editor with its unsaved definition', async () => {
+    vi.stubGlobal('navigation', undefined)
+    history.replaceState({}, '', '/admin/settings?tab=models')
+    render(<SettingsNav isAdministrator />)
+    history.pushState({}, '', '/admin/settings/intake-forms/t1')
+    const editor = <IntakeFormEditorClient initialSnapshot={fixture()} catalog={getIntakeFormBuilderCatalog()} />
+    const { rerender } = render(<Activity mode="visible">{editor}</Activity>)
+    edit(); act(() => history.back()); await screen.findByRole('alertdialog'); click('Leave')
+    await waitFor(() => expect(window.location.search).toBe('?tab=models'))
+    rerender(<Activity mode="hidden">{editor}</Activity>)
+    await act(async () => { history.forward(); await new Promise(resolve => window.addEventListener('popstate', resolve, { once: true })) })
+    rerender(<Activity mode="visible">{editor}</Activity>)
+    screen.getByLabelText('Form title').focus()
+    act(() => history.back()); await screen.findByRole('alertdialog')
+    click('Cancel')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Form title')))
+    expect(window.location.pathname).toBe('/admin/settings/intake-forms/t1')
+    expect(title()).toBe('Changed title')
+  })
+
+  it('guards fallback before an earlier router listener can hide the editor during popstate dispatch', async () => {
+    vi.stubGlobal('navigation', undefined)
+    history.replaceState({}, '', '/admin/settings?tab=models')
+    render(<SettingsNav isAdministrator />)
+    history.pushState({}, '', '/admin/settings/intake-forms/t1')
+    const editor = <IntakeFormEditorClient initialSnapshot={fixture()} catalog={getIntakeFormBuilderCatalog()} />
+    let view: ReturnType<typeof render>
+    const route = vi.fn(() => view.rerender(<Activity mode="hidden">{editor}</Activity>))
+    // Chrome dispatches the window target in registration order; jsdom groups
+    // capture listeners first. Capture reproduces Chrome's earlier-router order.
+    window.addEventListener('popstate', route, true)
+    try {
+      view = render(<Activity mode="visible">{editor}</Activity>)
+      edit(); act(() => history.back())
+      await screen.findByRole('alertdialog')
+      expect(route).not.toHaveBeenCalled()
+      click('Cancel')
+      expect(title()).toBe('Changed title')
+    } finally { window.removeEventListener('popstate', route, true) }
+  })
+
+  it('leaves unrelated navigation alone without an editor and after the editor unregisters', () => {
+    vi.stubGlobal('navigation', undefined)
+    const route = vi.fn()
+    window.addEventListener('popstate', route)
+    try {
+      window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
+      expect(route).toHaveBeenCalledTimes(1)
+      const view = mount(); edit(); view.unmount()
+      window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
+      expect(route).toHaveBeenCalledTimes(2)
+    } finally { window.removeEventListener('popstate', route) }
   })
 
   it('exempts same-page history anchors without dropping protection for a later route departure', async () => {

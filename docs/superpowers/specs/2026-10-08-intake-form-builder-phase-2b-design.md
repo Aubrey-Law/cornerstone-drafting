@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** implemented and verified locally, including all six whole-branch review repairs; controller repair re-review and separately authorized release remain pending
+**Status:** implemented and verified locally, including six initial and three follow-up review repairs; controller repair re-review and separately authorized release remain pending
 
 **Scope:** administrator-only visual authoring and synthetic preview over the
 Phase 2A intake-form persistence and lifecycle foundation
@@ -78,7 +78,11 @@ The page provides two creation paths:
    with a new key, name, and independent history.
 
 Duplicate loads parsed version detail on demand and offers every historical
-version; the summary list does not carry all definitions. Create, duplicate,
+version; the summary list does not carry all definitions. Its request includes
+`sourceVersionId`, `expectedSourceLockVersion`, and
+`expectedSourceDefinitionHash` from that loaded source. A stale source is a
+409 conflict, with no new template/version/audit row or key consumption.
+Create, duplicate,
 archive, and restore validate strict response shapes, identity, and expected
 state before navigation or local adoption. An invalid success response keeps
 the dialog and entered values intact and directs the administrator to reload
@@ -220,6 +224,15 @@ Leave/Cancel dialog as links, with focus restored on cancellation and exactly
 one captured destination on confirmation. Same-page anchors and modified,
 download, and non-self link targets retain their exemptions. Tab closing and
 reloading retain the browser's native beforeunload protection.
+
+Settings stamps shared history indices before editor mounting. A no-UI root
+boundary installs the early popstate listener, which is inert unless an
+editor registers its guard. Known indexed traversal restores the exact
+source entry before asking; confirmation traverses the captured delta once.
+For an unknown legacy entry, the fallback never invents direction or distance:
+it replaces the current entry with the editor URL/state and, if confirmed,
+replaces it with the captured destination URL. Cancel preserves editor data,
+URL, and focus, but original unknown-entry position cannot be guaranteed.
 
 ### Concurrent-edit conflicts
 
@@ -500,10 +513,10 @@ git diff --check origin/main...HEAD
 git diff --check
 ```
 
-After the six review repairs, the exact focused suite passed **15 files / 446 tests**, including real local
+After both review-repair waves, the exact focused suite passed **15 files / 461 tests**, including real local
 database tests, with no accessibility warning. Lint and typecheck exited 0.
-The full suite exited 0: **916 files passed, 2 skipped; 10,175 tests passed,
-27 skipped** (138.67 seconds). The additional skipped test is the new local
+The full suite exited 0: **916 files passed, 2 skipped; 10,190 tests passed,
+27 skipped** (146.50 seconds). The additional skipped test is the new local
 database regression, which passed in the explicitly configured focused run.
 The full suite emitted seven jsdom
 `Not implemented: navigation to another Document` notices, with no failed
@@ -611,7 +624,7 @@ RED-to-GREEN checks: imperative/history navigation, custom preview Review,
 historical selection and retirement, discard recency, list response validation,
 and catalog decision metadata. No drafting internals changed.
 
-The final repair Chrome run passed at **1440×1000** and **390×1000**. It covered
+The first repair Chrome run passed at **1440×1000** and **390×1000**. It covered
 Settings departure and native browser Back/Forward Cancel/Leave with retained
 edits and focus, no added history entries or replay loop; four-version history
 and retirement of v2 while preserving an unsaved v4; historical duplicate
@@ -629,16 +642,70 @@ changed, so type regeneration was unnecessary. Initial Task 9 reset/smoke
 evidence above remains a historical record, not a second reset or a new
 production-verification claim.
 
-Latest evidence:
+First repair evidence:
 `/private/tmp/intake-phase2b-final-fix-focused.log`,
 `/private/tmp/intake-phase2b-final-fix-full.log`, and
 `/private/tmp/intake-phase2b-final-fix-browser-evidence.json`.
 The final run recorded local unused-font preload and favicon aspect-ratio
 warnings, with no uncaught page error or failing acceptance assertion.
 
+### Second repair verification
+
+The three follow-up findings were reproduced individually and repaired with
+RED-to-GREEN regressions. Settings now starts shared history indexing before
+editor mounting. An approved no-UI root boundary installs one dormant
+popstate interceptor before the router; it acts only while an editor guard is
+registered. A router-hides-editor regression, pre-existing Settings entries,
+multi-step Back/Forward, cancellation, continuation, cleanup, and cached
+editor reactivation are covered. The Navigation API path remains intact.
+
+Known indexed entries restore and traverse the exact original entries without
+adding history. A truly unknown legacy entry has no trustworthy direction or
+distance: the fallback explicitly replaces its current entry with the editor
+URL/state for cancellation and uses the captured destination URL once on
+confirmation. It does not guess a history delta; preserving that unknown
+entry's original position is not claimed.
+
+Duplicate sends the dialog-loaded source lock and definition hash through
+the strict route/service/repository contract to the existing atomic RPC.
+A concurrent source save produces a sanitized 409 before any template,
+version, or audit row is created or the new key is consumed. Published and
+retired sources and strict success-response validation remain supported.
+Preview Review substitutes only the block body, preserving the normal
+fieldset legend, configured title, and described help; live Review is unchanged.
+
+The final actual Chrome run, with the Navigation API disabled before
+hydration, passed at **1440×1000** and **390×1000** from
+`2026-10-09T00:03:55.970Z` to `2026-10-09T00:04:53.130Z`.
+At each width, Back/Forward deltas -2, -1, +2, and +1 passed Cancel/Leave
+with exact entry/URL/focus restoration, one-time continuation, unchanged
+history length, and rearmed protection on revisiting the editor. Client and
+Staff preview displayed the overridden Review title/help and inert synthetic
+answers with no preview writes or intake/auth requests. A dialog-open →
+concurrent-save duplicate returned 409 with unchanged template/version/audit
+counts; after refreshing the source, the same key succeeded.
+
+The successful editor IDs were
+`5d6266c5-c610-4479-ad8b-6fea45b21fa7` (desktop) and
+`19089f15-4625-436c-abe0-e20ba899cd2c` (narrow).
+Fresh non-admin attorney sessions were denied both pages and all five
+list/detail/create/duplicate/archive API probes. The same two client intake
+IDs above retained null version pins, and the fixture user was restored to
+attorney. The screenshots were visually inspected without document horizontal
+overflow. Only unused local font preloads, a favicon aspect-ratio warning,
+and expected 409 resource notices occurred; there was no uncaught page error.
+No database reset or schema/function change was required in this repair wave.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-repair2-focused.log`,
+`/private/tmp/intake-phase2b-repair2-full.log`,
+`/private/tmp/intake-phase2b-repair2-browser-evidence.json`, and
+`/private/tmp/intake-phase2b-repair2-review-1440.png` /
+`/private/tmp/intake-phase2b-repair2-review-390.png`.
+
 ### Remaining release boundaries
 
-The six whole-branch review findings are repaired and locally verified;
+The six initial findings and three follow-up findings are repaired and locally verified;
 controller repair re-review remains pending. Phase 2C runtime activation and intake
 pinning, Phase 3 detailed intake enhancements, production bundled-form
 installation, and all drafting changes remain excluded. No push, pull
