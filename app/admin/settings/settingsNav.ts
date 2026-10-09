@@ -23,7 +23,7 @@ export type SettingsTab =
 
 export type SettingsNavItem =
   | { kind: 'tab'; tab: SettingsTab; label: string; description: string; adminOnly?: boolean }
-  | { kind: 'route'; href: string; label: string }
+  | { kind: 'route'; href: string; label: string; adminOnly?: boolean }
 
 export interface SettingsNavGroup {
   label: string
@@ -111,6 +111,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
   {
     label: 'Workflow',
     items: [
+      { kind: 'route', href: '/admin/settings/intake-forms', label: 'Intake forms', adminOnly: true },
       {
         kind: 'tab',
         tab: 'sla',
@@ -152,7 +153,7 @@ export const DEFAULT_SETTINGS_TAB: SettingsTab = 'models'
 export function settingsNavFor(isAdministrator: boolean): SettingsNavGroup[] {
   return SETTINGS_NAV.map(group => ({
     ...group,
-    items: group.items.filter(item => item.kind === 'route' || !item.adminOnly || isAdministrator),
+    items: group.items.filter(item => !item.adminOnly || isAdministrator),
   })).filter(group => group.items.length > 0)
 }
 

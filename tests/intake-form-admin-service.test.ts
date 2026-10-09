@@ -10,13 +10,14 @@ import * as adminClient from '@/lib/supabaseAdmin'
 vi.mock('@/lib/intake/forms/repository', () => ({
   listTemplateRows: vi.fn(), getTemplateRow: vi.fn(), getTemplateRowByKey: vi.fn(), getVersionRow: vi.fn(), getDraftRow: vi.fn(), listVersionRows: vi.fn(),
   createTemplateRow: vi.fn(), saveDraftRow: vi.fn(), createNextDraftRow: vi.fn(), publishDraftRow: vi.fn(),
-  retireVersionRow: vi.fn(), archiveTemplateRow: vi.fn(), discardDraftRow: vi.fn(),
+  retireVersionRow: vi.fn(), archiveTemplateRow: vi.fn(), discardDraftRow: vi.fn(), listAuditEventRows: vi.fn(), duplicateTemplateRow: vi.fn(),
 }))
 
 const definition = (): IntakeFormDefinition => ({ schemaVersion: 1, key: 'test', title: 'Test', sections: [
   { id: 'personal', title: 'Personal', audience: 'client_and_staff', items: [{ kind: 'field', id: 'name', fieldId: 'client_first_name' }] },
   { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'submit', blockId: 'review_submit' }] },
 ] })
+const duplicateGuards = () => ({ expectedSourceLockVersion: 3, expectedSourceDefinitionHash: hashIntakeFormDefinition(definition()) })
 const template = (overrides: Partial<IntakeFormTemplateRow> = {}): IntakeFormTemplateRow => ({
   id: 'template-1', key: 'test', name: 'Test', description: null, archived_at: null,
   created_by: 'admin-1', created_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z', ...overrides,
@@ -27,6 +28,7 @@ describe('intake form repository boundary', () => {
   async function adapter(response: { data: unknown; error: unknown }, rpcData?: unknown) {
     const query = {
       select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), range: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue(response),
       then: (resolve: (value: unknown) => unknown) => Promise.resolve(response).then(resolve),
     }
@@ -202,6 +204,122 @@ describe('intake form repository boundary', () => {
       expect(client.rpc).not.toHaveBeenCalled()
     } finally { spy.mockRestore() }
   })
+
+  it('limits audit reads to 50 and orders ties deterministically without exposing raw metadata', async () => {
+    const row = auditEvent()
+    const { real, spy, client, query } = await adapter({ data: [row], error: null })
+    try {
+      await expect(real.listAuditEventRows(row.template_id, 100)).resolves.toEqual([row])
+      expect(client.from).toHaveBeenCalledWith('intake_form_audit_events')
+      expect(query.eq).toHaveBeenCalledWith('template_id', row.template_id)
+      expect(query.limit).toHaveBeenCalledWith(50)
+      expect(query.order.mock.calls).toEqual([['occurred_at', { ascending: false }], ['id', { ascending: false }]])
+      await real.listAuditEventRows(row.template_id, 2)
+      expect(query.limit).toHaveBeenLastCalledWith(2)
+    } finally { spy.mockRestore() }
+  })
+
+  it.each([[], null, new Date(), { nested: undefined }, { nested: Number.NaN }, { nested: new Date() }].map((metadata) => ({ metadata })))('fails closed for non-JSON-object audit metadata: $metadata', async ({ metadata }) => {
+    const { real, spy } = await adapter({ data: [{ ...auditEvent(), metadata }], error: null })
+    try { await expect(real.listAuditEventRows(auditEvent().template_id)).rejects.toThrow('Stored intake form audit event is invalid') }
+    finally { spy.mockRestore() }
+  })
+
+  it('rejects unknown audit fields and actions, and preserves storage failures', async () => {
+    for (const raw of [{ ...auditEvent(), extra: true }, { ...auditEvent(), action: 'delete' }]) {
+      const { real, spy } = await adapter({ data: [raw], error: null })
+      try { await expect(real.listAuditEventRows(auditEvent().template_id)).rejects.toThrow('Stored intake form audit event is invalid') }
+      finally { spy.mockRestore() }
+    }
+    const failure = { code: 'XX000', message: 'audit unavailable' }
+    const { real, spy } = await adapter({ data: null, error: failure })
+    try { await expect(real.listAuditEventRows(auditEvent().template_id)).rejects.toBe(failure) }
+    finally { spy.mockRestore() }
+  })
+
+  it('atomically duplicates the parsed source with rewritten identity and source guards', async () => {
+    const source = version(definition(), { status: 'published', version: 5 })
+    const copied = { ...definition(), key: 'copy' }
+    const draft = version(copied, { id: 'copy-version', template_id: 'copy-template', lock_version: 0 })
+    const { definition: _definition, ...metadata } = draft
+    const { real, spy, client, query } = await adapter({ data: source, error: null }, metadata)
+    query.maybeSingle.mockResolvedValueOnce({ data: source, error: null })
+      .mockResolvedValueOnce({ data: template({ id: 'copy-template', key: 'copy', name: 'Copy' }), error: null })
+    try {
+      const result = await real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: source.id, actorId: 'admin-1', key: 'copy', name: 'Copy' })
+      expect(result).toMatchObject({ template: { id: 'copy-template', key: 'copy' }, draft: { definition: copied, lock_version: 0 } })
+      expect(client.rpc.mock.calls).toEqual([['duplicate_intake_form_template', {
+        p_actor_id: 'admin-1', p_source_version_id: source.id, p_key: 'copy', p_name: 'Copy', p_description: null,
+        p_expected_lock_version: 3, p_expected_definition_hash: source.definition_hash,
+        p_definition: copied, p_definition_hash: hashIntakeFormDefinition(copied),
+      }]])
+      result.draft.definition.sections[0].title = 'Changed copy'
+      expect(source.definition.sections[0].title).toBe('Personal')
+    } finally { spy.mockRestore() }
+  })
+
+  it.each(['lock', 'hash'])('rejects duplicate %s changed since the dialog read before calling the RPC', async mismatch => {
+    const source = version()
+    const { real, spy, client } = await adapter({ data: source, error: null })
+    try {
+      await expect(real.duplicateTemplateRow({ sourceVersionId: source.id, actorId: 'admin-1', key: 'copy', name: 'Copy',
+        expectedSourceLockVersion: mismatch === 'lock' ? 2 : 3,
+        expectedSourceDefinitionHash: mismatch === 'hash' ? 'a'.repeat(64) : source.definition_hash }))
+        .rejects.toMatchObject({ code: '40001', message: 'Source changed; refresh and try again' })
+      expect(client.rpc).not.toHaveBeenCalled()
+    } finally { spy.mockRestore() }
+  })
+
+  it('refuses invalid duplication sources and mismatched RPC hashes', async () => {
+    const { real, spy, client, query } = await adapter({ data: { ...version(), definition: {} }, error: null })
+    const input = { ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }
+    try {
+      await expect(real.duplicateTemplateRow(input)).rejects.toThrow('Stored intake form version version-1 is invalid')
+      expect(client.rpc).not.toHaveBeenCalled()
+      query.maybeSingle.mockResolvedValue({ data: version(), error: null })
+      const { definition: _definition, ...metadata } = version()
+      client.rpc.mockResolvedValue({ data: metadata, error: null })
+      await expect(real.duplicateTemplateRow(input)).rejects.toThrow('Stored intake form version version-1 is invalid')
+    } finally { spy.mockRestore() }
+  })
+
+  it('turns a source discarded after the read into the existing source conflict', async () => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
+    try {
+      await expect(real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toMatchObject({ code: '40001', message: 'Source changed; refresh and try again' })
+    } finally { spy.mockRestore() }
+  })
+
+  it.each([
+    { code: 'P0001', message: 'Other database validation failed' },
+    { code: 'XX000', message: 'Source version required' },
+    { code: 'P0001', message: 'Source version required with unexpected detail' },
+  ])('preserves unrelated duplicate RPC errors: $code / $message', async (failure) => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: failure })
+    try {
+      await expect(real.duplicateTemplateRow({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toBe(failure)
+    } finally { spy.mockRestore() }
+  })
+
+  it('maps the raced duplicate RPC rejection through the real repository to a typed service conflict', async () => {
+    const { real, spy, client } = await adapter({ data: version(), error: null })
+    client.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Source version required' } })
+    vi.mocked(repository.duplicateTemplateRow).mockImplementation(real.duplicateTemplateRow)
+    try {
+      await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1',
+        actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+        .rejects.toMatchObject({ code: 'INTAKE_FORM_CONFLICT', message: 'Source changed; refresh and try again' })
+    } finally { spy.mockRestore() }
+  })
+})
+const auditEvent = () => ({
+  id: '11111111-1111-4111-8111-111111111111', template_id: '22222222-2222-4222-8222-222222222222',
+  version_id: null, version_number: 1, action: 'discard', actor_id: '33333333-3333-4333-8333-333333333333',
+  metadata: { source_version_id: 'old-version', nested: [true, null, 1] }, occurred_at: '2026-10-08T12:00:00Z',
 })
 const version = (raw = definition(), overrides: Partial<IntakeFormVersionRow> = {}): IntakeFormVersionRow => ({
   id: 'version-1', template_id: 'template-1', version: 1, status: 'draft', definition: raw,
@@ -291,7 +409,7 @@ describe('intake form lifecycle service', () => {
 
   it.each([null, version(definition(), { template_id: 'other-template', status: 'published' })])('rejects missing or cross-template duplicate and retirement sources', async (row) => {
     vi.mocked(repository.getVersionRow).mockResolvedValue(row)
-    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1',
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1',
       key: 'copy', name: 'Copy' })).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
     await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
       .rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
@@ -302,8 +420,8 @@ describe('intake form lifecycle service', () => {
   it('duplicates and retires a selected version belonging to the requested template', async () => {
     vi.mocked(repository.getVersionRow).mockResolvedValue(version(definition(), { status: 'published' }))
     vi.mocked(repository.retireVersionRow).mockResolvedValue(version(definition(), { status: 'retired' }))
-    vi.mocked(repository.createTemplateRow).mockResolvedValue({ template: template({ key: 'copy' }), draft: version() })
-    await expect(service.duplicateIntakeFormTemplateFromTemplate({ templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+    vi.mocked(repository.duplicateTemplateRow).mockResolvedValue({ template: template({ key: 'copy' }), draft: version() })
+    await expect(service.duplicateIntakeFormTemplateFromTemplate({ ...duplicateGuards(), templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
       .resolves.toMatchObject({ template: { key: 'copy' } })
     await expect(service.retireIntakeFormTemplateVersion({ templateId: 'template-1', versionId: 'version-1', actorId: 'admin-1' }))
       .resolves.toMatchObject({ status: 'retired' })
@@ -447,21 +565,22 @@ describe('intake form lifecycle service', () => {
   it('duplicates into a new key/template and independent version-1 draft', async () => {
     const source = version(definition(), { status: 'published', version: 5 })
     vi.mocked(repository.getVersionRow).mockResolvedValue(source)
-    vi.mocked(repository.createTemplateRow).mockImplementation(async (input) => ({
+    vi.mocked(repository.duplicateTemplateRow).mockImplementation(async (input) => ({
       template: template({ id: 'template-2', key: input.key, name: input.name }),
-      draft: version(input.definition, { id: 'version-2', template_id: 'template-2', lock_version: 0 }),
+      draft: version({ ...definition(), key: input.key }, { id: 'version-2', template_id: 'template-2', lock_version: 0 }),
     }))
-    const result = await service.duplicateIntakeFormTemplate({ sourceVersionId: source.id, key: 'copy', name: 'Copy', actorId: 'admin-1' })
+    const result = await service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: source.id, key: 'copy', name: 'Copy', actorId: 'admin-1' })
     expect(result).toMatchObject({ template: { id: 'template-2', key: 'copy' }, draft: {
       id: 'version-2', template_id: 'template-2', version: 1, status: 'draft', lock_version: 0, definition: { key: 'copy' },
     }, diagnostics: [] })
     result.draft.definition.sections[0].title = 'Changed copy'
     expect(source.definition.sections[0].title).toBe('Personal')
     expect(repository.createNextDraftRow).not.toHaveBeenCalled()
+    expect(repository.createTemplateRow).not.toHaveBeenCalled()
   })
 
   it('rejects a duplicate reusing the original template key', async () => {
-    await expect(service.duplicateIntakeFormTemplate({ sourceVersionId: 'version-1', key: 'test', name: 'Copy', actorId: 'admin-1' }))
+    await expect(service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: 'version-1', key: 'test', name: 'Copy', actorId: 'admin-1' }))
       .rejects.toBeInstanceOf(service.IntakeFormValidationError)
     expect(repository.createTemplateRow).not.toHaveBeenCalled()
   })
@@ -517,5 +636,81 @@ describe('intake form lifecycle service', () => {
     await expect(service.getIntakeFormDraft('template-1')).resolves.toEqual(version())
     vi.mocked(repository.getVersionRow).mockRejectedValue(new Error('Stored intake form version version-1 is invalid'))
     await expect(service.getIntakeFormVersion('version-1')).rejects.toThrow('Stored intake form version version-1 is invalid')
+  })
+
+  it('builds key-ordered summaries including archived templates and selects the highest version per status', async () => {
+    const archived = template({ id: 'archived', key: 'a_archived', archived_at: '2026-10-08T12:00:00Z' })
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template(), archived])
+    vi.mocked(repository.listVersionRows).mockImplementation(async (id) => id === 'archived' ? [] : [
+      version(definition(), { id: 'published-old', status: 'published', version: 2 }),
+      version(definition(), { id: 'draft-new', version: 7 }),
+      version(definition(), { id: 'retired', status: 'retired', version: 8 }),
+      version(definition(), { id: 'published-new', status: 'published', version: 6 }),
+    ])
+    const summaries = await service.listIntakeFormTemplateSummaries()
+    expect(summaries.map((summary) => summary.template.key)).toEqual(['a_archived', 'test'])
+    expect(summaries[0]).toEqual({ template: archived, draft: null, latestPublished: null, latestVersion: null, lastModifiedAt: archived.updated_at })
+    expect(summaries[1]).toMatchObject({ draft: { id: 'draft-new' }, latestPublished: { id: 'published-new' }, latestVersion: { id: 'retired' } })
+  })
+
+  it('includes an older retired version in the last-modified aggregate', async () => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template()])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([
+      version(definition(), { id: 'retired-old', status: 'retired', version: 1, updated_at: '2026-10-10T15:00:00Z' }),
+      version(definition(), { id: 'published', status: 'published', version: 2, updated_at: '2026-10-09T15:00:00Z' }),
+      version(definition(), { id: 'draft', version: 3, updated_at: '2026-10-09T16:00:00Z' }),
+    ])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([
+      { draft: { id: 'draft' }, latestPublished: { id: 'published' }, latestVersion: { id: 'draft' }, lastModifiedAt: '2026-10-10T15:00:00Z' },
+    ])
+  })
+
+  it.each([null, '2026-10-10T15:00:00Z'])('includes template-only archive/restore updates (archived=%s) in last-modified', async archived_at => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template({ archived_at, updated_at: '2026-10-10T15:00:00Z' })])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([version(definition(), { updated_at: '2026-10-09T15:00:00Z' })])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([{ lastModifiedAt: '2026-10-10T15:00:00Z' }])
+  })
+
+  it('retains discard recency when the latest draft no longer exists', async () => {
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template({ updated_at: '2026-10-10T15:00:00Z' })])
+    vi.mocked(repository.listVersionRows).mockResolvedValue([version(definition(), { status: 'published', updated_at: '2026-10-09T15:00:00Z' })])
+    await expect(service.listIntakeFormTemplateSummaries()).resolves.toMatchObject([{ draft: null, lastModifiedAt: '2026-10-10T15:00:00Z' }])
+  })
+
+  it('returns a parsed editor snapshot with history and propagates storage errors', async () => {
+    vi.mocked(repository.listVersionRows).mockResolvedValue([version()])
+    vi.mocked(repository.listAuditEventRows).mockResolvedValue([auditEvent()] as never)
+    await expect(service.getIntakeFormEditorSnapshot('template-1')).resolves.toEqual({
+      template: template(), versions: [version()], draft: version(), auditEvents: [auditEvent()],
+    })
+    vi.mocked(repository.listVersionRows).mockRejectedValue(new Error('Stored definition is invalid'))
+    vi.mocked(repository.listTemplateRows).mockResolvedValue([template()])
+    await expect(service.getIntakeFormEditorSnapshot('template-1')).rejects.toThrow('Stored definition is invalid')
+    await expect(service.listIntakeFormTemplateSummaries()).rejects.toThrow() // storage failures never become empty summaries
+  })
+
+  it('returns null only for an absent editor template', async () => {
+    vi.mocked(repository.getTemplateRow).mockResolvedValue(null)
+    await expect(service.getIntakeFormEditorSnapshot('missing')).resolves.toBeNull()
+    expect(repository.listVersionRows).not.toHaveBeenCalled()
+    expect(repository.listAuditEventRows).not.toHaveBeenCalled()
+  })
+
+  it('creates a next draft only from a source scoped to the requested template', async () => {
+    const input = { templateId: 'template-1', sourceVersionId: 'version-1', actorId: 'admin-1' }
+    vi.mocked(repository.getVersionRow).mockResolvedValue(version(definition(), { template_id: 'other-template', status: 'published' }))
+    await expect(service.createNextIntakeFormTemplateDraft(input)).rejects.toBeInstanceOf(service.IntakeFormNotFoundError)
+    expect(repository.createNextDraftRow).not.toHaveBeenCalled()
+    vi.mocked(repository.getVersionRow).mockResolvedValue(version(definition(), { status: 'published' }))
+    vi.mocked(repository.createNextDraftRow).mockRejectedValue({ code: 'P0001', message: 'Template already has a draft' })
+    await expect(service.createNextIntakeFormTemplateDraft(input)).rejects.toBeInstanceOf(service.IntakeFormConflictError)
+    vi.mocked(repository.createNextDraftRow).mockResolvedValue(version(definition(), { version: 2, lock_version: 0 }))
+    await expect(service.createNextIntakeFormTemplateDraft(input)).resolves.toMatchObject({ draft: { version: 2 }, diagnostics: [] })
+  })
+
+  it('maps a raced duplication source to a sanitized typed conflict', async () => {
+    vi.mocked(repository.duplicateTemplateRow).mockRejectedValue({ code: '40001', message: 'Source changed; refresh and try again' })
+    await expect(service.duplicateIntakeFormTemplate({ ...duplicateGuards(), sourceVersionId: 'version-1', actorId: 'admin-1', key: 'copy', name: 'Copy' }))
+      .rejects.toMatchObject({ code: 'INTAKE_FORM_CONFLICT', message: 'Source changed; refresh and try again' })
   })
 })

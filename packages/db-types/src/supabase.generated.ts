@@ -6338,6 +6338,61 @@ export type Database = {
           },
         ]
       }
+      intake_form_audit_events: {
+        Row: {
+          action: string
+          actor_id: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          template_id: string
+          version_id: string | null
+          version_number: number | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          template_id: string
+          version_id?: string | null
+          version_number?: number | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          template_id?: string
+          version_id?: string | null
+          version_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_form_audit_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_form_audit_events_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "intake_form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_form_audit_events_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "intake_form_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intake_form_templates: {
         Row: {
           archived_at: string | null
@@ -13288,6 +13343,20 @@ export type Database = {
           p_practice?: string
           p_search?: string
           p_sort?: string
+        }
+        Returns: Json
+      }
+      duplicate_intake_form_template: {
+        Args: {
+          p_actor_id: string
+          p_definition: Json
+          p_definition_hash: string
+          p_description: string
+          p_expected_definition_hash: string
+          p_expected_lock_version: number
+          p_key: string
+          p_name: string
+          p_source_version_id: string
         }
         Returns: Json
       }

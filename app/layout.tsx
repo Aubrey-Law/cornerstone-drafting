@@ -3,6 +3,7 @@ import localFont from 'next/font/local'
 import { ThemedToaster } from '@/components/ThemedToaster'
 import { ThemeProvider } from '@/lib/theme/ThemeProvider'
 import { THEME_INIT_SCRIPT } from '@/lib/theme/theme-init-script'
+import { SettingsHistoryBoundary } from './admin/settings/SettingsHistoryBoundary'
 import './globals.css'
 
 // Vendored latin-subset variable fonts (assets/fonts/) so production builds
@@ -67,6 +68,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="antialiased">
+        <SettingsHistoryBoundary />
         <ThemeProvider>
           {children}
           <ThemedToaster />

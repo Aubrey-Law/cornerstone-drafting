@@ -24,6 +24,7 @@ type Context = { params: Promise<{ templateId: string }> }
 const paramsSchema = z.object({ templateId: z.string().uuid() })
 const saveSchema = z.object({ versionId: z.string().uuid(), expectedLockVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), definition: z.record(z.unknown()) }).strict()
 const discardSchema = z.object({ versionId: z.string().uuid(), expectedLockVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).strict()
+const createNextSchema = z.object({ sourceVersionId: z.string().uuid() }).strict()
 
 export async function GET(req: Request, context: Context) {
   const { err } = await requireAdministrator(req)
@@ -47,6 +48,19 @@ export async function PUT(req: Request, context: Context) {
     if (!body.success) return badRequest()
     const result = await service.saveIntakeFormTemplateDraft({ templateId: route.data.templateId, ...body.data, actorId: userId! })
     return NextResponse.json(result)
+  } catch (error) { return failure(error) }
+}
+
+export async function POST(req: Request, context: Context) {
+  const { err, userId } = await requireAdministrator(req)
+  if (err) return err
+  try {
+    const route = paramsSchema.safeParse(await context.params)
+    if (!route.success) return badRequest()
+    const body = createNextSchema.safeParse(await req.json().catch(() => null))
+    if (!body.success) return badRequest()
+    const result = await service.createNextIntakeFormTemplateDraft({ templateId: route.data.templateId, ...body.data, actorId: userId! })
+    return NextResponse.json(result, { status: 201 })
   } catch (error) { return failure(error) }
 }
 

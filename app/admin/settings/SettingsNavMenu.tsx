@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useLayoutEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { resolveSettingsTab, settingsNavFor, settingsTabHref, type SettingsNavItem } from './settingsNav'
+import { navigateSettings, retainSettingsHistoryTracking } from './navigation'
 
 function hrefFor(item: SettingsNavItem): string {
   return item.kind === 'tab' ? settingsTabHref(item.tab) : item.href
@@ -14,6 +16,7 @@ function hrefFor(item: SettingsNavItem): string {
  * on narrow ones (fifteen entries do not fit across a phone).
  */
 export function SettingsNav({ isAdministrator }: { isAdministrator: boolean }) {
+  useLayoutEffect(() => retainSettingsHistoryTracking(), [])
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -36,7 +39,7 @@ export function SettingsNav({ isAdministrator }: { isAdministrator: boolean }) {
           id="settings-section"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={selectValue}
-          onChange={e => router.push(e.target.value)}
+          onChange={e => { const destination = e.target.value; navigateSettings(destination, () => router.push(destination), e.currentTarget) }}
         >
           {groups.map(group => (
             <optgroup key={group.label} label={group.label}>

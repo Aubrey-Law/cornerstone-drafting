@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   Banknote,
   Briefcase,
@@ -57,6 +58,7 @@ import { adminBreadcrumbs } from '@/lib/adminBreadcrumbs'
 import { MatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
 import { SidebarMattersContext } from '@/lib/matters/SidebarMattersContext'
 import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
+import { requestDeparture } from '@/lib/navigation/departure'
 
 const GlobalSearch = dynamic(
   () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
@@ -121,6 +123,9 @@ export default function AdminLayoutClient({
   // sheet) so they share one fetch and one view of what is pinned.
   const [workspaceMatterId, setWorkspaceMatterId] = useState<string | null>(null)
   const sidebarMatters = useSidebarMatters(workspaceMatterId)
+  const accountTrigger = useRef<HTMLButtonElement>(null)
+  const signOutInFlight = useRef(false)
+  const signOutConfirmation = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -221,10 +226,26 @@ export default function AdminLayoutClient({
     }
   }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
-    router.refresh()
+  const handleSignOut = () => {
+    if (signOutInFlight.current) return
+    signOutConfirmation.current = !requestDeparture({
+      trigger: accountTrigger.current,
+      proceed: async () => {
+        if (signOutInFlight.current) return false
+        signOutInFlight.current = true
+        try {
+          const { error } = await supabase.auth.signOut()
+          if (error) throw error
+          router.push('/auth/login')
+          router.refresh()
+          return true
+        } catch {
+          toast.error('Unable to sign out. Please try again.')
+          accountTrigger.current?.focus()
+          return false
+        } finally { signOutInFlight.current = false }
+      },
+    })
   }
 
   return (
@@ -303,6 +324,7 @@ export default function AdminLayoutClient({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
+                  ref={accountTrigger}
                   variant="ghost"
                   className="h-9 gap-2 px-1.5"
                   aria-label={`Account: ${userName}`}
@@ -313,7 +335,11 @@ export default function AdminLayoutClient({
                   <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={event => {
+                // The editor dialog owns focus while it asks about departure.
+                if (signOutConfirmation.current) event.preventDefault()
+                signOutConfirmation.current = false
+              }}>
                 {/* The name moves in here from the header, where it was text
                     beside the avatar taking horizontal room on every page. */}
                 <DropdownMenuLabel className="truncate font-normal">
@@ -328,7 +354,7 @@ export default function AdminLayoutClient({
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={() => void handleSignOut()}>
+                <DropdownMenuItem variant="destructive" onSelect={handleSignOut}>
                   <LogOut className="size-4" aria-hidden />
                   Sign out
                 </DropdownMenuItem>

@@ -9,6 +9,7 @@ export interface CompiledIntakeSectionsProps extends Omit<IntakeBlockRendererPro
   form: CompiledIntakeForm
   evaluation: IntakeFormEvaluation
   mode?: 'client' | 'public_link' | 'attorney' | 'staff'
+  readOnly?: boolean
   openId: string
   onToggle: (sectionId: string) => void
   onContinue?: (sectionId: string, nextSectionId: string) => void
@@ -21,7 +22,7 @@ export interface CompiledIntakeSectionsProps extends Omit<IntakeBlockRendererPro
 }
 
 /** Evaluation owns active ordering, completion, issues, estimates and progress. */
-export function CompiledIntakeSections({ form, evaluation, mode = 'client', openId, onToggle, onContinue, onLastContinue, numberOffset = 0, showValidation = true, showProgress = false, ...itemProps }: CompiledIntakeSectionsProps) {
+export function CompiledIntakeSections({ form, evaluation, mode = 'client', readOnly = false, openId, onToggle, onContinue, onLastContinue, numberOffset = 0, showValidation = true, showProgress = false, ...itemProps }: CompiledIntakeSectionsProps) {
   const isStaff = mode === 'attorney' || mode === 'staff'
   return (
     <div aria-label={`${form.title} sections`} className="space-y-4">
@@ -42,7 +43,7 @@ export function CompiledIntakeSections({ form, evaluation, mode = 'client', open
             section={section}
             number={index + 1 + numberOffset}
             open={openId === section.id}
-            disabled={isStaff && section.audience === 'client_and_staff'}
+            disabled={readOnly || (isStaff && section.audience === 'client_and_staff')}
             showValidation={showValidation}
             onToggle={() => onToggle(section.id)}
             onContinue={next && onContinue ? () => onContinue(section.id, next.id) : !next && onLastContinue ? () => onLastContinue(section.id) : undefined}

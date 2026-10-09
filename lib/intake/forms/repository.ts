@@ -2,10 +2,10 @@ import 'server-only'
 import { z } from 'zod'
 import type { Database, Json } from '@aubrey-law/db-types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { hashIntakeFormDefinition } from './hash'
+import { canonicalizeIntakeFormDefinition, hashIntakeFormDefinition } from './hash'
 import { parseIntakeFormDefinition } from './schema'
 import type { IntakeFormDefinition } from './types'
-import type { IntakeFormTemplateRow, IntakeFormVersionRow } from './persistenceTypes'
+import type { IntakeFormAuditEventRow, IntakeFormTemplateRow, IntakeFormVersionRow } from './persistenceTypes'
 
 const templateSchema = z.object({
   id: z.string(), key: z.string(), name: z.string(), description: z.string().nullable(), archived_at: z.string().nullable(),
@@ -16,6 +16,44 @@ const versionMetadataSchema = z.object({
   definition_hash: z.string().regex(/^[0-9a-f]{64}$/), lock_version: z.number().int().nonnegative(), created_by: z.string(),
   published_by: z.string().nullable(), created_at: z.string(), updated_at: z.string(), published_at: z.string().nullable(),
 }).strict()
+
+/** Validate JSON descriptors before touching values, including nested objects. */
+function isJsonObject(raw: unknown): raw is Record<string, Json> {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const active = new Set<object>()
+  function visit(value: unknown): boolean {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
+    if (typeof value === 'number') return Number.isFinite(value)
+    if (typeof value !== 'object' || value === null || active.has(value)) return false
+    const array = Array.isArray(value)
+    const prototype = Object.getPrototypeOf(value)
+    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false
+    const keys = Reflect.ownKeys(value).filter((key) => !(array && key === 'length'))
+    if (array && keys.length !== value.length) return false
+    active.add(value)
+    for (const key of keys) {
+      if (typeof key !== 'string' || (array && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length))) return false
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!
+      if (!descriptor.enumerable || !('value' in descriptor) || !visit(descriptor.value)) return false
+    }
+    active.delete(value)
+    return true
+  }
+  return visit(raw)
+}
+const auditSchema = z.object({
+  id: z.string().uuid(), template_id: z.string().uuid(), version_id: z.string().uuid().nullable(),
+  version_number: z.number().int().positive().nullable(),
+  action: z.enum(['create', 'save', 'create_next_draft', 'publish', 'retire', 'archive', 'restore', 'duplicate', 'discard']),
+  actor_id: z.string().uuid(), occurred_at: z.string().datetime({ offset: true }),
+  metadata: z.custom<Record<string, Json>>(isJsonObject).transform((value) => JSON.parse(JSON.stringify(value)) as Record<string, Json>),
+}).strict()
+
+function parseAuditEvent(raw: unknown): IntakeFormAuditEventRow {
+  const result = auditSchema.safeParse(raw)
+  if (!result.success) throw new Error('Stored intake form audit event is invalid')
+  return result.data
+}
 
 function parseTemplate(raw: unknown): IntakeFormTemplateRow {
   const result = templateSchema.safeParse(raw)
@@ -43,7 +81,7 @@ function mutationVersion(raw: unknown, definition: IntakeFormDefinition): Intake
 
 type Functions = Database['public']['Functions']
 type LifecycleFunction = 'create_intake_form_template' | 'save_intake_form_draft' | 'create_next_intake_form_draft'
-  | 'publish_intake_form_draft' | 'retire_intake_form_version' | 'archive_intake_form_template' | 'discard_intake_form_draft'
+  | 'publish_intake_form_draft' | 'retire_intake_form_version' | 'archive_intake_form_template' | 'discard_intake_form_draft' | 'duplicate_intake_form_template'
 async function rpc<N extends LifecycleFunction>(name: N, args: Functions[N]['Args']): Promise<Json> {
   const { data, error } = await getAdminClient().rpc(name, args)
   if (error) throw error
@@ -95,6 +133,14 @@ export async function listVersionRows(templateId: string): Promise<IntakeFormVer
   }
 }
 
+export async function listAuditEventRows(templateId: string, limit = 50): Promise<IntakeFormAuditEventRow[]> {
+  const boundedLimit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(50, limit)) : 50
+  const { data, error } = await getAdminClient().from('intake_form_audit_events').select('*')
+    .eq('template_id', templateId).order('occurred_at', { ascending: false }).order('id', { ascending: false }).limit(boundedLimit)
+  if (error) throw error
+  return (data ?? []).map(parseAuditEvent)
+}
+
 type Actor = { actorId: string }
 type VersionInput = Actor & { versionId: string }
 export type CreateTemplateRowInput = Actor & {
@@ -107,6 +153,32 @@ export async function createTemplateRow(input: CreateTemplateRowInput): Promise<
     p_description: (input.description ?? null) as unknown as string,
     p_definition: input.definition as unknown as Json, p_definition_hash: input.definitionHash,
   }), input.definition)
+  const template = await getTemplateRow(draft.template_id)
+  if (!template) throw new Error('Created intake form template is unavailable')
+  return { template, draft }
+}
+export async function duplicateTemplateRow(input: Actor & {
+  sourceVersionId: string; expectedSourceLockVersion: number; expectedSourceDefinitionHash: string; key: string; name: string; description?: string | null
+}): Promise<{ template: IntakeFormTemplateRow; draft: IntakeFormVersionRow }> {
+  const source = await getVersionRow(input.sourceVersionId)
+  if (!source || source.lock_version !== input.expectedSourceLockVersion || source.definition_hash !== input.expectedSourceDefinitionHash) {
+    throw Object.assign(new Error('Source changed; refresh and try again'), { code: '40001' })
+  }
+  const definition = canonicalizeIntakeFormDefinition(source.definition)
+  definition.key = input.key
+  const draft = mutationVersion(await rpc('duplicate_intake_form_template', {
+    p_actor_id: input.actorId, p_source_version_id: input.sourceVersionId, p_key: input.key, p_name: input.name,
+    p_description: (input.description ?? null) as unknown as string,
+    p_expected_lock_version: input.expectedSourceLockVersion, p_expected_definition_hash: input.expectedSourceDefinitionHash,
+    p_definition: definition as unknown as Json, p_definition_hash: hashIntakeFormDefinition(definition),
+  }).catch((error: unknown) => {
+    // A source discarded after our read is the same stale-source conflict as a changed source.
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error &&
+      error.code === 'P0001' && error.message === 'Source version required') {
+      throw Object.assign(new Error('Source changed; refresh and try again'), { code: '40001' })
+    }
+    throw error
+  }), definition)
   const template = await getTemplateRow(draft.template_id)
   if (!template) throw new Error('Created intake form template is unavailable')
   return { template, draft }

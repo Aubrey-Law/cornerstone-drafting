@@ -1051,6 +1051,7 @@ export function ExistingDocumentUploadsBlock({ data, update, intakeId, publicInt
   return (
     <div className="space-y-6">
       <SectionDivider title="Additional Planning Information" />
+      {disabled && !intakeId && <p className="text-sm text-muted-foreground">Uploads are unavailable in preview. Clients can upload documents when completing an intake.</p>}
 
       <FormField label="Do you have a will, trust, or other estate planning document?">
         <ToggleSwitch

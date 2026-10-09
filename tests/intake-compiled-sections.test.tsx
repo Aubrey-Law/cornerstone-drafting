@@ -10,7 +10,8 @@ import { compileIntakeForm } from '@/lib/intake/forms/compiler'
 import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
-vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'test-session' } } }) } } }))
+const auth = vi.hoisted(() => vi.fn(async () => ({ data: { session: { access_token: 'test-session' } } })))
+vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: auth } } }))
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
@@ -34,6 +35,58 @@ function fixture(data: Record<string, unknown> = {}, source = definition) {
 }
 
 describe('compiled intake sections', () => {
+  it('keeps the normal Review body and its configured wrapper in live intake', () => {
+    const source = structuredClone(definition)
+    const block = source.sections[2].items[0]
+    if (block.kind !== 'block') throw new Error('Review fixture must be a block')
+    block.titleOverride = 'Check your planning details'
+    block.helpText = 'Please confirm names before submitting.'
+    render(<CompiledIntakeSections {...fixture({}, source)} mode="client" update={vi.fn()} openId="review" onToggle={vi.fn()} />)
+    const title = screen.getByRole('heading', { name: 'Check your planning details', level: 3 })
+    const wrapper = title.closest('fieldset')!
+    expect(wrapper.disabled).toBe(false)
+    expect(title.closest('legend')).toBeTruthy()
+    expect(document.getElementById(wrapper.getAttribute('aria-describedby')!)?.textContent).toBe('Please confirm names before submitting.')
+    expect(within(wrapper).queryByRole('region', { name: 'Current form review' })).toBeNull()
+    expect(within(wrapper).getByText('Personal Information')).toBeTruthy()
+  })
+
+  it.each(['client', 'staff'] as const)('disables canonical and compound controls in read-only %s preview', async audience => {
+    const source: IntakeFormDefinition = { ...definition, sections: [definition.sections[0],
+      { id: 'internal', title: 'Internal', audience: 'staff_only', items: [{ kind: 'block', id: 'plan-choice', blockId: 'attorney_plan_structure' }] }, definition.sections[2]] }
+    const result = compileIntakeForm(source, audience)
+    if (!result.success) throw new Error(JSON.stringify(result.errors))
+    const props = { form: result.form, evaluation: evaluateCompiledIntakeForm(result.form, {}), data: {} }
+    const update = vi.fn(); const save = vi.fn()
+    const view = render(<CompiledIntakeSections {...props} readOnly mode={audience} update={update} onAttorneySave={save} openId="personal" onToggle={vi.fn()} />)
+    expect((screen.getByLabelText('First name') as HTMLInputElement).disabled).toBe(true)
+    expect(screen.getByLabelText('Street Address').matches(':disabled')).toBe(true)
+    await userEvent.type(screen.getByLabelText('First name'), 'Changed')
+    fireEvent.change(screen.getByLabelText('Street Address'), { target: { value: 'Changed' } })
+    expect(update).not.toHaveBeenCalled()
+    if (audience === 'client') expect(screen.queryByRole('heading', { name: 'Internal' })).toBeNull()
+    else {
+      view.rerender(<CompiledIntakeSections {...props} readOnly mode={audience} update={update} onAttorneySave={save} openId="internal" onToggle={vi.fn()} />)
+      const choice = screen.getByRole('button', { name: /Joint Revocable Living Trust/ })
+      expect(choice.matches(':disabled')).toBe(true)
+      await userEvent.click(choice)
+      expect(save).not.toHaveBeenCalled()
+    }
+  })
+
+  it('shows an inert upload placeholder with no auth or network when disabled without an intake ID', async () => {
+    auth.mockClear()
+    const network = vi.fn(); vi.stubGlobal('fetch', network)
+    const source: IntakeFormDefinition = { ...definition, sections: [
+      { id: 'documents', title: 'Documents', audience: 'client_and_staff', items: [{ kind: 'block', id: 'uploads', blockId: 'existing_document_uploads' }] }, definition.sections[2]] }
+    const view = render(<CompiledIntakeSections {...fixture({ has_existing_plan: true, has_divorce_settlement: true, has_prior_gift_tax: true }, source)} mode="staff" update={vi.fn()} openId="documents" onToggle={vi.fn()} />)
+    expect(screen.getByText(/Uploads are unavailable in preview/i)).toBeDefined()
+    expect(view.container.querySelector('input[type=file]')).toBeNull()
+    await userEvent.click(screen.getByText(/Uploads are unavailable in preview/i))
+    expect(auth).not.toHaveBeenCalled()
+    expect(network).not.toHaveBeenCalled()
+  })
+
   it('continues to the review modal from the final display section and offsets attorney numbering', async () => {
     const props = fixture()
     props.evaluation.activeSections = props.evaluation.activeSections.filter((section) => section.id !== 'review')

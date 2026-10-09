@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved; Phase 1 and the Phase 2A persistence foundation implemented and verified locally; visual builder, activation/pinning, and detailed enhancements remain for later phases
+**Status:** approved; Phase 1, Phase 2A persistence, and Phase 2B visual builder including whole-branch repairs implemented and verified locally; controller repair re-review, Phase 2C activation/pinning, and Phase 3 detailed enhancements remain
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 
@@ -735,3 +735,283 @@ Task 1's read-only linked dry-run selected exactly
 that earlier observation was not refreshed here. Merging migration changes to
 `main` triggers the repository's migration deployment workflow, so that merge
 also requires the separately authorized deployment/reconciliation path.
+
+## Phase 2B local verification record — 2026-10-08
+
+Implemented the administrator-only list, visual editor, synthetic preview,
+optimistic-lock recovery, lifecycle history, and transactional audit log.
+The final accessibility pass added selected-node semantics and stable,
+contextual drag/move names when editable labels repeat. It did not change
+ordering behavior or visible editable copy.
+
+All commands used Node **24.20.0** from
+`/Users/scottaubrey/.nvm/versions/node/v24.20.0/bin`:
+
+```sh
+VITEST_INTAKE_FORM_TEST_DB_URL=postgresql://postgres:postgres@127.0.0.1:55422/postgres npx vitest run tests/intake-form-builder-schema.test.ts tests/intake-form-admin-service.test.ts tests/intake-form-admin-routes.test.ts tests/intake-form-builder-catalog.test.ts tests/intake-form-editor-state.test.ts tests/intake-form-preview-scenarios.test.ts tests/settings-nav.test.ts tests/intake-form-builder-pages.test.tsx tests/intake-form-builder-list.test.tsx tests/intake-form-builder-editor.test.tsx tests/intake-form-builder-save.test.tsx tests/intake-form-builder-lifecycle.test.tsx tests/intake-form-builder-preview.test.tsx tests/intake-compiled-sections.test.tsx tests/intake-form-legacy-parity.test.ts
+npm run lint
+npm run typecheck
+npm test
+git diff --check origin/main...HEAD
+git diff --check
+```
+
+After the third review-repair wave, the exact 15-file suite above plus
+`tests/intake-form-shell-navigation.test.tsx` and
+`tests/global-search.test.tsx` passed **17 files / 476 tests**, including real
+local database checks. Lint and typecheck exited 0. The final complete suite
+used `npm test -- --maxWorkers=2` and exited 0: **917 files passed, 2 skipped;
+10,198 tests passed, 27 skipped** (401.58 seconds). Test limits and repository
+configuration were unchanged. The opt-in database regression passed in the
+focused run. Seven jsdom cross-document-navigation notices were nonfailing.
+Both diff checks passed. Earlier timing failures, worker-start failures, and
+clean-base/current comparisons are recorded in the third-wave section below.
+The compared `origin/main` SHA was
+`718f5089e6bfd2a2319fa9e1015007ca38bcea88`.
+
+The five Review Focus cases were rerun in their owning suites: stale save and
+publish recovery; saving a structurally valid missing-review draft while
+publication remains blocked; retaining a moved condition and focusing its
+diagnostic target; zero preview network/auth writes, including disabled
+compound controls; and exactly one surviving actor/time/version discard audit
+event after the draft row is deleted.
+
+### Local database and browser acceptance
+
+Only disposable project `intake-form-foundation-phase2a` was used:
+API `http://127.0.0.1:55421`, database `127.0.0.1:55422`.
+
+```sh
+SUPABASE_AUTH_SITE_URL=http://localhost:3002 npx supabase db reset --db-url 'postgresql://postgres:postgres@127.0.0.1:55422/postgres?sslmode=disable' --yes
+npm run seed:browser-fixture
+npm run dev
+```
+
+Reset, fixture seed, and development-server startup succeeded. The local
+database contains **292 migrations through 20270131090200**, including the
+audit migration. The reset removed only reproducible disposable fixture data.
+The CLI's generic explicit-URL output calls this target “remote”; its actual
+address was loopback. No `--linked` operation was used.
+
+Actual Chrome acceptance passed at **1440×1000** and **390×1000**, with only
+the documented local fixture accounts. The attorney fixture was temporarily
+made an administrator for builder acceptance, then restored to attorney for
+fresh non-admin sign-ins. Temporary intake-track and standing-link fixture
+changes were restored after smoke checks.
+
+At both widths, acceptance covered blank creation, approved fields/blocks,
+real pointer drag and move-button reordering, incomplete-draft save and
+blocked publication, diagnostic repair, Married/Family conditional preview,
+client/staff preview, disabled answer controls and zero preview writes,
+save/publish, immutable published state, and creation of the next draft.
+Two browser sessions demonstrated HTTP 409 conflict, retained local edits,
+valid local JSON export, and confirmed reload of the winning definition.
+Duplicate, retire, archive, restore, and discard all passed with live version
+and audit queries. Catalog/dialog focus return, cancelled dirty navigation,
+native beforeunload dismissal, and narrow inline inspector placement passed;
+narrow build/preview screenshots were visually inspected without document
+horizontal overflow.
+
+Exact successful editor URLs:
+
+- `http://127.0.0.1:3002/admin/settings/intake-forms/fa5ece71-9cd4-44de-8e9d-0cefc3f4183b` (desktop).
+- `http://127.0.0.1:3002/admin/settings/intake-forms/f602c0bc-621f-4931-8739-dbd6d8801f2e` (narrow).
+- `http://127.0.0.1:3002/admin/settings/intake-forms` (list and creation).
+
+Each original template had exactly ten successful lifecycle events, plus one
+event on its independent duplicate. Only retired version 1 remained on each
+original. Each discarded version 2 retained exactly one event with actor
+`303720e7-a784-4516-b729-d6b858d7b179`, version number 2, and a null
+version foreign key. Discard timestamps were
+`2026-10-08 22:11:09.339056+00` (desktop) and
+`2026-10-08 22:12:05.872671+00` (narrow).
+
+At both widths, fresh attorney sessions saw the custom not-found page on both
+builder routes. List/detail GET, create POST, and metadata PATCH returned
+403. Existing estate and college client, public-invitation, and staff intake
+smoke checks passed, as did clicking the existing Drafting entry:
+
+- `http://127.0.0.1:3002/intake`.
+- `http://127.0.0.1:3002/intake/auth?invite=<local-fixture-token>`.
+  This registered-account fixture correctly showed “Continue your intake”
+  and the sign-in link; no anonymous questionnaire completion is claimed.
+  The full ephemeral URL is retained only in local acceptance evidence.
+- `http://127.0.0.1:3002/admin/crm/opportunities/170d0332-63bb-4328-8802-86f706ea8803?tab=intake`.
+- `http://127.0.0.1:3002/admin/drafting/26aa73dd-3954-43dc-890e-d8ce9906afe4`.
+  The existing Quick draft entry was visible; drafting internals were not edited.
+
+Before and after builder/preview and final smoke, `client_intake` contained
+exactly `060369b8-45e6-4753-a402-29a56a8cb43b` and
+`170d0332-63bb-4328-8802-86f706ea8803`, both with
+`form_version_id = null`. No intake was created or repinned.
+
+Observed console notices were unused local font/CSS preloads, a favicon
+aspect-ratio warning, and a loopback realtime WebSocket handshake returning
+503 on matter/drafting surfaces. The server also logged the optional local
+Google Calendar connection as unavailable. No uncaught page error occurred;
+these notices did not prevent the required assertions. They are recorded as
+observations, not asserted to be proven pre-existing defects. Early harness
+selectors and pre-hydration navigation timing were corrected before the
+successful acceptance runs.
+
+Local evidence is retained at
+`/private/tmp/intake-phase2b-task9-browser-evidence.json`,
+`/private/tmp/intake-phase2b-task9-guards-evidence.json`, and
+`/private/tmp/intake-phase2b-task9-smoke-evidence.json`.
+The initial Task 9 full-suite log is
+`/private/tmp/intake-phase2b-task9-final-full-test.log`.
+
+### Whole-branch review repair verification
+
+All six findings were reproduced against `215dd6d9` and repaired with focused
+RED-to-GREEN checks: imperative/history navigation, custom preview Review,
+historical selection and retirement, discard recency, list response validation,
+and catalog decision metadata. No drafting internals changed.
+
+The first repair Chrome run passed at **1440×1000** and **390×1000**. It covered
+Settings departure and native browser Back/Forward Cancel/Leave with retained
+edits and focus, no added history entries or replay loop; four-version history
+and retirement of v2 while preserving an unsaved v4; historical duplicate
+source selection; removed/reordered Review sections/items and changed
+requirements; inert synthetic controls with zero intake/auth requests;
+catalog type, baseline, and audience text; and discard list recency matching
+the durable actor/time/version event. Malformed create, duplicate, archive,
+and restore success responses preserved the list/dialog state. Fresh
+non-admin sessions were denied the list/editor and returned 403 for
+list/detail/create/archive APIs. The same two intakes retained null pins.
+
+The undeployed discard function was replaced only in the existing disposable
+loopback database to verify its one-line timestamp update. No schema signature
+changed, so type regeneration was unnecessary. Initial Task 9 reset/smoke
+evidence above remains a historical record, not a second reset or a new
+production-verification claim.
+
+First repair evidence:
+`/private/tmp/intake-phase2b-final-fix-focused.log`,
+`/private/tmp/intake-phase2b-final-fix-full.log`, and
+`/private/tmp/intake-phase2b-final-fix-browser-evidence.json`.
+The final run recorded local unused-font preload and favicon aspect-ratio
+warnings, with no uncaught page error or failing acceptance assertion.
+
+### Second repair verification
+
+The three follow-up findings were reproduced individually and repaired with
+RED-to-GREEN regressions. Settings now starts shared history indexing before
+editor mounting. An approved no-UI root boundary installs one dormant
+popstate interceptor before the router; it acts only while an editor guard is
+registered. A router-hides-editor regression, pre-existing Settings entries,
+multi-step Back/Forward, cancellation, continuation, cleanup, and cached
+editor reactivation are covered. The Navigation API path remains intact.
+
+Known indexed entries restore and traverse the exact original entries without
+adding history. A truly unknown legacy entry has no trustworthy direction or
+distance: the fallback explicitly replaces its current entry with the editor
+URL/state for cancellation and uses the captured destination URL once on
+confirmation. It does not guess a history delta; preserving that unknown
+entry's original position is not claimed.
+
+Duplicate sends the dialog-loaded source lock and definition hash through
+the strict route/service/repository contract to the existing atomic RPC.
+A concurrent source save produces a sanitized 409 before any template,
+version, or audit row is created or the new key is consumed. Published and
+retired sources and strict success-response validation remain supported.
+Preview Review substitutes only the block body, preserving the normal
+fieldset legend, configured title, and described help; live Review is unchanged.
+
+The final actual Chrome run, with the Navigation API disabled before
+hydration, passed at **1440×1000** and **390×1000** from
+`2026-10-09T00:03:55.970Z` to `2026-10-09T00:04:53.130Z`.
+At each width, Back/Forward deltas -2, -1, +2, and +1 passed Cancel/Leave
+with exact entry/URL/focus restoration, one-time continuation, unchanged
+history length, and rearmed protection on revisiting the editor. Client and
+Staff preview displayed the overridden Review title/help and inert synthetic
+answers with no preview writes or intake/auth requests. A dialog-open →
+concurrent-save duplicate returned 409 with unchanged template/version/audit
+counts; after refreshing the source, the same key succeeded.
+
+The successful editor IDs were
+`5d6266c5-c610-4479-ad8b-6fea45b21fa7` (desktop) and
+`19089f15-4625-436c-abe0-e20ba899cd2c` (narrow).
+Fresh non-admin attorney sessions were denied both pages and all five
+list/detail/create/duplicate/archive API probes. The same two client intake
+IDs above retained null version pins, and the fixture user was restored to
+attorney. The screenshots were visually inspected without document horizontal
+overflow. Only unused local font preloads, a favicon aspect-ratio warning,
+and expected 409 resource notices occurred; there was no uncaught page error.
+No database reset or schema/function change was required in this repair wave.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-repair2-focused.log`,
+`/private/tmp/intake-phase2b-repair2-full.log`,
+`/private/tmp/intake-phase2b-repair2-browser-evidence.json`, and
+`/private/tmp/intake-phase2b-repair2-review-1440.png` /
+`/private/tmp/intake-phase2b-repair2-review-390.png`.
+
+### Third whole-branch review repair verification
+
+The remaining shell-navigation finding is repaired. A shared cancellable
+departure request now serves Settings, Global Search, and Sign out. The
+existing editor dialog guards unsafe state before routing or authentication.
+Search Cancel retains the palette and query and restores the input or selected
+result; Leave closes the palette and pushes the captured route once. Sign out
+Cancel performs no auth call and returns account-trigger focus. Failed auth
+shows a retry message, retains edits, and rearms protection; confirmed success
+runs auth and login routing once. The boundary is dormant without an active
+unsafe editor, and the root history interceptor remains covered.
+
+Eight new real-component integration tests reached RED-to-GREEN, using actual
+Global Search, AdminLayout, editor hook/dialog, and root boundary. The exact
+15-file intake suite plus shell and existing search tests passed **17 files /
+476 tests**. Lint and typecheck passed. The complete final run,
+`npm test -- --maxWorkers=2`, passed **917 files, 2 skipped; 10,198 tests
+passed, 27 skipped** in **401.58s**, without changing repository configuration
+or test timeouts.
+
+The two earlier default full runs are retained as failed attempts, not counted
+as green: the first had three intake timing failures during cold app
+compilation; the second had one booking wait timeout and two worker-start
+timeouts. Serial reruns cleared booking, missing workers, save and lifecycle.
+The bundled preview cases also passed direct clean-base and current-branch
+comparisons with the existing 30s limit. The final full run passed every
+non-opt-in test. Detailed failure names, counts, and comparison evidence are
+in the local SDD repair report.
+
+Actual Chrome passed at **1440×1000** and **390×1000** from
+`2026-10-09T01:15:57.764Z` to `2026-10-09T01:18:07.815Z`: Cmd-K keyboard and
+pointer Cancel/Leave, query and input/result focus preservation, clean-state
+navigation, Sign out Cancel/no auth, injected local auth failure/retry, and
+single successful sign-out to login. Settings and Back guard behavior passed.
+A Forward-only follow-up also passed both widths from
+`2026-10-09T01:18:51.359Z` to `2026-10-09T01:19:13.087Z`, preserving exact
+entries, URL, focus, and history length. Both runs disabled the Navigation API
+before hydration and rejected native `window.confirm` calls.
+
+Fresh non-admin sessions were denied both builder pages and five API probes.
+The same two original intake IDs retained null version pins; no intake was
+created or repinned, and the fixture user was restored to attorney. Successful
+editor IDs were `6c6d2be9-5bc2-48d9-bff1-bef1e49ddd96` (desktop) and
+`681a5b48-5335-4ec2-96c9-442abd4249d0` (narrow). Screenshots were visually
+inspected with no horizontal overflow. The main run had no uncaught page
+error; observed notices were unused local fonts, favicon aspect ratio, and
+deliberately injected 400 responses. The first browser attempt timed out
+during cold route compilation before acceptance began and is preserved
+separately.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-repair3-focused.log`,
+`/private/tmp/intake-phase2b-repair3-full-two-workers.log`,
+`/private/tmp/intake-phase2b-repair3-browser-evidence.json`,
+`/private/tmp/intake-phase2b-repair3-forward-evidence.json`, and
+`/private/tmp/intake-phase2b-repair3-shell-1440.png` /
+`/private/tmp/intake-phase2b-repair3-shell-390.png`.
+No database reset, schema/function change, type generation, drafting change,
+or live intake change was required.
+
+### Remaining release boundaries
+
+The six initial findings, three follow-up findings, and final shell-navigation finding are repaired and locally verified;
+controller repair re-review remains pending. Phase 2C runtime activation and intake
+pinning, Phase 3 detailed intake enhancements, production bundled-form
+installation, and all drafting changes remain excluded. No push, pull
+request, linked migration deployment, shared-database mutation, or
+authenticated production QA was performed or is claimed by this record.

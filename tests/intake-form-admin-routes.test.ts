@@ -5,7 +5,8 @@ vi.mock('@/lib/apiAuth', () => ({ requireAdministrator: auth }))
 vi.mock('@/lib/intake/forms/adminService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/intake/forms/adminService')>()
   return { ...actual, ...Object.fromEntries([
-    'listIntakeFormTemplates', 'createIntakeFormTemplate', 'getIntakeFormTemplate', 'archiveIntakeFormTemplate',
+    'listIntakeFormTemplateSummaries', 'createIntakeFormTemplate', 'getIntakeFormEditorSnapshot', 'archiveIntakeFormTemplate',
+    'createNextIntakeFormTemplateDraft',
     'getIntakeFormDraft', 'saveIntakeFormTemplateDraft', 'discardIntakeFormTemplateDraft',
     'publishIntakeFormTemplateDraft', 'duplicateIntakeFormTemplateFromTemplate', 'retireIntakeFormTemplateVersion',
   ].map((name) => [name, vi.fn()])) }
@@ -13,6 +14,9 @@ vi.mock('@/lib/intake/forms/adminService', async (importOriginal) => {
 
 import * as service from '@/lib/intake/forms/adminService'
 import * as repository from '@/lib/intake/forms/repository'
+import * as adminClient from '@/lib/supabaseAdmin'
+import { hashIntakeFormDefinition } from '@/lib/intake/forms/hash'
+import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 import * as list from '@/app/api/admin/settings/intake-forms/route'
 import * as template from '@/app/api/admin/settings/intake-forms/[templateId]/route'
 import * as draft from '@/app/api/admin/settings/intake-forms/[templateId]/draft/route'
@@ -24,19 +28,21 @@ const templateId = '11111111-1111-4111-8111-111111111111'
 const versionId = '22222222-2222-4222-8222-222222222222'
 const actorId = '33333333-3333-4333-8333-333333333333'
 const definition = { schemaVersion: 1, key: 'test' }
+const duplicateGuards = { expectedSourceLockVersion: 3, expectedSourceDefinitionHash: 'a'.repeat(64) }
 const diagnostics = [{ path: 'sections', message: 'A shared unconditional review and submit path is required' }]
 type Context = { params: Promise<{ templateId: string; versionId: string }> }
 type Handler = (req: Request, context: Context) => Promise<Response>
 const cases = [
-  { name: 'list GET', method: 'GET', handler: list.GET, operation: 'listIntakeFormTemplates', body: undefined, input: undefined, result: [], response: { templates: [] }, status: 200 },
+  { name: 'list GET', method: 'GET', handler: list.GET, operation: 'listIntakeFormTemplateSummaries', body: undefined, input: undefined, result: [{ template: { id: templateId }, draft: null, latestPublished: null, latestVersion: null }], response: { templates: [{ template: { id: templateId }, draft: null, latestPublished: null, latestVersion: null }] }, status: 200 },
   { name: 'list POST', method: 'POST', handler: list.POST, operation: 'createIntakeFormTemplate', body: { key: 'test', name: 'Test', definition }, input: { key: 'test', name: 'Test', definition, actorId }, result: { template: { id: templateId }, draft: { id: versionId }, diagnostics }, status: 201 },
-  { name: 'template GET', method: 'GET', handler: template.GET, operation: 'getIntakeFormTemplate', body: undefined, input: templateId, result: { id: templateId }, response: { template: { id: templateId } }, status: 200 },
+  { name: 'template GET', method: 'GET', handler: template.GET, operation: 'getIntakeFormEditorSnapshot', body: undefined, input: templateId, result: { template: { id: templateId }, versions: [], draft: null, auditEvents: [] }, status: 200 },
   { name: 'template PATCH', method: 'PATCH', handler: template.PATCH, operation: 'archiveIntakeFormTemplate', body: { archived: false }, input: { templateId, actorId, archived: false }, result: { id: templateId, archived_at: null }, response: { template: { id: templateId, archived_at: null } }, status: 200 },
   { name: 'draft GET', method: 'GET', handler: draft.GET, operation: 'getIntakeFormDraft', body: undefined, input: templateId, result: { id: versionId }, response: { draft: { id: versionId } }, status: 200 },
+  { name: 'draft POST', method: 'POST', handler: draft.POST, operation: 'createNextIntakeFormTemplateDraft', body: { sourceVersionId: versionId }, input: { templateId, sourceVersionId: versionId, actorId }, result: { draft: { id: versionId, version: 2 }, diagnostics: [] }, status: 201 },
   { name: 'draft PUT', method: 'PUT', handler: draft.PUT, operation: 'saveIntakeFormTemplateDraft', body: { versionId, expectedLockVersion: 3, definition }, input: { templateId, versionId, actorId, expectedLockVersion: 3, definition }, result: { draft: { id: versionId, lock_version: 4 }, diagnostics }, status: 200 },
   { name: 'draft DELETE', method: 'DELETE', handler: draft.DELETE, operation: 'discardIntakeFormTemplateDraft', body: { versionId, expectedLockVersion: 3 }, input: { templateId, versionId, actorId, expectedLockVersion: 3 }, result: { id: versionId }, response: { draft: { id: versionId } }, status: 200 },
   { name: 'publish POST', method: 'POST', handler: publish.POST, operation: 'publishIntakeFormTemplateDraft', body: { versionId, expectedLockVersion: 3, expectedDefinitionHash: 'a'.repeat(64) }, input: { templateId, versionId, actorId, expectedLockVersion: 3, expectedDefinitionHash: 'a'.repeat(64) }, result: { id: versionId, status: 'published' }, response: { version: { id: versionId, status: 'published' } }, status: 200 },
-  { name: 'duplicate POST', method: 'POST', handler: duplicate.POST, operation: 'duplicateIntakeFormTemplateFromTemplate', body: { sourceVersionId: versionId, key: 'copy', name: 'Copy' }, input: { templateId, actorId, sourceVersionId: versionId, key: 'copy', name: 'Copy' }, result: { template: { key: 'copy' }, draft: { version: 1 }, diagnostics: [] }, status: 201 },
+  { name: 'duplicate POST', method: 'POST', handler: duplicate.POST, operation: 'duplicateIntakeFormTemplateFromTemplate', body: { ...duplicateGuards, sourceVersionId: versionId, key: 'copy', name: 'Copy' }, input: { ...duplicateGuards, templateId, actorId, sourceVersionId: versionId, key: 'copy', name: 'Copy' }, result: { template: { key: 'copy' }, draft: { version: 1 }, diagnostics: [] }, status: 201 },
   { name: 'retire POST', method: 'POST', handler: retire.POST, operation: 'retireIntakeFormTemplateVersion', body: {}, input: { templateId, versionId, actorId }, result: { id: versionId, status: 'retired' }, response: { version: { id: versionId, status: 'retired' } }, status: 200 },
 ] as const
 const request = (method: string, body: unknown) => new Request('http://app.test/api/admin/settings/intake-forms', {
@@ -123,6 +129,7 @@ describe.each(cases)('$name', (entry) => {
       for (const field of Object.keys(entry.body)) {
         const missing = { ...entry.body } as Record<string, unknown>; delete missing[field]
         invalid.push(missing, { ...entry.body, [field]: null })
+        if (field.endsWith('Id')) invalid.push({ ...entry.body, [field]: 'not-a-uuid' })
       }
       if ('expectedLockVersion' in entry.body) invalid.push(...[-1, 1.5, '3', Number.MAX_SAFE_INTEGER + 1].map((expectedLockVersion) => ({ ...entry.body, expectedLockVersion })))
       if ('expectedDefinitionHash' in entry.body) invalid.push({ ...entry.body, expectedDefinitionHash: 'A'.repeat(64) })
@@ -136,7 +143,7 @@ describe.each(cases)('$name', (entry) => {
   }
 })
 
-it.each([{ handler: template.GET, operation: 'getIntakeFormTemplate' }, { handler: draft.GET, operation: 'getIntakeFormDraft' }] as const)('returns 404 for an absent read resource', async ({ handler, operation }) => {
+it.each([{ handler: template.GET, operation: 'getIntakeFormEditorSnapshot' }, { handler: draft.GET, operation: 'getIntakeFormDraft' }] as const)('returns 404 for an absent read resource', async ({ handler, operation }) => {
   vi.mocked(service[operation]).mockResolvedValue(null)
   const response = await handler(request('GET', undefined), context())
   expect(response.status).toBe(404)
@@ -173,15 +180,16 @@ it('returns 409 for a stale draft identity through the real scoped service witho
   } finally { read.mockRestore(); save.mockRestore(); discard.mockRestore(); publishRow.mockRestore() }
 })
 
-it('returns 404 for cross-template duplicate and retirement through the real scoped service', async () => {
+it('returns 404 for cross-template next-draft, duplicate and retirement through the real scoped service', async () => {
   const actual = await vi.importActual<typeof service>('@/lib/intake/forms/adminService')
   const read = vi.spyOn(repository, 'getVersionRow').mockResolvedValue({ id: versionId, template_id: 'other-template', status: 'published' } as never)
   const create = vi.spyOn(repository, 'createTemplateRow')
   const retireRow = vi.spyOn(repository, 'retireVersionRow')
   try {
     vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockImplementation(actual.duplicateIntakeFormTemplateFromTemplate)
+    vi.mocked(service.createNextIntakeFormTemplateDraft).mockImplementation(actual.createNextIntakeFormTemplateDraft)
     vi.mocked(service.retireIntakeFormTemplateVersion).mockImplementation(actual.retireIntakeFormTemplateVersion)
-    for (const entry of cases.filter((entry) => ['duplicate POST', 'retire POST'].includes(entry.name))) {
+    for (const entry of cases.filter((entry) => ['draft POST', 'duplicate POST', 'retire POST'].includes(entry.name))) {
       const response = await (entry.handler as Handler)(request(entry.method, entry.body), context())
       expect(response.status).toBe(404)
       expect(await response.json()).toEqual({ error: 'Intake form resource not found', code: 'INTAKE_FORM_NOT_FOUND' })
@@ -189,4 +197,68 @@ it('returns 404 for cross-template duplicate and retirement through the real sco
     expect(create).not.toHaveBeenCalled()
     expect(retireRow).not.toHaveBeenCalled()
   } finally { read.mockRestore(); create.mockRestore(); retireRow.mockRestore() }
+})
+
+it('returns 409 when the next draft already exists through the real service', async () => {
+  const actual = await vi.importActual<typeof service>('@/lib/intake/forms/adminService')
+  const read = vi.spyOn(repository, 'getVersionRow').mockResolvedValue({ id: versionId, template_id: templateId, status: 'published' } as never)
+  const create = vi.spyOn(repository, 'createNextDraftRow').mockRejectedValue({ code: 'P0001', message: 'Template already has a draft' })
+  try {
+    vi.mocked(service.createNextIntakeFormTemplateDraft).mockImplementation(actual.createNextIntakeFormTemplateDraft)
+    const response = await draft.POST(request('POST', { sourceVersionId: versionId }), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Draft changed; refresh and try again', code: 'INTAKE_FORM_CONFLICT' })
+  } finally { read.mockRestore(); create.mockRestore() }
+})
+
+it('sanitizes the discarded-source RPC rejection through the real repository and service as 409', async () => {
+  const actual = await vi.importActual<typeof service>('@/lib/intake/forms/adminService')
+  const sourceDefinition: IntakeFormDefinition = { schemaVersion: 1, key: 'test', title: 'Test', sections: [
+    { id: 'personal', title: 'Personal', audience: 'client_and_staff', items: [
+      { kind: 'field', id: 'name', fieldId: 'client_first_name' },
+    ] },
+    { id: 'review', title: 'Review', audience: 'client_and_staff', items: [
+      { kind: 'block', id: 'submit', blockId: 'review_submit' },
+    ] },
+  ] }
+  const source = { id: versionId, template_id: templateId, version: 1, status: 'draft' as const, definition: sourceDefinition,
+    definition_hash: hashIntakeFormDefinition(sourceDefinition), lock_version: 3, created_by: actorId,
+    published_by: null, created_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z', published_at: null }
+  const sourceTemplate = { id: templateId, key: 'test', name: 'Test', description: null, archived_at: null,
+    created_by: actorId, created_at: source.created_at, updated_at: source.updated_at }
+  const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: source, error: null }) }
+  const client = { from: () => query, rpc: vi.fn().mockResolvedValue({ data: null,
+    error: { code: 'P0001', message: 'Source version required' } }) }
+  const database = vi.spyOn(adminClient, 'getAdminClient').mockReturnValue(client as unknown as ReturnType<typeof adminClient.getAdminClient>)
+  const readVersion = vi.spyOn(repository, 'getVersionRow').mockResolvedValue(source)
+  const readTemplate = vi.spyOn(repository, 'getTemplateRow').mockResolvedValue(sourceTemplate)
+  try {
+    vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockImplementation(actual.duplicateIntakeFormTemplateFromTemplate)
+    const response = await duplicate.POST(request('POST', { sourceVersionId: versionId, expectedSourceLockVersion: source.lock_version,
+      expectedSourceDefinitionHash: source.definition_hash, key: 'copy', name: 'Copy' }), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Draft changed; refresh and try again', code: 'INTAKE_FORM_CONFLICT' })
+  } finally { database.mockRestore(); readVersion.mockRestore(); readTemplate.mockRestore() }
+})
+
+it('rejects a duplicate request without the selected source lock and hash before service access', async () => {
+  vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockResolvedValue({ template: {}, draft: {}, diagnostics: [] } as never)
+  const response = await duplicate.POST(request('POST', { sourceVersionId: versionId, key: 'copy', name: 'Copy' }), context())
+  expect(response.status).toBe(400)
+  expect(service.duplicateIntakeFormTemplateFromTemplate).not.toHaveBeenCalled()
+})
+
+it.each(['lock', 'hash'])('returns sanitized 409 without mutation when the selected duplicate source %s changed before POST', async mismatch => {
+  const actual = await vi.importActual<typeof service>('@/lib/intake/forms/adminService')
+  const read = vi.spyOn(repository, 'getVersionRow').mockResolvedValue({ id: versionId, template_id: templateId, status: 'draft', lock_version: 4, definition_hash: 'b'.repeat(64) } as never)
+  const mutate = vi.spyOn(repository, 'duplicateTemplateRow')
+  try {
+    vi.mocked(service.duplicateIntakeFormTemplateFromTemplate).mockImplementation(actual.duplicateIntakeFormTemplateFromTemplate)
+    const response = await duplicate.POST(request('POST', { sourceVersionId: versionId, expectedSourceLockVersion: mismatch === 'lock' ? 3 : 4,
+      expectedSourceDefinitionHash: mismatch === 'hash' ? 'a'.repeat(64) : 'b'.repeat(64), key: 'copy', name: 'Copy' }), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Draft changed; refresh and try again', code: 'INTAKE_FORM_CONFLICT' })
+    expect(mutate).not.toHaveBeenCalled()
+  } finally { read.mockRestore(); mutate.mockRestore() }
 })

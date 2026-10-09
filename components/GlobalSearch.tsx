@@ -31,6 +31,7 @@ import {
 import { useGlobalSearch } from '@/lib/search/useGlobalSearch'
 import { recentHit, type SearchHit } from '@/lib/search/globalSearchSources'
 import { useSharedSidebarMatters } from '@/lib/matters/SidebarMattersContext'
+import { requestDeparture } from '@/lib/navigation/departure'
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
@@ -80,9 +81,15 @@ export function GlobalSearch() {
   }, [])
 
   const navigate = (href: string) => {
-    setOpen(false)
-    setQuery('')
-    router.push(href)
+    requestDeparture({
+      destination: href,
+      trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      proceed: () => {
+        setOpen(false)
+        setQuery('')
+        router.push(href)
+      },
+    })
   }
 
   const typed = query.trim().length > 0
@@ -99,6 +106,8 @@ export function GlobalSearch() {
             <CommandItem
               key={`${hit.kind}:${hit.id}`}
               value={`${hit.kind}:${hit.id}`}
+              tabIndex={-1}
+              onPointerDown={event => event.currentTarget.focus()}
               onSelect={() => navigate(hit.href)}
             >
               <Icon className="h-4 w-4" />
@@ -176,7 +185,7 @@ export function GlobalSearch() {
               <CommandSeparator />
               <CommandGroup heading="Navigate">
                 {navMatches.map(item => (
-                  <CommandItem key={item.href} onSelect={() => navigate(item.href)}>
+                  <CommandItem key={item.href} tabIndex={-1} onPointerDown={event => event.currentTarget.focus()} onSelect={() => navigate(item.href)}>
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </CommandItem>
