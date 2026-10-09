@@ -6,6 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const MAX_LOSERS_PER_CALL = 200
 
 /**
  * GET /api/admin/contacts/merge — duplicate candidates awaiting review.
@@ -23,7 +24,9 @@ export async function GET(req: Request) {
   const { data, error } = await admin
     .from('contact_merge_candidates')
     .select('*')
-    .limit(200)
+    // One row per copy now, not per pair, so this covers every group in
+    // practice; the cap only guards against a pathological import.
+    .limit(2000)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -82,11 +85,13 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/admin/contacts/merge — merge one reviewed pair.
+ * POST /api/admin/contacts/merge — merge reviewed copies into one person.
  *
- * Deliberately one pair per call rather than "merge everything that matched":
- * this repoints matters, appointments, message history and design-sheet
- * references, and a bulk endpoint makes a wrong judgement expensive to undo.
+ * Takes one winner and either `loserContactId` or `loserContactIds`. The list
+ * form exists for the case the review page groups: one person entered dozens
+ * of times. Each copy is still its own `merge_contacts` call (its own
+ * transaction and log line), so a failure part-way leaves every earlier merge
+ * complete and reported, never half-applied.
  */
 export async function POST(req: Request) {
   const { err, userId } = await requireAdmin(req)
@@ -94,39 +99,52 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const winnerId = typeof body.winnerContactId === 'string' ? body.winnerContactId.trim() : ''
-  const loserId = typeof body.loserContactId === 'string' ? body.loserContactId.trim() : ''
+  const loserIds: string[] = Array.isArray(body.loserContactIds)
+    ? body.loserContactIds.filter((id: unknown): id is string => typeof id === 'string').map((id: string) => id.trim())
+    : typeof body.loserContactId === 'string' ? [body.loserContactId.trim()] : []
   const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) || null : null
 
-  if (!UUID_RE.test(winnerId) || !UUID_RE.test(loserId)) {
+  if (!UUID_RE.test(winnerId) || loserIds.length === 0 || !loserIds.every(id => UUID_RE.test(id))) {
     return NextResponse.json(
-      { error: 'winnerContactId and loserContactId are required' },
+      { error: 'winnerContactId and loserContactId (or loserContactIds) are required' },
       { status: 400 },
     )
   }
-  if (winnerId === loserId) {
+  if (loserIds.length > MAX_LOSERS_PER_CALL) {
+    return NextResponse.json(
+      { error: `At most ${MAX_LOSERS_PER_CALL} contacts can be merged in one request` },
+      { status: 400 },
+    )
+  }
+  if (loserIds.includes(winnerId)) {
     return NextResponse.json({ error: 'A contact cannot be merged into itself' }, { status: 400 })
   }
 
-  const { data, error } = await getAdminClient().rpc('merge_contacts', {
-    p_winner_id: winnerId,
-    p_loser_id: loserId,
-    p_reason: reason,
-    p_actor_id: userId,
-  })
+  const admin = getAdminClient()
+  const totals = { merged: 0, matterLinksMoved: 0, rolesMoved: 0, messagesMoved: 0, designSheetsRewritten: 0 }
 
-  if (error) {
-    // The function's own validation (already merged, unknown contact) is a bad
-    // request, not a server fault.
-    const status = error.code === '22023' ? 409 : 500
-    return NextResponse.json({ error: error.message }, { status })
+  for (const loserId of [...new Set(loserIds)]) {
+    const { data, error } = await admin.rpc('merge_contacts', {
+      p_winner_id: winnerId,
+      p_loser_id: loserId,
+      p_reason: reason,
+      p_actor_id: userId,
+    })
+
+    if (error) {
+      // The function's own validation (already merged, unknown contact) is a
+      // conflict, not a server fault.
+      const status = error.code === '22023' ? 409 : 500
+      return NextResponse.json({ error: error.message, ...totals }, { status })
+    }
+
+    const row = Array.isArray(data) ? data[0] : data
+    totals.merged += 1
+    totals.matterLinksMoved += row?.matter_links_moved ?? 0
+    totals.rolesMoved += row?.roles_moved ?? 0
+    totals.messagesMoved += row?.messages_moved ?? 0
+    totals.designSheetsRewritten += row?.design_sheets_rewritten ?? 0
   }
 
-  const row = Array.isArray(data) ? data[0] : data
-  return NextResponse.json({
-    ok: true,
-    matterLinksMoved: row?.matter_links_moved ?? 0,
-    rolesMoved: row?.roles_moved ?? 0,
-    messagesMoved: row?.messages_moved ?? 0,
-    designSheetsRewritten: row?.design_sheets_rewritten ?? 0,
-  })
+  return NextResponse.json({ ok: true, ...totals })
 }

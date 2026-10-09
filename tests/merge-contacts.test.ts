@@ -7,6 +7,7 @@ function source(relativePath: string): string {
 }
 
 const MIGRATION = 'supabase/migrations/20260929000000_merge_contacts.sql'
+const REPAIR = 'supabase/migrations/20270131090000_merge_contacts_repair.sql'
 const ROUTE = 'app/api/admin/contacts/merge/route.ts'
 
 describe('merging two rows that are the same person', () => {
@@ -42,12 +43,40 @@ describe('merging two rows that are the same person', () => {
     expect(migration).toMatch(/DELETE FROM public\.contact_roles loser_role[\s\S]{0,500}winner_role\.priority = loser_role\.priority/i)
   })
 
-  it('moves communications and drops the duplicated CRM mirror', () => {
-    for (const table of ['sms_messages', 'calls']) {
-      expect(migration).toMatch(new RegExp(`UPDATE public\\.${table} SET contact_id = p_winner_id`, 'i'))
-    }
+})
+
+describe('the repaired merge (20270131090000)', () => {
+  const repair = source(REPAIR)
+
+  it('no longer names calls.contact_id, which production never had', () => {
+    // Every merge failed with 42703 on this one statement and rolled back.
+    expect(repair).not.toMatch(/UPDATE public\.calls/i)
+  })
+
+  it('discovers every foreign key onto contacts instead of listing tables', () => {
+    expect(repair).toMatch(/c\.confrelid = 'public\.contacts'::regclass/i)
+    expect(repair).toMatch(/EXECUTE format\('UPDATE %s SET %I = \$1 WHERE %I = \$2'/i)
+  })
+
+  it('keeps the explicit handling for references with unique keys', () => {
+    expect(repair).toMatch(/DELETE FROM public\.matter_contacts loser_link/i)
+    expect(repair).toMatch(/DELETE FROM public\.contact_roles loser_role/i)
     // cornerstone_crm_people is unique on contact_id, so repointing would fail.
-    expect(migration).toMatch(/DELETE FROM public\.cornerstone_crm_people WHERE contact_id = p_loser_id/i)
+    expect(repair).toMatch(/DELETE FROM public\.cornerstone_crm_people WHERE contact_id = p_loser_id/i)
+    expect(repair).toMatch(/NOT IN \(\s*'public\.matter_contacts'::regclass,\s*'public\.contact_roles'::regclass,\s*'public\.cornerstone_crm_people'::regclass/i)
+  })
+
+  it('still tombstones and logs rather than deleting', () => {
+    expect(repair).toMatch(/SET merged_into_id = p_winner_id,\s*merged_at = now\(\)/i)
+    expect(repair).toMatch(/INSERT INTO public\.contact_merges/i)
+    expect(repair).not.toMatch(/DELETE FROM public\.contacts/i)
+  })
+
+  it('pairs each copy with the single kept row, not every pair in the group', () => {
+    // 108 copies of one person produced 5,778 pairs before; now 107 rows.
+    expect(repair).toMatch(/row_number\(\) over \(\s*partition by email_key/i)
+    expect(repair).toMatch(/loser\.rank > 1/i)
+    expect(repair).toMatch(/where winner\.rank = 1/i)
   })
 })
 
@@ -95,9 +124,8 @@ describe('candidate detection', () => {
     expect(migration).toMatch(/coalesce\(c\.deceased, false\) = false/i)
   })
 
-  it('proposes one row per pair, best-connected as winner', () => {
-    expect(migration).toMatch(/\(winner\.relationship_type = 'self'\) > \(loser\.relationship_type = 'self'\)/i)
-    expect(migration).toMatch(/\(winner\.matter_count, winner\.created_at, winner\.id\) > \(loser\.matter_count, loser\.created_at, loser\.id\)/i)
+  it('keeps a self contact first, then the best-connected row', () => {
+    expect(source(REPAIR)).toMatch(/order by \(relationship_type = 'self'\) desc nulls last,\s*matter_count desc, created_at desc, id desc/i)
   })
 
   it('surfaces whether the names agree, which is what separates a couple from a duplicate', () => {
@@ -112,9 +140,15 @@ describe('the review endpoint', () => {
     expect(route.match(/requireAdmin/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('merges one reviewed pair per call, never in bulk', () => {
+  it('merges only the copies the reviewer named, one function call each', () => {
     expect(route).toMatch(/rpc\('merge_contacts'/)
+    expect(route).toMatch(/for \(const loserId of \[\.\.\.new Set\(loserIds\)\]\)/)
     expect(route).not.toMatch(/for \(const .* of candidates\)/)
+    expect(route).toMatch(/MAX_LOSERS_PER_CALL = 200/)
+  })
+
+  it('reports what already merged when a later copy fails', () => {
+    expect(route).toMatch(/NextResponse\.json\(\{ error: error\.message, \.\.\.totals \}/)
   })
 
   it('records who approved it', () => {
@@ -126,7 +160,7 @@ describe('the review endpoint', () => {
   })
 
   it('rejects a self-merge before reaching the database', () => {
-    expect(route).toMatch(/winnerId === loserId/)
+    expect(route).toMatch(/loserIds\.includes\(winnerId\)/)
   })
 })
 
@@ -159,9 +193,16 @@ describe('the review screen', () => {
     expect(client).toMatch(/couple\s*\n?\s*sharing an inbox/)
   })
 
-  it('merges one pair at a time, with no bulk action', () => {
-    expect(client).not.toMatch(/merge all|mergeAll|Merge all/i)
-    expect(client).toMatch(/loserContactId: candidate\.loser\.id/)
+  it('groups copies of one person instead of listing every pair', () => {
+    expect(client).toMatch(/function groupCandidates/)
+    expect(client).toMatch(/Show all \$\{group\.copies\.length\} copies/)
+  })
+
+  it('offers a group merge only for copies whose names match, behind a confirmation', () => {
+    expect(client).toMatch(/const sameName = group\.copies\.filter\(c => c\.namesMatch\)/)
+    expect(client).toMatch(/window\.confirm\(/)
+    expect(client).toMatch(/void merge\(group\.winner, sameName, group\.winner\.id\)/)
+    expect(client).toMatch(/loserContactIds: copies\.map\(copy => copy\.loser\.id\)/)
   })
 
   it('lets a reviewer dismiss a pair without merging it', () => {

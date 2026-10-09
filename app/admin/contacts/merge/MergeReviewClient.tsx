@@ -119,12 +119,36 @@ function SideCard({
   )
 }
 
+interface CandidateGroup {
+  winner: CandidateSide
+  email: string
+  copies: Candidate[]
+}
+
+/**
+ * The view pairs every copy with the one row its email would keep, so grouping
+ * by that row turns "Ann entered 108 times" into one card instead of a hundred.
+ */
+function groupCandidates(candidates: Candidate[]): CandidateGroup[] {
+  const groups = new Map<string, CandidateGroup>()
+  for (const candidate of candidates) {
+    const group = groups.get(candidate.winner.id)
+    if (group) group.copies.push(candidate)
+    else groups.set(candidate.winner.id, { winner: candidate.winner, email: candidate.email, copies: [candidate] })
+  }
+  return [...groups.values()].sort((a, b) => b.copies.length - a.copies.length)
+}
+
+/** How many copies of a group to show before "Show all". */
+const COLLAPSED_COPIES = 3
+
 export function MergeReviewClient() {
   const token = useAccessToken()
   const [candidates, setCandidates] = useState<Candidate[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [merged, setMerged] = useState<string[]>([])
 
   const load = useCallback(async () => {
@@ -145,38 +169,37 @@ export function MergeReviewClient() {
 
   useEffect(() => { void load() }, [load])
 
-  async function merge(candidate: Candidate) {
-    if (!token) return
-    const key = candidate.loser.id
-    setBusyId(key)
+  /** Merge one or more reviewed copies into the row the group keeps. */
+  async function merge(winner: CandidateSide, copies: Candidate[], busyKey: string) {
+    if (!token || copies.length === 0) return
+    setBusyId(busyKey)
     setError(null)
     try {
       const res = await fetch('/api/admin/contacts/merge', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          winnerContactId: candidate.winner.id,
-          loserContactId: candidate.loser.id,
-          reason: `Reviewed duplicate — matching email ${candidate.email}`,
+          winnerContactId: winner.id,
+          loserContactIds: copies.map(copy => copy.loser.id),
+          reason: `Reviewed duplicate — matching email ${copies[0].email}`,
         }),
       })
       const json = await res.json()
+      const summary = (count: number) =>
+        `${count} cop${count === 1 ? 'y' : 'ies'} merged into ${fullName(winner)} — ` +
+        `${json.matterLinksMoved ?? 0} matter link(s), ${json.rolesMoved ?? 0} role(s), ` +
+        `${json.messagesMoved ?? 0} message(s), ${json.designSheetsRewritten ?? 0} design sheet(s) updated.`
+      if (json.merged > 0) setMerged(prev => [...prev, summary(json.merged)])
       if (!res.ok) throw new Error(json.error ?? 'Merge failed')
-      setMerged(prev => [
-        ...prev,
-        `${fullName(candidate.loser)} merged into ${fullName(candidate.winner)} — ` +
-          `${json.matterLinksMoved} matter link(s), ${json.rolesMoved} role(s), ` +
-          `${json.messagesMoved} message(s), ${json.designSheetsRewritten} design sheet(s) updated.`,
-      ])
-      await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Merge failed')
     } finally {
       setBusyId(null)
+      await load()
     }
   }
 
-  const visible = (candidates ?? []).filter(c => !skipped.has(c.loser.id))
+  const groups = groupCandidates((candidates ?? []).filter(c => !skipped.has(c.loser.id)))
 
   return (
     <div className="space-y-4">
@@ -201,7 +224,7 @@ export function MergeReviewClient() {
 
       {candidates === null && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      {candidates !== null && visible.length === 0 && (
+      {candidates !== null && groups.length === 0 && (
         <EmptyState
           icon={Users}
           title="No duplicates to review"
@@ -209,48 +232,96 @@ export function MergeReviewClient() {
         />
       )}
 
-      {visible.map(candidate => (
-        <article key={candidate.loser.id} className="rounded-lg border border-border bg-card p-3">
-          {!candidate.namesMatch && (
-            <p className="mb-2 flex items-start gap-2 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-              <span>
-                <strong>Different names on the same email.</strong> This is much more often a couple
-                sharing an inbox than one person entered twice. Check before merging.
+      {groups.map(group => {
+        const sameName = group.copies.filter(c => c.namesMatch)
+        const isExpanded = expanded.has(group.winner.id)
+        const shown = isExpanded ? group.copies : group.copies.slice(0, COLLAPSED_COPIES)
+        const groupBusy = busyId === group.winner.id
+
+        return (
+          <article key={group.winner.id} className="space-y-3 rounded-lg border border-border bg-card p-3">
+            <header className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold">{group.email}</p>
+              <span className="text-xs text-muted-foreground">
+                {group.copies.length + 1} rows share this email
               </span>
-            </p>
-          )}
+              {sameName.length > 1 && (
+                <Button
+                  type="button" size="sm" className="ml-auto"
+                  disabled={busyId !== null}
+                  onClick={() => {
+                    if (!window.confirm(
+                      `Merge ${sameName.length} copies named ${fullName(group.winner)} into the kept row? ` +
+                      'Copies with a different name are left for you to review one by one.',
+                    )) return
+                    void merge(group.winner, sameName, group.winner.id)
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  {groupBusy ? 'Merging…' : `Merge all ${sameName.length} with the same name`}
+                </Button>
+              )}
+            </header>
 
-          <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
-            <SideCard side={candidate.loser} other={candidate.winner} title="Will be removed" tone="remove" />
-            <div className="flex items-center justify-center px-1">
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="merged into" />
-            </div>
-            <SideCard side={candidate.winner} other={candidate.loser} title="Will be kept" tone="keep" />
-          </div>
+            {shown.map(candidate => (
+              <div key={candidate.loser.id} className="rounded-md border border-border p-2">
+                {!candidate.namesMatch && (
+                  <p className="mb-2 flex items-start gap-2 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-sm">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                    <span>
+                      <strong>Different names on the same email.</strong> This is much more often a couple
+                      sharing an inbox than one person entered twice. Check before merging.
+                    </span>
+                  </p>
+                )}
 
-          <footer className="mt-3 flex items-center gap-2">
-            <Button
-              type="button" size="sm"
-              disabled={busyId === candidate.loser.id}
-              onClick={() => void merge(candidate)}
-            >
-              <Check className="h-3.5 w-3.5" />
-              {busyId === candidate.loser.id ? 'Merging…' : 'Merge'}
-            </Button>
-            <Button
-              type="button" size="sm" variant="outline"
-              onClick={() => setSkipped(prev => new Set(prev).add(candidate.loser.id))}
-            >
-              <X className="h-3.5 w-3.5" />
-              Not a duplicate
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Moves matters, appointments, messages and design-sheet references onto the kept row.
-            </span>
-          </footer>
-        </article>
-      ))}
+                <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
+                  <SideCard side={candidate.loser} other={candidate.winner} title="Will be removed" tone="remove" />
+                  <div className="flex items-center justify-center px-1">
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="merged into" />
+                  </div>
+                  <SideCard side={candidate.winner} other={candidate.loser} title="Will be kept" tone="keep" />
+                </div>
+
+                <footer className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button" size="sm"
+                    disabled={busyId !== null}
+                    onClick={() => void merge(candidate.winner, [candidate], candidate.loser.id)}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {busyId === candidate.loser.id ? 'Merging…' : 'Merge'}
+                  </Button>
+                  <Button
+                    type="button" size="sm" variant="outline"
+                    onClick={() => setSkipped(prev => new Set(prev).add(candidate.loser.id))}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Not a duplicate
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Moves matters, appointments, messages and design-sheet references onto the kept row.
+                  </span>
+                </footer>
+              </div>
+            ))}
+
+            {group.copies.length > COLLAPSED_COPIES && (
+              <Button
+                type="button" size="sm" variant="ghost"
+                onClick={() => setExpanded(prev => {
+                  const next = new Set(prev)
+                  if (next.has(group.winner.id)) next.delete(group.winner.id)
+                  else next.add(group.winner.id)
+                  return next
+                })}
+              >
+                {isExpanded ? 'Show fewer' : `Show all ${group.copies.length} copies`}
+              </Button>
+            )}
+          </article>
+        )
+      })}
     </div>
   )
 }
