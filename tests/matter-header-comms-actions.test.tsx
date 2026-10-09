@@ -125,4 +125,39 @@ describe('MatterWorkspaceHeader hands the matter to the Assistant', () => {
     const link = screen.getByRole('menuitem', { name: /open in assistant/i })
     expect(link.getAttribute('href')).toBe('/admin/assistant?matter=m-1')
   })
+
+  it('offers the scheduling actions in the Actions menu', async () => {
+    const user = userEvent.setup()
+    const onScheduleAppointment = vi.fn()
+    const onBookViaPage = vi.fn()
+    const onSendSchedulingLink = vi.fn()
+    render(
+      <MatterWorkspaceHeader
+        matter={matter()}
+        matterNumber="2026-001"
+        intakeCompleted={false}
+        intakeId={null}
+        unlocking={false}
+        factsRailOpen={false}
+        onToggleFactsRail={vi.fn()}
+        onOpenIntake={vi.fn()}
+        onImportIntake={vi.fn()}
+        onUnlockIntake={vi.fn()}
+        onDelete={vi.fn()}
+        onEmail={vi.fn()}
+        onScheduleAppointment={onScheduleAppointment}
+        onBookViaPage={onBookViaPage}
+        onSendSchedulingLink={onSendSchedulingLink}
+      />,
+    )
+    const open = async () => user.click(screen.getByRole('button', { name: 'Matter actions' }))
+    await open()
+    await user.click(screen.getByRole('menuitem', { name: 'Book via booking page…' }))
+    expect(onBookViaPage).toHaveBeenCalledOnce()
+    await open()
+    await user.click(screen.getByRole('menuitem', { name: 'Send scheduling link' }))
+    expect(onSendSchedulingLink).toHaveBeenCalledOnce()
+    await open()
+    expect(screen.getByRole('menuitem', { name: 'Schedule appointment…' })).toBeTruthy()
+  })
 })
