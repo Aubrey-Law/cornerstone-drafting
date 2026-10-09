@@ -100,9 +100,36 @@ describe('document folder routes', () => {
     expect(response.status).toBe(200)
     expect(mocks.insert).toHaveBeenCalledWith({
       matter_id: MATTER_ID,
+      parent_id: null,
       name: 'Deed work',
       created_by: 'user-1',
     })
+  })
+
+  it('creates a subfolder inside a folder of the same matter', async () => {
+    const PARENT_ID = '44444444-4444-4444-8444-444444444444'
+    mocks.from.mockImplementation((table: string) => {
+      if (table === 'matters') return chain({ data: { id: MATTER_ID }, error: null })
+      return chain({ data: { id: PARENT_ID, matter_id: MATTER_ID, name: 'Trust' }, error: null })
+    })
+
+    const response = await createFolder(post({ matterId: MATTER_ID, name: 'Trust', parentId: PARENT_ID }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ parent_id: PARENT_ID, name: 'Trust' }))
+  })
+
+  it('refuses a parent folder that belongs to another matter', async () => {
+    const PARENT_ID = '44444444-4444-4444-8444-444444444444'
+    mocks.from.mockImplementation((table: string) => {
+      if (table === 'matters') return chain({ data: { id: MATTER_ID }, error: null })
+      return chain({ data: { id: PARENT_ID, matter_id: 'some-other-matter' }, error: null })
+    })
+
+    const response = await createFolder(post({ matterId: MATTER_ID, name: 'Trust', parentId: PARENT_ID }))
+
+    expect(response.status).toBe(404)
+    expect(mocks.insert).not.toHaveBeenCalled()
   })
 
   it('rejects a blank name and a non-attorney', async () => {

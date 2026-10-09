@@ -7,6 +7,10 @@ import {
   documentFolderKey,
   documentFolderLabel,
   documentFolderViews,
+  folderMoveTargets,
+  folderPath,
+  folderPathLabel,
+  folderSubtreeIds,
   formatDocumentSize,
   isDocumentPdf,
   isDocumentWord,
@@ -122,6 +126,33 @@ describe('attorney-created folders', () => {
     // Without one, the derived answer stands, and a loose file stays loose.
     expect(documentFolderId(doc({ source: 'client' }))).toBe('client-uploads')
     expect(documentFolderId(doc({}))).toBeNull()
+  })
+
+  it('nests subfolders: the root shows top-level folders, a folder shows its children', () => {
+    const rows = [
+      folder({ id: 'drafts', name: 'Drafts' }),
+      folder({ id: 'trust', name: 'Trust', parent_id: 'drafts' }),
+      folder({ id: 'amend', name: 'Amendments', parent_id: 'trust' }),
+      folder({ id: 'will', name: 'Will', parent_id: 'drafts' }),
+    ]
+    const root = documentFolderViews(rows)
+    expect(root.filter(view => view.custom).map(view => view.id)).toEqual(['drafts'])
+    // Derived folders live only at the root.
+    expect(documentFolderViews(rows, 'drafts').map(view => view.id)).toEqual(['trust', 'will'])
+    expect([...folderSubtreeIds('drafts', rows)].sort()).toEqual(['amend', 'drafts', 'trust', 'will'])
+    expect([...folderSubtreeIds('will', rows)]).toEqual(['will'])
+    expect(folderPath('amend', rows).map(entry => entry.name)).toEqual(['Drafts', 'Trust', 'Amendments'])
+    expect(folderPathLabel('amend', rows)).toBe('Drafts / Trust / Amendments')
+    expect(folderPathLabel('executed', rows)).toBe('Signed & executed')
+    expect(folderMoveTargets(rows).map(target => target.label)).toEqual([
+      'Drafts', 'Drafts / Trust', 'Drafts / Trust / Amendments', 'Drafts / Will',
+    ])
+  })
+
+  it('survives a malformed parent cycle', () => {
+    const rows = [folder({ id: 'a', parent_id: 'b' }), folder({ id: 'b', parent_id: 'a' })]
+    expect([...folderSubtreeIds('a', rows)].sort()).toEqual(['a', 'b'])
+    expect(folderPath('a', rows)).toHaveLength(2)
   })
 
   it('labels either kind of folder from its id', () => {

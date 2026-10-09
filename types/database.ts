@@ -670,6 +670,8 @@ export interface MatterDocumentFolder {
   id: string
   matter_id: string
   name: string
+  /** The folder this one sits inside, or null for the workspace root. */
+  parent_id?: string | null
   created_by: string | null
   created_at: string
   updated_at: string
