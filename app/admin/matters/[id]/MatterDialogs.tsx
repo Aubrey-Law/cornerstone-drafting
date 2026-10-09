@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { stageLabel, type PipelineMatter } from '@/types/database'
 import { MergeRecordDialog } from '@/components/matter/MergeRecordDialog'
@@ -63,13 +65,28 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, mergeDialog
   }
   /** Matter page only: the lead-note delete confirmation. */
   leadNoteDelete?: { target: LinkedMatterNote | null; setTarget: (note: LinkedMatterNote | null) => void; confirm: (note: LinkedMatterNote) => void | Promise<void> }
-  /** Matter page only: the scheduling-link and book-for-client dialogs. */
-  scheduling?: { linkOpen: boolean; setLinkOpen: (open: boolean) => void; bookOpen: boolean; setBookOpen: (open: boolean) => void }
+  /** Matter page only: the scheduling-link, book-for-client and in-app appointment dialogs. */
+  scheduling?: {
+    linkOpen: boolean
+    setLinkOpen: (open: boolean) => void
+    bookOpen: boolean
+    setBookOpen: (open: boolean) => void
+    appointmentOpen: boolean
+    setAppointmentOpen: (open: boolean) => void
+  }
   composer: { channel: 'email' | 'sms' | null; setChannel: (channel: 'email' | 'sms' | null) => void }
 }) {
   const router = useRouter()
   const matterId = matter.matter_id
   const matterLabel = matter.client_name || matter.matter_name || 'this matter'
+  // Names stay whole: staff confirm the last name rather than the app guessing a split.
+  const appointmentAttendee = useMemo(() => ({
+    firstName: matter.client_name,
+    email: matter.client_email,
+    phone: matter.client_phone,
+    secondFirstName: matter.spouse_name,
+    secondEmail: matter.spouse_email,
+  }), [matter.client_name, matter.client_email, matter.client_phone, matter.spouse_name, matter.spouse_email])
 
   return (
     <>
@@ -124,6 +141,14 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, mergeDialog
           target={{ kind: 'matter', id: matterId }}
           open={scheduling.bookOpen}
           onOpenChange={scheduling.setBookOpen}
+        />
+
+        <ScheduleAppointmentDialog
+          target={{ kind: 'matter', id: matterId }}
+          attendee={appointmentAttendee}
+          open={scheduling.appointmentOpen}
+          onOpenChange={scheduling.setAppointmentOpen}
+          onBooked={() => router.refresh()}
         />
       </>}
 

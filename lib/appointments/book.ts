@@ -80,6 +80,12 @@ export interface BookAppointmentInput {
    * ask for Microsoft Teams. Ignored unless the format is virtual.
    */
   videoProvider?: OnlineMeetingProvider | null
+  /**
+   * Staff booking from a lead or matter page links that record directly; the
+   * email match only fills whichever side is not given.
+   */
+  linkedLeadId?: string | null
+  linkedMatterId?: string | null
 }
 
 export interface BookAppointmentResult {
@@ -492,31 +498,35 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
   const appointmentId = (inserted as { id: string }).id
 
   // Link lead/matter (reuses the Cal.com matching helpers).
-  let leadId: string | null = null
-  let matterId: string | null = null
-  try {
-    const lead = await findLeadByEmail(admin, input.attendeeEmail)
-    leadId = lead?.id ?? null
-    if (!leadId && input.source === 'public' && input.type.key === 'discovery_call') {
-      const created = await createLeadFromAppointment({
-        admin,
-        attendeeName: input.attendeeName,
-        attendeeFirstName: input.attendeeFirstName,
-        attendeeLastName: input.attendeeLastName,
-        attendeeEmail: input.attendeeEmail,
-        attendeePhone: input.attendeePhone ?? null,
-        typeLabel: input.type.label,
-        startIso,
-      })
-      leadId = created?.id ?? null
+  let leadId: string | null = input.linkedLeadId ?? null
+  let matterId: string | null = input.linkedMatterId ?? null
+  if (!leadId) {
+    try {
+      const lead = await findLeadByEmail(admin, input.attendeeEmail)
+      leadId = lead?.id ?? null
+      if (!leadId && input.source === 'public' && input.type.key === 'discovery_call') {
+        const created = await createLeadFromAppointment({
+          admin,
+          attendeeName: input.attendeeName,
+          attendeeFirstName: input.attendeeFirstName,
+          attendeeLastName: input.attendeeLastName,
+          attendeeEmail: input.attendeeEmail,
+          attendeePhone: input.attendeePhone ?? null,
+          typeLabel: input.type.label,
+          startIso,
+        })
+        leadId = created?.id ?? null
+      }
+    } catch (err) {
+      console.error('[appointments] lead match failed', err)
     }
-  } catch (err) {
-    console.error('[appointments] lead match failed', err)
   }
-  try {
-    matterId = await findMatterIdByEmail(admin, input.attendeeEmail)
-  } catch (err) {
-    console.error('[appointments] matter match failed', err)
+  if (!matterId) {
+    try {
+      matterId = await findMatterIdByEmail(admin, input.attendeeEmail)
+    } catch (err) {
+      console.error('[appointments] matter match failed', err)
+    }
   }
   if (leadId || matterId) {
     await admin

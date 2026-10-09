@@ -5,7 +5,7 @@ import { DiscoveryEntry } from '@/components/discovery/DiscoveryEntry'
 import Link from 'next/link'
 import { Users } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { openExternalPhone } from '@/lib/clientPhone'
@@ -84,6 +84,7 @@ import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { LeadIntakeCard } from './LeadIntakeCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
 import type {
   LeadActivityViewRow,
   LeadDetailRecord,
@@ -228,6 +229,15 @@ export function LeadDetailClient({
   const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
   const [spouse, setSpouse] = useState(initialSpouse)
+  const scheduleAttendee = useMemo(() => ({
+    firstName: lead.first_name,
+    lastName: lead.last_name,
+    email: lead.email,
+    phone: lead.phone,
+    secondFirstName: spouse?.first_name,
+    secondLastName: spouse?.last_name,
+    secondEmail: spouse?.email,
+  }), [lead.first_name, lead.last_name, lead.email, lead.phone, spouse?.first_name, spouse?.last_name, spouse?.email])
   const [conflictCheck, setConflictCheck] = useState<ConflictCheckState | null>(initialConflictCheck)
   const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -246,6 +256,7 @@ export function LeadDetailClient({
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
+  const [scheduleAppointmentOpen, setScheduleAppointmentOpen] = useState(false)
   const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(initialIntakeUrl)
@@ -717,7 +728,7 @@ export function LeadDetailClient({
           else changeTab('documents')
           return
         case 'schedule_meeting':
-          setBookForClientOpen(true)
+          setScheduleAppointmentOpen(true)
           return
         case 'snooze':
           setSnoozeOpen(true)
@@ -954,6 +965,7 @@ export function LeadDetailClient({
           onStatusChange={handleTopStatusChange}
           onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
           onBookForClient={() => setBookForClientOpen(true)}
+          onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
           onCall={() => openExternalPhone({ number: lead.phone ?? undefined })}
           onEmail={() => setCommunicationChannel('email')}
           onText={() => setCommunicationChannel('sms')}
@@ -1041,7 +1053,7 @@ export function LeadDetailClient({
                   onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
                   taskCount={taskCounts.open} tasksVersion={tasksVersion}
                   onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
-                  onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />
+                  onTasks={() => changeTab('tasks')} onSchedule={() => setScheduleAppointmentOpen(true)} />
                 <LeadConflictCard
                   leadId={lead.id}
                   initialCheck={conflictCheck}
@@ -1268,6 +1280,13 @@ export function LeadDetailClient({
         target={{ kind: 'lead', id: lead.id }}
         open={bookForClientOpen}
         onOpenChange={setBookForClientOpen}
+      />
+      <ScheduleAppointmentDialog
+        target={{ kind: 'lead', id: lead.id }}
+        attendee={scheduleAttendee}
+        open={scheduleAppointmentOpen}
+        onOpenChange={setScheduleAppointmentOpen}
+        onBooked={() => router.refresh()}
       />
       <CommunicationDialog
         open={communicationChannel !== null}

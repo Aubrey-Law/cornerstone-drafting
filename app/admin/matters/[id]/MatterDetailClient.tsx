@@ -200,6 +200,7 @@ function MatterDetailClientInner({
   const [stageHistoryOpen, setStageHistoryOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
+  const [scheduleAppointmentOpen, setScheduleAppointmentOpen] = useState(false)
   // Header Email/Text open the same composer the lead page uses, AI drafting
   // included, rather than only switching to the communications tab.
   const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
@@ -431,6 +432,7 @@ function MatterDetailClientInner({
           factsRailOpen={factsRailOpen}
           onToggleFactsRail={() => setFactsRailOpen(open => !open)}
           onEmail={() => setComposerChannel('email')}
+          onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
           onOpenIntake={() => void openIntakeSheet()}
           onImportIntake={() => setImportIntakeOpen(true)}
           onUnlockIntake={() => void handleUnlockIntake()}
@@ -622,6 +624,7 @@ function MatterDetailClientInner({
                 onSendEmail={() => void sendEmail()}
                 onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
                 onBookForClient={() => setBookForClientOpen(true)}
+                onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
               />
 
               <MatterNotesTab
@@ -761,7 +764,14 @@ function MatterDetailClientInner({
           }),
         }}
         leadNoteDelete={{ target: leadNotes.deleteTarget, setTarget: leadNotes.setDeleteTarget, confirm: leadNotes.deleteLeadNote }}
-        scheduling={{ linkOpen: schedulingLinkOpen, setLinkOpen: setSchedulingLinkOpen, bookOpen: bookForClientOpen, setBookOpen: setBookForClientOpen }}
+        scheduling={{
+          linkOpen: schedulingLinkOpen,
+          setLinkOpen: setSchedulingLinkOpen,
+          bookOpen: bookForClientOpen,
+          setBookOpen: setBookForClientOpen,
+          appointmentOpen: scheduleAppointmentOpen,
+          setAppointmentOpen: setScheduleAppointmentOpen,
+        }}
         composer={{ channel: composerChannel, setChannel: setComposerChannel }}
       />
       {confirmDialog}

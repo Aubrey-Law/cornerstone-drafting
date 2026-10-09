@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CalendarPlus, Check, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { type BookingQuestion, MAX_ANSWER_LENGTH } from '@/lib/appointments/bookingQuestions'
 import { normalizeBookingNames } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import SlotPicker, { type SlotPickerLoadResult } from '@/components/scheduling/SlotPicker'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
 import {
@@ -50,34 +51,55 @@ interface Draft {
   answers: Record<string, string>
 }
 
-function initialDraft(types: BookableType[], prefillIso?: string | null): Draft {
+/** Who the appointment is for, when booking from a lead or matter page. */
+export interface QuickBookAttendee {
+  firstName?: string | null
+  lastName?: string | null
+  email?: string | null
+  phone?: string | null
+  secondFirstName?: string | null
+  secondLastName?: string | null
+  secondEmail?: string | null
+}
+
+/** The lead or matter the booking is made from; it is linked directly. */
+export interface QuickBookLink {
+  leadId?: string | null
+  matterId?: string | null
+}
+
+function initialDraft(types: BookableType[], prefillIso?: string | null, attendee?: QuickBookAttendee | null): Draft {
   return {
     typeId: types[0]?.id ?? '',
     locationType: allowedFormats(types[0])[0],
     videoProvider: 'google_meet',
-    attendeeFirstName: '',
-    attendeeLastName: '',
-    attendeeEmail: '',
-    attendeePhone: '',
-    secondAttendeeFirstName: '',
-    secondAttendeeLastName: '',
-    secondAttendeeEmail: '',
+    attendeeFirstName: attendee?.firstName?.trim() ?? '',
+    attendeeLastName: attendee?.lastName?.trim() ?? '',
+    attendeeEmail: attendee?.email?.trim() ?? '',
+    attendeePhone: attendee?.phone?.trim() ?? '',
+    secondAttendeeFirstName: attendee?.secondFirstName?.trim() ?? '',
+    secondAttendeeLastName: attendee?.secondLastName?.trim() ?? '',
+    secondAttendeeEmail: attendee?.secondEmail?.trim() ?? '',
     startIso: prefillIso ?? '',
     answers: {},
   }
 }
 
-function nextThreeWorkingDayRange(prefillIso?: string | null) {
-  const from = prefillIso ? new Date(prefillIso) : new Date()
-  from.setMinutes(0, 0, 0)
-  const to = new Date(from)
-  let working = 0
-  while (working < 3) {
-    to.setDate(to.getDate() + 1)
-    if (to.getDay() !== 0 && to.getDay() !== 6) working += 1
-  }
-  to.setHours(23, 59, 59, 999)
-  return { from, to }
+/** "Mon, Oct 12 · 2:00 PM EDT" in the firm's time zone. */
+export function formatSlotSummary(iso: string, timezone: string): string {
+  const date = new Date(iso)
+  const day = date.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'short', month: 'short', day: 'numeric' })
+  const time = date.toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+  return `${day} · ${time}`
+}
+
+function slotDetailText(slot: OpenSlot | undefined): string | null {
+  if (!slot) return null
+  const notes = [
+    slot.afterHours ? 'after hours' : null,
+    slot.meetingOrdinal >= 2 ? `meeting #${slot.meetingOrdinal} that day` : null,
+  ].filter(Boolean)
+  return notes.length > 0 ? notes.join(' · ') : null
 }
 
 export function QuickBookPopover({
@@ -97,12 +119,74 @@ export function QuickBookPopover({
   authHeaders: () => HeadersInit | undefined
   onBooked: () => void
 }) {
-  const [draft, setDraft] = useState<Draft>(() => initialDraft(types, prefillIso))
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button size="sm">
+          <CalendarPlus className="mr-1 h-4 w-4" /> Quick book
+          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-micro">⌘⇧K</kbd>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[440px] max-w-[calc(100vw-2rem)] p-0">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Quick book</h2>
+          <p className="text-xs text-muted-foreground">Choose a verified opening and email the confirmation.</p>
+        </div>
+        <QuickBookForm
+          active={open}
+          types={types}
+          prefillIso={prefillIso}
+          timezone={timezone}
+          authHeaders={authHeaders}
+          onBooked={() => {
+            onOpenChange(false)
+            onBooked()
+          }}
+          bodyClassName="max-h-[70vh]"
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * The staff booking form: who, what, where, when (a month calendar like the
+ * client sees), then client answers. Used by Quick book on the calendar and
+ * by "Schedule appointment" on lead and matter pages.
+ */
+export function QuickBookForm({
+  active,
+  types,
+  prefillIso,
+  authHeaders,
+  onBooked,
+  timezone = FIRM_TIMEZONE,
+  attendee,
+  link,
+  showSearch = true,
+  bodyClassName,
+}: {
+  /** False while the surrounding popover or dialog is closed. */
+  active: boolean
+  types: BookableType[]
+  prefillIso?: string | null
+  timezone?: string
+  authHeaders: () => HeadersInit | undefined
+  onBooked: () => void
+  attendee?: QuickBookAttendee | null
+  link?: QuickBookLink | null
+  /** Hide the contact search when the attendee is already known. */
+  showSearch?: boolean
+  bodyClassName?: string
+}) {
+  const open = active
+  const [draft, setDraft] = useState<Draft>(() => initialDraft(types, prefillIso, attendee))
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<PersonResult[]>([])
-  const [slots, setSlots] = useState<OpenSlot[]>([])
-  const [connected, setConnected] = useState(true)
-  const [loadingSlots, setLoadingSlots] = useState(false)
+  // The lead or matter picked from search, linked unless the email is edited.
+  const [searchLink, setSearchLink] = useState<QuickBookLink | null>(null)
+  // Every opening the picker has loaded, by start; only these can be booked.
+  const [verifiedSlots, setVerifiedSlots] = useState<Map<string, OpenSlot>>(() => new Map())
   const [booking, setBooking] = useState(false)
   const [teamsConnected, setTeamsConnected] = useState(false)
   const selectedType = types.find(type => type.id === draft.typeId)
@@ -123,13 +207,13 @@ export function QuickBookPopover({
   useEffect(() => {
     if (!open) return
     setDraft(current => ({
-      ...(current.typeId ? current : initialDraft(types, prefillIso)),
+      ...(current.typeId ? current : initialDraft(types, prefillIso, attendee)),
       startIso: prefillIso ?? current.startIso,
     }))
-  }, [open, prefillIso, types])
+  }, [open, prefillIso, types, attendee])
 
   useEffect(() => {
-    if (!open || query.trim().length < 2) {
+    if (!open || !showSearch || query.trim().length < 2) {
       setPeople([])
       return
     }
@@ -139,39 +223,50 @@ export function QuickBookPopover({
         .then(body => setPeople(body.people ?? []))
     }, 180)
     return () => window.clearTimeout(timer)
-  }, [open, query, authHeaders])
+  }, [open, showSearch, query, authHeaders])
 
-  const range = useMemo(() => nextThreeWorkingDayRange(prefillIso), [prefillIso])
-  useEffect(() => {
-    if (!open || !draft.typeId || !draft.locationType) return
-    const controller = new AbortController()
-    setLoadingSlots(true)
-    setSlots([])
-    setConnected(false)
+  const { typeId, locationType } = draft
+  const loadSlots = useCallback(async ({ from, to }: { from: Date; to: Date }): Promise<SlotPickerLoadResult> => {
     const params = new URLSearchParams({
-      typeId: draft.typeId,
-      locationType: draft.locationType,
-      from: range.from.toISOString(),
-      to: range.to.toISOString(),
+      typeId,
+      locationType,
+      from: from.toISOString(),
+      to: to.toISOString(),
     })
     if (prefillIso) params.set('preferred', prefillIso)
-    void fetch(`/api/admin/scheduling/slots?${params}`, {
-      headers: authHeaders(),
-      signal: controller.signal,
-    })
-      .then(response => response.ok ? response.json() : { connected: false, slots: [] })
-      .then(body => {
-        if (controller.signal.aborted) return
-        setSlots(body.slots ?? [])
-        setConnected(Boolean(body.connected))
+    const unavailable = 'Verified openings are unavailable. Check the calendar connection and try again.'
+    try {
+      const response = await fetch(`/api/admin/scheduling/slots?${params}`, { headers: authHeaders() })
+      const body = await response.json().catch(() => ({}))
+      const horizonDays = typeof body.horizonDays === 'number' ? body.horizonDays : undefined
+      if (!response.ok) return { slots: [], horizonDays, error: body.error ?? unavailable }
+      if (!body.connected) return { slots: [], horizonDays, error: unavailable }
+      const opened: OpenSlot[] = body.slots ?? []
+      setVerifiedSlots(current => {
+        const next = new Map(current)
+        for (const slot of opened) next.set(slot.startIso, slot)
+        return next
       })
-      .catch(() => { if (!controller.signal.aborted) { setSlots([]); setConnected(false) } })
-      .finally(() => { if (!controller.signal.aborted) setLoadingSlots(false) })
-    return () => controller.abort()
-  }, [open, draft.typeId, draft.locationType, range, authHeaders, prefillIso])
+      return { slots: opened.map(slot => slot.startIso), horizonDays }
+    } catch {
+      return { slots: [], error: unavailable }
+    }
+  }, [typeId, locationType, prefillIso, authHeaders])
+
+  // A different type or format has different openings: forget the old ones.
+  useEffect(() => {
+    setVerifiedSlots(new Map())
+  }, [typeId, locationType])
+
+  const slotDetail = useCallback((iso: string) => slotDetailText(verifiedSlots.get(iso)), [verifiedSlots])
+  const onSelectSlot = useCallback((iso: string | null) => {
+    setDraft(current => ({ ...current, startIso: iso ?? '' }))
+  }, [])
+
+  const slotVerified = Boolean(draft.startIso) && verifiedSlots.has(draft.startIso)
 
   async function submit() {
-    if (loadingSlots || !connected || !slots.some(slot => slot.startIso === draft.startIso)) { toast.error('Choose a verified available slot'); return }
+    if (!slotVerified) { toast.error('Choose a verified available slot'); return }
     if (!draft.attendeeEmail.trim() || !draft.typeId || !draft.startIso) {
       toast.error('Choose who, what, where, and when')
       return
@@ -200,6 +295,8 @@ export function QuickBookPopover({
           secondAttendeeLastName: draft.secondAttendeeLastName.trim() || undefined,
           secondAttendeeEmail: draft.secondAttendeeEmail.trim() || undefined,
           answers: draft.answers,
+          linkedLeadId: (link ?? searchLink)?.leadId || undefined,
+          linkedMatterId: (link ?? searchLink)?.matterId || undefined,
         }),
       })
       const body = await response.json().catch(() => ({}))
@@ -212,9 +309,9 @@ export function QuickBookPopover({
       } else {
         toast.success('Appointment booked — confirmation email sent')
       }
-      onOpenChange(false)
-      setDraft(initialDraft(types, null))
+      setDraft(initialDraft(types, null, attendee))
       setQuery('')
+      setSearchLink(null)
       onBooked()
     } catch {
       toast.error('Booking failed')
@@ -224,20 +321,10 @@ export function QuickBookPopover({
   }
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button size="sm">
-          <CalendarPlus className="mr-1 h-4 w-4" /> Quick book
-          <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-micro">⌘⇧K</kbd>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] p-0">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">Quick book</h2>
-          <p className="text-xs text-muted-foreground">Choose a verified opening and email the confirmation.</p>
-        </div>
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
+    <>
+        <div className={cn('space-y-4 overflow-y-auto p-4', bodyClassName)}>
           <Step number="1" title="Who">
+            {showSearch && <>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input className="pl-8" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search contacts, leads, or matters…" />
@@ -262,6 +349,7 @@ export function QuickBookPopover({
                       }))
                       setQuery(person.name)
                       setPeople([])
+                      setSearchLink(person.kind === 'lead' ? { leadId: person.recordId } : { matterId: person.recordId })
                     }}
                   >
                     <span><span className="block text-xs font-medium text-foreground">{person.name}</span><span className="text-micro text-muted-foreground">{person.email}</span></span>
@@ -270,6 +358,7 @@ export function QuickBookPopover({
                 ))}
               </div>
             )}
+            </>}
             {draft.attendeeEmail && <p className="mt-1 text-micro text-green"><Check className="mr-1 inline h-3 w-3" />{[draft.attendeeFirstName, draft.attendeeLastName].filter(Boolean).join(' ')} · {draft.attendeeEmail}</p>}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
@@ -285,7 +374,7 @@ export function QuickBookPopover({
               <div>
                 <Label htmlFor="quick-book-email">Email</Label>
                 <Input id="quick-book-email" type="email" required
-                  value={draft.attendeeEmail} onChange={event => setDraft(current => ({ ...current, attendeeEmail: event.target.value }))} />
+                  value={draft.attendeeEmail} onChange={event => { setSearchLink(null); setDraft(current => ({ ...current, attendeeEmail: event.target.value })) }} />
               </div>
               <div>
                 <Label htmlFor="quick-book-phone">Phone</Label>
@@ -368,19 +457,16 @@ export function QuickBookPopover({
           </Step>
 
           <Step number="4" title="When">
-            {!connected ? (
-              <p className="rounded-md border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground">
-                Verified openings are unavailable. Check the calendar connection and try again.
-              </p>
-            ) : loadingSlots ? (
-              <p className="text-xs text-muted-foreground">Checking the calendar and appointment buffers…</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-1.5">
-                {slots.slice(0, 14).map(slot => (
-                  <SlotButton timezone={timezone} key={slot.startIso} slot={slot} selected={draft.startIso === slot.startIso} onClick={() => setDraft(current => ({ ...current, startIso: slot.startIso }))} />
-                ))}
-              </div>
-            )}
+            <div className="overflow-hidden rounded-lg border border-border">
+              {/* Remounts per type and format so the calendar opens fresh. */}
+              <SlotPicker
+                key={`${typeId}:${locationType}`}
+                loadSlots={loadSlots}
+                slotDetail={slotDetail}
+                selected={draft.startIso || null}
+                onSelect={onSelectSlot}
+              />
+            </div>
           </Step>
 
           {questions.length > 0 && (
@@ -402,13 +488,14 @@ export function QuickBookPopover({
           )}
         </div>
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
-          <span className="text-micro text-muted-foreground">{draft.startIso ? new Date(draft.startIso).toLocaleString('en-US', { timeZone: timezone }) : 'Choose a verified slot'}</span>
-          <Button size="sm" disabled={booking || loadingSlots || !connected || !slots.some(slot => slot.startIso === draft.startIso) || !draft.startIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
+          <span className={cn('text-xs', slotVerified ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+            {slotVerified ? formatSlotSummary(draft.startIso, timezone) : 'Choose a verified slot'}
+          </span>
+          <Button size="sm" disabled={booking || !slotVerified || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
             {booking ? 'Booking…' : 'Book & email confirmation'}
           </Button>
         </div>
-      </PopoverContent>
-    </Popover>
+    </>
   )
 }
 
@@ -456,16 +543,4 @@ function QuestionField({
 
 function Step({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
   return <section><h3 className="mb-1.5 text-xs font-semibold text-foreground"><span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-muted text-micro">{number}</span>{title}</h3>{children}</section>
-}
-
-function SlotButton({ slot, selected, onClick, timezone }: { timezone: string; slot: OpenSlot; selected: boolean; onClick: () => void }) {
-  const date = new Date(slot.startIso)
-  return (
-    <button type="button" onClick={onClick} className={cn('rounded-md border px-2 py-1.5 text-left', selected ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border hover:bg-accent')}>
-      <span className="block text-xs font-medium text-foreground">{date.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'short' })} · {date.toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' })}</span>
-      <span className="text-micro text-muted-foreground">
-        {slot.afterHours ? 'after hours · ' : ''}{slot.meetingOrdinal >= 2 ? `meeting #${slot.meetingOrdinal}` : 'first client meeting'}
-      </span>
-    </button>
-  )
 }

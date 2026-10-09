@@ -10,7 +10,10 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const MAX_RANGE_MS = 10 * 86_400_000
+// One month view of the staff picker (31 days, plus slack for a DST change).
+const MAX_RANGE_MS = 32 * 86_400_000
+/** How far ahead staff can book; the picker stops paging past it. */
+const STAFF_HORIZON_DAYS = 180
 const CLIENT_MEETING_CAP = 3
 
 export async function GET(req: NextRequest) {
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest) {
       bufferMinutes: settings.bufferMinutes,
       // Staff can book same-day, but slots still respect hours, duration and buffers.
       minNoticeHours: 0,
-      horizonDays: 10,
+      horizonDays: STAFF_HORIZON_DAYS,
       busy,
       now: new Date(),
       rangeStart: from,
@@ -79,10 +82,11 @@ export async function GET(req: NextRequest) {
       connected: true,
       slots: annotated,
       clientMeetingCap: CLIENT_MEETING_CAP,
+      horizonDays: STAFF_HORIZON_DAYS,
     })
   } catch (error) {
     if (error instanceof AvailabilityUnavailableError) {
-      return NextResponse.json({ connected: false, slots: [], error: error.message })
+      return NextResponse.json({ connected: false, slots: [], error: error.message, horizonDays: STAFF_HORIZON_DAYS })
     }
     throw error
   }
