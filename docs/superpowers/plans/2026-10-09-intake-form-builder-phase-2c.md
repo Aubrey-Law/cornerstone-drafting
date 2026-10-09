@@ -749,9 +749,13 @@ remain rejected at the route boundary.
    not silently overwrite a published form. Existing customized catalogs must
    instead be reviewed through the builder. Do not run synthetic fixture scripts
    against a shared environment.
-3. Verify both active track templates have a published version. Read their
-   definitions through the repository/runtime so schema, compiler and canonical
-   hashes are checked, not just SQL metadata. Verify an existing NULL-pin intake,
+3. Run `npm run intake:forms:check-release` against the intended environment.
+   This read-only check reports the exact newest published version IDs and hashes
+   for both tracks and checks purpose, archive state, metadata, canonical hashes,
+   and client/staff compilation through the repository. It accepts reviewed
+   customized forms and performs no writes. It is a catalog snapshot, not a
+   deployment, schema, rollout-state, or provider check; recheck its IDs/hashes
+   immediately before activation. Verify an existing NULL-pin intake,
    both authenticated and standing-link flows, and provider-backed uploads in
    the deployment. Confirm all deployed code supports saved retired pins.
 4. Activation is an explicit database-owner operation. Neither ordinary clients,
@@ -830,3 +834,19 @@ Integrated validation:
 
 Release branch: `codex/intake-form-builder-phase-2c`. Deployment and explicit
 owner activation remain pending the release procedure above.
+
+
+## Seventeenth step: repeatable catalog preflight
+
+Added `npm run intake:forms:check-release` for the release procedure. It uses only
+repository reads, prints no answers or credentials, and fails when either track
+lacks a valid active published questionnaire. Unlike the bundle installer, it
+accepts reviewed customizations and selects the latest published version while
+ignoring later drafts/retired versions, matching automatic assignment.
+
+Ten focused tests cover both tracks' missing/archived/wrong-purpose catalogs,
+publication metadata, hash/compiler failures, unreadable persistence, and latest
+published selection. The command passed against both version-two publications
+in the disposable local stack. This does not establish production readiness.
+Vercel's PR deployment was skipped under the repository's main-only deployment
+configuration; the successful Vercel status is not preview acceptance evidence.
