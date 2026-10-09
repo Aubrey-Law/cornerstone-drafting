@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { MatterSwitcher } from '@/components/matter/MatterSwitcher'
 import {
   CalendarDays,
+  CalendarPlus,
+  ExternalLink,
   ClipboardList,
   CloudUpload,
   Loader as Loader2,
@@ -42,6 +44,10 @@ export interface MatterWorkspaceHeaderProps {
   onEmail: () => void
   /** Books in the firm's own scheduler; hidden when not given. */
   onScheduleAppointment?: () => void
+  /** Emails or posts a link to the firm's booking page; hidden when not given. */
+  onSendSchedulingLink?: () => void
+  /** Opens the firm's booking page filled in for the client; hidden when not given. */
+  onBookViaPage?: () => void
   onOpenIntake: () => void
   onImportIntake: () => void
   onUnlockIntake: () => void
@@ -80,6 +86,8 @@ export function MatterWorkspaceHeader({
   onToggleFactsRail,
   onEmail,
   onScheduleAppointment,
+  onSendSchedulingLink,
+  onBookViaPage,
   onOpenIntake,
   onImportIntake,
   onUnlockIntake,
@@ -170,6 +178,18 @@ export function MatterWorkspaceHeader({
               <DropdownMenuItem onClick={onScheduleAppointment}>
                 <CalendarDays className="mr-2 size-3.5" />
                 Schedule appointment…
+              </DropdownMenuItem>
+            )}
+            {onBookViaPage && (
+              <DropdownMenuItem onClick={onBookViaPage}>
+                <ExternalLink className="mr-2 size-3.5" />
+                Book via booking page…
+              </DropdownMenuItem>
+            )}
+            {onSendSchedulingLink && (
+              <DropdownMenuItem onClick={onSendSchedulingLink}>
+                <CalendarPlus className="mr-2 size-3.5" />
+                Send scheduling link
               </DropdownMenuItem>
             )}
 

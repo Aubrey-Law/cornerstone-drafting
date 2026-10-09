@@ -434,6 +434,8 @@ function MatterDetailClientInner({
           onToggleFactsRail={() => setFactsRailOpen(open => !open)}
           onEmail={() => setComposerChannel('email')}
           onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
+          onBookViaPage={() => setBookForClientOpen(true)}
+          onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
           onOpenIntake={() => void openIntakeSheet()}
           onImportIntake={() => setImportIntakeOpen(true)}
           onUnlockIntake={() => void handleUnlockIntake()}
