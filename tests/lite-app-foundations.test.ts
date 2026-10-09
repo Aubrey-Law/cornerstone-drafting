@@ -52,6 +52,7 @@ describe('safe redirects', () => {
     expect(safeClientRedirectPath('/messages')).toBe('/messages')
     expect(safeClientRedirectPath('/intake')).toBe('/intake')
     expect(safeClientRedirectPath('/dashboard')).toBe('/dashboard')
+    expect(safeClientRedirectPath('/schedule')).toBe('/schedule')
     expect(safeClientRedirectPath('/admin/matters')).toBeNull()
     expect(safeClientRedirectPath('/plan-review')).toBeNull()
   })

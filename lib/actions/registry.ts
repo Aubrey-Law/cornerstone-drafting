@@ -1326,19 +1326,19 @@ const definitions: ActionDefinition[] = [
     validate: schedulingLinkInput,
     async preview(input) {
       const { resolveBookingLink, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
-      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const link = await resolveBookingLink(input)
       const firstName = input.name?.split(/\s+/)[0] ?? null
       const message = schedulingLinkMessage(firstName, link.label, link.url)
       return {
         display: { action: 'Send scheduling link', recipient: input.email, recipientName: input.name, subject: `Schedule your ${link.label}`, content: message },
         auditBefore: null,
-        auditAfter: { channel: 'email', meetingTypeKey: input.meetingTypeKey, leadId: input.leadId, matterId: input.matterId, provider: link.provider },
+        auditAfter: { channel: 'email', meetingTypeKey: input.meetingTypeKey, leadId: input.leadId, matterId: input.matterId, via: link.via },
       }
     },
     async execute(input, context) {
       const { resolveBookingLink, schedulingLinkHtml, schedulingLinkMessage } = await import('@/lib/bookings/bookingLink')
       const { sendEmail } = await import('@/lib/email/send')
-      const link = await resolveBookingLink({ ...input, channel: 'email' })
+      const link = await resolveBookingLink(input)
       const firstName = input.name?.split(/\s+/)[0] ?? null
       const message = schedulingLinkMessage(firstName, link.label, link.url)
       const result = await sendEmail({

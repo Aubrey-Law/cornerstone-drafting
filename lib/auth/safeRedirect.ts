@@ -21,6 +21,7 @@ const CLIENT_REDIRECT_ALLOWLIST = [
   '/messages',
   '/intake',
   '/forms',
+  '/schedule',
 ]
 
 function sanitizePath(value: string | null | undefined): string | null {
