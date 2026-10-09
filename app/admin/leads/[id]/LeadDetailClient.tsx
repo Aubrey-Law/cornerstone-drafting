@@ -1,17 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { openExternalPhone } from '@/lib/clientPhone'
+import { formatFirmDate } from '@/lib/format'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { copyToClipboard } from '@/lib/clipboard'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
-import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
+import { calendarDayDifference, cn, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { parseLeadTab, type LeadTab } from '@/lib/leads/leadPageTabs'
 import { parseTaskView, type TaskView } from '@/lib/matterPageTabs'
@@ -37,7 +38,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { LeadHiringReadiness } from '@/components/leads/LeadHiringReadiness'
 import { leadFieldDefinition } from '@/lib/leads/fieldDefinitions'
-import { LeadOverviewDetails } from '@/components/leads/LeadOverviewDetails'
 import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTasksTab'
 import { ViewSwitch } from '@/components/ViewSwitch'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
@@ -56,15 +56,21 @@ import { LeadKeyDatesCard, type LeadKeyDates } from '@/components/leads/LeadKeyD
 import { LeadConflictCard } from '@/components/leads/LeadConflictCard'
 import type { ConflictCheckState } from '@/lib/conflicts/match'
 import type { ContactChannel } from '@/lib/contacts/additionalChannels'
-import { LeadNextAction } from '@/components/leads/LeadNextAction'
+import { LeadNextAction, LeadNextActionCard } from '@/components/leads/LeadNextAction'
+import { LeadStageStepper } from '@/components/leads/LeadStageStepper'
+import type { LeadListRow } from '@/lib/leads/viewTypes'
+import { PersonSummaryCard, type OverviewPerson } from '@/app/admin/matters/[id]/MatterOverviewSidebar'
+import { useCollapseOnScroll } from '@/app/admin/matters/[id]/useCollapseOnScroll'
+import { RecordWorkspaceHeader, recordTitleClass, WORKSPACE_TAB_CLASS, WORKSPACE_TAB_TRIGGER_CLASS, WORKSPACE_TABS_LIST_CLASS, WorkspaceTabCount } from '@/components/workspace/RecordWorkspaceHeader'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
 import { computeLeadScore, leadScoreInputFromRow, type LeadScoreInput } from '@/lib/leads/score'
 import { clientContactTimestamps } from '@/lib/leads/contactEvents'
-import { LeadOverview, leadProgressLabel, leadDisplayDate } from '@/components/leads/LeadOverview'
+import { LeadOverview, leadDisplayDate } from '@/components/leads/LeadOverview'
 import { agreementSentInApp, effectiveEngagementStatus } from '@/lib/leads/engagementStatus'
 import { LeadSnoozeDialog } from '@/components/leads/LeadSnoozeDialog'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
+import { MergeRecordDialog } from '@/components/matter/MergeRecordDialog'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
@@ -87,7 +93,6 @@ import { MatterPeopleTabContent } from '@/app/admin/matters/[id]/MatterPeopleTab
 import { useConfirm } from '@/components/useConfirm'
 import { usePushToLawmatics } from '@/hooks/usePushToLawmatics'
 import { usePushToStatular } from '@/hooks/usePushToStatular'
-import { RecordWorkStrip } from '@/components/work/RecordWorkIndicator'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -234,6 +239,7 @@ export function LeadDetailClient({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
   const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
@@ -264,6 +270,8 @@ export function LeadDetailClient({
     reload: reloadDocuments,
   } = useLeadDocuments(lead.matter_id)
   const taskCounts = useRecordTaskCounts(lead.id, initialTaskCounts)
+  // On a phone the full header would hold much of the screen; it folds while the page scrolls.
+  const { ref: scrollBodyRef, collapsed: headerCollapsed } = useCollapseOnScroll<HTMLElement>('(max-width: 767px)')
 
   // The URL owns the tab, but the click applies immediately so the workspace
   // never waits on a router round trip.
@@ -758,7 +766,6 @@ export function LeadDetailClient({
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
-  const clientInitial = clientName.trim().charAt(0).toUpperCase() || '—'
   const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
   const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
   const contacts = clientContactTimestamps(activity)
@@ -845,132 +852,142 @@ export function LeadDetailClient({
     />
   )
 
+  const showSpouse = lead.marital_status?.trim().toLowerCase() === 'married'
+  const people: OverviewPerson[] = [
+    { role: 'Client', name: clientName, dob: lead.date_of_birth ?? null, email: lead.email ?? null, phone: lead.phone ?? null },
+    ...(showSpouse ? [{
+      role: 'Spouse' as const,
+      name: [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' ') || 'Name not recorded',
+      dob: spouse?.date_of_birth ?? null,
+      email: spouse?.email ?? null,
+      phone: spouse?.phone ?? null,
+    }] : []),
+  ]
+  const ownerLabel = workSummary?.owner === 'client' ? 'Client' : workSummary?.owner === 'automation' ? 'Automation' : 'Firm'
+  const snoozeNotice = snoozed && lead.lead_status === 'lead' && (
+    <div role="status" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted px-3.5 py-2.5 text-sm">
+      <span>Next action snoozed until {leadDisplayDate(lead.lead_next_action_snoozed_until, firmTimezone)}</span>
+      <Button variant="outline" size="sm" disabled={interactionBusy} onClick={() => void clearNextActionSnooze()}>Undo snooze</Button>
+    </div>
+  )
+  const nextActionCard = useLocalAction && visibleAction ? (
+    <LeadNextAction
+      action={visibleAction}
+      urgency={workSummary ? ['Critical', 'Today', 'Soon', 'Planned', 'Waiting'][workSummary.priorityBand] : undefined}
+      context={workSummary?.priorityReasons.map(reason => reason.label).join(' · ')}
+      busy={interactionBusy}
+      onIntent={intent => void handleNextAction(intent)}
+    >
+      {hiringReadiness}
+    </LeadNextAction>
+  ) : workSummary ? (
+    <LeadNextActionCard
+      eyebrow={`Next for ${ownerLabel === 'Automation' ? 'automation' : `the ${ownerLabel.toLowerCase()}`}`}
+      chips={<>
+        <Badge variant="outline" className="rounded-sm font-medium">{workSummary.state === 'blocked' ? 'Blocked' : workSummary.state === 'waiting' ? 'Waiting' : workSummary.state === 'snoozed' ? 'Snoozed' : 'Ready to work'}</Badge>
+        {workSummary.priorityReasons.length > 0 && <span>· {workSummary.priorityReasons.map(reason => reason.label).join(' · ')}</span>}
+      </>}
+      title={workSummary.title}
+      actions={<Button asChild><Link href={workSummary.href}>{workSummary.actionLabel}</Link></Button>}
+    >
+      {snoozeNotice}
+      {hiringReadiness}
+    </LeadNextActionCard>
+  ) : (snoozeNotice || hiringReadiness) ? (
+    <LeadNextActionCard eyebrow="Next for the firm" title={snoozeNotice ? 'Paused until the snooze ends' : 'Nothing due right now'}>
+      {snoozeNotice}
+      {hiringReadiness}
+    </LeadNextActionCard>
+  ) : null
+
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       {confirmDialog}
-      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-card px-4 py-3">
-        <Link href="/admin/crm/opportunities" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Leads
-        </Link>
-        <span aria-hidden className="text-xs text-muted-foreground">/</span>
-        <div className="flex min-w-0 flex-1 basis-40 items-center gap-1.5">
-          <span
-            aria-hidden
-            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-micro font-semibold text-muted-foreground"
-          >
-            {clientInitial}
-          </span>
-          <h1 className="break-words text-xl font-semibold tracking-tight">{clientName}</h1>
-        </div>
-        <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-micro font-medium text-muted-foreground lg:inline">
-          {provisionalLeadNumber(lead)}
-        </span>
-        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
-          {statusLabel} · day {leadDay}
-        </span>
-        <span className="text-xs text-muted-foreground">{leadProgressLabel(lead, engagementStatus)}</span>
-        {effectiveLastTouchAt !== null && lastTouchDays !== null && (
-          <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground md:inline">
-            Last contact {lastTouchDays}d ago
-          </span>
-        )}
-        <div className="ml-auto shrink-0">
-          <LeadTopActions
-            busy={interactionBusy}
-            status={lead.lead_status}
-            hasActiveAgreement={Boolean(activeAgreement)}
-            snoozed={snoozed}
-            matterId={lead.matter_id}
-            leadId={lead.id}
-            onDraft={handleTopDraft}
-            onConvert={handleTopConvert}
-            onClearSnooze={() => void clearNextActionSnooze()}
-            onStatusChange={handleTopStatusChange}
-            onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
-            onBookForClient={() => setBookForClientOpen(true)}
-            onCall={() => openExternalPhone({ number: lead.phone ?? undefined })}
-            onEmail={() => setCommunicationChannel('email')}
-            onText={() => setCommunicationChannel('sms')}
-            onIntake={() => { setIntakeSection(null); setIntakeSheetOpen(true) }}
-            onAddNote={addQuickNote}
-            onPushToLawmatics={() => void pushToLawmatics()}
-            pushingToLawmatics={pushingToLawmatics}
-            onPushToStatular={() => void pushToStatular()}
-            pushingToStatular={pushingToStatular}
-            onToggleRail={() => { setRailOpen(current => !current); if (railOpen) setActiveField(null) }}
-            railOpen={railOpen}
-            hasEmail={Boolean(lead.email?.trim())}
-            hasPhone={Boolean(lead.phone?.trim())}
-          />
-        </div>
-      </header>
-
+      {lead.matter_id && (
+        <MergeRecordDialog matterId={lead.matter_id} recordLabel="lead" open={mergeOpen} onOpenChange={setMergeOpen} />
+      )}
+      <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)} className="flex min-h-0 flex-1 flex-col gap-0">
+      <RecordWorkspaceHeader
+        backHref="/admin/crm/opportunities"
+        backLabel="Leads"
+        collapsed={headerCollapsed}
+        title={<span className={cn('block break-words', recordTitleClass(headerCollapsed))}>{clientName}</span>}
+        chips={[
+          // The intake track often reads the same as the practice area; show it once.
+          ...new Set([practiceAreaLabel(lead.practice_area), ...(lead.intake_track ? [intakeTrackLabel(lead.intake_track as IntakeTrack)] : [])]),
+          ...(lead.lead_status === 'lost' || lead.lead_status === 'declined'
+            ? [<Badge key="status" variant="outline" className="rounded-md border-destructive/40 font-medium text-destructive">{statusLabel}</Badge>]
+            : []),
+        ].filter(Boolean)}
+        meta={<span className="pl-1 text-muted-foreground tabular-nums">
+          {provisionalLeadNumber(lead)}{lead.created_at ? ` · Opened ${formatFirmDate(lead.created_at)}` : ''}
+        </span>}
+        stage={<LeadStageStepper lead={lead as unknown as LeadListRow} daysAsLead={leadDay} lastContactDays={effectiveLastTouchAt !== null ? lastTouchDays : null} />}
+        navigation={<nav aria-label="Lead workspace navigation" className="w-full min-w-0 overflow-x-auto bg-card px-4 md:px-6">
+          <TabsList aria-label="Lead workspace" className={WORKSPACE_TABS_LIST_CLASS}>
+            {([
+              ['overview', 'Overview'], ['intake', 'Intake'], ['tasks', 'Tasks'], ['people', 'People'],
+              ['assets', 'Assets'], ['documents', 'Documents'], ['communications', 'Messages'], ['notes', 'Notes'],
+            ] as const).map(([value, label]) => (
+              <TabsTrigger key={value} value={value} className={cn(WORKSPACE_TAB_CLASS, WORKSPACE_TAB_TRIGGER_CLASS)}>
+                {label}
+                {value === 'tasks' && taskCounts.open > 0 && <WorkspaceTabCount count={taskCounts.open} />}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </nav>}
+        actions={<LeadTopActions
+          busy={interactionBusy}
+          status={lead.lead_status}
+          hasActiveAgreement={Boolean(activeAgreement)}
+          snoozed={snoozed}
+          matterId={lead.matter_id}
+          leadId={lead.id}
+          onDraft={handleTopDraft}
+          onConvert={handleTopConvert}
+          onClearSnooze={() => void clearNextActionSnooze()}
+          onStatusChange={handleTopStatusChange}
+          onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
+          onBookForClient={() => setBookForClientOpen(true)}
+          onCall={() => openExternalPhone({ number: lead.phone ?? undefined })}
+          onEmail={() => setCommunicationChannel('email')}
+          onText={() => setCommunicationChannel('sms')}
+          onIntake={() => { setIntakeSection(null); setIntakeSheetOpen(true) }}
+          onAddNote={addQuickNote}
+          onPushToLawmatics={() => void pushToLawmatics()}
+          pushingToLawmatics={pushingToLawmatics}
+          onPushToStatular={() => void pushToStatular()}
+          pushingToStatular={pushingToStatular}
+          onToggleRail={() => { setRailOpen(current => !current); if (railOpen) setActiveField(null) }}
+          onMerge={() => setMergeOpen(true)}
+          railOpen={railOpen}
+          hasEmail={Boolean(lead.email?.trim())}
+          hasPhone={Boolean(lead.phone?.trim())}
+        />}
+      />
 
       {error && (
-        <p role="alert" aria-live="polite" className="border-b border-border bg-card px-4 py-1.5 text-xs text-destructive">
+        <p role="alert" aria-live="polite" className="border-b border-border bg-card px-4 py-1.5 text-xs text-destructive md:px-6">
           {error}
         </p>
       )}
 
       <div className="flex min-h-0 flex-1">
-        <ResponsiveDetailRail
-          open={railOpen}
-          onOpenChange={open => { if (!open && (interactionBusy || keyDatesSaving)) return; setRailOpen(open); if (!open) setActiveField(null) }}
-          label="Lead details"
-          drawer
-          blurOnEscape={false}
-          mobileClassName="bg-card"
-        >
-          <div className="h-full overflow-y-auto pt-10">
-          <LeadFieldsRail
-            lead={lead}
-            spouse={spouse}
-            onStageChange={handleTopStatusChange}
-            stageBusy={interactionBusy}
-            activeField={activeField}
-            onActiveFieldChange={changeActiveField}
-            onSaveField={saveField}
-            onRemoveSpouse={removeSpouse}
-            spouseRemovalError={spouseRemovalError}
-            className="h-auto overflow-visible"
-          />
-          {keyDates && <div className="p-4"><LeadKeyDatesCard keyDates={keyDates} onSaveKeyDate={saveKeyDate} saving={keyDatesSaving} /></div>}
-          </div>
-        </ResponsiveDetailRail>
-
-        <main className="@container flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-          <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
+        <main ref={scrollBodyRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
             {taskCounts.error && (
               <p role="status" className="text-sm text-destructive">
                 {taskCounts.error}{' '}
                 <button type="button" className="underline" onClick={() => void taskCounts.refresh()}>Retry</button>
               </p>
             )}
-            <div className="sticky top-0 z-10 overflow-x-auto border-b border-border bg-background"><TabsList aria-label="Lead workspace" className="h-auto w-max flex-nowrap justify-start rounded-none bg-transparent p-0 [&>button]:h-auto [&>button]:shrink-0 [&>button]:rounded-none [&>button]:border-0 [&>button]:border-b-2 [&>button]:px-3 [&>button]:py-2 [&>button[data-state=active]]:border-selected-border [&>button[data-state=active]]:bg-transparent">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="intake">Intake</TabsTrigger>
-              <TabsTrigger value="tasks" className="gap-1.5">
-                Tasks
-                {taskCounts.overdue > 0 && (
-                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-micro tabular-nums">
-                    {taskCounts.overdue}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="people">People</TabsTrigger>
-              <TabsTrigger value="assets">Assets</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="communications">Messages</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-            </TabsList></div>
 
-            <TabsContent value="overview" className="grid gap-6 data-[state=inactive]:hidden xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="order-2 min-w-0 space-y-5 xl:col-start-1 xl:row-start-1">
-                <LeadOverviewDetails lead={lead} spouse={spouse} clientName={clientName} lastContactAt={effectiveLastTouchAt} timeZone={firmTimezone} onEdit={() => setRailOpen(true)} />
-                <section aria-label="Contact and activity" className="rounded-xl border border-border bg-card p-4">
+            <TabsContent value="overview" className="@container/overview min-w-0 data-[state=inactive]:hidden">
+              <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
+              <div className="flex min-w-0 flex-col gap-5">
+                {nextActionCard}
+                <section aria-label="Contact and activity" className="rounded-lg border bg-card p-4 sm:p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold">Contact and activity</h2>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact and activity</h2>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" disabled={!lead.email?.trim()} onClick={() => setCommunicationChannel('email')}>Email lead</Button>
                       <Button variant="outline" size="sm" disabled={!smsEnabled || !lead.phone?.trim()} onClick={() => setCommunicationChannel('sms')}>Text lead</Button>
@@ -978,81 +995,55 @@ export function LeadDetailClient({
                   </div>
                   {timeline}
                 </section>
-                <details className="rounded-xl border border-border bg-card p-4">
-                  <summary className="cursor-pointer text-sm font-semibold">Qualification and preparation</summary>
+                <details className="rounded-lg border bg-card px-5 py-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qualification and preparation</summary>
                   <div className="mt-4 space-y-4">
-              <OperationalBrief brief={{
-                known: operationalBrief.known,
-                missing: operationalBrief.missing,
-                clientFollowUp: operationalBrief.clientFollowUp,
-                attorneyDecision: operationalBrief.attorneyDecision,
-                conflicts: operationalBrief.conflicts,
-                nextStageLabel: operationalBrief.nextStage,
-                nextStageBlockers: operationalBrief.blockers.map(item => item.label),
-                meetingPreparation: operationalBrief.meetingPreparation,
-              }} />
-              <LeadScoreCard
-                leadId={lead.id}
-                score={leadScore}
-                leadStatus={lead.lead_status}
-                onFillField={openField}
-                onIntent={intent => void handleNextAction(intent)}
-                /*
-                 * The banner above already owns the pipeline step. When it is
-                 * telling the reader to quote the fee, the card must not say
-                 * the same thing one panel lower.
-                 */
-                coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
-              />
-
+                    <OperationalBrief brief={{
+                      known: operationalBrief.known,
+                      missing: operationalBrief.missing,
+                      clientFollowUp: operationalBrief.clientFollowUp,
+                      attorneyDecision: operationalBrief.attorneyDecision,
+                      conflicts: operationalBrief.conflicts,
+                      nextStageLabel: operationalBrief.nextStage,
+                      nextStageBlockers: operationalBrief.blockers.map(item => item.label),
+                      meetingPreparation: operationalBrief.meetingPreparation,
+                    }} />
+                    <LeadScoreCard
+                      leadId={lead.id}
+                      score={leadScore}
+                      leadStatus={lead.lead_status}
+                      onFillField={openField}
+                      onIntent={intent => void handleNextAction(intent)}
+                      /*
+                       * The next-action card already owns the pipeline step. When it
+                       * is telling the reader to quote the fee, the card must not say
+                       * the same thing one panel lower.
+                       */
+                      coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
+                    />
                   </div>
                 </details>
               </div>
-              <aside aria-label="Up next" className="contents xl:col-start-2 xl:row-start-1 xl:block xl:min-w-0 xl:space-y-4 xl:border-l xl:border-border xl:pl-5">
-                <div className="order-1 space-y-4">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Up next</h2>
-                {workSummary && !useLocalAction && <div>
-                  <p className="text-xs text-muted-foreground">Owner: {workSummary.owner === 'client' ? 'Client' : workSummary.owner === 'automation' ? 'Automation' : 'Firm'}</p>
-                  <RecordWorkStrip summary={workSummary} prominent />
-                </div>}
-          {useLocalAction && visibleAction && (
-            <div className="mb-4">
-              <LeadNextAction
-                action={visibleAction}
-                urgency={workSummary ? ['Critical', 'Today', 'Soon', 'Planned', 'Waiting'][workSummary.priorityBand] : undefined}
-                context={workSummary?.priorityReasons.map(reason => reason.label).join(" · ")}
-                busy={interactionBusy}
-                onIntent={intent => void handleNextAction(intent)}
-              />
-            </div>
-          )}
-          {snoozed && lead.lead_status === 'lead' && (
-            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted p-3 text-sm">
-              <span>Next action snoozed until {leadDisplayDate(lead.lead_next_action_snoozed_until, firmTimezone)}</span>
-              <Button variant="outline" size="sm" disabled={interactionBusy} onClick={() => void clearNextActionSnooze()}>Undo snooze</Button>
-            </div>
-          )}
-                </div>
-                <div className="order-3 space-y-4">
-              <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt} nextAppointmentLabel={nextAppointmentLabel} readiness={hiringReadiness}
-                lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
-                updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
-                agreementStatus={engagementStatus} timeZone={firmTimezone}
-                // Sent by the app, the agreement's own status says so; this is for the ones that were not.
-                engagementSentOutside={agreementSentInApp(activeAgreement?.status) ? undefined : Boolean(lead.engagement_sent_at || lead.engagement_signed_at)}
-                onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
-                taskCount={taskCounts.open} tasksVersion={tasksVersion}
-                onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
-                onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />
-              <LeadConflictCard
-                leadId={lead.id}
-                initialCheck={conflictCheck}
-                canDecide={lead.lead_status === 'lead'}
-                onChange={setConflictCheck}
-              />
-                <Button variant="link" size="sm" onClick={() => setRailOpen(true)}>Edit lead details and dates</Button>
-                </div>
+              <aside aria-label="Lead summary" className="flex min-w-0 flex-col gap-4">
+                {people.map(person => <PersonSummaryCard key={person.role} person={person} />)}
+                <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt} nextAppointmentLabel={nextAppointmentLabel}
+                  lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
+                  updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
+                  agreementStatus={engagementStatus} timeZone={firmTimezone}
+                  // Sent by the app, the agreement's own status says so; this is for the ones that were not.
+                  engagementSentOutside={agreementSentInApp(activeAgreement?.status) ? undefined : Boolean(lead.engagement_sent_at || lead.engagement_signed_at)}
+                  onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
+                  taskCount={taskCounts.open} tasksVersion={tasksVersion}
+                  onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
+                  onTasks={() => changeTab('tasks')} onSchedule={() => setBookForClientOpen(true)} />
+                <LeadConflictCard
+                  leadId={lead.id}
+                  initialCheck={conflictCheck}
+                  canDecide={lead.lead_status === 'lead'}
+                  onChange={setConflictCheck}
+                />
               </aside>
+              </div>
             </TabsContent>
 
             <TabsContent value="intake" className="space-y-4">
@@ -1206,9 +1197,39 @@ export function LeadDetailClient({
                 lockedFilter="notes"
               />
             </TabsContent>
-          </Tabs>
         </main>
+
+        <ResponsiveDetailRail
+          open={railOpen}
+          onOpenChange={open => { if (!open && (interactionBusy || keyDatesSaving)) return; setRailOpen(open); if (!open) setActiveField(null) }}
+          label="Lead details"
+          side="right"
+          collapseBelow="lg"
+          collapseWithAdminRail
+          blurOnEscape={false}
+          desktopClassName="w-[340px] border-l border-border bg-card"
+          mobileClassName="bg-card"
+        >
+          <div className="h-full w-full overflow-y-auto">
+            {/* Room on the right for the sheet's own close button below lg. */}
+            <h2 className="border-b px-4 py-3 pr-12 text-sm font-semibold lg:pr-4">Lead details</h2>
+            <LeadFieldsRail
+              lead={lead}
+              spouse={spouse}
+              onStageChange={handleTopStatusChange}
+              stageBusy={interactionBusy}
+              activeField={activeField}
+              onActiveFieldChange={changeActiveField}
+              onSaveField={saveField}
+              onRemoveSpouse={removeSpouse}
+              spouseRemovalError={spouseRemovalError}
+              className="h-auto overflow-visible"
+            />
+            {keyDates && <div className="p-4"><LeadKeyDatesCard keyDates={keyDates} onSaveKeyDate={saveKeyDate} saving={keyDatesSaving} /></div>}
+          </div>
+        </ResponsiveDetailRail>
       </div>
+      </Tabs>
 
       <LeadSnoozeDialog open={snoozeOpen} onOpenChange={setSnoozeOpen} onSnooze={async until => {
         if (!beginInteraction()) throw new Error('Wait for the current action to finish.')

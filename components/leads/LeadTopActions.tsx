@@ -3,13 +3,24 @@
 import Link from 'next/link'
 
 import {
-  ClipboardList,
+  AlarmClockOff,
+  Ban,
+  Briefcase,
   CalendarDays,
-  MessageSquareText,
+  CalendarPlus,
+  ClipboardList,
+  CloudUpload,
   Mail,
+  Merge,
+  MessageSquareText,
   MoreHorizontal,
   PanelRight,
+  PenLine,
   Phone,
+  RotateCcw,
+  Sparkles,
+  UserCheck,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
+import { RecordDetailsButton } from '@/components/workspace/RecordWorkspaceHeader'
 
 type Props = {
   busy: boolean
@@ -46,6 +58,8 @@ type Props = {
   onPushToStatular?: () => void
   pushingToStatular?: boolean
   onToggleRail: () => void
+  /** Merge this lead into another lead or matter; hidden without a matter. */
+  onMerge?: () => void
   railOpen: boolean
   hasEmail: boolean
   hasPhone: boolean
@@ -73,6 +87,7 @@ export function LeadTopActions({
   onPushToStatular,
   pushingToStatular = false,
   onToggleRail,
+  onMerge,
   railOpen,
   hasEmail,
   hasPhone,
@@ -86,177 +101,124 @@ export function LeadTopActions({
   const canViewMatter = hired && Boolean(matterId)
 
   return (
-    <>
-      <div aria-label="Lead actions" className="hidden items-center gap-1 md:flex">
-        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2 text-xs" onClick={onCall} disabled={busy || !hasPhone}>
-          <Phone className="h-3.5 w-3.5" aria-hidden />
-          Call
-        </Button>
-        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2 text-xs" onClick={onEmail} disabled={busy || !hasEmail}>
-          <Mail className="h-3.5 w-3.5" aria-hidden />
-          Email
-        </Button>
-
-        {onAddNote && <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2" onClick={onAddNote} disabled={busy}><MessageSquareText className="h-3.5 w-3.5" aria-hidden />Add note</Button>}
-        <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 px-2" onClick={onBookForClient} disabled={busy}><CalendarDays className="h-3.5 w-3.5" aria-hidden />Schedule</Button>
-        {canViewMatter && <Button type="button" size="sm" onClick={onConvert} disabled={busy}>View matter</Button>}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-9 px-2"
-              aria-label="More actions"
-              disabled={busy}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onIntake}>Open intake</DropdownMenuItem>
-            {leadId && (
-              <DropdownMenuItem asChild>
-                <Link href={`/admin/assistant?lead=${leadId}`}>Open in Assistant</Link>
-              </DropdownMenuItem>
-            )}
-            {!canViewMatter && <DropdownMenuItem onClick={onDraft} disabled={!active}>{hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}</DropdownMenuItem>}
-            <DropdownMenuItem onClick={onSendSchedulingLink}>
-              Send scheduling link
-            </DropdownMenuItem>
-            {onPushToLawmatics && (
-              <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
-                {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
-              </DropdownMenuItem>
-            )}
-            {onPushToStatular && (
-              <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
-                {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={onBookForClient}>
-              Book for client…
-            </DropdownMenuItem>
-            {!canViewMatter && (
-              <DropdownMenuItem disabled={!active} onClick={onConvert}>
-                Hire matter
-              </DropdownMenuItem>
-            )}
-            {active && (
-              <DropdownMenuItem onClick={() => onStatusChange('lost')}>
-                Mark lost
-              </DropdownMenuItem>
-            )}
-            {active && (
-              <DropdownMenuItem onClick={() => onStatusChange('declined')}>
-                Decline — not a fit
-              </DropdownMenuItem>
-            )}
-            {active && snoozed && (
-              <DropdownMenuItem onClick={onClearSnooze}>
-                Clear snooze
-              </DropdownMenuItem>
-            )}
-            {closed && (
-              <DropdownMenuItem onClick={() => onStatusChange('lead')}>
-                Reactivate
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-9 px-2"
-          aria-label="Toggle details rail"
-          aria-pressed={railOpen}
-          onClick={onToggleRail}
-        >
-          <PanelRight className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+    <div role="group" aria-label="Lead actions" className="flex items-center gap-2">
+      <Button type="button" size="sm" variant="outline" className="hidden sm:inline-flex" onClick={onCall} disabled={busy || !hasPhone}>
+        <Phone className="size-3.5" aria-hidden />
+        Call
+      </Button>
+      <Button type="button" size="sm" variant="outline" className="hidden sm:inline-flex" onClick={onEmail} disabled={busy || !hasEmail}>
+        <Mail className="size-3.5" aria-hidden />
+        Email
+      </Button>
+      {canViewMatter && <Button type="button" size="sm" onClick={onConvert} disabled={busy}>View matter</Button>}
+      <RecordDetailsButton open={railOpen} onToggle={onToggleRail} record="lead" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 px-2 md:hidden"
-            aria-label="More lead actions"
-            disabled={busy}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+          <Button type="button" size="sm" variant="outline" aria-label="More actions" disabled={busy}>
+            <MoreHorizontal className="size-3.5" aria-hidden />
+            <span className="hidden sm:inline">Actions</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem disabled={!hasPhone} onClick={onCall}>
-            <Phone className="mr-2 h-3.5 w-3.5" />
-            Call
+            <Phone className="mr-2 size-3.5" />
+            Call client
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!hasEmail} onClick={onEmail}>
-            <Mail className="mr-2 h-3.5 w-3.5" />
-            Email
+            <Mail className="mr-2 size-3.5" />
+            Email client
           </DropdownMenuItem>
-
-          {onAddNote && <DropdownMenuItem onClick={onAddNote}>Add note</DropdownMenuItem>}
-          <DropdownMenuItem onClick={onIntake}>
-            <ClipboardList className="mr-2 h-3.5 w-3.5" />
-            Intake
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!canViewMatter && !active} onClick={canViewMatter ? onConvert : onDraft}>
-            {canViewMatter
-              ? 'View matter'
-              : hasActiveAgreement
-                ? 'Resume engagement'
-                : 'Draft engagement'}
+          {onAddNote && (
+            <DropdownMenuItem onClick={onAddNote}>
+              <MessageSquareText className="mr-2 size-3.5" />
+              Add note
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onBookForClient}>
+            <CalendarDays className="mr-2 size-3.5" />
+            Schedule meeting…
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onSendSchedulingLink}>
+            <CalendarPlus className="mr-2 size-3.5" />
             Send scheduling link
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={onIntake}>
+            <ClipboardList className="mr-2 size-3.5" />
+            Open intake
+          </DropdownMenuItem>
+          {canViewMatter ? (
+            <DropdownMenuItem onClick={onConvert}>
+              <Briefcase className="mr-2 size-3.5" />
+              View matter
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={onDraft} disabled={!active}>
+              <PenLine className="mr-2 size-3.5" />
+              {hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}
+            </DropdownMenuItem>
+          )}
+          {leadId && (
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/assistant?lead=${leadId}`}>
+                <Sparkles className="mr-2 size-3.5" />
+                Open in Assistant
+              </Link>
+            </DropdownMenuItem>
+          )}
           {onPushToLawmatics && (
             <DropdownMenuItem onClick={onPushToLawmatics} disabled={pushingToLawmatics}>
+              <CloudUpload className="mr-2 size-3.5" />
               {pushingToLawmatics ? 'Pushing to Lawmatics…' : 'Push to Lawmatics'}
             </DropdownMenuItem>
           )}
           {onPushToStatular && (
             <DropdownMenuItem onClick={onPushToStatular} disabled={pushingToStatular}>
+              <CloudUpload className="mr-2 size-3.5" />
               {pushingToStatular ? 'Pushing to Statular…' : 'Push to Statular'}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={onBookForClient}>
-            Book for client…
+          <DropdownMenuItem onClick={onToggleRail}>
+            <PanelRight className="mr-2 size-3.5" />
+            {railOpen ? 'Hide details' : 'Open details'}
           </DropdownMenuItem>
+          {onMerge && matterId && (
+            <DropdownMenuItem onClick={onMerge} disabled={busy}>
+              <Merge className="mr-2 size-3.5" />
+              Merge into another lead or matter…
+            </DropdownMenuItem>
+          )}
           {!canViewMatter && (
             <DropdownMenuItem disabled={!active} onClick={onConvert}>
+              <UserCheck className="mr-2 size-3.5" />
               Hire matter
-            </DropdownMenuItem>
-          )}
-          {active && (
-            <DropdownMenuItem onClick={() => onStatusChange('lost')}>
-              Mark lost
-            </DropdownMenuItem>
-          )}
-          {active && (
-            <DropdownMenuItem onClick={() => onStatusChange('declined')}>
-              Decline — not a fit
             </DropdownMenuItem>
           )}
           {active && snoozed && (
             <DropdownMenuItem onClick={onClearSnooze}>
+              <AlarmClockOff className="mr-2 size-3.5" />
               Clear snooze
+            </DropdownMenuItem>
+          )}
+          {active && (
+            <DropdownMenuItem onClick={() => onStatusChange('lost')}>
+              <XCircle className="mr-2 size-3.5" />
+              Mark lost
+            </DropdownMenuItem>
+          )}
+          {active && (
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onStatusChange('declined')}>
+              <Ban className="mr-2 size-3.5" />
+              Decline — not a fit
             </DropdownMenuItem>
           )}
           {closed && (
             <DropdownMenuItem onClick={() => onStatusChange('lead')}>
+              <RotateCcw className="mr-2 size-3.5" />
               Reactivate
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={onToggleRail}>
-            {railOpen ? 'Hide details' : 'Open details'}
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </>
+    </div>
   )
 }

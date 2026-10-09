@@ -60,7 +60,7 @@ describe('opportunity rail key dates', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit lead details and dates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show lead details' }))
     fireEvent.change(screen.getByLabelText('Discovery date'), { target: { value: '2026-08-03' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
 

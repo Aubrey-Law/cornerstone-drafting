@@ -1,5 +1,5 @@
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { reviewClient } from '@/lib/review/staff'
 import { loadUnresolvedBlockers } from '@/lib/runs/advisory'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
@@ -14,6 +14,7 @@ import { isGoogleConfigured } from '@/lib/googleCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isOptionalHistorySchemaError, loadClientIntakeShell, loadMatterShell } from '@/lib/matters/matterShell'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
+import { mergedRecordHref } from '@/lib/matters/mergeTargets'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
 import { resolveIntakeReviewFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { buildMatterPlanMirror } from '@/lib/matter/planMirror'
@@ -136,6 +137,9 @@ export default async function MatterDetailPage({ params }: Params) {
     const admin = getAdminClient()
     const id = await measure('identity', () => resolveMatterId(rawId, admin)).catch(error => { if (error instanceof Error && error.name === 'MatterReferenceNotFoundError') return null; throw error })
     if (!id) notFound()
+    // A lead or matter merged into another one is archived; old links follow it.
+    const mergedHref = await mergedRecordHref(admin, id)
+    if (mergedHref) redirect(mergedHref)
     // Identity is resolved first. All independent reads then overlap rather
     // than waiting for a second round trip after the matter overview.
     const matterShell = measure('matter-shell', () => loadMatterShell(admin, id))
