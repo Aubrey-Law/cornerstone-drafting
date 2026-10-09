@@ -1,12 +1,13 @@
+import { type FormFieldId, DISCOVERY_FIELD_IDS } from '@/lib/discovery/catalog'
 import { z } from 'zod'
-import { SHARED_FIELD_IDS, type SharedFieldId } from '@aubrey-law/estate-fields/core'
+import { SHARED_FIELD_IDS } from '@aubrey-law/estate-fields/core'
 import { collectConditionFieldIds } from './conditions'
 import type { IntakeBlockId, IntakeCondition, IntakeFormDefinition } from './types'
 
 const idSchema = z.string().min(1).max(80).refine((value) => value.trim().length > 0, 'Must not be blank')
 const titleSchema = z.string().min(1).max(160)
 const helpSchema = z.string().max(600)
-const fieldIdSchema = z.enum(SHARED_FIELD_IDS as [SharedFieldId, ...SharedFieldId[]])
+const fieldIdSchema = z.enum([...SHARED_FIELD_IDS, ...DISCOVERY_FIELD_IDS] as [FormFieldId, ...FormFieldId[]])
 const blockIds = [
   'address', 'spouse_details', 'children', 'financial_assets', 'planning_objectives',
   'existing_document_uploads', 'additional_contacts', 'client_fiduciaries',
@@ -75,7 +76,7 @@ const itemSchema = z.discriminatedUnion('kind', [
 ])
 
 export const intakeFormDefinitionSchema: z.ZodType<IntakeFormDefinition> = z.object({
-  schemaVersion: z.literal(1), key: idSchema, title: titleSchema, description: helpSchema.optional(),
+  purpose: z.enum(['client_intake', 'discovery_call']).optional(), schemaVersion: z.literal(1), key: idSchema, title: titleSchema, description: helpSchema.optional(),
   sections: z.array(z.object({
     id: idSchema, title: titleSchema, subtitle: helpSchema.optional(),
     timeEstimateMinutes: z.number().finite().nonnegative().optional(), optional: z.boolean().optional(),

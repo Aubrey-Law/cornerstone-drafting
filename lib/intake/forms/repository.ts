@@ -8,6 +8,7 @@ import type { IntakeFormDefinition } from './types'
 import type { IntakeFormAuditEventRow, IntakeFormTemplateRow, IntakeFormVersionRow } from './persistenceTypes'
 
 const templateSchema = z.object({
+  purpose: z.enum(['client_intake', 'discovery_call']).optional(),
   id: z.string(), key: z.string(), name: z.string(), description: z.string().nullable(), archived_at: z.string().nullable(),
   created_by: z.string(), created_at: z.string(), updated_at: z.string(),
 }).strict()

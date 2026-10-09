@@ -295,6 +295,7 @@ export function LeadTimelineCard({
         </div>
       )
     }
+    if (item.discoveryCallId) return <a className="text-sm underline" href={`/admin/crm/opportunities/${leadId}/discovery/${item.discoveryCallId}`}>View discovery answers</a>
     if (!item.body) return null
     return item.kind === 'note'
       ? <FormattedNote className="mt-1 text-muted-foreground">{item.body}</FormattedNote>

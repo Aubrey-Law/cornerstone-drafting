@@ -25,5 +25,5 @@ export default async function IntakeFormEditorPage({ params }: { params: Promise
     </div>
   }
   if (!snapshot || snapshot.template.id !== templateId || snapshot.versions.some(version => version.template_id !== templateId) || (snapshot.draft && snapshot.draft.template_id !== templateId)) notFound()
-  return <IntakeFormEditorClient initialSnapshot={snapshot} catalog={getIntakeFormBuilderCatalog()} />
+  return <IntakeFormEditorClient initialSnapshot={snapshot} catalog={getIntakeFormBuilderCatalog(snapshot.template.purpose)} />
 }

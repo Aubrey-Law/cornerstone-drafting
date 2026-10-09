@@ -90,7 +90,7 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
     <div role="group" aria-label="Editor mode" className="flex gap-2"><Button variant={mode === 'build' ? 'default' : 'outline'} aria-pressed={mode === 'build'} onClick={() => setMode('build')}>Build</Button><Button variant={mode === 'preview' ? 'default' : 'outline'} aria-pressed={mode === 'preview'} onClick={() => setMode('preview')}>Preview</Button></div>
     {mode === 'build' ? <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
       <IntakeFormOutline definition={localDefinition} catalog={catalog} selection={selection} onSelect={setSelection} readOnly={readOnly} inlineInspector={wide ? undefined : inspector}
-        onAddSection={() => { const next = addSection(localDefinition, { title: 'New section', audience: 'client_and_staff' }); change(next); setSelection({ kind: 'section', sectionId: next.sections.at(-1)!.id }) }}
+        onAddSection={() => { const next = addSection(localDefinition, { title: 'New section', audience: localDefinition.purpose === 'discovery_call' ? 'staff_only' : 'client_and_staff' }); change(next); setSelection({ kind: 'section', sectionId: next.sections.at(-1)!.id }) }}
         onAddItem={id => { rememberFocus(); setCatalogSection(id) }} onRemove={target => { rememberFocus(); setRemoving(target) }} onMoveSection={(id, index) => change(moveSection(localDefinition, id, index))} onMoveItem={move} />
       {wide && <div className="sticky top-4 min-w-0 max-h-[calc(100vh-2rem)] overflow-auto">{inspector}</div>}
     </div> : <IntakeFormPreview localDefinition={localDefinition} />}

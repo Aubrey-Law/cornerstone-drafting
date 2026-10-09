@@ -144,7 +144,7 @@ describe('intake conditions', () => {
 
   it('uses the supplied field resolver and exact equality', () => {
     const row = { stored_status: 'married' }
-    const resolve = (id: SharedFieldId) => id === 'marital_status' ? row.stored_status : undefined
+    const resolve = (id: import('@/lib/discovery/catalog').FormFieldId) => id === 'marital_status' ? row.stored_status : undefined
     expect(evaluateIntakeCondition(equals, resolve)).toBe(true)
     expect(evaluateIntakeCondition({ ...equals, op: 'not_equals' }, resolve)).toBe(false)
     expect(evaluateIntakeCondition(equals, () => 'single')).toBe(false)

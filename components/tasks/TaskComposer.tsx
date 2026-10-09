@@ -40,6 +40,7 @@ export interface TaskComposerHandle {
 }
 
 interface TaskComposerProps {
+  initialTitle?: string
   /** Pre-bound record, e.g. the matter whose tab the composer sits on. */
   defaultRecord?: RecordOption | null
   /** Hides the record chip and picker when the record can't change. */
@@ -108,6 +109,7 @@ function Chip({
  * `/` the template picker — both driven by what follows the trigger character.
  */
 export function TaskComposer({
+  initialTitle = '',
   defaultRecord = null,
   lockRecord = false,
   onCreate,
@@ -119,7 +121,7 @@ export function TaskComposer({
 }: TaskComposerProps) {
   const token = useAccessToken()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(initialTitle)
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [record, setRecord] = useState<RecordOption | null>(defaultRecord)

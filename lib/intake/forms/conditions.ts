@@ -1,4 +1,4 @@
-import type { SharedFieldId } from '@aubrey-law/estate-fields/core'
+import type { FormFieldId } from '@/lib/discovery/catalog'
 import type { IntakeCondition } from './types'
 
 function isSet(value: unknown): boolean {
@@ -10,7 +10,7 @@ function isSet(value: unknown): boolean {
 
 export function evaluateIntakeCondition(
   condition: IntakeCondition | undefined,
-  resolveValue: (fieldId: SharedFieldId) => unknown,
+  resolveValue: (fieldId: FormFieldId) => unknown,
 ): boolean {
   if (!condition) return true
   if ('conditions' in condition) {
@@ -24,8 +24,8 @@ export function evaluateIntakeCondition(
 }
 
 /** Unique referenced registry IDs, in first-appearance order. */
-export function collectConditionFieldIds(condition: IntakeCondition | undefined): SharedFieldId[] {
-  const fields = new Set<SharedFieldId>()
+export function collectConditionFieldIds(condition: IntakeCondition | undefined): FormFieldId[] {
+  const fields = new Set<FormFieldId>()
   function visit(entry: IntakeCondition): void {
     if ('conditions' in entry) entry.conditions.forEach(visit)
     else fields.add(entry.fieldId)

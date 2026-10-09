@@ -1,4 +1,4 @@
-import { getBuilderField } from '@aubrey-law/estate-fields/core'
+import { getFormField as getBuilderField } from '@/lib/discovery/catalog'
 import { getIntakeBlock } from './blockRegistry'
 import { getIntakeFormBuilderCatalog, type BuilderCatalogField } from './builderCatalog'
 import type { IntakeFormDefinition, IntakeFormItem, IntakeFormSection } from './types'
@@ -51,7 +51,7 @@ function itemLocation(definition: IntakeFormDefinition, id: string): { sectionIn
   throw new Error(`Unknown item "${id}"`)
 }
 
-export function createBlankDefinition(input: Pick<IntakeFormDefinition, 'key' | 'title' | 'description'>): IntakeFormDefinition {
+export function createBlankDefinition(input: Pick<IntakeFormDefinition, 'key' | 'title' | 'description' | 'purpose'>): IntakeFormDefinition {
   return { schemaVersion: 1, ...input, sections: [] }
 }
 

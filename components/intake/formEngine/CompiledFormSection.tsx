@@ -9,6 +9,7 @@ export interface CompiledFormSectionProps extends Omit<IntakeBlockRendererProps,
   section: EvaluatedIntakeSection
   number: number
   open: boolean
+  readOnlyMessage?: string
   disabled?: boolean
   showValidation?: boolean
   onToggle: () => void
@@ -16,12 +17,12 @@ export interface CompiledFormSectionProps extends Omit<IntakeBlockRendererProps,
   continueLabel?: string
 }
 
-export function CompiledFormSection({ section, number, open, disabled = false, showValidation = true, onToggle, onContinue, continueLabel, ...itemProps }: CompiledFormSectionProps) {
+export function CompiledFormSection({ section, number, open, disabled = false, readOnlyMessage, showValidation = true, onToggle, onContinue, continueLabel, ...itemProps }: CompiledFormSectionProps) {
   const time = section.timeEstimate > 0 ? `~${section.timeEstimate} min` : undefined
   const subtitle = [section.subtitle, time].filter(Boolean).join(' · ') || undefined
   const issues = showValidation ? section.issues : []
   return (
-    <GuidedSection id={`intake-section-${section.id}`} number={number} title={section.title} subtitle={subtitle} complete={section.complete} open={open} onToggle={onToggle} onContinue={onContinue} continueLabel={continueLabel}>
+    <GuidedSection id={`intake-section-${section.id}`} number={number} title={section.title} subtitle={subtitle} complete={section.complete} open={open} onToggle={onToggle} onContinue={onContinue} continueLabel={continueLabel} collapsedLabel={disabled && readOnlyMessage ? 'View' : undefined}>
       {issues.length > 0 ? (
         <div role={issues.some((issue) => issue.severity === 'error') ? 'alert' : 'status'} className="my-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
           <ul className="list-disc pl-4">
@@ -29,7 +30,7 @@ export function CompiledFormSection({ section, number, open, disabled = false, s
           </ul>
         </div>
       ) : null}
-      {disabled ? <p className="my-3 text-sm text-muted-foreground">Client&apos;s answers (read-only). Edit fields from the matter&apos;s intake editor.</p> : null}
+      {disabled ? <p className="my-3 text-sm text-muted-foreground">{readOnlyMessage ?? "Client's answers (read-only). Edit fields from the matter's intake editor."}</p> : null}
       <div className="space-y-5 pt-3">
         {section.items.map((entry) => <CompiledFormItem key={entry.id} item={entry.item} {...itemProps} disabled={disabled} />)}
       </div>

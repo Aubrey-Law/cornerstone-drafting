@@ -14,7 +14,7 @@ const noOp = () => {}
 
 /** Synthetic answers only: no intake identity or persistence capabilities. */
 export function IntakeFormPreview({ localDefinition }: { localDefinition: IntakeFormDefinition }) {
-  const [audience, setAudience] = useState<'client' | 'staff'>('client')
+  const [audience, setAudience] = useState<'client' | 'staff'>(localDefinition.purpose === 'discovery_call' ? 'staff' : 'client')
   const [scenario, setScenario] = useState<PreviewScenarioId>('empty')
   const [openId, setOpenId] = useState<string | null>(null)
   const compiled = useMemo(() => compileIntakeForm(localDefinition, audience), [localDefinition, audience])

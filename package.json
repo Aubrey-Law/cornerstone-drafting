@@ -54,7 +54,8 @@
     "build:ci": "node scripts/ciBuild.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:schema": "vitest run --config vitest.schema.config.ts",
-    "check:engagement-anchors": "vitest run --config vitest.probe.config.ts"
+    "check:engagement-anchors": "vitest run --config vitest.probe.config.ts",
+    "discovery:form:install": "node --conditions=react-server --import tsx scripts/installDiscoveryForm.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
