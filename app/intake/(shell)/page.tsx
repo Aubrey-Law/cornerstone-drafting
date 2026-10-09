@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic'
 
 const firm = getFirmConfig()
 
-export default async function IntakeHomePage({ searchParams }: { searchParams?: Promise<{ id?: string }> } = {}) {
+export default async function IntakeHomePage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { ClipboardList, Copy, Download, Mail, MoreHorizontal, Plus, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/useConfirm'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,6 +55,7 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
   const [adding, setAdding] = useState(false)
   const [sending, setSending] = useState(false)
   const [viewing, setViewing] = useState<MatterFormAssignmentSummary | null>(null)
+  const { confirm, confirmDialog } = useConfirm()
 
   const load = useCallback(async () => {
     try {
@@ -123,10 +125,10 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => void copyLink(intake)}><Copy className="h-3.5 w-3.5" />Copy link</DropdownMenuItem>
                       <DropdownMenuItem asChild><a href={`/api/admin/intake/${intake.id}/export`} download><Download className="h-3.5 w-3.5" />Download answers (Word)</a></DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => {
-                        if (!window.confirm(`Remove ${intake.name}'s questionnaire from this matter? Any answers already given are kept.`)) return
-                        void act(() => call(`/api/admin/matters/${matterId}/linked-intakes/${intake.linkId}`, 'DELETE'), 'Questionnaire removed')
-                      }}>Remove from matter</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void (async () => {
+                        if (!(await confirm({ title: `Remove ${intake.name}'s questionnaire from this matter?`, body: 'Any answers already given are kept.', confirmLabel: 'Remove', destructive: true }))) return
+                        await act(() => call(`/api/admin/matters/${matterId}/linked-intakes/${intake.linkId}`, 'DELETE'), 'Questionnaire removed')
+                      })()}>Remove from matter</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -150,10 +152,10 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
                       <DropdownMenuItem onSelect={() => void act(() => call(`/api/admin/matters/${matterId}/forms/${row.id}`, 'PATCH', { action: 'reopen' }), 'Form reopened for the client')}>Reopen for changes</DropdownMenuItem>
                     ) : <>
                       <DropdownMenuItem onSelect={() => void act(() => call(`/api/admin/matters/${matterId}/forms/${row.id}`, 'PATCH', { action: 'resend' }), 'Form emailed again')}>Resend email</DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => {
-                        if (!window.confirm(`Withdraw "${row.title}"? The client will no longer see it.`)) return
-                        void act(() => call(`/api/admin/matters/${matterId}/forms/${row.id}`, 'PATCH', { action: 'cancel' }), 'Form withdrawn')
-                      }}>Withdraw</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void (async () => {
+                        if (!(await confirm({ title: `Withdraw "${row.title}"?`, body: 'The client will no longer see it.', confirmLabel: 'Withdraw', destructive: true }))) return
+                        await act(() => call(`/api/admin/matters/${matterId}/forms/${row.id}`, 'PATCH', { action: 'cancel' }), 'Form withdrawn')
+                      })()}>Withdraw</DropdownMenuItem>
                     </>}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -175,6 +177,7 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
         setSending(false)
       }} />}
       <AnswersDialog matterId={matterId} assignment={viewing} onClose={() => setViewing(null)} />
+      {confirmDialog}
     </section>
   )
 }
