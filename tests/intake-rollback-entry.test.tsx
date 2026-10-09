@@ -15,14 +15,14 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs() })
 it('imports the actual page and dispatches legacy mode even when compiled modules cannot initialize', async () => {
   vi.stubEnv('INTAKE_RENDERER_MODE', 'legacy')
   const { default: Page } = await import('@/app/intake/(shell)/page')
-  render(await Page())
+  render(await Page({ searchParams: Promise.resolve({}) }))
   expect(screen.getByText('Legacy intake for Jane')).toBeTruthy()
 })
 
 it('fails closed in compiled mode if compilation is unavailable', async () => {
   vi.stubEnv('INTAKE_RENDERER_MODE', 'compiled')
   const { default: Page } = await import('@/app/intake/(shell)/page')
-  render(await Page())
+  render(await Page({ searchParams: Promise.resolve({}) }))
   expect(screen.getByRole('alert').textContent).toContain('temporarily unavailable')
   expect(screen.queryByText('Legacy intake for Jane')).toBeNull()
 })

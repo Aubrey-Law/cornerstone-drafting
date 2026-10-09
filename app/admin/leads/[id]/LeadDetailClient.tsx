@@ -82,6 +82,7 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { LeadIntakeCard } from './LeadIntakeCard'
+import { MatterFormsCard } from '@/components/forms/MatterFormsCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
@@ -1092,6 +1093,7 @@ export function LeadDetailClient({
                 onTrackChange={(track) => void changeIntakeTrack(track)}
                 busy={sendingIntake || intakeLinkBusy}
               />
+              {lead.matter_id && <MatterFormsCard matterId={lead.matter_id} />}
             </TabsContent>
 
             <TabsContent value="people" className="space-y-4">

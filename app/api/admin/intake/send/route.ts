@@ -8,6 +8,7 @@ import {
   ESTATE_INTAKE_INVITE,
 } from '@/lib/email/intakeInviteBodies'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { intakeBelongsToMatter } from '@/lib/forms/matterForms'
 
 export async function POST(req: Request) {
   const { err, userId, user } = await requireAdmin(req)
@@ -24,7 +25,17 @@ export async function POST(req: Request) {
 
   const admin = getAdminClient()
   let intakeId = leadIntakeId
-  if (matterId) {
+  if (matterId && leadIntakeId) {
+    // Both: one of the matter's questionnaires — its primary or a linked one,
+    // such as a student's College Prep alongside the parents' estate plan.
+    try {
+      if (!(await intakeBelongsToMatter(matterId, leadIntakeId))) {
+        return NextResponse.json({ error: 'That questionnaire is not on this matter' }, { status: 404 })
+      }
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Matter not found' }, { status: 404 })
+    }
+  } else if (matterId) {
     const { data: matter, error: matterError } = await admin
       .from('matters')
       .select('id, client_intake_id')

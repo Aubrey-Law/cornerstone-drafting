@@ -11,17 +11,23 @@ import { getIntakeTrack } from '@/lib/intakeTrack'
 import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
 import GuidedInterview from '@/components/intake/GuidedInterview'
 import { RequestUnlockButton } from './RequestUnlockButton'
+import { OtherFormsNotice, countOtherOpenForms } from './OtherFormsNotice'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const dynamic = 'force-dynamic'
 
 const firm = getFirmConfig()
 
-export default async function IntakeHomePage() {
+export default async function IntakeHomePage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const intake = await getOrCreateClientIntakeForUser(supabase, user)
+  // ?id= picks one of several questionnaires this person holds (see /forms).
+  const requestedId = (await searchParams)?.id
+  const intake = await getOrCreateClientIntakeForUser(supabase, user, requestedId && UUID.test(requestedId) ? requestedId : null)
+  const otherForms = <OtherFormsNotice count={await countOtherOpenForms(user.id, intake.id as string)} />
 
   const submitted =
     intake.status === 'submitted' || intake.status === 'approved'
@@ -59,6 +65,7 @@ export default async function IntakeHomePage() {
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <RequestUnlockButton
+                  intakeId={intake.id as string}
                   requestedAt={(intakeRow.unlock_requested_at as string | null) ?? null}
                 />
                 <Button asChild size="sm" variant="outline">
@@ -68,19 +75,22 @@ export default async function IntakeHomePage() {
             </div>
           </div>
         </div>
+        {otherForms}
       </div>
     )
   }
 
   const rendererMode = resolveIntakeRendererMode(process.env)
   if (rendererMode === 'legacy') {
-    return <GuidedInterview initialData={intakeRow as Record<string, unknown>} intakeId={intake.id as string} mode="client" rendererMode="legacy" />
+    return <>{otherForms}<GuidedInterview initialData={intakeRow as Record<string, unknown>} intakeId={intake.id as string} mode="client" rendererMode="legacy" /></>
   }
   try {
     const { compileBundledIntakeForm } = await import('@/lib/intake/forms/definitions')
     const compiled = compileBundledIntakeForm(getIntakeTrack(intakeRow), 'client')
     if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
     return (
+      <>
+      {otherForms}
       <GuidedInterview
         initialData={intakeRow as Record<string, unknown>}
         intakeId={intake.id as string}
@@ -88,6 +98,7 @@ export default async function IntakeHomePage() {
         rendererMode={rendererMode}
         compiledForm={compiled.form}
       />
+      </>
     )
   } catch (error) {
     console.error('Invalid bundled intake form', error)

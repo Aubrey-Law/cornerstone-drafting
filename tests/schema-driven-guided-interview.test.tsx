@@ -28,7 +28,7 @@ vi.mock('@/components/intake/formEngine/CompiledIntakeSections', () => ({
       <button onClick={() => props.onToggle(section.id)}>{section.title}</button>
       {props.openId === section.id && section.items.map(({ item }) => item.kind === 'field'
         ? <input key={item.id} aria-label={item.label} disabled={props.mode === 'attorney'} value={String(props.data[item.fieldId === 'client_first_name' ? 'first_name' : item.fieldId === 'client_last_name' ? 'last_name' : item.fieldId === 'client_email' ? 'email' : item.fieldId === 'client_phone' ? 'phone' : item.fieldId] ?? '')} onChange={(e) => props.update(item.fieldId === 'client_first_name' ? 'first_name' : item.fieldId, e.target.value)} />
-        : item.blockId === 'client_fiduciaries' || item.blockId === 'college_agents' || item.blockId === 'spouse_fiduciaries'
+        : item.kind !== 'block' ? null : item.blockId === 'client_fiduciaries' || item.blockId === 'college_agents' || item.blockId === 'spouse_fiduciaries'
           ? <button key={item.id} onClick={() => props.update(item.blockId === 'spouse_fiduciaries' ? '_fid_poa_spouse' : '_fid_poa_client', [])}>Remove final nominee</button>
           : <button key={item.id} disabled={props.mode === 'attorney'} onClick={() => props.update(item.blockId === 'children' ? '_children' : '_additional_contacts', [{ first_name: item.blockId === 'children' && props.data._children ? 'Updated' : 'New', last_name: 'Person' }])}>Edit {item.blockId}</button>)}
     </div>)}

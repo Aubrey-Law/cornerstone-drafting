@@ -4,7 +4,7 @@ import {
   type BuilderFieldDef, type FieldOption, type SharedFieldControl,
 } from '@aubrey-law/estate-fields/core'
 import { getIntakeBlock } from './blockRegistry'
-import type { IntakeAudience, IntakeBlockId, IntakeRequirement } from './types'
+import type { IntakeAudience, IntakeBlockId, IntakeFormPurpose, IntakeRequirement } from './types'
 
 export interface BuilderCatalogField {
   id: FormFieldId
@@ -74,7 +74,9 @@ function fieldGroup(id: FormFieldId): string {
 }
 
 /** Explicit display-only projection. Never send executable registry definitions to the browser. */
-export function getIntakeFormBuilderCatalog(purpose: 'client_intake' | 'discovery_call' = 'client_intake'): IntakeFormBuilderCatalog {
+export function getIntakeFormBuilderCatalog(purpose: IntakeFormPurpose = 'client_intake'): IntakeFormBuilderCatalog {
+  // Client forms hold only custom questions; nothing in them writes canonical data.
+  if (purpose === 'client_form') return { fields: [], blocks: [] }
   return {
     fields: (purpose === 'discovery_call' ? DISCOVERY_FIELD_IDS : BUILDER_FIELD_IDS).map(id => {
       const field = getFormField(id)

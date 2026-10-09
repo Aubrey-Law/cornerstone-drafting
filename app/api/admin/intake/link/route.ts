@@ -22,7 +22,16 @@ async function verifyLead(intakeId: string) {
     .not('lead_status', 'is', null)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  return data ? admin : null
+  if (data) return admin
+  // A questionnaire linked to a matter (e.g. a student's College Prep) has no
+  // lead of its own but carries the same standing link.
+  const { data: linked, error: linkError } = await admin
+    .from('matter_linked_intakes' as never)
+    .select('id')
+    .eq('client_intake_id', intakeId)
+    .maybeSingle()
+  if (linkError) throw new Error(linkError.message)
+  return linked ? admin : null
 }
 
 export async function GET(req: NextRequest) {

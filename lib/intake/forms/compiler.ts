@@ -1,17 +1,20 @@
 import { type FormFieldId, getFormField, isDiscoveryField, MANDATORY_DISCOVERY_FIELDS } from '@/lib/discovery/catalog'
 import { getIntakeBlock } from './blockRegistry'
 import { parseIntakeFormDefinition } from './schema'
-import type { IntakeBlockId, IntakeCondition, IntakeFormItem, IntakeFormSection, IntakeRequirement } from './types'
+import type { IntakeBlockId, IntakeCondition, IntakeFormItem, IntakeFormPurpose, IntakeFormSection, IntakeQuestionType, IntakeRequirement } from './types'
 
 export type CompiledIntakeItem =
   | { kind: 'field'; id: string; fieldId: FormFieldId; label: string; helpText?: string; effectiveRequirement: IntakeRequirement; condition?: IntakeCondition }
   | { kind: 'block'; id: string; blockId: IntakeBlockId; title?: string; helpText?: string; config: Record<string, unknown>; condition?: IntakeCondition }
+  | { kind: 'question'; id: string; label: string; questionType: IntakeQuestionType; options: string[]; required: boolean; helpText?: string; condition?: undefined }
+
+export const CHOICE_QUESTION_TYPES: readonly IntakeQuestionType[] = ['single_choice', 'multiple_choice']
 
 export interface CompiledIntakeSection extends Omit<IntakeFormSection, 'items'> {
   items: CompiledIntakeItem[]
 }
 export interface CompiledIntakeForm {
-  purpose?: 'client_intake' | 'discovery_call'
+  purpose?: IntakeFormPurpose
   schemaVersion: 1
   key: string
   title: string
@@ -37,6 +40,8 @@ export function compileIntakeForm(raw: unknown, audience: 'client' | 'staff'): C
     }).sort(compareDiagnostics) }
   }
   const discovery = parsed.data.purpose === 'discovery_call'
+  const clientForm = parsed.data.purpose === 'client_form'
+  let questionCount = 0
   const errors: IntakeFormDiagnostic[] = []
   const sections: CompiledIntakeSection[] = []
   const usedFields = new Set<FormFieldId>()
@@ -67,11 +72,28 @@ export function compileIntakeForm(raw: unknown, audience: 'client' | 'staff'): C
     const path = `sections.${sectionIndex}`
     const shared = section.audience === 'client_and_staff'
     if (discovery && shared) error(path, 'Discovery sections must be staff only')
+    if (clientForm && !shared) error(`${path}.audience`, 'Client form sections must be shared with the client')
+    if (clientForm && section.condition) error(`${path}.condition`, 'Client form sections cannot have visibility conditions')
     if (discovery && section.condition && section.items.some(item => item.kind === 'field' && MANDATORY_DISCOVERY_FIELDS.includes(item.fieldId as never))) error(path, 'Required discovery questions must be unconditional')
     checkCondition(section.condition, `${path}.condition`, shared)
     const items: CompiledIntakeItem[] = []
     section.items.forEach((item: IntakeFormItem, itemIndex) => {
       const itemPath = `${path}.items.${itemIndex}`
+      if (item.kind === 'question') {
+        if (!clientForm) { error(itemPath, 'Custom questions are only available in client forms'); return }
+        questionCount++
+        if (!item.label.trim()) error(`${itemPath}.label`, 'Enter the question text')
+        // Blank lines are what an editor leaves mid-typing; they are not choices.
+        const options = (item.options ?? []).map(option => option.trim()).filter(Boolean)
+        if (CHOICE_QUESTION_TYPES.includes(item.questionType)) {
+          if (!options.length) error(`${itemPath}.options`, 'Add at least one answer choice')
+          if (new Set(options).size !== options.length) error(`${itemPath}.options`, 'Answer choices must be unique')
+        } else if (options.length) error(`${itemPath}.options`, 'Only choice questions have answer choices')
+        items.push({ kind: 'question', id: item.id, label: item.label.trim(), questionType: item.questionType, options, required: item.required === true,
+          ...(item.helpText !== undefined ? { helpText: item.helpText } : {}) })
+        return
+      }
+      if (clientForm) { error(itemPath, 'Client forms contain custom questions only'); return }
       checkCondition(item.condition, `${itemPath}.condition`, shared)
       if (item.kind === 'field') {
         if (discovery !== isDiscoveryField(item.fieldId)) error(itemPath, 'Field is not allowed for this form purpose')
@@ -99,7 +121,8 @@ export function compileIntakeForm(raw: unknown, audience: 'client' | 'staff'): C
     if (audience === 'staff' || shared) sections.push({ ...clone(section), items })
   })
   if (discovery) for (const id of MANDATORY_DISCOVERY_FIELDS) if (!usedFields.has(id)) error('sections', `Required discovery question ${id} is missing`)
-  if (!discovery && !hasSharedReview) error('sections', 'A shared unconditional review and submit path is required')
+  if (clientForm && questionCount === 0) error('sections', 'Add at least one question')
+  if (!discovery && !clientForm && !hasSharedReview) error('sections', 'A shared unconditional review and submit path is required')
   if (errors.length) return { success: false, errors: errors.sort(compareDiagnostics) }
   return { success: true, form: { ...(parsed.data.purpose ? { purpose: parsed.data.purpose } : {}), schemaVersion: 1, key: parsed.data.key, title: parsed.data.title, audience, sections,
     ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}) } }

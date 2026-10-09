@@ -13,6 +13,7 @@ import {
   Menu,
   MessageSquare,
   ReceiptText,
+  ListChecks,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ const firm = getFirmConfig()
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/intake', label: 'Intake', icon: ClipboardList },
+  { href: '/forms', label: 'Forms', icon: ListChecks },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
   { href: '/assets', label: 'Assets', icon: Landmark },
   { href: '/messages', label: 'Messages', icon: MessageSquare },

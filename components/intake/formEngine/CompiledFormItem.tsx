@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import type { CompiledIntakeItem } from '@/lib/intake/forms/compiler'
+import { CustomQuestionField } from '@/components/forms/CustomQuestionField'
 import { CanonicalFieldItem } from './CanonicalFieldItem'
 import { INTAKE_BLOCK_RENDERERS, type IntakeBlockRendererProps } from './blockRenderers'
 
@@ -31,6 +32,10 @@ export function CompiledFormItem({ item, disabled = false, ...props }: CompiledF
           />}
         </fieldset>
       )
+    }
+    case 'question': {
+      const value = props.data[item.id]
+      return <CustomQuestionField question={item} value={typeof value === 'string' || Array.isArray(value) ? value as string | string[] : null} disabled={disabled} onChange={next => { if (!disabled) props.update(item.id, next) }} />
     }
     default: {
       const unreachable: never = item

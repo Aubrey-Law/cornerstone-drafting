@@ -45,6 +45,7 @@ import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
 import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
 import { MatterOverviewSidebar } from './MatterOverviewSidebar'
+import { MatterFormsCard } from '@/components/forms/MatterFormsCard'
 import { MatterKeyDates } from './MatterKeyDates'
 import { MatterOverviewComposer } from './MatterOverviewComposer'
 import { MatterOverviewWork } from './MatterOverviewWork'
@@ -512,6 +513,7 @@ function MatterDetailClientInner({
                     onPeople={() => setActiveTab('people')} onBilling={() => setActiveTab('billing')}
                     tasks={<><div className="mb-2 flex items-center justify-between"><span>Tasks · {taskCounts.open} open</span><Button variant="link" className="h-auto p-0" onClick={() => setActiveTab('tasks')}>View all</Button></div>{taskPreview.some(task => task.key !== workSummary?.workKey) ? <ul>{taskPreview.filter(task => task.key !== workSummary?.workKey).map(task => <li key={task.key}><Link className="block py-1 underline-offset-4 hover:underline" href={task.href}>{task.title}</Link></li>)}</ul> : currentEngineStageTask && workSummary?.workKey !== `task:${currentEngineStageTask.id}` ? <MatterEngineStageTaskCard compact task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} /> : <p className="text-xs text-muted-foreground">{taskCounts.open ? 'View all tasks for the full list.' : 'No open tasks.'}</p>}</>}
                   >
+                    <MatterFormsCard matterId={matterId} />
                     {showProbate && (
                       <MatterProbateEssentialsCard
                         details={matterDetails}

@@ -26,6 +26,20 @@ export type IntakeCondition =
   | { op: 'is_set'; fieldId: FormFieldId }
   | { op: 'all' | 'any'; conditions: IntakeCondition[] }
 
+/** Client forms only: free-standing questions whose answers stay with the sent form. */
+export type IntakeQuestionType =
+  | 'short_text'
+  | 'long_text'
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'yes_no'
+  | 'date'
+  | 'email'
+  | 'phone'
+  | 'number'
+
+export type IntakeFormPurpose = 'client_intake' | 'discovery_call' | 'client_form'
+
 export type IntakeFormItem =
   | {
       kind: 'field'
@@ -45,6 +59,17 @@ export type IntakeFormItem =
       config?: Record<string, unknown>
       condition?: IntakeCondition
     }
+  | {
+      kind: 'question'
+      id: string
+      label: string
+      questionType: IntakeQuestionType
+      options?: string[]
+      required?: boolean
+      helpText?: string
+      /** Client forms have no visibility conditions; typed so shared readers can ask. */
+      condition?: undefined
+    }
 
 export interface IntakeFormSection {
   id: string
@@ -58,7 +83,7 @@ export interface IntakeFormSection {
 }
 
 export interface IntakeFormDefinition {
-  purpose?: 'client_intake' | 'discovery_call'
+  purpose?: IntakeFormPurpose
   schemaVersion: 1
   key: string
   title: string

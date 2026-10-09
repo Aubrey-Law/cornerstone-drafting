@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { requestIntakeUnlock } from './actions'
 
-export function RequestUnlockButton({ requestedAt }: { requestedAt: string | null }) {
+export function RequestUnlockButton({ requestedAt, intakeId }: { requestedAt: string | null; intakeId?: string }) {
   const [pending, startTransition] = useTransition()
   const [sentAt, setSentAt] = useState<string | null>(requestedAt)
 
@@ -20,7 +20,7 @@ export function RequestUnlockButton({ requestedAt }: { requestedAt: string | nul
   function onClick() {
     startTransition(async () => {
       try {
-        const res = await requestIntakeUnlock()
+        const res = await requestIntakeUnlock(undefined, intakeId)
         setSentAt(res.requestedAt)
         toast.success("Unlock requested — we'll reach out shortly.")
       } catch (e) {

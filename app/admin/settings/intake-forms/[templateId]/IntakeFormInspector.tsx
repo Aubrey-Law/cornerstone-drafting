@@ -6,7 +6,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { BuilderCatalogField, IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import { eligibleConditionFields, type EditorSelection, type ItemPatch, type NewSection } from '@/lib/intake/forms/editorState'
-import type { IntakeCondition, IntakeFormDefinition, IntakeRequirement } from '@/lib/intake/forms/types'
+import type { IntakeCondition, IntakeFormDefinition, IntakeQuestionType, IntakeRequirement } from '@/lib/intake/forms/types'
+import { INTAKE_QUESTION_TYPES } from '@/lib/intake/forms/schema'
+import { QUESTION_TYPE_LABELS } from '@/lib/forms/clientFormAnswers'
 
 const selectClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring'
 const requirements: IntakeRequirement[] = ['optional', 'recommended', 'required']
@@ -116,9 +118,24 @@ export function IntakeFormInspector({ definition, catalog, selection, onFormChan
         <TextControl id={`${prefix}-id`} label="Section ID" value={section.id} readOnly />
         <TextControl id={`${prefix}-title`} label="Section title" value={section.title} onChange={title => onSectionChange(section.id, { title })} />
         <TextControl id={`${prefix}-subtitle`} label="Subtitle" value={section.subtitle ?? ''} long onChange={subtitle => onSectionChange(section.id, { subtitle })} />
-        <Control id={`${prefix}-audience`} label="Audience"><select id={`${prefix}-audience`} className={selectClass} value={section.audience} onChange={event => onSectionChange(section.id, { audience: event.target.value as NewSection['audience'] })}>{definition.purpose !== 'discovery_call' && <option value="client_and_staff">Client and staff</option>}<option value="staff_only">Staff only</option></select></Control>
+        <Control id={`${prefix}-audience`} label="Audience"><select id={`${prefix}-audience`} className={selectClass} value={section.audience} onChange={event => onSectionChange(section.id, { audience: event.target.value as NewSection['audience'] })}>{definition.purpose !== 'discovery_call' && <option value="client_and_staff">Client and staff</option>}{definition.purpose !== 'client_form' && <option value="staff_only">Staff only</option>}</select></Control>
         <Control id={`${prefix}-timeEstimateMinutes`} label="Time estimate (minutes)"><Input id={`${prefix}-timeEstimateMinutes`} type="number" min="0" step="any" value={section.timeEstimateMinutes ?? ''} onChange={event => onSectionChange(section.id, { timeEstimateMinutes: event.target.value === '' ? undefined : Number(event.target.value) })} /></Control>
         <label className="flex gap-2 text-sm"><input id={`${prefix}-optional`} type="checkbox" checked={section.optional ?? false} onChange={event => onSectionChange(section.id, { optional: event.target.checked })} />Optional section</label>
+      </> : item?.kind === 'question' ? <>
+        <TextControl id={`${prefix}-label`} label="Question" value={item.label} onChange={label => onItemChange(item.id, { label })} />
+        <TextControl id={`${prefix}-helpText`} label="Help text" value={item.helpText ?? ''} long onChange={helpText => onItemChange(item.id, { helpText })} />
+        <Control id={`${prefix}-questionType`} label="Answer type"><select id={`${prefix}-questionType`} className={selectClass} value={item.questionType} onChange={event => {
+          const questionType = event.target.value as IntakeQuestionType
+          const choice = questionType === 'single_choice' || questionType === 'multiple_choice'
+          onItemChange(item.id, { questionType, options: choice ? (item.options?.length ? item.options : ['Option 1', 'Option 2']) : undefined })
+        }}>{INTAKE_QUESTION_TYPES.map(type => <option key={type} value={type}>{QUESTION_TYPE_LABELS[type]}</option>)}</select></Control>
+        {(item.questionType === 'single_choice' || item.questionType === 'multiple_choice') && <Control id={`${prefix}-options`} label="Answer choices (one per line)">
+          <Textarea id={`${prefix}-options`} rows={5} value={(item.options ?? []).join('\n')} onChange={event => onItemChange(item.id, { options: event.target.value.split('\n') })} />
+        </Control>}
+        <label className="flex gap-2 text-sm"><input id={`${prefix}-required`} type="checkbox" checked={item.required ?? false} onChange={event => onItemChange(item.id, { required: event.target.checked })} />Required</label>
+        <Control id={`${prefix}-section`} label="Move to section"><select id={`${prefix}-section`} className={selectClass} value={section?.id} onChange={event => { const target = definition.sections.find(value => value.id === event.target.value); if (target) onMoveItem(item.id, target.id, target.items.length) }}>
+          {definition.sections.map(value => <option key={value.id} value={value.id} disabled={value.id !== section?.id && value.items.length >= 100}>{value.title}</option>)}
+        </select></Control>
       </> : item ? <>
         <TextControl id={`${prefix}-id`} label="Item ID" value={item.id} readOnly />
         <TextControl id={`${prefix}-${item.kind === 'field' ? 'fieldId' : 'blockId'}`} label={item.kind === 'field' ? 'Canonical field' : 'Approved block'} value={item.kind === 'field' ? item.fieldId : item.blockId} readOnly />
@@ -139,7 +156,7 @@ export function IntakeFormInspector({ definition, catalog, selection, onFormChan
           {definition.sections.map(value => <option key={value.id} value={value.id} disabled={value.id !== section?.id && value.items.length >= 100}>{value.title}</option>)}
         </select></Control>
       </> : null}
-      {selection.kind !== 'form' && <section id={`${prefix}-condition`} tabIndex={-1} aria-label="Visibility condition" className="space-y-3 focus-visible:outline-2 focus-visible:outline-ring">
+      {selection.kind !== 'form' && definition.purpose !== 'client_form' && <section id={`${prefix}-condition`} tabIndex={-1} aria-label="Visibility condition" className="space-y-3 focus-visible:outline-2 focus-visible:outline-ring">
         <h3 className="text-sm font-semibold">Show when</h3>
         {condition ? <><ConditionNode condition={condition} fields={fields} id={`${prefix}-condition`} onChange={setCondition} /><Button variant="outline" size="sm" onClick={() => setCondition(undefined)}>Remove visibility condition</Button></> : <>
           <p className="text-sm text-muted-foreground">Always visible{fields.length ? '.' : '. Add an eligible scalar field earlier in the form to use a condition.'}</p>
