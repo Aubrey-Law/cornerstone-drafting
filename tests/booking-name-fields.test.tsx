@@ -103,7 +103,8 @@ describe('booking component names', () => {
       : { connected: true, slots: [] } }) as Response)
     render(<QuickBookPopover open onOpenChange={vi.fn()} types={[{ ...type, id: 'type-1', locationTypes: ['teams'], active: true }]} prefillIso={slot} authHeaders={() => undefined} onBooked={vi.fn()} />)
     fireEvent.change(screen.getByPlaceholderText('Search contacts, leads, or matters…'), { target: { value: 'Mary' } })
-    fireEvent.click(await screen.findByRole('button', { name: /Mary Jane van Buren/ }))
+    // The month picker pages ahead past empty months while this loads; allow CI headroom.
+    fireEvent.click(await screen.findByRole('button', { name: /Mary Jane van Buren/ }, { timeout: 5000 }))
     expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane van Buren')
     expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText('Spouse/partner first name') as HTMLInputElement).value).toBe('Jo Ann de la Cruz')
