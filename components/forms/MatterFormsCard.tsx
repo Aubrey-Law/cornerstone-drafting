@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ClipboardList, Copy, Download, Mail, MoreHorizontal, Plus, Send } from 'lucide-react'
+import { ClipboardList, Copy, Download, FilePen, Mail, MoreHorizontal, Plus, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/components/useConfirm'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { clientFormQuestions, formatClientFormAnswer, type ClientFormAnswers } from '@/lib/forms/clientFormAnswers'
 import type { CompiledIntakeForm } from '@/lib/intake/forms/compiler'
-import type { MatterFormsOverview, MatterIntakeSummary, MatterFormAssignmentSummary } from '@/lib/forms/matterForms'
+import type { MatterFormsOverview, MatterIntakeSummary, MatterFormAssignmentSummary, MatterRef } from '@/lib/forms/matterForms'
 
 const selectClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm'
 const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'America/New_York' })
@@ -31,11 +32,29 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
   return json
 }
 
+function isSubmitted(intake: MatterIntakeSummary): boolean {
+  return intake.status === 'submitted' || intake.status === 'approved'
+}
 function intakeStatus(intake: MatterIntakeSummary): string {
-  if (intake.status === 'submitted' || intake.status === 'approved') return 'Submitted'
+  if (isSubmitted(intake)) return 'Submitted'
   if (intake.sentAt) return 'Sent'
   return intake.status === 'draft' ? 'Not sent' : 'In progress'
 }
+function matterLabel(matter: MatterRef): string {
+  return matter.matterNumber || matter.name || 'matter'
+}
+
+/**
+ * Why a linked questionnaire cannot yet be drafted, or null when it can. The
+ * server re-checks all of this; the card only explains the disabled button.
+ */
+export function companionDraftBlocker(intake: MatterIntakeSummary, matterHired: boolean): string | null {
+  if (intake.primary || intake.track !== 'college_prep' || intake.companionMatter) return null
+  if (!matterHired) return 'Hire this matter first'
+  if (!isSubmitted(intake)) return 'Available once the questionnaire is submitted'
+  return null
+}
+
 const assignmentStatus: Record<MatterFormAssignmentSummary['status'], string> = {
   sent: 'Sent', in_progress: 'In progress', submitted: 'Submitted', cancelled: 'Withdrawn',
 }
@@ -56,6 +75,8 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
   const [sending, setSending] = useState(false)
   const [viewing, setViewing] = useState<MatterFormAssignmentSummary | null>(null)
   const { confirm, confirmDialog } = useConfirm()
+  const [drafting, setDrafting] = useState<MatterIntakeSummary | null>(null)
+  const router = useRouter()
 
   const load = useCallback(async () => {
     try {
@@ -104,6 +125,13 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
       {loadError && <p role="alert" className="mt-3 text-sm text-destructive">{loadError} <button type="button" className="underline" onClick={() => void load()}>Retry</button></p>}
       {!overview && !loadError && <p className="mt-3 text-sm text-muted-foreground">Loading forms…</p>}
 
+      {overview?.parentMatter && (
+        <p className="mt-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          College Prep package opened from a questionnaire on{' '}
+          <Link className="font-medium text-foreground underline" href={`/admin/matters/${overview.parentMatter.id}`}>{overview.parentMatter.name || matterLabel(overview.parentMatter)}</Link>.
+        </p>
+      )}
+
       {overview && <div className="mt-3 space-y-4">
         <ul className="divide-y divide-border rounded-md border border-border">
           {overview.intakes.map(intake => (
@@ -114,9 +142,26 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
                   {intake.primary ? <Badge variant="secondary" className="ml-2">Primary</Badge> : null}
                 </p>
                 <p className="text-xs text-muted-foreground">{[intake.label, intake.name, intakeStatus(intake)].filter(Boolean).join(' · ')}</p>
+                {intake.companionMatter && (
+                  <p className="text-xs text-muted-foreground">
+                    Drafting on <Link className="underline" href={`/admin/matters/${intake.companionMatter.id}`}>{matterLabel(intake.companionMatter)}</Link>
+                  </p>
+                )}
               </div>
               {!intake.primary && (
                 <div className="flex items-center gap-1">
+                  {intake.companionMatter ? (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/admin/drafting/${intake.companionMatter.id}`}><FilePen className="h-3.5 w-3.5" />Open drafting</Link>
+                    </Button>
+                  ) : intake.track === 'college_prep' ? (
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      disabled={busy || Boolean(companionDraftBlocker(intake, overview.hired))}
+                      title={companionDraftBlocker(intake, overview.hired) ?? undefined}
+                      onClick={() => setDrafting(intake)}
+                    ><FilePen className="h-3.5 w-3.5" />Draft College Prep package</Button>
+                  ) : null}
                   <Button type="button" size="sm" variant="ghost" disabled={busy || !intake.email} onClick={() => void act(
                     () => call('/api/admin/intake/send', 'POST', { matterId, intakeId: intake.id }), `Questionnaire emailed to ${intake.email}`,
                   )}><Mail className="h-3.5 w-3.5" />Email link</Button>
@@ -178,6 +223,29 @@ export function MatterFormsCard({ matterId }: { matterId: string }) {
       }} />}
       <AnswersDialog matterId={matterId} assignment={viewing} onClose={() => setViewing(null)} />
       {confirmDialog}
+      <Dialog open={drafting !== null} onOpenChange={value => { if (!value && !busy) setDrafting(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Draft {drafting?.name}&apos;s College Prep package</DialogTitle>
+            <DialogDescription>
+              This opens a separate, hired College Prep matter with {drafting?.name} as the client, seeded from their questionnaire,
+              and takes you to its drafting workspace. The questionnaire stays listed here with a link to that matter.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setDrafting(null)}>Cancel</Button>
+            <Button type="button" disabled={busy || !drafting?.linkId} onClick={() => {
+              const target = drafting
+              if (!target?.linkId) return
+              void act(async () => {
+                const result = await call<{ draftingPath: string }>(`/api/admin/matters/${matterId}/linked-intakes/${target.linkId}/companion`, 'POST')
+                setDrafting(null)
+                router.push(result.draftingPath)
+              }, 'College Prep matter ready')
+            }}>{busy ? 'Opening…' : 'Open matter and draft'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
