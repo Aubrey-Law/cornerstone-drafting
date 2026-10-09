@@ -39,13 +39,13 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Intake questionnaire rollout configuration is unavailable'; END IF;
   IF NOT v_enabled THEN RETURN NEW; END IF;
 
-  SELECT id INTO v_template_id FROM public.intake_form_templates WHERE key = NEW.intake_track;
+  SELECT id INTO v_template_id FROM public.intake_form_templates WHERE key = NEW.intake_track AND purpose = 'client_intake';
   IF NOT FOUND THEN RAISE EXCEPTION 'No published questionnaire is available for this intake track'; END IF;
   -- Same transaction lock used by publish/retire/archive. Row locks also
   -- protect against direct catalog writes through service_role.
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_template_id::text, 0));
   PERFORM 1 FROM public.intake_form_templates
-    WHERE id = v_template_id AND key = NEW.intake_track AND archived_at IS NULL FOR SHARE;
+    WHERE id = v_template_id AND key = NEW.intake_track AND purpose = 'client_intake' AND archived_at IS NULL FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'No published questionnaire is available for this intake track'; END IF;
   SELECT id INTO v_version_id FROM public.intake_form_versions
     WHERE template_id = v_template_id AND status = 'published'

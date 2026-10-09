@@ -4,8 +4,8 @@ Date: 2026-10-09
 
 ## Current status
 
-Local HEAD includes Phase 2A (#757, `718f5089`) and Phase 2B (#760,
-`155208ba`). The administrator builder is implemented at
+The release branch includes Phase 2A (#757, `718f5089`), Phase 2B (#760,
+`155208ba`), and main through `38e1ff2e` (#765). The administrator builder is implemented at
 `/admin/settings/intake-forms`: catalog authoring, conditions, ordering,
 explicit saves, conflict recovery, synthetic preview, and version lifecycle.
 The older specifications' release-pending wording predates the merged commit;
@@ -56,8 +56,8 @@ review body. No persistence activation is included in this step.
    initial automatic selection uses only `estate` and `college_prep`.
 
 Creation-time track selection, automatic pinning safeguards (disabled), immutable
-pins/tracks, and conservative matter/lead merge compatibility are implemented in
-the working tree. Separate pinned questionnaires cannot be merged until a future
+pins/tracks, and conservative matter/lead merge compatibility are implemented on
+the release branch. Separate pinned questionnaires cannot be merged until a future
 explicit reconciliation workflow exists; there is no override in this release.
 
 ## Acceptance criteria
@@ -769,8 +769,8 @@ remain rejected at the route boundary.
        WHERE NOT EXISTS (
          SELECT 1 FROM public.intake_form_templates t
          JOIN public.intake_form_versions v ON v.template_id = t.id
-         WHERE t.key = required.key AND t.archived_at IS NULL
-           AND v.status = 'published'
+         WHERE t.key = required.key AND t.purpose = 'client_intake'
+           AND t.archived_at IS NULL AND v.status = 'published'
        )
      ) THEN RAISE EXCEPTION 'Both tracks need an active published questionnaire';
      END IF;
@@ -792,3 +792,41 @@ remain rejected at the route boundary.
 
 Production deployment/activation and provider-backed verification were not
 performed in this local implementation session. No migration backfills old pins.
+
+
+## Sixteenth step: integration and release branch
+
+Rebased the complete Phase 2C implementation onto main `38e1ff2e`, retaining
+new discovery-call, custom-form, and linked-intake behavior. The portal still
+selects the authorized questionnaire using `?id=` and now resolves that row's
+exact saved version. Shared item handling accommodates the new custom-question
+union; client-intake compilation continues to reject custom-form questions.
+Automatic assignment requires a `client_intake` template purpose, preventing a
+discovery or custom form from being assigned solely because its key matches.
+
+The eight unpublished Phase 2C migrations were renumbered to
+`20270203090000` through `20270203090700` after an upstream timestamp collision.
+Earlier evidence above used their previous local-only filenames; all references
+now point to their release filenames. No shared migration history was changed.
+
+Integrated validation:
+
+- Lint and typecheck passed. The full suite passed 947 files / 10,569 tests
+  (2 files / 27 tests skipped); the subsequent linked-intake page regression
+  check passed all 4 tests.
+- All 303 migrations replayed in the disposable acceptance stack. The original
+  user stack was not reset or modified.
+- Both tracks passed real database question editing, contact removal/restoration,
+  appointment, stale-write, role, and export checks. Household transaction and
+  rollback checks passed against the complete schema.
+- Pinning assertions include rejecting non-client-intake purposes and six
+  concurrent-lock checks. Contact editing/membership, appointment, and merge
+  isolation harnesses also passed their rollback and concurrency assertions.
+- Both tracks passed the live local HTTP lifecycle checks: publish/retire/archive,
+  unchanged old-pin delivery, new-version assignment, version/track immutability,
+  ownership and staff-access rejection, invite tokens, and Word exports.
+- Logs use `/private/tmp/intake-integrated-*.log`; production credentials and
+  provider-backed upload verification remain unavailable in this local setup.
+
+Release branch: `codex/intake-form-builder-phase-2c`. Deployment and explicit
+owner activation remain pending the release procedure above.

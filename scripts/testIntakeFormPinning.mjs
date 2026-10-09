@@ -40,6 +40,7 @@ try {
     CREATE TABLE public.client_intake(id text PRIMARY KEY, intake_track text NOT NULL DEFAULT 'estate', answers jsonb, practice_area text);
     ${readFileSync('supabase/migrations/20270130090001_intake_form_builder_foundation.sql', 'utf8')}
     ${readFileSync('supabase/migrations/20270131090200_intake_form_builder_audit.sql', 'utf8')}
+    ALTER TABLE public.intake_form_templates ADD COLUMN purpose text NOT NULL DEFAULT 'client_intake';
     ${readFileSync('supabase/migrations/20270203090000_intake_form_pinning_guards.sql', 'utf8')}
     ${readFileSync('tests/sql/intake-form-pinning.sql', 'utf8')}
     ${readFileSync('supabase/migrations/20270203090100_intake_creation_track.sql', 'utf8')}
