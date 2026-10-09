@@ -68,4 +68,32 @@ describe('ScheduleAppointmentDialog', () => {
     expect(posted[0]).toMatchObject({ typeId: 'type-1', startIso: slot, attendeeEmail: 'mary@example.com', linkedLeadId: 'lead-1' })
     await waitFor(() => expect(onBooked).toHaveBeenCalled())
   })
+
+  it('splits a matter client name at once, then uses the stored first and last names', async () => {
+    let resolveStored: ((value: unknown) => void) | null = null
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.startsWith('/api/admin/scheduling/settings')) {
+        return { ok: true, json: async () => ({ types: [{ id: 'type-1', label: 'Signing', durationMinutes: 60, locationType: 'phone', locationTypes: ['phone'], active: true }] }) }
+      }
+      if (url.startsWith('/api/admin/calendar/people?matterId=matter-1')) {
+        return { ok: true, json: () => new Promise(resolve => { resolveStored = resolve }) }
+      }
+      return { ok: true, json: async () => ({ connected: true, slots: [] }) }
+    }))
+    render(
+      <ScheduleAppointmentDialog
+        target={{ kind: 'matter', id: 'matter-1' }}
+        attendee={{ firstName: 'Mary Jane van Buren', email: 'mary@example.com', secondFirstName: 'Sam Jones' }}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    )
+    expect((await screen.findByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane van')
+    expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('Buren')
+    expect((screen.getByLabelText('Spouse/partner last name') as HTMLInputElement).value).toBe('Jones')
+    await waitFor(() => expect(resolveStored).not.toBeNull())
+    resolveStored!({ attendee: { firstName: 'Mary Jane', lastName: 'van Buren', email: 'mary@example.com', phone: '', secondFirstName: 'Sam', secondLastName: 'Jones', secondEmail: '' } })
+    await waitFor(() => expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('van Buren'))
+    expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane')
+  })
 })

@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
-import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { BookingPageDialog } from '@/components/scheduling/BookingPageDialog'
 import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { stageLabel, type PipelineMatter } from '@/types/database'
@@ -79,7 +79,7 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, mergeDialog
   const router = useRouter()
   const matterId = matter.matter_id
   const matterLabel = matter.client_name || matter.matter_name || 'this matter'
-  // Names stay whole: staff confirm the last name rather than the app guessing a split.
+  // The booking form splits these for an instant prefill, then loads the stored first/last names.
   const appointmentAttendee = useMemo(() => ({
     firstName: matter.client_name,
     email: matter.client_email,
@@ -137,10 +137,11 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, mergeDialog
           onOpenChange={scheduling.setLinkOpen}
         />
 
-        <BookCalendlyDialog
+        <BookingPageDialog
           target={{ kind: 'matter', id: matterId }}
           open={scheduling.bookOpen}
           onOpenChange={scheduling.setBookOpen}
+          onBooked={() => router.refresh()}
         />
 
         <ScheduleAppointmentDialog

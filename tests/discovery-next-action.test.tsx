@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({ create: vi.fn(), error: vi.fn() }))
 vi.mock('next/link', () => ({ default: ({ children, ...props }: ComponentProps<'a'>) => <a {...props}>{children}</a> }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/components/tasks/useTaskActions', () => ({ useTaskActions: () => ({ create: mocks.create }) }))
-vi.mock('@/components/scheduling/BookCalendlyDialog', () => ({ BookCalendlyDialog: () => null }))
+vi.mock('@/components/scheduling/BookingPageDialog', () => ({ BookingPageDialog: () => null }))
 vi.mock('@/components/tasks/TaskComposer', () => ({ TaskComposer: ({ onCreate, initialTitle, defaultRecord }: ComponentProps<typeof TaskComposer>) => <>
   <button onClick={() => void onCreate({ title: initialTitle!, lead_id: defaultRecord!.id })}>Missing owner</button>
   <button onClick={() => void onCreate({ title: initialTitle!, lead_id: defaultRecord!.id, assignee_id: 'owner', due_at: '2026-10-12T12:00:00Z' })}>Create</button>

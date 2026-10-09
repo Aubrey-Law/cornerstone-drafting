@@ -144,7 +144,25 @@ export interface AppointmentRow {
 
 export class BookingNameValidationError extends Error {}
 
-/** New bookings require confirmed components; historical display names are never split. */
+const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v'])
+
+/**
+ * A best-effort first/last guess for a record that only has a display name,
+ * used to prefill staff booking forms (which stay editable). The last word is
+ * the last name, keeping a trailing suffix with it: "Mary Jane van Buren" →
+ * "Mary Jane van" / "Buren" is a known miss staff can correct.
+ */
+export function splitDisplayName(name: string | null | undefined): { firstName: string; lastName: string } {
+  const words = (name ?? '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  if (words.length < 2) return { firstName: words[0] ?? '', lastName: '' }
+  const lastWords = words.length >= 3 && NAME_SUFFIXES.has(words[words.length - 1].toLowerCase()) ? 2 : 1
+  return {
+    firstName: words.slice(0, -lastWords).join(' '),
+    lastName: words.slice(-lastWords).join(' '),
+  }
+}
+
+/** New bookings require confirmed components; historical display names are never split server-side. */
 export function normalizeBookingNames(input: {
   firstName: unknown
   lastName: unknown

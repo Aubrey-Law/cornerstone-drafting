@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CalendarPlus, Check, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { type BookingQuestion, MAX_ANSWER_LENGTH } from '@/lib/appointments/bookingQuestions'
-import { normalizeBookingNames } from '@/lib/appointments/types'
+import { normalizeBookingNames, splitDisplayName } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import SlotPicker, { type SlotPickerLoadResult } from '@/components/scheduling/SlotPicker'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
@@ -68,20 +68,56 @@ export interface QuickBookLink {
   matterId?: string | null
 }
 
+/**
+ * First/last for the form. A record that only has a whole display name in the
+ * first-name slot is split so the last name is not left blank; staff can edit.
+ */
+function nameParts(first: string | null | undefined, last: string | null | undefined) {
+  const firstName = first?.trim() ?? ''
+  const lastName = last?.trim() ?? ''
+  return lastName ? { firstName, lastName } : splitDisplayName(firstName)
+}
+
+function attendeeFields(attendee: QuickBookAttendee | null | undefined) {
+  const client = nameParts(attendee?.firstName, attendee?.lastName)
+  const second = nameParts(attendee?.secondFirstName, attendee?.secondLastName)
+  return {
+    attendeeFirstName: client.firstName,
+    attendeeLastName: client.lastName,
+    attendeeEmail: attendee?.email?.trim() ?? '',
+    attendeePhone: attendee?.phone?.trim() ?? '',
+    secondAttendeeFirstName: second.firstName,
+    secondAttendeeLastName: second.lastName,
+    secondAttendeeEmail: attendee?.secondEmail?.trim() ?? '',
+  }
+}
+
 function initialDraft(types: BookableType[], prefillIso?: string | null, attendee?: QuickBookAttendee | null): Draft {
   return {
     typeId: types[0]?.id ?? '',
     locationType: allowedFormats(types[0])[0],
     videoProvider: 'google_meet',
-    attendeeFirstName: attendee?.firstName?.trim() ?? '',
-    attendeeLastName: attendee?.lastName?.trim() ?? '',
-    attendeeEmail: attendee?.email?.trim() ?? '',
-    attendeePhone: attendee?.phone?.trim() ?? '',
-    secondAttendeeFirstName: attendee?.secondFirstName?.trim() ?? '',
-    secondAttendeeLastName: attendee?.secondLastName?.trim() ?? '',
-    secondAttendeeEmail: attendee?.secondEmail?.trim() ?? '',
+    ...attendeeFields(attendee),
     startIso: prefillIso ?? '',
     answers: {},
+  }
+}
+
+/** The record's client and spouse with names as stored first/last components. */
+async function fetchRecordAttendee(
+  record: QuickBookLink,
+  authHeaders: () => HeadersInit | undefined,
+  signal?: AbortSignal,
+): Promise<QuickBookAttendee | null> {
+  const param = record.leadId ? `leadId=${encodeURIComponent(record.leadId)}` : record.matterId ? `matterId=${encodeURIComponent(record.matterId)}` : null
+  if (!param) return null
+  try {
+    const response = await fetch(`/api/admin/calendar/people?${param}`, { headers: authHeaders(), signal })
+    if (!response.ok) return null
+    const body = await response.json().catch(() => null)
+    return body?.attendee ?? null
+  } catch {
+    return null
   }
 }
 
@@ -185,6 +221,8 @@ export function QuickBookForm({
   const [people, setPeople] = useState<PersonResult[]>([])
   // The lead or matter picked from search, linked unless the email is edited.
   const [searchLink, setSearchLink] = useState<QuickBookLink | null>(null)
+  // Stored names replace the prefill only until staff edit a name themselves.
+  const namesEdited = useRef(false)
   // Every opening the picker has loaded, by start; only these can be booked.
   const [verifiedSlots, setVerifiedSlots] = useState<Map<string, OpenSlot>>(() => new Map())
   const [booking, setBooking] = useState(false)
@@ -211,6 +249,20 @@ export function QuickBookForm({
       startIso: prefillIso ?? current.startIso,
     }))
   }, [open, prefillIso, types, attendee])
+
+  // Booking from a lead or matter page: replace the prefill's names with the
+  // record's stored first/last components.
+  const linkLeadId = link?.leadId ?? null
+  const linkMatterId = link?.matterId ?? null
+  useEffect(() => {
+    if (!open || (!linkLeadId && !linkMatterId)) return
+    const controller = new AbortController()
+    void fetchRecordAttendee({ leadId: linkLeadId, matterId: linkMatterId }, authHeaders, controller.signal).then(stored => {
+      if (!stored || controller.signal.aborted || namesEdited.current) return
+      setDraft(current => ({ ...current, ...attendeeFields(stored) }))
+    })
+    return () => controller.abort()
+  }, [open, linkLeadId, linkMatterId, authHeaders])
 
   useEffect(() => {
     if (!open || !showSearch || query.trim().length < 2) {
@@ -312,6 +364,7 @@ export function QuickBookForm({
       setDraft(initialDraft(types, null, attendee))
       setQuery('')
       setSearchLink(null)
+      namesEdited.current = false
       onBooked()
     } catch {
       toast.error('Booking failed')
@@ -337,19 +390,28 @@ export function QuickBookForm({
                     type="button"
                     className="flex w-full items-center justify-between border-b border-border px-3 py-2 text-left last:border-0 hover:bg-accent"
                     onClick={() => {
+                      const record = person.kind === 'lead' ? { leadId: person.recordId } : { matterId: person.recordId }
+                      namesEdited.current = false
                       setDraft(current => ({
                         ...current,
-                        attendeeFirstName: person.name ?? '',
-                        attendeeLastName: '',
-                        attendeeEmail: person.email ?? '',
-                        attendeePhone: person.phone ?? '',
-                        secondAttendeeFirstName: person.secondName ?? '',
-                        secondAttendeeLastName: '',
-                        secondAttendeeEmail: person.secondEmail ?? '',
+                        ...attendeeFields({
+                          firstName: person.name,
+                          email: person.email,
+                          phone: person.phone,
+                          secondFirstName: person.secondName,
+                          secondEmail: person.secondEmail,
+                        }),
                       }))
                       setQuery(person.name)
                       setPeople([])
-                      setSearchLink(person.kind === 'lead' ? { leadId: person.recordId } : { matterId: person.recordId })
+                      setSearchLink(record)
+                      // The split above is instant; the stored components follow.
+                      void fetchRecordAttendee(record, authHeaders).then(stored => {
+                        if (!stored || namesEdited.current) return
+                        setDraft(current => current.attendeeEmail.trim().toLowerCase() === (person.email ?? '').trim().toLowerCase()
+                          ? { ...current, ...attendeeFields(stored) }
+                          : current)
+                      })
                     }}
                   >
                     <span><span className="block text-xs font-medium text-foreground">{person.name}</span><span className="text-micro text-muted-foreground">{person.email}</span></span>
@@ -364,12 +426,12 @@ export function QuickBookForm({
               <div>
                 <Label htmlFor="quick-book-first-name">First name</Label>
                 <Input id="quick-book-first-name" required maxLength={80} autoComplete="given-name"
-                  value={draft.attendeeFirstName} onChange={event => setDraft(current => ({ ...current, attendeeFirstName: event.target.value }))} />
+                  value={draft.attendeeFirstName} onChange={event => { namesEdited.current = true; setDraft(current => ({ ...current, attendeeFirstName: event.target.value })) }} />
               </div>
               <div>
                 <Label htmlFor="quick-book-last-name">Last name</Label>
                 <Input id="quick-book-last-name" required maxLength={80} autoComplete="family-name"
-                  value={draft.attendeeLastName} onChange={event => setDraft(current => ({ ...current, attendeeLastName: event.target.value }))} />
+                  value={draft.attendeeLastName} onChange={event => { namesEdited.current = true; setDraft(current => ({ ...current, attendeeLastName: event.target.value })) }} />
               </div>
               <div>
                 <Label htmlFor="quick-book-email">Email</Label>
@@ -384,12 +446,12 @@ export function QuickBookForm({
               <div>
                 <Label htmlFor="quick-book-spouse-first-name">Spouse/partner first name</Label>
                 <Input id="quick-book-spouse-first-name" maxLength={80}
-                  value={draft.secondAttendeeFirstName} onChange={event => setDraft(current => ({ ...current, secondAttendeeFirstName: event.target.value }))} />
+                  value={draft.secondAttendeeFirstName} onChange={event => { namesEdited.current = true; setDraft(current => ({ ...current, secondAttendeeFirstName: event.target.value })) }} />
               </div>
               <div>
                 <Label htmlFor="quick-book-spouse-last-name">Spouse/partner last name</Label>
                 <Input id="quick-book-spouse-last-name" maxLength={80}
-                  value={draft.secondAttendeeLastName} onChange={event => setDraft(current => ({ ...current, secondAttendeeLastName: event.target.value }))} />
+                  value={draft.secondAttendeeLastName} onChange={event => { namesEdited.current = true; setDraft(current => ({ ...current, secondAttendeeLastName: event.target.value })) }} />
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="quick-book-spouse-email">Spouse/partner email</Label>

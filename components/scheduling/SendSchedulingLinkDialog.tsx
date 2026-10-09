@@ -18,6 +18,8 @@ interface TypeOption {
   key: string
   label: string
   configured: boolean
+  /** Booked from the client portal only, so it can be sent as a portal message only. */
+  portalOnly?: boolean
   links: { email: string; sms: string; portal: string } | null
   embedUrl: string | null
 }
@@ -70,9 +72,9 @@ export function SendSchedulingLinkDialog({
       })
       .then(json => {
         setData(json)
-        const firstConfigured = json.types.find(t => t.configured)
+        const firstConfigured = json.types.find(t => t.configured && !t.portalOnly) ?? json.types.find(t => t.configured)
         setTypeKey(firstConfigured?.key ?? '')
-        setChannel(json.recipient.email ? 'email' : 'portal')
+        setChannel(json.recipient.email && !firstConfigured?.portalOnly ? 'email' : 'portal')
         setDirty(false)
         setSubjectDirty(false)
       })
@@ -112,8 +114,6 @@ export function SendSchedulingLinkDialog({
       toast.success(
         channel === 'portal' ? 'Posted to the client portal' : `Scheduling link ${json.status}`,
       )
-      // Lawmatics links: the lead could not be linked in Lawmatics first.
-      if (typeof json.warning === 'string') toast.warning(json.warning)
       onOpenChange(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Send failed')
@@ -124,6 +124,7 @@ export function SendSchedulingLinkDialog({
 
   const channelDisabled = (c: Channel): string | null => {
     if (!data) return 'Loading'
+    if (c === 'email' && selected?.portalOnly) return 'this type is booked from the client portal'
     if (c === 'email' && !data.recipient.email) return 'no email on file'
     if (c === 'sms' && !data.smsConfigured) return 'SMS not configured'
     if (c === 'sms' && !data.recipient.phone) return 'no phone on file'
@@ -188,8 +189,13 @@ export function SendSchedulingLinkDialog({
                     // line instead of being clipped or widening the dialog.
                     className="h-auto min-w-0 w-full justify-start whitespace-normal py-2 text-left"
                     disabled={!type.configured}
-                    title={type.configured ? undefined : 'Add the link in Settings → Scheduling'}
-                    onClick={() => { setTypeKey(type.key); setDirty(false); setSubjectDirty(false) }}
+                    title={type.configured ? undefined : 'Portal-only type: available for hired clients'}
+                    onClick={() => {
+                      setTypeKey(type.key)
+                      setDirty(false)
+                      setSubjectDirty(false)
+                      if (type.portalOnly) setChannel('portal')
+                    }}
                   >
                     {type.label}
                   </Button>
@@ -197,7 +203,7 @@ export function SendSchedulingLinkDialog({
               </div>
               {!data.types.some(t => t.configured) && (
                 <p className="text-xs text-destructive">
-                  No booking links configured yet — add them in Settings → Scheduling.
+                  No active appointment types yet. Add one in Settings → Scheduling.
                 </p>
               )}
             </div>
