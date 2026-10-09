@@ -310,6 +310,8 @@ async function sendConfirmationEmails(input: {
   type: AppointmentType
   startIso: string
   attendeeName: string
+  /** The first name entered at booking; older rows without one fall back to the full name. */
+  attendeeFirstName?: string | null
   attendeeEmail: string
   manageToken: string | null
   meetingUrl: string | null
@@ -358,7 +360,7 @@ async function sendConfirmationEmails(input: {
         meetingProvider: input.meetingProvider ?? null,
         manageToken: input.manageToken,
         event: input.action === 'Rescheduled' ? 'rescheduled' : 'booked',
-        firstName: attendeeFirstName(input.attendeeName),
+        firstName: input.attendeeFirstName?.trim() || attendeeFirstName(input.attendeeName),
       })
       await sendEmail({
         category: 'appointment_confirmation',
@@ -622,6 +624,7 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     type: effectiveType,
     startIso,
     attendeeName: input.attendeeName,
+    attendeeFirstName: input.attendeeFirstName,
     attendeeEmail: input.attendeeEmail,
     ccEmail: input.secondAttendeeEmail?.trim().toLowerCase() || null,
     manageToken: manage.token,
@@ -871,6 +874,7 @@ export async function rescheduleAppointment(
     type: { ...type, locationType: resolveLocationType(appointment.location_type, type) },
     startIso,
     attendeeName: appointment.attendee_name,
+    attendeeFirstName: appointment.attendee_first_name ?? null,
     attendeeEmail: appointment.attendee_email,
     ccEmail: appointment.second_attendee_email ?? null,
     // Manage link keeps working — token is unchanged on reschedule.
