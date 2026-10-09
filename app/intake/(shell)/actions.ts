@@ -10,7 +10,7 @@ export interface RequestUnlockResult {
   requestedAt: string
 }
 
-export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockResult> {
+export async function requestIntakeUnlock(note?: string, intakeId?: string): Promise<RequestUnlockResult> {
   const sb = await createServerSupabase()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -19,10 +19,14 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
   // one intake row (re-invite, second engagement), and maybeSingle() errors in
   // that case, which would make the unlock request permanently unavailable.
   // Ordering matches findClientIntakeForUser.
-  const { data: intakeRows, error: readError } = await sb
+  // A named questionnaire (one of several this person holds) is used when the
+  // caller owns it; the ownership predicate below still applies either way.
+  let lookup = sb
     .from('client_intake')
     .select('id, status, first_name, last_name, email')
     .or(`user_id.eq.${user.id},client_user_id.eq.${user.id}`)
+  if (intakeId && /^[0-9a-f-]{36}$/i.test(intakeId)) lookup = lookup.eq('id', intakeId)
+  const { data: intakeRows, error: readError } = await lookup
     .order('created_at', { ascending: true })
     .limit(1)
   if (readError) throw new Error(readError.message)
@@ -42,11 +46,20 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
     .eq('id', intake.id)
   if (updateError) throw new Error(updateError.message)
 
-  const { data: matter } = await admin
+  let { data: matter } = await admin
     .from('matters')
     .select('id, relationship_status')
     .eq('client_intake_id', intake.id)
     .maybeSingle()
+  if (!matter) {
+    // A linked questionnaire (e.g. a student's College Prep) has no matter of
+    // its own; route the request to the matter it was added to.
+    const { data: link } = await admin.from('matter_linked_intakes' as never).select('matter_id').eq('client_intake_id', intake.id).maybeSingle()
+    const linkedMatterId = (link as { matter_id?: string } | null)?.matter_id
+    if (linkedMatterId) {
+      ;({ data: matter } = await admin.from('matters').select('id, relationship_status').eq('id', linkedMatterId).maybeSingle())
+    }
+  }
   const adminLink = matter?.id && matter.relationship_status === 'hired'
     ? appUrl(`/admin/matters/${matter.id}?tab=communications&channel=portal`)
     : appUrl(`/admin/crm/opportunities/${intake.id}`)

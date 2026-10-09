@@ -6,6 +6,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import type { IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { NewItem } from '@/lib/intake/forms/editorState'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
+import { INTAKE_QUESTION_TYPES } from '@/lib/intake/forms/schema'
+import { QUESTION_TYPE_LABELS } from '@/lib/forms/clientFormAnswers'
 
 const controlLabels = { text: 'Text', textarea: 'Long text', email: 'Email', tel: 'Phone', date: 'Date', select: 'Single choice', multiselect: 'Multiple choice', boolean: 'Yes/no' }
 const requirementLabels = { optional: 'Optional', recommended: 'Recommended', required: 'Required' }
@@ -17,6 +19,21 @@ export function IntakeCatalogDrawer({ definition, catalog, sectionId, onClose, o
   const [query, setQuery] = useState('')
   const metadataId = useId()
   const section = definition.sections.find(value => value.id === sectionId)
+  if (definition.purpose === 'client_form') {
+    const full = Boolean(section && section.items.length >= 100)
+    return <Sheet open={Boolean(section)} onOpenChange={open => { if (!open) onClose() }}>
+      <SheetContent className="w-full sm:max-w-lg" onCloseAutoFocus={event => { event.preventDefault(); onRestoreFocus() }}>
+        <SheetHeader><SheetTitle>Add a question</SheetTitle><SheetDescription>Choose the kind of answer for a new question in {section?.title}. Answers stay with the sent form; they are not copied into the client record.</SheetDescription></SheetHeader>
+        {full && <p className="px-4 text-sm">Section has reached its 100-item limit</p>}
+        <ul className="space-y-1 overflow-auto px-4 pb-4">
+          {INTAKE_QUESTION_TYPES.map(type => <li key={type}><button type="button" disabled={full} className="w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+            onClick={() => onAdd({ kind: 'question', questionType: type, label: 'New question', ...(type === 'single_choice' || type === 'multiple_choice' ? { options: ['Option 1', 'Option 2'] } : {}) })}>
+            {QUESTION_TYPE_LABELS[type]}
+          </button></li>)}
+        </ul>
+      </SheetContent>
+    </Sheet>
+  }
   const used = new Set(definition.sections.flatMap(value => value.items.flatMap(item => item.kind === 'field' ? [item.fieldId] : [])))
   const entries = [
     ...catalog.fields.map(field => ({ ...field, kind: 'field' as const, reason: used.has(field.id) ? 'Already used in this form' : '' })),

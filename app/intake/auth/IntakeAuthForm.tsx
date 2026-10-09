@@ -23,9 +23,12 @@ const inputCls =
 export default function IntakeAuthForm({
   inviteToken,
   invitedEmail,
+  returnTo = '/intake',
 }: {
   inviteToken: string
   invitedEmail?: string
+  /** Sanitized server-side by portalReturnPath. */
+  returnTo?: string
 }) {
   const router = useRouter()
   const {
@@ -49,7 +52,7 @@ export default function IntakeAuthForm({
     name: ['email', 'password', 'confirmPassword'],
   })
 
-  const signInHref = `/auth/login?redirectTo=${encodeURIComponent('/intake')}`
+  const signInHref = `/auth/login?redirectTo=${encodeURIComponent(returnTo)}`
   const rootError = errors.root?.message
 
   async function onSubmit(values: IntakeSignupValues) {
@@ -95,7 +98,7 @@ export default function IntakeAuthForm({
     }
 
     toast.success('Welcome — starting your intake')
-    router.replace('/intake')
+    router.replace(returnTo)
     router.refresh()
   }
 

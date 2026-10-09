@@ -72,7 +72,7 @@ describe('visual intake editor', () => {
       section.title = 'Repeated label'
       for (const item of section.items) {
         if (item.kind === 'field') item.labelOverride = 'Repeated label'
-        else item.titleOverride = 'Repeated label'
+        else if (item.kind === 'block') item.titleOverride = 'Repeated label'
       }
     }
     mount(data)

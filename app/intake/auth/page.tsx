@@ -7,12 +7,14 @@ import { clientIpFrom } from '@/lib/clientIp'
 import { consumeRateLimit } from '@/lib/rateLimit'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
+import { portalReturnPath } from '@/lib/forms/portalReturnPath'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 interface SearchParams {
   token?: string
   invite?: string
+  next?: string
 }
 
 /**
@@ -51,7 +53,7 @@ export default async function IntakeAuthPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { token, invite } = await searchParams
+  const { token, invite, next } = await searchParams
   const inviteToken = invite ?? token ?? ''
   const firm = getFirmConfig()
 
@@ -97,6 +99,8 @@ export default async function IntakeAuthPage({
     )
   }
 
+  const returnTo = portalReturnPath(next, intake.id)
+
   await admin
     .from('client_intake')
     .update({ intake_token_last_used_at: new Date().toISOString() })
@@ -111,7 +115,7 @@ export default async function IntakeAuthPage({
     const invitedEmail = typeof intake.email === 'string' ? intake.email.trim().toLowerCase() : ''
     const userEmail = user.email?.trim().toLowerCase() ?? ''
     if (!invitedEmail || userEmail !== invitedEmail) {
-      redirect('/auth/login?error=staff_only&redirectTo=/intake')
+      redirect(`/auth/login?error=staff_only&redirectTo=${encodeURIComponent(returnTo)}`)
     }
 
     await admin
@@ -125,13 +129,13 @@ export default async function IntakeAuthPage({
 
     await admin.from('matters').update({ client_id: user.id }).eq('client_intake_id', intake.id).eq('relationship_status', 'hired')
 
-    redirect('/intake')
+    redirect(returnTo)
   }
 
   const alreadyRegistered = Boolean(intake.client_user_id || intake.user_id)
   const submitted = intake.status === 'submitted' || intake.status === 'approved'
   if (alreadyRegistered || submitted) {
-    const redirectTo = encodeURIComponent('/intake')
+    const redirectTo = encodeURIComponent(returnTo)
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 dark">
         <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center shadow-sm">
@@ -174,7 +178,7 @@ export default async function IntakeAuthPage({
             </p>
           </div>
 
-          <IntakeAuthForm inviteToken={inviteToken} invitedEmail={intake.email ?? undefined} />
+          <IntakeAuthForm inviteToken={inviteToken} invitedEmail={intake.email ?? undefined} returnTo={returnTo} />
         </div>
 
         <p className="text-center text-xs text-muted-foreground">

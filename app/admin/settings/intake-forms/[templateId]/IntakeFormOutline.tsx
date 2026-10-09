@@ -8,6 +8,7 @@ import type { IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog
 import type { EditorSelection } from '@/lib/intake/forms/editorState'
 
 export function itemLabel(item: IntakeFormItem, catalog: IntakeFormBuilderCatalog): string {
+  if (item.kind === 'question') return item.label
   return item.kind === 'field' ? item.labelOverride ?? catalog.fields.find(field => field.id === item.fieldId)?.label ?? item.fieldId
     : item.titleOverride ?? catalog.blocks.find(block => block.id === item.blockId)?.label ?? item.blockId
 }
