@@ -317,10 +317,12 @@ export async function prepareAnnualReviewOutreach(input: { actorId: string | nul
         name: candidate.clientName,
         email: candidate.clientEmail,
         matterId: candidate.matterId,
-        channel: 'email',
+        // Client Call is usually portal-only: a client with an account books
+        // it from the portal's Schedule page.
+        portalOnly: candidate.hasPortalAccount ? 'schedule' : 'refuse',
       })
     } catch {
-      // No booking page for a client call: the email asks for a reply instead.
+      // No page this client can book a client call from: the email asks for a reply instead.
       booking = null
     }
     const email = composeReviewEmail({
