@@ -1,5 +1,8 @@
 import { isPdfDocument, isWordDocument } from '@/lib/documents'
 import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
+import { folderPath } from '@/lib/documentFolders'
+
+export { folderPath, folderSubtreeIds } from '@/lib/documentFolders'
 
 export type FileTypeFilter = 'all' | 'pdf' | 'word' | 'other'
 
@@ -105,17 +108,41 @@ const DERIVED_FOLDER_VIEWS: DocumentFolderView[] = DOCUMENT_FOLDERS.map(folder =
 }))
 
 /**
- * Every folder the root should show, attorney-created ones first — they are
- * the ones somebody deliberately made, and burying them under three fixtures
- * would defeat the point of creating them.
+ * Every folder to show directly inside `parentId` (the root when null),
+ * attorney-created ones first — they are the ones somebody deliberately made,
+ * and burying them under three fixtures would defeat the point of creating
+ * them. The derived folders only exist at the root.
  */
-export function documentFolderViews(folders: MatterDocumentFolder[]): DocumentFolderView[] {
+export function documentFolderViews(
+  folders: MatterDocumentFolder[],
+  parentId: string | null = null,
+): DocumentFolderView[] {
   return [
-    ...[...folders]
+    ...folders
+      .filter(folder => (folder.parent_id ?? null) === parentId)
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(customFolderView),
-    ...DERIVED_FOLDER_VIEWS,
+    ...(parentId === null ? DERIVED_FOLDER_VIEWS : []),
   ]
+}
+
+/**
+ * "Drafts / Trust" — the label a move menu needs, where two subfolders may
+ * share a name under different parents.
+ */
+export function folderPathLabel(folderId: string, folders: MatterDocumentFolder[]): string {
+  const path = folderPath(folderId, folders)
+  return path.length > 0 ? path.map(folder => folder.name).join(' / ') : resolveFolderLabel(folderId, folders)
+}
+
+/** Attorney-created folders in tree order, each with its full path label. */
+export function folderMoveTargets(folders: MatterDocumentFolder[]): { id: string; label: string; depth: number }[] {
+  return folders
+    .map(folder => {
+      const path = folderPath(folder.id, folders)
+      return { id: folder.id, label: path.map(entry => entry.name).join(' / '), depth: path.length - 1 }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
 }
 
 /**

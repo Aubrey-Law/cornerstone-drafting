@@ -67,3 +67,17 @@ it('shows only matter milestones and saves the target through the existing detai
   fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
   await waitFor(() => expect(save).toHaveBeenCalledWith('scheduled_signing_date', '2026-10-20T12:00:00.000Z'))
 })
+
+it('fills a date from the calendar and still waits for Save', async () => {
+  render(<MatterKeyDates matterId="m1" details={null} onSaveField={vi.fn()} />)
+  const field = await screen.findByLabelText('Engagement Signed') as HTMLInputElement
+  const pickers = screen.getAllByTestId('key-date-picker') as HTMLInputElement[]
+  expect(screen.getAllByRole('button', { name: 'Open calendar' })).toHaveLength(4)
+  mocks.request.mockResolvedValueOnce({ anchors: { ...anchors, engagementSignedAt: '2026-11-03' }, rescheduled: 0 })
+  fireEvent.change(pickers[0], { target: { value: '2026-11-03' } })
+  expect(field.value).toBe('2026-11-03')
+  expect(mocks.request).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Save date' }))
+  await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce())
+  expect(mocks.request).toHaveBeenLastCalledWith('/api/admin/matters/m1/sla-anchors', expect.objectContaining({ body: JSON.stringify({ engagementSignedAt: '2026-11-03' }) }))
+})

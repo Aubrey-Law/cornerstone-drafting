@@ -1,6 +1,7 @@
 'use client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isSettledDateEntry } from '@/lib/firmDate'
 import { Input } from '@/components/ui/input'
@@ -34,6 +35,8 @@ export function KeyDateEditor({ label, hint, value, saving, onSave }: {
   label: string; hint: string; value: string | null; saving: boolean; onSave: (value: string | null) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
+  const labelId = useId()
   const [draft, setDraft] = useState(value ?? '')
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,13 +48,40 @@ export function KeyDateEditor({ label, hint, value, saving, onSave }: {
     onSave(parsed)
     setEditing(false)
   }
+  /**
+   * The calendar fills the text field the way typing would — the date still
+   * waits for Save — so a picked date and a typed one behave identically.
+   */
+  function openCalendar() {
+    const field = picker.current
+    if (!field || saving) return
+    field.value = parseDateEntry(draft) ?? ''
+    try { field.showPicker() } catch { field.focus(); field.click() }
+  }
+  function choose(iso: string) {
+    if (!iso) return
+    if (input.current) input.current.value = iso
+    setDraft(iso); setEditing(true); setError(null)
+  }
   return <div className="space-y-1">
-    <label className="block space-y-1">
-      <span className="text-xs font-medium text-foreground">{label}</span>
-      <Input ref={input} type="text" placeholder="MM/DD/YYYY" autoComplete="off" className="h-9" disabled={saving} defaultValue={value ?? ''}
-        onChange={event => { setDraft(event.target.value); setEditing(true); setError(null) }}
-        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); save() } }} />
-    </label>
+    <div className="relative">
+      <label className="block space-y-1">
+        <span id={labelId} className="text-xs font-medium text-foreground">{label}</span>
+        <Input ref={input} type="text" placeholder="MM/DD/YYYY" autoComplete="off" className="h-9 pr-9" disabled={saving} defaultValue={value ?? ''}
+          onChange={event => { setDraft(event.target.value); setEditing(true); setError(null) }}
+          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); save() } }} />
+      </label>
+      <button type="button" aria-label="Open calendar" aria-describedby={labelId} title="Pick from calendar" disabled={saving}
+        className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+        onClick={openCalendar}>
+        <CalendarDays className="h-4 w-4" aria-hidden />
+      </button>
+      {/* The browser's own calendar, opened by the button above. Kept rendered
+          (not display:none) because showPicker() needs a laid-out input. */}
+      <input ref={picker} type="date" tabIndex={-1} aria-hidden="true" data-testid="key-date-picker"
+        className="pointer-events-none absolute bottom-0 right-0 h-9 w-9 opacity-0"
+        onChange={event => choose(event.target.value)} />
+    </div>
     <span className="block text-micro text-muted-foreground">{hint}</span>
     {editing && <div className="flex items-center gap-2">
       <Button type="button" size="sm" disabled={saving} onClick={save}>Save date</Button>

@@ -3,7 +3,8 @@ import { getBearerUser } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { DOCUMENT_FOLDER_COLUMNS } from '@/lib/queryColumns'
 import { isAdminUser } from '@/lib/documentSecurity'
-import { normalizeFolderName } from '@/lib/documentFolders'
+import { folderSubtreeIds, normalizeFolderName } from '@/lib/documentFolders'
+import type { MatterDocumentFolder } from '@/types/database'
 
 // PATCH /api/documents/folders/[folderId]  body: { name }
 export async function PATCH(req: Request, { params }: { params: Promise<{ folderId: string }> }) {
@@ -27,7 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ folder
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ error: `A folder named “${name}” already exists` }, { status: 409 })
+      return NextResponse.json({ error: `A folder named “${name}” already exists here` }, { status: 409 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -37,8 +38,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ folder
 
 // DELETE /api/documents/folders/[folderId]
 //
-// The folder goes; its documents do not. `folder_id` is ON DELETE SET NULL, so
-// everything filed inside falls back to the root of the matter's workspace.
+// The folder goes, and its subfolders with it (`parent_id` is ON DELETE
+// CASCADE); its documents do not. `folder_id` is ON DELETE SET NULL, so
+// everything filed anywhere in the branch falls back to the root of the
+// matter's workspace.
 export async function DELETE(req: Request, { params }: { params: Promise<{ folderId: string }> }) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,15 +52,21 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ folde
 
   const { data: existing } = await sb
     .from('matter_document_folders')
-    .select('id')
+    .select('id, matter_id')
     .eq('id', folderId)
     .maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const { data: siblings } = await sb
+    .from('matter_document_folders')
+    .select('id, parent_id')
+    .eq('matter_id', (existing as { matter_id: string }).matter_id)
+  const branch = [...folderSubtreeIds(folderId, Array.isArray(siblings) ? siblings as MatterDocumentFolder[] : [])]
+
   const { count } = await sb
     .from('matter_documents')
     .select('id', { count: 'exact', head: true })
-    .eq('folder_id', folderId)
+    .in('folder_id', branch)
 
   const { error } = await sb.from('matter_document_folders').delete().eq('id', folderId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

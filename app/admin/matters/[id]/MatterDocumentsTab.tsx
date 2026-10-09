@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownAZ,
   Check,
@@ -75,6 +75,10 @@ import {
   buildDocumentStatusBadges,
   documentFolderId,
   documentFolderViews,
+  folderMoveTargets,
+  folderPath,
+  folderPathLabel,
+  folderSubtreeIds,
   formatDocumentSize,
   isDocumentPdf,
   isDocumentShared,
@@ -295,14 +299,33 @@ export function MatterDocumentsTab({
    * Attorney-created folders are listed even when empty — one you just made and
    * have not filed anything into yet still has to be visible to drop files on.
    */
-  const folders = useMemo(() => documentFolderViews(customFolders).map(folder => {
-    const contents = matchingDocuments.filter(doc => documentFolderId(doc) === folder.id)
+  /** The attorney-created folder that is open, if any — only those nest. */
+  const openCustomFolder = useMemo(
+    () => customFolders.find(folder => folder.id === openFolder) ?? null,
+    [customFolders, openFolder],
+  )
+  const openFolderPath = useMemo(
+    () => (openCustomFolder ? folderPath(openCustomFolder.id, customFolders) : []),
+    [customFolders, openCustomFolder],
+  )
+  const moveTargets = useMemo(() => folderMoveTargets(customFolders), [customFolders])
+
+  /**
+   * A folder tile counts everything filed anywhere beneath it, subfolders
+   * included, so a parent holding only subfolders does not read as empty.
+   */
+  const folders = useMemo(() => documentFolderViews(customFolders, openCustomFolder?.id ?? null).map(folder => {
+    const branch = folder.custom ? folderSubtreeIds(folder.id, customFolders) : new Set([folder.id])
+    const contents = matchingDocuments.filter(doc => {
+      const id = documentFolderId(doc)
+      return id !== null && branch.has(id)
+    })
     return {
       ...folder,
       documents: contents,
       size: contents.reduce((sum, doc) => sum + (doc.size || 0), 0),
     }
-  }), [customFolders, matchingDocuments])
+  }), [customFolders, matchingDocuments, openCustomFolder])
 
   const sortDocuments = useCallback((docs: MatterDocument[]) => {
     const direction = sortAscending ? 1 : -1
@@ -332,14 +355,22 @@ export function MatterDocumentsTab({
     return sortDocuments(matchingDocuments.filter(doc => documentFolderId(doc) === null))
   }, [matchingDocuments, openFolder, searching, sortDocuments])
 
-  /** Folder tiles are root furniture; a flattened search replaces them. */
-  const showFolders = openFolder === null && !searching
+  /**
+   * Folder tiles show at the root and inside an attorney-created folder (its
+   * subfolders); a flattened search replaces them.
+   */
+  const showFolders = (openFolder === null || openCustomFolder !== null) && !searching
 
   /**
-   * At the root the master checkbox covers the folders on screen as well, not
-   * just the loose files sitting beside them.
+   * Where folder tiles are on screen the master checkbox covers them as well,
+   * not just the loose files sitting beside them.
    */
-  const selectAllTargets = openFolder === null && !searching ? matchingDocuments : listedDocuments
+  const selectAllTargets = useMemo(() => {
+    if (!showFolders) return listedDocuments
+    if (!openCustomFolder) return matchingDocuments
+    const branch = folderSubtreeIds(openCustomFolder.id, customFolders)
+    return matchingDocuments.filter(doc => doc.folder_id != null && branch.has(doc.folder_id))
+  }, [customFolders, listedDocuments, matchingDocuments, openCustomFolder, showFolders])
 
   const selectedDocuments = useMemo(
     () => visibleDocuments.filter(doc => selectedIds.has(doc.id)),
@@ -539,8 +570,11 @@ export function MatterDocumentsTab({
     if (!name) return
     setBusy('create-folder')
     try {
-      const folder = await createDocumentFolder(matterId, name)
-      toast.success(`Created “${folder.name}”`)
+      // With a folder of the firm's open, the new one goes inside it.
+      const folder = await createDocumentFolder(matterId, name, openCustomFolder?.id ?? null)
+      toast.success(openCustomFolder
+        ? `Created “${folder.name}” in “${openCustomFolder.name}”`
+        : `Created “${folder.name}”`)
       setNewFolderOpen(false)
       setNewFolderName('')
       await refresh()
@@ -574,8 +608,11 @@ export function MatterDocumentsTab({
     setBusy('delete-folder')
     try {
       await deleteDocumentFolder(folder.id)
-      // Its documents survive; the view they were in does not.
-      if (openFolder === folder.id) setOpenFolder(null)
+      // Its documents survive; the view they were in does not. Step out to the
+      // deleted folder's parent if we were anywhere inside it.
+      if (openFolder !== null && folderSubtreeIds(folder.id, customFolders).has(openFolder)) {
+        setOpenFolder(folder.parent_id ?? null)
+      }
       toast.success(`Deleted “${folder.name}”. Its documents moved back to All documents.`)
       setFolderDeleteTarget(null)
       await refresh()
@@ -602,7 +639,7 @@ export function MatterDocumentsTab({
       }
       if (moved.length > 0) {
         const destination = folderId
-          ? resolveFolderLabel(folderId, customFolders)
+          ? folderPathLabel(folderId, customFolders)
           : 'All documents'
         toast.success(moved.length === 1 ? `Moved to ${destination}` : `Moved ${moved.length} documents to ${destination}`)
         await refresh()
@@ -843,10 +880,29 @@ export function MatterDocumentsTab({
             >
               All documents
             </button>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden />
-            <span aria-current="page" className="px-1.5 py-1 font-medium">
-              {resolveFolderLabel(openFolder, customFolders)}
-            </span>
+            {openFolderPath.length > 0 ? openFolderPath.map((folder, index) => (
+              <Fragment key={folder.id}>
+                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                {index === openFolderPath.length - 1 ? (
+                  <span aria-current="page" className="truncate px-1.5 py-1 font-medium">{folder.name}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="truncate rounded px-1.5 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    onClick={() => setOpenFolder(folder.id)}
+                  >
+                    {folder.name}
+                  </button>
+                )}
+              </Fragment>
+            )) : (
+              <>
+                <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden />
+                <span aria-current="page" className="px-1.5 py-1 font-medium">
+                  {resolveFolderLabel(openFolder, customFolders)}
+                </span>
+              </>
+            )}
           </nav>
         )}
 
@@ -883,12 +939,12 @@ export function MatterDocumentsTab({
                 {customFolders.length === 0 ? (
                   <DropdownMenuItem disabled>No folders yet</DropdownMenuItem>
                 ) : (
-                  customFolders.map(folder => (
+                  moveTargets.map(folder => (
                     <DropdownMenuItem
                       key={folder.id}
                       onSelect={() => void handleMove(selectedDocuments, folder.id)}
                     >
-                      {folder.name}
+                      {folder.label}
                     </DropdownMenuItem>
                   ))
                 )}
@@ -1051,7 +1107,7 @@ export function MatterDocumentsTab({
                           there the chip is what says where the hit lives. */}
                       {openFolder === null && folderKey !== null && (
                         <span className="text-micro text-muted-foreground">
-                          {resolveFolderLabel(folderKey, customFolders)}
+                          {folderPathLabel(folderKey, customFolders)}
                         </span>
                       )}
                       <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
@@ -1176,7 +1232,7 @@ export function MatterDocumentsTab({
                             <FolderPlus className="mr-2 h-4 w-4" />New folder…
                           </DropdownMenuItem>
                         ) : (
-                          customFolders
+                          moveTargets
                             .filter(folder => folder.id !== doc.folder_id)
                             .map(folder => (
                               <DropdownMenuItem
@@ -1184,7 +1240,7 @@ export function MatterDocumentsTab({
                                 onSelect={() => void handleMove([doc], folder.id)}
                               >
                                 <Folder className="mr-2 h-4 w-4" />
-                                <span className="truncate">{folder.name}</span>
+                                <span className="truncate">{folder.label}</span>
                               </DropdownMenuItem>
                             ))
                         )}
@@ -1220,7 +1276,7 @@ export function MatterDocumentsTab({
       <Dialog open={newFolderOpen} onOpenChange={open => { if (!open) setNewFolderOpen(false) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>New folder</DialogTitle>
+            <DialogTitle>{openCustomFolder ? `New folder in “${openCustomFolder.name}”` : 'New folder'}</DialogTitle>
             <DialogDescription>
               Group this {recordLabel}&rsquo;s documents however the work is organised. Folders are
               firm-only — the client portal never shows them.
@@ -1288,8 +1344,10 @@ export function MatterDocumentsTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete folder?</AlertDialogTitle>
             <AlertDialogDescription>
-              &ldquo;{folderDeleteTarget?.name ?? ''}&rdquo; will be removed. The documents filed in it are
-              not deleted — they move back to All documents.
+              &ldquo;{folderDeleteTarget?.name ?? ''}&rdquo; will be removed
+              {folderDeleteTarget && customFolders.some(folder => folder.parent_id === folderDeleteTarget.id)
+                ? ', along with its subfolders'
+                : ''}. The documents filed in it are not deleted — they move back to All documents.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

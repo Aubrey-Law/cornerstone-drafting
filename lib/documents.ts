@@ -322,6 +322,7 @@ export async function listDocumentFolders(matterId: string): Promise<MatterDocum
 export async function createDocumentFolder(
   matterId: string,
   name: string,
+  parentId: string | null = null,
 ): Promise<MatterDocumentFolder> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -329,7 +330,7 @@ export async function createDocumentFolder(
   const res = await fetch('/api/documents/folders', {
     method: 'POST',
     headers: authHeaders(token),
-    body: JSON.stringify({ matterId, name }),
+    body: JSON.stringify({ matterId, name, parentId }),
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body?.error ?? 'Could not create folder')
