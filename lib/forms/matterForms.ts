@@ -21,6 +21,13 @@ export class MatterFormsError extends Error {
   constructor(message: string, readonly status = 400) { super(message) }
 }
 
+/** Another matter shown alongside this one (a companion drafting matter, or the matter it came from). */
+export interface MatterRef {
+  id: string
+  name: string | null
+  matterNumber: string | null
+}
+
 export interface MatterIntakeSummary {
   id: string
   primary: boolean
@@ -33,6 +40,8 @@ export interface MatterIntakeSummary {
   sentAt: string | null
   completedAt: string | null
   hasPortalAccount: boolean
+  /** Linked questionnaires only: the hired matter it is being drafted on. */
+  companionMatter: MatterRef | null
 }
 export interface MatterFormAssignmentSummary {
   id: string
@@ -53,6 +62,9 @@ export interface ClientFormOption {
 }
 export interface MatterFormsOverview {
   matterId: string
+  hired: boolean
+  /** Set when this matter is a companion opened from a questionnaire linked to that matter. */
+  parentMatter: MatterRef | null
   intakes: MatterIntakeSummary[]
   assignments: MatterFormAssignmentSummary[]
   options: ClientFormOption[]
@@ -74,14 +86,23 @@ function dbFailure(error: { message: string } | null, message = 'Forms are tempo
   throw new MatterFormsError(message, 503)
 }
 
-async function loadMatter(matterId: string): Promise<{ id: string; client_intake_id: string }> {
-  const { data, error } = await formsDb().from('matters').select('id, client_intake_id').eq('id', matterId).maybeSingle()
+type MatterRow = { id: string; client_intake_id: string; relationship_status: string | null }
+
+async function loadMatter(matterId: string): Promise<MatterRow> {
+  const { data, error } = await formsDb().from('matters').select('id, client_intake_id, relationship_status').eq('id', matterId).maybeSingle()
   if (error) dbFailure(error)
   if (!data?.client_intake_id) throw new MatterFormsError('Matter not found.', 404)
-  return data as { id: string; client_intake_id: string }
+  return data as MatterRow
 }
 
-async function logMatterActivity(matterId: string, actorId: string | null, eventType: string, title: string, detail: string | null) {
+async function loadMatterRefs(ids: string[]): Promise<Map<string, MatterRef>> {
+  if (!ids.length) return new Map()
+  const { data, error } = await formsDb().from('matters').select('id, name, matter_number').in('id', ids)
+  if (error) dbFailure(error)
+  return new Map((data ?? []).map(row => [row.id, { id: row.id, name: row.name ?? null, matterNumber: row.matter_number ?? null }]))
+}
+
+export async function logMatterActivity(matterId: string, actorId: string | null, eventType: string, title: string, detail: string | null) {
   try {
     await formsDb().from('matter_activity').insert({ matter_id: matterId, event_type: eventType, title, detail, actor_id: actorId })
   } catch (error) {
@@ -109,6 +130,7 @@ export async function listMatterIntakes(matterId: string): Promise<MatterIntakeS
   const { data: rows, error } = await formsDb().from('client_intake').select(INTAKE_COLUMNS).in('id', ids)
   if (error) dbFailure(error)
   const byId = new Map(((rows ?? []) as IntakeRow[]).map(row => [row.id, row]))
+  const companions = await loadMatterRefs((links ?? []).flatMap(link => link.companion_matter_id ? [link.companion_matter_id] : []))
   return ids.flatMap(id => {
     const row = byId.get(id)
     if (!row) return []
@@ -117,24 +139,30 @@ export async function listMatterIntakes(matterId: string): Promise<MatterIntakeS
       id, primary: id === matter.client_intake_id, linkId: link?.id ?? null, label: link?.label ?? null,
       name: intakeDisplayName(row), email: row.email, track: getIntakeTrack(row), status: row.status,
       sentAt: row.intake_sent_at, completedAt: row.intake_completed_at, hasPortalAccount: Boolean(row.user_id || row.client_user_id),
+      companionMatter: link?.companion_matter_id ? companions.get(link.companion_matter_id) ?? null : null,
     }]
   })
 }
 
 export async function getMatterFormsOverview(matterId: string): Promise<MatterFormsOverview> {
-  const [intakes, assignmentsResult, options] = await Promise.all([
+  const [matter, intakes, assignmentsResult, options, parentLink] = await Promise.all([
+    loadMatter(matterId),
     listMatterIntakes(matterId),
     formsDb().from('client_form_assignments').select('*').eq('matter_id', matterId).order('sent_at', { ascending: false }),
     listClientFormOptions(),
+    formsDb().from('matter_linked_intakes').select('matter_id').eq('companion_matter_id', matterId).maybeSingle(),
   ])
   if (assignmentsResult.error) dbFailure(assignmentsResult.error)
+  if (parentLink.error) dbFailure(parentLink.error)
+  const parentMatterId = parentLink.data?.matter_id ?? null
+  const parentMatter = parentMatterId ? (await loadMatterRefs([parentMatterId])).get(parentMatterId) ?? null : null
   const names = new Map(intakes.map(intake => [intake.id, intake.name]))
   const assignments = (assignmentsResult.data ?? []).map(row => ({
     id: row.id, title: row.title, status: row.status, recipientIntakeId: row.client_intake_id,
     recipientName: names.get(row.client_intake_id) ?? 'Former recipient', sentAt: row.sent_at, submittedAt: row.submitted_at,
     formVersionId: row.form_version_id,
   }))
-  return { matterId, intakes, assignments, options }
+  return { matterId, hired: matter.relationship_status === 'hired', parentMatter, intakes, assignments, options }
 }
 
 export interface AddLinkedIntakeInput {
@@ -193,7 +221,8 @@ export async function removeLinkedIntake(matterId: string, linkId: string, actor
   if (rowError) dbFailure(rowError)
   const intake = row as IntakeRow | null
   const { count } = await formsDb().from('client_form_assignments').select('id', { count: 'exact', head: true }).eq('client_intake_id', link.client_intake_id)
-  const untouched = intake && (intake.status ?? 'draft') === 'draft' && !intake.user_id && !intake.client_user_id && !intake.intake_sent_at && !count
+  // A questionnaire with a companion matter is that matter's primary intake: only ever unlink it.
+  const untouched = !link.companion_matter_id && intake && (intake.status ?? 'draft') === 'draft' && !intake.user_id && !intake.client_user_id && !intake.intake_sent_at && !count
   let deleted = false
   if (untouched) {
     // Other tables may hold the row (contacts, uploads); fall back to unlinking.
