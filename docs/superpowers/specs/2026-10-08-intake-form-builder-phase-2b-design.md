@@ -545,7 +545,7 @@ npm run dev
 ```
 
 Reset, fixture seed, and development-server startup succeeded. The local
-database contains **290 migrations through 20270130090002**, including the
+database contains **292 migrations through 20270131090200**, including the
 audit migration. The reset removed only reproducible disposable fixture data.
 The CLI's generic explicit-URL output calls this target “remote”; its actual
 address was loopback. No `--linked` operation was used.
