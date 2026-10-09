@@ -6,7 +6,21 @@ type ClientIntakeRow = Record<string, unknown>
 export async function findClientIntakeForUser(
   supabase: SupabaseClient,
   userId: string,
+  preferredId?: string | null,
 ): Promise<ClientIntakeRow | null> {
+  // One person can hold several questionnaires (their own and, say, a child's
+  // College Prep they are filling in). A requested one is honoured only when
+  // the caller owns it; otherwise the oldest row stays canonical.
+  if (preferredId) {
+    const { data: preferred } = await supabase
+      .from('client_intake')
+      .select('*')
+      .eq('id', preferredId)
+      .or(`user_id.eq.${userId},client_user_id.eq.${userId}`)
+      .limit(1)
+    if (preferred?.[0]) return preferred[0] as ClientIntakeRow
+  }
+
   const { data } = await supabase
     .from('client_intake')
     .select('*')
@@ -56,8 +70,9 @@ async function linkInvitedIntakeByEmail(user: User): Promise<ClientIntakeRow | n
 export async function getOrCreateClientIntakeForUser(
   supabase: SupabaseClient,
   user: User,
+  preferredId?: string | null,
 ): Promise<ClientIntakeRow> {
-  const owned = await findClientIntakeForUser(supabase, user.id)
+  const owned = await findClientIntakeForUser(supabase, user.id, preferredId)
   if (owned) return owned
 
   const linked = await linkInvitedIntakeByEmail(user)

@@ -30,7 +30,9 @@ export async function resolveIntakeForm(input: {
       throw new IntakeFormUnavailableError()
     }
     const template = await getTemplateRow(version.template_id)
-    if (!template || template.purpose === 'discovery_call' || version.definition.purpose === 'discovery_call' || version.definition.key !== template.key) throw new IntakeFormUnavailableError()
+    // Only client-intake questionnaires resolve here; discovery calls and
+    // custom client forms have their own delivery paths.
+    if (!template || (template.purpose ?? 'client_intake') !== 'client_intake' || (version.definition.purpose ?? 'client_intake') !== 'client_intake' || version.definition.key !== template.key) throw new IntakeFormUnavailableError()
     const compiled = compileIntakeForm(version.definition, input.audience)
     if (!compiled.success) throw new IntakeFormUnavailableError()
     return { source: 'persistent', versionId: input.formVersionId, form: compiled.form }

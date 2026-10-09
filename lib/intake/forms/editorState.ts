@@ -14,9 +14,11 @@ export type NewSection = Omit<IntakeFormSection, 'id' | 'items'>
 export type NewItem =
   | Omit<Extract<IntakeFormItem, { kind: 'field' }>, 'id'>
   | Omit<Extract<IntakeFormItem, { kind: 'block' }>, 'id'>
+  | Omit<Extract<IntakeFormItem, { kind: 'question' }>, 'id'>
 export type ItemPatch =
   | Partial<Omit<Extract<IntakeFormItem, { kind: 'field' }>, 'id' | 'kind' | 'fieldId'>>
   | Partial<Omit<Extract<IntakeFormItem, { kind: 'block' }>, 'id' | 'kind' | 'blockId'>>
+  | Partial<Omit<Extract<IntakeFormItem, { kind: 'question' }>, 'id' | 'kind'>>
 
 const clone = <T>(value: T): T => structuredClone(value)
 
@@ -80,7 +82,9 @@ export function moveSection(definition: IntakeFormDefinition, id: string, toInde
 
 export function addItem(definition: IntakeFormDefinition, sectionId: string, input: NewItem, factory: EditorIdFactory = () => globalThis.crypto.randomUUID()): IntakeFormDefinition {
   const index = sectionIndex(definition, sectionId)
-  if (input.kind === 'field') {
+  if (input.kind === 'question') {
+    if (definition.purpose !== 'client_form') throw new Error('Custom questions are only available in client forms')
+  } else if (input.kind === 'field') {
     getBuilderField(input.fieldId)
     if (definition.sections.some(section => section.items.some(item => item.kind === 'field' && item.fieldId === input.fieldId))) {
       throw new Error(`Field "${input.fieldId}" is already used in this form`)
@@ -97,7 +101,7 @@ export function updateItem(definition: IntakeFormDefinition, id: string, patch: 
   return { ...definition, sections: definition.sections.map((section, s) => s === location.sectionIndex ? {
     ...section, items: section.items.map((item, i) => i === location.itemIndex ? {
       ...item, ...clone(patch), id: item.id, kind: item.kind,
-      ...(item.kind === 'field' ? { fieldId: item.fieldId } : { blockId: item.blockId }),
+      ...(item.kind === 'field' ? { fieldId: item.fieldId } : item.kind === 'block' ? { blockId: item.blockId } : {}),
     } as IntakeFormItem : item),
   } : section) }
 }
@@ -178,7 +182,7 @@ export function targetForDiagnostic(path: string, definition: IntakeFormDefiniti
   const itemIndex = /^\d+$/.test(parts[3] ?? '') ? Number(parts[3]) : -1
   const item = section.items[itemIndex]
   if (!item) return { kind: 'section', sectionId: section.id, control: 'items' }
-  return { kind: 'item', sectionId: section.id, itemId: item.id, control: parts[4] || (item.kind === 'field' ? 'labelOverride' : 'titleOverride') }
+  return { kind: 'item', sectionId: section.id, itemId: item.id, control: parts[4] || (item.kind === 'field' ? 'labelOverride' : item.kind === 'question' ? 'label' : 'titleOverride') }
 }
 
 /** Browser-safe comparison of JSON definitions; array order remains significant. */

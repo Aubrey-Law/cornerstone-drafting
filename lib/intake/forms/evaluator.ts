@@ -119,7 +119,8 @@ export function evaluateCompiledIntakeForm(form: CompiledIntakeForm, data: Intak
   const activeSections = activeContent.map(({ section, activeItems }): EvaluatedIntakeSection => {
     const activeFields = new Set(activeItems.flatMap((item) => item.kind === 'field' ? [item.fieldId] : []))
     const items = activeItems.map((item): EvaluatedIntakeItem => {
-      const result = item.kind === 'block' ? evaluateIntakeBlock(item.blockId, item.config, data) : (() => {
+      // Custom questions belong to client forms, which are evaluated by lib/forms; never here.
+      const result = item.kind === 'block' ? evaluateIntakeBlock(item.blockId, item.config, data) : item.kind === 'question' ? { issues: [], complete: true } : (() => {
         const field = getFormField(item.fieldId)
         const issues = scalarIssues(item, field, data, activeFields, activeFormFields)
         return { issues, complete: issues.every((issue) => issue.severity !== 'error') }

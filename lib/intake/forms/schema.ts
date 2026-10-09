@@ -2,7 +2,7 @@ import { type FormFieldId, DISCOVERY_FIELD_IDS } from '@/lib/discovery/catalog'
 import { z } from 'zod'
 import { SHARED_FIELD_IDS } from '@aubrey-law/estate-fields/core'
 import { collectConditionFieldIds } from './conditions'
-import type { IntakeBlockId, IntakeCondition, IntakeFormDefinition } from './types'
+import type { IntakeBlockId, IntakeCondition, IntakeFormDefinition, IntakeQuestionType } from './types'
 
 const idSchema = z.string().min(1).max(80).refine((value) => value.trim().length > 0, 'Must not be blank')
 const titleSchema = z.string().min(1).max(160)
@@ -14,6 +14,9 @@ const blockIds = [
   'spouse_fiduciaries', 'guardian', 'college_parents', 'college_agents',
   'college_hipaa_recipients', 'review_submit', 'attorney_plan_structure', 'attorney_documents',
 ] as const satisfies readonly IntakeBlockId[]
+export const INTAKE_QUESTION_TYPES = [
+  'short_text', 'long_text', 'single_choice', 'multiple_choice', 'yes_no', 'date', 'email', 'phone', 'number',
+] as const satisfies readonly IntakeQuestionType[]
 
 // Bound recursion while parsing, so malformed conditions cannot overflow the stack.
 function conditionSchemaAtDepth(depth: number): z.ZodType<IntakeCondition> {
@@ -73,10 +76,14 @@ const itemSchema = z.discriminatedUnion('kind', [
     titleOverride: titleSchema.optional(), helpText: helpSchema.optional(),
     config: configSchema.optional(), condition: conditionSchema.optional(),
   }).strict(),
+  z.object({
+    kind: z.literal('question'), id: idSchema, label: z.string().max(300), questionType: z.enum(INTAKE_QUESTION_TYPES),
+    options: z.array(z.string().max(160)).max(50).optional(), required: z.boolean().optional(), helpText: helpSchema.optional(),
+  }).strict(),
 ])
 
 export const intakeFormDefinitionSchema: z.ZodType<IntakeFormDefinition> = z.object({
-  purpose: z.enum(['client_intake', 'discovery_call']).optional(), schemaVersion: z.literal(1), key: idSchema, title: titleSchema, description: helpSchema.optional(),
+  purpose: z.enum(['client_intake', 'discovery_call', 'client_form']).optional(), schemaVersion: z.literal(1), key: idSchema, title: titleSchema, description: helpSchema.optional(),
   sections: z.array(z.object({
     id: idSchema, title: titleSchema, subtitle: helpSchema.optional(),
     timeEstimateMinutes: z.number().finite().nonnegative().optional(), optional: z.boolean().optional(),
