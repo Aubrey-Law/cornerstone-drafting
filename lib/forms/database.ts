@@ -26,6 +26,8 @@ export type MatterLinkedIntakeRow = {
   matter_id: string
   client_intake_id: string
   label: string | null
+  /** The hired matter this questionnaire is drafted on (its primary intake), if one was opened. */
+  companion_matter_id: string | null
   created_by: string | null
   created_at: string
 }
