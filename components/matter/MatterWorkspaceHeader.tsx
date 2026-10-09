@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { MatterSwitcher } from '@/components/matter/MatterSwitcher'
 import {
+  CalendarDays,
   ClipboardList,
   CloudUpload,
   Loader as Loader2,
@@ -39,6 +40,8 @@ export interface MatterWorkspaceHeaderProps {
   factsRailOpen: boolean
   onToggleFactsRail: () => void
   onEmail: () => void
+  /** Books in the firm's own scheduler; hidden when not given. */
+  onScheduleAppointment?: () => void
   onOpenIntake: () => void
   onImportIntake: () => void
   onUnlockIntake: () => void
@@ -76,6 +79,7 @@ export function MatterWorkspaceHeader({
   factsRailOpen,
   onToggleFactsRail,
   onEmail,
+  onScheduleAppointment,
   onOpenIntake,
   onImportIntake,
   onUnlockIntake,
@@ -162,6 +166,12 @@ export function MatterWorkspaceHeader({
               <Mail className="mr-2 size-3.5" />
               Email client
             </DropdownMenuItem>
+            {onScheduleAppointment && (
+              <DropdownMenuItem onClick={onScheduleAppointment}>
+                <CalendarDays className="mr-2 size-3.5" />
+                Schedule appointment…
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem onClick={onOpenIntake}>
               <ClipboardList className="mr-2 size-3.5" />

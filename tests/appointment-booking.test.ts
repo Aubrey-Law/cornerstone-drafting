@@ -485,6 +485,25 @@ describe('bookAppointment', () => {
     ).toBe(true)
   })
 
+  it('links the lead or matter staff booked from, over an email match', async () => {
+    state.lead = { id: 'lead-email', lead_status: 'lead' }
+    state.matterId = 'matter-email'
+    await bookAppointment({ ...bookingInput(), source: 'admin', linkedMatterId: 'matter-page' })
+    expect(state.updates.find(u => u.table === 'appointments')?.values).toMatchObject({
+      linked_lead_id: 'lead-email',
+      linked_matter_id: 'matter-page',
+    })
+  })
+
+  it('passes a page link from the admin route and ignores malformed ids', async () => {
+    const leadId = '11111111-2222-4333-8444-555555555555'
+    const request = new NextRequest('http://localhost/api/admin/scheduling/appointments', { method: 'POST', body: JSON.stringify({ typeId: TYPE.id, startIso: SLOT_ISO, attendeeFirstName: 'Pat', attendeeLastName: 'Client',
+      attendeeEmail: 'pat@example.com', linkedLeadId: leadId, linkedMatterId: 'not-a-uuid' }) })
+    const response = await adminBook(request)
+    expect(response.status).toBe(200)
+    expect(state.updates.find(u => u.table === 'appointments')?.values).toMatchObject({ linked_lead_id: leadId })
+  })
+
   it('rejects a slot that conflicts with busy time', async () => {
     state.busy = [
       { start: Date.parse('2026-08-10T14:00:00Z'), end: Date.parse('2026-08-10T15:00:00Z') },

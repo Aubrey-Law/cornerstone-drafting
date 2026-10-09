@@ -10,6 +10,7 @@ import {
   CalendarPlus,
   ClipboardList,
   CloudUpload,
+  ExternalLink,
   Mail,
   Merge,
   MessageSquareText,
@@ -46,6 +47,8 @@ type Props = {
   onStatusChange: (status: MutableLeadStatus) => void
   onSendSchedulingLink: () => void
   onBookForClient: () => void
+  /** Books in the firm's own scheduler (verified openings, confirmation email). */
+  onScheduleAppointment?: () => void
   onCall: () => void
   onEmail: () => void
   onText: () => void
@@ -78,6 +81,7 @@ export function LeadTopActions({
   onStatusChange,
   onSendSchedulingLink,
   onBookForClient,
+  onScheduleAppointment,
   onCall,
   onEmail,
   onIntake,
@@ -134,9 +138,15 @@ export function LeadTopActions({
               Add note
             </DropdownMenuItem>
           )}
+          {onScheduleAppointment && (
+            <DropdownMenuItem onClick={onScheduleAppointment}>
+              <CalendarDays className="mr-2 size-3.5" />
+              Schedule appointment…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onBookForClient}>
-            <CalendarDays className="mr-2 size-3.5" />
-            Schedule meeting…
+            <ExternalLink className="mr-2 size-3.5" />
+            Book via booking page…
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onSendSchedulingLink}>
             <CalendarPlus className="mr-2 size-3.5" />

@@ -23,6 +23,7 @@ import { RecordTabHeader } from '@/components/RecordTabHeader'
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
   onBookForClient: () => void
+  onScheduleAppointment?: () => void
 }
 
 export interface MatterMessagesSectionsProps {
@@ -148,6 +149,7 @@ export function MatterCommunicationsTab({
   onChannelChange,
   onSendSchedulingLink,
   onBookForClient,
+  onScheduleAppointment,
   items,
   clientName,
   clientPhone,
@@ -179,6 +181,11 @@ export function MatterCommunicationsTab({
             <Button type="button" size="sm" variant="outline" onClick={onBookForClient}>
               Book for client…
             </Button>
+            {onScheduleAppointment && (
+              <Button type="button" size="sm" onClick={onScheduleAppointment}>
+                Schedule appointment…
+              </Button>
+            )}
           </>
         }
       />

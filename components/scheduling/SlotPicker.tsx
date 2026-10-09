@@ -19,9 +19,23 @@ interface AvailabilityResponse {
   error?: string
 }
 
+/** One month's openings, as returned by a custom `loadSlots`. */
+export interface SlotPickerLoadResult {
+  slots: string[]
+  horizonDays?: number
+  error?: string
+}
+
 export interface SlotPickerProps {
-  /** Appointment type slug for the availability API. */
-  typeSlug: string
+  /** Appointment type slug for the public availability API. */
+  typeSlug?: string
+  /**
+   * Replaces the public availability API (staff booking uses the admin slots
+   * route). Keep it stable: a new function reloads the month.
+   */
+  loadSlots?: (range: { from: Date; to: Date }) => Promise<SlotPickerLoadResult>
+  /** Optional second line under a time (e.g. "after hours"). */
+  slotDetail?: (slotIso: string) => string | null
   /** Optional manage token (reschedule flow for portal-only types). */
   manageToken?: string
   selected: string | null
@@ -111,6 +125,8 @@ function plural(n: number, word: string): string {
 
 export default function SlotPicker({
   typeSlug,
+  loadSlots,
+  slotDetail,
   manageToken,
   selected,
   onSelect,
@@ -119,15 +135,18 @@ export default function SlotPicker({
   notice,
   header,
 }: SlotPickerProps) {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()))
+  // A preselected time (staff clicking the calendar) opens on its month and day.
+  const [month, setMonth] = useState(() => startOfMonth(selected ? new Date(selected) : new Date()))
   const [slots, setSlots] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState<string | null>(() =>
+    selected ? dayKey(new Date(selected)) : null,
+  )
   const [horizonDays, setHorizonDays] = useState<number | null>(null)
   // Until the client navigates or picks, skip forward past empty months (e.g.
   // late in a month with nothing left) so the first screen shows openings.
-  const [autoAdvance, setAutoAdvance] = useState(true)
+  const [autoAdvance, setAutoAdvance] = useState(!selected)
 
   const tz = useBrowserTimeZone()
   const todayKey = dayKey(new Date())
@@ -149,6 +168,21 @@ export default function SlotPicker({
         const from = Math.max(month.getTime(), Date.now())
         // Capped: a month that crosses a DST change can run past 31 × 24h.
         const to = Math.min(addMonths(month, 1).getTime(), from + MAX_RANGE_DAYS * DAY_MS)
+        if (loadSlots) {
+          const result = await loadSlots({ from: new Date(from), to: new Date(to) })
+          if (ignore) return
+          if (typeof result.horizonDays === 'number' && Number.isFinite(result.horizonDays)) {
+            setHorizonDays(result.horizonDays)
+          }
+          setSlots(result.error ? [] : result.slots)
+          setError(result.error ?? null)
+          return
+        }
+        if (!typeSlug) {
+          setSlots([])
+          setError('Could not load availability')
+          return
+        }
         const params = new URLSearchParams({
           type: typeSlug,
           from: new Date(from).toISOString(),
@@ -184,7 +218,7 @@ export default function SlotPicker({
     return () => {
       ignore = true
     }
-  }, [typeSlug, manageToken, month, refreshKey])
+  }, [typeSlug, loadSlots, manageToken, month, refreshKey])
 
   const slotsByDay = useMemo(() => {
     const byDay = new Map<string, string[]>()
@@ -404,19 +438,27 @@ export default function SlotPicker({
         <div className="grid grid-cols-2 gap-2 @2xl/picker:max-h-[440px] @2xl/picker:grid-cols-1 @2xl/picker:overflow-y-auto @2xl/picker:p-0.5">
           {daySlots.map(slot => {
             const isSelected = selected === slot
+            const detail = slotDetail?.(slot) ?? null
             return (
               <button
                 key={slot}
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => onSelect(isSelected ? null : slot)}
-                className={`h-12 w-full shrink-0 rounded-lg border text-base font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60 @2xl/picker:h-[46px] ${
+                className={`min-h-12 w-full shrink-0 rounded-lg border py-1 text-base font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60 @2xl/picker:min-h-[46px] ${
                   isSelected
                     ? 'border-brand-teal bg-brand-teal text-white'
                     : 'border-border bg-card text-primary hover:border-brand-teal'
                 }`}
               >
                 {fmtTime(slot)}
+                {detail && (
+                  <span
+                    className={`block text-xs font-normal ${isSelected ? 'text-white/85' : 'text-muted-foreground'}`}
+                  >
+                    {detail}
+                  </span>
+                )}
               </button>
             )
           })}

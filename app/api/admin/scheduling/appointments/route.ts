@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
       locationType: t.locationType,
       locationTypes: t.locationTypes,
       active: t.active,
+      bookingQuestions: t.bookingQuestions,
     })),
     appointments: rows.map(row => ({
       id: row.id,
@@ -155,6 +156,15 @@ interface PostBody {
   videoProvider?: unknown
   /** `{ [questionId]: answer }`; required questions are not enforced for staff. */
   answers?: unknown
+  /** Booked from a lead or matter page: link to that record, not an email match. */
+  linkedLeadId?: unknown
+  linkedMatterId?: unknown
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function optionalUuid(value: unknown): string | null {
+  return typeof value === 'string' && UUID_RE.test(value) ? value : null
 }
 
 /**
@@ -235,6 +245,8 @@ export async function POST(req: NextRequest) {
       source: 'admin',
       bookedByUserId: userId ?? null,
       videoProvider: body.videoProvider === 'microsoft_teams' ? 'microsoft_teams' : null,
+      linkedLeadId: optionalUuid(body.linkedLeadId),
+      linkedMatterId: optionalUuid(body.linkedMatterId),
     })
     return NextResponse.json({
       ok: true,

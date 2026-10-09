@@ -329,7 +329,8 @@ describe('lead detail page', () => {
     expect(screen.getByRole('menuitem', { name: 'Hire matter' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Mark lost' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Add note' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Schedule meeting…' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Schedule appointment…' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Book via booking page…' })).toBeTruthy()
   })
 
   it('opens the details flyout from the header toggle', async () => {
