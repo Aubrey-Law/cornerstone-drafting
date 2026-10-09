@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { TaskComposer } from '@/components/tasks/TaskComposer'
 import { useTaskActions } from '@/components/tasks/useTaskActions'
-import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { BookingPageDialog } from '@/components/scheduling/BookingPageDialog'
 import type { DiscoveryCall } from '@/lib/discovery/contracts'
 import { getFormField } from '@/lib/discovery/catalog'
 
@@ -80,6 +80,6 @@ export function DiscoveryNextAction({ call, name, email }: { call: DiscoveryCall
         } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not prepare task'); return null }
       }} />
     </>}
-    <BookCalendlyDialog open={booking} onOpenChange={setBooking} target={{ kind: 'lead', id: call.lead_id }} />
+    <BookingPageDialog open={booking} onOpenChange={setBooking} target={{ kind: 'lead', id: call.lead_id }} />
   </section>
 }

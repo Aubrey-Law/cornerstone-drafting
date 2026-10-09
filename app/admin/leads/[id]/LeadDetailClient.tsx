@@ -84,7 +84,7 @@ import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { LeadIntakeCard } from './LeadIntakeCard'
 import { MatterFormsCard } from '@/components/forms/MatterFormsCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
-import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { BookingPageDialog } from '@/components/scheduling/BookingPageDialog'
 import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
 import type {
   LeadActivityViewRow,
@@ -1278,10 +1278,11 @@ export function LeadDetailClient({
         open={schedulingLinkOpen}
         onOpenChange={setSchedulingLinkOpen}
       />
-      <BookCalendlyDialog
+      <BookingPageDialog
         target={{ kind: 'lead', id: lead.id }}
         open={bookForClientOpen}
         onOpenChange={setBookForClientOpen}
+        onBooked={() => router.refresh()}
       />
       <ScheduleAppointmentDialog
         target={{ kind: 'lead', id: lead.id }}

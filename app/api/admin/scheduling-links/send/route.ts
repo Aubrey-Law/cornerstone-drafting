@@ -4,10 +4,10 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { sendEmail } from '@/lib/email/send'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { notifyClientOfFirmMessage } from '@/lib/portalNotifications'
-import { buildCalendlyLink, getCalendlyUrls } from '@/lib/calendly/links'
-import { bookingProviderForUrl } from '@/lib/bookings/provider'
-import { prepareLawmaticsBooking } from '@/lib/integrations/lawmatics/bookingLink'
-import { MEETING_TYPE_KEYS, meetingTypeForKey, type MeetingTypeKey } from '@/lib/scheduling'
+import { listAppointmentTypes } from '@/lib/appointments/settings'
+import type { AppointmentType } from '@/lib/appointments/types'
+import { loadBookingAttendee } from '@/lib/appointments/bookingAttendee'
+import { nativeBookingPath, nativeBookingUrl, type BookingPrefill } from '@/lib/bookings/prefill'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,6 +69,28 @@ function defaultMessage(firstName: string | null, label: string, link: string): 
   return `${greeting}\n\nPlease use this link to schedule your ${label}:\n${link}\n\nIf none of the times work, let us know and we'll find one that does.`
 }
 
+/** Stored first/last names when the record has them; the display name otherwise. */
+async function bookingPrefill(
+  target: { leadId: string | null; matterId: string | null },
+  recipient: Recipient,
+): Promise<BookingPrefill> {
+  const attendee = await loadBookingAttendee(
+    getAdminClient(),
+    target.leadId ? { leadId: target.leadId } : { matterId: target.matterId! },
+  ).catch(() => null)
+  return {
+    firstName: attendee?.firstName ?? recipient.firstName,
+    lastName: attendee?.lastName ?? null,
+    email: recipient.email,
+    phone: recipient.phone,
+  }
+}
+
+async function findBookableType(slug: unknown): Promise<AppointmentType | null> {
+  if (typeof slug !== 'string' || !slug) return null
+  return (await listAppointmentTypes()).find(type => type.slug === slug && type.active) ?? null
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -104,30 +126,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error ?? 'Not found' }, { status: 404 })
   }
 
-  const urls = await getCalendlyUrls()
-  const linkOpts = {
-    name: recipient.name,
-    email: recipient.email,
-    leadId,
-    matterId,
-  }
-  const types = MEETING_TYPE_KEYS.map(key => {
-    const meetingType = meetingTypeForKey(key)!
-    const base = urls[key]
-    return {
-      key,
-      label: meetingType.label,
-      configured: Boolean(base),
-      links: base
-        ? {
-            email: buildCalendlyLink(base, { ...linkOpts, channel: 'email' }),
-            sms: buildCalendlyLink(base, { ...linkOpts, channel: 'sms' }),
-            portal: buildCalendlyLink(base, { ...linkOpts, channel: 'portal' }),
-          }
-        : null,
-      embedUrl: base ? buildCalendlyLink(base, { ...linkOpts, channel: 'staff' }) : null,
-    }
-  })
+  const prefill = await bookingPrefill({ leadId, matterId }, recipient)
+  // The firm's own booking pages. A portal-only type needs a signed-in
+  // client, so it is offered for portal messages only.
+  const types = (await listAppointmentTypes())
+    .filter(type => type.active)
+    .map(type => {
+      const url = nativeBookingUrl(type.slug, prefill)
+      return {
+        key: type.slug,
+        label: type.label,
+        configured: type.public || Boolean(matterId),
+        portalOnly: !type.public,
+        links: { email: url, sms: url, portal: url },
+        // Embedded in the staff app: same host, so the page can report back.
+        embedUrl: nativeBookingPath(type.slug, prefill),
+      }
+    })
 
   return NextResponse.json({
     recipient: { name: recipient.name, email: recipient.email, phone: recipient.phone },
@@ -159,47 +174,32 @@ export async function POST(req: NextRequest) {
   if (channel !== 'email' && channel !== 'sms' && channel !== 'portal') {
     return NextResponse.json({ error: 'channel must be email, sms, or portal' }, { status: 400 })
   }
+  if (channel === 'sms') return NextResponse.json({ error: 'Texting has been retired.' }, { status: 410 })
   if (channel === 'portal' && !matterId) {
     return NextResponse.json({ error: 'Portal messages require a matter target' }, { status: 400 })
   }
 
-  const meetingType = meetingTypeForKey(typeof body.meetingTypeKey === 'string' ? body.meetingTypeKey : null)
+  const meetingType = await findBookableType(body.meetingTypeKey)
   if (!meetingType) {
-    return NextResponse.json({ error: 'Unknown meeting type' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown appointment type' }, { status: 400 })
   }
-
-  const urls = await getCalendlyUrls()
-  const baseUrl = urls[meetingType.key as MeetingTypeKey]
-  if (!baseUrl) {
+  if (!meetingType.public && channel !== 'portal') {
     return NextResponse.json(
-      { error: `No booking link configured for ${meetingType.label}. Add it in Settings → Scheduling.` },
+      { error: `${meetingType.label} is booked from the client portal; send it as a portal message.` },
       { status: 400 },
     )
   }
+  const baseUrl = nativeBookingUrl(meetingType.slug)
 
   const { recipient, error: recipientError } = await resolveRecipient({ leadId, matterId })
   if (recipientError || !recipient) {
     return NextResponse.json({ error: recipientError ?? 'Not found' }, { status: 404 })
   }
 
-  // Lawmatics events carry no metadata: link the lead to its Lawmatics
-  // prospect first, so the booking it creates resolves back to this record.
-  const lawmatics = channel !== 'sms' && bookingProviderForUrl(baseUrl) === 'lawmatics'
-    ? await prepareLawmaticsBooking({ leadId, matterId }, userId)
-    : null
-  const warning = lawmatics?.warning ? { warning: lawmatics.warning } : {}
-
-  const link = buildCalendlyLink(baseUrl, {
-    name: recipient.name,
-    email: recipient.email,
-    leadId,
-    matterId,
-    channel,
-  })
+  const link = nativeBookingUrl(meetingType.slug, await bookingPrefill({ leadId, matterId }, recipient))
 
   const provided = typeof body.message === 'string' ? body.message.trim() : ''
-  // Any link to the same booking page counts — the user may have kept a
-  // variant with different utm params from the dialog preview.
+  // Any link to the same booking page counts, prefilled or not.
   const hasLink = provided.includes(baseUrl)
   const message = provided
     ? hasLink ? provided : `${provided}\n\n${link}`
@@ -256,10 +256,8 @@ export async function POST(req: NextRequest) {
         .select()
         .single()
     }
-    return NextResponse.json({ success: true, channel, status: result.status, ...warning })
+    return NextResponse.json({ success: true, channel, status: result.status })
   }
-
-  if (channel === 'sms') return NextResponse.json({ error: 'Texting has been retired.' }, { status: 410 })
 
   // channel === 'portal' (matterId guaranteed above)
   const { error: messageError } = await admin
@@ -276,5 +274,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: messageError.message }, { status: 500 })
   }
   await notifyClientOfFirmMessage(matterId!)
-  return NextResponse.json({ success: true, channel, status: 'posted', ...warning })
+  return NextResponse.json({ success: true, channel, status: 'posted' })
 }

@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { loadBookingAttendee } from '@/lib/appointments/bookingAttendee'
 
 export const dynamic = 'force-dynamic'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
+  // ?leadId= | ?matterId= → one record's client and spouse, names as stored
+  // components, to prefill a booking.
+  const leadId = req.nextUrl.searchParams.get('leadId')
+  const matterId = req.nextUrl.searchParams.get('matterId')
+  if (leadId || matterId) {
+    const id = leadId ?? matterId ?? ''
+    if ((leadId && matterId) || !UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Pass one valid leadId or matterId' }, { status: 400 })
+    }
+    const attendee = await loadBookingAttendee(getAdminClient(), leadId ? { leadId: id } : { matterId: id })
+    if (!attendee) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ attendee })
+  }
   const raw = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   if (raw.length < 2) return NextResponse.json({ people: [] })
   const q = raw.replace(/[%,()]/g, ' ').slice(0, 80)

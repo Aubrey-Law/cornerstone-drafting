@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BookingQuestionFields from '@/components/scheduling/BookingQuestionFields'
 import SlotPicker, { fmtLongDay, fmtTime } from '@/components/scheduling/SlotPicker'
 import {
@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { BookingQuestion } from '@/lib/appointments/bookingQuestions'
 import { formatPhoneInput } from '@/lib/phone'
+import { parseBookingPrefill } from '@/lib/bookings/prefill'
 
 type Step = 'pick' | 'details' | 'done'
 
@@ -90,6 +91,19 @@ export default function BookingWidget({
   const [confirmedStart, setConfirmedStart] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
+  // A link the firm sent (or staff opening this page for a client) carries the
+  // client's details in the URL fragment. Fill empty fields, then drop the
+  // fragment so it is not left in the address bar or copied onward.
+  useEffect(() => {
+    if (!standalone || emailLocked || !window.location.hash) return
+    const prefill = parseBookingPrefill(window.location.hash)
+    if (prefill.firstName) setFirstName(current => current || prefill.firstName!)
+    if (prefill.lastName) setLastName(current => current || prefill.lastName!)
+    if (prefill.email) setEmail(current => current || prefill.email!)
+    if (prefill.phone) setPhone(current => current || formatPhoneInput(prefill.phone!))
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }, [standalone, emailLocked])
+
   const Title = standalone ? 'h1' : 'h2'
   const shownTime = step === 'done' ? confirmedStart : selected
 
@@ -140,6 +154,10 @@ export default function BookingWidget({
       }
       setConfirmedStart(json.startTime ?? selected)
       goTo('done')
+      // Staff can open this page inside the app; tell that dialog it is booked.
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'cornerstone:booking-confirmed' }, window.location.origin)
+      }
     } catch {
       setError('Booking failed. Please try again.')
     } finally {

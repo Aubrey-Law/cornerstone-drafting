@@ -46,6 +46,28 @@ describe('booking component names', () => {
     expect(submitted[0]).not.toHaveProperty('secondAttendeeName')
   })
 
+  it('fills the details from a firm link, clears the fragment, and tells a host dialog when booked', async () => {
+    window.history.replaceState(null, '', '/book/discovery-call#first=Mary%20Jane&last=van%20Buren&email=mary%40example.com&phone=5555550100')
+    const postMessage = vi.spyOn(window.parent, 'postMessage')
+    // In a test window parent === window; pretend the page is embedded.
+    const parent = Object.getOwnPropertyDescriptor(window, 'parent')
+    Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage } })
+    try {
+      render(<BookingWidget type={type} standalone />)
+      expect(window.location.hash).toBe('')
+      await chooseSlot()
+      expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane')
+      expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('van Buren')
+      expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('mary@example.com')
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }))
+      await screen.findByText("You're booked")
+      expect(postMessage).toHaveBeenCalledWith({ type: 'cornerstone:booking-confirmed' }, window.location.origin)
+    } finally {
+      if (parent) Object.defineProperty(window, 'parent', parent)
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
   it('returns to the calendar with the time cleared when the slot was taken', async () => {
     vi.mocked(fetch).mockImplementation(async (_url, init) => {
       if (init?.method === 'POST') {
@@ -97,18 +119,32 @@ describe('booking component names', () => {
     expect(submitted[0]).toMatchObject({ attendeeFirstName: 'Mary Jane', attendeeLastName: 'van Buren', secondAttendeeFirstName: 'Jo Ann', secondAttendeeLastName: 'de la Cruz' })
   })
 
-  it('requires confirmation instead of splitting historical names selected by staff', async () => {
-    vi.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () => String(url).includes('/people?')
-      ? { people: [{ id: 'lead:1', kind: 'lead', recordId: '1', name: 'Mary Jane van Buren', email: 'mary@example.com', phone: null, secondName: 'Jo Ann de la Cruz', secondEmail: 'jo@example.com' }] }
-      : { connected: true, slots: [] } }) as Response)
+  it('fills stored first and last names for a person picked by staff', async () => {
+    vi.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () => String(url).includes('/people?leadId=')
+      ? { attendee: { firstName: 'Mary Jane', lastName: 'van Buren', email: 'mary@example.com', phone: '', secondFirstName: 'Jo Ann', secondLastName: 'de la Cruz', secondEmail: 'jo@example.com' } }
+      : String(url).includes('/people?')
+        ? { people: [{ id: 'lead:1', kind: 'lead', recordId: '1', name: 'Mary Jane van Buren', email: 'mary@example.com', phone: null, secondName: 'Jo Ann de la Cruz', secondEmail: 'jo@example.com' }] }
+        : { connected: true, slots: [] } }) as Response)
     render(<QuickBookPopover open onOpenChange={vi.fn()} types={[{ ...type, id: 'type-1', locationTypes: ['teams'], active: true }]} prefillIso={slot} authHeaders={() => undefined} onBooked={vi.fn()} />)
     fireEvent.change(screen.getByPlaceholderText('Search contacts, leads, or matters…'), { target: { value: 'Mary' } })
     // The month picker pages ahead past empty months while this loads; allow CI headroom.
     fireEvent.click(await screen.findByRole('button', { name: /Mary Jane van Buren/ }, { timeout: 5000 }))
-    expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane van Buren')
-    expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('')
-    expect((screen.getByLabelText('Spouse/partner first name') as HTMLInputElement).value).toBe('Jo Ann de la Cruz')
-    expect((screen.getByLabelText('Spouse/partner last name') as HTMLInputElement).value).toBe('')
-    expect((screen.getByRole('button', { name: 'Book & email confirmation' }) as HTMLButtonElement).disabled).toBe(true)
+    // The record's stored components replace the instant split of the display name.
+    await waitFor(() => expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('van Buren'))
+    expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane')
+    expect((screen.getByLabelText('Spouse/partner first name') as HTMLInputElement).value).toBe('Jo Ann')
+    expect((screen.getByLabelText('Spouse/partner last name') as HTMLInputElement).value).toBe('de la Cruz')
+  })
+
+  it('splits a display name when no stored components come back', async () => {
+    vi.mocked(fetch).mockImplementation(async url => ({ ok: !String(url).includes('/people?leadId='), json: async () => String(url).includes('/people?')
+      ? { people: [{ id: 'lead:1', kind: 'lead', recordId: '1', name: 'Pat Q. Client Jr.', email: 'pat@example.com', phone: null, secondName: null, secondEmail: null }] }
+      : { connected: true, slots: [] } }) as Response)
+    render(<QuickBookPopover open onOpenChange={vi.fn()} types={[{ ...type, id: 'type-1', locationTypes: ['teams'], active: true }]} prefillIso={slot} authHeaders={() => undefined} onBooked={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText('Search contacts, leads, or matters…'), { target: { value: 'Pat' } })
+    fireEvent.click(await screen.findByRole('button', { name: /Pat Q\. Client Jr\./ }, { timeout: 5000 }))
+    expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Pat Q.')
+    expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('Client Jr.')
+    expect((screen.getByLabelText('Spouse/partner first name') as HTMLInputElement).value).toBe('')
   })
 })

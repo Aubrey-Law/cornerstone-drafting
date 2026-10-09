@@ -4,14 +4,6 @@ const inserts: Array<{ table: string; values: Record<string, unknown> }> = []
 const sendEmail = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'sent', logId: 'log-1' }))
 const sendOutboundSms = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'queued', providerMessageId: 'SM1', smsMessage: {}, activity: null }))
 const notifyClientOfFirmMessage = vi.fn(async (..._args: unknown[]) => undefined)
-const prepareLawmaticsBooking = vi.fn(async (..._args: unknown[]) => ({
-  intakeId: 'lead-1', prospectId: 'p-1', operation: 'updated', warning: null as string | null,
-}))
-
-vi.mock('@/lib/integrations/lawmatics/bookingLink', () => ({
-  prepareLawmaticsBooking: (...a: unknown[]) => prepareLawmaticsBooking(...a),
-}))
-
 vi.mock('@/lib/apiAuth', () => ({
   requireAdmin: vi.fn(async () => ({
     err: null,
@@ -39,12 +31,20 @@ vi.mock('@/lib/portalNotifications', () => ({
   notifyClientOfFirmMessage: (...a: unknown[]) => notifyClientOfFirmMessage(...a),
 }))
 
-vi.mock('@/lib/calendly/links', async importOriginal => ({
-  ...(await importOriginal<typeof import('@/lib/calendly/links')>()),
-  getCalendlyUrls: vi.fn(async () => ({
-    discovery_call: 'https://calendly.com/aubreylaw/discovery',
-    signing_appointment: 'https://calendly.com/aubreylaw/signing',
-    draft_review: 'https://app.lawmatics.com/forms/booking/draft-review',
+vi.stubEnv('NEXT_PUBLIC_PORTAL_URL', 'https://portal.example.com')
+
+vi.mock('@/lib/appointments/settings', () => ({
+  listAppointmentTypes: vi.fn(async () => [
+    { id: 't-1', slug: 'discovery-call', label: 'Discovery Call', active: true, public: true },
+    { id: 't-2', slug: 'signing', label: 'Signing Appointment', active: true, public: false },
+    { id: 't-3', slug: 'retired', label: 'Retired', active: false, public: true },
+  ]),
+}))
+
+vi.mock('@/lib/appointments/bookingAttendee', () => ({
+  loadBookingAttendee: vi.fn(async () => ({
+    firstName: 'Avery', lastName: 'Stone', email: 'avery@example.com', phone: '+15555550123',
+    secondFirstName: '', secondLastName: '', secondEmail: '',
   })),
 }))
 
@@ -86,25 +86,33 @@ beforeEach(() => {
   sendEmail.mockClear()
   sendOutboundSms.mockClear()
   notifyClientOfFirmMessage.mockClear()
-  prepareLawmaticsBooking.mockClear()
   vi.resetModules()
 })
 
 describe('GET /api/admin/scheduling-links/send', () => {
-  it('returns configured types with per-channel links and embed url', async () => {
+  it("offers the firm's own active booking pages, prefilled for the client", async () => {
     const { GET } = await import('@/app/api/admin/scheduling-links/send/route')
     const res = await GET(new Request('http://localhost/api/admin/scheduling-links/send?leadId=lead-1') as never)
     const json = await res.json()
 
-    expect(json.smsConfigured).toBe(true)
     expect(json.recipient).toMatchObject({ name: 'Avery Stone', email: 'avery@example.com' })
-    const discovery = json.types.find((t: { key: string }) => t.key === 'discovery_call')
+    expect(json.types.map((t: { key: string }) => t.key)).toEqual(['discovery-call', 'signing'])
+    const discovery = json.types.find((t: { key: string }) => t.key === 'discovery-call')
     expect(discovery.configured).toBe(true)
-    expect(discovery.links.email).toContain('utm_medium=email')
-    expect(discovery.links.email).toContain('utm_content=leadId%3Alead-1')
-    expect(discovery.embedUrl).toContain('utm_medium=staff')
-    const pmps = json.types.find((t: { key: string }) => t.key === 'pmps')
-    expect(pmps.configured).toBe(false)
+    expect(discovery.links.email).toBe('https://portal.example.com/book/discovery-call#first=Avery&last=Stone&email=avery%40example.com&phone=%2B15555550123')
+    // Embedded on the staff host, so it is a path.
+    expect(discovery.embedUrl).toMatch(/^\/book\/discovery-call#first=Avery/)
+    expect(JSON.stringify(json)).not.toMatch(/calendly|lawmatics|cal\.com/i)
+    // A portal-only type cannot be emailed to a lead.
+    const signing = json.types.find((t: { key: string }) => t.key === 'signing')
+    expect(signing).toMatchObject({ configured: false, portalOnly: true })
+  })
+
+  it('offers portal-only types for a matter, whose client can use the portal', async () => {
+    const { GET } = await import('@/app/api/admin/scheduling-links/send/route')
+    const res = await GET(new Request('http://localhost/api/admin/scheduling-links/send?matterId=matter-1') as never)
+    const json = await res.json()
+    expect(json.types.find((t: { key: string }) => t.key === 'signing')).toMatchObject({ configured: true, portalOnly: true })
   })
 })
 
@@ -112,7 +120,7 @@ describe('POST /api/admin/scheduling-links/send', () => {
   it('sends an email link to a lead and logs lead_activity', async () => {
     const { res } = await post({
       target: { leadId: 'lead-1' },
-      meetingTypeKey: 'discovery_call',
+      meetingTypeKey: 'discovery-call',
       channel: 'email',
     })
 
@@ -120,7 +128,7 @@ describe('POST /api/admin/scheduling-links/send', () => {
     const [args] = sendEmail.mock.calls[0] as [Record<string, unknown>]
     expect(args.category).toBe('scheduling_link')
     expect(args.to).toBe('avery@example.com')
-    expect(String(args.text)).toContain('https://calendly.com/aubreylaw/discovery')
+    expect(String(args.text)).toContain('https://portal.example.com/book/discovery-call')
     const activity = inserts.find(i => i.table === 'lead_activity')
     expect(activity?.values).toMatchObject({ lead_id: 'lead-1', event_type: 'email_sent' })
   })
@@ -128,19 +136,19 @@ describe('POST /api/admin/scheduling-links/send', () => {
   it('appends the link when the edited message dropped it', async () => {
     await post({
       target: { leadId: 'lead-1' },
-      meetingTypeKey: 'discovery_call',
+      meetingTypeKey: 'discovery-call',
       channel: 'email',
       message: 'Custom note with no link',
     })
     const [args] = sendEmail.mock.calls[0] as [Record<string, unknown>]
     expect(String(args.text)).toContain('Custom note with no link')
-    expect(String(args.text)).toContain('https://calendly.com/aubreylaw/discovery')
+    expect(String(args.text)).toContain('https://portal.example.com/book/discovery-call')
   })
 
   it('rejects retired SMS scheduling links without sending', async () => {
     const { res } = await post({
       target: { matterId: 'matter-1' },
-      meetingTypeKey: 'signing_appointment',
+      meetingTypeKey: 'signing',
       channel: 'sms',
     })
     expect(res.status).toBe(410)
@@ -150,70 +158,42 @@ describe('POST /api/admin/scheduling-links/send', () => {
   it('posts a portal message and notifies the client (matter only)', async () => {
     const { res } = await post({
       target: { matterId: 'matter-1' },
-      meetingTypeKey: 'signing_appointment',
+      meetingTypeKey: 'signing',
       channel: 'portal',
     })
     expect(res.status).toBe(200)
     const message = inserts.find(i => i.table === 'messages')
     expect(message?.values).toMatchObject({ matter_id: 'matter-1', sender_role: 'attorney' })
-    expect(String(message?.values.body)).toContain('https://calendly.com/aubreylaw/signing')
+    expect(String(message?.values.body)).toContain('https://portal.example.com/book/signing')
     expect(notifyClientOfFirmMessage).toHaveBeenCalledWith('matter-1')
   })
 
   it('rejects portal channel for a lead target', async () => {
     const { res } = await post({
       target: { leadId: 'lead-1' },
-      meetingTypeKey: 'discovery_call',
+      meetingTypeKey: 'discovery-call',
       channel: 'portal',
     })
     expect(res.status).toBe(400)
   })
 
-  it('rejects an unconfigured meeting type', async () => {
-    const { res } = await post({
-      target: { leadId: 'lead-1' },
-      meetingTypeKey: 'pmps',
-      channel: 'email',
-    })
+  it('rejects an unknown or inactive appointment type', async () => {
+    for (const meetingTypeKey of ['pmps', 'retired']) {
+      const { res } = await post({ target: { leadId: 'lead-1' }, meetingTypeKey, channel: 'email' })
+      expect(res.status).toBe(400)
+    }
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('sends a portal-only type only as a portal message', async () => {
+    const { res, json } = await post({ target: { matterId: 'matter-1' }, meetingTypeKey: 'signing', channel: 'email' })
     expect(res.status).toBe(400)
+    expect(json.error).toContain('client portal')
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 
   it('rejects when neither or both target ids are given', async () => {
-    expect((await post({ target: {}, meetingTypeKey: 'discovery_call', channel: 'email' })).res.status).toBe(400)
-    expect((await post({ target: { leadId: 'a', matterId: 'b' }, meetingTypeKey: 'discovery_call', channel: 'email' })).res.status).toBe(400)
-  })
-})
-
-describe('Lawmatics booking links', () => {
-  it('does not touch Lawmatics for other schedulers', async () => {
-    await post({ target: { leadId: 'lead-1' }, meetingTypeKey: 'discovery_call', channel: 'email' })
-    expect(prepareLawmaticsBooking).not.toHaveBeenCalled()
-  })
-
-  it('pushes the lead to Lawmatics before sending, and prefills the name parts', async () => {
-    const { res, json } = await post({ target: { leadId: 'lead-1' }, meetingTypeKey: 'draft_review', channel: 'email' })
-
-    expect(res.status).toBe(200)
-    expect(json.warning).toBeUndefined()
-    expect(prepareLawmaticsBooking).toHaveBeenCalledWith({ leadId: 'lead-1', matterId: null }, 'user-1')
-    expect(prepareLawmaticsBooking.mock.invocationCallOrder[0]).toBeLessThan(sendEmail.mock.invocationCallOrder[0])
-    const text = String((sendEmail.mock.calls[0]?.[0] as { text?: unknown }).text)
-    const link = new URL(text.match(/https:\/\/app\.lawmatics\.com\S+/)![0])
-    expect(link.searchParams.get('first_name')).toBe('Avery')
-    expect(link.searchParams.get('last_name')).toBe('Stone')
-    expect(link.searchParams.get('email')).toBe('avery@example.com')
-  })
-
-  it('still sends when the push fails, and returns the warning for staff', async () => {
-    prepareLawmaticsBooking.mockResolvedValueOnce({
-      intakeId: 'lead-1', prospectId: null, operation: null,
-      warning: 'Reconnect Lawmatics to continue synchronization. The booking will be matched to this client by email instead.',
-    } as never)
-    const { res, json } = await post({ target: { matterId: 'matter-1' }, meetingTypeKey: 'draft_review', channel: 'portal' })
-
-    expect(res.status).toBe(200)
-    expect(prepareLawmaticsBooking).toHaveBeenCalledWith({ leadId: null, matterId: 'matter-1' }, 'user-1')
-    expect(json.warning).toContain('matched to this client by email')
-    expect(inserts.some(item => item.table === 'messages')).toBe(true)
+    expect((await post({ target: {}, meetingTypeKey: 'discovery-call', channel: 'email' })).res.status).toBe(400)
+    expect((await post({ target: { leadId: 'a', matterId: 'b' }, meetingTypeKey: 'discovery-call', channel: 'email' })).res.status).toBe(400)
   })
 })
