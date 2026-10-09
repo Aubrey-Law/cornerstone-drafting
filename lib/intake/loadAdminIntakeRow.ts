@@ -86,9 +86,10 @@ export async function loadAdminIntakeRow(
     relationship_label: c.relationship_label,
   }))
 
-  return hydrateIntakeWithContacts(admin, {
+  const hydrated = await hydrateIntakeWithContacts(admin, {
     ...data,
     _fiduciary_roles: fiduciaryRoles,
     _intake_contacts: intakeContacts,
-  }, clientIntakeId)
+  }, clientIntakeId, true)
+  return hydrated
 }

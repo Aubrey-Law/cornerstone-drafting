@@ -1,4 +1,5 @@
 import { listCalls, availableTemplate } from '@/lib/discovery/service'
+import { resolveIntakeDelivery } from '@/lib/intake/forms/runtime'
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
 import { notFound, redirect } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -196,6 +197,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ])
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
+  if (hydratedLead.form_version_id != null) {
+    const delivery = await resolveIntakeDelivery(hydratedLead, 'staff', process.env)
+    if (delivery.rendererMode !== 'compiled') throw new Error('Pinned questionnaire unavailable')
+    hydratedLead._pinned_form = delivery.compiledForm
+  }
   let initialIntakeUrl: string | null = null
   if (lead.intake_link_version && !lead.intake_link_revoked_at) {
     initialIntakeUrl = standingIntakeUrl(lead.id, lead.intake_link_version)

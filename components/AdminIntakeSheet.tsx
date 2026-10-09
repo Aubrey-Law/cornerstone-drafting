@@ -1,5 +1,7 @@
 'use client'
 
+import dynamic from 'next/dynamic'
+import type { CompiledIntakeForm } from '@/lib/intake/forms/compiler'
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   Controller,
@@ -12,7 +14,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
-import { getAdminIntakeData, saveAdminIntakeDraft, submitAdminIntake, resolveMatterIntake } from '@/app/actions/adminIntake'
+import { getAdminIntakeData, saveAdminIntakeDraft, submitAdminIntake, submitSavedPinnedIntake, resolveMatterIntake, prepareAdminIntake } from '@/app/actions/adminIntake'
 import { emptyAdminIntakeFormData } from '@/types/adminIntake'
 import { mapRawIntakeToFormData } from '@/lib/intake/adminIntakeFormMapping'
 import type { AdminIntakeFormData, AdminIntakeChild } from '@/types/adminIntake'
@@ -218,6 +220,8 @@ function Field({ children, span2 }: { children: React.ReactNode; span2?: boolean
   return <div className={span2 ? 'col-span-2' : undefined}>{children}</div>
 }
 
+const AdminPinnedIntakeReview = dynamic(() => import('@/components/intake/AdminPinnedIntakeReview'))
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function AdminIntakeSheet({
@@ -237,7 +241,17 @@ export default function AdminIntakeSheet({
   const [intakeStatus, setIntakeStatus] = useState<string | null>(null)
   const [intakeTrack, setIntakeTrack] = useState<IntakeTrack>(DEFAULT_INTAKE_TRACK)
   const [intakeContacts, setIntakeContacts] = useState<ContactSuggestion[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(Boolean(clientIntakeId || matterId))
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [questionEditing, setQuestionEditing] = useState(false)
+  const [pinnedSubmitting, setPinnedSubmitting] = useState(false)
+  const [pinnedReview, setPinnedReview] = useState<{ form: CompiledIntakeForm; data: Record<string, unknown>; versionId: string } | null>(null)
+
+  function adoptPinnedReview(raw: Record<string, unknown>) {
+    if (raw.form_version_id == null) { setPinnedReview(null); return }
+    if (typeof raw.form_version_id !== 'string' || !raw._pinned_form) throw new Error('The pinned questionnaire is unavailable. Close and reopen the intake.')
+    setPinnedReview({ form: raw._pinned_form as CompiledIntakeForm, data: raw, versionId: raw.form_version_id })
+  }
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [footerError, setFooterError] = useState('')
@@ -257,7 +271,7 @@ export default function AdminIntakeSheet({
   // `intake_track: 'estate'` (the column default), and reading the track alone
   // put an estate questionnaire in front of a College Preparation Plan — and
   // then demanded marital status and assets it never showed.
-  const isCollegePrep = intakeTrack === 'college_prep' || isCollegePrepPracticeArea(practiceArea)
+  const isCollegePrep = intakeTrack === 'college_prep' || (!pinnedReview && isCollegePrepPracticeArea(practiceArea))
 
   // The submit rules differ by track, so the resolver is rebuilt when it flips.
   // useForm re-reads its options on every render, so the new one takes effect.
@@ -307,8 +321,8 @@ export default function AdminIntakeSheet({
     ],
   })
 
-  const showEP = isEP(practiceArea) && !isCollegePrep
-  const showProbate = isProbate(practiceArea) && !isCollegePrep
+  const showEP = (Boolean(pinnedReview) || isEP(practiceArea)) && !isCollegePrep
+  const showProbate = !pinnedReview && isProbate(practiceArea) && !isCollegePrep
   const showSpouse = maritalStatus === 'married'
   const showGuardian = hasMinorChildren
   const clientLocked = intakeStatus === 'submitted' || intakeStatus === 'approved'
@@ -330,27 +344,33 @@ export default function AdminIntakeSheet({
       ? { student: 'contact', agents: 'fiduciaries', school: 'guided', parents: 'guided', documents: 'guided' }
       : { contact: 'contact', household: 'family', assets: 'assets', real_estate: 'assets', fiduciaries: 'fiduciaries', wishes: 'goals' }
     const frame = requestAnimationFrame(() => {
-      const anchor = anchors[initialSection]
-      const target = initialSection === 'review'
+      const anchor = pinnedReview ? initialSection : anchors[initialSection]
+      const reviewSection = pinnedReview?.form.sections?.some(section => section.id === initialSection
+        && section.items.some(item => item.kind === 'block' && item.blockId === 'review_submit'))
+      const target = initialSection === 'review' || reviewSection
         ? reviewRef.current
-        : anchor ? bodyRef.current?.querySelector<HTMLElement>(`[data-intake-section="${anchor}"]`) : null
+        : anchor ? Array.from(bodyRef.current?.querySelectorAll<HTMLElement>('[data-intake-section]') ?? []).find(element => element.dataset.intakeSection === anchor) : null
       target?.scrollIntoView?.({ block: 'start' })
       target?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
-  }, [open, loading, initialSection, isCollegePrep])
+  }, [open, loading, initialSection, isCollegePrep, pinnedReview])
 
   // ── Load initial data when sheet opens ────────────────────────────────────
   useEffect(() => {
     if (!open) return
 
     let cancelled = false
+    setLoadFailed(false)
+    setPinnedReview(null)
 
     async function loadIntake(idToLoad: string) {
       setLoading(true)
       try {
         const raw = await getAdminIntakeData(idToLoad)
-        if (cancelled || !raw) return
+        if (cancelled) return
+        if (!raw) throw new Error('Intake not found')
+        adoptPinnedReview(raw)
         reset(mapRawIntakeToFormData(raw))
         setCurrentIntakeId(idToLoad)
         onIntakeIdChange?.(idToLoad)
@@ -363,6 +383,7 @@ export default function AdminIntakeSheet({
         )
       } catch (err) {
         if (!cancelled) {
+          setLoadFailed(true)
           toast.error(`Failed to load intake: ${(err as Error).message}`)
         }
       } finally {
@@ -379,13 +400,31 @@ export default function AdminIntakeSheet({
           idToLoad = await resolveMatterIntake(matterId)
         } catch (err) {
           if (!cancelled) {
+            setLoadFailed(true)
             toast.error(`Failed to resolve intake: ${(err as Error).message}`)
           }
+          return
         } finally {
           if (!cancelled) setLoading(false)
         }
       }
 
+      if (cancelled) return
+      if (!idToLoad && (matterId || leadId)) {
+        setLoading(true)
+        try {
+          const prepared = await prepareAdminIntake({ leadId, matterId, clientIntakeId: null, clientUserId, clientName })
+          idToLoad = prepared.id
+        } catch (err) {
+          if (!cancelled) {
+            setLoadFailed(true)
+            toast.error(`Failed to prepare questionnaire: ${(err as Error).message}`)
+          }
+          return
+        } finally {
+          if (!cancelled) setLoading(false)
+        }
+      }
       if (cancelled) return
 
       if (idToLoad) {
@@ -414,7 +453,7 @@ export default function AdminIntakeSheet({
     return () => {
       cancelled = true
     }
-  }, [open, clientIntakeId, clientName, matterId, onIntakeIdChange, reset])
+  }, [open, clientIntakeId, clientName, matterId, leadId, clientUserId, onIntakeIdChange, reset])
 
   // Sync currentIntakeId if prop changes
   useEffect(() => {
@@ -423,6 +462,7 @@ export default function AdminIntakeSheet({
 
   // ── Close guard ──────────────────────────────────────────────────────────
   function requestClose() {
+    if (pinnedSubmitting || questionEditing) return
     if (isDirty) {
       setShowDiscard(true)
     } else {
@@ -437,6 +477,9 @@ export default function AdminIntakeSheet({
     setCurrentIntakeId(null)
     setIntakeStatus(null)
     setIntakeTrack(DEFAULT_INTAKE_TRACK)
+    setPinnedReview(null)
+    setQuestionEditing(false)
+    setLoadFailed(false)
     onClose()
   }
 
@@ -445,6 +488,7 @@ export default function AdminIntakeSheet({
   // Returns the saved intake id so callers that need a persisted row (the Word
   // export reads the saved record) can chain off a successful save.
   async function handleSaveDraft(): Promise<string | null> {
+    if (questionEditing) return null
     setSaving(true)
     setFooterError('')
     const data = getValues()
@@ -455,6 +499,17 @@ export default function AdminIntakeSheet({
       // Re-baseline so the saved values are no longer "unsaved changes".
       reset(data)
       setIntakeStatus(prev => (prev === 'submitted' || prev === 'approved' ? prev : 'draft'))
+      if (pinnedReview) {
+        try {
+          const latest = await getAdminIntakeData(result.id)
+          if (!latest) throw new Error('Intake not found')
+          adoptPinnedReview(latest)
+        } catch {
+          setLoadFailed(true)
+          setFooterError('Edits saved, but the questionnaire could not be refreshed. Close and reopen the intake before submitting or exporting.')
+          return null
+        }
+      }
       toast.success(clientLocked ? 'Attorney edits saved' : 'Draft saved')
       return result.id
     } catch (err) {
@@ -469,6 +524,7 @@ export default function AdminIntakeSheet({
   // The route renders the saved row, so unsaved edits are persisted first —
   // otherwise the download would quietly omit what is on screen.
   async function handleExportWord() {
+    if (questionEditing) return
     if (!currentIntakeId) return
     setFooterError('')
     const intakeIdForExport = isDirty ? await handleSaveDraft() : currentIntakeId
@@ -498,6 +554,22 @@ export default function AdminIntakeSheet({
       setFooterError((err as Error).message)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function handleSubmitPinned() {
+    if (!pinnedReview || !currentIntakeId || isDirty || loading || loadFailed || saving || pinnedSubmitting || questionEditing) return
+    setPinnedSubmitting(true)
+    setFooterError('')
+    try {
+      await submitSavedPinnedIntake({ intakeId: currentIntakeId, expectedVersionId: pinnedReview.versionId })
+      toast.success('Intake submitted')
+      doClose()
+      onSubmitted()
+    } catch (error) {
+      setFooterError((error as Error).message)
+    } finally {
+      setPinnedSubmitting(false)
     }
   }
 
@@ -535,13 +607,36 @@ export default function AdminIntakeSheet({
             <div className="py-12 text-center text-compact text-muted-foreground">
               Loading intake data…
             </div>
+          ) : loadFailed ? (
+            <p role="alert" className="text-sm text-destructive">Unable to load the saved questionnaire. Close and reopen the intake to try again.</p>
           ) : (
             <>
+              {pinnedReview && currentIntakeId && <AdminPinnedIntakeReview form={pinnedReview.form} data={pinnedReview.data} intakeId={currentIntakeId} dirty={isDirty}
+                disabled={saving || exporting || pinnedSubmitting || isSubmitting}
+                onEditingChange={setQuestionEditing}
+                onSaved={async () => {
+                  try {
+                    const raw = await getAdminIntakeData(currentIntakeId)
+                    if (!raw) throw new Error('Saved questionnaire could not be refreshed.')
+                    adoptPinnedReview(raw)
+                    reset(mapRawIntakeToFormData(raw))
+                    setIntakeStatus(typeof raw.status === 'string' ? raw.status : null)
+                    setIntakeTrack(getIntakeTrack(raw))
+                    setIntakeContacts(Array.isArray(raw._intake_contacts) ? raw._intake_contacts as ContactSuggestion[] : [])
+                  } catch {
+                    setLoadFailed(true)
+                    setQuestionEditing(false)
+                    setFooterError('The answer was saved, but the questionnaire could not be refreshed. Close and reopen the intake.')
+                  }
+                }} />}
+              {pinnedReview && <p className="mb-3 text-sm text-muted-foreground">The shared summary below is read-only. Make changes in the saved questionnaire above.</p>}
+              <fieldset disabled={questionEditing || Boolean(pinnedReview)} className="min-w-0 space-y-4 border-0 p-0">
               {isCollegePrep && (
                 <div data-intake-section="guided" tabIndex={-1} className="mb-4 rounded-md border border-border bg-muted p-3 text-xs leading-relaxed text-muted-foreground">
                   <span className="font-medium text-foreground">College Preparation Plan intake.</span>{' '}
-                  The student is the client. School, parent, HIPAA, and living-will answers are captured in
-                  the guided questionnaire — this sheet edits the student&apos;s details and agents.
+                  {pinnedReview
+                    ? "The student is the client. Edit individual college-prep answers in the saved questionnaire above, and the read-only shared summary below."
+                    : "The student is the client. School, parent, HIPAA, and living-will answers are captured in the guided questionnaire — this sheet edits the student's details and agents."}
                 </div>
               )}
 
@@ -1185,6 +1280,7 @@ export default function AdminIntakeSheet({
                 rows={4}
                 {...register('special_notes')}
               />
+              </fieldset>
             </>
           )}
         </div>
@@ -1215,7 +1311,7 @@ export default function AdminIntakeSheet({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!currentIntakeId || exporting || saving}
+                  disabled={!currentIntakeId || exporting || saving || loading || loadFailed || pinnedSubmitting || questionEditing}
                   title={currentIntakeId ? undefined : 'Save the intake before exporting'}
                   onClick={() => void handleExportWord()}
                 >
@@ -1228,7 +1324,7 @@ export default function AdminIntakeSheet({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!isDirty || saving}
+                  disabled={Boolean(pinnedReview) || !isDirty || saving || loading || loadFailed || pinnedSubmitting || questionEditing}
                   onClick={() => void handleSaveDraft()}
                 >
                   {saving ? 'Saving…' : clientLocked ? 'Save attorney edits' : 'Save draft'}
@@ -1239,10 +1335,10 @@ export default function AdminIntakeSheet({
                 {!clientLocked && (
                   <Button
                     type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleSubmit(onSubmit)()}
+                    disabled={isSubmitting || loading || loadFailed || saving || pinnedSubmitting || questionEditing || Boolean(pinnedReview && isDirty)}
+                    onClick={() => { if (pinnedReview) void handleSubmitPinned(); else void handleSubmit(onSubmit)() }}
                   >
-                    {isSubmitting ? 'Submitting…' : 'Submit intake'}
+                    {isSubmitting || pinnedSubmitting ? 'Submitting…' : pinnedReview ? 'Submit saved questionnaire' : 'Submit intake'}
                   </Button>
                 )}
                 </div>

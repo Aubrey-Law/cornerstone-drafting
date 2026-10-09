@@ -43,10 +43,8 @@ describe('intake client auth', () => {
     expect(page).toContain('hydrateIntakeWithContacts')
     expect(page).toContain("intake.status === 'submitted'")
     expect(page).toContain('if (!submitted)')
-    expect(page).toContain('resolveIntakeRendererMode(process.env)')
-    expect(page).toContain("compileBundledIntakeForm(getIntakeTrack(intakeRow), 'client')")
-    expect(page).toContain('compiledForm={compiled.form}')
-    expect(page).toContain('if (!compiled.success)')
+    // Delivery, pin selection, and fail-closed behavior are exercised against
+    // the actual page in intake-pinned-page and intake-rollback-entry tests.
     expect(page).not.toContain('getBundledIntakeForm(')
     const wrapper = fs.readFileSync(path.join(process.cwd(), 'components/intake/GuidedInterview.tsx'), 'utf8')
     expect(wrapper).not.toContain('process.env')

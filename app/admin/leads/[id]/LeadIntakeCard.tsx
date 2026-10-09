@@ -28,7 +28,7 @@ function stateLine(intake: IntakeRow, completed: number, total: number): string 
   const status = typeof intake.status === 'string' ? intake.status.toLowerCase() : ''
   const sent = Boolean(intake.intake_sent_at) || ['sent', 'submitted', 'approved'].includes(status)
   const submitted = status === 'submitted' || status === 'approved'
-  return `${sent ? 'Sent' : 'Never sent'} · ${submitted ? 'submitted' : 'nothing submitted'} · ${completed} of ${total} sections`
+  return `${sent ? 'Sent' : 'Never sent'} · ${submitted ? 'submitted' : 'nothing submitted'} · ${total ? `${completed} of ${total} sections` : 'questionnaire progress unavailable'}`
 }
 
 export function LeadIntakeCard({
@@ -43,7 +43,7 @@ export function LeadIntakeCard({
   const completed = segments.filter((segment) => segment.complete).length
   const track = getIntakeTrack(intake)
   const status = typeof intake.status === 'string' ? intake.status.toLowerCase() : ''
-  const trackLocked = status === 'submitted' || status === 'approved'
+  const trackLocked = intake.form_version_id != null || status === 'submitted' || status === 'approved'
 
   return (
     <section className="rounded-lg border border-border bg-card p-4" aria-label="Lead intake">

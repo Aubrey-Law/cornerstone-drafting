@@ -12,7 +12,7 @@ export class IntakeFormUnavailableError extends Error {
   }
 }
 
-/** Dormant until activation: only a NULL legacy pin permits bundled resolution. */
+/** Only a NULL legacy pin permits bundled resolution. */
 export async function resolveIntakeForm(input: {
   formVersionId: string | null
   track: IntakeTrack

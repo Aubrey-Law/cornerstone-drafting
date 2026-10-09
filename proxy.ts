@@ -132,6 +132,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // These handlers authenticate bearer/standing-link credentials themselves.
+  // Requiring a cookie first made the supported invitation flow unreachable.
+  // Keep this list explicit: headers never bypass staff routes or page checks.
+  const intakeTokenRoute = pathname === '/api/intake' || pathname === '/api/intake/contacts'
+    || pathname === '/api/intake/documents' || /^\/api\/intake\/[^/]+\/export$/.test(pathname)
+  if (intakeTokenRoute && (request.headers.get('x-intake-token')?.trim()
+    || /^Bearer \S+$/.test(request.headers.get('authorization') ?? ''))) {
+    return NextResponse.next()
+  }
+
   const requiresSession = SESSION_REQUIRED_PREFIXES.some(
     p => pathname === p || pathname.startsWith(`${p}/`),
   )

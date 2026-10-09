@@ -1,20 +1,11 @@
+import type { CompiledIntakeForm } from '@/lib/intake/forms/compiler'
+import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
+import { unpackInitialIntakeData } from '@/lib/intake/unpackInitialData'
 import { getActiveSteps, getStepById, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeTrack } from '@/lib/intakeTrack'
 
 export type LeadIntakeSegment = {
-  id:
-    | 'contact'
-    | 'household'
-    | 'assets'
-    | 'real_estate'
-    | 'fiduciaries'
-    | 'wishes'
-    | 'review'
-    | 'student'
-    | 'school'
-    | 'parents'
-    | 'agents'
-    | 'documents'
+  id: string
   label: string
   complete: boolean
 }
@@ -139,6 +130,16 @@ function collegePrepProgress(intake: IntakeRow): LeadIntakeSegment[] {
 }
 
 export function getLeadIntakeProgress(intake: IntakeRow): LeadIntakeSegment[] {
+  if (intake.form_version_id != null) {
+    const form = intake._pinned_form as CompiledIntakeForm | undefined
+    // A missing pinned definition must not be scored against today's bundle.
+    if (!form) return []
+    return evaluateCompiledIntakeForm(form, unpackInitialIntakeData(intake)).activeSections.map(section => ({
+      id: section.id, label: section.title,
+      complete: section.items.some(({ item }) => item.kind === 'block' && item.blockId === 'review_submit')
+        ? intake.status === 'submitted' || intake.status === 'approved' : section.complete,
+    }))
+  }
   if (getIntakeTrack(intake) === 'college_prep') return collegePrepProgress(intake)
 
   return [

@@ -84,7 +84,7 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   const completed = segments.filter(segment => segment.complete).length
   const intakeReceived = Boolean(lead.intake_completed_at)
     || ['submitted', 'approved', 'completed'].includes(String(lead.status ?? lead.intake_status ?? '').toLowerCase())
-  const intakeStep = (<OverviewFact label="Intake" value={intakeReceived ? 'Intake received' : `${completed} of ${segments.length} sections complete`}>
+  const intakeStep = (<OverviewFact label="Intake" value={intakeReceived ? 'Intake received' : segments.length ? `${completed} of ${segments.length} sections complete` : 'Questionnaire progress unavailable'}>
           <Button variant="link" className="h-auto p-0" onClick={onIntake}>Review intake</Button>
         </OverviewFact>)
   const engagementStep = (<OverviewFact label="Engagement" value={engagementSigned ? 'Signed' : agreementStatus ? (agreementStatus.charAt(0).toUpperCase() + agreementStatus.slice(1)).replaceAll('_', ' ') : 'Not prepared'}>

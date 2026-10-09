@@ -9,8 +9,9 @@ import { supabase } from '@/lib/supabaseClient'
 import { guidedFontClass } from '@/lib/clientFonts'
 import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
 import { useContacts } from '@/hooks/useContacts'
-import { formatSubmissionIssueList, getActiveSteps, getStepIssues, type IntakeRow } from '@/lib/intakeSections'
-import { getIntakeReadinessFlags } from '@/lib/intakeReadiness'
+import { formatSubmissionIssueList, type IntakeRow } from '@/lib/intakeSections'
+import { getIntakeTrack } from '@/lib/intakeTrack'
+import { getCompiledIntakeReadinessFlags } from '@/lib/intake/forms/readiness'
 import { getLegalReviewFlags } from '@/lib/intakeLegalFlags'
 import { intakePlanTypeLabel, normalizeIntakePlanType } from '@/lib/intakePlanType'
 import { type DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
@@ -23,6 +24,7 @@ import {
 } from '@/lib/intake/forms/blockRegistry'
 import { GuidedSection } from './GuidedSection'
 import { ReviewModal, type GuidedInterviewProps } from './LegacyGuidedInterview'
+import { CompiledIntakeReview } from './formEngine/CompiledIntakeReview'
 import { CompiledIntakeSections } from './formEngine/CompiledIntakeSections'
 import { AttorneyDocumentsBlock, AttorneyPlanStructureBlock } from './formEngine/blockRenderers'
 import { IntakeSectionProgressList } from './IntakeSectionProgressList'
@@ -41,7 +43,7 @@ function text(data: IntakeRow, key: string): string {
 export default function SchemaDrivenGuidedInterview({ initialData, intakeId, compiledForm, mode = 'client', submitted = false, matterLabel, publicIntakeToken, onAttorneySave }: Props) {
   const router = useRouter()
   const isAttorney = mode === 'attorney'
-  const isCollegePrep = compiledForm.key === 'college_prep'
+  const isCollegePrep = getIntakeTrack(initialData) === 'college_prep'
   const [data, setData] = useState<Record<string, unknown>>(() => unpackInitialIntakeData(initialData))
   const dataRef = useRef(data)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -145,7 +147,7 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
   }, [leaveSection, setOpenSection])
 
   const legalFlags = useMemo(() => isAttorney ? getLegalReviewFlags(data, data.plan_type) : [], [isAttorney, data])
-  const readinessFlags = useMemo(() => isAttorney ? getIntakeReadinessFlags(data) : [], [isAttorney, data])
+  const readinessFlags = useMemo(() => isAttorney ? getCompiledIntakeReadinessFlags(compiledForm, data) : [], [isAttorney, compiledForm, data])
   const clientName = [text(data, 'first_name'), text(data, 'last_name')].filter(Boolean).join(' ')
   const flagCount = legalFlags.length + readinessFlags.length
 
@@ -233,7 +235,8 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
             <div style={guidedIntroCardStyle}>
               <ProgressRing pct={evaluation.percentComplete} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h1 style={{ fontWeight: 500, fontSize: 25, lineHeight: 1.2, color: 'var(--gi-heading)', margin: 0 }}>{isCollegePrep ? 'College Preparation Plan' : `Welcome${!isAttorney && clientName ? `, ${clientName.split(' ')[0]}` : ''}`}</h1>
+                <h1 style={{ fontWeight: 500, fontSize: 25, lineHeight: 1.2, color: 'var(--gi-heading)', margin: 0 }}>{compiledForm.title}</h1>
+                {compiledForm.description && <p className="mt-2 text-sm text-muted-foreground">{compiledForm.description}</p>}
                 <p style={{ font: '400 14px/1.6 var(--gi-sans)', color: 'var(--gi-muted)', margin: '10px 0 0' }}>{isCollegePrep
                   ? 'Every document here is voluntary. The student chooses who receives authority, how much, and for how long — and can revoke any of it at any time. Leave blank anything you would rather discuss at the meeting; your progress saves automatically.'
                   : 'Answer what you can before our meeting — rough answers are fine, and everything is strictly confidential. Your progress saves automatically.'}</p>
@@ -245,7 +248,7 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
                 ? <AttorneyPlanStructureBlock data={data} update={update} onAttorneySave={persistAttorneyPatch} />
                 : <AttorneyDocumentsBlock data={data} update={update} onAttorneySave={persistAttorneyPatch} />}
             </GuidedSection>)}
-            <CompiledIntakeSections form={compiledForm} evaluation={displayEvaluation} data={data} update={update} intakeId={intakeId} publicIntakeToken={publicIntakeToken} mode={mode} openId={openId} onToggle={toggleSection} onContinue={isAttorney ? undefined : continueToNextSection} onAttorneySave={isAttorney ? persistAttorneyPatch : undefined} showValidation={showValidation} numberOffset={attorneySections.length} onLastContinue={isAttorney ? undefined : (id) => { leaveSection(id); setOpenSection(''); setReviewOpen(true) }} />
+            <CompiledIntakeSections form={compiledForm} previewReview={<CompiledIntakeReview evaluation={evaluation} data={data} intakeId={intakeId} publicIntakeToken={publicIntakeToken} onEditSection={selectSection} />} evaluation={displayEvaluation} data={data} update={update} intakeId={intakeId} publicIntakeToken={publicIntakeToken} mode={mode} openId={openId} onToggle={toggleSection} onContinue={isAttorney ? undefined : continueToNextSection} onAttorneySave={isAttorney ? persistAttorneyPatch : undefined} showValidation={showValidation} numberOffset={attorneySections.length} onLastContinue={isAttorney ? undefined : (id) => { leaveSection(id); setOpenSection(''); setReviewOpen(true) }} />
           </main>
           <aside style={{ flex: 1, minWidth: 'min(300px, 100%)', position: 'sticky', top: 26, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {isAttorney && <div style={guidedCardStyle}>
@@ -260,7 +263,7 @@ export default function SchemaDrivenGuidedInterview({ initialData, intakeId, com
           </aside>
         </div>
       </div>
-      {reviewOpen && <ReviewModal reviewSelectors={{ getActiveSteps, getStepIssues }} data={data} title={isCollegePrep ? 'Review your College Preparation Plan intake' : 'Review your estate plan organizer'} intakeId={intakeId} publicIntakeToken={publicIntakeToken} isAttorney={isAttorney} matterLabel={matterLabel} legalFlags={legalFlags} readinessFlags={readinessFlags.map((flag) => flag.message)} selectedDocKeys={selectedDocKeys} submitting={submitting} canSubmit={!isAttorney && !submitted} onEdit={(id) => { setReviewOpen(false); if (id) setOpenSection(id) }} onClose={() => setReviewOpen(false)} onSubmit={handleSubmit} />}
+      {reviewOpen && <ReviewModal reviewContent={<CompiledIntakeReview evaluation={evaluation} data={data} intakeId={intakeId} publicIntakeToken={publicIntakeToken} onEditSection={(id) => { setReviewOpen(false); setOpenSection(id) }} />} data={data} title={`Review ${compiledForm.title}`} intakeId={intakeId} publicIntakeToken={publicIntakeToken} isAttorney={isAttorney} matterLabel={matterLabel} legalFlags={legalFlags} readinessFlags={readinessFlags.map((flag) => flag.message)} selectedDocKeys={selectedDocKeys} submitting={submitting} canSubmit={!isAttorney && !submitted} onEdit={(id) => { setReviewOpen(false); if (id) setOpenSection(id) }} onClose={() => setReviewOpen(false)} onSubmit={handleSubmit} />}
     </div>
   )
 }

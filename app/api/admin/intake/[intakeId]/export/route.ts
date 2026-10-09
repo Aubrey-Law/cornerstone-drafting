@@ -34,9 +34,8 @@ function str(row: Record<string, unknown>, key: string): string {
 /**
  * Download one client intake as a Word document.
  *
- * The row is flattened with the same mapper the attorney intake sheet uses, so
- * the export prints exactly the answers the form shows — including which
- * sections the practice area and track put in front of the attorney.
+ * Pinned rows use the saved staff-audience questionnaire. Unpinned rows retain
+ * the canonical attorney-sheet export and its practice-area/track selection.
  *
  * `?practiceArea=` lets the caller pass the label it is displaying (the sheet
  * gets it from the lead/matter, which is authoritative); the intake row's own
@@ -54,6 +53,15 @@ export async function GET(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Intake not found' }, { status: 404 })
     }
 
+    let pinnedExport
+    if (row.form_version_id != null) {
+      try {
+        const { resolvePinnedIntakeExport } = await import('@/lib/intake/forms/exportRuntime')
+        pinnedExport = await resolvePinnedIntakeExport(row, 'staff')
+      } catch {
+        return NextResponse.json({ error: 'This questionnaire is unavailable for export. Please try again later.' }, { status: 503 })
+      }
+    }
     const form = mapRawIntakeToFormData(row)
     const requestedPracticeArea = req.nextUrl.searchParams.get('practiceArea')?.trim()
     const clientName = [form.first_name, form.last_name]
@@ -69,7 +77,10 @@ export async function GET(req: NextRequest, { params }: Params) {
       exportedOn: new Date().toISOString().slice(0, 10),
     }
 
-    const document = buildIntakeWordDocument(buildIntakeExportSections(form, meta), meta)
+    const document = buildIntakeWordDocument(pinnedExport?.sections ?? buildIntakeExportSections(form, meta), {
+      ...meta,
+      ...(pinnedExport ? { documentTitle: pinnedExport.title } : {}),
+    })
     const buffer = await Packer.toBuffer(document)
     const filename = safeHeaderFilename(intakeExportFilename(meta.clientName, meta.exportedOn))
 

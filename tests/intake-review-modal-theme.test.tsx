@@ -76,3 +76,14 @@ describe('review modal theming', () => {
     expect(classes).toContain('text-foreground')
   })
 })
+
+
+it('uses supplied compiled review content without rendering the bundled summary', () => {
+  render(<ReviewModal data={{ first_name: 'Bundled-only answer' }} intakeId="" isAttorney={false}
+    selectedDocKeys={[]} legalFlags={[]} readinessFlags={[]} submitting={false} canSubmit
+    onEdit={NOOP} onClose={NOOP} onSubmit={NOOP}
+    reviewContent={<section aria-label="Custom questionnaire review">Custom form content</section>} />)
+  expect(screen.getByRole('region', { name: 'Custom questionnaire review' })).toBeTruthy()
+  expect(screen.queryByText('Bundled-only answer')).toBeNull()
+  expect(screen.getByRole('dialog')).toBeTruthy()
+})

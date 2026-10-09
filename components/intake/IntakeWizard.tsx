@@ -964,41 +964,47 @@ export function PlanningObjectivesBlock({ data, update }: StepProps) {
 
   return (
     <div className="space-y-6">
-      <FormField label="Why did you choose Aubrey Law?" optional>
-        <Textarea
-          value={obj.why_choose_firm ?? ''}
-          onChange={(e) => updateObj('why_choose_firm', e.target.value)}
-          rows={3}
-          placeholder="A referral, online search, prior experience…"
-        />
+      <div className="space-y-1">
+        <FormField label="Why did you choose Aubrey Law?" optional>
+          <Textarea
+            value={obj.why_choose_firm ?? ''}
+            onChange={(e) => updateObj('why_choose_firm', e.target.value)}
+            rows={3}
+            placeholder="A referral, online search, prior experience…"
+          />
+        </FormField>
         <WhyWeAsk>
           This helps us understand what mattered to you when choosing counsel and tailor your first conversation.
         </WhyWeAsk>
-      </FormField>
+      </div>
 
-      <FormField label="Why are you planning now?" optional>
-        <Textarea
-          value={obj.why_now ?? ''}
-          onChange={(e) => updateObj('why_now', e.target.value)}
-          rows={3}
-          placeholder="A life event, peace of mind, a nudge from family…"
-        />
+      <div className="space-y-1">
+        <FormField label="Why are you planning now?" optional>
+          <Textarea
+            value={obj.why_now ?? ''}
+            onChange={(e) => updateObj('why_now', e.target.value)}
+            rows={3}
+            placeholder="A life event, peace of mind, a nudge from family…"
+          />
+        </FormField>
         <WhyWeAsk>
           Your timing and motivation help your attorney focus the plan on what is driving you right now.
         </WhyWeAsk>
-      </FormField>
+      </div>
 
-      <FormField label="Is making things easy for loved ones important to you?" optional>
-        <Textarea
-          value={obj.make_things_easy ?? ''}
-          onChange={(e) => updateObj('make_things_easy', e.target.value)}
-          rows={2}
-          placeholder="Most clients say yes — share anything specific you have in mind."
-        />
+      <div className="space-y-1">
+        <FormField label="Is making things easy for loved ones important to you?" optional>
+          <Textarea
+            value={obj.make_things_easy ?? ''}
+            onChange={(e) => updateObj('make_things_easy', e.target.value)}
+            rows={2}
+            placeholder="Most clients say yes — share anything specific you have in mind."
+          />
+        </FormField>
         <WhyWeAsk>
           Many clients want to spare family from confusion, conflict, or extra court steps. Your answer shapes how we structure the plan.
         </WhyWeAsk>
-      </FormField>
+      </div>
 
     </div>
   )

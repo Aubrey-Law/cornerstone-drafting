@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CompiledIntakeSections } from '@/components/intake/formEngine/CompiledIntakeSections'
-import { CompiledFormItem } from '@/components/intake/formEngine/CompiledFormItem'
+import { CompiledIntakeReview } from '@/components/intake/formEngine/CompiledIntakeReview'
 import { compileIntakeForm } from '@/lib/intake/forms/compiler'
 import { evaluateCompiledIntakeForm } from '@/lib/intake/forms/evaluator'
 import { clonePreviewScenarioAnswers, INTAKE_PREVIEW_SCENARIOS, type PreviewScenarioId } from '@/lib/intake/forms/previewScenarios'
@@ -40,20 +40,8 @@ export function IntakeFormPreview({ localDefinition }: { localDefinition: Intake
       <TabsContent value={audience} className="mt-3">
         {compiled.success && evaluation ? <CompiledIntakeSections form={compiled.form} evaluation={evaluation} data={data}
           mode={audience} readOnly openId={activeOpenId} onToggle={id => setOpenId(activeOpenId === id ? '' : id)}
-          previewReview={<section aria-label="Current form review" className="space-y-4">
-            <p className="text-sm text-muted-foreground">Review the current form with these sample answers. Missing answers reflect this form&apos;s requirements.</p>
-            {evaluation.activeSections.map(section => {
-              const items = section.items.filter(({ item }) => item.kind !== 'block' || item.blockId !== 'review_submit')
-              if (!items.length) return null
-              return <div key={section.id} className="space-y-3 rounded-lg border p-4">
-                <h4 className="text-sm font-semibold">{section.title}</h4>
-                {items.map(entry => <div key={entry.id} className="space-y-2">
-                  <CompiledFormItem item={entry.item} data={data} disabled update={noOp} onEditSection={noOp} />
-                  {entry.issues.length > 0 && <ul className="space-y-1 text-sm">{entry.issues.map((issue, index) => <li key={index} className={issue.severity === 'error' ? 'text-destructive' : 'text-muted-foreground'}>{issue.message}</li>)}</ul>}
-                </div>)}
-              </div>
-            })}
-          </section>}
+          previewReview={<CompiledIntakeReview evaluation={evaluation} data={data}
+            description="Review the current form with these sample answers. Missing answers reflect this form's requirements." />}
           update={noOp} onEditSection={noOp} showValidation={false} />
           : <div role="alert" className="rounded-lg border border-destructive p-4">
             <p>Preview is unavailable until the form checks below are resolved.</p>

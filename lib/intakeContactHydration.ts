@@ -1,7 +1,10 @@
+import { staffContactSnapshot } from '@/lib/intake/forms/staffContactEditing'
+import { withStaffAppointments } from '@/lib/intake/forms/loadStaffAppointments'
+import { staffHouseholdSnapshot } from '@/lib/intake/forms/staffHousehold'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
-import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
+import { CLIENT_INTAKE_ADDITIONAL_SOURCE, REMOVED_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
 import { formatPhoneInput } from '@/lib/phone'
 import { splitName } from '@/lib/contacts/childName'
 
@@ -204,7 +207,7 @@ function childContactToIntakeEntry(
   }
 }
 
-function additionalContactToIntakeEntry(contact: ContactRow): Record<string, unknown> {
+function additionalContactToIntakeEntry(contact: ContactRow, staffSnapshots: boolean): Record<string, unknown> {
   const address =
     composedAddressOneLine({
       street: contact.address_line1,
@@ -215,6 +218,7 @@ function additionalContactToIntakeEntry(contact: ContactRow): Record<string, unk
 
   return {
     id: String(contact.id ?? ''),
+    ...(staffSnapshots ? { _staff_edit_snapshot: staffContactSnapshot(contact) } : {}),
     first_name: text(contact.first_name),
     middle_name: text(contact.middle_name),
     last_name: text(contact.last_name),
@@ -261,6 +265,7 @@ function fiduciaryEntryFromContact(contact: ContactRow): Record<string, unknown>
 export function applyContactIntakeData(
   intake: Record<string, unknown>,
   contacts: ContactRow[],
+  staffSnapshots = false,
 ): Record<string, unknown> {
   const out = { ...intake }
 
@@ -276,6 +281,7 @@ export function applyContactIntakeData(
       preferred_pronoun: text(spouse.preferred_pronoun),
       date_of_birth: spouse.date_of_birth ?? '',
       is_us_citizen: spouse.is_us_citizen ?? true,
+      citizenship_status: spouse.citizenship_status ?? null,
       email: spouse.email ?? '',
       phone: phone(spouse.phone),
     }
@@ -287,7 +293,9 @@ export function applyContactIntakeData(
   const children = contacts
     .filter((contact) => contact.relationship_type === 'child')
     .map((contact) => childContactToIntakeEntry(contact, clientFirstName, spouseFirstName))
-  if (children.length > 0) out._children = children
+  if (children.length > 0 || intake.form_version_id) out._children = children
+  if (staffSnapshots) out._staff_household = contacts.filter(contact => !contact.merged_into_id && ['spouse','child'].includes(String(contact.relationship_type)))
+    .map(contact => ({ id: contact.id, kind: contact.relationship_type, expected: staffHouseholdSnapshot(contact) }))
 
   const fiduciaryMap: Record<string, Array<Record<string, unknown>>> = {}
   for (const contact of contacts) {
@@ -316,8 +324,10 @@ export function applyContactIntakeData(
 
   const additionalContacts = contacts
     .filter((contact) => String(contact.source ?? '') === CLIENT_INTAKE_ADDITIONAL_SOURCE)
-    .map(additionalContactToIntakeEntry)
-  if (additionalContacts.length > 0) out._additional_contacts = additionalContacts
+    .map(contact => additionalContactToIntakeEntry(contact, staffSnapshots))
+  if (additionalContacts.length > 0 || contacts.some(contact => contact.source === REMOVED_INTAKE_ADDITIONAL_SOURCE)) out._additional_contacts = additionalContacts
+  if (staffSnapshots) out._staff_removed_contacts = contacts.filter(contact => contact.source === REMOVED_INTAKE_ADDITIONAL_SOURCE && !contact.merged_into_id)
+    .map(contact => additionalContactToIntakeEntry(contact, true))
 
   return out
 }
@@ -326,6 +336,7 @@ export async function hydrateIntakeWithContacts(
   client: DbClient,
   intake: Record<string, unknown>,
   intakeId = String(intake.id ?? ''),
+  staffSnapshots = false,
 ): Promise<Record<string, unknown>> {
   if (!intakeId) return intake
 
@@ -335,5 +346,6 @@ export async function hydrateIntakeWithContacts(
     .eq('client_intake_id', intakeId)
 
   if (error) throw new Error(error.message)
-  return applyContactIntakeData(intake, (data ?? []) as ContactRow[])
+  const hydrated = applyContactIntakeData(intake, (data ?? []) as ContactRow[], staffSnapshots)
+  return intake.form_version_id ? withStaffAppointments(client, hydrated, staffSnapshots) : hydrated
 }

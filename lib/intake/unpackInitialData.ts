@@ -35,8 +35,12 @@ export function unpackInitialIntakeData(
   const fiduciaryEntries = base.fiduciary_entries as Record<string, unknown> | undefined
   if (fiduciaryEntries && typeof fiduciaryEntries === 'object') {
     for (const [key, value] of Object.entries(fiduciaryEntries)) {
-      if (key === 'children') base._children = value
-      else if (key === 'additional_contacts') base._additional_contacts = value
+      // Hydrated contacts (including an explicit empty list) take precedence
+      // over historical JSON snapshots. Otherwise opening and then saving the
+      // interview can silently restore an old child or appointment.
+      if (key === 'children' || key === 'additional_contacts' || key.startsWith('fid_')) {
+        if (!Object.prototype.hasOwnProperty.call(base, `_${key}`)) base[`_${key}`] = value
+      }
       else if (key === 'review_choices') {
         if (!base._review_choices) base._review_choices = value
       } else base[`_${key}`] = value

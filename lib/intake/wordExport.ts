@@ -36,6 +36,8 @@ export interface IntakeExportTable {
 
 export interface IntakeExportSection {
   title: string
+  /** Ordered questionnaire items, including blocks between scalar answers. */
+  parts?: IntakeExportSection[]
   rows: IntakeExportRow[]
   /** Repeating entries (children, fiduciaries) printed as their own grid. */
   table?: IntakeExportTable
@@ -405,9 +407,9 @@ export function buildIntakeWordDocument(
     }),
   ]
 
-  for (const section of sections) {
-    children.push(new Paragraph({
-      heading: HeadingLevel.HEADING_2,
+  function appendSection(section: IntakeExportSection, nested = false) {
+    if (section.title) children.push(new Paragraph({
+      heading: nested ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_2,
       spacing: { before: 240, after: 100 },
       border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'BFBFBF' } },
       children: [new TextRun({ text: section.title, font: FONT, size: 24, bold: true })],
@@ -427,7 +429,9 @@ export function buildIntakeWordDocument(
       }
       children.push(gridTable(section.table))
     }
+    for (const part of section.parts ?? []) appendSection(part, true)
   }
+  for (const section of sections) appendSection(section)
 
   return new Document({
     styles: {

@@ -195,7 +195,7 @@ function resolverReferences(filename: string, contents: string): string[] {
   return violations
 }
 
-describe('persistent rendering remains dormant', () => {
+describe('persistent resolution stays behind the server runtime boundary', () => {
   it.each([
     "import { resolveIntakeForm as load } from '@/lib/intake/forms/resolver'; export const wrapped = load",
     "export { resolveIntakeForm as load } from './forms/resolver'",
@@ -206,7 +206,7 @@ describe('persistent rendering remains dormant', () => {
     expect(resolverReferences(path.resolve('lib/intake/helper.ts'), contents)).toContain('lib/intake/helper.ts')
   })
 
-  it('has no resolver imports in current pages, intake/public routes, or intake components', () => {
+  it('allows resolver imports only in the shared server runtime boundary', () => {
     function sourceFiles(directory: string): string[] {
       return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         const filename = path.join(directory, entry.name)
@@ -214,7 +214,7 @@ describe('persistent rendering remains dormant', () => {
       })
     }
     const files = ['app', 'components', 'lib', 'hooks'].flatMap((root) => sourceFiles(path.resolve(root)))
-      .filter((filename) => filename !== path.resolve('lib/intake/forms/resolver.ts'))
+      .filter((filename) => !['lib/intake/forms/resolver.ts', 'lib/intake/forms/runtime.ts'].some(allowed => filename === path.resolve(allowed)))
     expect(files).toContain(path.resolve('components/intake/SchemaDrivenGuidedInterview.tsx'))
     expect(files).toContain(path.resolve('app/intake/(shell)/page.tsx'))
     expect(files).toContain(path.resolve('app/api/intake/route.ts'))

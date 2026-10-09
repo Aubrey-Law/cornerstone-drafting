@@ -1,0 +1,21 @@
+-- Minimal prerequisites for executing the real merge migrations in isolation.
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$;
+CREATE TABLE public.users(id uuid PRIMARY KEY, role text);
+CREATE TABLE public.client_intake(id uuid PRIMARY KEY, intake_track text NOT NULL DEFAULT 'estate', form_version_id uuid, answers jsonb);
+CREATE TABLE public.matters(id uuid PRIMARY KEY, client_intake_id uuid, client_id uuid, matter_number text, name text, relationship_status text, status text);
+CREATE TABLE public.matter_activity(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), matter_id text, event_type text, actor_id uuid, title text, detail text, metadata jsonb);
+CREATE TABLE public.design_sheets(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), matter_id uuid REFERENCES public.matters(id));
+CREATE TABLE public.contact_roles(id uuid PRIMARY KEY, matter_id uuid REFERENCES public.matters(id));
+CREATE TABLE public.matter_estate_clause_overrides(id uuid PRIMARY KEY, matter_id uuid);
+CREATE TABLE public.matter_relationship_status_history(id uuid PRIMARY KEY);
+CREATE TABLE public.matter_stage_history(id uuid PRIMARY KEY);
+CREATE TABLE public.asset_funding(id uuid PRIMARY KEY);
+CREATE TABLE public.estate_clause_preview_evidence(id uuid PRIMARY KEY);
+CREATE TABLE public.document_template_versions(id uuid PRIMARY KEY);
+CREATE TABLE public.contacts(id uuid PRIMARY KEY, client_intake_id uuid REFERENCES public.client_intake(id));
+CREATE TABLE public.asset_intake(id uuid PRIMARY KEY);
+CREATE TABLE public.cornerstone_crm_people(id uuid PRIMARY KEY);
+CREATE TABLE public.matter_document_folders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), matter_id uuid REFERENCES public.matters(id), name text);
+CREATE TABLE public.matter_documents(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), matter_id text, folder_id uuid);
+CREATE TABLE public.intake_uploads(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), client_intake_id uuid REFERENCES public.client_intake(id));
