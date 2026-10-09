@@ -7,7 +7,8 @@ import { compileIntakeForm, type IntakeFormDiagnostic } from '@/lib/intake/forms
 import { createBlankDefinition, definitionFingerprint } from '@/lib/intake/forms/editorState'
 import { parseIntakeFormDefinition } from '@/lib/intake/forms/schema'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
-import { SETTINGS_NAVIGATION_EVENT, SETTINGS_HISTORY_CHANGE_EVENT, retainSettingsHistoryTracking, registerSettingsHistoryGuard, settingsHistoryPosition, type SettingsNavigationRequest } from '../../navigation'
+import { SETTINGS_HISTORY_CHANGE_EVENT, retainSettingsHistoryTracking, registerSettingsHistoryGuard, settingsHistoryPosition } from '../../navigation'
+import { DEPARTURE_REQUEST_EVENT, type DepartureAction, type DepartureRequest } from '@/lib/navigation/departure'
 import { parseSnapshot, parseVersion, invalidResponse } from '@/lib/intake/forms/responseParsing'
 
 export type IntakeFormSaveStatus = 'clean' | 'dirty' | 'saving' | 'error' | 'conflict'
@@ -38,7 +39,7 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
   const [serverDiagnostics, setServerDiagnostics] = useState<IntakeFormDiagnostic[]>([])
   const inFlight = useRef(false)
   const allowDeparture = useRef(false)
-  const departureAction = useRef<(() => void) | null>(null)
+  const departureAction = useRef<DepartureAction | null>(null)
   const departureTrigger = useRef<HTMLElement | null>(null)
   const [confirmingDeparture, setConfirmingDeparture] = useState(false)
   const dirty = definitionFingerprint(localDefinition) !== definitionFingerprint(savedDefinition)
@@ -68,7 +69,7 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       const destination = new URL(href, window.location.href)
       return destination.pathname === window.location.pathname && destination.search === window.location.search && destination.origin === window.location.origin
     }
-    const askToLeave = (proceed: () => void, trigger: HTMLElement | null) => {
+    const askToLeave = (proceed: DepartureAction, trigger: HTMLElement | null) => {
       if (departureAction.current) return
       departureAction.current = proceed
       departureTrigger.current = trigger
@@ -89,8 +90,8 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       askToLeave(() => window.location.assign(destination.href), anchor)
     }
     const imperative = (event: Event) => {
-      const { destination, proceed, trigger } = (event as CustomEvent<SettingsNavigationRequest>).detail
-      if (!unsafe || allowDeparture.current || samePage(destination)) return
+      const { destination, proceed, trigger } = (event as CustomEvent<DepartureRequest>).detail
+      if (!unsafe || allowDeparture.current || (destination && samePage(destination))) return
       event.preventDefault(); askToLeave(proceed, trigger)
     }
     // Cancel traversals before Next observes popstate. No synthetic history entries,
@@ -101,7 +102,7 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       if (!unsafe || allowDeparture.current || traversal.navigationType !== 'traverse' || !event.cancelable ||
         !traversal.destination.sameDocument || samePage(traversal.destination.url)) return
       event.preventDefault()
-      askToLeave(() => navigation?.traverseTo(traversal.destination.key), document.activeElement instanceof HTMLElement ? document.activeElement : null)
+      askToLeave(() => { navigation?.traverseTo(traversal.destination.key) }, document.activeElement instanceof HTMLElement ? document.activeElement : null)
     }
     // The Settings boundary indexes entries before the editor mounts. Retain a
     // reference here too so a standalone or cached editor has the same boundary.
@@ -142,10 +143,10 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
       window.addEventListener(SETTINGS_HISTORY_CHANGE_EVENT, rememberHistory)
     }
     window.addEventListener('beforeunload', beforeUnload)
-    window.addEventListener(SETTINGS_NAVIGATION_EVENT, imperative)
+    window.addEventListener(DEPARTURE_REQUEST_EVENT, imperative)
     document.addEventListener('click', click, true)
     return () => {
-      window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener(SETTINGS_NAVIGATION_EVENT, imperative); document.removeEventListener('click', click, true)
+      window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener(DEPARTURE_REQUEST_EVENT, imperative); document.removeEventListener('click', click, true)
       navigation?.removeEventListener('navigate', navigate)
       unregisterHistoryGuard?.()
       window.removeEventListener(SETTINGS_HISTORY_CHANGE_EVENT, rememberHistory)
@@ -157,13 +158,21 @@ export function useIntakeFormDraft(initialSnapshot: IntakeFormEditorSnapshot) {
     departureAction.current = null
     setConfirmingDeparture(false)
   }
-  function confirmDeparture() {
+  async function confirmDeparture() {
     const proceed = departureAction.current
     if (!proceed) return
     departureAction.current = null
     allowDeparture.current = true
     setConfirmingDeparture(false)
-    proceed()
+    try {
+      if (await proceed() !== false) return
+    } catch {
+      setError('Unable to leave this page. Please try again.')
+    }
+    // A failed asynchronous side effect (for example sign-out) grants no
+    // permission to discard the still-mounted editor on the next departure.
+    allowDeparture.current = false
+    restoreDepartureFocus()
   }
   function restoreDepartureFocus() {
     if (!allowDeparture.current && departureTrigger.current?.isConnected) departureTrigger.current.focus()

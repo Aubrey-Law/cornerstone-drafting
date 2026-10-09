@@ -756,15 +756,16 @@ git diff --check origin/main...HEAD
 git diff --check
 ```
 
-After both review-repair waves, the exact focused suite passed **15 files / 461 tests**, including real local
-database tests, with no accessibility warning. Lint and typecheck exited 0.
-The full suite exited 0: **916 files passed, 2 skipped; 10,190 tests passed,
-27 skipped** (146.50 seconds). The additional skipped test is the new local
-database regression, which passed in the explicitly configured focused run.
-The full suite emitted seven jsdom
-`Not implemented: navigation to another Document` notices, with no failed
-tests. Both diff checks passed. No failure was classified as pre-existing;
-a clean-baseline failure comparison was therefore not needed.
+After the third review-repair wave, the exact 15-file suite above plus
+`tests/intake-form-shell-navigation.test.tsx` and
+`tests/global-search.test.tsx` passed **17 files / 476 tests**, including real
+local database checks. Lint and typecheck exited 0. The final complete suite
+used `npm test -- --maxWorkers=2` and exited 0: **917 files passed, 2 skipped;
+10,198 tests passed, 27 skipped** (401.58 seconds). Test limits and repository
+configuration were unchanged. The opt-in database regression passed in the
+focused run. Seven jsdom cross-document-navigation notices were nonfailing.
+Both diff checks passed. Earlier timing failures, worker-start failures, and
+clean-base/current comparisons are recorded in the third-wave section below.
 The compared `origin/main` SHA was
 `718f5089e6bfd2a2319fa9e1015007ca38bcea88`.
 
@@ -946,9 +947,69 @@ Latest evidence:
 `/private/tmp/intake-phase2b-repair2-review-1440.png` /
 `/private/tmp/intake-phase2b-repair2-review-390.png`.
 
+### Third whole-branch review repair verification
+
+The remaining shell-navigation finding is repaired. A shared cancellable
+departure request now serves Settings, Global Search, and Sign out. The
+existing editor dialog guards unsafe state before routing or authentication.
+Search Cancel retains the palette and query and restores the input or selected
+result; Leave closes the palette and pushes the captured route once. Sign out
+Cancel performs no auth call and returns account-trigger focus. Failed auth
+shows a retry message, retains edits, and rearms protection; confirmed success
+runs auth and login routing once. The boundary is dormant without an active
+unsafe editor, and the root history interceptor remains covered.
+
+Eight new real-component integration tests reached RED-to-GREEN, using actual
+Global Search, AdminLayout, editor hook/dialog, and root boundary. The exact
+15-file intake suite plus shell and existing search tests passed **17 files /
+476 tests**. Lint and typecheck passed. The complete final run,
+`npm test -- --maxWorkers=2`, passed **917 files, 2 skipped; 10,198 tests
+passed, 27 skipped** in **401.58s**, without changing repository configuration
+or test timeouts.
+
+The two earlier default full runs are retained as failed attempts, not counted
+as green: the first had three intake timing failures during cold app
+compilation; the second had one booking wait timeout and two worker-start
+timeouts. Serial reruns cleared booking, missing workers, save and lifecycle.
+The bundled preview cases also passed direct clean-base and current-branch
+comparisons with the existing 30s limit. The final full run passed every
+non-opt-in test. Detailed failure names, counts, and comparison evidence are
+in the local SDD repair report.
+
+Actual Chrome passed at **1440×1000** and **390×1000** from
+`2026-10-09T01:15:57.764Z` to `2026-10-09T01:18:07.815Z`: Cmd-K keyboard and
+pointer Cancel/Leave, query and input/result focus preservation, clean-state
+navigation, Sign out Cancel/no auth, injected local auth failure/retry, and
+single successful sign-out to login. Settings and Back guard behavior passed.
+A Forward-only follow-up also passed both widths from
+`2026-10-09T01:18:51.359Z` to `2026-10-09T01:19:13.087Z`, preserving exact
+entries, URL, focus, and history length. Both runs disabled the Navigation API
+before hydration and rejected native `window.confirm` calls.
+
+Fresh non-admin sessions were denied both builder pages and five API probes.
+The same two original intake IDs retained null version pins; no intake was
+created or repinned, and the fixture user was restored to attorney. Successful
+editor IDs were `6c6d2be9-5bc2-48d9-bff1-bef1e49ddd96` (desktop) and
+`681a5b48-5335-4ec2-96c9-442abd4249d0` (narrow). Screenshots were visually
+inspected with no horizontal overflow. The main run had no uncaught page
+error; observed notices were unused local fonts, favicon aspect ratio, and
+deliberately injected 400 responses. The first browser attempt timed out
+during cold route compilation before acceptance began and is preserved
+separately.
+
+Latest evidence:
+`/private/tmp/intake-phase2b-repair3-focused.log`,
+`/private/tmp/intake-phase2b-repair3-full-two-workers.log`,
+`/private/tmp/intake-phase2b-repair3-browser-evidence.json`,
+`/private/tmp/intake-phase2b-repair3-forward-evidence.json`, and
+`/private/tmp/intake-phase2b-repair3-shell-1440.png` /
+`/private/tmp/intake-phase2b-repair3-shell-390.png`.
+No database reset, schema/function change, type generation, drafting change,
+or live intake change was required.
+
 ### Remaining release boundaries
 
-The six initial findings and three follow-up findings are repaired and locally verified;
+The six initial findings, three follow-up findings, and final shell-navigation finding are repaired and locally verified;
 controller repair re-review remains pending. Phase 2C runtime activation and intake
 pinning, Phase 3 detailed intake enhancements, production bundled-form
 installation, and all drafting changes remain excluded. No push, pull
