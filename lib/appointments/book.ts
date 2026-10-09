@@ -18,7 +18,7 @@ import {
 } from './calendarSync'
 import { runPostBookingAutomation } from './automation'
 import { formatWhen } from './emailFormat'
-import { buildAppointmentConfirmationEmail, officeAddressLine } from './confirmationEmail'
+import { attendeeFirstName, buildAppointmentConfirmationEmail, officeAddressLine } from './confirmationEmail'
 import { delegateAppointmentConfirmation } from './delegateConfirmation'
 import { createManageToken } from './manageTokens'
 import type { OnlineMeetingProvider } from './calendarTypes'
@@ -358,6 +358,7 @@ async function sendConfirmationEmails(input: {
         meetingProvider: input.meetingProvider ?? null,
         manageToken: input.manageToken,
         event: input.action === 'Rescheduled' ? 'rescheduled' : 'booked',
+        firstName: attendeeFirstName(input.attendeeName),
       })
       await sendEmail({
         category: 'appointment_confirmation',
@@ -365,6 +366,9 @@ async function sendConfirmationEmails(input: {
         cc: input.ccEmail ?? undefined,
         subject: email.subject,
         html: email.html,
+        // The builder returns the finished branded document; a stored template
+        // for this category must not replace it.
+        useStoredTemplate: false,
         leadId: input.leadId ?? null,
         matterId: input.matterId ?? null,
       })
