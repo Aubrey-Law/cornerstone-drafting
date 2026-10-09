@@ -141,6 +141,15 @@ describe('one builder for the booking call and the action', () => {
     expect(phone.html).toContain('Appointment rescheduled')
   })
 
+  it('prefers the stored first name and falls back to the full name', () => {
+    const book = fs.readFileSync('lib/appointments/book.ts', 'utf8')
+    expect(book).toContain('firstName: input.attendeeFirstName?.trim() || attendeeFirstName(input.attendeeName)')
+    expect(book).toContain('attendeeFirstName: appointment.attendee_first_name ?? null')
+    const context = fs.readFileSync('lib/appointments/confirmationContext.ts', 'utf8')
+    expect(context).toMatch(/\.select\('[^']*attendee_first_name/)
+    expect(context).toContain('firstName: appointment.attendee_first_name?.trim() || attendeeFirstName(appointment.attendee_name)')
+  })
+
   it('takes the headline name from the attendee', () => {
     expect(attendeeFirstName('  Margaret  Ann Smith ')).toBe('Margaret')
     expect(attendeeFirstName('')).toBeNull()

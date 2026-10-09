@@ -152,7 +152,7 @@ export function officeAddressLine(firm: { street?: string | null; city?: string 
   return firmOfficeAddress(firm)
 }
 
-/** First word of the attendee's name, for the headline; null when there is none. */
+/** First word of the attendee's full name — the headline's fallback when no first name was stored. */
 export function attendeeFirstName(name: string | null | undefined): string | null {
   return name?.trim().split(/\s+/)[0] || null
 }

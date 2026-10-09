@@ -12,13 +12,13 @@ import { resolveLocationType } from './types'
  */
 export async function loadConfirmationContext(admin: SupabaseClient, appointmentId: string): Promise<{
   appointment: Pick<AppointmentRow,
-    'id' | 'appointment_type_id' | 'start_time' | 'status' | 'location_type' | 'attendee_name' | 'attendee_email'
+    'id' | 'appointment_type_id' | 'start_time' | 'status' | 'location_type' | 'attendee_name' | 'attendee_first_name' | 'attendee_email'
     | 'second_attendee_email' | 'linked_lead_id' | 'linked_matter_id' | 'online_meeting_url' | 'online_meeting_provider'>
   type: AppointmentType
   email: Omit<ConfirmationEmailInput, 'manageToken' | 'event'>
 }> {
   const { data, error } = await admin.from('appointments')
-    .select('id, appointment_type_id, start_time, status, location_type, attendee_name, attendee_email, second_attendee_email, linked_lead_id, linked_matter_id, online_meeting_url, online_meeting_provider')
+    .select('id, appointment_type_id, start_time, status, location_type, attendee_name, attendee_first_name, attendee_email, second_attendee_email, linked_lead_id, linked_matter_id, online_meeting_url, online_meeting_provider')
     .eq('id', appointmentId).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new Error('Appointment not found')
@@ -37,7 +37,7 @@ export async function loadConfirmationContext(admin: SupabaseClient, appointment
       officeAddress: officeAddressLine(firm),
       meetingUrl: appointment.online_meeting_url,
       meetingProvider: appointment.online_meeting_provider ?? null,
-      firstName: attendeeFirstName(appointment.attendee_name),
+      firstName: appointment.attendee_first_name?.trim() || attendeeFirstName(appointment.attendee_name),
     },
   }
 }
