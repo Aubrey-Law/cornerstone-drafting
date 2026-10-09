@@ -11,6 +11,7 @@ import {
   ClipboardList,
   CloudUpload,
   Mail,
+  Merge,
   MessageSquareText,
   MoreHorizontal,
   PanelRight,
@@ -57,6 +58,8 @@ type Props = {
   onPushToStatular?: () => void
   pushingToStatular?: boolean
   onToggleRail: () => void
+  /** Merge this lead into another lead or matter; hidden without a matter. */
+  onMerge?: () => void
   railOpen: boolean
   hasEmail: boolean
   hasPhone: boolean
@@ -84,6 +87,7 @@ export function LeadTopActions({
   onPushToStatular,
   pushingToStatular = false,
   onToggleRail,
+  onMerge,
   railOpen,
   hasEmail,
   hasPhone,
@@ -177,6 +181,12 @@ export function LeadTopActions({
             <PanelRight className="mr-2 size-3.5" />
             {railOpen ? 'Hide details' : 'Open details'}
           </DropdownMenuItem>
+          {onMerge && matterId && (
+            <DropdownMenuItem onClick={onMerge} disabled={busy}>
+              <Merge className="mr-2 size-3.5" />
+              Merge into another lead or matter…
+            </DropdownMenuItem>
+          )}
           {!canViewMatter && (
             <DropdownMenuItem disabled={!active} onClick={onConvert}>
               <UserCheck className="mr-2 size-3.5" />

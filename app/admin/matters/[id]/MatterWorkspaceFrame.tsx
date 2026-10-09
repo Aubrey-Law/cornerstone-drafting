@@ -129,6 +129,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
         onPushToStatular={() => void actions.pushToStatular()}
         pushingToStatular={actions.pushingToStatular}
         onDelete={actions.deleteDialog.openDialog}
+        onMerge={actions.mergeDialog.openDialog}
         collapsed={collapsed}
         stage={practiceArea === 'Probate' ? <ProbateStageStrip details={facts.details} /> : undefined}
         meta={<span className="flex flex-wrap items-center gap-2 pl-1">
@@ -237,6 +238,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
           practiceArea: practiceAreaLabel(facts.details?.practice_area ?? matter.practice_area),
         }}
         deleteDialog={actions.deleteDialog}
+        mergeDialog={actions.mergeDialog}
         unlock={{ open: actions.unlockConfirmOpen, setOpen: actions.setUnlockConfirmOpen, confirm: actions.confirmUnlockIntake }}
         stage={{
           preflight: stage.stagePreflight,

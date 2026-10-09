@@ -200,7 +200,8 @@ describe('the review screen', () => {
 
   it('offers a group merge only for copies whose names match, behind a confirmation', () => {
     expect(client).toMatch(/const sameName = group\.copies\.filter\(c => c\.namesMatch\)/)
-    expect(client).toMatch(/window\.confirm\(/)
+    expect(client).toMatch(/setConfirmGroup\(group\.winner\.id\)/)
+    expect(client).toContain('Confirm merge')
     expect(client).toMatch(/void merge\(group\.winner, sameName, group\.winner\.id\)/)
     expect(client).toMatch(/loserContactIds: copies\.map\(copy => copy\.loser\.id\)/)
   })

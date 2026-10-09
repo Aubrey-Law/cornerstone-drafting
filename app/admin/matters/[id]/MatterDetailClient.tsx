@@ -439,6 +439,7 @@ function MatterDetailClientInner({
           onPushToStatular={() => void actions.pushToStatular()}
           pushingToStatular={actions.pushingToStatular}
           onDelete={actions.deleteDialog.openDialog}
+          onMerge={actions.mergeDialog.openDialog}
           collapsed={headerCollapsed}
           stage={showProbate ? (
             <ProbateStageStrip details={matterDetails} />
@@ -748,6 +749,7 @@ function MatterDetailClientInner({
           practiceArea: practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area),
         }}
         deleteDialog={actions.deleteDialog}
+        mergeDialog={actions.mergeDialog}
         unlock={{ open: actions.unlockConfirmOpen, setOpen: actions.setUnlockConfirmOpen, confirm: actions.confirmUnlockIntake }}
         stage={{
           preflight: stageControl.stagePreflight,

@@ -149,6 +149,8 @@ export function MergeReviewClient() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // The group awaiting a second click on its "Merge all" button.
+  const [confirmGroup, setConfirmGroup] = useState<string | null>(null)
   const [merged, setMerged] = useState<string[]>([])
 
   const load = useCallback(async () => {
@@ -245,21 +247,32 @@ export function MergeReviewClient() {
               <span className="text-xs text-muted-foreground">
                 {group.copies.length + 1} rows share this email
               </span>
-              {sameName.length > 1 && (
+              {sameName.length > 1 && confirmGroup !== group.winner.id && (
                 <Button
                   type="button" size="sm" className="ml-auto"
                   disabled={busyId !== null}
-                  onClick={() => {
-                    if (!window.confirm(
-                      `Merge ${sameName.length} copies named ${fullName(group.winner)} into the kept row? ` +
-                      'Copies with a different name are left for you to review one by one.',
-                    )) return
-                    void merge(group.winner, sameName, group.winner.id)
-                  }}
+                  onClick={() => setConfirmGroup(group.winner.id)}
                 >
                   <Check className="h-3.5 w-3.5" />
                   {groupBusy ? 'Merging…' : `Merge all ${sameName.length} with the same name`}
                 </Button>
+              )}
+              {sameName.length > 1 && confirmGroup === group.winner.id && (
+                <span className="ml-auto flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Merge {sameName.length} copies named {fullName(group.winner)}? Different names stay for review.
+                  </span>
+                  <Button
+                    type="button" size="sm"
+                    disabled={busyId !== null}
+                    onClick={() => { setConfirmGroup(null); void merge(group.winner, sameName, group.winner.id) }}
+                  >
+                    Confirm merge
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setConfirmGroup(null)}>
+                    Cancel
+                  </Button>
+                </span>
               )}
             </header>
 

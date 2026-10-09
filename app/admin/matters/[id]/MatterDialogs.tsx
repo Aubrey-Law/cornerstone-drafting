@@ -27,7 +27,8 @@ import { SendSchedulingLinkDialog } from '@/components/scheduling/SendScheduling
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { stageLabel, type PipelineMatter } from '@/types/database'
-import type { MatterDeleteDialogState } from './useMatterHeaderActions'
+import { MergeRecordDialog } from '@/components/matter/MergeRecordDialog'
+import type { MatterDeleteDialogState, MatterMergeDialogState } from './useMatterHeaderActions'
 import type { StageLifecyclePreflight } from './useMatterStage'
 import type { LinkedMatterNote } from './tabs/notes'
 
@@ -47,11 +48,12 @@ export interface MatterIntakeDialogsState {
 }
 
 /** Every dialog and sheet the matter page opens; state is owned by the page's hooks. */
-export function MatterDialogs({ matter, token, intake, deleteDialog, unlock, stage, leadNoteDelete, scheduling, composer }: {
+export function MatterDialogs({ matter, token, intake, deleteDialog, mergeDialog, unlock, stage, leadNoteDelete, scheduling, composer }: {
   matter: PipelineMatter
   token: string | null
   intake: MatterIntakeDialogsState
   deleteDialog: MatterDeleteDialogState
+  mergeDialog: MatterMergeDialogState
   unlock: { open: boolean; setOpen: (open: boolean) => void; confirm: () => void | Promise<void> }
   stage: {
     preflight: StageLifecyclePreflight | null
@@ -71,6 +73,12 @@ export function MatterDialogs({ matter, token, intake, deleteDialog, unlock, sta
 
   return (
     <>
+      <MergeRecordDialog
+        matterId={matterId}
+        recordLabel="matter"
+        open={mergeDialog.open}
+        onOpenChange={mergeDialog.setOpen}
+      />
       <ImportIntakeDialog
         open={intake.importOpen}
         onOpenChange={intake.setImportOpen}
