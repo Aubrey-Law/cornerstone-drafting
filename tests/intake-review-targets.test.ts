@@ -124,11 +124,11 @@ describe('admin intake review flag computation', () => {
   it('hydrates the intake row with contacts before computing flags', () => {
     expect(source).toContain('async function recomputeIntakeReviewFlags(')
     expect(source).toContain('hydrated = await hydrateIntakeWithContacts(admin, intakeRow, intakeId)')
-    expect(source).toContain('getIntakeReadinessFlags(hydrated as IntakeRow)')
+    expect(source).toContain('resolveIntakeReadiness(intakeRow, hydrated)')
   })
 
   it('routes every flag computation through the hydrating helper', () => {
-    const directCalls = source.match(/getIntakeReadinessFlags\(/g) ?? []
+    const directCalls = source.match(/resolveIntakeReadiness\(/g) ?? []
     expect(directCalls).toHaveLength(1)
     expect(source).not.toContain('getIntakeReadinessFlags(intakeRow as IntakeRow)')
     expect((source.match(/recomputeIntakeReviewFlags\(admin, intakeId\)/g) ?? []).length).toBe(2)

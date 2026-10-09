@@ -376,9 +376,9 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
         PERFORM pg_temp.expect_failure(format('SELECT public.discard_intake_form_draft(%L,%L,1)', '${admin}', next->>'id'), 'Draft changed; refresh and try again');
         PERFORM public.discard_intake_form_draft('${admin}', (next->>'id')::uuid, 0);
         IF EXISTS (SELECT 1 FROM public.intake_form_versions WHERE id = (next->>'id')::uuid) THEN RAISE EXCEPTION 'Draft was not discarded'; END IF;
-        INSERT INTO public.client_intake (form_version_id) VALUES (v);
+        PERFORM pg_temp.expect_failure(format('INSERT INTO public.client_intake (form_version_id) VALUES (%L)', v), 'Intake questionnaire versions are assigned by the database');
         r := public.retire_intake_form_version('${admin}', v);
-        IF r->>'status' <> 'retired' OR NOT EXISTS (SELECT 1 FROM public.client_intake WHERE form_version_id = v) THEN RAISE EXCEPTION 'Retirement broke pin'; END IF;
+        IF r->>'status' <> 'retired' THEN RAISE EXCEPTION 'Retirement metadata missing'; END IF;
         next := public.create_next_intake_form_draft('${admin}', v);
         IF (next->>'version')::integer <> 2 THEN RAISE EXCEPTION 'Retired source copy failed'; END IF;
         PERFORM public.archive_intake_form_template('${admin}', t);
@@ -391,7 +391,7 @@ describe.skipIf(!localDatabaseUrl)('intake form database guards (local PostgreSQ
         PERFORM public.discard_intake_form_draft('${admin}', (next->>'id')::uuid, 0);
         PERFORM pg_temp.expect_failure(format('SELECT public.create_next_intake_form_draft(%L,%L)', '${admin}', v), 'Template is archived');
         PERFORM pg_temp.expect_failure(format('DELETE FROM public.intake_form_templates WHERE id = %L', t), 'update or delete on table%violates foreign key constraint%');
-        PERFORM pg_temp.expect_failure('INSERT INTO public.client_intake (form_version_id) VALUES (gen_random_uuid())', 'insert or update on table%violates foreign key constraint%');
+        PERFORM pg_temp.expect_failure('INSERT INTO public.client_intake (form_version_id) VALUES (gen_random_uuid())', 'Intake questionnaire versions are assigned by the database');
       END;
       $test$;
     `)

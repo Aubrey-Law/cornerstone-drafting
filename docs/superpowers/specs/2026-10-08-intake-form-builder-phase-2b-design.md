@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** implemented and verified locally, including all three review-repair waves; controller repair re-review and separately authorized release remain pending
+**Status:** merged as #760 (`155208ba`) in the current checkout, including all three review-repair waves. Historical review-pending entries below are retained as records of that branch. Production deployment has not been verified in this status review. Next: [Phase 2C activation readiness](../plans/2026-10-09-intake-form-builder-phase-2c.md).
 
 **Scope:** administrator-only visual authoring and synthetic preview over the
 Phase 2A intake-form persistence and lifecycle foundation

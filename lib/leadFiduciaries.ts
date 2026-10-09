@@ -1,3 +1,4 @@
+import { loadIntakeCreationContext } from '@/lib/intake/creationContext'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { syncChildrenProjection } from '@/lib/contacts/syncChildrenProjection'
@@ -253,6 +254,7 @@ export async function attachLeadFiduciaryContacts(
 
   let intakeId = typeof existingIntake?.id === 'string' ? existingIntake.id : null
   if (!intakeId) {
+    const creationContext = await loadIntakeCreationContext(admin, { leadId: args.leadId })
     const fullName = [args.firstName, args.lastName].filter(Boolean).join(' ') || null
     const { data: createdIntake, error: createIntakeError } = await admin
       .from('client_intake')
@@ -263,7 +265,7 @@ export async function attachLeadFiduciaryContacts(
         full_name: fullName,
         email: args.email,
         phone: formatPhoneForStorage(args.phone),
-        practice_area: 'EP',
+        ...creationContext,
         status: 'draft',
         current_step: 1,
         state: 'MA',

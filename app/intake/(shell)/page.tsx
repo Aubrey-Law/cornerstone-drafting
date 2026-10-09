@@ -7,8 +7,7 @@ import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIn
 import { type IntakeRow } from '@/lib/intakeSections'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
-import { getIntakeTrack } from '@/lib/intakeTrack'
-import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
+import { resolveIntakeDelivery } from '@/lib/intake/forms/runtime'
 import GuidedInterview from '@/components/intake/GuidedInterview'
 import { RequestUnlockButton } from './RequestUnlockButton'
 import { OtherFormsNotice, countOtherOpenForms } from './OtherFormsNotice'
@@ -44,6 +43,7 @@ export default async function IntakeHomePage({ searchParams }: { searchParams: P
       )) as IntakeRow
     } catch (error) {
       console.error('[intake page] contact hydration failed:', error)
+      if (intake.form_version_id) return <p role="alert">This questionnaire is temporarily unavailable. Please contact the firm.</p>
     }
   }
 
@@ -80,14 +80,8 @@ export default async function IntakeHomePage({ searchParams }: { searchParams: P
     )
   }
 
-  const rendererMode = resolveIntakeRendererMode(process.env)
-  if (rendererMode === 'legacy') {
-    return <>{otherForms}<GuidedInterview initialData={intakeRow as Record<string, unknown>} intakeId={intake.id as string} mode="client" rendererMode="legacy" /></>
-  }
   try {
-    const { compileBundledIntakeForm } = await import('@/lib/intake/forms/definitions')
-    const compiled = compileBundledIntakeForm(getIntakeTrack(intakeRow), 'client')
-    if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
+    const delivery = await resolveIntakeDelivery(intake, 'client', process.env)
     return (
       <>
       {otherForms}
@@ -95,13 +89,12 @@ export default async function IntakeHomePage({ searchParams }: { searchParams: P
         initialData={intakeRow as Record<string, unknown>}
         intakeId={intake.id as string}
         mode="client"
-        rendererMode={rendererMode}
-        compiledForm={compiled.form}
+        {...delivery}
       />
       </>
     )
   } catch (error) {
-    console.error('Invalid bundled intake form', error)
+    console.error('Intake form unavailable', error)
     return <p role="alert">This questionnaire is temporarily unavailable. Please contact the firm.</p>
   }
 }

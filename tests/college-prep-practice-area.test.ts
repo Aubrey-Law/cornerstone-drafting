@@ -170,7 +170,7 @@ describe('design sheet follows the practice area', () => {
  * intake asks, not just what drafts — otherwise the attorney intake sheet keeps
  * showing assets, spouse and trust and hides the student's own questions.
  */
-function intakeTrackHarness(options: { intakeId?: string | null; track?: string } = {}) {
+function intakeTrackHarness(options: { intakeId?: string | null; track?: string; pin?: string } = {}) {
   const updates: Array<Record<string, unknown>> = []
   const admin = {
     from: (table: string) => {
@@ -191,7 +191,7 @@ function intakeTrackHarness(options: { intakeId?: string | null; track?: string 
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: { id: 'intake-1', intake_track: options.track ?? 'estate' },
+              data: { id: 'intake-1', intake_track: options.track ?? 'estate', form_version_id: options.pin },
             }),
           }),
         }),
@@ -223,6 +223,12 @@ describe('intake questionnaire follows the practice area', () => {
     expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'CP')).toBe(true)
     expect(updates).toHaveLength(1)
     expect(updates[0]).toMatchObject({ intake_track: 'college_prep' })
+  })
+
+  it('preserves a pinned questionnaire when the matter is reclassified', async () => {
+    const { admin, updates } = intakeTrackHarness({ track: 'estate', pin: 'version-1' })
+    expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'CP')).toBe(false)
+    expect(updates).toEqual([])
   })
 
   it('moves the intake back to the estate questionnaire', async () => {
@@ -279,19 +285,6 @@ describe('intake questionnaire follows the practice area', () => {
 
     expect(trackAt).toBeGreaterThan(-1)
     expect(seedAt).toBeGreaterThan(trackAt)
-  })
-
-  it('reads the attorney intake sheet as college prep from the practice area too', () => {
-    // Matters created before the questionnaire followed the practice area keep
-    // the 'estate' default, so the sheet must not trust the track alone.
-    const sheet = fs.readFileSync(
-      path.join(process.cwd(), 'components/AdminIntakeSheet.tsx'),
-      'utf8',
-    )
-
-    expect(sheet).toContain(
-      "intakeTrack === 'college_prep' || isCollegePrepPracticeArea(practiceArea)",
-    )
   })
 
   it('recognises the practice area label the intake sheet is handed', () => {

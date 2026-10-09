@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SchemaDrivenGuidedInterview from '@/components/intake/SchemaDrivenGuidedInterview'
 import { compileIntakeForm } from '@/lib/intake/forms/compiler'
@@ -12,14 +12,14 @@ const mocks = vi.hoisted(() => ({
   spouse: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined), children: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined),
   fiduciaries: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined), additional: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined),
   session: vi.fn(async () => ({ data: { session: { access_token: 'session-1' } } })),
-  error: vi.fn(),
+  error: vi.fn(), renderReview: false,
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }))
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: mocks.session } } }))
 vi.mock('@/hooks/useAutoSave', () => ({ useAutoSave: () => ({ status: 'saved', flush: mocks.flush, trackForFlush: mocks.track, debouncedSave: mocks.debounce }) }))
 vi.mock('@/hooks/useContacts', () => ({ useContacts: () => ({ saveSpouse: mocks.spouse, saveChildren: mocks.children, saveFiduciaries: mocks.fiduciaries, saveAdditionalContacts: mocks.additional }) }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
-vi.mock('@/components/intake/LegacyGuidedInterview', () => ({ ReviewModal: ({ onSubmit, submitting }: { onSubmit: () => void; submitting: boolean }) => <button disabled={submitting} onClick={onSubmit}>Submit questionnaire</button> }))
+vi.mock('@/components/intake/LegacyGuidedInterview', () => ({ ReviewModal: ({ onSubmit, submitting, reviewContent }: { onSubmit: () => void; submitting: boolean; reviewContent?: React.ReactNode }) => <div>{mocks.renderReview ? reviewContent : null}<button disabled={submitting} onClick={onSubmit}>Submit questionnaire</button></div> }))
 // Domain controls are covered by the compiled renderer suites; this boundary
 // exposes canonical writes while exercising the real interview orchestration.
 vi.mock('@/components/intake/formEngine/CompiledIntakeSections', () => ({
@@ -64,9 +64,27 @@ beforeEach(() => {
   mocks.session.mockResolvedValue({ data: { session: { access_token: 'session-1' } } })
   vi.stubGlobal('fetch', submitFetch)
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => {
+  mocks.renderReview = false
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('compiled interview workflow', () => {
+  it.each([false, true])('autosaves current household and appointment answers over embedded snapshots (empty: %s)', empty => {
+    const current = empty ? [] : [{ contact_id: 'current-id', first_name: 'Current', last_name: 'Person', priority: 2 }]
+    mount({ ...completeContact, _children: current, _fid_poa_spouse: current,
+      fiduciary_entries: { children: [{ first_name: 'Stale child' }], fid_poa_spouse: [{ first_name: 'Stale nominee', priority: 1 }] },
+    })
+    expect(mocks.debounce).not.toHaveBeenCalled()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Personal' })[0])
+    fireEvent.change(screen.getByLabelText(/First name/i), { target: { value: 'Janet' } })
+    const body = mocks.debounce.mock.calls.at(-1)?.[0] as unknown as Record<string, unknown>
+    expect(body._children).toEqual(current)
+    expect(body._fid_poa_spouse).toEqual(current)
+    expect(JSON.stringify(body)).not.toContain('Stale')
+  })
+
   it('tracks canonical edits and saves a dirty contact block on leave', async () => {
     mount()
     fireEvent.click(screen.getAllByRole('button', { name: 'Personal' })[0])
@@ -235,4 +253,45 @@ describe('compiled interview workflow', () => {
     expect(compiled.form.sections.every((section) => section.audience === 'client_and_staff')).toBe(true)
     expect(JSON.stringify(compiled.form)).not.toContain('attorney_')
   })
+})
+
+describe('compiled questionnaire review', () => {
+  it('reviews custom section order, labels and requirements and edits the actual section', () => {
+    const compiled = compileIntakeForm({ schemaVersion: 1, key: 'custom', title: 'Custom', sections: [
+      { id: 'custom_notes', title: 'Your priorities', audience: 'client_and_staff', items: [
+        { kind: 'field', id: 'notes', fieldId: 'special_notes', labelOverride: 'Planning notes', requirement: 'required' },
+      ] },
+      { id: 'custom_identity', title: 'Your identity', audience: 'client_and_staff', items: [
+        { kind: 'field', id: 'first', fieldId: 'client_first_name', labelOverride: 'Given name' },
+      ] },
+      { id: 'review', title: 'Review', audience: 'client_and_staff', items: [{ kind: 'block', id: 'submit', blockId: 'review_submit' }] },
+    ] }, 'client')
+    if (!compiled.success) throw new Error(JSON.stringify(compiled.errors))
+    mocks.renderReview = true
+    render(<SchemaDrivenGuidedInterview initialData={completeContact} intakeId="intake-1" compiledForm={compiled.form} />)
+    fireEvent.click(screen.getByRole('button', { name: /Review questionnaire/ }))
+    const review = within(screen.getByRole('region', { name: 'Current form review' }))
+    expect(review.getAllByRole('heading').map(node => node.textContent)).toEqual(['Your priorities', 'Your identity'])
+    expect(review.getByLabelText('Given name').matches(':disabled')).toBe(true)
+    expect((review.getByLabelText('Given name') as HTMLInputElement).value).toBe('Jane')
+    expect(review.getByText("Answer anything else you'd like us to know?.")).toBeTruthy()
+    expect(review.queryByText('Personal Information')).toBeNull()
+    fireEvent.click(review.getByRole('button', { name: 'Edit Your identity' }))
+    expect(screen.queryByRole('region', { name: 'Current form review' })).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Given name' })).toBeTruthy()
+    expect(mocks.debounce).not.toHaveBeenCalled()
+    expect(submitFetch).not.toHaveBeenCalled()
+  })
+})
+
+
+it.each([
+  ['college_prep', 'custom_student_form', true],
+  ['estate', 'college_prep', false],
+] as const)('uses the intake track %s independently of the template key %s', (track, key, college) => {
+  render(<SchemaDrivenGuidedInterview initialData={{ ...completeContact, intake_track: track }} intakeId="intake-1"
+    compiledForm={{ ...form(), key, title: 'Published form title', description: 'Published form instructions' }} />)
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Published form title')
+  expect(screen.getByText('Published form instructions')).toBeTruthy()
+  expect(Boolean(screen.queryByText(/Every document here is voluntary/))).toBe(college)
 })

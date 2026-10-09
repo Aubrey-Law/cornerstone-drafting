@@ -111,7 +111,11 @@ function scalarIssues(item: Extract<CompiledIntakeItem, { kind: 'field' }>, fiel
 
 /** One condition/validation result drives display, progress, review, and submit. */
 export function evaluateCompiledIntakeForm(form: CompiledIntakeForm, data: IntakeRow): IntakeFormEvaluation {
-  const resolve = (fieldId: FormFieldId) => readFormField(fieldId, data)
+  const resolve = (fieldId: FormFieldId) => {
+    const field = getFormField(fieldId)
+    const value = readFormField(fieldId, data)
+    return field.control !== 'multiselect' && field.normalize ? field.normalize(value) : value
+  }
   const activeContent = form.sections.filter((section) => evaluateIntakeCondition(section.condition, resolve)).map((section) => ({
     section, activeItems: section.items.filter((item) => evaluateIntakeCondition(item.condition, resolve)),
   }))

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 
-**Status:** approved; Phase 1, Phase 2A persistence, and Phase 2B visual builder including whole-branch repairs implemented and verified locally; controller repair re-review, Phase 2C activation/pinning, and Phase 3 detailed enhancements remain
+**Status:** Phase 1, Phase 2A (#757), and Phase 2B (#760) merged in the current checkout. Phase 2C client delivery/submission, staff saved-review/submission, and Word export now honor stored pins in the working tree; database pinning safeguards are prepared with rollout disabled. Creation-time track selection is implemented. Conservative merge compatibility is implemented. Staff authoring gaps, activation verification, and Phase 3 enhancements remain. See the [Phase 2C readiness and next steps](../plans/2026-10-09-intake-form-builder-phase-2c.md). Historical verification records below describe their original branch state; production deployment is not verified by this status update.
 
 **Scope:** architecture and staged delivery for schema-driven intake, an admin form builder, and the detailed intake experience
 

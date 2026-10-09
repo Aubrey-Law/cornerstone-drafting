@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -719,6 +719,7 @@ export function ReviewModal(props: {
   onEdit: (id?: string) => void
   onClose: () => void
   onSubmit: () => void
+  reviewContent?: ReactNode
   reviewSelectors?: IntakeReviewSelectors
 }) {
   const {
@@ -757,13 +758,13 @@ export function ReviewModal(props: {
         </DialogDescription>
 
         <div style={{ padding: '20px 28px', maxHeight: 'min(70vh, 720px)', overflowY: 'auto' }}>
-          <IntakeQuestionnaireReview
+          {props.reviewContent ?? <IntakeQuestionnaireReview
             selectors={props.reviewSelectors ?? { getActiveSteps, getStepIssues }}
             data={data}
             onEditSection={(id) => onEdit(id)}
             intakeId={props.intakeId}
             publicIntakeToken={props.publicIntakeToken}
-          />
+          />}
 
           {isAttorney && selectedDocKeys.length > 0 && (
             <div style={{ marginTop: 16, border: '1px solid var(--gi-border)', borderRadius: 11, padding: '17px 19px' }}>

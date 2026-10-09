@@ -25,12 +25,16 @@ export async function POST(req: NextRequest) {
   const admin = getAdminClient()
   const { data: intake, error: fetchError } = await admin
     .from('client_intake')
-    .select('id, status, intake_track, lead_status')
+    .select('id, status, intake_track, lead_status, form_version_id')
     .eq('id', intakeId)
     .maybeSingle()
 
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 })
   if (!intake) return NextResponse.json({ error: 'Intake not found' }, { status: 404 })
+
+  if (intake.form_version_id != null && intake.intake_track !== track) {
+    return NextResponse.json({ error: 'This intake uses a saved questionnaire version. Its track cannot be changed.' }, { status: 409 })
+  }
 
   if (intake.status === 'submitted' || intake.status === 'approved') {
     return NextResponse.json(

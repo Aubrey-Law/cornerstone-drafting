@@ -63,3 +63,19 @@ describe('proxy role resolution', () => {
     expect(mocks.from).not.toHaveBeenCalled()
   })
 })
+
+describe('intake route credential delegation', () => {
+  it.each(['/api/intake', '/api/intake/contacts', '/api/intake/documents', '/api/intake/id/export'])('lets %s validate supported non-cookie credentials', async path => {
+    for (const headers of [new Headers({ 'X-Intake-Token': 'untrusted-token' }), new Headers({ Authorization: 'Bearer untrusted-token' })]) {
+      mocks.getClaims.mockClear()
+      const response = await proxy(new NextRequest(`https://cornerstone.example${path}`, { headers }))
+      expect(response.headers.get('x-middleware-next')).toBe('1')
+      expect(mocks.getClaims).not.toHaveBeenCalled()
+    }
+  })
+  it.each(['/api/admin/intake/id/export', '/api/intake/unknown', '/intake'])('never delegates cookie protection for %s', async path => {
+    mocks.getClaims.mockResolvedValueOnce({ data: { claims: {} } })
+    const response = await proxy(new NextRequest(`https://cornerstone.example${path}`, { headers: { 'X-Intake-Token': 'forged', Authorization: 'Bearer forged' } }))
+    expect(response.status).toBe(path === '/intake' ? 307 : 401)
+  })
+})

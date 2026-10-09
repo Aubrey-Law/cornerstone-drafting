@@ -41,6 +41,8 @@ export function intakeTrackForPracticeArea(practiceArea: unknown): IntakeTrack {
  * `college_prep_details` coexist on the row, so switching back restores the
  * original view.
  *
+ * Pinned questionnaires retain their original track regardless of matter
+ * reclassification. The database also guards against concurrent pin changes.
  * Returns true when a write happened.
  */
 export async function reconcileMatterIntakeTrack(
@@ -63,11 +65,11 @@ export async function reconcileMatterIntakeTrack(
 
     const { data: intake } = await admin
       .from('client_intake')
-      .select('id, intake_track')
+      .select('id, intake_track, form_version_id')
       .eq('id', intakeId)
       .maybeSingle()
 
-    if (!intake) return false
+    if (!intake || intake.form_version_id != null) return false
     if (getIntakeTrack(intake as Record<string, unknown>) === track) return false
 
     const { error } = await admin

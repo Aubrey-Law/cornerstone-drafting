@@ -9,8 +9,7 @@ import { formatPhoneForStorage } from '@/lib/phone'
 import { parsePlanningObjectives, PLANNING_OBJECTIVES_NOTES_KEY } from '@/lib/intakePlanningObjectives'
 import { syncLeadFromIntake } from '@/lib/syncLeadFromIntake'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
-import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
-import type { IntakeRow } from '@/lib/intakeSections'
+import { type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import {
   adminFiduciaryEntriesFromForm,
   probateDetailsFromForm,
@@ -22,7 +21,11 @@ import { getHousehold } from '@/lib/contacts/getHousehold'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
 import { resolveMatterIntakeIdForMatter } from '@/lib/intake/resolveMatterIntakeId'
+import { resolveIntakeDelivery, resolveIntakeReadiness } from '@/lib/intake/forms/runtime'
+import { submitSavedPinnedIntakeRow } from '@/lib/intake/forms/staffSubmission'
+import { mapRawIntakeToFormData } from '@/lib/intake/adminIntakeFormMapping'
 import { loadAdminIntakeRow } from '@/lib/intake/loadAdminIntakeRow'
+import { loadIntakeCreationContext } from '@/lib/intake/creationContext'
 import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 import { markIntakeUploadsReviewed as persistIntakeUploadsReviewed, markPortalUploadsReviewed as persistPortalUploadsReviewed } from '@/lib/matter/unreviewedUploads'
 import { citizenshipStatusToLegacyBoolean } from '@/lib/sharedFields'
@@ -55,7 +58,7 @@ async function recomputeIntakeReviewFlags(
     return []
   }
 
-  const reviewFlags = getIntakeReadinessFlags(hydrated as IntakeRow)
+  const reviewFlags = await resolveIntakeReadiness(intakeRow, hydrated)
   await admin
     .from('client_intake')
     .update({ attorney_review_flags: reviewFlags })
@@ -335,7 +338,11 @@ export async function getAdminIntakeData(
   clientIntakeId: string
 ): Promise<Record<string, unknown> | null> {
   await requireAdminServerAction()
-  return loadAdminIntakeRow(clientIntakeId)
+  const row = await loadAdminIntakeRow(clientIntakeId)
+  if (!row || row.form_version_id == null) return row
+  const delivery = await resolveIntakeDelivery(row, 'staff', process.env)
+  if (delivery.rendererMode !== 'compiled') throw new Error('Pinned questionnaire unavailable')
+  return { ...row, _pinned_form: delivery.compiledForm }
 }
 
 /** Resolve and heal the household intake linked to a matter. */
@@ -356,7 +363,7 @@ interface AdminIntakeArgs {
 }
 
 async function findOrCreateIntake(
-  args: AdminIntakeArgs,
+  args: Omit<AdminIntakeArgs, 'data'>,
   initialPayload: Record<string, unknown>,
 ): Promise<string> {
   const admin = getAdminClient()
@@ -383,11 +390,13 @@ async function findOrCreateIntake(
       return intakeId
     }
 
+    const creationContext = await loadIntakeCreationContext(admin, { matterId: args.matterId })
     const userId = await resolveUserId((matter.client_id as string | null | undefined) ?? args.clientUserId)
     const { data: newRecord, error: insertError } = await admin
       .from('client_intake')
       .insert({
         ...initialPayload,
+        ...creationContext,
         user_id: userId,
       })
       .select('id')
@@ -408,14 +417,26 @@ async function findOrCreateIntake(
     .maybeSingle()
   if (existing?.id) return existing.id as string
 
+  const creationContext = await loadIntakeCreationContext(admin, { leadId: args.leadId })
   const userId = await resolveUserId(args.clientUserId)
   const { data: newRecord, error: insertError } = await admin
     .from('client_intake')
-    .insert({ ...initialPayload, user_id: userId, lead_id: args.leadId })
+    .insert({ ...initialPayload, ...creationContext, user_id: userId, lead_id: args.leadId })
     .select('id')
     .single()
   if (insertError) throw new Error(insertError.message)
   return newRecord.id as string
+}
+
+/** Establish version identity before staff enter answers into either editor. */
+export async function prepareAdminIntake(args: Omit<AdminIntakeArgs, 'data'> & { clientName?: string | null }): Promise<{ id: string }> {
+  await requireAdminServerAction()
+  const parts = (args.clientName ?? '').trim().slice(0, 500).split(/\s+/)
+  const id = await findOrCreateIntake(args, {
+    status: 'draft', first_name: parts[0] || null, last_name: parts.slice(1).join(' ') || null,
+    full_name: parts.join(' ') || null,
+  })
+  return { id }
 }
 
 export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id: string }> {
@@ -426,10 +447,11 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
 
   const { data: currentIntake, error: currentIntakeError } = await admin
     .from('client_intake')
-    .select('status')
+    .select('status, form_version_id')
     .eq('id', intakeId)
     .maybeSingle()
   if (currentIntakeError) throw new Error(currentIntakeError.message)
+  if (currentIntake?.form_version_id) throw new Error('Edit the saved pinned questionnaire, then save each answer. The shared summary cannot replace versioned answers.')
 
   const currentStatus = typeof currentIntake?.status === 'string' ? currentIntake.status : null
   const saveStatus = currentStatus && CLIENT_LOCKED_INTAKE_STATUSES.has(currentStatus)
@@ -503,7 +525,10 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
   await requireAdminServerAction()
   const admin = getAdminClient()
   const payload: Record<string, unknown> = buildPayload(args.data, 'submitted')
-  const intakeId = await findOrCreateIntake(args, payload)
+  const intakeId = await findOrCreateIntake(args, { ...payload, status: 'draft' })
+  const { data: current, error: currentError } = await admin.from('client_intake').select('form_version_id').eq('id', intakeId).maybeSingle()
+  if (currentError || !current) throw new Error('Unable to load intake before submission')
+  if (current.form_version_id != null) throw new Error('Save your edits, then submit the saved pinned questionnaire.')
   await mergeJsonbDetails(admin, intakeId, payload)
 
   const { error } = await admin
@@ -528,6 +553,31 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
 
   await syncLeadFromIntake(admin, { intakeId, fields: payload })
 
+  return finishAdminIntakeSubmission(admin, intakeId, args, matter)
+}
+
+/** Submit the saved pinned questionnaire, independently of the staff editor schema. */
+export async function submitSavedPinnedIntake(args: { intakeId: string; expectedVersionId: string }): Promise<{ id: string }> {
+  await requireAdminServerAction()
+  const admin = getAdminClient()
+  const row = await submitSavedPinnedIntakeRow(admin, args.intakeId, args.expectedVersionId)
+  const { data: matter, error } = await admin.from('matters').select('id, stage, relationship_status').eq('client_intake_id', args.intakeId).maybeSingle()
+  if (error) throw new Error('Intake submitted, but the matter could not be refreshed. Reload to verify its status.')
+  return finishAdminIntakeSubmission(admin, args.intakeId, {
+    clientIntakeId: args.intakeId,
+    clientUserId: null,
+    leadId: typeof row.lead_id === 'string' ? row.lead_id : null,
+    matterId: matter?.id ?? null,
+    data: mapRawIntakeToFormData(row),
+  }, matter)
+}
+
+async function finishAdminIntakeSubmission(
+  admin: ReturnType<typeof getAdminClient>,
+  intakeId: string,
+  args: AdminIntakeArgs,
+  matter: { id: string; stage: string | null; relationship_status: string | null } | null,
+): Promise<{ id: string }> {
   // Compute readiness flags from the just-written intake row so the design
   // sheet seed and matter_alerts surface the same information the client-
   // portal submit path produces.

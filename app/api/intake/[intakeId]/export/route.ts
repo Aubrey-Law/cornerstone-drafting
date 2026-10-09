@@ -42,6 +42,7 @@ function toExportSections(sections: PortalReviewSection[]): IntakeExportSection[
 /**
  * Download the client's own intake answers as a Word document.
  *
+ * Pinned rows use their saved client-audience questionnaire and active items.
  * This is the portal-side counterpart to the attorney export: it prints what
  * the review screen shows, in the review's own wording, so the download reads
  * as "a copy of what I submitted" rather than as the attorney's form.
@@ -94,10 +95,19 @@ export async function GET(req: Request, { params }: Params) {
       exportedOn: new Date().toISOString().slice(0, 10),
     }
 
-    const sections = toExportSections(buildPortalReviewSections(hydrated))
+    let pinnedExport
+    if (data.form_version_id != null) {
+      try {
+        const { resolvePinnedIntakeExport } = await import('@/lib/intake/forms/exportRuntime')
+        pinnedExport = await resolvePinnedIntakeExport(hydrated, 'client')
+      } catch {
+        return NextResponse.json({ error: 'This questionnaire is unavailable for export. Please try again later.' }, { status: 503 })
+      }
+    }
+    const sections = pinnedExport?.sections ?? toExportSections(buildPortalReviewSections(hydrated))
     const document = buildIntakeWordDocument(sections, {
       ...meta,
-      documentTitle: 'Your Intake Answers',
+      documentTitle: pinnedExport?.title ?? 'Your Intake Answers',
     })
     const buffer = await Packer.toBuffer(document)
     const filename = safeHeaderFilename(

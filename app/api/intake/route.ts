@@ -6,8 +6,8 @@ import { appUrl } from '@/lib/urls'
 import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 import { intakePayloadTouchesLead, syncLeadFromIntake } from '@/lib/syncLeadFromIntake'
 import type { IntakeRow } from '@/lib/intake/legacySections'
-import { resolveIntakeRendererMode } from '@/lib/intake/forms/rendererMode'
-import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
+import { createIntakeSubmissionValidator, resolveIntakeReadiness } from '@/lib/intake/forms/runtime'
+import { type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
 import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
@@ -156,11 +156,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   // Load validation only after selecting the server's rollout mode. Broken
   // compiled definitions must not prevent the rollback API from initializing.
-  let getSubmissionErrors: typeof import('@/lib/intake/legacySections').getSubmissionErrors
+  let validateSubmission: Awaited<ReturnType<typeof createIntakeSubmissionValidator>>
   try {
-    ;({ getSubmissionErrors } = resolveIntakeRendererMode(process.env) === 'legacy'
-      ? await import('@/lib/intake/legacySections')
-      : await import('@/lib/intakeSections'))
+    validateSubmission = await createIntakeSubmissionValidator(process.env)
   } catch (error) {
     console.error('[intake POST] validation unavailable:', error)
     return NextResponse.json({ error: 'Intake validation is temporarily unavailable.' }, { status: 503 })
@@ -289,14 +287,19 @@ export async function POST(req: Request) {
         hydratedForSubmit,
         body,
       ) as IntakeRow
-      const submitErrors = getSubmissionErrors(mergedForSubmit)
+      let submitErrors
+      try {
+        submitErrors = await validateSubmission(tokenRow, mergedForSubmit)
+      } catch {
+        return NextResponse.json({ error: 'Intake validation is temporarily unavailable.' }, { status: 503 })
+      }
       if (submitErrors.length > 0) {
         return NextResponse.json(
           { error: 'Intake is incomplete', issues: submitErrors },
           { status: 422 },
         )
       }
-      reviewFlags = getIntakeReadinessFlags(mergedForSubmit)
+      reviewFlags = await resolveIntakeReadiness(tokenRow, mergedForSubmit)
       cleanPayload.attorney_review_flags = reviewFlags
     }
 
@@ -632,14 +635,19 @@ export async function POST(req: Request) {
         hydratedForSubmit,
         body,
       ) as IntakeRow
-      const submitErrors = getSubmissionErrors(mergedForSubmit)
+      let submitErrors
+      try {
+        submitErrors = await validateSubmission(existingForSubmit ?? {}, mergedForSubmit)
+      } catch {
+        return NextResponse.json({ error: 'Intake validation is temporarily unavailable.' }, { status: 503 })
+      }
       if (submitErrors.length > 0) {
         return NextResponse.json(
           { error: 'Intake is incomplete', issues: submitErrors },
           { status: 422 },
         )
       }
-      reviewFlags = getIntakeReadinessFlags(mergedForSubmit)
+      reviewFlags = await resolveIntakeReadiness(existingForSubmit ?? {}, mergedForSubmit)
       cleanPayload.attorney_review_flags = reviewFlags
     }
   }

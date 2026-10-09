@@ -131,6 +131,11 @@ export function MergeRecordDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <p className="text-xs text-muted-foreground">
+          If either record uses a saved questionnaire version, both records must share the same intake
+          to merge. Estate-planning and college-prep intakes cannot be merged.
+        </p>
+
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input

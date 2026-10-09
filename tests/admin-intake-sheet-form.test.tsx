@@ -10,14 +10,23 @@ import type { AdminIntakeFormData } from '@/types/adminIntake'
 const getAdminIntakeData = vi.fn()
 const saveAdminIntakeDraft = vi.fn()
 const submitAdminIntake = vi.fn()
+const submitSavedPinnedIntake = vi.fn()
 const resolveMatterIntake = vi.fn()
+const prepareAdminIntake = vi.fn()
 
 vi.mock('@/app/actions/adminIntake', () => ({
+  prepareAdminIntake: (...args: unknown[]) => prepareAdminIntake(...args),
   getAdminIntakeData: (...args: unknown[]) => getAdminIntakeData(...args),
   saveAdminIntakeDraft: (...args: unknown[]) => saveAdminIntakeDraft(...args),
+  submitSavedPinnedIntake: (...args: unknown[]) => submitSavedPinnedIntake(...args),
   submitAdminIntake: (...args: unknown[]) => submitAdminIntake(...args),
   resolveMatterIntake: (...args: unknown[]) => resolveMatterIntake(...args),
 }))
+
+vi.mock('@/components/intake/AdminPinnedIntakeReview', () => ({ default: ({ form, dirty, onEditingChange, onSaved }: { form: { title: string }; dirty: boolean; onEditingChange: (value: boolean) => void; onSaved: () => Promise<void> }) => <section aria-label="Saved pinned questionnaire">{form.title}{dirty && <p>Save your edits to refresh this review before submitting.</p>}
+  <button onClick={() => onEditingChange(true)}>Start question edit</button>
+  <button onClick={() => void onSaved().then(() => onEditingChange(false))}>Finish question save</button>
+</section> }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -30,8 +39,8 @@ vi.mock('@/components/address-autocomplete', () => ({
   AddressAutocomplete: () => null,
 }))
 
-function renderSheet(overrides: Partial<React.ComponentProps<typeof AdminIntakeSheet>> = {}) {
-  return render(
+async function renderSheet(overrides: Partial<React.ComponentProps<typeof AdminIntakeSheet>> = {}) {
+  const result = render(
     <AdminIntakeSheet
       leadId="lead-1"
       matterId={null}
@@ -45,6 +54,8 @@ function renderSheet(overrides: Partial<React.ComponentProps<typeof AdminIntakeS
       {...overrides}
     />,
   )
+  await waitFor(() => expect(screen.queryByText('Loading intake data…')).toBeNull())
+  return result
 }
 
 /**
@@ -64,6 +75,7 @@ function dataFrom(mock: ReturnType<typeof vi.fn>): AdminIntakeFormData {
 }
 
 beforeEach(() => {
+  prepareAdminIntake.mockResolvedValue({ id: null })
   submitAdminIntake.mockResolvedValue({ id: 'intake-1' })
   saveAdminIntakeDraft.mockResolvedValue({ id: 'intake-1' })
 })
@@ -76,7 +88,7 @@ afterEach(() => {
 describe('AdminIntakeSheet submit validation', () => {
   it('blocks submission and names the missing fields', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
 
     await user.click(screen.getByRole('button', { name: 'Submit intake' }))
 
@@ -90,7 +102,7 @@ describe('AdminIntakeSheet submit validation', () => {
 
   it('submits once the estate-track requirements are answered', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
 
     await user.type(field('email'), 'ada@example.com')
     await user.selectOptions(field<HTMLSelectElement>('marital_status'), 'single')
@@ -110,7 +122,7 @@ describe('AdminIntakeSheet submit validation', () => {
 
   it('never asks the College Prep track for marital status or assets', async () => {
     const user = userEvent.setup()
-    renderSheet({ practiceArea: 'College Preparation Plan' })
+    await renderSheet({ practiceArea: 'College Preparation Plan' })
 
     // The assets section is hidden on this track; marital status still shows,
     // but neither one blocks submission.
@@ -127,7 +139,7 @@ describe('AdminIntakeSheet submit validation', () => {
 
   it('sends every field, not just the validated ones', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
 
     await user.type(field('email'), 'ada@example.com')
     await user.selectOptions(field<HTMLSelectElement>('marital_status'), 'single')
@@ -149,7 +161,7 @@ describe('AdminIntakeSheet submit validation', () => {
 describe('AdminIntakeSheet draft saving', () => {
   it('stays disabled until something changes, then saves without validating', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
 
     const saveDraft = screen.getByRole('button', { name: 'Save draft' })
     expect(saveDraft.hasAttribute('disabled')).toBe(true)
@@ -184,7 +196,7 @@ describe('AdminIntakeSheet children list', () => {
 
   it('collects each added child and submits them in order', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
     await fillEstateRequirements(user)
 
     // "Children?" is the first Yes/No segment on the estate track.
@@ -210,7 +222,7 @@ describe('AdminIntakeSheet children list', () => {
 
   it('drops the whole list when the answer flips back to No', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
     await fillEstateRequirements(user)
 
     await user.click(screen.getAllByRole('button', { name: 'Yes' })[0])
@@ -233,7 +245,7 @@ describe('AdminIntakeSheet children list', () => {
 
   it('removes a single child without disturbing the others', async () => {
     const user = userEvent.setup()
-    renderSheet()
+    await renderSheet()
     await fillEstateRequirements(user)
 
     await user.click(screen.getAllByRole('button', { name: 'Yes' })[0])
@@ -258,17 +270,99 @@ describe('AdminIntakeSheet children list', () => {
 describe('AdminIntakeSheet section navigation', () => {
   it('focuses the requested section after intake data finishes loading', async () => {
     getAdminIntakeData.mockResolvedValue({ intake_track: 'estate', first_name: 'Ada' })
-    renderSheet({ clientIntakeId: 'intake-1', initialSection: 'assets' })
+    await renderSheet({ clientIntakeId: 'intake-1', initialSection: 'assets' })
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Assets' })))
   })
 
   it('explains where unavailable College Prep questions can be answered', async () => {
     getAdminIntakeData.mockResolvedValue({ intake_track: 'college_prep', first_name: 'Ada' })
-    renderSheet({ clientIntakeId: 'intake-1', initialSection: 'school' })
+    await renderSheet({ clientIntakeId: 'intake-1', initialSection: 'school' })
     await waitFor(() => {
       expect(document.activeElement?.getAttribute('data-intake-section')).toBe('guided')
     })
     expect(document.activeElement?.textContent).toContain('guided questionnaire')
     expect(screen.queryByRole('heading', { name: 'Assets' })).toBeNull()
   })
+})
+
+
+describe('staff pinned questionnaire review', () => {
+  const pinned = { id: 'pinned-intake', status: 'draft', form_version_id: 'version-1', intake_track: 'estate', first_name: 'Ada', last_name: 'Lovelace', _pinned_form: { title: 'Pinned family questionnaire' } }
+  it('submits saved answers using the pin without passing them through legacy form validation', async () => {
+    getAdminIntakeData.mockResolvedValue(pinned)
+    submitSavedPinnedIntake.mockResolvedValue({ id: 'pinned-intake' })
+    await renderSheet({ clientIntakeId: 'pinned-intake' })
+    await screen.findByRole('region', { name: 'Saved pinned questionnaire' })
+    await userEvent.click(screen.getByRole('button', { name: 'Submit saved questionnaire' }))
+    expect(submitSavedPinnedIntake).toHaveBeenCalledWith({ intakeId: 'pinned-intake', expectedVersionId: 'version-1' })
+    expect(submitAdminIntake).not.toHaveBeenCalled()
+  })
+  it('routes a custom review-section ID to the submit controls', async () => {
+    getAdminIntakeData.mockResolvedValue({ ...pinned, _pinned_form: { ...pinned._pinned_form, sections: [{ id: 'custom_finish', items: [{ kind: 'block', blockId: 'review_submit' }] }] } })
+    await renderSheet({ clientIntakeId: 'pinned-intake', initialSection: 'custom_finish' })
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Review and submit intake'))
+  })
+  it('prepares the stored form before accepting answers for a new record', async () => {
+    prepareAdminIntake.mockResolvedValue({ id: 'pinned-intake' })
+    getAdminIntakeData.mockResolvedValue(pinned)
+    await renderSheet()
+    expect(prepareAdminIntake).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'lead-1', clientIntakeId: null }))
+    expect(screen.getByRole('region', { name: 'Saved pinned questionnaire' })).toBeTruthy()
+    expect(field('first_name').closest('fieldset')?.disabled).toBe(true)
+    expect(saveAdminIntakeDraft).not.toHaveBeenCalled()
+  })
+  it('keeps the legacy shared summary read-only for pinned questionnaires', async () => {
+    getAdminIntakeData.mockResolvedValue(pinned)
+    saveAdminIntakeDraft.mockResolvedValue({ id: 'pinned-intake' })
+    await renderSheet({ clientIntakeId: 'pinned-intake' })
+    await screen.findByRole('region', { name: 'Saved pinned questionnaire' })
+    expect(field('first_name').closest('fieldset')?.disabled).toBe(true)
+    expect(field<HTMLInputElement>('first_name').value).toBe('Ada')
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(saveAdminIntakeDraft).not.toHaveBeenCalled()
+    expect((screen.getByRole('button', { name: 'Submit saved questionnaire' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+  it('guards shared editing, submission, export and closing until a question save refreshes the sheet', async () => {
+    const onClose = vi.fn()
+    getAdminIntakeData.mockResolvedValueOnce(pinned).mockResolvedValueOnce({ ...pinned, first_name: 'Refreshed' })
+    await renderSheet({ clientIntakeId: 'pinned-intake', onClose })
+    await screen.findByRole('region', { name: 'Saved pinned questionnaire' })
+    await userEvent.click(screen.getByRole('button', { name: 'Start question edit' }))
+    expect(field('first_name').closest('fieldset')?.disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Submit saved questionnaire' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Export Word' }) as HTMLButtonElement).disabled).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onClose).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Finish question save' }))
+    await waitFor(() => expect(field<HTMLInputElement>('first_name').value).toBe('Refreshed'))
+    expect(field('first_name').closest('fieldset')?.disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Submit saved questionnaire' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+  it('fails closed if the saved question cannot be refreshed', async () => {
+    getAdminIntakeData.mockResolvedValueOnce(pinned).mockRejectedValueOnce(new Error('Unavailable'))
+    await renderSheet({ clientIntakeId: 'pinned-intake' })
+    await screen.findByRole('region', { name: 'Saved pinned questionnaire' })
+    await userEvent.click(screen.getByRole('button', { name: 'Start question edit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Finish question save' }))
+    await screen.findByText('The answer was saved, but the questionnaire could not be refreshed. Close and reopen the intake.')
+    expect((screen.getByRole('button', { name: 'Submit saved questionnaire' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Export Word' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it('blocks writes after a failed pinned review load', async () => {
+    getAdminIntakeData.mockRejectedValue(new Error('Pinned form unavailable'))
+    await renderSheet({ clientIntakeId: 'pinned-intake' })
+    await screen.findByRole('alert')
+    expect((screen.getByRole('button', { name: 'Submit intake' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Export Word' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+
+it('keeps a pinned estate questionnaire on its stored track after a matter practice-area change', async () => {
+  getAdminIntakeData.mockResolvedValue({ id: 'intake-1', status: 'draft', form_version_id: 'version-1', intake_track: 'estate', first_name: 'Ada', _pinned_form: { title: 'Pinned estate questionnaire' } })
+  renderSheet({ clientIntakeId: 'intake-1', practiceArea: 'College Preparation Plan' })
+  await screen.findByRole('region', { name: 'Saved pinned questionnaire' })
+  expect(screen.queryByText('College Preparation Plan intake.')).toBeNull()
+  expect(document.querySelector('[name="estate_value"]')).not.toBeNull()
+  expect((screen.getByRole('button', { name: 'Export Word' }) as HTMLButtonElement).disabled).toBe(false)
 })
