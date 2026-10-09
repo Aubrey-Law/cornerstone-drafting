@@ -10,6 +10,7 @@ import {
   PenLine,
   Phone,
   Trash2,
+  Merge,
   Upload,
   Clock as UnlockIcon,
   Sparkles,
@@ -47,6 +48,8 @@ export interface MatterWorkspaceHeaderProps {
   onPushToStatular?: () => void
   pushingToStatular?: boolean
   onDelete: () => void
+  /** Merge this matter into another lead or matter. */
+  onMerge?: () => void
   planLabel?: string | null
   matterTypeLabel?: string | null
   stage?: ReactNode
@@ -81,6 +84,7 @@ export function MatterWorkspaceHeader({
   onPushToStatular,
   pushingToStatular = false,
   onDelete,
+  onMerge,
   planLabel,
   matterTypeLabel,
   stage,
@@ -205,6 +209,12 @@ export function MatterWorkspaceHeader({
               <PanelRight className="mr-2 size-3.5" />
               {factsRailOpen ? 'Hide details' : 'Open details'}
             </DropdownMenuItem>
+            {onMerge && (
+              <DropdownMenuItem onClick={onMerge}>
+                <Merge className="mr-2 size-3.5" />
+                Merge into another lead or matter…
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
               <Trash2 className="mr-2 size-3.5" />
               Delete matter

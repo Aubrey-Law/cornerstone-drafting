@@ -70,6 +70,7 @@ import { agreementSentInApp, effectiveEngagementStatus } from '@/lib/leads/engag
 import { LeadSnoozeDialog } from '@/components/leads/LeadSnoozeDialog'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
+import { MergeRecordDialog } from '@/components/matter/MergeRecordDialog'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
@@ -238,6 +239,7 @@ export function LeadDetailClient({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
   const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
@@ -901,6 +903,9 @@ export function LeadDetailClient({
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       {confirmDialog}
+      {lead.matter_id && (
+        <MergeRecordDialog matterId={lead.matter_id} recordLabel="lead" open={mergeOpen} onOpenChange={setMergeOpen} />
+      )}
       <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)} className="flex min-h-0 flex-1 flex-col gap-0">
       <RecordWorkspaceHeader
         backHref="/admin/crm/opportunities"
@@ -954,6 +959,7 @@ export function LeadDetailClient({
           onPushToStatular={() => void pushToStatular()}
           pushingToStatular={pushingToStatular}
           onToggleRail={() => { setRailOpen(current => !current); if (railOpen) setActiveField(null) }}
+          onMerge={() => setMergeOpen(true)}
           railOpen={railOpen}
           hasEmail={Boolean(lead.email?.trim())}
           hasPhone={Boolean(lead.phone?.trim())}

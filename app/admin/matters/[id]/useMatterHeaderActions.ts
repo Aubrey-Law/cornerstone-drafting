@@ -167,6 +167,8 @@ export function useMatterHeaderActions({ matter, setMatter, setMatterDetails, to
     }
   }
 
+  const [mergeOpen, setMergeOpen] = useState(false)
+
   const closeDeleteDialog = () => {
     setDeleteOpen(false)
     setDeleteWarning(null)
@@ -185,7 +187,13 @@ export function useMatterHeaderActions({ matter, setMatter, setMatterDetails, to
       close: closeDeleteDialog,
       submit: (confirm: boolean) => handleDeleteMatter(confirm),
     },
+    mergeDialog: {
+      open: mergeOpen,
+      setOpen: setMergeOpen,
+      openDialog: () => setMergeOpen(true),
+    },
   }
 }
 
 export type MatterDeleteDialogState = ReturnType<typeof useMatterHeaderActions>['deleteDialog']
+export type MatterMergeDialogState = ReturnType<typeof useMatterHeaderActions>['mergeDialog']

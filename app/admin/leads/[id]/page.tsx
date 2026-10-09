@@ -1,5 +1,5 @@
 import { manualCommunicationsEnabled } from '@/lib/communications/providers'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey } from '@/lib/firmDate'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
@@ -16,6 +16,7 @@ import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { fetchLatestConflictCheck } from '@/lib/conflicts/server'
 import { LeadDetailClient } from './LeadDetailClient'
+import { mergedRecordHref } from '@/lib/matters/mergeTargets'
 import { fetchWorkGraphForUser } from '@/lib/work/server'
 import { buildRecordWorkSummaries } from '@/lib/work/recordSummary'
 
@@ -122,6 +123,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   if (leadError) console.error('Could not load lead detail', { leadId: id, error: leadError })
   if (!lead || !lead.lead_status) notFound()
+  // A lead merged into another record is archived; old links follow it.
+  const mergedHref = lead.matter_id ? await mergedRecordHref(admin, lead.matter_id as string) : null
+  if (mergedHref) redirect(mergedHref)
 
   // Read through the join (step 3 of docs/matter-contacts-migration.md), which
   // needs the lead's matter — so this follows the lead read rather than running
