@@ -209,11 +209,13 @@ export default function AdminLayoutClient({
   }, [])
 
   // Drafting workspaces need horizontal room for the design sheet + clause
-  // preview; collapse the global nav to the icon rail while there. The user
-  // can still expand it — the preference is written when they toggle.
+  // preview; collapse the global nav to the icon rail on first entry. Later
+  // step changes inside drafting must not re-collapse after the user expands.
+  const wasOnDraftingWorkspace = useRef(false)
   useEffect(() => {
-    if (!/^\/admin\/drafting\/[0-9a-f-]{36}/i.test(pathname)) return
-    setCollapsed(true)
+    const onDrafting = /^\/admin\/drafting\/[0-9a-f-]{36}/i.test(pathname)
+    if (onDrafting && !wasOnDraftingWorkspace.current) setCollapsed(true)
+    wasOnDraftingWorkspace.current = onDrafting
   }, [pathname])
 
   // `matterDisplayName` is already resolved for the rail, so naming the record
