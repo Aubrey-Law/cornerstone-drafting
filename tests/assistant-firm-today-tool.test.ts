@@ -88,9 +88,15 @@ describe('the firm-today tool', () => {
       dueTasks: expect.any(Promise),
     }))
     expect(body.ok).toBe(true)
-    expect(body.now).toMatchObject({ source: 'portal_message', title: 'Reply to Amy Chen', record: { type: 'matter', id: 'm1' } })
+    // Stuck drafting (red, ≥3 days over SLA) is Critical, so it leads the plan
+    // ahead of ordinary client-message Must-do work.
+    expect(body.now).toMatchObject({
+      source: 'matter_action',
+      title: 'Draft',
+      record: { type: 'matter', id: 'm1' },
+    })
     const mustDo = body.must_do as Array<Record<string, unknown>>
-    expect(mustDo.some(item => item.source === 'portal_message')).toBe(true)
+    expect(mustDo.some(item => item.source === 'portal_message' && item.title === 'Reply to Amy Chen')).toBe(true)
     expect((body.waiting_or_blocked as Array<Record<string, unknown>>).some(item => item.owner === 'client')).toBe(true)
     expect(events.at(-1)).toMatchObject({ tool: READ_FIRM_TODAY_TOOL_NAME, status: 'done', result: { overload: expect.any(Boolean) } })
   })
