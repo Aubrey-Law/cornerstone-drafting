@@ -149,8 +149,13 @@ export default async function AdminTodayPage({
   const params = (await searchParams) ?? {}
   const legacy = (Array.isArray(params.legacy) ? params.legacy[0] : params.legacy) === '1'
   const [auth, settings] = await Promise.all([getCachedClaims(), loadFirmSettings()])
+  // Legacy Today is retired for normal use. Keep the page reachable only while
+  // cutover is incomplete and an operator explicitly asks for ?legacy=1 (or the
+  // firm rolled Command Center back off in Settings).
   const legacyFallbackAvailable = !settings.commandCenterCutoverAt
-  if (!settings.commandCenterV2Enabled || (legacy && legacyFallbackAvailable) || !auth) return <LegacyTodayPage />
+  if (!auth) return <LegacyTodayPage />
+  if (!settings.commandCenterV2Enabled) return <LegacyTodayPage />
+  if (legacy && legacyFallbackAvailable) return <LegacyTodayPage />
 
   const now = new Date()
   const [graph, preferences, pendingApprovalsResult, assignees] = await Promise.all([
@@ -200,12 +205,6 @@ export default async function AdminTodayPage({
             >
               Weekly review
             </Link>
-            {legacyFallbackAvailable ? <Link
-              href="/admin?legacy=1"
-              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              View legacy Today
-            </Link> : null}
           </div>}
         />
         <CommandCenter
