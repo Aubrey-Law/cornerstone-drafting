@@ -15,12 +15,18 @@ function item(key: string, band: WorkItem['priorityBand'], minutes = 30, sourceT
 }
 
 describe('daily planner', () => {
-  it('limits ordinary must-dos to three but never hides critical overflow', () => {
+  it('limits ordinary must-dos to the preference cap but never hides critical overflow', () => {
     const normal = createDailyPlanPreview({
       items: [item('one', 1), item('two', 1), item('three', 1), item('four', 1)],
       preferences: DEFAULT_WORK_PREFERENCES, now: NOW,
     })
-    expect(normal.mustDo.map(value => value.workKey)).toEqual(['one', 'two', 'three'])
+    expect(normal.mustDo.map(value => value.workKey)).toEqual(['one', 'two'])
+
+    const wider = createDailyPlanPreview({
+      items: [item('one', 1), item('two', 1), item('three', 1), item('four', 1)],
+      preferences: { ...DEFAULT_WORK_PREFERENCES, maxMustDo: 3 }, now: NOW,
+    })
+    expect(wider.mustDo.map(value => value.workKey)).toEqual(['one', 'two', 'three'])
 
     const critical = createDailyPlanPreview({
       items: [item('one', 0), item('two', 0), item('three', 0), item('four', 0)],

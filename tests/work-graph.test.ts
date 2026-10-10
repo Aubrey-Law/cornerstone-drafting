@@ -105,6 +105,55 @@ describe('canonical work graph', () => {
     }))
   })
 
+  it('promotes stuck drafting into Critical and signing prep into Must do', () => {
+    const drafting = aging({
+      action: { kind: 'draft', label: 'Open drafting', href: '/admin/drafting/m1', title: 'Draft the trust' },
+      health: 'red',
+      days_over_sla: 5,
+    })
+    const signing = aging({
+      id: '10000000-0000-4000-8000-000000000002',
+      action: { kind: 'signing', label: 'Prepare signing', href: '/admin/matters/m2', title: 'Prepare for signing' },
+      health: 'amber',
+      days_over_sla: 0,
+    })
+    const graph = buildWorkGraph({ today: today({ waitingOnYou: [drafting, signing] }) }, NOW)
+    expect(graph.items.find(item => item.actionKey === 'matter.draft')).toMatchObject({
+      priorityBand: 0,
+      priorityReasons: expect.arrayContaining([expect.objectContaining({ code: 'drafting_overdue' })]),
+    })
+    expect(graph.items.find(item => item.actionKey === 'matter.signing')).toMatchObject({
+      priorityBand: 1,
+      priorityReasons: expect.arrayContaining([expect.objectContaining({ code: 'signing_prep' })]),
+    })
+  })
+
+  it('folds estate billing readiness into the work graph', () => {
+    const graph = buildWorkGraph({
+      today: today({
+        billing: {
+          unbilledCount: 3,
+          unbilledCents: 45000,
+          overdueInvoices: [],
+          overdueCents: 0,
+          milestonesReadyCount: 2,
+          reminderDraftCount: 1,
+          paymentExceptionCount: 1,
+          claimsAwaitingSubmissionCount: 1,
+          claimsAwaitingReimbursementCount: 0,
+        },
+      }),
+    }, NOW)
+
+    expect(graph.items.map(item => item.workKey)).toEqual(expect.arrayContaining([
+      'billing:unbilled:to-invoice',
+      'billing:milestones:ready',
+      'billing:reminders:approve',
+      'billing:exceptions',
+      'billing:plan-claims',
+    ]))
+  })
+
   it('ignores obsolete matter intake sending signals from both sources', () => {
     const base = aging({ action: { kind: 'send-intake', label: 'Send intake', href: '/admin/matters/m1' } })
     const graph = buildWorkGraph({ today: today({

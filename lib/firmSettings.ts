@@ -68,9 +68,9 @@ function defaults(): FullFirmSettings {
     emailSignatureHtml: '',
     emailSignatureDefault: true,
     calendarDailyTargetMinutes: 360,
-    // The command center is intentionally opt-in while its shadow reconciliation
-    // runs beside the legacy Today page.
-    commandCenterV2Enabled: false,
+    // Command Center is the Today home. Legacy Today remains available only
+    // through emergency rollback in Settings → Command center.
+    commandCenterV2Enabled: true,
     commandCenterV2EnabledAt: null,
     commandCenterCutoverAt: null,
   }

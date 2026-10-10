@@ -30,9 +30,14 @@ export type PriorityReasonCode =
   | 'appointment_soon'
   | 'automation_failed'
   | 'billing_overdue'
+  | 'billing_unbilled'
+  | 'billing_ready'
+  | 'billing_reminder'
   | 'intake_ready'
   | 'document_review_ready'
   | 'intake_unsent'
+  | 'drafting_overdue'
+  | 'signing_prep'
   | 'high_priority'
   | 'blocked'
   | 'snoozed'
@@ -95,15 +100,22 @@ export interface WorkPreferences {
   workdayEnd: string
 }
 
+/** Solo-first defaults: a shorter must-do list and a tighter admin batch so
+ *  the attorney can clear communications without losing deep-work capacity. */
 export const DEFAULT_WORK_PREFERENCES: WorkPreferences = {
-  maxMustDo: 3,
+  maxMustDo: 2,
   focusCapacityMinutes: 240,
   interruptionBufferPercent: 20,
   focusBlockMinutes: 50,
   maxFocusBlockMinutes: 60,
-  adminBatchMinutes: 30,
+  adminBatchMinutes: 15,
   workdayStart: '09:00',
   workdayEnd: '17:00',
+}
+
+/** One-click preset for a solo attorney (also the factory default). */
+export const SOLO_WORK_PREFERENCES: WorkPreferences = {
+  ...DEFAULT_WORK_PREFERENCES,
 }
 
 export type PlanLane = 'now' | 'must_do' | 'suggested' | 'communication' | 'later'

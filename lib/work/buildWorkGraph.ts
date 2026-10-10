@@ -128,10 +128,19 @@ function agingItem(row: TodayQueueRow): WorkItem {
     ?? (row.entity === 'matter' ? `/admin/matters/${row.id}` : `/admin/leads/${row.id}`)
   const sourceType: WorkSourceType = row.entity === 'lead' ? 'lead_action' : 'matter_action'
   const waiting = row.owner === 'client'
-  const band: PriorityBand = waiting ? 4 : row.health === 'red' ? 1 : 2
+  const actionKind = row.action?.kind ?? null
+  const draftingStuck = !waiting && actionKind === 'draft' && row.health === 'red' && (row.days_over_sla ?? 0) >= 3
+  const signingPrep = !waiting && actionKind === 'signing'
+  let band: PriorityBand = waiting ? 4 : row.health === 'red' ? 1 : 2
+  if (draftingStuck) band = 0
+  else if (signingPrep && band > 1) band = 1
   const reasons: PriorityReason[] = waiting
     ? [{ code: 'waiting_external', label: 'Waiting on client' }]
-    : [{ code: 'stage_sla', label: row.health === 'red' ? 'Stage is over SLA' : 'Stage is approaching SLA' }]
+    : draftingStuck
+      ? [{ code: 'drafting_overdue', label: 'Drafting is overdue' }, { code: 'stage_sla', label: 'Stage is over SLA' }]
+      : signingPrep
+        ? [{ code: 'signing_prep', label: 'Signing preparation' }, { code: 'stage_sla', label: row.health === 'red' ? 'Stage is over SLA' : 'Stage is approaching SLA' }]
+        : [{ code: 'stage_sla', label: row.health === 'red' ? 'Stage is over SLA' : 'Stage is approaching SLA' }]
   return {
     workKey: agingKey(row),
     sourceType,
@@ -145,8 +154,8 @@ function agingItem(row: TodayQueueRow): WorkItem {
     state: waiting ? 'waiting' : 'open',
     priorityBand: band,
     priorityReasons: reasons,
-    estimateMinutes: row.action?.kind === 'draft' ? 60 : row.entity === 'lead' ? 15 : 20,
-    actionKey: row.action?.kind ? `${row.entity}.${row.action.kind}` : `${row.entity}.review`,
+    estimateMinutes: actionKind === 'draft' || actionKind === 'signing' ? 60 : row.entity === 'lead' ? 15 : 20,
+    actionKey: actionKind ? `${row.entity}.${actionKind}` : `${row.entity}.review`,
     staleSince: row.stage_entered_at,
     clientWaitingSince: waiting ? undefined : row.stage_entered_at,
   }
@@ -366,6 +375,107 @@ export function buildWorkGraph(
       estimateMinutes: 15,
       batchTag: 'billing',
       actionKey: 'billing.invoice.follow-up',
+    })
+  }
+
+  const billing = sources.today.billing
+  if (billing.unbilledCount > 0) {
+    items.push({
+      workKey: 'billing:unbilled:to-invoice',
+      sourceType: 'billing',
+      sourceIds: ['unbilled'],
+      evidence: evidence('billing', 'unbilled', '/admin/billing?filter=to_invoice'),
+      record: { type: 'firm', name: 'Billing' },
+      title: `Invoice ${billing.unbilledCount} unbilled charge${billing.unbilledCount === 1 ? '' : 's'}`,
+      actionLabel: 'Open billing',
+      href: '/admin/billing?filter=to_invoice',
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 2,
+      priorityReasons: [{ code: 'billing_unbilled', label: 'Unbilled work waiting' }],
+      estimateMinutes: 20,
+      batchTag: 'billing',
+      actionKey: 'billing.unbilled.review',
+    })
+  }
+  if ((billing.milestonesReadyCount ?? 0) > 0) {
+    const count = billing.milestonesReadyCount ?? 0
+    items.push({
+      workKey: 'billing:milestones:ready',
+      sourceType: 'billing',
+      sourceIds: ['milestones'],
+      evidence: evidence('billing', 'milestones', '/admin/billing?filter=milestones'),
+      record: { type: 'firm', name: 'Billing' },
+      title: `Bill ${count} ready fee milestone${count === 1 ? '' : 's'}`,
+      actionLabel: 'Open milestones',
+      href: '/admin/billing?filter=milestones',
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 2,
+      priorityReasons: [{ code: 'billing_ready', label: 'Fee milestones ready' }],
+      estimateMinutes: 15,
+      batchTag: 'billing',
+      actionKey: 'billing.milestones.review',
+    })
+  }
+  if ((billing.reminderDraftCount ?? 0) > 0) {
+    const count = billing.reminderDraftCount ?? 0
+    items.push({
+      workKey: 'billing:reminders:approve',
+      sourceType: 'billing',
+      sourceIds: ['reminders'],
+      evidence: evidence('billing', 'reminders', '/admin/billing?filter=reminders'),
+      record: { type: 'firm', name: 'Billing' },
+      title: `Approve ${count} invoice reminder draft${count === 1 ? '' : 's'}`,
+      actionLabel: 'Review reminders',
+      href: '/admin/billing?filter=reminders',
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 1,
+      priorityReasons: [{ code: 'billing_reminder', label: 'Reminder drafts waiting' }],
+      estimateMinutes: 10,
+      batchTag: 'billing',
+      actionKey: 'billing.reminders.review',
+    })
+  }
+  if ((billing.paymentExceptionCount ?? 0) > 0) {
+    const count = billing.paymentExceptionCount ?? 0
+    items.push({
+      workKey: 'billing:exceptions',
+      sourceType: 'billing',
+      sourceIds: ['exceptions'],
+      evidence: evidence('billing', 'exceptions', '/admin/billing?filter=exceptions'),
+      record: { type: 'firm', name: 'Billing' },
+      title: `Resolve ${count} payment exception${count === 1 ? '' : 's'}`,
+      actionLabel: 'Open exceptions',
+      href: '/admin/billing?filter=exceptions',
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 1,
+      priorityReasons: [{ code: 'billing_overdue', label: 'Payment exceptions' }],
+      estimateMinutes: 15,
+      batchTag: 'billing',
+      actionKey: 'billing.exceptions.review',
+    })
+  }
+  const claimsWaiting = (billing.claimsAwaitingSubmissionCount ?? 0) + (billing.claimsAwaitingReimbursementCount ?? 0)
+  if (claimsWaiting > 0) {
+    items.push({
+      workKey: 'billing:plan-claims',
+      sourceType: 'billing',
+      sourceIds: ['plan-claims'],
+      evidence: evidence('billing', 'plan-claims', '/admin/billing?filter=plan_claims'),
+      record: { type: 'firm', name: 'Billing' },
+      title: `Advance ${claimsWaiting} plan claim${claimsWaiting === 1 ? '' : 's'}`,
+      actionLabel: 'Open claims',
+      href: '/admin/billing?filter=plan_claims',
+      owner: 'firm',
+      state: 'open',
+      priorityBand: 2,
+      priorityReasons: [{ code: 'billing_ready', label: 'Plan claims need attention' }],
+      estimateMinutes: 20,
+      batchTag: 'billing',
+      actionKey: 'billing.claims.review',
     })
   }
 
