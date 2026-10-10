@@ -165,19 +165,28 @@ function messageBand(receivedAt: string, now: Date): PriorityBand {
   return now.getTime() - Date.parse(receivedAt) >= 4 * 60 * 60 * 1000 ? 1 : 2
 }
 
+function emailRecord(row: EmailTriageRow): WorkItem['record'] {
+  if (row.matter_id) {
+    return { type: 'matter', id: row.matter_id, name: row.sender_name ?? row.sender_email }
+  }
+  if (row.client_intake_id) {
+    return { type: 'lead', id: row.client_intake_id, name: row.sender_name ?? row.sender_email }
+  }
+  return { type: 'firm', name: row.sender_name ?? row.sender_email }
+}
+
+function isActivelySnoozed(row: EmailTriageRow, now: Date): boolean {
+  return Boolean(row.snoozed_until && Date.parse(row.snoozed_until) > now.getTime())
+}
+
 function emailItem(row: EmailTriageRow, now: Date): WorkItem {
   const href = `/admin/email-triage?thread=${encodeURIComponent(row.id)}`
-  const record = row.matter_id
-    ? { type: 'matter' as const, id: row.matter_id, name: row.sender_name ?? row.sender_email }
-    : row.client_intake_id
-      ? { type: 'lead' as const, id: row.client_intake_id, name: row.sender_name ?? row.sender_email }
-      : { type: 'firm' as const, name: row.sender_name ?? row.sender_email }
   return {
     workKey: `email:${row.id}:reply`,
     sourceType: 'email',
     sourceIds: [row.id],
     evidence: evidence('email', row.id, href),
-    record,
+    record: emailRecord(row),
     title: row.subject?.trim() || `Reply to ${row.sender_name ?? row.sender_email}`,
     actionLabel: row.status === 'drafted' ? 'Review draft' : 'Reply',
     href,
@@ -192,6 +201,33 @@ function emailItem(row: EmailTriageRow, now: Date): WorkItem {
     batchTag: 'communications',
     actionKey: 'communication.email.reply',
     clientWaitingSince: row.received_at,
+  }
+}
+
+/** Overdue "remind me if no reply" items after the firm already answered. */
+function emailFollowUpItem(row: EmailTriageRow, now: Date): WorkItem {
+  const href = `/admin/email-triage?thread=${encodeURIComponent(row.id)}&view=follow_up`
+  return {
+    workKey: `email:${row.id}:follow_up`,
+    sourceType: 'email',
+    sourceIds: [row.id],
+    evidence: evidence('email', row.id, href),
+    record: emailRecord(row),
+    title: row.subject?.trim()
+      ? `Follow up: ${row.subject.trim()}`
+      : `Follow up with ${row.sender_name ?? row.sender_email}`,
+    actionLabel: 'Check follow-up',
+    href,
+    owner: 'firm',
+    state: 'open',
+    priorityBand: messageBand(row.follow_up_at ?? row.received_at, now),
+    priorityReasons: [
+      { code: 'follow_up_due', label: 'Email follow-up is due' },
+    ],
+    estimateMinutes: 10,
+    batchTag: 'communications',
+    actionKey: 'communication.email.reply',
+    clientWaitingSince: row.follow_up_at ?? undefined,
   }
 }
 
@@ -354,7 +390,19 @@ export function buildWorkGraph(
     })
   }
 
-  items.push(...(sources.email ?? []).map(row => emailItem(row, now)))
+  const nowMs = now.getTime()
+  for (const row of sources.email ?? []) {
+    if (isActivelySnoozed(row, now)) continue
+    const followUpDue = row.follow_up_at && Date.parse(row.follow_up_at) <= nowMs
+      && (row.status === 'replied' || row.status === 'approved' || row.status === 'dismissed')
+    if (followUpDue) {
+      items.push(emailFollowUpItem(row, now))
+      continue
+    }
+    if (['needs_reply', 'drafting', 'drafted', 'failed', 'approved'].includes(row.status)) {
+      items.push(emailItem(row, now))
+    }
+  }
   items.push(...(sources.sms ?? []).filter(row => row.unreadCount > 0 && row.lastDirection === 'inbound').map(row => smsItem(row, now)))
 
   for (const invoice of sources.today.billing.overdueInvoices) {

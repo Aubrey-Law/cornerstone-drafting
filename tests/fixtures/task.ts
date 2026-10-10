@@ -68,6 +68,8 @@ export function taskFixture(overrides: Partial<TaskRow> = {}): TaskRow {
     triggers_day_zero: false,
     skipped_at: null,
     closeout_reason: null,
+    email_triage_thread_id: null,
+    gmail_thread_id: null,
 
     ...overrides,
   }

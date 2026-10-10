@@ -54,7 +54,7 @@ export default async function CommunicationsPage() {
 
       <div className="grid gap-3 md:grid-cols-3">
         {[
-          { title: 'Email', count: count('email'), href: '/admin/email-triage', icon: Mail, detail: 'Triage, draft, approve, and reply.' },
+          { title: 'Mail Desk', count: count('email'), href: '/admin/email-triage', icon: Mail, detail: 'Triage, draft, snooze, follow up, and reply. Non-client mail is sorted in Gmail.' },
           { title: 'Texts', count: count('sms'), href: '/admin/texts', icon: MessageSquareText, detail: 'Unread and unlinked conversations.' },
           { title: 'Client portal', count: count('portal_message'), href: '/admin/matters/list', icon: MessagesSquare, detail: 'Secure matter conversations.' },
         ].map(channel => (

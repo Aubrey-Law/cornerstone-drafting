@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { runEmailTriageScan } from '@/lib/emailTriage/scan'
+import { wakeDueEmailFollowUps } from '@/lib/emailTriage/wakeFollowUps'
 import { runSystemAutomation } from '@/lib/automations/control'
 
 export const runtime = 'nodejs'
@@ -20,7 +21,9 @@ async function handle(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return NextResponse.json(await runEmailTriageScan({ trigger: 'cron' }))
+  const scan = await runEmailTriageScan({ trigger: 'cron' })
+  const followUps = await wakeDueEmailFollowUps(null).catch(() => ({ woke: 0 }))
+  return NextResponse.json({ ...scan, followUpsWoke: followUps.woke })
 }
 
 export async function GET(req: Request) {

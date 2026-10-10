@@ -36,9 +36,11 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     section('inboxNeedsReplyCount', () => count(admin.from('messages').select('id', { count: 'exact', head: true }).eq('sender_role', 'client').is('read_at', null)), 0),
     // Mail the attorney still owes a reply to. 'approved' is excluded: the
     // draft is in Gmail and the thread is his to send, not the queue's.
+    // Actively snoozed threads leave the badge until they wake.
     section('emailTriageNeedsReplyCount', () => count(admin.from('email_triage_threads')
       .select('id', { count: 'exact', head: true })
-      .in('status', ['needs_reply', 'drafting', 'drafted', 'failed'])), 0),
+      .in('status', ['needs_reply', 'drafting', 'drafted', 'failed'])
+      .or(`snoozed_until.is.null,snoozed_until.lte.${new Date().toISOString()}`)), 0),
     section('overdueInvoiceCount', fetchOverdueInvoiceCount, 0),
     // Zero, not a query, while texting is switched off: no Texts nav item shows.
     section('smsUnreadThreadCount', async () => (isSmsConfigured() ? countUnreadSmsThreads() : 0), 0),

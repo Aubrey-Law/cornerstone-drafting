@@ -86,12 +86,16 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   const badge = (key: SidebarCountKey, tone: SidebarBadgeTone): SidebarBadge =>
     failed.has(key) ? { value: counts[key], tone, stale: true } : { value: counts[key], tone }
 
-  if (href === '/admin' || href === '/admin/communications') {
-    const value = counts.inboxNeedsReplyCount + counts.emailTriageNeedsReplyCount + counts.smsUnreadThreadCount
+  if (href === '/admin' || href === '/admin/communications' || href === '/admin/email-triage') {
+    const value = href === '/admin/email-triage'
+      ? counts.emailTriageNeedsReplyCount
+      : counts.inboxNeedsReplyCount + counts.emailTriageNeedsReplyCount + counts.smsUnreadThreadCount
     if (value > 0) {
-      const stale = failed.has('inboxNeedsReplyCount')
-        || failed.has('emailTriageNeedsReplyCount')
-        || failed.has('smsUnreadThreadCount')
+      const stale = href === '/admin/email-triage'
+        ? failed.has('emailTriageNeedsReplyCount')
+        : (failed.has('inboxNeedsReplyCount')
+          || failed.has('emailTriageNeedsReplyCount')
+          || failed.has('smsUnreadThreadCount'))
       return { value, tone: 'accent', ...(stale ? { stale: true } : {}) }
     }
   }

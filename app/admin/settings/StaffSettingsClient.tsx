@@ -666,7 +666,7 @@ export function StaffSettingsClient({
                 <p className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber">
                   This connection cannot read the mailbox, so{' '}
                   <Link href="/admin/email-triage" className="font-medium underline underline-offset-2">
-                    email triage
+                    Mail Desk
                   </Link>{' '}
                   stays empty. Reconnect to grant the read permission.
                 </p>
