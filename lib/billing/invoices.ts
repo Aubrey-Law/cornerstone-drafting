@@ -138,6 +138,25 @@ export interface Invoice {
   matterNumber: string | null
 }
 
+/**
+ * One invoice as the matter Billing tab shows it. Balances are the same
+ * accounting the firm register uses, so a matter and the register cannot disagree.
+ */
+export interface MatterInvoiceSummary {
+  id: string
+  number: string | null
+  kind: InvoiceKind
+  status: InvoiceStatus
+  payer: InvoicePayer
+  subtotalCents: number
+  issueDate: string | null
+  dueDate: string | null
+  balance: number
+  collected: number
+  overdue: boolean
+  daysPastDue: number
+}
+
 export interface InvoiceDetail extends Invoice {
   lines: InvoiceLine[]
   payments: InvoicePaymentGroup[]

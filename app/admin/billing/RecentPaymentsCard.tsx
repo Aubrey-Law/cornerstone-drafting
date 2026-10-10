@@ -25,7 +25,7 @@ export function RecentPaymentsCard({ payments }: { payments: RecentPaymentRow[] 
           <div key={payment.id} className="flex items-start justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
               <Link
-                href={`/admin/matters/${payment.matterId}`}
+                href={`/admin/matters/${payment.matterId}?tab=billing`}
                 className="text-xs font-medium hover:text-primary hover:underline"
               >
                 {payment.clientName}

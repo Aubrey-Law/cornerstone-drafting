@@ -133,7 +133,7 @@ export function LedgerTable({
                 </TableCell>
                 <TableCell>
                   <Link
-                    href={`/admin/matters/${row.matterId}`}
+                    href={`/admin/matters/${row.matterId}?tab=billing`}
                     className="font-medium text-foreground hover:text-primary hover:underline"
                   >
                     {row.clientName}
@@ -197,7 +197,7 @@ export function LedgerTable({
                     </Button>
                   ) : row.kind === 'plan_claim' && row.status === 'claim_submitted' ? (
                     <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
-                      <Link href={`/admin/matters/${row.matterId}`} aria-label={`View claim for ${row.clientName}`}>
+                      <Link href={`/admin/matters/${row.matterId}?tab=billing`} aria-label={`View claim for ${row.clientName}`}>
                         View claim
                       </Link>
                     </Button>

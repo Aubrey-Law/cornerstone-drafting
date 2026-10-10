@@ -543,11 +543,35 @@ export default function BillingClient({
 
       {view === 'work' ? (
         <div className="min-w-0 space-y-4">
-          <BillingWorkSummary counts={counts} month={month} />
-          {pagination && <div className="flex items-center gap-3 text-sm"><span>{pagination.total} matching charges · page {pagination.page}</span>{[pagination.page-1,pagination.page+1].map((page,index)=>{
-            const params=new URLSearchParams(searchParams.toString());params.set('page',String(page))
-            return <Button key={index} variant="outline" size="sm" disabled={index===0 ? page<1 : pagination.page*pagination.pageSize>=pagination.total} onClick={()=>router.push(`/admin/billing?${params}`)}>{index===0 ? 'Previous' : 'Next'}</Button>
-          })}</div>}
+          <BillingWorkSummary counts={counts} month={month} active={filter} />
+          {pagination && (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <p className="text-muted-foreground">
+                {pagination.total} matching charge{pagination.total === 1 ? '' : 's'}
+                {' · '}
+                page {pagination.page} of {Math.max(1, Math.ceil(pagination.total / pagination.pageSize))}
+              </p>
+              <div className="flex gap-2">
+                {[pagination.page - 1, pagination.page + 1].map((page, index) => {
+                  const params = new URLSearchParams(searchParams.toString())
+                  params.set('page', String(page))
+                  const atStart = index === 0 && page < 1
+                  const atEnd = index === 1 && pagination.page * pagination.pageSize >= pagination.total
+                  return (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      disabled={atStart || atEnd}
+                      onClick={() => router.push(`/admin/billing?${params}`)}
+                    >
+                      {index === 0 ? 'Previous' : 'Next'}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="min-w-0">
             <Card className="min-w-0 gap-0 py-0">
               <CardHeader className="gap-3 border-b border-border py-3">

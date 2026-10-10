@@ -21,6 +21,7 @@ import {
 import { TabsContent } from '@/components/ui/tabs'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
+import { InvoiceStatusBadge } from '@/components/billing/InvoiceStatusBadge'
 import { LogPaymentDialog, paymentMethodLabels } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
@@ -35,6 +36,7 @@ import {
 } from '@/components/billing/AttachFeeScheduleDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingMoney } from '@/lib/billing/metrics'
+import type { MatterInvoiceSummary } from '@/lib/billing/invoices'
 import type { MatterFeeScheduleView, ServicePackageOption } from '@/lib/billing/schedules'
 import type {
   BillingLedgerRow,
@@ -43,6 +45,7 @@ import type {
   AddableBillingKind,
 } from '@/lib/billing/types'
 import { formatFirmDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import {
   CloseOutCard,
@@ -74,6 +77,42 @@ interface MatterBillingView {
   feeSchedule: MatterFeeScheduleView | null
   milestonesEnabled: boolean
   servicePackages: ServicePackageOption[]
+  invoices: MatterInvoiceSummary[]
+}
+
+type BillingSection = 'work' | 'arrangement'
+
+function BillingSectionSwitch({
+  section,
+  onChange,
+}: {
+  section: BillingSection
+  onChange: (section: BillingSection) => void
+}) {
+  const options: { value: BillingSection; label: string }[] = [
+    { value: 'work', label: 'Work' },
+    { value: 'arrangement', label: 'Arrangement' },
+  ]
+  return (
+    <div role="group" aria-label="Billing sections" className="flex w-fit items-center rounded-lg bg-muted p-1">
+      {options.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={section === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'inline-flex min-h-10 items-center rounded-md px-3 text-sm font-medium transition-colors',
+            section === option.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function dayOf(iso: string | null): string {
@@ -183,9 +222,21 @@ function FeesChargesCard({
                       <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                         <BillingStatusBadge row={row} />
                         <span>
-                          {row.invoicedAt
-                            ? `${row.status === 'claim_submitted' ? 'Submitted' : 'Invoiced'} ${dayOf(row.invoicedAt)}`
-                            : 'Not invoiced'}
+                          {row.invoiceId ? (
+                            <Link
+                              href={row.invoiceNumber
+                                ? `/admin/billing/invoices/${row.invoiceId}`
+                                : `/admin/billing/invoices/${row.invoiceId}/edit`}
+                              className="font-medium text-foreground hover:underline"
+                            >
+                              {row.invoiceNumber ?? 'Draft invoice'}
+                            </Link>
+                          ) : row.invoicedAt ? (
+                            `${row.status === 'claim_submitted' ? 'Submitted' : 'Invoiced'} ${dayOf(row.invoicedAt)}`
+                          ) : (
+                            'Not invoiced'
+                          )}
+                          {row.invoiceId && row.invoicedAt ? ` · ${dayOf(row.invoicedAt)}` : ''}
                           {row.status !== 'paid' && ` · ${row.ageDays}d`}
                         </span>
                       </span>
@@ -318,6 +369,95 @@ function PaymentsCard({
   )
 }
 
+/** Invoices already composed for this matter. Charges stay in the ledger below. */
+function MatterInvoicesCard({
+  invoices,
+  createHref,
+}: {
+  invoices: MatterInvoiceSummary[]
+  createHref: string
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b [.border-b]:pb-4">
+        <CardTitle className="text-sm">Invoices</CardTitle>
+        <div className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={createHref}>
+              <Plus className="size-4" aria-hidden />
+              Create invoice
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="px-0">
+        {invoices.length === 0 ? (
+          <EmptyState
+            className="py-6"
+            icon={ReceiptText}
+            title="No invoices yet"
+            description="Group this matter’s open charges into one bill. Payments recorded against an invoice show up here."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="sm:min-w-[520px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-4">Invoice</TableHead>
+                  <TableHead className="hidden sm:table-cell">Due</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
+                  <TableHead className="pr-4 text-right"><span className="sr-only">Open</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map(invoice => {
+                  const href = invoice.status === 'draft'
+                    ? `/admin/billing/invoices/${invoice.id}/edit`
+                    : `/admin/billing/invoices/${invoice.id}`
+                  const label = invoice.number ?? 'Draft'
+                  return (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="pl-4 whitespace-normal">
+                        <Link href={href} className="font-medium hover:underline">
+                          {label}
+                        </Link>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <InvoiceStatusBadge invoice={invoice} overdue={invoice.overdue} />
+                          <span className="sm:hidden">
+                            {invoice.dueDate ? `Due ${dayOf(invoice.dueDate)}` : 'No due date'}
+                          </span>
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden text-muted-foreground sm:table-cell">
+                        {invoice.dueDate ? dayOf(invoice.dueDate) : '—'}
+                        {invoice.overdue && (
+                          <span className="block text-xs font-semibold text-destructive">
+                            {invoice.daysPastDue}d late
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {billingMoney(invoice.balance)}
+                      </TableCell>
+                      <TableCell className="pr-4 text-right">
+                        <Button asChild variant="link" size="sm" className="h-auto min-h-11 px-0">
+                          <Link href={href} aria-label={`${invoice.status === 'draft' ? 'Continue' : 'Open'} ${label}`}>
+                            {invoice.status === 'draft' ? 'Continue' : 'Open'}
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function MatterBillingTab({
   matterId,
   enabled,
@@ -329,6 +469,7 @@ export function MatterBillingTab({
 }: MatterBillingTabProps) {
   const token = useAccessToken()
   const [view, setView] = useState<MatterBillingView | null>(null)
+  const [section, setSection] = useState<BillingSection>('work')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -375,6 +516,7 @@ export function MatterBillingTab({
         feeSchedule: json.feeSchedule ?? null,
         milestonesEnabled: json.milestonesEnabled ?? false,
         servicePackages: json.servicePackages ?? [],
+        invoices: json.invoices ?? [],
       })
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load billing')
@@ -593,7 +735,10 @@ export function MatterBillingTab({
     <TabsContent value="billing" className="space-y-4">
       <RecordTabHeader
         title="Billing"
-        description="Fee arrangement, charges, payments, and invoices for this matter."
+        description={section === 'work'
+          ? 'Invoices, charges, and payments on this matter.'
+          : 'How this matter is priced: fee type, proposal, and plan details.'}
+        actions={<BillingSectionSwitch section={section} onChange={setSection} />}
       />
       {loading && !view ? (
         <div className="space-y-4" aria-busy>
@@ -614,12 +759,31 @@ export function MatterBillingTab({
           />
         </Card>
       ) : (
+        section === 'arrangement' ? (
+          <div className="space-y-4">
+            <FeeTypeCard details={details} onSaveField={onSaveField} />
+            <ProposalPricingCard details={details} onSaveField={onSaveField} />
+            <LegalPlanClaimCard
+              details={details}
+              onSaveField={onSaveField}
+              hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
+              onStartClaim={() => openCharge('plan_claim')}
+            />
+            {view?.milestonesEnabled && (
+              <FeeScheduleCard
+                schedule={view.feeSchedule}
+                packageCount={view.servicePackages.length}
+                onAttach={openSchedule}
+              />
+            )}
+            <TimeEntriesCard matterId={matterId} />
+          </div>
+        ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_1fr]">
           {/*
-            On a wide screen: the ledger on the left, the summary beside it. On a
-            phone the side column used to stack under every ledger card, so the
-            balance came last; the summary block now comes first there and the
-            close-out after the ledger.
+            On a wide screen: invoices and the ledger on the left, the balance
+            beside them. On a phone the balance comes first, then the ledger,
+            then close-out.
           */}
           <div className="space-y-4 lg:col-start-2 lg:row-start-1">
             <MoneyInCard
@@ -683,21 +847,7 @@ export function MatterBillingTab({
           </div>
 
           <div className="min-w-0 space-y-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-            <FeeTypeCard details={details} onSaveField={onSaveField} />
-            <ProposalPricingCard details={details} onSaveField={onSaveField} />
-            <LegalPlanClaimCard
-              details={details}
-              onSaveField={onSaveField}
-              hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
-              onStartClaim={() => openCharge('plan_claim')}
-            />
-            {view?.milestonesEnabled && (
-              <FeeScheduleCard
-                schedule={view.feeSchedule}
-                packageCount={view.servicePackages.length}
-                onAttach={openSchedule}
-              />
-            )}
+            <MatterInvoicesCard invoices={view?.invoices ?? []} createHref={billMatterHref} />
             <FeesChargesCard
               rows={rows}
               selected={selectedCharges}
@@ -715,7 +865,6 @@ export function MatterBillingTab({
           </div>
 
           <div className="space-y-4 lg:col-start-2 lg:row-start-2">
-            <TimeEntriesCard matterId={matterId} />
             <PlanClaimsCard rows={rows} invoiceHref={claimsInvoiceHref} />
             <CloseOutCard
               details={details}
@@ -728,6 +877,7 @@ export function MatterBillingTab({
             />
           </div>
         </div>
+        )
       )}
 
       <AddChargeDialog

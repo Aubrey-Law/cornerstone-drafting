@@ -36,7 +36,7 @@ function ClaimsCard({ snapshot }: { snapshot: BillingSnapshot }) {
               <div key={claim.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <Link
-                    href={`/admin/matters/${claim.matterId}`}
+                    href={`/admin/matters/${claim.matterId}?tab=billing`}
                     className="text-xs font-medium hover:text-primary hover:underline"
                   >
                     {claim.clientName} — {billingPlanLabel(claim.plan)}
