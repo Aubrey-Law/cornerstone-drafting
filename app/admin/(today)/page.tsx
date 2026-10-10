@@ -25,6 +25,7 @@ import { createDailyPlanPreview } from '@/lib/work/planner'
 import { fetchDailyPlan } from '@/lib/work/plans'
 import { getDailyPlanCalendarStatus } from '@/lib/work/dailyPlanCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { fetchTaskAssignees } from '@/lib/queries/tasks'
 import { type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 
 export const dynamic = 'force-dynamic'
@@ -152,7 +153,7 @@ export default async function AdminTodayPage({
   if (!settings.commandCenterV2Enabled || (legacy && legacyFallbackAvailable) || !auth) return <LegacyTodayPage />
 
   const now = new Date()
-  const [graph, preferences, pendingApprovalsResult] = await Promise.all([
+  const [graph, preferences, pendingApprovalsResult, assignees] = await Promise.all([
     fetchWorkGraphForUser(auth.id, now),
     fetchWorkPreferences(auth.id),
     getAdminClient().from('action_proposals')
@@ -163,7 +164,9 @@ export default async function AdminTodayPage({
       .in('risk', ['external_write', 'legal_financial'])
       .order('created_at', { ascending: false })
       .limit(3),
+    fetchTaskAssignees(),
   ])
+  const canDelegate = assignees.some(person => person.id !== auth.id)
   const preview = createDailyPlanPreview({
     items: graph.items,
     preferences,
@@ -189,7 +192,7 @@ export default async function AdminTodayPage({
         <PageHeader
           eyebrow={dateLabel}
           title="Today"
-          description="One plan across client work, deadlines, communications, calendar, billing, and automation."
+          description="Your next step, then the rest of the day — client work, deadlines, replies, calendar, and billing."
           actions={<div className="flex items-center gap-3">
             <Link
               href="/admin/weekly-review"
@@ -227,6 +230,7 @@ export default async function AdminTodayPage({
             ...graph.sourceErrors,
             ...(pendingApprovalsResult.error ? ['approvals'] : []),
           ]}
+          canDelegate={canDelegate}
         />
         <div className="mt-4">
           <DelegatedActivityCard includeExplicitApprovals={false} />

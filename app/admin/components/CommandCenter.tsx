@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import type { DailyPlanPreview, WorkItem, WorkPreferences } from '@/lib/work/types'
+import { SOLO_WORK_PREFERENCES } from '@/lib/work/types'
 import type { DailyPlanStatus } from '@/lib/work/plans'
 import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib/work/dailyPlanCalendar'
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
@@ -63,6 +64,8 @@ interface Props {
   initialPlan: CommandCenterPlan | null
   initialApprovals: ApprovalProposal[]
   sourceErrors: string[]
+  /** False for a solo firm — Delegate is noise when nobody else can take the work. */
+  canDelegate?: boolean
 }
 
 const BAND_LABEL = ['Critical', 'Must do', 'Soon', 'Planned', 'Waiting'] as const
@@ -130,7 +133,17 @@ function PlanningPreferences({
           <div className="space-y-1.5"><Label htmlFor="workday-start">Workday starts</Label><Input id="workday-start" type="time" value={draft.workdayStart} onChange={event => setDraft(current => ({ ...current, workdayStart: event.target.value }))} /></div>
           <div className="space-y-1.5"><Label htmlFor="workday-end">Workday ends</Label><Input id="workday-end" type="time" value={draft.workdayEnd} onChange={event => setDraft(current => ({ ...current, workdayEnd: event.target.value }))} /></div>
         </div>
-        <DialogFooter><Button onClick={save} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Check />} Save preferences</Button></DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saving}
+            onClick={() => setDraft(SOLO_WORK_PREFERENCES)}
+          >
+            Solo practice preset
+          </Button>
+          <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Check />} Save preferences</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -413,18 +426,23 @@ function WorkCard({
   planId,
   openedAtRef,
   onRefresh,
+  onEnsurePlan,
+  canDelegate = true,
 }: {
   item: WorkItem
   primary?: boolean
   planId: string | null
   openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
+  /** Lazily persist a draft so Start works before the attorney runs Create draft. */
+  onEnsurePlan?: () => Promise<string | null>
+  canDelegate?: boolean
 }) {
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function planStatus(status: 'started' | 'completed') {
-    if (!planId) return
-    const response = await fetch(`/api/admin/daily-plans/${planId}`, {
+  async function planStatus(status: 'started' | 'completed', resolvedPlanId: string | null = planId) {
+    if (!resolvedPlanId) return
+    const response = await fetch(`/api/admin/daily-plans/${resolvedPlanId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -438,12 +456,16 @@ function WorkCard({
   async function start() {
     setBusy('start')
     try {
+      let resolvedPlanId = planId
+      if (!resolvedPlanId && onEnsurePlan) {
+        resolvedPlanId = await onEnsurePlan()
+      }
       if (item.sourceType === 'task') {
         await executeTodayInternalAction({
           actionKey: 'task.start', referencePayload: { taskId: item.sourceIds[0] }, displaySummary: `Start task: ${item.title}`, item,
         })
       }
-      await planStatus('started')
+      await planStatus('started', resolvedPlanId)
       await onRefresh()
       toast.success('Marked in progress')
     } catch (error) {
@@ -557,7 +579,7 @@ function WorkCard({
           </Button>
         ) : (
           <>
-            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null || !planId}>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null}>
               {busy === 'start' ? <Loader2 className="animate-spin" /> : <Play />} Start
             </Button>
             <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={done} disabled={busy !== null}>
@@ -571,9 +593,9 @@ function WorkCard({
             </Button>
           </>
         )}
-        {item.sourceType === 'task'
+        {canDelegate && (item.sourceType === 'task'
           ? <DelegateTaskButton item={item} onDelegated={onRefresh} />
-          : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>}
+          : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>)}
         <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
           <Link href={assistantHref(item)}><Bot /> Ask Cornerstone</Link>
         </Button>
@@ -593,16 +615,28 @@ function WorkList({
   planId,
   openedAtRef,
   onRefresh,
+  onEnsurePlan,
+  canDelegate = true,
 }: {
   items: WorkItem[]
   empty: string
   planId: string | null
   openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
+  onEnsurePlan?: () => Promise<string | null>
+  canDelegate?: boolean
 }) {
   if (!items.length) return <p className="py-5 text-center text-sm text-muted-foreground">{empty}</p>
   return <div className="space-y-2">{items.map(item => (
-    <WorkCard key={item.workKey} item={item} planId={planId} openedAtRef={openedAtRef} onRefresh={onRefresh} />
+    <WorkCard
+      key={item.workKey}
+      item={item}
+      planId={planId}
+      openedAtRef={openedAtRef}
+      onRefresh={onRefresh}
+      onEnsurePlan={onEnsurePlan}
+      canDelegate={canDelegate}
+    />
   ))}</div>
 }
 
@@ -735,12 +769,23 @@ function EndOfDayClose({
   )
 }
 
-export function CommandCenter({ initialPreview, preferences, initialPlan, initialApprovals, sourceErrors }: Props) {
+export function CommandCenter({
+  initialPreview,
+  preferences,
+  initialPlan,
+  initialApprovals,
+  sourceErrors,
+  canDelegate = true,
+}: Props) {
   const openedAtMs = useRef(Date.now())
   const [preview, setPreview] = useState(initialPreview)
   const [workPreferences, setWorkPreferences] = useState(preferences)
   const [plan, setPlan] = useState(initialPlan)
-  const [focusMode, setFocusMode] = useState(false)
+  // A committed day should open on the next step — not a wall of lanes.
+  const [focusMode, setFocusMode] = useState(() => (
+    initialPlan?.status === 'committed'
+    && Boolean(selectCommittedFocusItem(initialPreview, initialPlan))
+  ))
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmUnverifiedCommitOpen, setConfirmUnverifiedCommitOpen] = useState(false)
 
@@ -836,24 +881,42 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
     }
   }
 
+  async function persistDraftPlan(options: { quiet?: boolean } = {}): Promise<string> {
+    const response = await fetch('/api/admin/daily-plans/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: preview.date }),
+    })
+    const body = await response.json().catch(() => ({})) as {
+      plan?: Omit<CommandCenterPlan, 'calendarStatus'>
+      preview?: DailyPlanPreview
+      calendarStatus?: DailyPlanCalendarStatus
+      error?: string
+    }
+    if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
+    setPlan({ ...body.plan, calendarStatus: body.calendarStatus ?? null })
+    setPreview(body.preview)
+    if (!options.quiet) toast.success('Draft day created')
+    return body.plan.id
+  }
+
+  async function ensureDraftPlan(): Promise<string | null> {
+    if (plan?.id && plan.status !== 'closed') return plan.id
+    setBusy('generate')
+    try {
+      return await persistDraftPlan({ quiet: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The plan could not be generated')
+      return null
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function generate() {
     setBusy('generate')
     try {
-      const response = await fetch('/api/admin/daily-plans/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: preview.date }),
-      })
-      const body = await response.json().catch(() => ({})) as {
-        plan?: Omit<CommandCenterPlan, 'calendarStatus'>
-        preview?: DailyPlanPreview
-        calendarStatus?: DailyPlanCalendarStatus
-        error?: string
-      }
-      if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
-      setPlan({ ...body.plan, calendarStatus: body.calendarStatus ?? null })
-      setPreview(body.preview)
-      toast.success('Draft day created')
+      await persistDraftPlan()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The plan could not be generated')
     } finally {
@@ -888,6 +951,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
         status: body.plan!.status,
         calendarStatus: body.calendarSync ?? current.calendarStatus,
       } : current)
+      setFocusMode(true)
       if (body.calendarSyncError) {
         toast.warning(`Plan committed. Calendar needs attention: ${body.calendarSyncError}`)
       } else if (body.calendarSync && (body.calendarSync.pendingBlocks > 0 || body.calendarSync.staleBlocks > 0)) {
@@ -937,7 +1001,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           </div>
           <Button variant="outline" onClick={() => setFocusMode(false)}>View full plan</Button>
         </div>
-        <WorkCard item={focusItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+        <WorkCard
+          item={focusItem}
+          primary
+          planId={plan?.id ?? null}
+          openedAtRef={openedAtMs}
+          onRefresh={refresh}
+          onEnsurePlan={ensureDraftPlan}
+          canDelegate={canDelegate}
+        />
         <p className="text-center text-xs text-muted-foreground">
           The rest of the queue is still safe. Finish, snooze, or block this item to reveal the next one.
         </p>
@@ -1018,7 +1090,9 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
           <div>
             <p className="font-semibold text-foreground">Today is over capacity by {formatMinutes(preview.overloadMinutes)}.</p>
-            <p className="mt-1 text-muted-foreground">Do not hide the conflict. Defer, delegate, or reschedule one of the must-do items below.</p>
+            <p className="mt-1 text-muted-foreground">
+              Do not hide the conflict. Defer, reschedule{canDelegate ? ', delegate,' : ','} or shorten one of the must-do items below.
+            </p>
           </div>
         </div>
       )}
@@ -1059,7 +1133,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <h2 id="now-heading" className="text-base font-semibold">Now</h2>
         </div>
         {nowItem
-          ? <WorkCard item={nowItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+          ? <WorkCard
+              item={nowItem}
+              primary
+              planId={plan?.id ?? null}
+              openedAtRef={openedAtMs}
+              onRefresh={refresh}
+              onEnsurePlan={ensureDraftPlan}
+              canDelegate={canDelegate}
+            />
           : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No firm-owned work needs attention.</CardContent></Card>}
       </section>
 
@@ -1071,7 +1153,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Critical work is never hidden; otherwise this list stops at {workPreferences.maxMustDo}.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleMustDo} empty="No additional must-do items." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleMustDo}
+                empty="No additional must-do items."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+              />
             </CardContent>
           </Card>
 
@@ -1081,7 +1171,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>{visibleCommunication.length} replies grouped into a {workPreferences.adminBatchMinutes}-minute admin block.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleCommunication} empty="No additional replies waiting." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleCommunication}
+                empty="No additional replies waiting."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+              />
               <Button asChild variant="link" size="sm" className="mt-2 px-0">
                 <Link href="/admin/communications">Open all communications <ExternalLink /></Link>
               </Button>
@@ -1094,7 +1192,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Important work that fits the remaining capacity.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleSuggested} empty="No additional work fits today’s capacity." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleSuggested}
+                empty="No additional work fits today’s capacity."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+              />
             </CardContent>
           </Card>
         </div>
@@ -1117,7 +1223,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Visible for context, excluded from Focus Mode.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={activeItems(preview.waiting).slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={activeItems(preview.waiting).slice(0, 8)}
+                empty="Nothing is waiting or blocked."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+              />
               {activeItems(preview.waiting).length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {activeItems(preview.waiting).length - 8} more</p>}
             </CardContent>
           </Card>
@@ -1125,7 +1239,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <details className="rounded-xl border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">Later · {preview.later.length}</summary>
             <div className="mt-3">
-              <WorkList items={activeItems(preview.later)} empty="Nothing deferred." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={activeItems(preview.later)}
+                empty="Nothing deferred."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+              />
             </div>
           </details>
         </aside>
