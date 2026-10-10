@@ -932,7 +932,7 @@ export function MatterFactsPanel({
         onToggle={() => toggle('activity')}
         hint={activity[0] ? formatDate(activity[0].created_at) : undefined}
       >
-        <PanelActivity activity={activity} onOpenTab={() => onOpenTab('activity')} />
+        <PanelActivity activity={activity} onOpenTab={() => onOpenTab('history')} />
       </PanelSection>
 
       </>}

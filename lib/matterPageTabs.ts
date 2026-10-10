@@ -9,9 +9,9 @@ export const MATTER_TABS = [
   'documents',
   'billing',
   'communications',
-  'notes',
-  'reviews',
-  'activity',
+  // Notes, stage/activity history, and document reviews share one History tab
+  // with three faces — fewer top-level tabs without losing the surfaces.
+  'history',
 ] as const
 
 export type MatterTab = (typeof MATTER_TABS)[number]
@@ -25,6 +25,23 @@ export function parseTaskView(value: string | null | undefined): TaskView {
   return value && (TASK_VIEWS as readonly string[]).includes(value) ? (value as TaskView) : 'queue'
 }
 
+/** Faces of the History tab: notes, chronological activity, and reviews. */
+export const HISTORY_VIEWS = ['notes', 'activity', 'reviews'] as const
+
+export type HistoryView = (typeof HISTORY_VIEWS)[number]
+
+export function parseHistoryView(
+  view: string | null | undefined,
+  legacyTab?: string | null,
+): HistoryView {
+  if (legacyTab === 'notes' || legacyTab === 'activity' || legacyTab === 'reviews') {
+    return legacyTab
+  }
+  return view && (HISTORY_VIEWS as readonly string[]).includes(view)
+    ? (view as HistoryView)
+    : 'notes'
+}
+
 export const COMMUNICATION_CHANNELS = ['all', 'portal', 'sms', 'email'] as const
 
 export type CommunicationChannel = (typeof COMMUNICATION_CHANNELS)[number]
@@ -35,6 +52,9 @@ const LEGACY_TAB_MAP: Record<string, MatterTab> = {
   calls: 'communications',
   // The SLA plan is now the Tasks tab's plan view. `?view=plan` opens it there.
   sla: 'tasks',
+  notes: 'history',
+  activity: 'history',
+  reviews: 'history',
 }
 
 export function parseMatterTab(value: string | null | undefined): MatterTab {

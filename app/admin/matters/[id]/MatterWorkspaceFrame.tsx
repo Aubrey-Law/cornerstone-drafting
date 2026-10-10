@@ -155,7 +155,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
         navigation={<MatterWorkspaceNav
           matterId={matterId}
           active={active}
-          counts={{ tasks: data.taskCount, reviews: data.reviewBlockerCount, documents: intake.uploadCounts.total }}
+          counts={{ tasks: data.taskCount, history: data.reviewBlockerCount, documents: intake.uploadCounts.total }}
           drafting={practiceArea !== 'Probate' && practiceArea !== 'TA'}
         />}
       />

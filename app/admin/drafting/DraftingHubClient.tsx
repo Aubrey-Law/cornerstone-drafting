@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownAZ, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { FilterChip } from '@/components/FilterChip'
 import { SearchField } from '@/components/SearchField'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { SavedDraftingViews } from './SavedDraftingViews'
@@ -183,19 +184,15 @@ export default function DraftingHubClient({ result, query }: DraftingHubClientPr
             {ACTION_CHIPS.map(chip => {
               const selected = actionFilter === chip.value
               return (
-                <button
+                <FilterChip
                   key={chip.value}
-                  type="button"
-                  aria-pressed={selected}
+                  selected={selected}
+                  count={actionCounts[chip.value]}
                   onClick={() => setActionFilter(chip.value)}
-                  className={cn(
-                    'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-micro font-medium transition-colors',
-                    selected ? 'bg-primary text-primary-foreground' : cn(chip.tone, 'hover:opacity-80'),
-                  )}
+                  className={cn('shrink-0 text-micro', !selected && chip.tone)}
                 >
                   {chip.label}
-                  <span className="tabular-nums opacity-70">· {actionCounts[chip.value]}</span>
-                </button>
+                </FilterChip>
               )
             })}
           </div>

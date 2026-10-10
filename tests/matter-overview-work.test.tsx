@@ -54,7 +54,7 @@ it('opens the date editor from the empty milestone state', async () => {
   expect(onDates).toHaveBeenCalledOnce()
 })
 
-it('composes the next action, milestone track, communication activity, and summary column', () => {
+it('composes the next action, compact next-milestone line, communication activity, and summary column', () => {
   render(<MatterOverviewWork
     {...props}
     details={{ scheduled_signing_date: '2026-11-12', engagement_signed: true, engagement_signed_at: '2026-09-24' }}
@@ -68,10 +68,7 @@ it('composes the next action, milestone track, communication activity, and summa
   expect(screen.getByRole('complementary', { name: 'Matter summary' })).toBeTruthy()
   expect(screen.getByText('Drafts due')).toBeTruthy()
   expect(screen.getByText(/Calculated from target signing/)).toBeTruthy()
-  const track = screen.getByRole('list', { name: 'Milestone track' })
-  expect(track.textContent).toContain('Engaged (done)')
-  expect(track.textContent).toContain('Drafts to client (done)')
-  expect(track.textContent).toContain('Signing (next)')
+  expect(screen.queryByRole('list', { name: 'Milestone track' })).toBeNull()
   expect(screen.getByText('Overview sidebar')).toBeTruthy()
   expect(screen.getByText('Existing composer')).toBeTruthy()
   expect(screen.getByRole('complementary', { name: 'Matter summary' }).parentElement?.className).toContain('@min-[960px]/overview:grid-cols')

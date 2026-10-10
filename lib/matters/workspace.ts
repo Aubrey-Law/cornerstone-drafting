@@ -1,7 +1,7 @@
 export const MATTER_WORKSPACE_SECTIONS = [
-  ['overview', 'Overview'], ['tasks', 'Tasks'], ['drafting', 'Drafting'], ['reviews', 'Reviews'],
+  ['overview', 'Overview'], ['tasks', 'Tasks'], ['drafting', 'Drafting'],
   ['people', 'People'], ['assets', 'Assets'], ['documents', 'Documents'], ['billing', 'Billing'],
-  ['communications', 'Messages'], ['notes', 'Notes'], ['activity', 'Activity'],
+  ['communications', 'Messages'], ['history', 'History'],
 ] as const
 export type MatterWorkspaceSection = (typeof MATTER_WORKSPACE_SECTIONS)[number][0]
 export function matterWorkspaceHref(id: string, section: MatterWorkspaceSection) {

@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useMatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
 import { matterIdFromPath, matterWorkspaceHref } from '@/lib/matters/workspace'
 import { Pin, PinOff } from 'lucide-react'
@@ -12,6 +14,10 @@ import { MatterActionsMenu, MatterContextMenu } from '@/components/matter/Matter
 import { matterHref } from '@/lib/matters/matterActions'
 import type { MatterNavRow } from '@/lib/queries/sidebarMatters'
 import type { SidebarMattersState } from '@/lib/matters/useSidebarMatters'
+
+/** Groups that start collapsed so Today / Clients / Work stay scannable. */
+const COLLAPSIBLE_NAV_GROUPS = new Set(['Operations', 'Tools'])
+const NAV_GROUP_EXPANDED_KEY = 'cornerstone.admin.navGroupsExpanded'
 
 export interface AdminNavItem {
   href: string
@@ -125,7 +131,7 @@ function MatterRow({
         {(active || isPinned) && <details open={active || undefined} className="px-3 pb-2 text-xs">
           <summary className="cursor-pointer py-1 text-muted-foreground">Workspace</summary>
           <div className="flex flex-col gap-1 border-l pl-3">
-            {(['overview', 'tasks', 'drafting', 'documents', 'reviews'] as const).map(section => <Link key={section} href={matterWorkspaceHref(matter.matter_id, section)} onClick={onNavigate} className="rounded px-2 py-1 capitalize hover:bg-accent">{section}</Link>)}
+            {(['overview', 'tasks', 'drafting', 'documents', 'history'] as const).map(section => <Link key={section} href={matterWorkspaceHref(matter.matter_id, section)} onClick={onNavigate} className="rounded px-2 py-1 capitalize hover:bg-accent">{section}</Link>)}
           </div>
         </details>}
       </div>
@@ -158,6 +164,19 @@ export function isNavItemActive(item: Pick<AdminNavItem, 'href' | 'exact'>, path
   )
 }
 
+function readExpandedGroups(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(NAV_GROUP_EXPANDED_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, boolean>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 export function AdminSidebar({
   pathname,
   compact,
@@ -171,21 +190,66 @@ export function AdminSidebar({
   // visiting the list would highlight a row called "list" that does not exist.
   const workspace = useMatterWorkspaceContext()
   const activeMatterId = workspace?.matterId ?? matterIdFromPath(pathname)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    setExpandedGroups(readExpandedGroups())
+  }, [])
+
+  const setGroupExpanded = (group: string, open: boolean) => {
+    setExpandedGroups(prev => {
+      const next = { ...prev, [group]: open }
+      try {
+        window.localStorage.setItem(NAV_GROUP_EXPANDED_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
 
   return (
     // One scroll area between the logo and the theme footer. Without it a short
     // window pushed the last items under the footer instead of scrolling.
     <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
-      {navGroups.map(group => (
+      {navGroups.map(group => {
+        const groupItems = navItems.filter(item => item.group === group)
+        const groupHasActive = groupItems.some(item =>
+          workspace?.matterId ? item.href === '/admin/matters/list' : isNavItemActive(item, pathname),
+        )
+        const collapsible = COLLAPSIBLE_NAV_GROUPS.has(group) && !compact
+        // Active routes force the group open so the current page stays reachable.
+        const expanded = !collapsible || groupHasActive || expandedGroups[group] === true
+        const groupBadgeTotal = groupItems.reduce((sum, item) => {
+          const badge = getNavBadge(item.href, badgeCounts)
+          return sum + (badge?.value ?? 0)
+        }, 0)
+
+        return (
         <div key={group} className={cn('flex shrink-0 flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
           {!compact ? (
-            <p className="px-3 pb-1 pt-2 text-micro font-semibold uppercase tracking-wider text-muted-foreground/70">
-              {group}
-            </p>
+            collapsible ? (
+              <button
+                type="button"
+                onClick={() => setGroupExpanded(group, !expanded)}
+                aria-expanded={expanded}
+                className="flex w-full items-center gap-1 px-3 pb-1 pt-2 text-left text-micro font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-muted-foreground"
+              >
+                <span className="flex-1">{group}</span>
+                {!expanded && groupBadgeTotal > 0 && (
+                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-micro font-medium normal-case tracking-normal text-primary tabular-nums">
+                    {groupBadgeTotal}
+                  </span>
+                )}
+                <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', expanded && 'rotate-180')} aria-hidden />
+              </button>
+            ) : (
+              <p className="px-3 pb-1 pt-2 text-micro font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {group}
+              </p>
+            )
           ) : null}
-          {navItems
-            .filter(item => item.group === group)
-            .map(item => {
+          {(expanded || compact) && groupItems.map(item => {
               const active = workspace?.matterId ? item.href === '/admin/matters/list' : isNavItemActive(item, pathname)
               const Icon = item.icon
               const badge = getNavBadge(item.href, badgeCounts)
@@ -256,7 +320,8 @@ export function AdminSidebar({
               )
             })}
         </div>
-      ))}
+        )
+      })}
 
       {/*
         Matter rows are two lines of text, which the 56px icon rail cannot show —

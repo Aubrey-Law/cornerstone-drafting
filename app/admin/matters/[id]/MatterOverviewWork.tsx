@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react'
 import { ArrowRight, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { FilterChip } from '@/components/FilterChip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +18,6 @@ import { evaluateMatterRequirements, type EngagementState } from '@/lib/lifecycl
 import { resolveIntakeReviewTarget, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { cn, FIRM_TIMEZONE, formatDate } from '@/lib/utils'
 import { nextMatterMilestone } from '@/lib/matter/nextMilestone'
-import { matterMilestoneTrack, milestoneTrackProgress } from '@/lib/matter/milestoneTrack'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { PipelineMatter, MatterActivity } from '@/types/database'
 import { activityEventTitle, eventMetaFor } from './activityEventMeta'
@@ -32,7 +32,6 @@ const NEED_LABELS: Record<string, string> = {
 
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 const ACTIVITY_WHEN = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: FIRM_TIMEZONE })
-const shortDate = (key: string) => SHORT_DATE.format(new Date(`${key}T12:00:00Z`))
 
 type FeedFilter = 'all' | 'messages' | 'notes' | 'documents' | 'system'
 const FEED_FILTERS: FeedFilter[] = ['all', 'messages', 'notes', 'documents', 'system']
@@ -128,8 +127,6 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
   const hasOpenPrep = prep.some(item => !item.done)
 
   const milestone = nextMatterMilestone(matter, details)
-  const track = matterMilestoneTrack(matter, details)
-  const trackFill = milestoneTrackProgress(track)
 
   return <div className="@container/overview min-w-0">
   <div className="grid min-w-0 items-start gap-5 @min-[960px]/overview:grid-cols-[minmax(0,1fr)_20rem]">
@@ -178,43 +175,35 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
         </div>
       </section>
 
-      <section aria-label="Matter milestones" className="rounded-lg border bg-card px-6 pb-5 pt-4">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Milestones</h2>
-          <p className="text-compact text-muted-foreground">
-            {milestone ? <>
-              Next: <strong className="font-medium text-foreground">{milestone.label}</strong>
-              {' · '}<time dateTime={milestone.date}>{formatDate(milestone.date)}</time>
-              {' · '}<span className={milestone.daysAway < 0 ? 'font-medium text-destructive' : undefined}>{relativeDays(milestone.daysAway)}</span>
-              {milestone.derived ? ' · Calculated from target signing' : ''}
-              {' · '}
-            </> : <>No milestone scheduled. </>}
-            <Button variant="link" className="h-auto p-0 text-compact" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
-          </p>
-        </div>
-        <ol aria-label="Milestone track" className="relative grid grid-cols-5">
-          <span aria-hidden className="absolute inset-x-[10%] top-[7px] h-0.5 bg-border" />
-          <span aria-hidden className="absolute left-[10%] top-[7px] h-0.5 bg-primary" style={{ width: `${trackFill * 80}%` }} />
-          {track.map(point => <li key={point.label} className="relative flex min-w-0 flex-col items-center gap-1.5 text-center">
-            <span aria-hidden className={cn('block size-4 rounded-full',
-              point.state === 'done' && 'bg-primary',
-              point.state === 'next' && 'border-[3px] border-selected-border bg-card',
-              point.state === 'later' && 'border-2 border-border bg-card')} />
-            <span className="text-compact font-medium">{point.label}<span className="sr-only">{point.state === 'done' ? ' (done)' : point.state === 'next' ? ' (next)' : ''}</span></span>
-            <span className="-mt-1.5 text-xs text-muted-foreground">{point.date ? `${point.planned ? 'Planned ' : ''}${shortDate(point.date)}` : '—'}</span>
-          </li>)}
-        </ol>
+      {/* Compact next-milestone line — the stage strip in the header is the
+          primary timeline, so Overview no longer repeats a second track. */}
+      <section aria-label="Matter milestones" className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Next milestone</h2>
+        <p className="text-compact text-muted-foreground">
+          {milestone ? <>
+            <strong className="font-medium text-foreground">{milestone.label}</strong>
+            {' · '}<time dateTime={milestone.date}>{formatDate(milestone.date)}</time>
+            {' · '}<span className={milestone.daysAway < 0 ? 'font-medium text-destructive' : undefined}>{relativeDays(milestone.daysAway)}</span>
+            {milestone.derived ? ' · Calculated from target signing' : ''}
+            {' · '}
+          </> : <>No milestone scheduled. </>}
+          <Button variant="link" className="h-auto p-0 text-compact" onClick={onDates}>{milestone ? 'View all dates' : 'Set date'}</Button>
+        </p>
       </section>
 
       <section aria-label="Matter communication and activity" className="overflow-hidden rounded-lg border bg-card">
         {composer && <div className="border-b">{composer}</div>}
         <div className="px-4 pb-2.5 pt-1.5">
           <div role="group" aria-label="Activity filter" className="flex flex-wrap gap-1.5 pb-1 pt-2">
-            {FEED_FILTERS.map(filter => <button key={filter} type="button" aria-pressed={feedFilter === filter} onClick={() => setFeedFilter(filter)}
-              className={cn('rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                feedFilter === filter ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border bg-card text-muted-foreground hover:bg-accent')}>
-              {filter[0].toUpperCase() + filter.slice(1)}
-            </button>)}
+            {FEED_FILTERS.map(filter => (
+              <FilterChip
+                key={filter}
+                selected={feedFilter === filter}
+                onClick={() => setFeedFilter(filter)}
+              >
+                {filter[0].toUpperCase() + filter.slice(1)}
+              </FilterChip>
+            ))}
           </div>
           {feed.length ? <ul aria-label="Recent activity">
             {feed.slice(0, ACTIVITY_PREVIEW).map(item => {

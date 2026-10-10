@@ -3,9 +3,9 @@
 import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
+import { FilterChip } from '@/components/FilterChip'
 import { Textarea } from '@/components/ui/textarea'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
-import { cn } from '@/lib/utils'
 
 const EmailComposer = dynamic(() => import('@/components/rail/RailEmailPane').then(module => module.ManualEmailComposer), {
   loading: () => <p className="p-4 text-sm text-muted-foreground">Loading email composer…</p>,
@@ -96,11 +96,19 @@ export function MatterOverviewComposer(props: Props) {
     </>}
     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       <div role="group" aria-label="Compose action" className="flex flex-wrap gap-1.5">
-        {modes.map(item => <button key={item} type="button" aria-pressed={mode === item} disabled={busy} onClick={() => {
-          setMode(item); setError(null)
-          if (item === 'Email') setEmailVisited(true)
-        }} className={cn('rounded-full border px-2.5 py-0.5 font-medium transition-colors disabled:opacity-50',
-          mode === item ? 'border-selected-border bg-selected text-selected-foreground' : 'border-border bg-card text-muted-foreground hover:bg-accent')}>{item}</button>)}
+        {modes.map(item => (
+          <FilterChip
+            key={item}
+            selected={mode === item}
+            disabled={busy}
+            onClick={() => {
+              setMode(item); setError(null)
+              if (item === 'Email') setEmailVisited(true)
+            }}
+          >
+            {item}
+          </FilterChip>
+        ))}
       </div>
       <span className="flex-1" />
       <span className="text-muted-foreground">{hint}</span>

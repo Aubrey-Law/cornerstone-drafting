@@ -6,10 +6,12 @@ import {
   type AssetView,
   type CommunicationChannel,
   type DocumentView,
+  type HistoryView,
   type MatterTab,
   parseAssetView,
   parseCommunicationChannel,
   parseDocumentView,
+  parseHistoryView,
   parseMatterTab,
   parseTaskView,
   type TaskView,
@@ -25,11 +27,18 @@ export function useMatterTabs() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const activeTab = parseMatterTab(searchParams.get('tab'))
+  const rawTab = searchParams.get('tab')
+  const activeTab = parseMatterTab(rawTab)
   const communicationChannel = parseCommunicationChannel(searchParams.get('channel'))
   // The Tasks tab's two faces. `?tab=sla` from an older link resolves to
   // `tasks`, so plan links keep working; `?view=plan` opens the plan directly.
   const taskView = parseTaskView(searchParams.get('view'))
+  // History consolidates notes / activity / reviews. Legacy `?tab=notes` etc.
+  // still open the matching face.
+  const historyView = parseHistoryView(
+    activeTab === 'history' ? searchParams.get('view') : null,
+    rawTab,
+  )
   // Assets' inventory or funding, Documents' files or signing — `?view=` on
   // those tabs, the same parameter the Tasks tab uses.
   const assetView = parseAssetView(activeTab === 'assets' ? searchParams.get('view') : null)
@@ -61,6 +70,7 @@ export function useMatterTabs() {
     if (tab === 'overview') {
       params.delete('tab')
       params.delete('channel')
+      params.delete('view')
     } else {
       params.set('tab', tab)
       if (tab === 'communications') {
@@ -68,7 +78,9 @@ export function useMatterTabs() {
       } else {
         params.delete('channel')
       }
-      if (tab !== 'tasks') params.delete('view')
+      if (tab !== 'tasks' && tab !== 'history' && tab !== 'assets' && tab !== 'documents') {
+        params.delete('view')
+      }
     }
     if (tab !== 'documents') { params.delete('scope'); params.delete('document') }
     else if (scope) { params.set('scope', scope); params.delete('document') }
@@ -84,6 +96,14 @@ export function useMatterTabs() {
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', 'tasks')
     if (view === 'queue') params.delete('view')
+    else params.set('view', view)
+    replace(params)
+  }, [replace, searchParams])
+
+  const setHistoryView = useCallback((view: HistoryView) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'history')
+    if (view === 'notes') params.delete('view')
     else params.set('view', view)
     replace(params)
   }, [replace, searchParams])
@@ -114,7 +134,7 @@ export function useMatterTabs() {
   }, [replace, searchParams])
 
   return {
-    activeTab, communicationChannel, taskView, assetView, documentView, documentScope, deepLinkedDocumentId,
-    setActiveTab, setTaskView, setTabView, setDocumentScope, detailsOpen, setDetailsOpen,
+    activeTab, communicationChannel, taskView, historyView, assetView, documentView, documentScope, deepLinkedDocumentId,
+    setActiveTab, setTaskView, setHistoryView, setTabView, setDocumentScope, detailsOpen, setDetailsOpen,
   }
 }

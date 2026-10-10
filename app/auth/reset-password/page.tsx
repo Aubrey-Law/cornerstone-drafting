@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
 import { PasswordInput } from '@/components/auth/PasswordInput'
 import { AuthShell } from '@/components/layout/AuthShell'
+import { Button } from '@/components/ui/button'
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -64,7 +65,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-5 shadow-sm sm:p-8">
+    <div className="w-full max-w-md space-y-6 rounded-lg border border-border-strong bg-card p-5 shadow-md sm:p-8">
       <div className="text-center">
         <p className="text-xs font-semibold uppercase tracking-widest text-primary">Account security</p>
         <h1 className="mt-2 text-xl font-semibold text-foreground">Reset your password</h1>
@@ -98,13 +99,9 @@ function ResetPasswordForm() {
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
           />
-          <button
-            type="submit"
-            disabled={saving}
-            className="h-11 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={saving} className="h-11 w-full">
             {saving ? 'Updating…' : 'Update password'}
-          </button>
+          </Button>
         </form>
       )}
 
