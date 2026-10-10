@@ -21,10 +21,21 @@ run and test it inside a Cursor Cloud VM.
 | Supabase (Postgres + Auth + Storage + Studio) | yes | local stack via `supabase start` (needs Docker) | Auth + all matter/design/document data. |
 | Cloudflare R2 | optional locally | external service (no local emulator) | Only needed for document save/upload/preview and `/api/health?check=full`. Design editing + draft **download-ZIP** work without it. |
 
+### What already runs on boot
+
+Cloud Agent `install` is `npm ci`. `start` then brings the local stack up and is safe to rerun:
+
+1. `dockerd` in a tmux session named `dockerd` (fuse-overlayfs, iptables-legacy; the image already has Docker).
+2. `supabase start` with `SUPABASE_AUTH_SITE_URL=http://localhost:3002`.
+3. `.env.local` from `supabase status -o env`, plus placeholder R2 values and `ADMIN_EMAIL=attorney@example.com`. The Anthropic value is a local placeholder; live model calls need a real key.
+4. `npm run seed:browser-fixture` (idempotent).
+5. `npm run dev` in a tmux session named `next-dev` when `http://127.0.0.1:3002/auth/login` is not already up.
+
+Read `/tmp/cursor/start-user/start-user.log` if login or the API is down. A missing `/tmp/cursor/start-user/` directory means `start` did not run on this boot — follow the manual steps below instead of starting a second Docker daemon, Supabase stack, or dev server on top of one that is already up.
+
 ### One-time environment prerequisites (not in the update script)
 
-The update script only runs `npm ci`. The following are **system deps / service startup**
-that a fresh VM needs and must be done manually (kept out of the update script on purpose):
+The update script only runs `npm ci`. Docker lives in the saved environment image, not in `install`. On a VM that did not boot from that image, install it by hand:
 
 1. **Docker** (for the local Supabase stack) is not preinstalled. Install `docker-ce`
    + plugins, then configure it for this VM kernel: set `storage-driver: fuse-overlayfs`
@@ -54,7 +65,7 @@ that a fresh VM needs and must be done manually (kept out of the update script o
    Logins: staff `attorney@example.com` / `Password123!`; portal client
    `client@example.com` / `Password123!`. The script prints direct URLs for the
    leads list, lead detail, matter detail, drafting hub, and portal dashboard.
-4. `npm run dev` and open http://localhost:3002 (redirects to `/admin/drafting`; unauthenticated
+4. `npm run dev` and open http://localhost:3002 (redirects to `/admin`; unauthenticated
    requests go to `/auth/login`).
 
 ### Non-obvious gotchas
