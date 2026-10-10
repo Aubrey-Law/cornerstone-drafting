@@ -1,5 +1,5 @@
 import 'server-only'
-import { allAccountingRows } from '@/lib/queries/invoiceBalances'
+import { allAccountingRows, loadInvoiceAccounting } from '@/lib/queries/invoiceBalances'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GeneratedDatabase } from '@/types/supabase'
 import { billingPlanFor, type BillingFilter } from '@/lib/billing/types'
@@ -21,6 +21,7 @@ import {
   type MatterFeeScheduleView,
   type ServicePackageOption,
 } from '@/lib/billing/schedules'
+import { invoiceOverdue, type InvoiceKind, type InvoicePayer, type InvoiceStatus, type MatterInvoiceSummary } from '@/lib/billing/invoices'
 import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -55,6 +56,14 @@ type InvoiceContextRow = {
   number: string | null
   due_date: string | null
   status: string
+}
+
+type MatterInvoiceRow = InvoiceContextRow & {
+  kind: InvoiceKind
+  payer?: InvoicePayer | null
+  subtotal_cents: number
+  issue_date: string | null
+  created_at: string
 }
 
 type MatterRow = {
@@ -162,6 +171,8 @@ export interface MatterBillingView {
   milestonesEnabled: boolean
   /** Packages offered to attach. Empty unless one can be attached right now. */
   servicePackages: ServicePackageOption[]
+  /** This matter's invoices, newest first, with the same balances as the register. */
+  invoices: MatterInvoiceSummary[]
 }
 
 /**
@@ -204,7 +215,7 @@ export async function fetchMatterBilling(
       .maybeSingle(),
     admin
       .from('invoices')
-      .select('id, number, due_date, status')
+      .select('id, number, kind, status, payer, subtotal_cents, issue_date, due_date, created_at')
       .eq('matter_id', matterId),
   ])
 
@@ -212,9 +223,8 @@ export async function fetchMatterBilling(
     ?? detailResult.error ?? invoiceResult.error
   if (error) throw new Error(error.message)
 
-  const invoiceById = new Map(
-    ((invoiceResult.data ?? []) as InvoiceContextRow[]).map(invoice => [invoice.id, invoice]),
-  )
+  const invoiceRows = (invoiceResult.data ?? []) as MatterInvoiceRow[]
+  const invoiceById = new Map(invoiceRows.map(invoice => [invoice.id, invoice]))
   const itemRows = (itemResult.data ?? []) as BillingItemRow[]
   const details = (detailResult.data ?? null) as DetailRow | null
   const items = itemRows.map(row =>
@@ -226,13 +236,23 @@ export async function fetchMatterBilling(
     }),
   )
 
-  const paymentResult = items.length
-    ? await admin
-      .from('billing_payments')
-      .select('*')
-      .in('billing_item_id', items.map(item => item.id))
-      .order('received_at', { ascending: true })
-    : { data: [], error: null }
+  const todayKey = firmTodayKey(now)
+  const [paymentResult, invoiceAccounting] = await Promise.all([
+    items.length
+      ? admin
+        .from('billing_payments')
+        .select('*')
+        .in('billing_item_id', items.map(item => item.id))
+        .order('received_at', { ascending: true })
+      : Promise.resolve({ data: [] as PaymentRow[], error: null }),
+    invoiceRows.length
+      ? loadInvoiceAccounting(admin, invoiceRows.map(row => ({
+        id: row.id,
+        subtotal_cents: row.subtotal_cents,
+        kind: row.kind,
+      })))
+      : Promise.resolve(new Map<string, { collected: number; balance: number }>()),
+  ])
   if (paymentResult.error) throw new Error(paymentResult.error.message)
 
   const payments = ((paymentResult.data ?? []) as PaymentRow[]).map((row): BillingPayment => ({
@@ -253,13 +273,37 @@ export async function fetchMatterBilling(
   const servicePackages = canAttach ? await fetchAttachableServicePackages() : []
 
   return {
-    rows: buildRows(items, payments, firmTodayKey(now)),
+    rows: buildRows(items, payments, todayKey),
     legalPlan: billingPlan(details?.legal_plan ?? null),
     hasClaim: items.some(item => item.kind === 'plan_claim'),
     feeSchedule,
     milestonesEnabled,
     servicePackages,
+    invoices: matterInvoiceSummaries(invoiceRows, invoiceAccounting, todayKey),
   }
+}
+
+function matterInvoiceSummaries(
+  rows: MatterInvoiceRow[],
+  accounting: Map<string, { collected: number; balance: number }>,
+  todayKey: string,
+): MatterInvoiceSummary[] {
+  return [...rows]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
+    .map(row => {
+      const totals = accounting.get(row.id) ?? { collected: 0, balance: row.kind === 'credit_note' ? 0 : row.subtotal_cents }
+      const summary = {
+        id: row.id,
+        number: row.number,
+        kind: row.kind,
+        status: row.status as InvoiceStatus,
+        payer: row.payer ?? 'client',
+        subtotalCents: row.subtotal_cents,
+        issueDate: row.issue_date,
+        dueDate: row.due_date,
+      }
+      return { ...summary, ...totals, ...invoiceOverdue(summary, totals.balance, todayKey) }
+    })
 }
 
 async function completeBillingRows<T>(read:(offset:number)=>PromiseLike<{data:T[]|null;error:unknown}>):Promise<{data:T[];error:{message:string}|null}> {

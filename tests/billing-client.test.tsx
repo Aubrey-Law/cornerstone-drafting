@@ -330,9 +330,9 @@ describe('billing workspace', () => {
   it('turns the work summary into direct filters without loading reporting cards', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Open balances.*1/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Past due.*1/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ }).getAttribute('aria-current')).toBeNull()
+    expect(screen.getByRole('link', { name: /Open balances.*1/ }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: /Past due.*1/ }).getAttribute('aria-current')).toBeNull()
   })
 
   it('debounces ledger search before replacing the URL', () => {

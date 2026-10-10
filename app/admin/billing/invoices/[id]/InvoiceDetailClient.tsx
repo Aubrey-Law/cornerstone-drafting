@@ -325,7 +325,7 @@ export default function InvoiceDetailClient({
               </span>
             )}
             <Link
-              href={`/admin/matters/${invoice.matterId}`}
+              href={`/admin/matters/${invoice.matterId}?tab=billing`}
               className="hover:text-primary hover:underline"
             >
               {invoice.clientName}

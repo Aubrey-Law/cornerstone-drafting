@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { BillingLedgerRow, BillingPlan } from '@/lib/billing/types'
+import type { MatterInvoiceSummary } from '@/lib/billing/invoices'
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
@@ -59,6 +60,7 @@ function respondWith(view: {
   rows: BillingLedgerRow[]
   legalPlan?: BillingPlan | null
   hasClaim?: boolean
+  invoices?: MatterInvoiceSummary[]
 }) {
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
     if (init?.method === 'POST') {
@@ -70,11 +72,16 @@ function respondWith(view: {
           rows: view.rows,
           legalPlan: view.legalPlan ?? null,
           hasClaim: view.hasClaim ?? false,
+          invoices: view.invoices ?? [],
         }),
         { status: 200 },
       ),
     )
   })
+}
+
+async function showArrangement(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Arrangement' }))
 }
 
 function renderTab(enabled = true, overrides: Partial<React.ComponentProps<typeof MatterBillingTab>> = {}) {
@@ -249,6 +256,51 @@ describe('MatterBillingTab', () => {
 
   // A client charge is billed by composing an invoice, not by flipping a flag:
   // the quick action deep-links the composer with the charge pre-selected.
+  it('opens on collection work and keeps fee setup on Arrangement', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await screen.findByText('Flat fee — Joint trust package')
+    expect(screen.getByRole('button', { name: 'Work' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('Invoices')).toBeTruthy()
+    expect(screen.queryByLabelText('Fee type')).toBeNull()
+
+    await showArrangement(user)
+    expect(screen.getByLabelText('Fee type')).toBeTruthy()
+    expect(screen.queryByText('Invoices')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Log payment' })).toBeNull()
+  })
+
+  it('lists this matter’s invoices and links a charge to its invoice', async () => {
+    const invoiceId = '44444444-4444-4444-8444-444444444444'
+    respondWith({
+      rows: [row({ invoiceId, invoiceNumber: '2026-014' })],
+      invoices: [{
+        id: invoiceId,
+        number: '2026-014',
+        kind: 'invoice',
+        status: 'partial',
+        payer: 'client',
+        subtotalCents: 480_000,
+        issueDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        balance: 330_000,
+        collected: 150_000,
+        overdue: true,
+        daysPastDue: 12,
+      }],
+    })
+    renderTab()
+
+    const invoiceLinks = await screen.findAllByRole('link', { name: '2026-014' })
+    expect(invoiceLinks.map(link => link.getAttribute('href'))).toEqual([
+      `/admin/billing/invoices/${invoiceId}`,
+      `/admin/billing/invoices/${invoiceId}`,
+    ])
+    expect(screen.getByText('12d late')).toBeTruthy()
+  })
+
   it('links an uninvoiced client charge to the invoice composer', async () => {
     respondWith({
       rows: [row({ status: 'to_invoice', invoicedAt: null, collected: 0, balance: 480_000 })],
@@ -303,14 +355,17 @@ describe('MatterBillingTab', () => {
   })
 
   it('nudges when a plan matter has no claim in the ledger', async () => {
+    const user = userEvent.setup()
     respondWith({ rows: [row()] })
     renderTab(true, { details: { billing_type: 'metlife' } })
 
+    await showArrangement(user)
     expect(await screen.findByText('Legal plan, claim & work dates')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Start a claim' })).toBeTruthy()
   })
 
   it('drops the nudge once a claim exists', async () => {
+    const user = userEvent.setup()
     respondWith({
       rows: [
         row({
@@ -327,6 +382,7 @@ describe('MatterBillingTab', () => {
     renderTab(true, { details: { billing_type: 'metlife' } })
 
     await screen.findByText('MetLife claim')
+    await showArrangement(user)
     expect(screen.queryByRole('button', { name: 'Start a claim' })).toBeNull()
     expect(screen.getAllByText('Claim submitted').length).toBeGreaterThan(0)
   })
@@ -370,10 +426,12 @@ describe('MatterBillingTab', () => {
   })
 
   it('renders no claim block at all for a flat-fee matter', async () => {
+    const user = userEvent.setup()
     respondWith({ rows: [row()] })
     renderTab()
 
     await screen.findByText('Flat fee — Joint trust package')
+    await showArrangement(user)
     expect(screen.getByText('Work dates')).toBeTruthy()
     expect(screen.queryByLabelText('Claim amount')).toBeNull()
     expect(screen.queryByLabelText('Member ID')).toBeNull()
@@ -481,6 +539,7 @@ describe('MatterBillingTab', () => {
     respondWith({ rows: [row()], legalPlan: 'metlife' })
     renderTab(true, { details: { billing_type: 'metlife' } })
 
+    await showArrangement(user)
     await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByLabelText('Type').textContent).toContain('Legal Plan Claim')
@@ -508,6 +567,7 @@ describe('MatterBillingTab', () => {
     respondWith({ rows: [row()], legalPlan: 'arag' })
     renderTab(true, { details: { billing_type: 'arag' } })
 
+    await showArrangement(user)
     await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByLabelText('Legal plan').textContent).toContain('ARAG')
