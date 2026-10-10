@@ -21,7 +21,7 @@ export function PageHeader({ title, description, eyebrow, icon: Icon, actions }:
             <span className="text-xs font-medium uppercase tracking-wide">{eyebrow}</span>
           </div>
         )}
-        <h1 className="admin-page-title mt-1 text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="admin-page-title mt-1">{title}</h1>
         {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

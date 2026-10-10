@@ -5,7 +5,6 @@ import { Calendar, Check, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FormattedNote } from '@/components/notes/FormattedNote'
 import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
-import { TabsContent } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/EmptyState'
 import { RecordTabHeader } from '@/components/RecordTabHeader'
@@ -94,7 +93,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
   } = props
 
   return (
-    <TabsContent value="notes" className="mt-0 space-y-4">
+    <div className="mt-0 space-y-4">
       <RecordTabHeader
         title="Notes"
         description="Internal notes, client-communication notes, and meeting notes for this matter."
@@ -234,7 +233,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
       )}
 
       {meetingNotes}
-    </TabsContent>
+    </div>
   )
 }
 

@@ -152,9 +152,10 @@ describe('a matter’s reviews', () => {
     expect((await matterReviews(new Request('http://localhost'), { params: Promise.resolve({ id: MATTER }) })).status).toBe(403)
   })
 
-  it('have a tab on the matter page, opened by ?tab=reviews', () => {
-    expect(MATTER_TABS).toContain('reviews')
-    expect(parseMatterTab('reviews')).toBe('reviews')
+  it('open under the History tab via legacy ?tab=reviews', () => {
+    expect(MATTER_TABS).toContain('history')
+    expect(MATTER_TABS).not.toContain('reviews')
+    expect(parseMatterTab('reviews')).toBe('history')
   })
 })
 

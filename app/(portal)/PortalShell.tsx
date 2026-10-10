@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  MoreHorizontal,
   ReceiptText,
   ListChecks,
 } from 'lucide-react'
@@ -35,6 +36,9 @@ const navItems = [
   { href: '/schedule', label: 'Schedule', icon: CalendarClock },
   { href: '/account', label: 'Billing', icon: ReceiptText },
 ]
+
+/** Primary destinations on the mobile bottom bar; the rest live under More. */
+const MOBILE_PRIMARY = ['/dashboard', '/documents', '/messages'] as const
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -69,6 +73,13 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
+
+  const primaryMobile = navItems.filter(item =>
+    (MOBILE_PRIMARY as readonly string[]).includes(item.href),
+  )
+  const moreActive = !primaryMobile.some(
+    item => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  )
 
   // h-dvh, not h-screen: on iOS 100vh is the *large* viewport (toolbar hidden),
   // which pushed the sticky message composer behind Safari's bottom toolbar.
@@ -193,7 +204,45 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
+
+        {/* Mobile bottom bar — primary destinations without opening the sheet. */}
+        <nav
+          aria-label="Primary"
+          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {primaryMobile.map(item => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-micro font-medium transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                <item.icon className="size-5" aria-hidden />
+                {item.label}
+                {item.href === '/messages' && unreadCount > 0 && (
+                  <span className="absolute right-1/4 top-1.5 size-1.5 rounded-full bg-primary" aria-hidden />
+                )}
+              </Link>
+            )
+          })}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className={cn(
+              'flex flex-1 flex-col items-center gap-0.5 py-2 text-micro font-medium transition-colors',
+              moreActive ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <MoreHorizontal className="size-5" aria-hidden />
+            More
+          </button>
+        </nav>
       </div>
     </div>
   )
