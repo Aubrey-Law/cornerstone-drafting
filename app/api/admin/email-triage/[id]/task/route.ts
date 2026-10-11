@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { taskRecordLink } from '@/lib/emailTriage/taskFromThread'
 import { fetchEmailTriageRow } from '@/lib/queries/emailTriage'
 import { TASK_COLUMNS } from '@/lib/queries/tasks'
 import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
@@ -46,6 +47,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!Number.isNaN(parsed.getTime())) dueAt = parsed.toISOString()
   }
 
+  // Never set both — `tasks_one_relation` rejects it, and lead rows often have
+  // matter_id + client_intake_id after a hire or companion matter.
+  const record = taskRecordLink(row)
+
   const admin = getAdminClient()
   const { data, error } = await admin
     .from('tasks')
@@ -57,8 +62,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       task_type: 'single',
       status: 'open',
       owner: 'firm',
-      matter_id: row.matter_id,
-      lead_id: row.client_intake_id,
+      matter_id: record.matter_id,
+      lead_id: record.lead_id,
       due_at: dueAt,
       assignee_id: auth.userId,
       created_by: auth.userId,
