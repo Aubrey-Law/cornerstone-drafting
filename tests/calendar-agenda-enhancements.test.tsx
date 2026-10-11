@@ -28,6 +28,17 @@ describe('Day agenda enhancements', () => {
     expect(screen.getByText(/past day/)).toBeInTheDocument()
     expect(screen.queryByText(/rest of today/)).not.toBeInTheDocument()
   })
+  it('leaves future meetings unlabeled until they have a lifecycle', () => {
+    render(<DayAgenda {...props} appointments={[{
+      id: 'soon', startTime: '2026-10-07T16:00:00.000Z', endTime: '2026-10-07T16:30:00.000Z', status: 'scheduled',
+      attendeeName: 'Jordan Hale', attendeeEmail: 'jordan@example.com', attendeePhone: null, typeLabel: 'Client Call',
+      locationType: 'phone', source: 'admin', calendarSynced: false, notes: null, onlineMeetingUrl: null,
+      linkedMatterId: null, linkedMatterNumber: null, linkedMatterStage: null, linkedMatterPlanType: null, linkedLeadId: null,
+      secondAttendeeName: null, secondAttendeeEmail: null, calendarShowAsBusy: true,
+    }]} />)
+    expect(screen.getByText('Jordan Hale')).toBeInTheDocument()
+    expect(screen.queryByText(/Prep readiness unknown/)).not.toBeInTheDocument()
+  })
   it('compares client plus internal work to the target and handles zero target', () => {
     const { rerender } = render(<LoadIndicator day={{ date: '2026-10-07', clientMinutes: 60, internalMinutes: 120, targetMinutes: 120, isToday: true }} count={1} />)
     expect(screen.getByText(/over target/)).toBeInTheDocument()

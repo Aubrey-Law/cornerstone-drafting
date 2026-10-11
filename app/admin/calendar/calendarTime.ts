@@ -1,4 +1,41 @@
+import { calendarAnchorDate } from '@/lib/calendarDay'
 import { dateInstant, nextDateKey } from '@/lib/calendarAvailability'
+import { nextWorkingDateKeys } from '@/lib/calendarProductivity'
+
+/** Week and plan ranges. Same-month ends stay "October 11 – 17, 2026". */
+export function formatSpanHeading(start: Date, end: Date): string {
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+  const startLabel = start.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' as const }),
+  })
+  if (sameMonth) return `${startLabel} – ${end.getDate()}, ${end.getFullYear()}`
+  return `${startLabel} – ${end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+}
+
+/** Ten working days starting from a firm calendar date, labeled in that calendar. */
+export function formatPlanHeading(dateKey: string, timezone: string): string {
+  const keys = nextWorkingDateKeys(new Date(`${dateKey}T12:00:00Z`), 10, timezone)
+  const start = calendarAnchorDate(keys[0], new Date())
+  const end = calendarAnchorDate(keys[keys.length - 1], start)
+  return formatSpanHeading(start, end)
+}
+
+/** HH:mm in the scheduling timezone, for date/time inputs. */
+export function zonedTimeInput(iso: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso))
+  const hour = parts.find(part => part.type === 'hour')?.value ?? '00'
+  const minute = parts.find(part => part.type === 'minute')?.value ?? '00'
+  return `${hour === '24' ? '00' : hour}:${minute}`
+}
+
 export function instantDayKey(iso: string, timezone: string): string {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: timezone })
 }

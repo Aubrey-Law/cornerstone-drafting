@@ -93,6 +93,8 @@ export interface CalendarRailData {
 
 export interface PlanData {
   today: CalendarTodayPlan
+  /** included: Google plus Cornerstone. unavailable: Cornerstone only. partial: totals withheld. */
+  googleStatus?: 'included' | 'unavailable' | 'partial'
   days: Array<{
     date: string
     clientMinutes: number

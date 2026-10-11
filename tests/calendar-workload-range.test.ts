@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ calendar: vi.fn(), appointments: [], target: 240, gte: vi.fn(), settings: vi.fn(), workGraph: vi.fn() }))
+const mocks = vi.hoisted(() => ({ calendar: vi.fn(), appointments: [] as Array<{ start_time: string; end_time: string; status: string }>, target: 240, gte: vi.fn(), settings: vi.fn(), workGraph: vi.fn() }))
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: async () => ({ userId: 'staff' }) }))
 vi.mock('@/lib/appointments/settings', () => ({ getSchedulingSettings: mocks.settings }))
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from: (table: string) => {
@@ -30,7 +30,14 @@ describe('calendar week workload range', () => {
   })
   it('does not represent partial Google results as a complete load', async () => {
     mocks.calendar.mockResolvedValue({ raw: [], skipped: ['Firm calendar'], truncated: true })
-    expect(await (await GET(new NextRequest('http://localhost/api?from=2026-10-04&to=2026-10-11'))).json()).toMatchObject({ connected: false, days: [] })
+    expect(await (await GET(new NextRequest('http://localhost/api?from=2026-10-04&to=2026-10-11'))).json()).toMatchObject({ connected: false, googleStatus: 'partial', days: [] })
+  })
+  it('keeps Cornerstone workload when Google is unavailable', async () => {
+    mocks.calendar.mockRejectedValue(new Error('Google Calendar is not connected'))
+    mocks.appointments = [{ start_time: '2026-10-07T14:00:00.000Z', end_time: '2026-10-07T15:00:00.000Z', status: 'scheduled' }]
+    const body = await (await GET(new NextRequest('http://localhost/api?from=2026-10-04&to=2026-10-11&workload=1'))).json()
+    expect(body).toMatchObject({ connected: false, googleStatus: 'unavailable' })
+    expect(body.days[3]).toMatchObject({ date: '2026-10-07', clientMinutes: 60, internalMinutes: 0 })
   })
   it('rejects malformed or excessive explicit ranges', async () => {
     for (const range of ['from=2026-02-30&to=2026-03-05', 'from=2026-10-04&to=2026-10-04', 'from=2026-10-04&to=2027-10-04']) expect((await GET(new NextRequest(`http://localhost/api?${range}`))).status).toBe(400)

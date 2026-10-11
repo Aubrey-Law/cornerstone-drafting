@@ -59,7 +59,7 @@ function AgendaRow({
   const past = Date.parse(appointment.endTime) < now.getTime()
   const followUpReady = now.getTime() >= Date.parse(appointment.endTime) + 10 * 60_000
   const minutes = Math.max(0, Math.round((Date.parse(appointment.endTime) - Date.parse(appointment.startTime)) / 60_000))
-  const status = appointment.status === 'no_show' ? 'No-show' : appointment.status === 'cancelled' ? 'Cancelled' : appointment.status === 'rescheduled' ? 'Rescheduled' : past ? 'Meeting ended' : Date.parse(appointment.startTime) <= now.getTime() ? 'In progress' : 'Prep readiness unknown'
+  const status = appointment.status === 'no_show' ? 'No-show' : appointment.status === 'cancelled' ? 'Cancelled' : appointment.status === 'rescheduled' ? 'Rescheduled' : past ? 'Meeting ended' : Date.parse(appointment.startTime) <= now.getTime() ? 'In progress' : null
   const category = categorize(appointment.typeLabel)
   const categoryStyle = categoryStyleFor(appointment.typeLabel)
   return (
@@ -108,7 +108,7 @@ function AgendaRow({
           {overlap && <p className="mt-2 text-xs text-muted-foreground">Overlaps another event</p>}
           {!appointment.calendarSynced && appointment.status === 'scheduled' && !isExternallyManagedSource(appointment.source) && <p className="mt-2 rounded border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground">Not synced to Google Calendar. External bookings may not reflect this appointment.</p>}
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-micro">
-            <span className="text-muted-foreground">{status}</span>
+            {status && <span className="text-muted-foreground">{status}</span>}
             <span className="ml-auto flex flex-wrap gap-1">
               {appointment.linkedMatterId && (
                 <Button asChild size="sm" variant="ghost">
