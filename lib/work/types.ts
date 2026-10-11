@@ -41,6 +41,7 @@ export type PriorityReasonCode =
   | 'high_priority'
   | 'blocked'
   | 'snoozed'
+  | 'follow_up_due'
   | 'waiting_external'
   | 'planned'
 

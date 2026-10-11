@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { deleteGmailDraft } from '@/lib/email/gmailDraft'
-import { removeTriageLabels } from '@/lib/email/gmailLabels'
+import { removeTriageLabels, sortMailboxThread } from '@/lib/email/gmailLabels'
 import { getMailboxIdentity } from '@/lib/email/gmailRead'
 import { emailDomain } from '@/lib/emailTriage/classifySender'
+import { applyAndRecordMailboxSort, loadArchiveNonClientEnabled } from '@/lib/emailTriage/mailboxSort'
 import { fetchEmailTriageRow } from '@/lib/queries/emailTriage'
 
 export const dynamic = 'force-dynamic'
@@ -63,15 +64,36 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const gmailCleanup = scope === 'thread'
-    ? null
-    : await cleanUpInGmail(
-      admin,
-      scope === 'domain'
-        ? { column: 'sender_domain', value: emailDomain(row.sender_email) }
-        : { column: 'sender_email', value: row.sender_email },
-      auth.userId ?? null,
-    )
+  const archiveEnabled = await loadArchiveNonClientEnabled().catch(() => true)
+
+  if (scope === 'thread') {
+    // Plain dismiss: archive + Handled so it leaves the Inbox without an
+    // ignore rule. Best effort — the row is already dismissed.
+    let identity
+    try {
+      identity = await getMailboxIdentity(auth.userId ?? null)
+      await applyAndRecordMailboxSort({
+        token: identity.token,
+        threadId: row.gmail_thread_id,
+        kind: 'dismissed',
+        classification: row.classification,
+        archiveEnabled,
+        triageRowId: id,
+      })
+    } catch {
+      // Dismissal already saved.
+    }
+    return NextResponse.json({ ok: true, scope, gmailCleanup: null })
+  }
+
+  const gmailCleanup = await cleanUpInGmail(
+    admin,
+    scope === 'domain'
+      ? { column: 'sender_domain', value: emailDomain(row.sender_email) }
+      : { column: 'sender_email', value: row.sender_email },
+    auth.userId ?? null,
+    archiveEnabled,
+  )
 
   return NextResponse.json({ ok: true, scope, gmailCleanup })
 }
@@ -91,6 +113,7 @@ async function cleanUpInGmail(
   admin: ReturnType<typeof getAdminClient>,
   match: { column: 'sender_email' | 'sender_domain'; value: string },
   userId: string | null,
+  archiveEnabled: boolean,
 ): Promise<{ labelsRemoved: number; draftsDeleted: number; error: string | null }> {
   const result = { labelsRemoved: 0, draftsDeleted: 0, error: null as string | null }
   try {
@@ -103,10 +126,22 @@ async function cleanUpInGmail(
     if (rows.length === 0) return result
 
     const identity = await getMailboxIdentity(userId)
+    const threadIds = Array.from(new Set(rows.map(r => r.gmail_thread_id)))
     result.labelsRemoved = await removeTriageLabels({
       token: identity.token,
-      threadIds: Array.from(new Set(rows.map(r => r.gmail_thread_id))),
+      threadIds,
     })
+    // Ignore-list: Noise + archive so these senders stop cluttering Inbox.
+    for (const threadId of threadIds) {
+      await sortMailboxThread({
+        token: identity.token,
+        threadId,
+        kind: 'noise',
+        classification: 'automated',
+        archiveEnabled,
+        automatedHard: true,
+      })
+    }
 
     for (const r of rows) {
       if (!r.gmail_draft_id) continue

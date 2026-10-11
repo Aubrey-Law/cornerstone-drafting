@@ -4,7 +4,11 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchCalendarBusy } from '@/lib/appointments/calendarBusy'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { firmTodayKey } from '@/lib/firmDate'
-import { fetchEmailTriageQueue, fetchTriageEnabled } from '@/lib/queries/emailTriage'
+import {
+  fetchDueEmailFollowUps,
+  fetchEmailTriageQueue,
+  fetchTriageEnabled,
+} from '@/lib/queries/emailTriage'
 import { listSmsThreads } from '@/lib/queries/smsThreads'
 import { fetchDueTasks } from '@/lib/queries/tasks'
 import { fetchTodayData } from '@/lib/queries/today'
@@ -171,8 +175,16 @@ export async function fetchWorkGraphForUser(
     ), sourceDurationsMs),
     futureTasksPromise,
     timedSource('overrides', () => userId ? fetchWorkOverrides(userId) : Promise.resolve([]), sourceDurationsMs),
-    timedSource('email', () => optionalSource('email', async () =>
-      (await fetchTriageEnabled()) ? fetchEmailTriageQueue() : [], [], sourceErrors), sourceDurationsMs),
+    timedSource('email', () => optionalSource('email', async () => {
+      if (!(await fetchTriageEnabled())) return []
+      const [queue, followUps] = await Promise.all([
+        fetchEmailTriageQueue(),
+        fetchDueEmailFollowUps(),
+      ])
+      const byId = new Map(queue.map(row => [row.id, row]))
+      for (const row of followUps) byId.set(row.id, row)
+      return Array.from(byId.values())
+    }, [], sourceErrors), sourceDurationsMs),
     timedSource('sms', () => optionalSource('sms', async () =>
       isSmsConfigured() ? listSmsThreads({ filter: 'unread', limit: 100 }) : [], [], sourceErrors), sourceDurationsMs),
     timedSource('document_reviews', () => optionalSource(

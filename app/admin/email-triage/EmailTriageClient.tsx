@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
+  Clock,
   ExternalLink,
+  ListTodo,
   Loader2,
   MailCheck,
   MailSearch,
@@ -28,6 +30,7 @@ import { triageLabelName } from '@/lib/emailTriage/labels'
 import type {
   EmailTriageRow,
   TriageClassification,
+  TriageQueueView,
   TriageScanRow,
 } from '@/lib/queries/emailTriage'
 
@@ -35,10 +38,46 @@ interface Props {
   initialRows: EmailTriageRow[]
   initialScan: TriageScanRow | null
   listingTruncated?: boolean
+  initialView?: TriageQueueView
   enabled: boolean
+  archiveNonClient?: boolean
   connected: boolean
   mailbox: string | null
   hasReadScope: boolean
+}
+
+const QUEUE_VIEWS: { id: TriageQueueView; label: string }[] = [
+  { id: 'all', label: 'All waiting' },
+  { id: 'client', label: 'Clients' },
+  { id: 'lead', label: 'Leads' },
+  { id: 'contact', label: 'Contacts' },
+  { id: 'possible_lead', label: 'Possible leads' },
+  { id: 'overdue', label: 'Overdue' },
+  { id: 'needs_draft', label: 'Needs draft' },
+  { id: 'drafted', label: 'Drafted' },
+  { id: 'failed', label: 'Failed' },
+  { id: 'snoozed', label: 'Snoozed' },
+  { id: 'follow_up', label: 'Follow-ups due' },
+]
+
+function snoozePresetIso(kind: '1h' | 'tonight' | 'tomorrow' | 'week'): string {
+  const now = new Date()
+  if (kind === '1h') return new Date(now.getTime() + 3_600_000).toISOString()
+  if (kind === 'week') return new Date(now.getTime() + 7 * 86_400_000).toISOString()
+  const target = new Date(now)
+  if (kind === 'tonight') {
+    target.setHours(20, 0, 0, 0)
+    if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1)
+  } else {
+    target.setDate(target.getDate() + 1)
+    target.setHours(9, 0, 0, 0)
+  }
+  return target.toISOString()
+}
+
+function followUpPresetIso(kind: '2d' | '1w'): string {
+  const days = kind === '2d' ? 2 : 7
+  return new Date(Date.now() + days * 86_400_000).toISOString()
 }
 
 const CLASSIFICATION_LABEL: Record<TriageClassification, string> = {
@@ -104,13 +143,16 @@ export function EmailTriageClient({
   initialRows,
   initialScan,
   listingTruncated = false,
+  initialView = 'all',
   enabled,
+  archiveNonClient = true,
   connected,
   mailbox,
   hasReadScope,
 }: Props) {
   const token = useAccessToken()
   const { confirm, confirmDialog } = useConfirm()
+  const [view, setView] = useState<TriageQueueView>(initialView)
   const [rows, setRows] = useState(initialRows)
   const [scan, setScan] = useState(initialScan)
   const [selectedId, setSelectedId] = useState<string | null>(initialRows[0]?.id ?? null)
@@ -133,8 +175,8 @@ export function EmailTriageClient({
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }), [token])
 
-  const reload = useCallback(async () => {
-    const res = await fetch('/api/admin/email-triage', {
+  const reload = useCallback(async (nextView: TriageQueueView = view) => {
+    const res = await fetch(`/api/admin/email-triage?view=${encodeURIComponent(nextView)}`, {
       headers: authHeaders(),
       cache: 'no-store',
     })
@@ -152,7 +194,12 @@ export function EmailTriageClient({
     })
     setRows(nextRows)
     setScan(body.scan ?? null)
-  }, [authHeaders])
+  }, [authHeaders, view])
+
+  const changeView = useCallback((next: TriageQueueView) => {
+    setView(next)
+    void reload(next)
+  }, [reload])
 
   const runScan = useCallback(async () => {
     setScanning(true)
@@ -277,6 +324,51 @@ export function EmailTriageClient({
     )
   }, [act, selected])
 
+  const patchSelected = useCallback(async (patch: Record<string, unknown>, success: string) => {
+    if (!selected) return false
+    return act(
+      selected,
+      '',
+      { method: 'PATCH', body: JSON.stringify(patch) },
+      { success, failure: 'Could not update the thread' },
+    )
+  }, [act, selected])
+
+  const snoozeSelected = useCallback(async (until: string) => {
+    return patchSelected({ snoozedUntil: until }, 'Snoozed — hidden until then')
+  }, [patchSelected])
+
+  const clearSnoozeSelected = useCallback(async () => {
+    return patchSelected({ snoozedUntil: null }, 'Snooze cleared')
+  }, [patchSelected])
+
+  const followUpSelected = useCallback(async (at: string) => {
+    return patchSelected({ followUpAt: at }, 'Follow-up reminder set')
+  }, [patchSelected])
+
+  const clearFollowUpSelected = useCallback(async () => {
+    return patchSelected({ followUpAt: null }, 'Follow-up cleared')
+  }, [patchSelected])
+
+  const createTaskSelected = useCallback(async () => {
+    if (!selected) return false
+    return act(
+      selected,
+      '/task',
+      { method: 'POST', body: '{}' },
+      {
+        success: body => {
+          const href = typeof body.href === 'string' ? body.href : '/admin/tasks'
+          toast.message('Task created', {
+            action: { label: 'Open', onClick: () => { window.location.href = href } },
+          })
+          return 'Task created from this email'
+        },
+        failure: 'Could not create the task',
+      },
+    )
+  }, [act, selected])
+
   // Sends exactly what the editor shows — the subject and body travel with the
   // request, so an edit the autosave has not reached yet is the one that goes.
   const sendSelected = useCallback(async () => {
@@ -367,11 +459,11 @@ export function EmailTriageClient({
   if (!enabled) {
     return (
       <AdminPageShell>
-        <PageHeader title="Email triage" eyebrow="Daily" icon={MailSearch} />
+        <PageHeader title="Mail Desk" eyebrow="Daily" icon={MailSearch} />
         <EmptyState
           icon={MailSearch}
-          title="Email triage is switched off"
-          description="Nothing is reading the mailbox. Turn it on in firm settings to start scanning."
+          title="Mail Desk is switched off"
+          description="Nothing is reading the mailbox. Turn email triage on in firm settings to start scanning."
         />
       </AdminPageShell>
     )
@@ -383,14 +475,15 @@ export function EmailTriageClient({
     // draft off screen.
     <AdminPageShell className="lg:h-full">
       <PageHeader
-        title="Email triage"
+        title="Mail Desk"
         eyebrow="Daily"
         icon={MailSearch}
         description={
           <>
-            Client and lead email waiting on a reply
-            {mailbox ? <> in <span className="font-medium">{mailbox}</span></> : null}.
-            Send a reply from here, or put it in Gmail as a draft to finish there.
+            Matter-aware email queue
+            {mailbox ? <> for <span className="font-medium">{mailbox}</span></> : null}.
+            Non-client and handled mail is labelled
+            {archiveNonClient ? ' and archived out of the Gmail Inbox' : ' in Gmail (Inbox left alone)'}.
           </>
         }
         actions={
@@ -424,12 +517,28 @@ export function EmailTriageClient({
         </ConnectionNotice>
       )}
 
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Mail Desk views">
+        {QUEUE_VIEWS.map(item => (
+          <Button
+            key={item.id}
+            type="button"
+            size="sm"
+            variant={view === item.id ? 'default' : 'outline'}
+            role="tab"
+            aria-selected={view === item.id}
+            onClick={() => changeView(item.id)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+
       {(scan || rows.length > 0) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {scan
             ? (
               <p className="text-xs text-muted-foreground">
-                Last scanned {waitingLabel(scan.started_at)} · {rows.length} waiting
+                Last scanned {waitingLabel(scan.started_at)} · {rows.length} in this view
                 {scan.error ? ` · last scan reported: ${scan.error}` : ''}
               </p>
             )
@@ -514,6 +623,11 @@ export function EmailTriageClient({
                   )}
                   onSend={sendSelected}
                   onDismiss={dismissSelected}
+                  onSnooze={snoozeSelected}
+                  onClearSnooze={clearSnoozeSelected}
+                  onFollowUp={followUpSelected}
+                  onClearFollowUp={clearFollowUpSelected}
+                  onCreateTask={createTaskSelected}
                 />
               )
               : <EmptyState icon={MailSearch} title="Pick a message" />}
@@ -613,6 +727,11 @@ function DraftPane({
   onApprove,
   onSend,
   onDismiss,
+  onSnooze,
+  onClearSnooze,
+  onFollowUp,
+  onClearFollowUp,
+  onCreateTask,
 }: {
   row: EmailTriageRow
   busy: boolean
@@ -623,10 +742,16 @@ function DraftPane({
   onApprove: () => Promise<boolean>
   onSend: () => Promise<boolean>
   onDismiss: (scope: 'thread' | 'sender' | 'domain') => Promise<boolean>
+  onSnooze: (until: string) => Promise<boolean>
+  onClearSnooze: () => Promise<boolean>
+  onFollowUp: (at: string) => Promise<boolean>
+  onClearFollowUp: () => Promise<boolean>
+  onCreateTask: () => Promise<boolean>
 }) {
   const href = recordHref(row)
   const hasDraft = Boolean(row.draft_body?.trim())
   const dirty = useRef(false)
+  const snoozed = Boolean(row.snoozed_until && Date.parse(row.snoozed_until) > Date.now())
 
   // Autosave. The attorney edits and clicks away; losing the edit because it
   // was never explicitly saved would be worse than an occasional extra write.
@@ -660,6 +785,21 @@ function DraftPane({
           <Link href={href} className="mt-1 inline-block text-xs font-medium underline underline-offset-2">
             Open the Cornerstone record
           </Link>
+        )}
+        {(row.gmail_sort_label || snoozed || row.follow_up_at) && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {row.gmail_sort_label
+              ? <>Also sorted in Gmail as <span className="font-medium">{row.gmail_sort_label}</span>. </>
+              : null}
+            {snoozed && row.snoozed_until
+              ? <>Snoozed until {new Date(row.snoozed_until).toLocaleString()}. </>
+              : null}
+            {row.follow_up_at
+              ? <>Follow up {Date.parse(row.follow_up_at) <= Date.now() ? 'due' : 'at'}{' '}
+                {new Date(row.follow_up_at).toLocaleString()}.
+                </>
+              : null}
+          </p>
         )}
       </div>
 
@@ -724,12 +864,45 @@ function DraftPane({
           <Trash2 className="mr-1.5 size-3.5" />
           Dismiss
         </Button>
+        <Button size="sm" variant="ghost" onClick={() => void onCreateTask()} disabled={busy}>
+          <ListTodo className="mr-1.5 size-3.5" />
+          Create task
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => onDismiss('sender')} disabled={busy}>
           Never this sender
         </Button>
         <Button size="sm" variant="ghost" onClick={() => onDismiss('domain')} disabled={busy}>
           Never this domain
         </Button>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Clock className="size-3.5" aria-hidden /> Snooze
+        </span>
+        {snoozed ? (
+          <Button size="sm" variant="outline" onClick={() => void onClearSnooze()} disabled={busy}>
+            Clear snooze
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('1h'))} disabled={busy}>1h</Button>
+            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tonight'))} disabled={busy}>Tonight</Button>
+            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tomorrow'))} disabled={busy}>Tomorrow</Button>
+            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('week'))} disabled={busy}>Next week</Button>
+          </>
+        )}
+        <span className="ml-2 text-xs text-muted-foreground">Follow-up</span>
+        {row.follow_up_at ? (
+          <Button size="sm" variant="outline" onClick={() => void onClearFollowUp()} disabled={busy}>
+            Clear follow-up
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('2d'))} disabled={busy}>In 2 days</Button>
+            <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('1w'))} disabled={busy}>In 1 week</Button>
+          </>
+        )}
       </div>
 
       {row.status === 'approved' && row.gmail_draft_message_id && (

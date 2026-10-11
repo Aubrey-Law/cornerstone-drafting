@@ -117,6 +117,11 @@ export interface TaskRow {
    */
   closeout_reason: string | null
 
+  /** Mail Desk triage row this task was created from, when any. */
+  email_triage_thread_id: string | null
+  /** Gmail thread id for deep-linking when the triage row is gone. */
+  gmail_thread_id: string | null
+
   /** Joined for display — the matter/lead this task hangs off. */
   record_name?: string | null
   assignee_name?: string | null

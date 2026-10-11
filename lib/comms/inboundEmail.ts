@@ -30,7 +30,7 @@ export function inboundEmailItem(
   const triageId = openTriageIdByThread.get(row.gmail_thread_id)
   const links = [
     ...(triageId
-      ? [{ label: 'Reply in Email triage', href: `/admin/email-triage?thread=${encodeURIComponent(triageId)}` }]
+      ? [{ label: 'Reply in Mail Desk', href: `/admin/email-triage?thread=${encodeURIComponent(triageId)}` }]
       : []),
     { label: 'Open in Gmail', href: gmailThreadHref(row.gmail_thread_id) },
   ]

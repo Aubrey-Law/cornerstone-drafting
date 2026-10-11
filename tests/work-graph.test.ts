@@ -24,6 +24,7 @@ function task(overrides: Partial<TaskRow> = {}): TaskRow {
     paused_at: null, total_paused_days: 0, pre_engagement: false, auto: false, conditional: false,
     gate: null, variant: null, extends_target_days: null, recurring_interval_days: null,
     triggers_day_zero: false, skipped_at: null, closeout_reason: null,
+    email_triage_thread_id: null, gmail_thread_id: null,
     ...overrides,
   }
 }

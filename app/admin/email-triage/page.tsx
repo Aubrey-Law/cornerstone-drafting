@@ -4,21 +4,38 @@ import { getGoogleConnectionForUser, hasGmailModifyScope } from '@/lib/googleCal
 import {
   fetchEmailTriageQueue,
   fetchLastTriageScan,
+  fetchTriageArchiveNonClient,
   fetchTriageEnabled,
+  type TriageQueueView,
 } from '@/lib/queries/emailTriage'
 import { TRIAGE_LISTING_CEILING } from '@/lib/emailTriage/scan'
 import { EmailTriageClient } from './EmailTriageClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EmailTriagePage() {
+const VIEWS: TriageQueueView[] = [
+  'all', 'client', 'lead', 'contact', 'possible_lead',
+  'overdue', 'needs_draft', 'drafted', 'failed', 'snoozed', 'follow_up',
+]
+
+export default async function EmailTriagePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string; thread?: string }>
+}) {
   const user = await getCachedClaims()
   if (!user) redirect('/auth/login')
 
-  const [rows, scan, enabled, connection] = await Promise.all([
-    fetchEmailTriageQueue(),
+  const params = await searchParams
+  const view = VIEWS.includes(params.view as TriageQueueView)
+    ? (params.view as TriageQueueView)
+    : 'all'
+
+  const [rows, scan, enabled, archiveNonClient, connection] = await Promise.all([
+    fetchEmailTriageQueue({ view }),
     fetchLastTriageScan(),
     fetchTriageEnabled(),
+    fetchTriageArchiveNonClient(),
     getGoogleConnectionForUser(user.id),
   ])
 
@@ -26,7 +43,9 @@ export default async function EmailTriagePage() {
     <EmailTriageClient
       initialRows={rows}
       initialScan={scan}
+      initialView={view}
       enabled={enabled}
+      archiveNonClient={archiveNonClient}
       connected={Boolean(connection)}
       mailbox={connection?.email ?? null}
       // An empty queue and a missing permission look identical on screen, so

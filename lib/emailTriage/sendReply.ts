@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { GmailSendError, sendViaGmail } from '@/lib/email/gmailSend'
 import { deleteGmailDraft } from '@/lib/email/gmailDraft'
-import { applyTriageLabel } from '@/lib/email/gmailLabels'
 import { triageLabelName } from '@/lib/emailTriage/labels'
+import { applyAndRecordMailboxSort, loadArchiveNonClientEnabled } from '@/lib/emailTriage/mailboxSort'
 import { GmailReadError, getMailboxIdentity, getThread } from '@/lib/email/gmailRead'
 import { buildReplyHeaders } from '@/lib/email/replyHeaders'
 import { logSend } from '@/lib/email/send'
@@ -201,12 +201,20 @@ export async function sendTriageReply(args: {
   }
 
   let label: string | null = null
-  try {
-    label = await applyTriageLabel({ token, threadId: row.gmail_thread_id, classification: row.classification })
-  } catch (error) {
+  const archiveEnabled = await loadArchiveNonClientEnabled().catch(() => true)
+  const sorted = await applyAndRecordMailboxSort({
+    token,
+    threadId: row.gmail_thread_id,
+    kind: 'handled',
+    classification: row.classification,
+    archiveEnabled,
+    triageRowId: id,
+  })
+  label = sorted.label
+  if (sorted.error) {
     notices.push(
-      `The ${triageLabelName(row.classification) ?? ''} label could not be applied: `
-      + (error instanceof Error ? error.message : String(error)),
+      `The ${triageLabelName(row.classification) ?? 'Cornerstone'} label could not be applied: `
+      + sorted.error,
     )
   }
 

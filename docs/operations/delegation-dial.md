@@ -31,13 +31,15 @@ before. Today that is the automation rule runner (`lib/automations/server.ts`). 
 approval policy can only narrow the dial: `required` caps its proposals at Propose,
 `automatic` defers to the dial, `prohibited` never runs live.
 
-**Email triage** (`lib/emailTriage/delegate.ts`) consults the dial for
-`email.triage.reply.send` right after the scan stores a draft. The triage page is this action's
-Propose surface, so at Propose nothing changes; Observe records "would have sent" proposals;
-Act and report sends through the registry action, which shares its send path with the page's
-"Send reply" button (`lib/emailTriage/sendReply.ts`). Only senders classified as a client or lead
-are ever answered unattended; contacts and possible leads always wait on the page. A cron run
-sends as the mailbox owner; a manual refresh sends as the person who clicked.
+**Mail Desk / email triage** (`lib/emailTriage/delegate.ts`) consults the dial for
+`email.triage.reply.send` right after the scan stores a draft. The Mail Desk page
+(`/admin/email-triage`) is this action's Propose surface, so at Propose nothing changes;
+Observe records "would have sent" proposals; Act and report sends through the registry action,
+which shares its send path with the page's "Send reply" button (`lib/emailTriage/sendReply.ts`).
+Only senders classified as a client or lead are ever answered unattended; contacts and possible
+leads always wait on the page. A cron run sends as the mailbox owner; a manual refresh sends as
+the person who clicked. The same scan also labels and archives non-client / handled mail in
+Gmail so the Inbox stays limited to unresolved client and lead work.
 
 The same scan files inbound mail on the record (`lib/emailTriage/fileInbound.ts`). Every thread
 it examines whose correspondent it can place as a client, lead or contact has that person's
