@@ -3,23 +3,31 @@
 import { DesignSheetConflictDialog } from '@/components/design-sheet/DesignSheetConflictDialog'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { PanelLeft, PanelLeftClose } from 'lucide-react'
+import { MoreHorizontal, PanelLeft, PanelLeftClose } from 'lucide-react'
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
 } from 'react'
+import { createPortal } from 'react-dom'
 import '@/app/intake/guided.css'
-import {
-  BrandBar,
-  DesignToolbarActions,
-  type GuidedSaveStatus,
-} from '@/components/guided'
+import { DesignToolbarActions } from '@/components/guided'
 import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
+import { DesignSheetActionBar } from '@/components/design-sheet/DesignSheetActionBar'
 import { ClausePreview } from '@/components/design-sheet/ClausePreview'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
 import {
   ResponsiveDetailRail,
@@ -29,9 +37,8 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { dockClausePreview } from '@/lib/designSheet/workspaceLayout'
 import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
-import { cn } from '@/lib/utils'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
-import { getDesignPlanTrack } from '@/lib/collegePrepDesign'
+import { getDesignPlanTrack, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import {
   DESIGN_SHEET_GROUP_IDS,
   designSectionAnchorId,
@@ -77,9 +84,7 @@ const DesignSheetImportDialog = dynamic(
   { ssr: false },
 )
 
-const APP_HEADER_HEIGHT = 60
-const READINESS_STRIP_HEIGHT = 90
-const STICKY_CONTENT_OFFSET = APP_HEADER_HEIGHT + READINESS_STRIP_HEIGHT
+const MATTER_TYPE_BLOCK = 'Matter type must be confirmed before drafting'
 
 export interface DesignSheetPageProps {
   matterId: string
@@ -97,10 +102,6 @@ export interface DesignSheetPageProps {
   requestedSectionId?: string | null
   initialFocus?: DesignInitialFocus | null
   designState?: DesignSheetState
-}
-
-function saveStatusForHeader(status: DesignSheetState['saveStatus']): GuidedSaveStatus {
-  return status
 }
 
 /** Final section: signing mechanics + drafting review. Synthetic — not in the section catalog. */
@@ -170,9 +171,13 @@ function DesignSheetPageContent({
     applyPlanStructurePatch,
     documentInclusions,
     blockingCount,
-    optionalCount,
     blockingDetails,
   } = state
+
+  const handleClauseStatus = useCallback((status: { count: number; error: string | null }) => {
+    setClauseTextCount(status.count)
+    setClausePreviewError(status.error)
+  }, [])
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const appliedInitialFocusRef = useRef<DesignInitialFocus | null>(null)
@@ -185,6 +190,12 @@ function DesignSheetPageContent({
   const [hideUnusedDecisions, setHideUnusedDecisions] = useState(true)
   const [clausePreviewOpen, setClausePreviewOpen] = useState(true)
   const [clauseDrawerOpen, setClauseDrawerOpen] = useState(false)
+  const [clauseTextCount, setClauseTextCount] = useState(0)
+  const [clausePreviewError, setClausePreviewError] = useState<string | null>(null)
+  const [previewMount, setPreviewMount] = useState<HTMLDivElement | null>(null)
+  const [actionHost, setActionHost] = useState<HTMLElement | null>(null)
+  const [barHeight, setBarHeight] = useState(0)
+  const barRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   // Desktop keeps a persisted docked/hidden preference; the phone sheet is
   // transient and always starts closed so the form is what you land on.
@@ -374,14 +385,15 @@ function DesignSheetPageContent({
   const previousGroup = activeIndex > 0 ? navGroups[activeIndex - 1] : null
   const nextGroup = activeIndex >= 0 && activeIndex < navGroups.length - 1 ? navGroups[activeIndex + 1] : null
   const activeTitle = activeGroup?.title ?? REVIEW_GROUP.title
+  const stickyTop = embedded ? 0 : barHeight
 
-  const setContainerScrollTop = useCallback((target: HTMLElement, clearance = STICKY_CONTENT_OFFSET) => {
+  const setContainerScrollTop = useCallback((target: HTMLElement, clearance = stickyTop) => {
     const container = scrollContainerRef.current
     if (!container) return
     const containerTop = container.getBoundingClientRect().top
     const targetTop = target.getBoundingClientRect().top
     container.scrollTop += targetTop - containerTop - clearance
-  }, [])
+  }, [stickyTop])
 
   /**
    * Switches the visible section. Keeps the same `#<groupId>` hash contract the
@@ -416,11 +428,11 @@ function DesignSheetPageContent({
     })
   }, [setContainerScrollTop])
 
-  const lastBlockerKey = useRef<string | null>(null)
+  const [lastBlockerKey, setLastBlockerKey] = useState<string | null>(null)
   const handleBlockerSelect = useCallback((item: { sectionId: string; targetField: string | null }) => {
     const groupId = designSectionAnchorId(item.sectionId)
     if (!groupId) return
-    lastBlockerKey.current = `${item.sectionId}:${item.targetField}`
+    setLastBlockerKey(`${item.sectionId}:${item.targetField}`)
     selectGroup(groupId, { targetField: item.targetField })
     // Fiduciary blockers target a grid role column, not a single input — tint
     // the whole column so the missing assignment is obvious.
@@ -474,6 +486,74 @@ function DesignSheetPageContent({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [handleSave])
 
+  const matterTypeMessage = useMemo(() => {
+    if (sheet.matter_type === undefined) return null
+    try {
+      resolveDraftComposition(sheet.matter_type, sheet.is_joint === true, {
+        singleClientPlan: isCollegePrepDesignSheet(sheet),
+      })
+      return null
+    } catch (error) {
+      return error instanceof Error && error.message === MATTER_TYPE_BLOCK ? error.message : null
+    }
+  }, [sheet])
+
+  const fieldBlockerRows = blockingDetails.flatMap(detail => detail.blockers).flatMap(item => {
+    const groupId = designSectionAnchorId(item.sectionId)
+    if (!groupId) return []
+    const title = groups.find(group => group.id === groupId)?.title
+    return [{
+      id: item.id,
+      label: title ? `${title}: ${item.label}` : item.label,
+      sectionId: item.sectionId,
+      targetField: item.targetField,
+    }]
+  })
+  const blockerCursor = fieldBlockerRows.findIndex(item => `${item.sectionId}:${item.targetField}` === lastBlockerKey)
+  const blockerStart = blockerCursor >= 0 && fieldBlockerRows.length > 0 ? (blockerCursor + 1) % fieldBlockerRows.length : 0
+  const orderedFieldBlockers = fieldBlockerRows.length > 0
+    ? [...fieldBlockerRows.slice(blockerStart), ...fieldBlockerRows.slice(0, blockerStart)]
+    : []
+  const matterTypeLabel = matterTypeMessage ?? (clausePreviewError === MATTER_TYPE_BLOCK ? MATTER_TYPE_BLOCK : null)
+  const blockerRows = [
+    ...(matterTypeLabel ? [{
+      id: 'matter-type',
+      label: MATTER_TYPE_BLOCK,
+    }] : []),
+    ...orderedFieldBlockers.map((item, index) => ({
+      id: item.id,
+      label: item.label,
+      nextUnresolved: index === 0,
+    })),
+  ]
+  const onSelectBlockerRow = useCallback((id: string) => {
+    if (id === 'matter-type') {
+      router.push(`/admin/matters/${matterId}`)
+      return
+    }
+    const item = fieldBlockerRows.find(row => row.id === id)
+    if (item) handleBlockerSelect(item)
+  }, [fieldBlockerRows, handleBlockerSelect, matterId, router])
+
+  useLayoutEffect(() => {
+    if (!embedded) {
+      setActionHost(null)
+      return
+    }
+    setActionHost(document.getElementById('drafting-design-actions'))
+  }, [embedded])
+
+  useEffect(() => {
+    const node = barRef.current
+    if (!node || embedded) return
+    const measure = () => setBarHeight(node.offsetHeight)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [embedded])
+
   const openDrafting = useCallback(async () => {
     if (onOpenDrafting) {
       onOpenDrafting()
@@ -487,8 +567,8 @@ function DesignSheetPageContent({
   const pageHeight = '100%'
   const indexStyle: CSSProperties = {
     position: 'sticky',
-    top: APP_HEADER_HEIGHT,
-    height: `calc(100vh - ${APP_HEADER_HEIGHT}px)`,
+    top: stickyTop,
+    height: `calc(100% - ${stickyTop}px)`,
     overflowY: 'auto',
     alignSelf: 'flex-start',
   }
@@ -498,12 +578,13 @@ function DesignSheetPageContent({
    * clause preview is dropped rather than squeezed. Wider viewports add the
    * docked index and, when open, the preview.
    */
+  const showClauseColumn = clauseTextCount > 0 && clausePreviewOpen && clausesDocked && !isMobile
   const gridTemplateColumns = isMobile
     ? 'minmax(0, 1fr)'
     : [
         navOpen ? '244px' : null,
         'minmax(0, 1fr)',
-        clausePreviewOpen && clausesDocked ? 'minmax(320px, 360px)' : null,
+        showClauseColumn ? 'minmax(320px, 360px)' : null,
       ].filter(Boolean).join(' ')
 
   return (
@@ -547,54 +628,97 @@ function DesignSheetPageContent({
             />
           ) : null}
 
-          <header
-            className="sticky z-40 border-b border-border bg-card px-4 [&>div]:!mb-0 [&>div]:!h-full [&>div]:!flex-nowrap"
-            style={{ top: 0, height: APP_HEADER_HEIGHT }}
-          >
-            <BrandBar
-              saveStatus={saveStatusForHeader(saveStatus)}
-              matterLabel={embedded ? undefined : matterLabel}
-              savedLabel={saveStatusText}
-              dirtyLabel="Unsaved changes"
-              actions={(
-                <>
-                  <DesignToolbarActions
-                    collapsed
-                    onClonePlan={() => setCloneDialogOpen(true)}
-                    onImport={() => setImportDialogOpen(true)}
-                    onSave={handleSave}
-                    onExport={handleExportDesignSheet}
-                    onExportJson={handleExportGeneratorData}
-                    onExportJsonDocx={handleExportGeneratorDataDocx}
-                    onExportStatular={handleExportStatular}
-                    onExportSummary={handleExportSummary}
-                    saveLabel={saveStatus === 'dirty' ? 'Save Changes' : 'Saved'}
-                    saving={saveStatus === 'saving'}
-                    exporting={exporting}
-                    pending={isPending}
-                    saveDirty={saveStatus === 'dirty'}
-                    showSave={false}
+          {(() => {
+            const designActions = (
+              <DesignAccelerationBar
+                sheet={sheet}
+                updateField={updateField}
+                documentInclusions={documentInclusions}
+                attorneyPreset={attorneyPreset}
+                onAttorneyPresetChange={handleAttorneyPresetChange}
+                blockingCount={blockingCount}
+                onAutofill={() => setImportDialogOpen(true)}
+                renderActions={({ completeButton, shortcutItems }) => (
+                  <DesignSheetActionBar
+                    rows={blockerRows}
+                    saveStatusText={saveStatusText}
+                    onSaveAndCheck={() => void openDrafting()}
+                    onSelectRow={onSelectBlockerRow}
+                    complete={completeButton}
+                    menu={(
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Import and shortcuts">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-72">
+                          <DesignToolbarActions
+                            variant="items"
+                            onClonePlan={() => setCloneDialogOpen(true)}
+                            onImport={() => setImportDialogOpen(true)}
+                            onSave={handleSave}
+                            onExport={handleExportDesignSheet}
+                            onExportJson={handleExportGeneratorData}
+                            onExportJsonDocx={handleExportGeneratorDataDocx}
+                            onExportStatular={handleExportStatular}
+                            onExportSummary={handleExportSummary}
+                            saveLabel={saveStatus === 'dirty' ? 'Save Changes' : 'Saved'}
+                            saving={saveStatus === 'saving'}
+                            exporting={exporting}
+                            pending={isPending}
+                            saveDirty={saveStatus === 'dirty'}
+                            showSave={false}
+                          />
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel>Shortcuts</DropdownMenuLabel>
+                          {shortcutItems}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            aria-pressed={navOpen}
+                            onSelect={() => handleNavOpenChange(!navOpen)}
+                          >
+                            {navOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                            {navOpen ? 'Hide sections' : 'Show sections'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={clauseTextCount === 0}
+                            aria-pressed={clausesDocked ? clausePreviewOpen : clauseDrawerOpen}
+                            onSelect={handleClausePreviewToggle}
+                          >
+                            {clausesDocked && clausePreviewOpen ? 'Hide clauses' : 'Preview clauses'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   />
-                  <DesignAccelerationBar
-                    sheet={sheet}
-                    updateField={updateField}
-                    documentInclusions={documentInclusions}
-                    attorneyPreset={attorneyPreset}
-                    onAttorneyPresetChange={handleAttorneyPresetChange}
-                    blockingCount={blockingDetails.reduce((total, group) => total + group.blockers.length, 0)}
-                    onAutofill={() => setImportDialogOpen(true)}
-                  />
-                </>
-              )}
-            />
-          </header>
+                )}
+              />
+            )
+            if (embedded && actionHost) return createPortal(designActions, actionHost)
+            return (
+              <header ref={barRef} className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-card px-4 py-2">
+                <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground sm:inline">{matterLabel}</span>
+                <div className="min-w-0 flex-1">{designActions}</div>
+              </header>
+            )
+          })()}
 
-          {!clausesDocked && <Sheet open={clauseDrawerOpen} onOpenChange={setClauseDrawerOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-              <SheetTitle>Clause preview</SheetTitle>
-              <ClausePreview matterId={matterId} sheet={sheet} />
-            </SheetContent>
-          </Sheet>}
+          <ClausePreview
+            matterId={matterId}
+            sheet={sheet}
+            onStatus={handleClauseStatus}
+            mount={previewMount}
+          />
+
+          {!showClauseColumn && !clausesDocked && clauseTextCount > 0 && (
+            <Sheet open={clauseDrawerOpen} onOpenChange={setClauseDrawerOpen}>
+              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                <SheetTitle>Clause preview</SheetTitle>
+                <div ref={setPreviewMount} className="h-full min-h-0" />
+              </SheetContent>
+            </Sheet>
+          )}
           <div
             className="mx-auto grid w-full max-w-[1680px] gap-5 px-4"
             style={{ gridTemplateColumns }}
@@ -621,80 +745,6 @@ function DesignSheetPageContent({
             </ResponsiveDetailRail>
 
             <main className="min-w-0 pb-10">
-              <section
-                className="sticky z-30 -mx-1 border-b border-border bg-background px-1 py-3"
-                style={{ top: APP_HEADER_HEIGHT, minHeight: READINESS_STRIP_HEIGHT }}
-                aria-label="Draft readiness"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className={cn('text-sm font-semibold', blockingCount > 0 ? 'text-warning' : 'text-success')}>
-                      {blockingCount > 0
-                        ? `${blockingCount} decision${blockingCount === 1 ? '' : 's'} block drafting`
-                        : 'Ready to draft'}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {optionalCount} optional refinement{optionalCount === 1 ? '' : 's'} remaining.
-                    </p>
-                    {blockingCount > 0 ? (
-                      <details className="mt-2"><summary className="cursor-pointer text-xs">Show unresolved decisions by section</summary><div className="mt-2 flex flex-wrap gap-1.5">
-                        {blockingDetails.flatMap(detail => detail.blockers).map(item => {
-                          const groupId = designSectionAnchorId(item.sectionId)
-                          if (!groupId) return null
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => handleBlockerSelect(item)}
-                              className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-micro font-medium text-warning hover:bg-warning/15"
-                            >
-                              {groups.find(group => group.id === groupId)?.title}: {item.label}
-                            </button>
-                          )
-                        })}
-                      </div></details>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    {blockingCount > 0 && <Button type="button" size="sm" variant="outline" onClick={() => {
-                      const blockers = blockingDetails.flatMap(detail => detail.blockers)
-                      const current = blockers.findIndex(item => `${item.sectionId}:${item.targetField}` === lastBlockerKey.current)
-                      const next = blockers[(current + 1) % blockers.length]
-                      if (next) handleBlockerSelect(next)
-                    }}>Next unresolved decision</Button>}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-pressed={navOpen}
-                      onClick={() => handleNavOpenChange(!navOpen)}
-                    >
-                      {navOpen ? (
-                        <PanelLeftClose className="h-4 w-4" aria-hidden />
-                      ) : (
-                        <PanelLeft className="h-4 w-4" aria-hidden />
-                      )}
-                      <span className="hidden sm:inline">{navOpen ? 'Hide sections' : 'Sections'}</span>
-                      <span className="sr-only sm:hidden">
-                        {navOpen ? 'Hide sections' : 'Show sections'}
-                      </span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-pressed={clausesDocked ? clausePreviewOpen : clauseDrawerOpen}
-                      onClick={handleClausePreviewToggle}
-                      // Narrow workspaces show clauses in a drawer.
-                      className="inline-flex"
-                    >
-                      {clausesDocked && clausePreviewOpen ? 'Hide clauses' : 'Preview clauses'}
-                    </Button>
-                    <Button size="sm" onClick={() => void openDrafting()}>Save and check drafts</Button>
-                  </div>
-                </div>
-              </section>
-
               <div className="pt-4">
                 <div className="mb-3">
                   <p className="admin-category text-muted-foreground">
@@ -707,6 +757,9 @@ function DesignSheetPageContent({
                   >
                     {activeTitle}
                   </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Gray from intake, amber overridden, white attorney-only.
+                  </p>
                 </div>
                 {activeGroup ? (
                   <GroupCard
@@ -729,7 +782,7 @@ function DesignSheetPageContent({
                     optionalCount={groupReadiness.get(activeGroup.id)?.optional.length ?? 0}
                     blockingLabels={groupReadiness.get(activeGroup.id)?.blocking.map(item => item.label) ?? []}
                     optionalLabels={groupReadiness.get(activeGroup.id)?.optional.map(item => item.label) ?? []}
-                    scrollMarginTop={STICKY_CONTENT_OFFSET}
+                    scrollMarginTop={stickyTop}
                   >
                     {activeGroup.render()}
                   </GroupCard>
@@ -766,18 +819,18 @@ function DesignSheetPageContent({
               </div>
             </main>
 
-            {clausePreviewOpen && clausesDocked && !isMobile ? (
+            {showClauseColumn ? (
               <aside
                 aria-label="Clause preview"
                 className="border-l border-border"
                 style={{
                   position: 'sticky',
-                  top: APP_HEADER_HEIGHT,
-                  height: `calc(100vh - ${APP_HEADER_HEIGHT}px)`,
+                  top: stickyTop,
+                  height: `calc(100% - ${stickyTop}px)`,
                   alignSelf: 'flex-start',
                 }}
               >
-                <ClausePreview matterId={matterId} sheet={sheet} />
+                <div ref={setPreviewMount} className="h-full min-h-0" />
               </aside>
             ) : null}
           </div>

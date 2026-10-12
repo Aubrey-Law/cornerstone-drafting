@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,11 @@ export interface DesignAccelerationBarProps {
   blockingCount?: number
   /** Opens the proposal review. Omitted when the workspace has no dialog mounted. */
   onAutofill?: () => void
+  /**
+   * Places Complete sheet and the shortcut items in the caller's bar.
+   * The preset dialog stays mounted here either way.
+   */
+  renderActions?: (slots: { completeButton: ReactNode; shortcutItems: ReactNode }) => ReactNode
 }
 
 export function DesignAccelerationBar({
@@ -45,6 +50,7 @@ export function DesignAccelerationBar({
   onAttorneyPresetChange,
   blockingCount = 0,
   onAutofill,
+  renderActions,
 }: DesignAccelerationBarProps) {
   const [presetDialogOpen, setPresetDialogOpen] = useState(false)
   const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
@@ -119,6 +125,18 @@ export function DesignAccelerationBar({
     },
   ]
 
+  const shortcutItems = shortcuts.map(shortcut => (
+    <DropdownMenuItem
+      key={shortcut.key}
+      disabled={shortcut.disabled}
+      onSelect={shortcut.onSelect}
+      className="flex-col items-start gap-0.5"
+    >
+      <span className="text-xs font-medium">{shortcut.label}</span>
+      <span className="text-micro text-muted-foreground">{shortcut.description}</span>
+    </DropdownMenuItem>
+  ))
+
   const shortcutsMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -129,20 +147,27 @@ export function DesignAccelerationBar({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        {shortcuts.map(shortcut => (
-          <DropdownMenuItem
-            key={shortcut.key}
-            disabled={shortcut.disabled}
-            onSelect={shortcut.onSelect}
-            className="flex-col items-start gap-0.5"
-          >
-            <span className="text-xs font-medium">{shortcut.label}</span>
-            <span className="text-micro text-muted-foreground">{shortcut.description}</span>
-          </DropdownMenuItem>
-        ))}
+        {shortcutItems}
       </DropdownMenuContent>
     </DropdownMenu>
   )
+
+  const completeButton = onAutofill ? (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1.5 text-xs"
+      onClick={onAutofill}
+    >
+      <Sparkles className="h-3.5 w-3.5" />
+      Complete sheet
+      {blockingCount > 0 && (
+        <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-micro font-medium text-warning">
+          {blockingCount}
+        </span>
+      )}
+    </Button>
+  ) : null
 
   return (
     <>
@@ -176,25 +201,12 @@ export function DesignAccelerationBar({
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center gap-2">
-        {onAutofill && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs"
-            onClick={onAutofill}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Complete sheet
-            {blockingCount > 0 && (
-              <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-micro font-medium text-warning">
-                {blockingCount}
-              </span>
-            )}
-          </Button>
-        )}
-        {shortcutsMenu}
-      </div>
+      {renderActions ? renderActions({ completeButton, shortcutItems }) : (
+        <div className="flex items-center gap-2">
+          {completeButton}
+          {shortcutsMenu}
+        </div>
+      )}
     </>
   )
 }

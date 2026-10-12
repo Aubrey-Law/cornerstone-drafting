@@ -28,6 +28,8 @@ const ReviewStep = dynamic(() => import('./ReviewStep'), { ssr: false })
 
 type Step = 'design' | 'generate' | 'review'
 
+const QUICK_DRAFT_TITLE = 'Generates from the sheet as it stands and skips the section-by-section pass.'
+
 const STEPS: { id: Step; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'design',   label: 'Design',   icon: FileText,     description: 'Plan structure, fiduciaries, assets' },
   { id: 'generate', label: 'Generate', icon: FilePenLine,  description: 'Run the document generator' },
@@ -243,14 +245,18 @@ export default function DraftingWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       {embeddedInWorkspace ? (
-        <div className="shrink-0 border-b border-border bg-card px-4 py-2 md:px-6">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="relative z-30 shrink-0 border-b border-border bg-card px-4 py-2 md:px-6">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {stepper()}
-            <div className="min-w-0 flex-1">{mobileStepper()}</div>
-            {/* The design sheet's toolbar carries its own save pill; repeat it here only off Design or mid-transition. */}
-            <div className="ml-auto text-xs text-muted-foreground" role="status" aria-live="polite">{step !== 'design' || preparing || transitionError ? saveStatus : null}</div>
+            <div className="min-w-0 flex-1 md:flex-none">{mobileStepper()}</div>
+            {step === 'design' ? (
+              <div id="drafting-design-actions" className="flex min-w-0 flex-1 basis-full items-center md:basis-auto" />
+            ) : (
+              <div className="ml-auto text-xs text-muted-foreground" role="status" aria-live="polite">{saveStatus}</div>
+            )}
             <Link
               href={`/admin/drafting/${matterId}/quick`}
+              title={QUICK_DRAFT_TITLE}
               className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -260,7 +266,7 @@ export default function DraftingWorkspace({
         </div>
       ) : <>
       {/* Workspace header */}
-      <div className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
+      <div className="relative z-30 shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex items-center justify-between gap-2 md:gap-4">
           <nav aria-label="Breadcrumb" className="min-w-0">
             <ol className="flex min-w-0 items-center gap-2 text-sm">
@@ -278,6 +284,7 @@ export default function DraftingWorkspace({
           <div className="hidden shrink-0 items-center gap-4 sm:flex">
             <Link
               href={`/admin/drafting/${matterId}/quick`}
+              title={QUICK_DRAFT_TITLE}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -299,7 +306,7 @@ export default function DraftingWorkspace({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <Link href={`/admin/drafting/${matterId}/quick`}>
+                <Link href={`/admin/drafting/${matterId}/quick`} title={QUICK_DRAFT_TITLE}>
                   <Sparkles className="h-4 w-4" />
                   Quick draft a document
                 </Link>
@@ -316,7 +323,12 @@ export default function DraftingWorkspace({
 
         {mobileStepper('mt-3')}
 
-        {stepper('mt-3')}
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {stepper()}
+          {step === 'design' ? (
+            <div id="drafting-design-actions" className="min-w-0 flex-1" />
+          ) : null}
+        </div>
       </div>
 
       {step !== 'design' && designState.conflict && <DesignSheetConflictDialog
@@ -326,9 +338,11 @@ export default function DraftingWorkspace({
         onResolve={designState.resolveConflict}
         onReload={() => designState.reloadConflictLatest()}
       />}
-      <div className="shrink-0 border-b px-4 py-2 text-xs md:px-6" role="status" aria-live="polite">
-        {saveStatus}
-      </div>
+      {step !== 'design' && (
+        <div className="shrink-0 border-b px-4 py-2 text-xs md:px-6" role="status" aria-live="polite">
+          {saveStatus}
+        </div>
+      )}
       </>}
       {/* Step body */}
       <div className={cn(

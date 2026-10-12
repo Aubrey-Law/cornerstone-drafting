@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type {
   ClausePreviewClause,
@@ -8,9 +9,19 @@ import type {
 } from '@/lib/estateGenerator/clausePreview'
 import type { DesignSheet } from '@/types/database'
 
+export interface ClausePreviewStatus {
+  count: number
+  error: string | null
+  loading: boolean
+}
+
 interface ClausePreviewProps {
   matterId: string
   sheet: DesignSheet
+  /** Reports whether any clause text exists so the column can stay unmounted. */
+  onStatus?: (status: ClausePreviewStatus) => void
+  /** Host for the preview. With no clause text, nothing is rendered. */
+  mount?: HTMLElement | null
 }
 
 function ClausePart({ part }: { part: ClausePreviewPart }) {
@@ -27,7 +38,7 @@ function ClausePart({ part }: { part: ClausePreviewPart }) {
   return <>{part.text}</>
 }
 
-export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
+export function ClausePreview({ matterId, sheet, onStatus, mount = null }: ClausePreviewProps) {
   const accessToken = useAccessToken()
   const [clauses, setClauses] = useState<ClausePreviewClause[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +69,7 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
         })
         .catch(fetchError => {
           if (fetchError instanceof DOMException && fetchError.name === 'AbortError') return
+          setClauses([])
           setError(fetchError instanceof Error ? fetchError.message : 'Unable to build clause preview')
         })
         .finally(() => {
@@ -71,27 +83,18 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
     }
   }, [accessToken, matterId, sheet])
 
-  return (
+  useEffect(() => {
+    onStatus?.({ count: clauses.length, error, loading })
+  }, [clauses.length, error, loading, onStatus])
+
+  if (loading || error || clauses.length === 0 || !mount) return null
+
+  return createPortal(
     <div className="h-full overflow-y-auto bg-muted px-4 py-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Clause preview</h2>
-          <p className="text-micro text-muted-foreground">Live drafting language · read only</p>
-        </div>
-        {loading ? <span className="text-micro text-muted-foreground">Updating…</span> : null}
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-foreground">Clause preview</h2>
+        <p className="text-micro text-muted-foreground">Live drafting language · read only</p>
       </div>
-
-      {error ? (
-        <div className="rounded-md border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] p-3 text-xs text-[var(--gi-amber)]">
-          {error}
-        </div>
-      ) : null}
-
-      {!error && !loading && clauses.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">
-          Choose plan documents to see their clauses here.
-        </p>
-      ) : null}
 
       <div className="space-y-3">
         {clauses.map(clause => (
@@ -114,6 +117,7 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
           </article>
         ))}
       </div>
-    </div>
+    </div>,
+    mount,
   )
 }
