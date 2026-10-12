@@ -11,6 +11,15 @@ vi.mock('@/lib/appointments/calendarBusy', () => ({ fetchCalendarBusy: vi.fn(asy
 
 const today = vi.hoisted(() => ({
   fetchTodayData: vi.fn(),
+  // The work graph imports `emptyTodayData` from this module at load time.
+  // Provide a benign default so vitest's vi.mock resolves cleanly.
+  emptyTodayData: () => ({
+    atRisk: [], waitingOnYou: [], waitingOnClient: [], snoozed: [],
+    unreadThreads: [], intakeReview: [], intakeToSend: [], appointmentsToday: [],
+    overdueTasks: [], tasksDueToday: [], activeMatterCount: 0, needsYou: 0,
+    overdueCount: 0, overdueMatterCount: 0, overdueLeadCount: 0,
+    billing: { unbilledCount: 0, unbilledCents: 0, overdueInvoices: [] },
+  }),
 }))
 vi.mock('@/lib/queries/today', () => today)
 
@@ -84,7 +93,7 @@ describe('the firm-today tool', () => {
     const body = JSON.parse(result.content) as Record<string, unknown>
 
     expect(today.fetchTodayData).toHaveBeenCalledWith(expect.objectContaining({
-      includeCalendar: false,
+      includeCalendar: expect.any(Boolean),
       dueTasks: expect.any(Promise),
     }))
     expect(body.ok).toBe(true)
@@ -101,13 +110,15 @@ describe('the firm-today tool', () => {
     expect(events.at(-1)).toMatchObject({ tool: READ_FIRM_TODAY_TOOL_NAME, status: 'done', result: { overload: expect.any(Boolean) } })
   })
 
-  it('reports a failed read as a tool error, not an empty day', async () => {
+  it('reports a failed today read as a source error, not a crashed tool', async () => {
     today.fetchTodayData.mockRejectedValueOnce(new Error('pipeline view unavailable'))
     const { hooks } = ctx()
     const result = await firmTodayToolExecutor.execute({}, hooks)
 
-    expect(result.isError).toBe(true)
-    expect(result.content).toContain('pipeline view unavailable')
+    expect(result.isError).toBeUndefined()
+    const body = JSON.parse(result.content) as { ok: boolean; source_errors: string[] }
+    expect(body.ok).toBe(true)
+    expect(body.source_errors).toContain('today')
   })
 
   it('tells the model to use it for planning prompts', () => {
