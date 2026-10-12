@@ -5,9 +5,8 @@ import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, ChevronRight, Columns3, Database, History, Plus, Table2, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, ChevronRight, Database, History, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   EMPTY_MATTER_TABLE_FILTERS,
@@ -22,6 +21,9 @@ import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
 import { matterExportCsv, matterExportFilename, toMatterExportRow } from '@/lib/matters/exportRows'
 import { downloadCsv } from '@/lib/browserDownload'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
+import { EmptyState } from '@/components/EmptyState'
+import { ViewModeSwitch } from '@/components/ViewModeSwitch'
+import MattersLoading from './(overview)/list/loading'
 import { MatterStageBoard, type StageBoardCard } from '@/components/matter/MatterStageBoard'
 import {
   MatterPipelineInsights,
@@ -103,16 +105,16 @@ export default function MattersClient(props: MattersClientProps) {
 }
 
 function MattersClientShell({ matters: _matters, loadError = null }: MattersClientProps) {
-  return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background md:-mx-6 md:-mb-6">
-      <div className="border-b border-border bg-card px-4 py-4 md:px-6">
-        <h1 className="admin-page-title">Matters</h1>
+  if (loadError) {
+    return (
+      <div className="px-4 py-8 md:px-6">
+        <div role="alert">
+          <EmptyState icon={Briefcase} title="Could not load matters" description={loadError} className="rounded-lg border border-border bg-card" />
+        </div>
       </div>
-      <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
-        <p className="text-sm text-muted-foreground">{loadError ?? 'Loading…'}</p>
-      </div>
-    </div>
-  )
+    )
+  }
+  return <MattersLoading />
 }
 
 function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadError = null, pagination }: MattersClientProps) {
@@ -521,37 +523,7 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
             Include closed
           </FilterChip>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div
-              className="inline-flex rounded-md border border-border bg-background p-0.5"
-              role="group"
-              aria-label="View mode"
-            >
-              <button type="button" aria-pressed={view === 'grid'} onClick={() => switchView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border')}>Grid</button>
-              <button
-                type="button"
-                aria-pressed={view === 'board'}
-                onClick={() => switchView('board')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                  view === 'board' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Columns3 className="h-3.5 w-3.5" aria-hidden />
-                Board
-              </button>
-              <button
-                type="button"
-                aria-pressed={view === 'table'}
-                onClick={() => switchView('table')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                  view === 'table' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Table2 className="h-3.5 w-3.5" aria-hidden />
-                Table
-              </button>
-            </div>
+            <ViewModeSwitch value={view} modes={['grid', 'board', 'table'] as const} onChange={switchView} />
             <Select
               value={filters.practice}
               onValueChange={value => updateFilter('practice', value)}
@@ -619,20 +591,23 @@ function MattersClientInner({ matters: initialMatters, workSummaries = {}, loadE
       <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
         {pagination && <div className="mb-3 flex items-center gap-3 text-sm"><span>{pagination.total} matching matters{view!=='board' ? ` · page ${pagination.page}` : ''}</span>{view!=='board' && <><Button variant="outline" size="sm" disabled={pagination.page<=1} onClick={()=>navigate({page:String(pagination.page-1)},false)}>Previous</Button><Button variant="outline" size="sm" disabled={pagination.page*pagination.pageSize>=pagination.total} onClick={()=>navigate({page:String(pagination.page+1)},false)}>Next</Button></>}</div>}
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border px-6 py-16 text-center">
-            <Briefcase className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-            {!loadError && matters.length === 0 && (
-              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5" />
-                New matter
-              </Button>
-            )}
+          <div role={loadError ? 'alert' : 'status'}>
+            <EmptyState
+              icon={Briefcase}
+              title={emptyMessage}
+              className="rounded-lg border border-dashed border-border bg-card"
+              action={!loadError && matters.length === 0 ? (
+                <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" />
+                  New matter
+                </Button>
+              ) : undefined}
+            />
           </div>
         ) : view === 'grid' ? (
           <ul aria-label="Matters grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(m => <li key={m.matter_id} className="space-y-3 rounded-lg border bg-card p-4">
-              <div className="flex items-start justify-between gap-2"><Link href={`/admin/matters/${m.matter_id}`} className="font-semibold hover:underline">{matterTitle(m)}</Link><Badge variant="secondary">{stageLabel(m.stage)}</Badge></div>
+            {filtered.map(m => <li key={m.matter_id} className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-ring">
+              <div className="flex items-start justify-between gap-2"><Link href={`/admin/matters/${m.matter_id}`} className="rounded-sm font-semibold outline-none hover:underline focus-visible:underline">{matterTitle(m)}</Link><Badge variant="secondary">{stageLabel(m.stage)}</Badge></div>
               <p className="text-xs text-muted-foreground">{matterSubtitle(m)}</p>
               <RecordWorkIndicator summary={workSummaries[m.matter_id]} />
               <p className="text-xs text-muted-foreground">Last milestone · {formatLastMilestone(matterLastMilestoneAt(m))}</p>

@@ -1,10 +1,14 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Check, FileText, Landmark, Mail, PenLine, Phone, Upload } from 'lucide-react'
+import { FileText, Landmark, Mail, PenLine, Phone, Upload } from 'lucide-react'
 import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { PortalMilestoneTracker } from '@/components/portal/PortalMilestoneTracker'
+import { PortalFact, PortalNextStep, PortalQuietNote, PortalUnavailable } from '@/components/portal/PortalDashboardChrome'
 import { PortalPageHeader } from '../PortalPageHeader'
 import { PortalAccountCard } from '@/components/portal/PortalAccountCard'
 import { getFirmConfig } from '@/lib/firmConfig'
@@ -201,55 +205,8 @@ export default async function PortalDashboardPage() {
         ) : null}
       />
 
-      {/* ── stage tracker (flat — not a card) ── */}
-      <section className="py-2">
-        <ol className="flex items-start">
-          {progress.milestones.map((step, i) => {
-            const done = step.state === 'completed'
-            const current = step.state === 'current'
-            return (
-              <li key={step.key} className="flex min-w-0 flex-1 items-start last:flex-none">
-                <div className="flex min-w-0 shrink flex-col items-center gap-1.5 px-0.5">
-                  <span
-                    aria-hidden
-                    className="flex size-5 shrink-0 items-center justify-center rounded-full border-2"
-                    style={
-                      done
-                        ? { background: 'var(--primary)', borderColor: 'var(--primary)' }
-                        : current
-                          ? { borderColor: 'var(--primary)' }
-                          : { borderColor: 'var(--border)' }
-                    }
-                  >
-                    {done && <Check className="size-3 text-primary-foreground" strokeWidth={3} />}
-                  </span>
-                  <span
-                    className={[
-                      'text-center text-micro leading-tight sm:text-xs',
-                      current
-                        ? 'font-semibold text-foreground'
-                        : done
-                          ? 'text-foreground'
-                          : 'text-muted-foreground',
-                    ].join(' ')}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-                {i < progress.milestones.length - 1 && (
-                  <span
-                    aria-hidden
-                    className="mt-[9px] h-0.5 min-w-2 flex-1"
-                    style={{ background: done ? 'var(--primary)' : 'var(--border)' }}
-                  />
-                )}
-              </li>
-            )
-          })}
-        </ol>
-        {progress.milestones.length === 0 && (
-          <p className="mt-4 text-sm text-muted-foreground">The firm will share progress updates through Messages.</p>
-        )}
+      <section className="py-2" aria-label="Where your plan is">
+        <PortalMilestoneTracker milestones={progress.milestones} />
       </section>
 
       {/* ── where your plan stands (supporting copy, not a card) ── */}
@@ -265,33 +222,27 @@ export default async function PortalDashboardPage() {
         </section>
       )}
 
-      {/* ── what's next — the only hero card on the dashboard ── */}
-      <section
-        className="mt-5 rounded-lg border p-5"
-        style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue-strong-border)' }}
-      >
-        <h2 className="text-sm font-semibold text-foreground">What&apos;s next</h2>
-        <p className="mt-1 text-sm leading-relaxed text-foreground/80">{nextAction.message}</p>
-        {nextAction.href && nextAction.label && (
-          <Button asChild size="sm" className="mt-4">
+      <PortalNextStep
+        message={nextAction.message}
+        action={nextAction.href && nextAction.label ? (
+          <Button asChild size="sm">
             <Link href={nextAction.href}>{nextAction.label}</Link>
           </Button>
-        )}
-      </section>
+        ) : null}
+      />
 
       {/* ── ready for your signature ── */}
       {signaturesResult.value.length > 0 && (
         <section className="mt-5 border-t border-border pt-4" data-testid="pending-signatures">
           <h2 className="text-sm font-semibold text-foreground">Ready for your signature</h2>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-0.5">
             {[...pendingSignatures.mine, ...pendingSignatures.others].slice(0, 4).map(signature => (
-              <li key={signature.sessionId} className="flex items-start gap-2.5">
-                <PenLine className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground">{signatureTitle(signature)}</p>
-                  <p className="text-xs text-muted-foreground">{signatureStatusLine(signature)}</p>
-                </div>
-              </li>
+              <PortalFact
+                key={signature.sessionId}
+                icon={PenLine}
+                title={signatureTitle(signature)}
+                detail={signatureStatusLine(signature)}
+              />
             ))}
           </ul>
           {pendingSignatures.mine.length > 0 && (
@@ -313,16 +264,20 @@ export default async function PortalDashboardPage() {
             {funding.todo > 0 ? ` · ${funding.todo} need${funding.todo === 1 ? 's' : ''} your action` : ''}
             {funding.checking > 0 ? ` · ${funding.checking} being checked` : ''}.
           </p>
+          <Progress
+            className="mt-3"
+            value={funding.total === 0 ? 0 : Math.round((funding.done / funding.total) * 100)}
+            aria-label={`${funding.done} of ${funding.total} assets in the plan`}
+          />
           {assetsTodo.length > 0 && (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3 space-y-0.5">
               {assetsTodo.slice(0, 4).map(asset => (
-                <li key={asset.assetId} className="flex items-start gap-2.5">
-                  <Landmark className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="text-sm text-foreground">{asset.description || asset.categoryLabel}</p>
-                    <p className="text-xs text-muted-foreground">{PORTAL_STATE_LABELS[asset.state]}</p>
-                  </div>
-                </li>
+                <PortalFact
+                  key={asset.assetId}
+                  icon={Landmark}
+                  title={asset.description || asset.categoryLabel}
+                  detail={PORTAL_STATE_LABELS[asset.state]}
+                />
               ))}
             </ul>
           )}
@@ -336,15 +291,14 @@ export default async function PortalDashboardPage() {
       {openRequests.length > 0 && (
         <section className="mt-5 border-t border-border pt-4">
           <h2 className="text-sm font-semibold text-foreground">What we need from you</h2>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-0.5">
             {openRequests.slice(0, 4).map(request => (
-              <li key={request.id} className="flex items-start gap-2.5">
-                <Upload className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground">{request.title}</p>
-                  {request.dueOn && <p className="text-xs text-muted-foreground">Due {request.dueOn}</p>}
-                </div>
-              </li>
+              <PortalFact
+                key={request.id}
+                icon={Upload}
+                title={request.title}
+                detail={request.dueOn ? `Due ${request.dueOn}` : null}
+              />
             ))}
           </ul>
           {openRequests.length > 4 && (
@@ -358,7 +312,12 @@ export default async function PortalDashboardPage() {
 
       {/* Only shown when there is something to say: a client with no invoices
           should not be told their balance is zero. */}
-      {matter && !accountResult.available && <p role="alert" className="mt-4 text-sm text-destructive">Billing is temporarily unavailable. <Link href="/account" className="underline">Retry billing</Link></p>}
+      {matter && !accountResult.available && (
+        <PortalUnavailable>
+          Billing is temporarily unavailable.{' '}
+          <Link href="/account" className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Retry billing</Link>
+        </PortalUnavailable>
+      )}
       {account && account.invoices.length > 0 && (
         <div className="mt-4">
           <PortalAccountCard account={account} />
@@ -370,25 +329,21 @@ export default async function PortalDashboardPage() {
         <section>
           <h2 className="text-sm font-semibold text-foreground">Recent documents</h2>
           {!documentsResult.available ? (
-            <p role="alert" className="mt-2 text-sm text-destructive">Documents are temporarily unavailable. <Link href="/documents" className="underline">Retry documents</Link></p>
+            <PortalUnavailable>
+              Documents are temporarily unavailable.{' '}
+              <Link href="/documents" className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Retry documents</Link>
+            </PortalUnavailable>
           ) : documents.length === 0 ? (
-            <p className="mt-2 text-sm text-muted-foreground">No documents shared yet.</p>
+            <PortalQuietNote>No documents shared yet.</PortalQuietNote>
           ) : (
-            <ul className="mt-3 space-y-3">
+            <ul className="mt-3 space-y-0.5">
               {documents.map(doc => (
-                <li key={doc.id} className="flex items-start gap-2.5">
-                  {doc.source === 'client' ? (
-                    <Upload className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-foreground">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {DOC_DATE.format(new Date(doc.created_at))}
-                    </p>
-                  </div>
-                </li>
+                <PortalFact
+                  key={doc.id}
+                  icon={doc.source === 'client' ? Upload : FileText}
+                  title={doc.name}
+                  detail={DOC_DATE.format(new Date(doc.created_at))}
+                />
               ))}
             </ul>
           )}
@@ -401,9 +356,7 @@ export default async function PortalDashboardPage() {
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">Messages</h2>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
-                {unreadCount} unread
-              </span>
+              <Badge>{unreadCount} unread</Badge>
             )}
           </div>
           {latestMessage ? (
@@ -421,7 +374,7 @@ export default async function PortalDashboardPage() {
             </>
           ) : (
             <>
-              <p className="mt-2 text-sm text-muted-foreground">No messages yet.</p>
+              <PortalQuietNote>No messages yet.</PortalQuietNote>
               <Button asChild size="sm" variant="outline" className="mt-4">
                 <Link href="/messages">Send a message</Link>
               </Button>
@@ -456,16 +409,16 @@ export default async function PortalDashboardPage() {
           <div className="mt-3 space-y-1.5">
             <a
               href={`tel:${firm.phone.replace(/[^\d+]/g, '')}`}
-              className="flex items-center gap-2 text-sm text-foreground hover:underline"
+              className="flex min-h-11 items-center gap-2 rounded-md px-2 text-sm text-foreground underline-offset-4 hover:bg-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Phone className="size-4 shrink-0 text-muted-foreground" />
+              <Phone className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               {firm.phone}
             </a>
             <a
               href={`mailto:${firm.email}`}
-              className="flex items-center gap-2 text-sm text-foreground hover:underline"
+              className="flex min-h-11 items-center gap-2 rounded-md px-2 text-sm text-foreground underline-offset-4 hover:bg-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Mail className="size-4 shrink-0 text-muted-foreground" />
+              <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="truncate">{firm.email}</span>
             </a>
           </div>

@@ -3,7 +3,7 @@ import { usePrimaryReady } from '@/app/admin/components/NavigationTiming'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Archive, Columns3, Plus, Table2, Trash2 } from 'lucide-react'
+import { Archive, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
@@ -46,6 +46,7 @@ import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTa
 import { LeadsGrid } from '@/components/leads/LeadsGrid'
 import { LeadsBoard } from '@/components/leads/LeadsBoard'
 import { cn } from '@/lib/utils'
+import { ViewModeSwitch } from '@/components/ViewModeSwitch'
 import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
 import {
   Dialog,
@@ -688,37 +689,7 @@ export function LeadsClient({
               ))}
             </SelectContent>
           </Select>
-          <div
-            className="inline-flex rounded-md border border-border bg-background p-0.5"
-            role="group"
-            aria-label="View mode"
-          >
-            <button type="button" aria-pressed={view === 'grid'} onClick={() => selectView('grid')} className={cn('rounded px-2.5 py-1 text-xs font-medium', view === 'grid' && 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border')}>Grid</button>
-            <button
-              type="button"
-              aria-pressed={view === 'table'}
-              onClick={() => selectView('table')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'table' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Table2 className="h-3.5 w-3.5" aria-hidden />
-              Table
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'board'}
-              onClick={() => selectView('board')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'board' ? 'bg-selected text-selected-foreground ring-1 ring-inset ring-selected-border' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Columns3 className="h-3.5 w-3.5" aria-hidden />
-              Board
-            </button>
-          </div>
+          <ViewModeSwitch value={view} modes={['grid', 'table', 'board'] as const} onChange={selectView} />
           {hasTableFilters && (
             <Button type="button" variant="ghost" size="sm" onClick={clearTableFilters}>
               Clear filters
@@ -734,7 +705,7 @@ export function LeadsClient({
         </p>
       )}
 
-      <div className={cn('min-w-0 space-y-3', pending && 'opacity-60 transition-opacity')}>
+      <div className={cn('min-w-0 space-y-3', pending && 'opacity-60 transition-opacity motion-reduce:transition-none')} aria-busy={pending}>
         {view === 'grid' ? <LeadsGrid leads={filteredLeads} workSummaries={workSummaries} /> : view === 'board' ? (
           <LeadsBoard
             leads={filteredLeads}
