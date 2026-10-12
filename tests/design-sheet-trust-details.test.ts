@@ -35,8 +35,8 @@ describe('trust details design section', () => {
   it('renders the marital and bypass options for joint and separate trusts alike', () => {
     // A joint trust always shows them; a separate trust only once the residuary
     // is actually held in trust for the spouse.
-    expect(trustDetailsSource).toContain('{jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}')
-    expect(trustDetailsSource).toContain('{spouseTrustsFromResiduary && (')
+    expect(trustDetailsSource).toContain('{!essential && jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}')
+    expect(trustDetailsSource).toContain('{!essential && spouseTrustsFromResiduary && (')
     expect(trustDetailsSource).toContain("spousalFunding !== 'outright_to_spouse' && spousalFunding !== 'not_to_spouse'")
   })
 
