@@ -124,7 +124,13 @@ it('includes everyday destinations and keeps Command-K as search on Calendar', a
   render(<GlobalSearch />)
   await user.keyboard('{Meta>}k{/Meta}')
   expect(screen.getByRole('dialog')).toBeTruthy()
-  for (const name of ['Tasks', 'Calendar', 'Billing']) expect(screen.getByRole('option', { name })).toBeTruthy()
+  for (const name of ['Tasks', 'Calendar', 'Billing', 'Overview', 'People', 'Activities', 'Payroll']) {
+    expect(screen.getByRole('option', { name })).toBeTruthy()
+  }
+  expect(screen.queryByRole('option', { name: 'Contacts' })).toBeNull()
+  expect(screen.queryByRole('option', { name: 'Drafting' })).toBeNull()
+  const headings = [...document.querySelectorAll('[cmdk-group-heading]')].map(node => node.textContent)
+  expect(headings).toEqual(['Today', 'Clients', 'Work', 'Operations', 'Tools'])
 })
 
 /**

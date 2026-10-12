@@ -54,7 +54,8 @@ export function ThemeToggle({ collapsed = false, variant = 'default' }: ThemeTog
   const trigger = isSidebar ? (
     <button
       type="button"
-      aria-label={label}
+      aria-label={collapsed ? label : 'Appearance'}
+      title={collapsed ? label : undefined}
       className={cn(
         'flex items-center rounded-md border-0 bg-transparent text-sm transition-colors',
         collapsed ? 'justify-center px-2 py-2' : 'w-full gap-3 px-3 py-2',
@@ -62,7 +63,7 @@ export function ThemeToggle({ collapsed = false, variant = 'default' }: ThemeTog
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed ? <span>{LABELS[theme]}</span> : null}
+      {!collapsed ? <span>Appearance</span> : null}
     </button>
   ) : (
     <Button

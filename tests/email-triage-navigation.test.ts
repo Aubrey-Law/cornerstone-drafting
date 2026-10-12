@@ -21,9 +21,12 @@ describe('communications navigation', () => {
   })
 
   it('is reachable from the command palette', () => {
-    // A separate, duplicated list from the sidebar's — easy to forget, so it
-    // gets its own assertion rather than being assumed.
-    expect(source('components/GlobalSearch.tsx')).toContain(HREF)
+    // Search used to keep a second list. It now reads the same nav the rail uses.
+    const search = source('components/GlobalSearch.tsx')
+    expect(search).toContain("from '@/app/admin/adminNav'")
+    expect(search).toContain('adminNavItems')
+    expect(search).not.toContain('NAV_ITEMS')
+    expect(adminNavItems.some(item => item.href === HREF)).toBe(true)
   })
 
   it('badges waiting mail in Communications and the authoritative Today queue', () => {

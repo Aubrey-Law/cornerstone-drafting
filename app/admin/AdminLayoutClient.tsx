@@ -6,28 +6,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  Banknote,
-  Briefcase,
-  BookOpen,
-  CalendarDays,
   ChevronDown,
-  Activity,
-  ContactRound,
-  AlarmClock,
-  LayoutDashboard,
-  ListTodo,
   LogOut,
-  Mail,
   Menu,
   PanelLeftClose,
   PanelLeft,
-  Send,
-  ReceiptText,
   Settings,
-  Sparkles,
-  MessageSquareText,
-  Sun,
-  Zap,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -60,6 +44,10 @@ import { MatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
 import { SidebarMattersContext } from '@/lib/matters/SidebarMattersContext'
 import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
 import { requestDeparture } from '@/lib/navigation/departure'
+import { ADMIN_NAV_GROUPS, adminNavItems } from './adminNav'
+
+export type { AdminNavGroup } from './adminNav'
+export { adminNavItems }
 
 const GlobalSearch = dynamic(
   () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
@@ -67,36 +55,6 @@ const GlobalSearch = dynamic(
 )
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
-
-export type AdminNavGroup = 'Today' | 'Clients' | 'Work' | 'Operations' | 'Tools'
-export const adminNavItems: {
-  href: string
-  label: string
-  icon: React.ElementType
-  group: AdminNavGroup
-  exact?: boolean
-}[] = [
-  // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
-  { href: '/admin', label: 'Today', icon: Sun, group: 'Today', exact: true },
-  { href: '/admin/overview', label: 'Overview', icon: LayoutDashboard, group: 'Today' },
-  { href: '/admin/crm/opportunities', label: 'Leads', icon: Send, group: 'Clients' },
-  { href: '/admin/matters/list', label: 'Matters', icon: Briefcase, group: 'Clients' },
-  { href: '/admin/crm/people', label: 'People', icon: ContactRound, group: 'Clients' },
-  { href: '/admin/crm/activities', label: 'Activities', icon: Activity, group: 'Clients' },
-  { href: '/admin/pipeline/aging', label: 'Aging', icon: AlarmClock, group: 'Clients' },
-  { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
-  { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
-  { href: '/admin/communications', label: 'Communications', icon: MessageSquareText, group: 'Operations' },
-  { href: '/admin/email-triage', label: 'Mail Desk', icon: Mail, group: 'Operations' },
-  { href: '/admin/automations', label: 'Automations', icon: Zap, group: 'Operations' },
-  { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Operations' },
-  { href: '/admin/payroll', label: 'Payroll', icon: Banknote, group: 'Operations' },
-  { href: '/admin/assistant', label: 'Assistant', icon: Sparkles, group: 'Tools' },
-  { href: '/admin/works', label: 'Library', icon: BookOpen, group: 'Tools' },
-  { href: '/admin/settings', label: 'Settings', icon: Settings, group: 'Tools' },
-]
-
-const ADMIN_NAV_GROUPS: AdminNavGroup[] = ['Today', 'Clients', 'Work', 'Operations', 'Tools']
 
 interface AdminLayoutClientProps {
   children: React.ReactNode
@@ -209,16 +167,6 @@ export default function AdminLayoutClient({
       /* ignore */
     }
   }, [])
-
-  // Drafting workspaces need horizontal room for the design sheet + clause
-  // preview; collapse the global nav to the icon rail on first entry. Later
-  // step changes inside drafting must not re-collapse after the user expands.
-  const wasOnDraftingWorkspace = useRef(false)
-  useEffect(() => {
-    const onDrafting = /^\/admin\/drafting\/[0-9a-f-]{36}/i.test(pathname)
-    if (onDrafting && !wasOnDraftingWorkspace.current) setCollapsed(true)
-    wasOnDraftingWorkspace.current = onDrafting
-  }, [pathname])
 
   // `matterDisplayName` is already resolved for the rail, so naming the record
   // in the trail costs no extra request.

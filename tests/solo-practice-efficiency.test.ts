@@ -70,10 +70,16 @@ describe('solo-practice billing and workflow foundation', () => {
 
 describe('solo-practice navigation and drafting safeguards', () => {
   it('groups the firm navigation and retires Inbox', () => {
-    const nav = read('app/admin/AdminLayoutClient.tsx')
-    for (const group of ['Today', 'Clients', 'Work', 'Operations', 'Tools']) expect(nav).toContain(`'${group}'`)
+    const nav = read('app/admin/adminNav.ts')
+    let cursor = -1
+    for (const group of ['Today', 'Clients', 'Work', 'Operations', 'Tools']) {
+      const at = nav.indexOf(`group: '${group}'`)
+      expect(at).toBeGreaterThan(cursor)
+      cursor = at
+    }
     expect(nav).not.toContain("href: '/admin/inbox'")
-    expect(nav.indexOf("label: 'Drafting'")).toBeLessThan(nav.indexOf("label: 'Billing'"))
+    expect(nav).not.toContain("label: 'Drafting'")
+    expect(nav).not.toContain("href: '/admin/contacts'")
   })
 
   it('offers a full portal account route and an editable funding roadmap', () => {

@@ -21,10 +21,19 @@ describe('ThemeToggle menu', () => {
     mockPathname = '/admin/drafting'
   })
 
-  it('labels the trigger with the current theme', () => {
+  it('labels the expanded rail control Appearance', () => {
     mockTheme = 'dark'
     render(<ThemeToggle variant="sidebar" />)
-    expect(screen.getByRole('button', { name: 'Theme: Dark' })).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Appearance' })
+    expect(button.textContent).toContain('Appearance')
+  })
+
+  it('keeps an icon-only theme tooltip when the rail is collapsed', () => {
+    mockTheme = 'dark'
+    render(<ThemeToggle variant="sidebar" collapsed />)
+    const button = screen.getByRole('button', { name: 'Theme: Dark' })
+    expect(button.getAttribute('title')).toBe('Theme: Dark')
+    expect(button.textContent).not.toContain('Appearance')
   })
 
   it('lists all three choices, marks the active one, and applies a pick', async () => {

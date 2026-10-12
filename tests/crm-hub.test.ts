@@ -6,7 +6,7 @@ const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), 
 
 describe('unified CRM hub', () => {
   it('links directly to Leads while preserving the CRM workspaces', () => {
-    const adminLayout = read('app/admin/AdminLayoutClient.tsx')
+    const adminLayout = read('app/admin/adminNav.ts')
     const subnav = read('app/admin/crm/CrmSubnav.tsx')
 
     expect(adminLayout).toContain("{ href: '/admin/crm/opportunities', label: 'Leads'")
