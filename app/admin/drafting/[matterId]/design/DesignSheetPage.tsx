@@ -39,11 +39,17 @@ import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import { getDesignPlanTrack, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
+import { designGroupForLayout } from '@/lib/designSheet/designSectionNav'
+import {
+  ESSENTIAL_DESIGN_SHEET_TITLE,
+  isEssentialDesignPracticeArea,
+  resolveDesignSheetLayout,
+  setDesignSheetLayout,
+} from '@/lib/designSheet/sheetLayout'
 import {
   DESIGN_SHEET_GROUP_IDS,
   designSectionAnchorId,
   normalizeDesignSectionId,
-  resolveDesignSheetGroupId,
   type DesignSheetGroupId,
 } from '@/lib/designSheet/sectionIds'
 import {
@@ -204,7 +210,10 @@ function DesignSheetPageContent({
   // `null` falls back to the first visible group. Seeded from the URL hash so
   // deep links (matter overview "fix this", copied URLs) land on their section.
   const [activeGroupId, setActiveGroupId] = useState<DesignSheetGroupId | null>(() =>
-    typeof window === 'undefined' ? null : resolveDesignSheetGroupId(window.location.hash.replace(/^#/, '')),
+    typeof window === 'undefined' ? null : designGroupForLayout(
+      window.location.hash.replace(/^#/, ''),
+      resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet }),
+    ),
   )
   const [fiduciaryFlashField, setFiduciaryFlashField] = useState<string | null>(null)
   const { loadPreferences, savePreferences } = useUserPreferences()
@@ -308,9 +317,11 @@ function DesignSheetPageContent({
       .filter(section => !hideUnusedDecisions || section.applicable),
     [hideUnusedDecisions, sectionDefs, sheet],
   )
+  const layout = resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet })
+  const canSwitchDesignSheet = isEssentialDesignPracticeArea(matter.practice_area)
   const groups = useMemo(
-    () => buildDesignSheetGroups(visibleDesignSections(displayedSectionDefs), getDesignPlanTrack(sheet)),
-    [displayedSectionDefs, sheet],
+    () => buildDesignSheetGroups(visibleDesignSections(displayedSectionDefs), getDesignPlanTrack(sheet), layout),
+    [displayedSectionDefs, layout, sheet],
   )
 
   const handleHideUnusedChange = useCallback((checked: boolean) => {
@@ -339,15 +350,14 @@ function DesignSheetPageContent({
   }, [isMobile, savePreferences])
 
   const groupReadiness = useMemo(() => new Map(groups.map(group => {
-    const sectionIds = new Set(group.sections.map(section => section.id))
     const blocking = blockingDetails
-      .filter(detail => sectionIds.has(detail.id))
+      .filter(detail => designGroupForLayout(detail.id, layout) === group.id)
       .flatMap(detail => detail.blockers)
     const optional = state.optionalDetails
-      .filter(detail => sectionIds.has(detail.id))
+      .filter(detail => designGroupForLayout(detail.id, layout) === group.id)
       .flatMap(detail => detail.blockers)
     return [group.id, { blocking, optional }] as const
-  })), [blockingDetails, groups, state.optionalDetails])
+  })), [blockingDetails, groups, layout, state.optionalDetails])
 
   const navGroups = useMemo(() => [
     ...groups.map(group => {
@@ -373,10 +383,11 @@ function DesignSheetPageContent({
 
   // One section at a time: the active group falls back to the first visible
   // group when unset or hidden by "Hide what this plan doesn't use".
+  const layoutAwareActiveId = activeGroupId ? designGroupForLayout(activeGroupId, layout) : null
   const resolvedActiveGroupId: DesignSheetGroupId = useMemo(() => {
-    if (activeGroupId && navGroups.some(group => group.id === activeGroupId)) return activeGroupId
+    if (layoutAwareActiveId && navGroups.some(group => group.id === layoutAwareActiveId)) return layoutAwareActiveId
     return navGroups[0]?.id ?? REVIEW_GROUP.id
-  }, [activeGroupId, navGroups])
+  }, [layoutAwareActiveId, navGroups])
   const activeGroup = useMemo(
     () => groups.find(group => group.id === resolvedActiveGroupId) ?? null,
     [groups, resolvedActiveGroupId],
@@ -430,14 +441,14 @@ function DesignSheetPageContent({
 
   const [lastBlockerKey, setLastBlockerKey] = useState<string | null>(null)
   const handleBlockerSelect = useCallback((item: { sectionId: string; targetField: string | null }) => {
-    const groupId = designSectionAnchorId(item.sectionId)
+    const groupId = designGroupForLayout(item.sectionId, layout)
     if (!groupId) return
     setLastBlockerKey(`${item.sectionId}:${item.targetField}`)
     selectGroup(groupId, { targetField: item.targetField })
     // Fiduciary blockers target a grid role column, not a single input — tint
     // the whole column so the missing assignment is obvious.
     if (item.targetField?.endsWith('_slots')) setFiduciaryFlashField(item.targetField)
-  }, [selectGroup])
+  }, [layout, selectGroup])
 
   useEffect(() => {
     if (!fiduciaryFlashField) return
@@ -447,17 +458,17 @@ function DesignSheetPageContent({
 
   useEffect(() => {
     const normalized = normalizeDesignSectionId(requestedSectionId)
-    const groupId = resolveDesignSheetGroupId(requestedSectionId)
+    const groupId = designGroupForLayout(requestedSectionId, layout)
     if (!groupId || appliedSectionRef.current === normalized) return
     appliedSectionRef.current = normalized
     selectGroup(groupId)
-  }, [requestedSectionId, selectGroup])
+  }, [layout, requestedSectionId, selectGroup])
 
   useEffect(() => {
     if (!initialFocus) return
     const normalizedSectionId = normalizeDesignSectionId(initialFocus.sectionId)
     if (!shouldApplyDesignInitialFocus(initialFocus, normalizedSectionId, appliedInitialFocusRef.current)) return
-    const groupId = designSectionAnchorId(normalizedSectionId)
+    const groupId = designGroupForLayout(normalizedSectionId, layout)
     if (!groupId) return
     appliedInitialFocusRef.current = initialFocus
     setActiveGroupId(groupId)
@@ -474,7 +485,7 @@ function DesignSheetPageContent({
         flashDesignTarget(target)
       })
     })
-  }, [initialFocus, setContainerScrollTop])
+  }, [initialFocus, layout, setContainerScrollTop])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -499,7 +510,7 @@ function DesignSheetPageContent({
   }, [sheet])
 
   const fieldBlockerRows = blockingDetails.flatMap(detail => detail.blockers).flatMap(item => {
-    const groupId = designSectionAnchorId(item.sectionId)
+    const groupId = designGroupForLayout(item.sectionId, layout)
     if (!groupId) return []
     const title = groups.find(group => group.id === groupId)?.title
     return [{
@@ -746,6 +757,24 @@ function DesignSheetPageContent({
 
             <main className="min-w-0 pb-10">
               <div className="pt-4">
+                {canSwitchDesignSheet && (
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <h1 className="text-base font-semibold text-foreground">
+                      {layout === 'essential' ? ESSENTIAL_DESIGN_SHEET_TITLE : 'Full design sheet'}
+                    </h1>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto px-0 text-xs"
+                      onClick={() => updateField('decisions', previous => setDesignSheetLayout(
+                        previous,
+                        layout === 'essential' ? 'full' : 'essential',
+                      ))}
+                    >
+                      {layout === 'essential' ? 'Full design sheet' : ESSENTIAL_DESIGN_SHEET_TITLE}
+                    </Button>
+                  </div>
+                )}
                 <div className="mb-3">
                   <p className="admin-category text-muted-foreground">
                     Section {activeIndex + 1} of {navGroups.length}

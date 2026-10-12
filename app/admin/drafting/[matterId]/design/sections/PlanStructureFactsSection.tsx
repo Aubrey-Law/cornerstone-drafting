@@ -24,9 +24,19 @@ function newAssetTitle() {
   return 'Additional Disinheritance Language'
 }
 
-type PlanStructureFactsSectionProps = SectionProps
+interface PlanStructureFactsSectionProps extends SectionProps {
+  /** The full sheet keeps the asset inventory under these facts. The essential sheet leaves it off. */
+  includeAssets?: boolean
+  /** Placement note that only makes sense inside the full Estate Plan Details section. */
+  showPlacementNote?: boolean
+}
 
-export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFactsSectionProps) {
+export function PlanStructureFactsSection({
+  sheet,
+  onChange,
+  includeAssets = true,
+  showPlacementNote = true,
+}: PlanStructureFactsSectionProps) {
   const children = sheet.children ?? []
   const disinheritances = sheet.disinheritances ?? []
   const disinheritedChildren = sheet.disinherited_children ?? []
@@ -78,9 +88,11 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
 
   return (
     <>
-      <AttorneyNoteBanner>
-        Children options and disinheritance details remain in the Estate Plan Details section.
-      </AttorneyNoteBanner>
+      {showPlacementNote && (
+        <AttorneyNoteBanner>
+          Children options and disinheritance details remain in the Estate Plan Details section.
+        </AttorneyNoteBanner>
+      )}
 
       <SectionBlock title="Children Options">
         <div className="space-y-3">
@@ -286,7 +298,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
         </SectionBlock>
       </div>
 
-      <AssetsSection sheet={sheet} onChange={onChange} />
+      {includeAssets && <AssetsSection sheet={sheet} onChange={onChange} />}
     </>
   )
 }

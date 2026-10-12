@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import { resolveDesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import { nextConsumedDesignFocus, shouldConsumeDesignFocus } from '@/lib/designFocusNavigation'
 import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
 import DesignSheetPage from '@/app/admin/drafting/[matterId]/design/DesignSheetPage'
@@ -96,6 +97,7 @@ export default function DraftingWorkspace({
       matter,
       isLP,
       lpData: designState.lpDataState,
+      layout: resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet: designState.sheet }),
     })
   }, [designState.lpDataState, designState.sheet, isLP, matter])
   const designComplete = designReadiness?.complete ?? false

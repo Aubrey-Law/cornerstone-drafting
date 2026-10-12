@@ -1,5 +1,6 @@
 import 'server-only'
 import { computeDesignSheetReadiness } from '@/lib/designSheetReadiness'
+import { resolveDesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import { applyContactIntakeData } from '@/lib/intakeContactHydration'
 import { getIntakeReadinessFlags } from '@/lib/intakeReadiness'
 import { loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
@@ -126,6 +127,7 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
         matter: { has_minor_children: matter.has_minor_children },
         isLP: false,
         lpData: null,
+        layout: resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet }),
       })
       designUnapproved = sheet.status !== 'ready' || !readiness.complete
       designBlockingCount = readiness.blocking.length

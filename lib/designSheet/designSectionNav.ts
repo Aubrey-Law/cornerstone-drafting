@@ -5,9 +5,13 @@ import {
 } from '@/lib/designPlanType'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DesignPlanTrack } from '@/lib/collegePrepDesign'
+import type { DesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import {
   DESIGN_SECTION_IDS,
+  DESIGN_SHEET_GROUP_IDS,
   normalizeDesignSectionId,
+  resolveDesignSheetGroupId,
+  type DesignSheetGroupId,
 } from '@/lib/designSheet/sectionIds'
 
 export interface DesignSectionNavItem {
@@ -25,6 +29,8 @@ export interface DesignSectionNavArgs {
   planType?: string | null
   /** Which plan the sheet drafts; `college_prep` swaps the whole section list. */
   planTrack?: DesignPlanTrack | null
+  /** EP and EPLP open Essential Estate Plan Design unless the attorney chose the full sheet. */
+  layout?: DesignSheetLayout | null
 }
 
 export function getDesignSectionNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[] {
@@ -50,8 +56,37 @@ function collegePrepNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[]
   ]
 }
 
+function essentialNavItems(): DesignSectionNavItem[] {
+  return [
+    { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information', applicable: true },
+    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciary Role Assignment', applicable: true },
+    { id: DESIGN_SECTION_IDS.essentialEstatePlan, label: 'Estate Plan Design', applicable: true },
+  ]
+}
+
+/**
+ * The group a deep link or readiness blocker should open. On the essential
+ * sheet, trust, powers, health care, and real property all live inside
+ * Estate Plan Design.
+ */
+export function designGroupForLayout(
+  token: string | null | undefined,
+  layout: DesignSheetLayout,
+): DesignSheetGroupId | null {
+  const resolved = resolveDesignSheetGroupId(token)
+  if (!resolved || layout !== 'essential') return resolved
+  if (
+    resolved === DESIGN_SHEET_GROUP_IDS.facts
+    || resolved === DESIGN_SHEET_GROUP_IDS.fiduciaries
+    || resolved === DESIGN_SHEET_GROUP_IDS.review
+    || resolved === DESIGN_SHEET_GROUP_IDS.essentialPlan
+  ) return resolved
+  return DESIGN_SHEET_GROUP_IDS.essentialPlan
+}
+
 export function getAllDesignSectionNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[] {
   const { intakeSnapshot, documentInclusions, planType } = args
+  if (args.layout === 'essential') return essentialNavItems()
   if (args.planTrack === 'college_prep') return collegePrepNavItems(args)
   const revocableTrustPlan = designPlanTypeIncludesRevocableTrust(planType)
   const disallowsRevocableTrust = planTypeDisallowsRevocableTrustDocument(planType)

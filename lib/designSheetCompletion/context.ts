@@ -14,6 +14,7 @@ import {
 import { fetchDesignSheet, fetchIntakeForMatter, fetchMatter, fetchMatterContacts } from '@/lib/queries'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { normalizePracticeArea } from '@/lib/practiceArea'
+import { resolveDesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 
@@ -165,6 +166,7 @@ export async function buildCompletionContext(matterId: string): Promise<DesignSh
     matter: { has_minor_children: matter.has_minor_children },
     isLP,
     lpData,
+    layout: resolveDesignSheetLayout({ practiceArea, sheet }),
   })
 
   return {

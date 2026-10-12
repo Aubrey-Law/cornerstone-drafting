@@ -34,7 +34,8 @@ export function TransfersAssignmentsSection({
   contacts,
   onAddContact,
   onUpdateContact,
-}: TransfersAssignmentsSectionProps) {
+  title = 'Real Estate Transfer',
+}: TransfersAssignmentsSectionProps & { title?: string }) {
   const persisted = useMemo(() => getPersistedRealEstateTransfer(sheet), [sheet])
 
   const [form, setForm] = useState<RealEstateTransferFormState>(() =>
@@ -174,7 +175,7 @@ export function TransfersAssignmentsSection({
   return (
     <div>
       <SectionBlock
-        title="Real Estate Transfer"
+        title={title}
         subtitle="Upload the current deed, configure the realty trust, and generate transfer documents for this matter."
       >
         <RealEstateTransferWorkflow
