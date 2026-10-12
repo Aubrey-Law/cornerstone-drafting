@@ -80,4 +80,20 @@ describe('work graph email snooze and follow-up', () => {
     expect(item?.actionLabel).toBe('Check follow-up')
     expect(item?.batchTag).toBe('communications')
   })
+
+  it('includes the follow-up note in the work-item reason', () => {
+    const result = buildWorkGraph({
+      today: today(),
+      email: [
+        emailRow({
+          id: 'fu-note',
+          status: 'replied',
+          follow_up_at: '2026-09-30T13:00:00.000Z',
+          follow_up_note: 'Waiting on deed draft',
+        }),
+      ],
+    }, NOW)
+    const item = result.items.find(i => i.workKey === 'email:fu-note:follow_up')
+    expect(item?.priorityReasons[0]?.label).toContain('Waiting on deed draft')
+  })
 })

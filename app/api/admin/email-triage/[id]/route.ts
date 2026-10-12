@@ -37,7 +37,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (snoozedUntil !== undefined) patch.snoozed_until = snoozedUntil
 
   const followUpAt = optionalTimestamp(body.followUpAt)
-  if (followUpAt !== undefined) patch.follow_up_at = followUpAt
+  if (followUpAt !== undefined) {
+    patch.follow_up_at = followUpAt
+    // Clearing the reminder also drops the note so a later follow-up starts clean.
+    if (followUpAt === null && body.followUpNote === undefined) {
+      patch.follow_up_note = null
+    }
+  }
 
   if (Object.keys(patch).length === 1) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

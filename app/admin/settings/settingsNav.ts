@@ -73,7 +73,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         kind: 'tab',
         tab: 'email',
         label: 'Email',
-        description: 'Sender, branding, and which mailbox each email category sends from.',
+        description: 'Mail Desk triage, sender branding, and which mailbox each category sends from.',
       },
       {
         kind: 'tab',
