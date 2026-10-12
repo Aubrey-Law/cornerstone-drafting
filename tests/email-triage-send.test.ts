@@ -85,6 +85,7 @@ function message(id: string, from: string, extra: Partial<Record<string, unknown
     inReplyTo: null,
     headers: {},
     bodyText: '',
+    attachments: [],
     labelIds: ['INBOX'],
     ...extra,
   }

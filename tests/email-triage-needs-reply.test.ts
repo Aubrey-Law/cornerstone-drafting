@@ -32,6 +32,7 @@ function message(
     inReplyTo: null,
     headers: {},
     bodyText: 'body',
+    attachments: [],
     labelIds: opts.labels ?? ['INBOX'],
   }
 }

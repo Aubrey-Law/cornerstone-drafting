@@ -27,7 +27,7 @@ function message(over: Partial<GmailMessageSummary> & Pick<GmailMessageSummary, 
   return {
     threadId: 't1', from: { name: 'Pat Smith', email: 'pat@example.com' }, to: [], cc: [], subject: 'Deed question',
     snippet: 'Quick question about the deed', receivedAt: '2026-10-05T12:00:00.000Z', messageIdHeader: `<${over.id}@example.com>`,
-    references: null, inReplyTo: null, headers: {}, bodyText: '', labelIds: ['INBOX'], ...over,
+    references: null, inReplyTo: null, headers: {}, bodyText: '', attachments: [], labelIds: ['INBOX'], ...over,
   }
 }
 

@@ -46,6 +46,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
           from: message.from,
           receivedAt: message.receivedAt,
           bodyText: message.bodyText,
+          attachments: message.attachments,
           outbound: message.labelIds.includes('SENT')
             || message.from.email === identity.address,
         })),

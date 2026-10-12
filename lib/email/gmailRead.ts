@@ -77,6 +77,13 @@ export interface GmailAddress {
   email: string
 }
 
+/** Filename/size only — never downloaded into firm storage. */
+export interface GmailAttachmentMeta {
+  filename: string
+  mimeType: string | null
+  size: number | null
+}
+
 export interface GmailMessageSummary {
   id: string
   threadId: string
@@ -94,6 +101,8 @@ export interface GmailMessageSummary {
   headers: Record<string, string>
   /** Decoded, HTML-stripped, with the quoted reply chain removed. */
   bodyText: string
+  /** Attachment filenames/sizes from MIME parts — metadata only. */
+  attachments: GmailAttachmentMeta[]
   labelIds: string[]
 }
 
@@ -271,6 +280,29 @@ export function extractBody(payload: RawPart | undefined): string {
   return text.length > MAX_BODY_CHARS ? `${text.slice(0, MAX_BODY_CHARS)}\n\n[truncated]` : text
 }
 
+/**
+ * List attachment filenames and sizes from a MIME tree without downloading them.
+ * Inline parts without a filename are ignored; blobs stay in Gmail.
+ */
+export function extractAttachments(payload: RawPart | undefined): GmailAttachmentMeta[] {
+  const found: GmailAttachmentMeta[] = []
+  const walk = (part: RawPart | undefined) => {
+    if (!part) return
+    const filename = (part.filename ?? '').trim()
+    if (filename) {
+      const size = typeof part.body?.size === 'number' ? part.body.size : null
+      found.push({
+        filename,
+        mimeType: part.mimeType?.trim() || null,
+        size,
+      })
+    }
+    for (const child of part.parts ?? []) walk(child)
+  }
+  walk(payload)
+  return found
+}
+
 const QUOTE_MARKERS: RegExp[] = [
   // "On Tue, 3 Sep 2026 at 10:04, Jane <jane@x> wrote:"
   /^\s*On\s.+\bwrote:\s*$/,
@@ -352,6 +384,7 @@ export function parseMessage(raw: RawMessage): GmailMessageSummary | null {
     inReplyTo: headers['in-reply-to'] ?? null,
     headers,
     bodyText: stripQuotedChain(extractBody(raw.payload)),
+    attachments: extractAttachments(raw.payload),
     labelIds: raw.labelIds ?? [],
   }
 }
