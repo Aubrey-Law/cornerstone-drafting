@@ -27,7 +27,7 @@ export default async function BillingPage({
   if (!auth) return null
   const params = await searchParams
   if (params.tab === 'invoices') return <InvoiceRegister params={params} />
-  if(params.tab !== 'insights') {
+  if (params.tab === 'ledger') {
     const month=selectedMonth(params.month)
     const filter=typeof params.filter==='string' ? params.filter as BillingFilter : 'open'
     const ledger=await fetchLedgerPage({...pageRequest({page:params.page}),filter,search:typeof params.search==='string' ? params.search : '',month})
@@ -50,11 +50,11 @@ export default async function BillingPage({
       weekStart={data.weekStart}
       matterOptions={matterOptions}
       invoices={[]}
-      bankDeposits={
+      bankDeposits={params.tab === 'insights' ? (
         <Suspense fallback={<p className="text-xs text-muted-foreground">Loading bank deposits…</p>}>
           <MercuryDeposits />
         </Suspense>
-      }
+      ) : undefined}
     />
   )
 }

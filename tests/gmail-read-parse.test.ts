@@ -9,6 +9,7 @@ vi.mock('@/lib/googleCalendar', () => ({
 import {
   charsetToEncoding,
   decodeBase64Url,
+  extractAttachments,
   extractBody,
   headersToMap,
   htmlToText,
@@ -194,6 +195,38 @@ describe('extractBody', () => {
   it('returns empty rather than throwing when there is no text part at all', () => {
     expect(extractBody({ mimeType: 'application/pdf', filename: 'x.pdf' })).toBe('')
     expect(extractBody(undefined)).toBe('')
+  })
+})
+
+describe('extractAttachments', () => {
+  it('lists filename and size without downloading body data', () => {
+    const attachments = extractAttachments({
+      mimeType: 'multipart/mixed',
+      parts: [
+        { mimeType: 'text/plain', body: { data: b64url('hello') } },
+        {
+          mimeType: 'application/pdf',
+          filename: 'will.pdf',
+          body: { attachmentId: 'att-1', size: 2048 },
+        },
+        {
+          mimeType: 'image/png',
+          filename: 'scan.png',
+          body: { attachmentId: 'att-2', size: 512 },
+        },
+      ],
+    })
+    expect(attachments).toEqual([
+      { filename: 'will.pdf', mimeType: 'application/pdf', size: 2048 },
+      { filename: 'scan.png', mimeType: 'image/png', size: 512 },
+    ])
+  })
+
+  it('ignores parts without a filename', () => {
+    expect(extractAttachments({
+      mimeType: 'text/plain',
+      body: { data: b64url('no file') },
+    })).toEqual([])
   })
 })
 

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 const VIEWS: TriageQueueView[] = [
   'all', 'client', 'lead', 'contact', 'possible_lead',
-  'overdue', 'needs_draft', 'drafted', 'failed', 'snoozed', 'follow_up',
+  'overdue', 'needs_draft', 'drafted', 'failed', 'snoozed', 'follow_up', 'mine',
 ]
 
 export default async function EmailTriagePage({
@@ -54,7 +54,7 @@ export default async function EmailTriagePage({
   } else {
     try {
       ;[rows, scan, enabled, archiveNonClient] = await Promise.all([
-        fetchEmailTriageQueue({ view }),
+        fetchEmailTriageQueue({ view, claimedBy: user.id }),
         fetchLastTriageScan(),
         fetchTriageEnabled(),
         fetchTriageArchiveNonClient(),
@@ -75,6 +75,7 @@ export default async function EmailTriagePage({
       connected={connected}
       mailbox={connection?.email ?? null}
       queueError={queueError}
+      currentUserId={user.id}
       // An empty queue and a missing permission look identical on screen, so
       // the page is told which it is rather than left to imply the wrong one.
       hasReadScope={hasGmailModifyScope(connection?.scopes)}

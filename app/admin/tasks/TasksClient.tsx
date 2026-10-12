@@ -113,20 +113,22 @@ function GroupShell({
   children: React.ReactNode
 }) {
   if (count === 0) return null
+  const headingId = `task-group-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
   return (
     <section>
       <div className="flex items-center gap-2 px-1 pb-1 pt-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
+        <h2 id={headingId} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
         <Badge
           variant="secondary"
-          className={cn('text-micro tabular-nums', accent && 'bg-destructive/15 text-destructive')}
+          className={cn('text-micro tabular-nums', accent && 'border-transparent bg-red-bg text-red')}
         >
           {count}
         </Badge>
       </div>
       <ul
+        aria-labelledby={headingId}
         className={cn(
-          'divide-y divide-border overflow-hidden rounded-lg border border-border bg-card',
+          'divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-sm',
           accent && 'border-l-[3px] border-l-destructive',
         )}
       >
@@ -157,7 +159,7 @@ function CollapsedGroup({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
           {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
           <span>{title}</span>
@@ -705,7 +707,7 @@ export function TasksClient({
                 setOpenOnly(false)
                 setDoneOpen(true)
               }}
-              className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-micro font-medium text-primary-foreground"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-micro font-medium text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Open only
               <X className="size-3" aria-hidden />
@@ -755,7 +757,7 @@ export function TasksClient({
       </div>
       </section>
 
-      {pagination && <div className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
+      {pagination && (pagination.total > 0 || pagination.params.showDone) && <nav className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
         <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : presentation === 'list' ? 'Groups below show this page.' : 'Showing tasks from this page.'}</span>
         <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
         <Button variant="outline" size="sm" disabled={pagination.params.page >= pageCount} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
@@ -764,7 +766,7 @@ export function TasksClient({
           <Button variant="outline" size="sm" disabled={pagination.params.donePage <= 1} onClick={() => navigate({ donePage: String(pagination.params.donePage - 1), page: String(pagination.params.page) })}>Previous completed</Button>
           <Button variant="outline" size="sm" disabled={pagination.params.donePage * pagination.params.pageSize >= pagination.doneTotal} onClick={() => navigate({ donePage: String(pagination.params.donePage + 1), page: String(pagination.params.page) })}>Next completed</Button>
         </div>}
-      </div>}
+      </nav>}
       {presentation !== 'list' ? <TaskPresentationView tasks={[...scoped, ...doneTodayScoped]} presentation={presentation} onOpen={setSelectedTask} isPending={actions.isPending} onStatus={async (task, status) => {
         const updated = status === 'done' ? await actions.complete(task) : await actions.patch(task.id, { status })
         if (updated) { applyUpdate(updated); router.refresh() }

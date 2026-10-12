@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-export type BillingView = 'work' | 'invoices' | 'reports'
+export type BillingView = 'dashboard' | 'ledger' | 'invoices' | 'reports'
 
 const views: { view: BillingView; href: string; label: string }[] = [
-  { view: 'work', href: '/admin/billing', label: 'Billing work' },
+  { view: 'dashboard', href: '/admin/billing', label: 'Dashboard' },
+  { view: 'ledger', href: '/admin/billing?tab=ledger', label: 'Ledger' },
   { view: 'invoices', href: '/admin/billing?tab=invoices', label: 'Invoices' },
   { view: 'reports', href: '/admin/billing?tab=insights', label: 'Reports' },
 ]

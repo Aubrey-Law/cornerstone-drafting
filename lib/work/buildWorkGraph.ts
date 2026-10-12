@@ -222,7 +222,12 @@ function emailFollowUpItem(row: EmailTriageRow, now: Date): WorkItem {
     state: 'open',
     priorityBand: messageBand(row.follow_up_at ?? row.received_at, now),
     priorityReasons: [
-      { code: 'follow_up_due', label: 'Email follow-up is due' },
+      {
+        code: 'follow_up_due',
+        label: row.follow_up_note?.trim()
+          ? `Email follow-up is due — ${row.follow_up_note.trim()}`
+          : 'Email follow-up is due',
+      },
     ],
     estimateMinutes: 10,
     batchTag: 'communications',
