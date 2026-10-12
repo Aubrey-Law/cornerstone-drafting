@@ -74,6 +74,11 @@ export interface TodayData {
   overdueTasks: TaskRow[]
   /** Open tasks due today (firm timezone). */
   tasksDueToday: TaskRow[]
+  /**
+   * Set when the due-task read failed. The task lists above are then empty
+   * because they could not be loaded, not because the day is clear.
+   */
+  tasksError?: string | null
   activeMatterCount: number
   /** Rows the attorney can act on — never counts client-owned aging rows. */
   needsYou: number
@@ -229,7 +234,14 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
   // erring narrow would hide a task that is due.
   const dueThrough = calendarTo
 
-  const [aging, mattersRes, leadActionsRes, unreadRes, dueTasks, appointmentsRes, billing] = await Promise.all([
+  const dueTaskRead = Promise.resolve(options.dueTasks ?? fetchDueTasks(dueThrough))
+    .then(tasks => ({ tasks, error: null as string | null }))
+    .catch((error: unknown) => {
+      console.error('fetchTodayData tasks error:', error)
+      return { tasks: [] as TaskRow[], error: 'Tasks are unavailable. Please retry.' }
+    })
+
+  const [aging, mattersRes, leadActionsRes, unreadRes, dueTaskResult, appointmentsRes, billing] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -250,7 +262,7 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
       .select('matter_id, created_at')
       .eq('sender_role', 'client')
       .is('read_at', null),
-    options.dueTasks ?? fetchDueTasks(dueThrough),
+    dueTaskRead,
     admin
       .from('appointments')
       .select('id, start_time, end_time, status, attendee_name, linked_matter_id, google_event_id, appointment_type_id')
@@ -404,6 +416,7 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
   // `dueTasks` is already bounded at the end of today, so these two groups
   // between them are the whole read — anything else the boundary let through
   // is due tomorrow and belongs to neither.
+  const dueTasks = dueTaskResult.tasks
   const overdueTasks = dueTasks.filter(task => taskDueGroup(task) === 'overdue')
   const tasksDueToday = dueTasks.filter(task => taskDueGroup(task) === 'today')
 
@@ -422,6 +435,7 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
       .filter((id): id is string => Boolean(id)),
     overdueTasks,
     tasksDueToday,
+    tasksError: dueTaskResult.error,
     activeMatterCount: matters.length,
     needsYou:
       overdueTasks.length + tasksDueToday.length + waitingOnYou.length + unreadThreads.length
@@ -432,6 +446,36 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
     overdueMatterCount: atRisk.filter(r => r.health === 'red' && r.entity === 'matter').length,
     overdueLeadCount: atRisk.filter(r => r.health === 'red' && r.entity === 'lead').length,
     billing,
+  }
+}
+
+/** A Today payload that keeps the page up when the aggregate read itself throws. */
+export function emptyTodayData(): TodayData {
+  return {
+    atRisk: [],
+    waitingOnYou: [],
+    waitingOnClient: [],
+    snoozed: [],
+    unreadThreads: [],
+    intakeReview: [],
+    intakeToSend: [],
+    appointmentsToday: [],
+    appointmentsError: true,
+    overdueTasks: [],
+    tasksDueToday: [],
+    tasksError: 'Tasks are unavailable. Please retry.',
+    activeMatterCount: 0,
+    needsYou: 0,
+    overdueCount: 0,
+    overdueMatterCount: 0,
+    overdueLeadCount: 0,
+    billing: {
+      unbilledCount: 0,
+      unbilledCents: 0,
+      overdueInvoices: [],
+      overdueCents: 0,
+      error: 'Billing is unavailable. Please retry.',
+    },
   }
 }
 

@@ -913,6 +913,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               now={now}
               timezone={timezone}
               workload={workload}
+              workloadPending={googleStatus === 'loading'}
               appointmentCounts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
@@ -922,10 +923,10 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             </div>
           ) : view === 'day' ? (
             <div className="space-y-3">
-            <WeekStrip days={Array.from({ length: 7 }, (_, i) => { const date = nextDateKey(weekFrom, i); return workload.find(day => day.date === date) ?? { date, clientMinutes: 0, internalMinutes: 0, targetMinutes: NaN, isToday: date === todayKey } })} selectedDay={selectedDay} todayKey={todayKey} counts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))} onSelect={setSelectedDay} />
+            <WeekStrip workloadPending={googleStatus === 'loading'} days={Array.from({ length: 7 }, (_, i) => { const date = nextDateKey(weekFrom, i); return workload.find(day => day.date === date) ?? { date, clientMinutes: 0, internalMinutes: 0, targetMinutes: NaN, isToday: date === todayKey } })} selectedDay={selectedDay} todayKey={todayKey} counts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))} onSelect={setSelectedDay} />
             <WorkloadNote status={googleStatus} />
             <DayAgenda
-              now={now} todayKey={todayKey} timezone={timezone} availability={availability} attentionUnavailable={attentionUnavailable}
+              now={now} todayKey={todayKey} timezone={timezone} availability={availability} calendarConnected={calendarConnected} attentionUnavailable={attentionUnavailable}
               conflictAppointments={selectedAppointments} conflictCalendarEvents={selectedCalendarEvents}
               totalAppointments={selectedAppointments.filter(a => a.status === 'scheduled').length}
               totalCalendarEvents={selectedCalendarEvents.filter(e => !isBlock(e)).length}
@@ -1126,7 +1127,15 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
 }
 
 function WorkloadNote({ status }: { status: 'loading' | 'included' | 'unavailable' | 'partial' | 'failed' }) {
-  if (status === 'unavailable') return <p className="text-xs text-muted-foreground">Load counts Cornerstone appointments. Google Calendar is not included.</p>
+  if (status === 'unavailable') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Google Calendar is not connected.{' '}
+        <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">Connect Google Calendar</Link>
+        {' '}to see availability. Appointments booked in Cornerstone still appear here.
+      </p>
+    )
+  }
   if (status === 'partial') return <p className="text-xs text-muted-foreground">Load is hidden because Google Calendar returned a partial result.</p>
   if (status === 'failed') return <p className="text-xs text-muted-foreground" role="alert">Could not load workload.</p>
   return null

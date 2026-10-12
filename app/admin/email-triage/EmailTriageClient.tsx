@@ -49,6 +49,8 @@ interface Props {
   connected: boolean
   mailbox: string | null
   hasReadScope: boolean
+  /** Set when a connected mailbox's queue could not be read. */
+  queueError?: string | null
   currentUserId: string
 }
 
@@ -178,6 +180,7 @@ export function EmailTriageClient({
   connected,
   mailbox,
   hasReadScope,
+  queueError = null,
   currentUserId,
 }: Props) {
   const token = useAccessToken()
@@ -581,6 +584,24 @@ export function EmailTriageClient({
     return () => window.removeEventListener('keydown', handler)
   }, [busy, dismissSelected, draftSelected, rows, selected, selectedId])
 
+  if (!connected) {
+    return (
+      <AdminPageShell>
+        <PageHeader title="Mail Desk" eyebrow="Daily" icon={MailSearch} />
+        <EmptyState
+          icon={MailSearch}
+          title="Gmail is not connected"
+          description="There is nothing to triage until the mailbox is connected."
+          action={(
+            <Button asChild>
+              <Link href="/admin/settings?tab=google">Connect Google</Link>
+            </Button>
+          )}
+        />
+      </AdminPageShell>
+    )
+  }
+
   if (!enabled) {
     return (
       <AdminPageShell>
@@ -631,6 +652,16 @@ export function EmailTriageClient({
           Gmail is not connected, so there is nothing to triage.{' '}
           <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">
             Connect Google
+          </Link>
+          .
+        </ConnectionNotice>
+      )}
+
+      {queueError && (
+        <ConnectionNotice>
+          {queueError}{' '}
+          <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">
+            Check the Google connection
           </Link>
           .
         </ConnectionNotice>

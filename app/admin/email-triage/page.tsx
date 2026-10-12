@@ -31,13 +31,39 @@ export default async function EmailTriagePage({
     ? (params.view as TriageQueueView)
     : 'all'
 
-  const [rows, scan, enabled, archiveNonClient, connection] = await Promise.all([
-    fetchEmailTriageQueue({ view, claimedBy: user.id }),
-    fetchLastTriageScan(),
-    fetchTriageEnabled(),
-    fetchTriageArchiveNonClient(),
-    getGoogleConnectionForUser(user.id),
-  ])
+  const connection = await getGoogleConnectionForUser(user.id)
+  const connected = Boolean(connection)
+
+  let rows: Awaited<ReturnType<typeof fetchEmailTriageQueue>> = []
+  let scan: Awaited<ReturnType<typeof fetchLastTriageScan>> = null
+  let enabled = false
+  let archiveNonClient = true
+  // A missing mailbox is an empty queue with a connect action, not a crash.
+  // A failed read of a connected mailbox stays on this page and says so.
+  let queueError: string | null = null
+
+  if (!connected) {
+    try {
+      ;[enabled, archiveNonClient] = await Promise.all([
+        fetchTriageEnabled(),
+        fetchTriageArchiveNonClient(),
+      ])
+    } catch (error) {
+      console.error('Mail Desk settings failed:', error)
+    }
+  } else {
+    try {
+      ;[rows, scan, enabled, archiveNonClient] = await Promise.all([
+        fetchEmailTriageQueue({ view, claimedBy: user.id }),
+        fetchLastTriageScan(),
+        fetchTriageEnabled(),
+        fetchTriageArchiveNonClient(),
+      ])
+    } catch (error) {
+      console.error('Mail Desk queue failed:', error)
+      queueError = 'The queue could not be read. Nothing in your mailbox has been changed.'
+    }
+  }
 
   return (
     <EmailTriageClient
@@ -46,8 +72,9 @@ export default async function EmailTriagePage({
       initialView={view}
       enabled={enabled}
       archiveNonClient={archiveNonClient}
-      connected={Boolean(connection)}
+      connected={connected}
       mailbox={connection?.email ?? null}
+      queueError={queueError}
       currentUserId={user.id}
       // An empty queue and a missing permission look identical on screen, so
       // the page is told which it is rather than left to imply the wrong one.

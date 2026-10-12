@@ -11,7 +11,7 @@ import {
 } from '@/lib/queries/emailTriage'
 import { listSmsThreads } from '@/lib/queries/smsThreads'
 import { fetchDueTasks } from '@/lib/queries/tasks'
-import { fetchTodayData } from '@/lib/queries/today'
+import { emptyTodayData, fetchTodayData } from '@/lib/queries/today'
 import { fetchUnreviewedUploadCountsForMatters } from '@/lib/matter/unreviewedUploads'
 import {
   buildWorkGraph,
@@ -163,7 +163,12 @@ export async function fetchWorkGraphForUser(
     // The work graph must not synchronously enumerate every visible Google
     // calendar. One freeBusy request below supplies the planner with the same
     // blocking calendars while the database remains the source of obligations.
-    timedSource('today', () => fetchTodayData({ includeCalendar: false, dueTasks: futureTasksPromise }), sourceDurationsMs),
+    timedSource('today', () => optionalSource(
+      'today',
+      () => fetchTodayData({ includeCalendar: false, dueTasks: futureTasksPromise }),
+      emptyTodayData(),
+      sourceErrors,
+    ), sourceDurationsMs),
     // Leave room inside the 1.5s API SLO for the database adapters. A slow
     // provider is reported as a source error rather than silently producing a
     // schedule that looks conflict-free.

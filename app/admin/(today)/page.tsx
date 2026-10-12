@@ -21,6 +21,7 @@ import { CommandCenterTelemetry } from '@/app/admin/components/CommandCenterTele
 import { getCachedClaims } from '@/lib/supabaseServer'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { fetchWorkGraphForUser, fetchWorkPreferences } from '@/lib/work/server'
+import type { WorkGraphResult } from '@/lib/work/types'
 import { createDailyPlanPreview } from '@/lib/work/planner'
 import { fetchDailyPlan } from '@/lib/work/plans'
 import { getDailyPlanCalendarStatus } from '@/lib/work/dailyPlanCalendar'
@@ -49,7 +50,7 @@ async function LegacyTodayPage() {
   }).format(new Date())
 
   const allClear = [
-    today.overdueTasks.length === 0 && 'No overdue tasks',
+    !today.tasksError && today.overdueTasks.length === 0 && 'No overdue tasks',
     today.unreadThreads.length === 0 && 'No unread client messages',
     today.intakeReview.length === 0 && 'No intakes waiting on review',
   ].filter(Boolean) as string[]
@@ -64,16 +65,19 @@ async function LegacyTodayPage() {
         title="Today"
         eyebrow={dateLabel}
         description={
-          <>
-          {today.overdueTasks.length} task{today.overdueTasks.length === 1 ? '' : 's'} overdue
-          {' · '}
-          {today.tasksDueToday.length} due today
-          {' · '}
-          {today.overdueMatterCount} matter{today.overdueMatterCount === 1 ? '' : 's'}
-          {' · '}
-          {today.overdueLeadCount} lead{today.overdueLeadCount === 1 ? '' : 's'} over SLA
-
-          </>
+          today.tasksError
+            ? today.tasksError
+            : (
+              <>
+                {today.overdueTasks.length} task{today.overdueTasks.length === 1 ? '' : 's'} overdue
+                {' · '}
+                {today.tasksDueToday.length} due today
+                {' · '}
+                {today.overdueMatterCount} matter{today.overdueMatterCount === 1 ? '' : 's'}
+                {' · '}
+                {today.overdueLeadCount} lead{today.overdueLeadCount === 1 ? '' : 's'} over SLA
+              </>
+            )
         }
       />
 
@@ -88,6 +92,7 @@ async function LegacyTodayPage() {
             intakeToSend={[]}
             overdueTasks={today.overdueTasks}
             tasksDueToday={today.tasksDueToday}
+            tasksError={today.tasksError}
           />
 
           <LazyPlanning>
@@ -158,8 +163,16 @@ export default async function AdminTodayPage({
   if (legacy && legacyFallbackAvailable) return <LegacyTodayPage />
 
   const now = new Date()
-  const [graph, preferences, pendingApprovalsResult, assignees] = await Promise.all([
-    fetchWorkGraphForUser(auth.id, now),
+  const [graphResult, preferences, pendingApprovalsResult, assignees] = await Promise.all([
+    fetchWorkGraphForUser(auth.id, now).catch((error: unknown): WorkGraphResult => {
+      console.error('Today work graph failed:', error)
+      return {
+        generatedAt: now.toISOString(),
+        items: [],
+        appointments: [],
+        sourceErrors: ['today'],
+      }
+    }),
     fetchWorkPreferences(auth.id),
     getAdminClient().from('action_proposals')
       .select('id, action_key, risk, display_summary, confirmation_policy, created_at, source')
@@ -171,6 +184,7 @@ export default async function AdminTodayPage({
       .limit(3),
     fetchTaskAssignees(),
   ])
+  const graph = graphResult
   const canDelegate = assignees.some(person => person.id !== auth.id)
   const preview = createDailyPlanPreview({
     items: graph.items,

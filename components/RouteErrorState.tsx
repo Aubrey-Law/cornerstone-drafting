@@ -14,6 +14,9 @@ interface RouteErrorStateProps {
   retryLabel?: string
   backHref?: string
   backLabel?: string
+  /** A second way out, used when the primary back link is the page that failed. */
+  secondaryHref?: string
+  secondaryLabel?: string
   minHeightClassName?: string
 }
 export function RouteErrorState({
@@ -24,6 +27,8 @@ export function RouteErrorState({
   retryLabel = 'Try again',
   backHref,
   backLabel,
+  secondaryHref,
+  secondaryLabel,
   minHeightClassName = 'min-h-[50vh]',
 }: RouteErrorStateProps) {
   useEffect(() => {
@@ -44,6 +49,11 @@ export function RouteErrorState({
         {backHref && backLabel && (
           <Button size="sm" asChild>
             <Link href={backHref}>{backLabel}</Link>
+          </Button>
+        )}
+        {secondaryHref && secondaryLabel && (
+          <Button size="sm" variant={backHref ? 'outline' : 'default'} asChild>
+            <Link href={secondaryHref}>{secondaryLabel}</Link>
           </Button>
         )}
       </div>

@@ -25,13 +25,14 @@ export function TimeGrid(props: {
   now: Date
   timezone: string
   workload: PlanData['days']
+  workloadPending?: boolean
   appointmentCounts: Map<string, number>
   selectedDay: string
   onSelectDay: (key: string) => void
   onSlotClick: (date: Date, time: string) => void
   onEventClick: (a: CalendarAppointment) => void
 }) {
-  const { days, byDay, calendarByDay, todayKey, now, timezone, workload, appointmentCounts, selectedDay, onSelectDay, onSlotClick, onEventClick } = props
+  const { days, byDay, calendarByDay, todayKey, now, timezone, workload, workloadPending = false, appointmentCounts, selectedDay, onSelectDay, onSlotClick, onEventClick } = props
   const [externalDetail, setExternalDetail] = useState<ExternalCalendarEvent | null>(null)
   // Widened past the business window when the days on screen hold earlier or
   // later events, so nothing on the calendar falls off the grid.
@@ -69,7 +70,7 @@ export function TimeGrid(props: {
                 >
                   {d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })}
                 </button>
-                <LoadIndicator day={workload.find(day => day.date === key)} count={appointmentCounts.get(key) ?? 0} />
+                <LoadIndicator pending={workloadPending} day={workload.find(day => day.date === key)} count={appointmentCounts.get(key) ?? 0} />
                 {allDayBlocked && (
                   <span
                     className="mt-0.5 block truncate rounded px-1 text-micro leading-4 text-muted-foreground"

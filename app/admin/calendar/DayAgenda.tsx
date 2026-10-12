@@ -35,6 +35,18 @@ function minutesLabel(minutes: number): string {
   return [hours ? `${hours}h` : '', rest ? `${rest}m` : ''].filter(Boolean).join(' ') || '0m'
 }
 
+function agendaStatus(input: {
+  appointmentCount: number
+  calendarEventCount: number
+  calendarConnected: boolean
+  booked: string | null
+}): string {
+  const counts = `${input.appointmentCount} appointments · ${input.calendarEventCount} calendar events`
+  if (!input.calendarConnected) return `${counts} · Connect Google Calendar to see availability.`
+  if (input.booked) return `${counts} · ${input.booked}`
+  return `${counts} · Availability could not be checked.`
+}
+
 function CalendarEventRow({ event, overlap, timezone }: { event: ExternalCalendarEvent; overlap: boolean; timezone: string }) {
   const style = categoryStyleFor(event.subject)
   return <div className="flex gap-3 rounded border border-border bg-card p-3 text-xs text-foreground" style={{ borderLeft: `3px solid ${style.dot}` }}>
@@ -146,6 +158,7 @@ function AgendaRow({
 export function DayAgenda({
   date, appointments, calendarEvents, attention, rail, onDismissAttention, onOpenAppointment, onReschedule, onBookSlot,
   now = new Date(), todayKey = firmTodayKey(now), timezone = FIRM_TIMEZONE, availability = null,
+  calendarConnected = true,
   totalAppointments, totalCalendarEvents, attentionUnavailable = false, conflictAppointments = appointments, conflictCalendarEvents = calendarEvents,
 }: {
   date: Date
@@ -161,6 +174,8 @@ export function DayAgenda({
   todayKey?: string
   timezone?: string
   availability?: DayAvailability | null
+  /** False once the page knows Google Calendar is not connected. */
+  calendarConnected?: boolean
   attentionUnavailable?: boolean
   conflictAppointments?: CalendarAppointment[]
   conflictCalendarEvents?: ExternalCalendarEvent[]
@@ -186,7 +201,16 @@ export function DayAgenda({
   ].sort((a, b) => a.start - b.start || a.id.localeCompare(b.id))
   return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
     <div className="min-w-0 space-y-3">
-      <p className="text-xs text-muted-foreground">{totalAppointments ?? active.filter(item => item.status === 'scheduled').length} appointments · {totalCalendarEvents ?? external.length} calendar events · {availability ? `${minutesLabel(bookedMinutes(availability.windows, availability.busy))} booked${key < todayKey ? ' · past day' : ` · ${minutesLabel(intervalMinutes(gaps ?? []))} open${isToday ? ' for the rest of today' : ' during working hours'}`}` : 'Availability unavailable'} · totals before category filters</p>
+      <p className="text-xs text-muted-foreground">{agendaStatus({
+        appointmentCount: totalAppointments ?? active.filter(item => item.status === 'scheduled').length,
+        calendarEventCount: totalCalendarEvents ?? external.length,
+        calendarConnected,
+        booked: availability
+          ? `${minutesLabel(bookedMinutes(availability.windows, availability.busy))} booked${key < todayKey ? ' · past day' : ` · ${minutesLabel(intervalMinutes(gaps ?? []))} open${isToday ? ' for the rest of today' : ' during working hours'}`}`
+          : null,
+      })}{!calendarConnected && <> {' '}
+        <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">Open settings</Link>
+      </>}</p>
       <AttentionBand items={attention} onDismiss={onDismissAttention} />
       {attentionUnavailable && <p className="text-xs text-muted-foreground" role="status">Attention items unavailable</p>}
       <div className="space-y-2">{rows.map(row => <div key={row.id}>{row.node}</div>)}

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Mail, MessageSquareText, MessagesSquare } from 'lucide-react'
 import { getCachedClaims } from '@/lib/supabaseServer'
+import { getGoogleConnectionForUser } from '@/lib/googleCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchWorkGraphForUser } from '@/lib/work/server'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -13,8 +14,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function CommunicationsPage() {
   const auth = await getCachedClaims()
-  const [graph, pendingResult] = await Promise.all([
-    auth ? fetchWorkGraphForUser(auth.id) : Promise.resolve(null),
+  const [graph, pendingResult, connection] = await Promise.all([
+    auth ? fetchWorkGraphForUser(auth.id).catch((error: unknown) => {
+      console.error('Communications work graph failed:', error)
+      return null
+    }) : Promise.resolve(null),
     auth
       ? getAdminClient().from('action_proposals')
         .select('id, action_key, risk, display_summary, confirmation_policy, created_at')
@@ -24,7 +28,10 @@ export default async function CommunicationsPage() {
         .order('created_at', { ascending: false })
         .limit(10)
       : Promise.resolve({ data: [] }),
+    auth ? getGoogleConnectionForUser(auth.id) : Promise.resolve(null),
   ])
+  const mailConnected = Boolean(connection)
+  const mailUnreadable = !graph || graph.sourceErrors.includes('email')
   const communication = graph?.items.filter(item =>
     item.sourceType === 'email' || item.sourceType === 'sms' || item.sourceType === 'portal_message',
   ) ?? []
@@ -54,9 +61,20 @@ export default async function CommunicationsPage() {
 
       <div className="grid gap-3 md:grid-cols-3">
         {[
-          { title: 'Mail Desk', count: count('email'), href: '/admin/email-triage', icon: Mail, detail: 'Triage, draft, snooze, follow up, and reply. Non-client mail is sorted in Gmail.' },
-          { title: 'Texts', count: count('sms'), href: '/admin/texts', icon: MessageSquareText, detail: 'Unread and unlinked conversations.' },
-          { title: 'Client portal', count: count('portal_message'), href: '/admin/matters/list', icon: MessagesSquare, detail: 'Secure matter conversations.' },
+          {
+            title: 'Mail Desk',
+            count: mailConnected && !mailUnreadable ? String(count('email')) : '—',
+            href: mailConnected ? '/admin/email-triage' : '/admin/settings?tab=google',
+            icon: Mail,
+            detail: !mailConnected
+              ? 'Gmail is not connected, so this is not an empty inbox.'
+              : mailUnreadable
+                ? 'The queue could not be read.'
+                : 'Triage, draft, snooze, follow up, and reply. Non-client mail is sorted in Gmail.',
+            action: mailConnected ? 'Open mail desk' : 'Connect Google',
+          },
+          { title: 'Texts', count: String(count('sms')), href: '/admin/texts', icon: MessageSquareText, detail: 'Unread and unlinked conversations.', action: 'Open texts' },
+          { title: 'Client portal', count: String(count('portal_message')), href: '/admin/matters/list', icon: MessagesSquare, detail: 'Secure matter conversations.', action: 'Open client portal' },
         ].map(channel => (
           <Card key={channel.title}>
             <CardHeader className="pb-2">
@@ -66,7 +84,7 @@ export default async function CommunicationsPage() {
               </CardTitle>
               <CardDescription>{channel.detail}</CardDescription>
             </CardHeader>
-            <CardContent><Button asChild variant="outline" size="sm"><Link href={channel.href}>Open {channel.title.toLowerCase()}</Link></Button></CardContent>
+            <CardContent><Button asChild variant="outline" size="sm"><Link href={channel.href}>{channel.action}</Link></Button></CardContent>
           </Card>
         ))}
       </div>
