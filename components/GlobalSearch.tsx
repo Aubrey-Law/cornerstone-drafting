@@ -4,20 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Briefcase,
-  BookOpen,
-  Clock,
-  CalendarDays,
   ListTodo,
   ReceiptText,
-  FilePenLine,
-  MessageSquareText,
   Search,
-  Settings,
-  Sparkles,
-  Sun,
   User,
-  UsersRound,
-  Zap,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -32,24 +22,7 @@ import { useGlobalSearch } from '@/lib/search/useGlobalSearch'
 import { recentHit, type SearchHit } from '@/lib/search/globalSearchSources'
 import { useSharedSidebarMatters } from '@/lib/matters/SidebarMattersContext'
 import { requestDeparture } from '@/lib/navigation/departure'
-
-const NAV_ITEMS = [
-  { label: 'Today', href: '/admin', icon: Sun },
-  { label: 'Communications', href: '/admin/communications', icon: MessageSquareText },
-  { label: 'Mail Desk', href: '/admin/email-triage', icon: MessageSquareText },
-  { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
-  { label: 'Matters', href: '/admin/matters/list', icon: Briefcase },
-  { label: 'Contacts', href: '/admin/contacts', icon: User },
-  { label: 'Tasks', href: '/admin/tasks', icon: ListTodo },
-  { label: 'Calendar', href: '/admin/calendar', icon: CalendarDays },
-  { label: 'Automations', href: '/admin/automations', icon: Zap },
-  { label: 'Billing', href: '/admin/billing', icon: ReceiptText },
-  { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },
-  { label: 'Assistant', href: '/admin/assistant', icon: Sparkles },
-  { label: 'Library', href: '/admin/works', icon: BookOpen },
-  { label: 'Aging', href: '/admin/pipeline/aging', icon: Clock },
-  { label: 'Settings', href: '/admin/settings', icon: Settings },
-]
+import { ADMIN_NAV_GROUPS, adminNavItems } from '@/app/admin/adminNav'
 
 const KIND_ICON = {
   matter: Briefcase,
@@ -94,9 +67,11 @@ export function GlobalSearch() {
   }
 
   const typed = query.trim().length > 0
-  const navMatches = NAV_ITEMS.filter(item =>
-    item.label.toLowerCase().includes(query.trim().toLowerCase()),
-  )
+  const needle = query.trim().toLowerCase()
+  const navMatches = adminNavItems.filter(item => item.label.toLowerCase().includes(needle))
+  const navGroups = ADMIN_NAV_GROUPS
+    .map(group => ({ group, items: navMatches.filter(item => item.group === group) }))
+    .filter(section => section.items.length > 0)
 
   const renderGroup = (heading: string, items: SearchHit[]) =>
     items.length > 0 && (
@@ -164,8 +139,23 @@ export function GlobalSearch() {
           )}
           <CommandEmpty>{searching ? 'Searching…' : searchError ?? 'No results.'}</CommandEmpty>
 
-          {/* Before anything is typed: where you already were. ⌘K then Enter
-              returns you to the matter you had open. */}
+          {/* Idle palette matches the rail: the same groups, then the matters
+              you already had open. ⌘K then Enter returns you to one of them. */}
+          {!typed && navGroups.map(section => (
+            <CommandGroup key={section.group} heading={section.group}>
+              {section.items.map(item => (
+                <CommandItem
+                  key={item.href}
+                  tabIndex={-1}
+                  onPointerDown={event => event.currentTarget.focus()}
+                  onSelect={() => navigate(item.href)}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
           {!typed && renderGroup('Recent matters', recents)}
 
           {renderGroup('Matters', hits.matters)}
@@ -181,17 +171,24 @@ export function GlobalSearch() {
             </p>
           )}
 
-          {navMatches.length > 0 && (
+          {typed && navGroups.length > 0 && (
             <>
               <CommandSeparator />
-              <CommandGroup heading="Navigate">
-                {navMatches.map(item => (
-                  <CommandItem key={item.href} tabIndex={-1} onPointerDown={event => event.currentTarget.focus()} onSelect={() => navigate(item.href)}>
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              {navGroups.map(section => (
+                <CommandGroup key={section.group} heading={section.group}>
+                  {section.items.map(item => (
+                    <CommandItem
+                      key={item.href}
+                      tabIndex={-1}
+                      onPointerDown={event => event.currentTarget.focus()}
+                      onSelect={() => navigate(item.href)}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
             </>
           )}
         </CommandList>

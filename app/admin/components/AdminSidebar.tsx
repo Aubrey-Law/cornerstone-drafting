@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useMatterWorkspaceContext } from '@/lib/matters/WorkspaceContext'
-import { matterIdFromPath, matterWorkspaceHref } from '@/lib/matters/workspace'
+import { matterIdFromPath } from '@/lib/matters/workspace'
 import { Pin, PinOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -33,9 +33,8 @@ interface AdminSidebarProps {
   badgeCounts: SidebarCounts
   matters: SidebarMattersState
   /**
-   * Passed in rather than imported. `adminNavItems` has to stay a literal in
-   * AdminLayoutClient.tsx because two tests read that file as text, and importing
-   * it here would make the shell and this component import each other.
+   * Passed in rather than imported. The list lives in `adminNav.ts` so search
+   * and the rail share one source; importing the shell here would cycle.
    */
   navItems: readonly AdminNavItem[]
   navGroups: readonly string[]
@@ -62,10 +61,10 @@ function MatterRow({
   const milestoneMs = milestone !== null && Number.isFinite(milestone) ? milestone : null
   // The title is already the client's name, so the second line carries what
   // tells two of that client's matters apart: when it last moved, then its
-  // number. The date goes first so truncation clips the number, not the date.
-  const subtitle = [formatLastMilestone(milestoneMs), matter.matter_number]
-    .filter(Boolean)
-    .join(' · ')
+  // number. The date stays; a number that does not fit the row is dropped
+  // whole. The link tooltip still has the full title, client, and number.
+  const milestoneLabel = formatLastMilestone(milestoneMs)
+  const matterNumber = matter.matter_number?.trim() || ''
 
   return (
     <MatterContextMenu
@@ -99,11 +98,17 @@ function MatterRow({
           */}
           <span
             className={cn(
-              'truncate text-micro leading-tight opacity-60 transition-opacity duration-200 group-hover/matter:opacity-100',
+              'flex max-h-[1.25em] flex-wrap overflow-hidden text-micro leading-tight opacity-60 transition-opacity duration-200 group-hover/matter:opacity-100',
               matterRecencyTone(milestoneMs),
             )}
           >
-            {subtitle || '—'}
+            {milestoneLabel ? <span className="shrink-0">{milestoneLabel}</span> : null}
+            {matterNumber ? (
+              <span className={cn('whitespace-nowrap', !milestoneLabel && 'min-w-0 truncate')}>
+                {milestoneLabel ? ` · ${matterNumber}` : matterNumber}
+              </span>
+            ) : null}
+            {!milestoneLabel && !matterNumber ? '—' : null}
           </span>
         </Link>
 
@@ -128,12 +133,6 @@ function MatterRow({
             onMovePin={onMovePin}
           />
         </div>
-        {(active || isPinned) && <details open={active || undefined} className="px-3 pb-2 text-xs">
-          <summary className="cursor-pointer py-1 text-muted-foreground">Workspace</summary>
-          <div className="flex flex-col gap-1 border-l pl-3">
-            {(['overview', 'tasks', 'drafting', 'documents', 'history'] as const).map(section => <Link key={section} href={matterWorkspaceHref(matter.matter_id, section)} onClick={onNavigate} className="rounded px-2 py-1 capitalize hover:bg-accent">{section}</Link>)}
-          </div>
-        </details>}
       </div>
     </MatterContextMenu>
   )
@@ -164,16 +163,19 @@ export function isNavItemActive(item: Pick<AdminNavItem, 'href' | 'exact'>, path
   )
 }
 
-function readExpandedGroups(): Record<string, boolean> {
+function readExpandedGroups(): { stored: boolean; groups: Record<string, boolean> } {
   try {
     const raw = window.localStorage.getItem(NAV_GROUP_EXPANDED_KEY)
-    if (!raw) return {}
+    if (raw === null) return { stored: false, groups: {} }
     const parsed = JSON.parse(raw) as unknown
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, boolean>
-      : {}
+    return {
+      stored: true,
+      groups: parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, boolean>
+        : {},
+    }
   } catch {
-    return {}
+    return { stored: true, groups: {} }
   }
 }
 
@@ -193,7 +195,19 @@ export function AdminSidebar({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    setExpandedGroups(readExpandedGroups())
+    const { stored, groups } = readExpandedGroups()
+    if (stored) {
+      setExpandedGroups(groups)
+      return
+    }
+    // First visit: Operations is open once, then the stored choice takes over.
+    const seeded = { Operations: true }
+    setExpandedGroups(seeded)
+    try {
+      window.localStorage.setItem(NAV_GROUP_EXPANDED_KEY, JSON.stringify(seeded))
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   const setGroupExpanded = (group: string, open: boolean) => {
