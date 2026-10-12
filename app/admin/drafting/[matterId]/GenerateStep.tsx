@@ -333,7 +333,27 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
         const data = await response.json().catch(() => ({})) as { error?: string; detail?: string }
         if (!response.ok) {
           const message = data.detail ?? data.error ?? 'Draft preflight failed.'
-          setResult({ success: false, error: message })
+          // Matter type is refused before a preflight report exists. Surface it
+          // on the same report so the Fix link can open the design-sheet field.
+          if (message === MATTER_TYPE_REQUIRED_MESSAGE) {
+            setPreflight({
+              sourceRevision: 'matter-type-required',
+              matterId,
+              designSheetId: null,
+              engine: 'node',
+              canGenerate: false,
+              packageNames: [],
+              documentsToGenerate: [],
+              unsupportedDocumentLabels: [],
+              fallbackPackageNames: [],
+              missing: [],
+              missingFields: [],
+              warnings: [],
+              error: message,
+            })
+          } else {
+            setResult({ success: false, error: message })
+          }
           toast.error(message)
           return
         }
