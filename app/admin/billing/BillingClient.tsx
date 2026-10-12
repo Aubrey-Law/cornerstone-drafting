@@ -51,8 +51,8 @@ import {
 import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
 import { BatchInvoiceDialog } from '@/components/billing/BatchInvoiceDialog'
 import type { InvoiceListRowView } from '@/components/billing/InvoiceListTable'
+import { BillingDashboard } from './BillingDashboard'
 import { BillingViewNav } from './BillingViewNav'
-import { BillingWorkSummary } from './BillingWorkSummary'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -93,7 +93,8 @@ export default function BillingClient({
   const month = /^\d{4}-\d{2}$/.test(searchParams.get('month') ?? '')
     ? searchParams.get('month')!
     : initialSnapshot.selectedMonth
-  const view = searchParams.get('tab') === 'insights' ? 'reports' : 'work'
+  const tabParam = searchParams.get('tab')
+  const view = tabParam === 'insights' ? 'reports' : tabParam === 'ledger' ? 'ledger' : 'dashboard'
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -154,7 +155,7 @@ export default function BillingClient({
     const params = new URLSearchParams(routeQuery)
     params.delete('page')
     if (next.tab !== undefined) {
-      if (next.tab === 'ledger') params.delete('tab')
+      if (next.tab === 'dashboard') params.delete('tab')
       else params.set('tab', next.tab)
     }
     const nextFilter = next.filter ?? filter
@@ -489,7 +490,13 @@ export default function BillingClient({
       <NavigationReady route="Billing" />
       <PageHeader
         title="Billing"
-        description="Charges, invoices, payments, and legal plan claims across all matters."
+        description={
+          view === 'dashboard'
+            ? 'What to bill, collect, and follow up on.'
+            : view === 'ledger'
+              ? 'Charges across matters, one client at a time.'
+              : 'Collections, aging, and plan claims for the month.'
+        }
         actions={
           <>
             <DropdownMenu>
@@ -541,9 +548,15 @@ export default function BillingClient({
 
       <BillingViewNav active={view} />
 
-      {view === 'work' ? (
+      {view === 'dashboard' ? (
+        <BillingDashboard
+          snapshot={initialSnapshot}
+          counts={counts}
+          onNudgeAction={nudge => void actOnNudge(nudge)}
+          onDismiss={nudge => void dismissNudge(nudge)}
+        />
+      ) : view === 'ledger' ? (
         <div className="min-w-0 space-y-4">
-          <BillingWorkSummary counts={counts} month={month} active={filter} />
           {pagination && (
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <p className="text-muted-foreground">

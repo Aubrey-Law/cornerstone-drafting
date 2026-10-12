@@ -36,7 +36,8 @@ describe('invoice register shell', () => {
     render(await InvoiceRegister({ params: {} }))
 
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Billing work' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Ledger' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Invoices' }).getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('link', { name: 'Reports' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'New invoice' })).toBeTruthy()
