@@ -30,7 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useConfirm } from '@/components/useConfirm'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_REPLY_SLA_HOURS } from '@/lib/comms/thread'
-import { formatBytes } from '@/lib/email/attachments'
+import { formatBytes } from '@/lib/email/formatBytes'
 import { triageLabelName } from '@/lib/emailTriage/labels'
 import type {
   EmailTriageRow,

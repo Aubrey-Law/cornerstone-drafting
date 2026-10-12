@@ -30,12 +30,6 @@ export function totalAttachmentBytes(attachments: EmailAttachment[]): number {
   return attachments.reduce((sum, item) => sum + item.content.byteLength, 0)
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 type Admin = ReturnType<typeof getAdminClient>
 
 /**
@@ -75,3 +69,5 @@ export async function loadMatterDocumentAttachments(
 
   return attachments
 }
+
+export { formatBytes } from './formatBytes'
