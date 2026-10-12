@@ -201,8 +201,8 @@ export default async function PortalDashboardPage() {
         ) : null}
       />
 
-      {/* ── stage tracker ── */}
-      <section className="rounded-lg border border-border bg-card p-5">
+      {/* ── stage tracker (flat — not a card) ── */}
+      <section className="py-2">
         <ol className="flex items-start">
           {progress.milestones.map((step, i) => {
             const done = step.state === 'completed'
@@ -252,9 +252,9 @@ export default async function PortalDashboardPage() {
         )}
       </section>
 
-      {/* ── where your plan stands ── */}
+      {/* ── where your plan stands (supporting copy, not a card) ── */}
       {planStatus && (
-        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="plan-status">
+        <section className="mt-5 border-t border-border pt-4" data-testid="plan-status">
           <h2 className="text-sm font-semibold text-foreground">Where your plan stands</h2>
           <p className="mt-2 text-sm leading-relaxed text-foreground">{planStatus.body}</p>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -265,9 +265,9 @@ export default async function PortalDashboardPage() {
         </section>
       )}
 
-      {/* ── what's next ── */}
+      {/* ── what's next — the only hero card on the dashboard ── */}
       <section
-        className="mt-4 rounded-lg border p-5"
+        className="mt-5 rounded-lg border p-5"
         style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue-strong-border)' }}
       >
         <h2 className="text-sm font-semibold text-foreground">What&apos;s next</h2>
@@ -281,7 +281,7 @@ export default async function PortalDashboardPage() {
 
       {/* ── ready for your signature ── */}
       {signaturesResult.value.length > 0 && (
-        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="pending-signatures">
+        <section className="mt-5 border-t border-border pt-4" data-testid="pending-signatures">
           <h2 className="text-sm font-semibold text-foreground">Ready for your signature</h2>
           <ul className="mt-3 space-y-2">
             {[...pendingSignatures.mine, ...pendingSignatures.others].slice(0, 4).map(signature => (
@@ -306,7 +306,7 @@ export default async function PortalDashboardPage() {
 
       {/* ── your assets, once the plan is signed ── */}
       {fundingStage && assets.length > 0 && (
-        <section className="mt-4 rounded-lg border border-border bg-card p-5" data-testid="portal-funding">
+        <section className="mt-5 border-t border-border pt-4" data-testid="portal-funding">
           <h2 className="text-sm font-semibold text-foreground">Moving your assets into the plan</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {funding.done} of {funding.total} in the plan
@@ -334,7 +334,7 @@ export default async function PortalDashboardPage() {
 
       {/* ── what the firm has asked for ── */}
       {openRequests.length > 0 && (
-        <section className="mt-4 rounded-lg border border-border bg-card p-5">
+        <section className="mt-5 border-t border-border pt-4">
           <h2 className="text-sm font-semibold text-foreground">What we need from you</h2>
           <ul className="mt-3 space-y-2">
             {openRequests.slice(0, 4).map(request => (
@@ -365,9 +365,9 @@ export default async function PortalDashboardPage() {
         </div>
       )}
 
-      {/* ── documents + messages ── */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <section className="rounded-lg border border-border bg-card p-5">
+      {/* ── documents + messages (flat sections) ── */}
+      <div className="mt-5 grid gap-6 border-t border-border pt-4 sm:grid-cols-2">
+        <section>
           <h2 className="text-sm font-semibold text-foreground">Recent documents</h2>
           {!documentsResult.available ? (
             <p role="alert" className="mt-2 text-sm text-destructive">Documents are temporarily unavailable. <Link href="/documents" className="underline">Retry documents</Link></p>
@@ -397,7 +397,7 @@ export default async function PortalDashboardPage() {
           </Button>
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5">
+        <section>
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">Messages</h2>
             {unreadCount > 0 && (
@@ -431,9 +431,9 @@ export default async function PortalDashboardPage() {
       </div>
 
       {/* ── appointment + firm contact ── */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-5 grid gap-6 border-t border-border pt-4 sm:grid-cols-2">
         {appointment && (
-          <section className="rounded-lg border border-border bg-card p-5">
+          <section>
             <h2 className="text-sm font-semibold text-foreground">Next appointment</h2>
             <p className="mt-2 text-sm font-medium text-foreground">
               {appointment.typeLabel ?? 'Appointment'}
@@ -448,7 +448,7 @@ export default async function PortalDashboardPage() {
           </section>
         )}
 
-        <section className="rounded-lg border border-border bg-card p-5">
+        <section>
           <h2 className="text-sm font-semibold text-foreground">{firm.firmName}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Questions? Reach us directly — we&apos;re happy to help.

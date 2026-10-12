@@ -3,8 +3,8 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { consumeRateLimit } from '@/lib/rateLimit'
 import { GmailSendError } from '@/lib/email/gmailSend'
 import { createGmailDraft, deleteGmailDraft } from '@/lib/email/gmailDraft'
-import { applyTriageLabel } from '@/lib/email/gmailLabels'
 import { triageLabelName } from '@/lib/emailTriage/labels'
+import { applyAndRecordMailboxSort, loadArchiveNonClientEnabled } from '@/lib/emailTriage/mailboxSort'
 import { GmailReadError, getMailboxIdentity, getThread } from '@/lib/email/gmailRead'
 import { buildReplyHeaders } from '@/lib/email/replyHeaders'
 import { replySubject } from '@/lib/emailTriage/prompt'
@@ -79,24 +79,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       userId: auth.userId,
     })
 
-    // File the thread under Client / Lead. The draft is already in Gmail, which
-    // is what the attorney asked for, so a labelling failure is reported back
-    // rather than turned into a failed approval.
-    let label: string | null = null
-    let labelError: string | null = null
-    try {
-      label = await applyTriageLabel({
-        token: identity.token,
-        threadId: row.gmail_thread_id,
-        classification: row.classification,
-      })
-    } catch (error) {
-      labelError = error instanceof Error ? error.message : String(error)
-    }
-    // Kept on the row, not only in the response, so the triage page still says
-    // the thread is unlabelled after a reload.
+    // Handled + relationship label + archive. The draft lives under Drafts;
+    // labelling failure is reported rather than failing the approval.
+    const archiveEnabled = await loadArchiveNonClientEnabled().catch(() => true)
+    const sorted = await applyAndRecordMailboxSort({
+      token: identity.token,
+      threadId: row.gmail_thread_id,
+      kind: 'handled',
+      classification: row.classification,
+      archiveEnabled,
+      triageRowId: id,
+    })
+    const label = sorted.label
+    const labelError = sorted.error
     const labelNotice = labelError
-      ? `The draft is in Gmail, but the ${triageLabelName(row.classification) ?? ''} label could not be applied: ${labelError}`
+      ? `The draft is in Gmail, but the ${triageLabelName(row.classification) ?? 'Cornerstone'} label could not be applied: ${labelError}`
       : null
 
     const now = new Date().toISOString()

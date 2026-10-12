@@ -77,7 +77,7 @@ describe('Record email history', () => {
       id: 'in-1', channel: 'email', direction: 'inbound', body: 'Quick question about the deed', meta: 'Deed question',
       sender: 'Pat Smith <client@example.test>', body_href: '/api/admin/comms/email-inbound/in-1',
     })
-    expect(items[1].links.map((link: { label: string }) => link.label)).toEqual(['Reply in Email triage', 'Open in Gmail'])
+    expect(items[1].links.map((link: { label: string }) => link.label)).toEqual(['Reply in Mail Desk', 'Open in Gmail'])
     expect(mocks.calls.filter(call => call.table === 'email_inbound_messages' && call.op === 'update')).toHaveLength(1)
     expect(mocks.calls).toContainEqual({ table: 'email_inbound_messages', op: 'in', args: ['id', ['in-1']] })
   })

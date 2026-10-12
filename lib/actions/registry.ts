@@ -550,6 +550,140 @@ const definitions: ActionDefinition[] = [
     },
   } as ActionDefinition<{ workKey: string; state: 'open' | 'blocked' | 'snoozed'; snoozedUntil: string | null }>,
   {
+    key: 'portal.messages.mark_read',
+    risk: 'internal_write',
+    validate(value) {
+      const input = objectInput(value)
+      const matterId = optionalUuid(input, 'matterId')
+      if (!matterId) throw new Error('A valid matter is required')
+      return { matterId }
+    },
+    async preview(input, context) {
+      const { count, error } = await context.admin.from('messages').select('id', { count: 'exact', head: true })
+        .eq('matter_id', input.matterId).eq('sender_role', 'client').is('read_at', null)
+      if (error) throw new Error(error.message)
+      return {
+        display: { action: 'Mark portal messages read', matterId: input.matterId, unread: count ?? 0 },
+        auditBefore: { matterId: input.matterId, unread: count ?? 0 },
+        auditAfter: { matterId: input.matterId, unread: 0 },
+      }
+    },
+    async execute(input, context) {
+      const now = new Date().toISOString()
+      const { data, error } = await context.admin.from('messages')
+        .update({ read_at: now })
+        .eq('matter_id', input.matterId).eq('sender_role', 'client').is('read_at', null)
+        .select('id')
+      if (error) throw new Error(error.message)
+      return { matterId: input.matterId, marked: data?.length ?? 0 }
+    },
+    auditResult(result) {
+      const value = result as { matterId?: string; marked?: number }
+      return { matterId: value.matterId, marked: value.marked ?? 0 }
+    },
+  } as ActionDefinition<{ matterId: string }>,
+  {
+    key: 'sms.thread.mark_read',
+    risk: 'internal_write',
+    validate(value) {
+      const input = objectInput(value)
+      const phone = typeof input.phone === 'string' ? input.phone.trim() : ''
+      if (!phone || phone.length > 32) throw new Error('A phone number is required')
+      return { phone }
+    },
+    async preview(input) {
+      return {
+        display: { action: 'Mark texts read', phone: input.phone },
+        auditBefore: { phone: input.phone },
+        auditAfter: { phone: input.phone, read: true },
+      }
+    },
+    async execute(input) {
+      const { markSmsThreadRead } = await import('@/lib/queries/smsThreads')
+      const marked = await markSmsThreadRead(input.phone)
+      return { phone: input.phone, marked }
+    },
+    auditResult(result) {
+      const value = result as { phone?: string; marked?: number }
+      return { phone: value.phone, marked: value.marked ?? 0 }
+    },
+  } as ActionDefinition<{ phone: string }>,
+  {
+    key: 'email.triage.dismiss',
+    risk: 'internal_write',
+    validate(value) {
+      const input = objectInput(value)
+      const threadId = optionalUuid(input, 'threadId')
+      if (!threadId) throw new Error('A valid triage thread is required')
+      const scope = input.scope === 'sender' || input.scope === 'domain' ? input.scope : 'thread'
+      return { threadId, scope: scope as 'thread' | 'sender' | 'domain' }
+    },
+    async preview(input, context) {
+      const { data, error } = await context.admin.from('email_triage_threads')
+        .select('id, subject, status, sender_email').eq('id', input.threadId).maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Triage thread not found')
+      return {
+        display: {
+          action: 'Dismiss email triage',
+          subject: data.subject,
+          fromStatus: data.status,
+          scope: input.scope,
+        },
+        auditBefore: { threadId: data.id, status: data.status, sender: data.sender_email },
+        auditAfter: { threadId: data.id, status: 'dismissed', scope: input.scope },
+      }
+    },
+    async execute(input, context) {
+      const now = new Date().toISOString()
+      const { data, error } = await context.admin.from('email_triage_threads')
+        .update({ status: 'dismissed', dismissed_at: now, dismissed_reason: 'Dismissed from Command Center', updated_at: now })
+        .eq('id', input.threadId)
+        .in('status', ['needs_reply', 'drafting', 'drafted', 'failed', 'approved'])
+        .select('id, status')
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Triage thread not found or already cleared')
+      return data
+    },
+    auditResult(result) {
+      const value = result as { id?: string; status?: string }
+      return { threadId: value.id, status: value.status }
+    },
+  } as ActionDefinition<{ threadId: string; scope: 'thread' | 'sender' | 'domain' }>,
+  {
+    key: 'matter.uploads.mark_reviewed',
+    risk: 'internal_write',
+    validate(value) {
+      const input = objectInput(value)
+      const matterId = optionalUuid(input, 'matterId')
+      if (!matterId) throw new Error('A valid matter is required')
+      return { matterId }
+    },
+    async preview(input, context) {
+      const { data, error } = await context.admin.from('matters').select('id, name').eq('id', input.matterId).maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Matter not found')
+      return {
+        display: { action: 'Mark client uploads reviewed', matter: data.name ?? input.matterId },
+        auditBefore: { matterId: input.matterId, reviewed: false },
+        auditAfter: { matterId: input.matterId, reviewed: true },
+      }
+    },
+    async execute(input, context) {
+      const { markPortalUploadsReviewed, markIntakeUploadsReviewed } = await import('@/lib/matter/unreviewedUploads')
+      const { resolveMatterIntakeIdForMatter } = await import('@/lib/intake/resolveMatterIntakeId')
+      await markPortalUploadsReviewed(context.admin, input.matterId)
+      const intakeId = await resolveMatterIntakeIdForMatter(context.admin, input.matterId)
+      if (intakeId) await markIntakeUploadsReviewed(context.admin, intakeId)
+      return { matterId: input.matterId, intakeId }
+    },
+    auditResult(result) {
+      const value = result as { matterId?: string; intakeId?: string | null }
+      return { matterId: value.matterId, intakeId: value.intakeId ?? null }
+    },
+  } as ActionDefinition<{ matterId: string }>,
+  {
     key: 'task.create',
     risk: 'internal_write',
     validate: taskCreateInput,

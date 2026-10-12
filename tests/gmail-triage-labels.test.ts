@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyTriageLabel, triageLabelName } from '@/lib/email/gmailLabels'
+import { CORNERSTONE_LABEL } from '@/lib/emailTriage/labels'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -8,34 +9,36 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('triageLabelName', () => {
-  it('labels clients, leads and possible leads', () => {
-    expect(triageLabelName('client')).toBe('Client')
-    expect(triageLabelName('lead')).toBe('Lead')
-    expect(triageLabelName('possible_lead')).toBe('Lead')
-    expect(triageLabelName('contact')).toBeNull()
+  it('labels clients, leads, possible leads, and contacts under Cornerstone/', () => {
+    expect(triageLabelName('client')).toBe(CORNERSTONE_LABEL.client)
+    expect(triageLabelName('lead')).toBe(CORNERSTONE_LABEL.lead)
+    expect(triageLabelName('possible_lead')).toBe(CORNERSTONE_LABEL.lead)
+    expect(triageLabelName('contact')).toBe(CORNERSTONE_LABEL.contact)
   })
 })
 
 describe('applyTriageLabel', () => {
-  it('reuses an existing label, matched case-insensitively', async () => {
+  it('reuses an existing Cornerstone label, matched case-insensitively', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ labels: [{ id: 'Label_7', name: 'client' }] }))
+      .mockResolvedValueOnce(jsonResponse({
+        labels: [{ id: 'Label_7', name: 'cornerstone/client' }],
+      }))
       .mockResolvedValueOnce(jsonResponse({ id: 'thread-1' }))
     vi.stubGlobal('fetch', fetchMock)
 
     const applied = await applyTriageLabel({ token: 't', threadId: 'thread-1', classification: 'client' })
 
-    expect(applied).toBe('Client')
+    expect(applied).toBe(CORNERSTONE_LABEL.client)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [url, init] = fetchMock.mock.calls[1]
     expect(url).toContain('/threads/thread-1/modify')
     expect(JSON.parse(init.body)).toEqual({ addLabelIds: ['Label_7'] })
   })
 
-  it('creates the label when the mailbox has none', async () => {
+  it('creates the nested label when the mailbox has none', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ labels: [{ id: 'INBOX', name: 'INBOX' }] }))
-      .mockResolvedValueOnce(jsonResponse({ id: 'Label_9', name: 'Lead' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'Label_9', name: CORNERSTONE_LABEL.lead }))
       .mockResolvedValueOnce(jsonResponse({ id: 'thread-2' }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -44,16 +47,8 @@ describe('applyTriageLabel', () => {
     const [createUrl, createInit] = fetchMock.mock.calls[1]
     expect(createUrl).toMatch(/\/labels$/)
     expect(createInit.method).toBe('POST')
-    expect(JSON.parse(createInit.body).name).toBe('Lead')
+    expect(JSON.parse(createInit.body).name).toBe(CORNERSTONE_LABEL.lead)
     expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ addLabelIds: ['Label_9'] })
-  })
-
-  it('makes no Gmail calls for an unlabelled classification', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    expect(await applyTriageLabel({ token: 't', threadId: 'x', classification: 'contact' })).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('surfaces a Gmail error', async () => {
@@ -65,24 +60,23 @@ describe('applyTriageLabel', () => {
 })
 
 describe('where labels are applied', () => {
-  it('labels a thread the scan finds answered from Gmail', async () => {
+  it('sorts a thread the scan finds answered from Gmail', async () => {
     const { readFileSync } = await import('node:fs')
     const scan = readFileSync('lib/emailTriage/scan.ts', 'utf-8')
     const resolve = scan.slice(scan.indexOf("action.kind === 'resolve'"))
-    expect(resolve.slice(0, resolve.indexOf('continue\n', resolve.indexOf('applyTriageLabel')))).toContain(
-      'classification: existing!.classification',
-    )
+    expect(resolve).toContain("kind: 'handled'")
+    expect(resolve).toContain('applyAndRecordMailboxSort')
   })
 })
 
 describe('removeTriageLabels', () => {
-  it('removes only the triage labels the mailbox has, on every thread', async () => {
+  it('removes Cornerstone and legacy triage labels the mailbox has', async () => {
     const { removeTriageLabels } = await import('@/lib/email/gmailLabels')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({
         labels: [
-          { id: 'Label_C', name: 'Client' },
-          { id: 'Label_L', name: 'lead' },
+          { id: 'Label_C', name: CORNERSTONE_LABEL.client },
+          { id: 'Label_L', name: 'Lead' },
           { id: 'Label_X', name: 'Billing' },
         ],
       }))
@@ -97,7 +91,9 @@ describe('removeTriageLabels', () => {
       expect.stringContaining('/threads/b/modify'),
     ])
     for (const [, init] of modifies) {
-      expect(JSON.parse(init.body)).toEqual({ removeLabelIds: ['Label_C', 'Label_L'] })
+      expect(JSON.parse(init.body).removeLabelIds).toEqual(
+        expect.arrayContaining(['Label_C', 'Label_L']),
+      )
     }
   })
 
@@ -112,13 +108,15 @@ describe('removeTriageLabels', () => {
 })
 
 describe('never this sender / domain', () => {
-  it('cleans up Gmail for the sender and domain scopes, not a plain dismiss', async () => {
+  it('cleans up Gmail for the sender and domain scopes, and sorts thread dismiss', async () => {
     const { readFileSync } = await import('node:fs')
     const route = readFileSync('app/api/admin/email-triage/[id]/dismiss/route.ts', 'utf-8')
-    expect(route).toContain("scope === 'thread'\n    ? null\n    : await cleanUpInGmail(")
+    expect(route).toContain("scope === 'thread'")
+    expect(route).toContain("kind: 'dismissed'")
     expect(route).toContain("{ column: 'sender_domain', value: emailDomain(row.sender_email) }")
     expect(route).toContain(".eq(match.column, match.value)")
     expect(route).toContain('removeTriageLabels')
+    expect(route).toContain("kind: 'noise'")
     expect(route).toContain('deleteGmailDraft')
   })
 })

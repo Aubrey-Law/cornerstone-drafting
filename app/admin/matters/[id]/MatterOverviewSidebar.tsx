@@ -14,7 +14,8 @@ import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterPlanMirror } from '@/lib/matter/planMirror'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 
-const CARD = 'rounded-lg border bg-card px-4 py-3.5'
+/** Flat summary blocks — borders only where a control needs a hit target. */
+const CARD = 'rounded-md px-1 py-2'
 const LABEL = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground'
 
 function initials(name: string): string {
@@ -116,7 +117,7 @@ export function FeeSummaryCard({ details, progress, error, onBilling }: {
     : typeof stated === 'number' ? `${wholeDollars(stated)} flat` : null
   return (
     <button type="button" onClick={onBilling} aria-label="Fee — open billing"
-      className={`${CARD} block w-full text-left transition-colors hover:border-input focus-visible:outline-2 focus-visible:outline-ring`}>
+      className="block w-full rounded-md border border-border bg-card px-4 py-3.5 text-left transition-colors hover:border-input focus-visible:outline-2 focus-visible:outline-ring">
       <span className="mb-2 flex items-baseline justify-between gap-2">
         <span className={LABEL}>Fee</span>
         {headline && <span className="text-xs text-muted-foreground tabular-nums">{headline}</span>}

@@ -146,7 +146,7 @@ describe('inbound email on the record', () => {
       sender: 'Pat Smith <pat@example.com>', created_at: '2026-10-04T12:00:00.000Z', body_href: '/api/admin/comms/email-inbound/in-1',
     })
     expect(item.links).toEqual([
-      { label: 'Reply in Email triage', href: '/admin/email-triage?thread=triage-3' },
+      { label: 'Reply in Mail Desk', href: '/admin/email-triage?thread=triage-3' },
       { label: 'Open in Gmail', href: gmailThreadHref('thread-9') },
     ])
   })

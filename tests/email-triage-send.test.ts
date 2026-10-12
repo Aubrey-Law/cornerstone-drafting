@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
   sendViaGmail: vi.fn(),
   deleteGmailDraft: vi.fn(),
-  applyTriageLabel: vi.fn(),
+  applyAndRecordMailboxSort: vi.fn(),
+  loadArchiveNonClientEnabled: vi.fn(),
   logSend: vi.fn(),
   envEmailsHardKilled: vi.fn(),
   getAllSettings: vi.fn(),
@@ -36,7 +37,10 @@ vi.mock('@/lib/email/gmailSend', () => ({
   sendViaGmail: mocks.sendViaGmail,
 }))
 vi.mock('@/lib/email/gmailDraft', () => ({ deleteGmailDraft: mocks.deleteGmailDraft }))
-vi.mock('@/lib/email/gmailLabels', () => ({ applyTriageLabel: mocks.applyTriageLabel }))
+vi.mock('@/lib/emailTriage/mailboxSort', () => ({
+  applyAndRecordMailboxSort: mocks.applyAndRecordMailboxSort,
+  loadArchiveNonClientEnabled: mocks.loadArchiveNonClientEnabled,
+}))
 vi.mock('@/lib/email/send', () => ({ logSend: mocks.logSend }))
 vi.mock('@/lib/email/settings', () => ({
   envEmailsHardKilled: mocks.envEmailsHardKilled,
@@ -136,7 +140,8 @@ beforeEach(() => {
   mocks.getThread.mockResolvedValue({ id: 'thread-1', messages: [message('msg-in', 'client@example.com')] })
   mocks.sendViaGmail.mockResolvedValue({ fromAddress: ATTORNEY, messageId: 'sent-1', threadId: 'thread-1' })
   mocks.deleteGmailDraft.mockResolvedValue(undefined)
-  mocks.applyTriageLabel.mockResolvedValue('Client')
+  mocks.loadArchiveNonClientEnabled.mockResolvedValue(true)
+  mocks.applyAndRecordMailboxSort.mockResolvedValue({ label: 'Cornerstone/Client', error: null })
   mocks.logSend.mockResolvedValue('log-1')
 })
 

@@ -66,29 +66,53 @@ export function MatterStatCards({
   snapshot: MatterDashboardSnapshot
   aging: MatterAgingTiles
 }) {
+  // Always show open matters; hide attention/signing tiles when idle so the
+  // overview does not read as a hollow zero-stat dashboard.
+  const cards = [
+    {
+      icon: Briefcase,
+      label: 'Open matters',
+      value: snapshot.open.count,
+      caption: <MonthDelta total={snapshot.open} />,
+      href: '/admin/matters/list',
+      always: true,
+    },
+    {
+      icon: AlarmClock,
+      label: 'Needs attention',
+      value: snapshot.needsAttention,
+      caption: 'Firm-owned Critical, Must do, and Soon work',
+      href: '/admin/matters/list?card=attention',
+      always: false,
+    },
+    {
+      icon: FileSignature,
+      label: 'Signing soon',
+      value: snapshot.signingSoon,
+      caption: 'Signing date within 30 days',
+      href: '/admin/matters/list?card=signing',
+      always: false,
+    },
+  ].filter(card => card.always || card.value > 0)
+
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
-      <StatCard
-        icon={Briefcase}
-        label="Open matters"
-        value={snapshot.open.count}
-        caption={<MonthDelta total={snapshot.open} />}
-        href="/admin/matters/list"
-      />
-      <StatCard
-        icon={AlarmClock}
-        label="Needs attention"
-        value={snapshot.needsAttention}
-        caption="Firm-owned Critical, Must do, and Soon work"
-        href="/admin/matters/list?card=attention"
-      />
-      <StatCard
-        icon={FileSignature}
-        label="Signing soon"
-        value={snapshot.signingSoon}
-        caption="Signing date within 30 days"
-        href="/admin/matters/list?card=signing"
-      />
+    <div className={cnGrid(cards.length)}>
+      {cards.map(card => (
+        <StatCard
+          key={card.label}
+          icon={card.icon}
+          label={card.label}
+          value={card.value}
+          caption={card.caption}
+          href={card.href}
+        />
+      ))}
     </div>
   )
+}
+
+function cnGrid(count: number) {
+  if (count <= 1) return 'grid min-w-0 grid-cols-1 gap-3'
+  if (count === 2) return 'grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2'
+  return 'grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3'
 }

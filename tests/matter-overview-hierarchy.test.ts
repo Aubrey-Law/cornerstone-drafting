@@ -13,7 +13,7 @@ describe('matter overview hierarchy', () => {
     expect(client).not.toContain('MatterOverviewSummaryCards')
   })
 
-  it('uses plain collection tab labels, keeps their workspaces mounted, and keeps Activity last', () => {
+  it('uses plain collection tab labels, keeps their workspaces mounted, and consolidates History last', () => {
     const client = fs.readFileSync(path.join(matterDir, 'MatterDetailClient.tsx'), 'utf8')
 
     const navigation = fs.readFileSync(path.join(process.cwd(), 'lib/matters/workspace.ts'), 'utf8')
@@ -21,6 +21,7 @@ describe('matter overview hierarchy', () => {
     expect(navigation).toContain("['people', 'People']")
     expect(navigation).toContain("['assets', 'Assets']")
     expect(navigation).toContain("['documents', 'Documents']")
+    expect(navigation).toContain("['history', 'History']")
     expect(client).toContain('documents: unreviewedUploadCounts.total')
     expect(client).not.toContain('People {contacts.length}')
     expect(client).not.toContain('Assets {initialEstateSnapshot.assetCount}')
@@ -28,7 +29,10 @@ describe('matter overview hierarchy', () => {
     expect(client).toContain('<MatterPeopleTab')
     expect(client).toContain('<MatterAssetsTabContent')
     expect(client).toContain('<MatterDocumentsWorkspace')
-    expect(client.indexOf('value="activity"')).toBeGreaterThan(client.indexOf('value="notes"'))
+    expect(client).toContain('value="history"')
+    expect(client).not.toContain('TabsContent value="notes"')
+    expect(client).not.toContain('TabsContent value="activity"')
+    expect(client).not.toContain('TabsContent value="reviews"')
   })
 
   it('folds the administrative fields into the facts panel and exposes persistent save state', () => {

@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { PasswordInput } from '@/components/auth/PasswordInput'
 import { AuthShell } from '@/components/layout/AuthShell'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   DEFAULT_ADMIN_HOME,
   safeAdminRedirectPath,
@@ -14,11 +17,6 @@ import { ensureUserProfile } from '@/lib/auth/ensureUserProfile'
 import { toast } from 'sonner'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
-
-// text-base on mobile (matching components/ui/input.tsx): iOS Safari auto-zooms
-// the page when focusing an input whose font-size is under 16px.
-const inputCls =
-  'mt-1 block h-11 w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground md:text-sm'
 
 function GoogleIcon() {
   return (
@@ -30,9 +28,6 @@ function GoogleIcon() {
     </svg>
   )
 }
-
-const oauthBtnCls =
-  'flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent disabled:opacity-50'
 
 async function resolveDestination(userId: string, redirectTo: string | null): Promise<string> {
   const { data: authData } = await supabase.auth.getUser()
@@ -125,24 +120,26 @@ function LoginForm() {
 
   return (
     <AuthShell>
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-5 shadow-sm sm:p-8">
+      {/* Stronger border + elevated card so the form reads against the dark shell. */}
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border-strong bg-card p-5 shadow-md sm:p-8">
           <div>
             <h2 className="text-center text-lg font-medium text-foreground">Sign in</h2>
-            <p className="mt-1 text-center text-xs text-muted-foreground/60">
+            <p className="mt-1 text-center text-xs text-muted-foreground">
               Staff and client access
             </p>
           </div>
 
           <div className="space-y-3">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => void signInWithOAuth('google')}
               disabled={oauthPending !== null}
-              className={oauthBtnCls}
+              className="h-11 w-full gap-2.5"
             >
               <GoogleIcon />
               {oauthPending === 'google' ? 'Redirecting…' : 'Continue with Google'}
-            </button>
+            </Button>
             <div className="flex items-center gap-3 pt-1">
               <span className="h-px flex-1 bg-border" />
               <span className="text-xs text-muted-foreground">or continue with email</span>
@@ -150,19 +147,17 @@ function LoginForm() {
             </div>
           </div>
 
-          <div>
-            <label htmlFor="login-email" className="block text-sm font-medium text-foreground">
-              Email address
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="login-email">Email address</Label>
+            <Input
               id="login-email"
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className={inputCls}
               placeholder="you@example.com"
+              className="h-11 text-base md:text-sm"
             />
           </div>
 
@@ -176,24 +171,21 @@ function LoginForm() {
             onChange={e => setPassword(e.target.value)}
             placeholder="Your password"
             labelAction={
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetLoading}
-                className="-my-2 min-h-11 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                className="-my-2 h-auto min-h-11 px-0 text-xs font-medium"
               >
                 {resetLoading ? 'Sending…' : 'Forgot password?'}
-              </button>
+              </Button>
             }
           />
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="h-11 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={loading} className="h-11 w-full">
             {loading ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
       </form>
     </AuthShell>
   )

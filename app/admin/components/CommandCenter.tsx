@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowRight,
@@ -40,6 +41,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import type { DailyPlanPreview, WorkItem, WorkPreferences } from '@/lib/work/types'
+import { SOLO_WORK_PREFERENCES } from '@/lib/work/types'
 import type { DailyPlanStatus } from '@/lib/work/plans'
 import type { DailyPlanCalendarStatus, DailyPlanCalendarSyncResult } from '@/lib/work/dailyPlanCalendar'
 import type { EndOfDayClosePreview, EndOfDayWorkItem } from '@/lib/work/endOfDay'
@@ -47,6 +49,8 @@ import { itemsExceptNow } from '@/lib/work/presentation'
 import { selectCommittedFocusItem, type CommittedFocusPlanItem } from '@/lib/work/committedFocus'
 import { buildCommittedDayAgenda, buildDayAgenda } from '@/lib/work/dayAgenda'
 import { capacityAvailabilityLabel } from '@/lib/work/capacityPresentation'
+import { resolveCommandCenterDone } from '@/lib/work/commandCenterDone'
+import { findMidDayCriticalItems } from '@/lib/work/midDayCritical'
 import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 import { getCalendarConfidence } from '@/lib/work/calendarConfidence'
 
@@ -63,6 +67,8 @@ interface Props {
   initialPlan: CommandCenterPlan | null
   initialApprovals: ApprovalProposal[]
   sourceErrors: string[]
+  /** False for a solo firm — Delegate is noise when nobody else can take the work. */
+  canDelegate?: boolean
 }
 
 const BAND_LABEL = ['Critical', 'Must do', 'Soon', 'Planned', 'Waiting'] as const
@@ -130,7 +136,17 @@ function PlanningPreferences({
           <div className="space-y-1.5"><Label htmlFor="workday-start">Workday starts</Label><Input id="workday-start" type="time" value={draft.workdayStart} onChange={event => setDraft(current => ({ ...current, workdayStart: event.target.value }))} /></div>
           <div className="space-y-1.5"><Label htmlFor="workday-end">Workday ends</Label><Input id="workday-end" type="time" value={draft.workdayEnd} onChange={event => setDraft(current => ({ ...current, workdayEnd: event.target.value }))} /></div>
         </div>
-        <DialogFooter><Button onClick={save} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Check />} Save preferences</Button></DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saving}
+            onClick={() => setDraft(SOLO_WORK_PREFERENCES)}
+          >
+            Solo practice preset
+          </Button>
+          <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Check />} Save preferences</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -413,18 +429,25 @@ function WorkCard({
   planId,
   openedAtRef,
   onRefresh,
+  onEnsurePlan,
+  canDelegate = true,
+  keyboardFocused = false,
 }: {
   item: WorkItem
   primary?: boolean
   planId: string | null
   openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
+  /** Lazily persist a draft so Start works before the attorney runs Create draft. */
+  onEnsurePlan?: () => Promise<string | null>
+  canDelegate?: boolean
+  keyboardFocused?: boolean
 }) {
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function planStatus(status: 'started' | 'completed') {
-    if (!planId) return
-    const response = await fetch(`/api/admin/daily-plans/${planId}`, {
+  async function planStatus(status: 'started' | 'completed', resolvedPlanId: string | null = planId) {
+    if (!resolvedPlanId) return
+    const response = await fetch(`/api/admin/daily-plans/${resolvedPlanId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -438,12 +461,16 @@ function WorkCard({
   async function start() {
     setBusy('start')
     try {
+      let resolvedPlanId = planId
+      if (!resolvedPlanId && onEnsurePlan) {
+        resolvedPlanId = await onEnsurePlan()
+      }
       if (item.sourceType === 'task') {
         await executeTodayInternalAction({
           actionKey: 'task.start', referencePayload: { taskId: item.sourceIds[0] }, displaySummary: `Start task: ${item.title}`, item,
         })
       }
-      await planStatus('started')
+      await planStatus('started', resolvedPlanId)
       await onRefresh()
       toast.success('Marked in progress')
     } catch (error) {
@@ -456,20 +483,20 @@ function WorkCard({
   async function done() {
     setBusy('done')
     try {
-      if (item.sourceType === 'task') {
-        await executeTodayInternalAction({
-          actionKey: 'task.complete', referencePayload: { taskId: item.sourceIds[0] }, displaySummary: `Complete task: ${item.title}`, item,
-        })
-      } else {
-        // Non-task items represent external state (an unread message, intake,
-        // invoice, etc.). Opening and resolving that source is the only honest
-        // completion path; a local checkmark must not hide unfinished work.
-        toast.info('Resolve this in its source record; Cornerstone will clear it automatically.')
+      const action = resolveCommandCenterDone(item)
+      if (!action) {
+        toast.info('Open the source record to finish this — Cornerstone will clear it when the underlying work is done.')
         return
       }
+      await executeTodayInternalAction({
+        actionKey: action.actionKey,
+        referencePayload: action.referencePayload,
+        displaySummary: action.displaySummary,
+        item,
+      })
       await planStatus('completed')
       await onRefresh()
-      toast.success('Completed')
+      toast.success(action.planOnly ? 'Cleared from today’s focus' : 'Completed')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to complete this work')
     } finally {
@@ -520,10 +547,15 @@ function WorkCard({
   const hasPersonalDisposition = item.state === 'blocked' || item.state === 'snoozed'
 
   return (
-    <article className={cn(
-      'rounded-xl border bg-card p-4 shadow-sm',
-      primary && 'border-primary/40 bg-primary/[0.035] p-5',
-    )}>
+    <article
+      id={`cc-row-${item.workKey}`}
+      data-work-key={item.workKey}
+      className={cn(
+        'rounded-xl border bg-card p-4 shadow-sm',
+        primary && 'border-primary/40 bg-primary/[0.035] p-5',
+        keyboardFocused && 'ring-2 ring-primary ring-offset-2',
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -557,7 +589,7 @@ function WorkCard({
           </Button>
         ) : (
           <>
-            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null || !planId}>
+            <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={start} disabled={busy !== null}>
               {busy === 'start' ? <Loader2 className="animate-spin" /> : <Play />} Start
             </Button>
             <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" onClick={done} disabled={busy !== null}>
@@ -571,9 +603,9 @@ function WorkCard({
             </Button>
           </>
         )}
-        {item.sourceType === 'task'
+        {canDelegate && (item.sourceType === 'task'
           ? <DelegateTaskButton item={item} onDelegated={onRefresh} />
-          : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>}
+          : <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled title="Only task work can be delegated directly"><Users /> Delegate</Button>)}
         <Button asChild size="sm" className="h-7 px-2 text-xs" variant="ghost">
           <Link href={assistantHref(item)}><Bot /> Ask Cornerstone</Link>
         </Button>
@@ -593,16 +625,31 @@ function WorkList({
   planId,
   openedAtRef,
   onRefresh,
+  onEnsurePlan,
+  canDelegate = true,
+  keyboardFocusKey = null,
 }: {
   items: WorkItem[]
   empty: string
   planId: string | null
   openedAtRef: RefObject<number>
   onRefresh: () => Promise<void>
+  onEnsurePlan?: () => Promise<string | null>
+  canDelegate?: boolean
+  keyboardFocusKey?: string | null
 }) {
   if (!items.length) return <p className="py-5 text-center text-sm text-muted-foreground">{empty}</p>
   return <div className="space-y-2">{items.map(item => (
-    <WorkCard key={item.workKey} item={item} planId={planId} openedAtRef={openedAtRef} onRefresh={onRefresh} />
+    <WorkCard
+      key={item.workKey}
+      item={item}
+      planId={planId}
+      openedAtRef={openedAtRef}
+      onRefresh={onRefresh}
+      onEnsurePlan={onEnsurePlan}
+      canDelegate={canDelegate}
+      keyboardFocused={keyboardFocusKey === item.workKey}
+    />
   ))}</div>
 }
 
@@ -735,14 +782,29 @@ function EndOfDayClose({
   )
 }
 
-export function CommandCenter({ initialPreview, preferences, initialPlan, initialApprovals, sourceErrors }: Props) {
+export function CommandCenter({
+  initialPreview,
+  preferences,
+  initialPlan,
+  initialApprovals,
+  sourceErrors,
+  canDelegate = true,
+}: Props) {
+  const router = useRouter()
   const openedAtMs = useRef(Date.now())
   const [preview, setPreview] = useState(initialPreview)
   const [workPreferences, setWorkPreferences] = useState(preferences)
   const [plan, setPlan] = useState(initialPlan)
-  const [focusMode, setFocusMode] = useState(false)
+  // A committed day should open on the next step — not a wall of lanes.
+  const [focusMode, setFocusMode] = useState(() => (
+    initialPlan?.status === 'committed'
+    && Boolean(selectCommittedFocusItem(initialPreview, initialPlan))
+  ))
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmUnverifiedCommitOpen, setConfirmUnverifiedCommitOpen] = useState(false)
+  const [interruptFocusKey, setInterruptFocusKey] = useState<string | null>(null)
+  const [dismissedCriticalKeys, setDismissedCriticalKeys] = useState<string[]>([])
+  const [keyboardFocusKey, setKeyboardFocusKey] = useState<string | null>(null)
 
   const removedWorkKeys = useMemo(() => new Set(
     plan?.status === 'committed'
@@ -762,12 +824,121 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
   // `now` points at an item in one of the plan lanes. Render that obligation
   // once, as the prominent next action, instead of making an ADHD user decide
   // whether two identical cards represent two separate commitments.
-  const focusItem = selectCommittedFocusItem(preview, plan)
+  const committedFocus = selectCommittedFocusItem(preview, plan)
+  const interruptFocusItem = interruptFocusKey
+    ? allWorkItems.find(item => item.workKey === interruptFocusKey && item.state === 'open') ?? null
+    : null
+  const focusItem = interruptFocusItem ?? committedFocus
   const calendarUnavailable = sourceErrors.includes('calendar')
   const nowItem = plan?.status === 'committed' ? focusItem : preview.now
   const visibleMustDo = itemsExceptNow(activeItems(preview.mustDo), nowItem)
   const visibleCommunication = itemsExceptNow(activeItems(preview.communication), nowItem)
   const visibleSuggested = itemsExceptNow(activeItems(preview.suggested), nowItem)
+  const midDayCritical = useMemo(() => {
+    if (plan?.status !== 'committed') return []
+    const plannedKeys = plan.items.map(item => item.work_key)
+    const dismissed = new Set(dismissedCriticalKeys)
+    return findMidDayCriticalItems(allWorkItems, plannedKeys)
+      .filter(item => !dismissed.has(item.workKey) && item.workKey !== interruptFocusKey)
+  }, [plan, allWorkItems, dismissedCriticalKeys, interruptFocusKey])
+
+  const keyboardTargets = useMemo(() => {
+    const rows: WorkItem[] = []
+    const seen = new Set<string>()
+    for (const item of [
+      ...(nowItem ? [nowItem] : []),
+      ...visibleMustDo,
+      ...visibleCommunication,
+      ...visibleSuggested,
+    ]) {
+      if (seen.has(item.workKey)) continue
+      seen.add(item.workKey)
+      rows.push(item)
+    }
+    return rows
+  }, [nowItem, visibleMustDo, visibleCommunication, visibleSuggested])
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], aside')) return
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return
+
+      const idx = keyboardTargets.findIndex(item => item.workKey === keyboardFocusKey)
+      const move = (delta: number) => {
+        if (!keyboardTargets.length) return
+        const next = idx === -1 ? (delta > 0 ? 0 : keyboardTargets.length - 1) : idx + delta
+        const clamped = Math.max(0, Math.min(keyboardTargets.length - 1, next))
+        const key = keyboardTargets[clamped].workKey
+        setKeyboardFocusKey(key)
+        document.getElementById(`cc-row-${key}`)?.scrollIntoView({ block: 'nearest' })
+      }
+      const focused = idx >= 0 ? keyboardTargets[idx] : null
+
+      switch (event.key) {
+        case 'j':
+        case 'J':
+        case 'ArrowDown':
+          event.preventDefault()
+          move(1)
+          break
+        case 'k':
+        case 'K':
+        case 'ArrowUp':
+          event.preventDefault()
+          move(-1)
+          break
+        case 'e':
+        case 'E':
+        case 'Enter':
+          if (focused) {
+            event.preventDefault()
+            router.push(focused.href)
+          }
+          break
+        case 'f':
+        case 'F':
+          if (focusItem) {
+            event.preventDefault()
+            setFocusMode(true)
+          }
+          break
+        case 'x':
+        case 'X':
+          if (focused) {
+            event.preventDefault()
+            const row = document.getElementById(`cc-row-${focused.workKey}`)
+            const done = Array.from(row?.querySelectorAll('button') ?? []).find(button =>
+              /\bDone\b/.test(button.textContent ?? ''))
+            done?.click()
+          }
+          break
+        case 's':
+        case 'S':
+          if (focused) {
+            event.preventDefault()
+            const row = document.getElementById(`cc-row-${focused.workKey}`)
+            const snooze = Array.from(row?.querySelectorAll('button') ?? []).find(button =>
+              /\bSnooze\b/.test(button.textContent ?? ''))
+            snooze?.click()
+          }
+          break
+        case 'Escape':
+          if (focusMode) {
+            event.preventDefault()
+            setFocusMode(false)
+          } else {
+            setKeyboardFocusKey(null)
+          }
+          break
+        default:
+          break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [keyboardTargets, keyboardFocusKey, focusItem, focusMode, router])
 
   async function updatePlanEditor(change: { order?: string[]; workKey?: string; status?: 'skipped' }) {
     if (!plan || plan.status !== 'committed') return
@@ -836,24 +1007,42 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
     }
   }
 
+  async function persistDraftPlan(options: { quiet?: boolean } = {}): Promise<string> {
+    const response = await fetch('/api/admin/daily-plans/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: preview.date }),
+    })
+    const body = await response.json().catch(() => ({})) as {
+      plan?: Omit<CommandCenterPlan, 'calendarStatus'>
+      preview?: DailyPlanPreview
+      calendarStatus?: DailyPlanCalendarStatus
+      error?: string
+    }
+    if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
+    setPlan({ ...body.plan, calendarStatus: body.calendarStatus ?? null })
+    setPreview(body.preview)
+    if (!options.quiet) toast.success('Draft day created')
+    return body.plan.id
+  }
+
+  async function ensureDraftPlan(): Promise<string | null> {
+    if (plan?.id && plan.status !== 'closed') return plan.id
+    setBusy('generate')
+    try {
+      return await persistDraftPlan({ quiet: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The plan could not be generated')
+      return null
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function generate() {
     setBusy('generate')
     try {
-      const response = await fetch('/api/admin/daily-plans/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: preview.date }),
-      })
-      const body = await response.json().catch(() => ({})) as {
-        plan?: Omit<CommandCenterPlan, 'calendarStatus'>
-        preview?: DailyPlanPreview
-        calendarStatus?: DailyPlanCalendarStatus
-        error?: string
-      }
-      if (!response.ok || !body.plan || !body.preview) throw new Error(body.error ?? 'The plan could not be generated')
-      setPlan({ ...body.plan, calendarStatus: body.calendarStatus ?? null })
-      setPreview(body.preview)
-      toast.success('Draft day created')
+      await persistDraftPlan()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The plan could not be generated')
     } finally {
@@ -888,6 +1077,7 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
         status: body.plan!.status,
         calendarStatus: body.calendarSync ?? current.calendarStatus,
       } : current)
+      setFocusMode(true)
       if (body.calendarSyncError) {
         toast.warning(`Plan committed. Calendar needs attention: ${body.calendarSyncError}`)
       } else if (body.calendarSync && (body.calendarSync.pendingBlocks > 0 || body.calendarSync.staleBlocks > 0)) {
@@ -937,7 +1127,15 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           </div>
           <Button variant="outline" onClick={() => setFocusMode(false)}>View full plan</Button>
         </div>
-        <WorkCard item={focusItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+        <WorkCard
+          item={focusItem}
+          primary
+          planId={plan?.id ?? null}
+          openedAtRef={openedAtMs}
+          onRefresh={refresh}
+          onEnsurePlan={ensureDraftPlan}
+          canDelegate={canDelegate}
+        />
         <p className="text-center text-xs text-muted-foreground">
           The rest of the queue is still safe. Finish, snooze, or block this item to reveal the next one.
         </p>
@@ -1018,7 +1216,46 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
           <div>
             <p className="font-semibold text-foreground">Today is over capacity by {formatMinutes(preview.overloadMinutes)}.</p>
-            <p className="mt-1 text-muted-foreground">Do not hide the conflict. Defer, delegate, or reschedule one of the must-do items below.</p>
+            <p className="mt-1 text-muted-foreground">
+              Do not hide the conflict. Defer, reschedule{canDelegate ? ', delegate,' : ','} or shorten one of the must-do items below.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {midDayCritical.length > 0 && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-border bg-amber-bg p-4 text-sm sm:flex-row sm:items-start">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-strong" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-foreground">
+              New critical work appeared after you committed
+              {midDayCritical.length > 1 ? ` (${midDayCritical.length})` : ''}.
+            </p>
+            <p className="mt-1 text-amber-strong">{midDayCritical[0].title}</p>
+            <p className="mt-1 text-muted-foreground">
+              Focus Mode keeps your committed order unless you insert this intentionally.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setInterruptFocusKey(midDayCritical[0].workKey)
+                  setFocusMode(true)
+                }}
+              >
+                <Focus /> Insert into Focus
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDismissedCriticalKeys(current => [...current, ...midDayCritical.map(item => item.workKey)])}
+              >
+                Keep focus
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <Link href={midDayCritical[0].href}>{midDayCritical[0].actionLabel}<ArrowRight className="h-3.5 w-3.5" /></Link>
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -1059,8 +1296,18 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <h2 id="now-heading" className="text-base font-semibold">Now</h2>
         </div>
         {nowItem
-          ? <WorkCard item={nowItem} primary planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+          ? <WorkCard
+              item={nowItem}
+              primary
+              planId={plan?.id ?? null}
+              openedAtRef={openedAtMs}
+              onRefresh={refresh}
+              onEnsurePlan={ensureDraftPlan}
+              canDelegate={canDelegate}
+              keyboardFocused={keyboardFocusKey === nowItem.workKey}
+            />
           : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No firm-owned work needs attention.</CardContent></Card>}
+        <p className="mt-2 text-micro text-muted-foreground">Keyboard: J/K move · E open · X done · S snooze · F focus · Esc back</p>
       </section>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
@@ -1071,7 +1318,16 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Critical work is never hidden; otherwise this list stops at {workPreferences.maxMustDo}.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleMustDo} empty="No additional must-do items." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleMustDo}
+                empty="No additional must-do items."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+                keyboardFocusKey={keyboardFocusKey}
+              />
             </CardContent>
           </Card>
 
@@ -1081,7 +1337,16 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>{visibleCommunication.length} replies grouped into a {workPreferences.adminBatchMinutes}-minute admin block.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleCommunication} empty="No additional replies waiting." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleCommunication}
+                empty="No additional replies waiting."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+                keyboardFocusKey={keyboardFocusKey}
+              />
               <Button asChild variant="link" size="sm" className="mt-2 px-0">
                 <Link href="/admin/communications">Open all communications <ExternalLink /></Link>
               </Button>
@@ -1094,7 +1359,16 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Important work that fits the remaining capacity.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={visibleSuggested} empty="No additional work fits today’s capacity." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={visibleSuggested}
+                empty="No additional work fits today’s capacity."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+                keyboardFocusKey={keyboardFocusKey}
+              />
             </CardContent>
           </Card>
         </div>
@@ -1117,7 +1391,16 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
               <CardDescription>Visible for context, excluded from Focus Mode.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkList items={activeItems(preview.waiting).slice(0, 8)} empty="Nothing is waiting or blocked." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={activeItems(preview.waiting).slice(0, 8)}
+                empty="Nothing is waiting or blocked."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+                keyboardFocusKey={keyboardFocusKey}
+              />
               {activeItems(preview.waiting).length > 8 && <p className="mt-2 text-xs text-muted-foreground">+ {activeItems(preview.waiting).length - 8} more</p>}
             </CardContent>
           </Card>
@@ -1125,7 +1408,16 @@ export function CommandCenter({ initialPreview, preferences, initialPlan, initia
           <details className="rounded-xl border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">Later · {preview.later.length}</summary>
             <div className="mt-3">
-              <WorkList items={activeItems(preview.later)} empty="Nothing deferred." planId={plan?.id ?? null} openedAtRef={openedAtMs} onRefresh={refresh} />
+              <WorkList
+                items={activeItems(preview.later)}
+                empty="Nothing deferred."
+                planId={plan?.id ?? null}
+                openedAtRef={openedAtMs}
+                onRefresh={refresh}
+                onEnsurePlan={ensureDraftPlan}
+                canDelegate={canDelegate}
+                keyboardFocusKey={keyboardFocusKey}
+              />
             </div>
           </details>
         </aside>

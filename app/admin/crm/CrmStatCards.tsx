@@ -69,46 +69,65 @@ function StatCard({
 
 export function CrmStatCards({ snapshot }: { snapshot: CrmDashboardSnapshot }) {
   const { conversion } = snapshot
+  // Conversion ring stays; hide zero people/pipeline/converted tiles so idle
+  // CRM overviews do not fill with empty metric chrome.
+  const stats = [
+    {
+      icon: Users,
+      label: 'Total people',
+      value: snapshot.people,
+      caption: `${snapshot.people.newThisMonth} new`,
+      always: true,
+    },
+    {
+      icon: Briefcase,
+      label: 'Active pipeline',
+      value: snapshot.activePipeline,
+      caption: `${snapshot.followUps.overdue} follow-up${snapshot.followUps.overdue === 1 ? '' : 's'} overdue`,
+      always: false,
+    },
+    {
+      icon: UserCheck,
+      label: 'Converted',
+      value: snapshot.converted,
+      caption: `${snapshot.conversion.percent}% of leads`,
+      always: false,
+    },
+  ].filter(card => card.always || card.value.count > 0)
+
   return (
     <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card className="min-w-0 gap-0 py-0">
-        <CardContent className="px-4 py-4">
-          <p className="text-sm font-semibold">
-            {conversion.percent >= 50 ? 'Conversion is holding' : 'Conversion has room'}
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="relative">
-              <ConversionRing percent={conversion.percent} />
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">
-                {conversion.percent}%
-              </span>
-            </div>
-            <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-              {NUMBER.format(conversion.converted)} of {NUMBER.format(conversion.total)} lead
-              {conversion.total === 1 ? '' : 's'} have converted to a matter.
+      {conversion.total > 0 && (
+        <Card className="min-w-0 gap-0 py-0">
+          <CardContent className="px-4 py-4">
+            <p className="text-sm font-semibold">
+              {conversion.percent >= 50 ? 'Conversion is holding' : 'Conversion has room'}
             </p>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="relative">
+                <ConversionRing percent={conversion.percent} />
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">
+                  {conversion.percent}%
+                </span>
+              </div>
+              <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
+                {NUMBER.format(conversion.converted)} of {NUMBER.format(conversion.total)} lead
+                {conversion.total === 1 ? '' : 's'} have converted to a matter.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <StatCard
-        icon={Users}
-        label="Total people"
-        value={snapshot.people}
-        caption={`${snapshot.people.newThisMonth} new`}
-      />
-      <StatCard
-        icon={Briefcase}
-        label="Active pipeline"
-        value={snapshot.activePipeline}
-        caption={`${snapshot.followUps.overdue} follow-up${snapshot.followUps.overdue === 1 ? '' : 's'} overdue`}
-      />
-      <StatCard
-        icon={UserCheck}
-        label="Converted"
-        value={snapshot.converted}
-        caption={`${snapshot.conversion.percent}% of leads`}
-      />
+      {stats.map(card => (
+        <StatCard
+          key={card.label}
+          icon={card.icon}
+          label={card.label}
+          value={card.value}
+          caption={card.caption}
+        />
+      ))}
     </div>
   )
 }

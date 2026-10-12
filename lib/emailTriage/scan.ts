@@ -6,7 +6,7 @@ import {
   listTriageThreadIds,
   GmailReadError,
 } from '@/lib/email/gmailRead'
-import { applyTriageLabel } from '@/lib/email/gmailLabels'
+import { GmailLabelCache } from '@/lib/email/gmailLabels'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { TriageClassification } from '@/lib/queries/emailTriage'
@@ -26,6 +26,7 @@ import {
   isMissingTableError,
   latestInboundMessage,
 } from './fileInbound'
+import { applyAndRecordMailboxSort } from './mailboxSort'
 import { evaluateNeedsReply } from './needsReply'
 import type { SenderMatch } from './classifySender'
 
@@ -220,19 +221,26 @@ async function loadIgnoreRules(): Promise<IgnoreRules> {
 interface TriageSettings {
   enabled: boolean
   query: string
+  /** When false, label non-client mail but leave it in the Gmail Inbox. */
+  archiveNonClient: boolean
 }
 
 async function loadSettings(): Promise<TriageSettings> {
   const { data, error } = await getAdminClient()
     .from('firm_settings')
-    .select('email_triage_enabled, email_triage_query')
+    .select('email_triage_enabled, email_triage_query, email_triage_archive_non_client')
     .eq('id', 1)
     .maybeSingle()
   if (error) throw error
-  const row = data as { email_triage_enabled?: boolean; email_triage_query?: string | null } | null
+  const row = data as {
+    email_triage_enabled?: boolean
+    email_triage_query?: string | null
+    email_triage_archive_non_client?: boolean
+  } | null
   return {
     enabled: Boolean(row?.email_triage_enabled),
     query: row?.email_triage_query?.trim() || TRIAGE_SEARCH_QUERY,
+    archiveNonClient: row?.email_triage_archive_non_client !== false,
   }
 }
 
@@ -366,6 +374,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
   }
   let listingTruncated = false
   let failure: string | null = null
+  const labelCache = new GmailLabelCache(identity.token)
 
   try {
     const [ignore, existingRows, filedIds] = await Promise.all([
@@ -501,7 +510,71 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       })
 
       const action = decideThreadAction(verdict, existing)
-      if (action.kind === 'skip') continue
+
+      if (action.kind === 'skip') {
+        // Still sort in Gmail: settled rows and non-reply mail must leave the
+        // Inbox even when the queue has nothing to do.
+        if (existing && (existing.status === 'dismissed' || existing.status === 'replied')) {
+          await applyAndRecordMailboxSort({
+            token: identity.token,
+            threadId: thread.id,
+            kind: existing.status === 'dismissed' ? 'dismissed' : 'handled',
+            classification: existing.classification,
+            archiveEnabled: settings.archiveNonClient,
+            triageRowId: existing.id,
+            cache: labelCache,
+          })
+        } else if (!verdict.needsReply && latestInbound) {
+          const senderKey = latestInbound.from.email.toLowerCase()
+          const match = await classifySender(admin, {
+            email: latestInbound.from.email,
+            name: latestInbound.from.name,
+            threadsFromSender: threadsBySender.get(senderKey) ?? 1,
+            headers: latestInbound.headers,
+            labelIds: latestInbound.labelIds,
+            subject: latestInbound.subject,
+            ignore,
+            connectedAddress: identity.address,
+            firmDomains,
+            threadParticipants: collectThreadParticipants({
+              messages: thread.messages,
+              senderEmail: latestInbound.from.email,
+              connectedAddress: identity.address,
+              firmDomains,
+            }),
+          })
+          if (match.classification === 'internal') {
+            await applyAndRecordMailboxSort({
+              token: identity.token,
+              threadId: thread.id,
+              kind: 'internal',
+              classification: 'internal',
+              archiveEnabled: settings.archiveNonClient,
+              cache: labelCache,
+            })
+          } else if (match.classification === 'automated') {
+            await applyAndRecordMailboxSort({
+              token: identity.token,
+              threadId: thread.id,
+              kind: 'noise',
+              classification: 'automated',
+              archiveEnabled: settings.archiveNonClient,
+              automatedHard: match.automatedHard,
+              cache: labelCache,
+            })
+          } else if (match.classification === 'contact') {
+            await applyAndRecordMailboxSort({
+              token: identity.token,
+              threadId: thread.id,
+              kind: 'contact_idle',
+              classification: 'contact',
+              archiveEnabled: settings.archiveNonClient,
+              cache: labelCache,
+            })
+          }
+        }
+        continue
+      }
 
       if (action.kind === 'resolve') {
         // The thread now ends outbound: it was answered in Gmail, on a phone,
@@ -512,14 +585,17 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           .update({ status: 'replied', replied_at: now, last_scanned_at: now, updated_at: now })
           .eq('id', existing!.id)
         counts.resolved += 1
-        // File it under Client / Lead the same way an approved reply is. Best
-        // effort: the reply already went out, and a labelling failure is not a
-        // reason to fail the scan or leave the row open.
-        await applyTriageLabel({
+        // Handled + relationship label + archive. Best effort: the reply
+        // already went out.
+        await applyAndRecordMailboxSort({
           token: identity.token,
           threadId: thread.id,
+          kind: 'handled',
           classification: existing!.classification,
-        }).catch(() => {})
+          archiveEnabled: settings.archiveNonClient,
+          triageRowId: existing!.id,
+          cache: labelCache,
+        })
         continue
       }
 
@@ -553,10 +629,27 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
 
       if (match.classification === 'internal') {
         counts.skippedInternal += 1
+        await applyAndRecordMailboxSort({
+          token: identity.token,
+          threadId: thread.id,
+          kind: 'internal',
+          classification: 'internal',
+          archiveEnabled: settings.archiveNonClient,
+          cache: labelCache,
+        })
         continue
       }
       if (match.classification === 'automated') {
         counts.skippedAutomated += 1
+        await applyAndRecordMailboxSort({
+          token: identity.token,
+          threadId: thread.id,
+          kind: 'noise',
+          classification: 'automated',
+          archiveEnabled: settings.archiveNonClient,
+          automatedHard: match.automatedHard,
+          cache: labelCache,
+        })
         continue
       }
 
@@ -606,6 +699,23 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         }, { onConflict: 'connection_email,gmail_thread_id' })
       if (upsertErr) throw upsertErr
       counts.queued += 1
+
+      // Relationship label; stay in Inbox while a reply is still owed.
+      const { data: queuedRow } = await admin
+        .from('email_triage_threads')
+        .select('id')
+        .eq('connection_email', identity.address)
+        .eq('gmail_thread_id', thread.id)
+        .maybeSingle()
+      await applyAndRecordMailboxSort({
+        token: identity.token,
+        threadId: thread.id,
+        kind: 'needs_reply',
+        classification: match.classification,
+        archiveEnabled: settings.archiveNonClient,
+        triageRowId: (queuedRow as { id?: string } | null)?.id ?? null,
+        cache: labelCache,
+      })
     }
 
     const drafting = await draftPending({

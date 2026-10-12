@@ -25,6 +25,11 @@ export interface SenderMatch {
   displayName: string | null
   /** Why, in words. Stored on the row so a wrong call can be argued with. */
   reason: string
+  /**
+   * When `classification` is `automated`: true means hard (safe to archive in
+   * Gmail); false means soft heuristics only (label Noise, leave Inbox).
+   */
+  automatedHard?: boolean
 }
 
 export interface IgnoreRules {
@@ -323,6 +328,7 @@ export async function classifySender(
       ...none,
       displayName: args.name,
       reason: automated.reason ?? 'automated',
+      automatedHard: true,
     }
   }
 
@@ -345,6 +351,7 @@ export async function classifySender(
       ...none,
       displayName: args.name,
       reason: automated.reason ?? 'automated',
+      automatedHard: false,
     }
   }
 

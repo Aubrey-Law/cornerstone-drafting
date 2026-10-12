@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   ListTodo,
   LogOut,
+  Mail,
   Menu,
   PanelLeftClose,
   PanelLeft,
@@ -86,6 +87,7 @@ export const adminNavItems: {
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
   { href: '/admin/communications', label: 'Communications', icon: MessageSquareText, group: 'Operations' },
+  { href: '/admin/email-triage', label: 'Mail Desk', icon: Mail, group: 'Operations' },
   { href: '/admin/automations', label: 'Automations', icon: Zap, group: 'Operations' },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Operations' },
   { href: '/admin/payroll', label: 'Payroll', icon: Banknote, group: 'Operations' },
@@ -208,6 +210,16 @@ export default function AdminLayoutClient({
     }
   }, [])
 
+  // Drafting workspaces need horizontal room for the design sheet + clause
+  // preview; collapse the global nav to the icon rail on first entry. Later
+  // step changes inside drafting must not re-collapse after the user expands.
+  const wasOnDraftingWorkspace = useRef(false)
+  useEffect(() => {
+    const onDrafting = /^\/admin\/drafting\/[0-9a-f-]{36}/i.test(pathname)
+    if (onDrafting && !wasOnDraftingWorkspace.current) setCollapsed(true)
+    wasOnDraftingWorkspace.current = onDrafting
+  }, [pathname])
+
   // `matterDisplayName` is already resolved for the rail, so naming the record
   // in the trail costs no extra request.
   const crumbs = adminBreadcrumbs(pathname, { recordLabel: matterDisplayName })
@@ -249,11 +261,12 @@ export default function AdminLayoutClient({
   }
 
   return (
-    // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
+    // h-dvh + overflow-hidden so <main> owns the scroll and the docked rail
     // can be a full-height column beside it instead of floating over content.
+    // dvh matches the portal shell and avoids mobile browser chrome clipping.
     <MatterWorkspaceContext.Provider value={{ matterId: workspaceMatterId, setMatterId: setWorkspaceMatterId }}>
     <SidebarMattersContext.Provider value={sidebarMatters}>
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <aside
         className={cn(
           'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:flex md:flex-col',
@@ -269,10 +282,10 @@ export default function AdminLayoutClient({
           {!compact ? (
             <Link href="/admin" className="flex min-w-0 items-center gap-2">
               <Image src="/favicon.svg" alt="" width={28} height={28} />
-              <span className="truncate text-sm font-semibold">Cornerstone</span>
+              <span className="truncate text-sm font-semibold">Aubrey Law</span>
             </Link>
           ) : (
-            <Link href="/admin" className="flex items-center justify-center" title="Cornerstone">
+            <Link href="/admin" className="flex items-center justify-center" title="Aubrey Law">
               <Image src="/favicon.svg" alt="" width={24} height={24} />
             </Link>
           )}
@@ -310,7 +323,7 @@ export default function AdminLayoutClient({
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="text-sm font-semibold">Cornerstone</span>
+            <span className="text-sm font-semibold">Aubrey Law</span>
           </div>
           <div className="ml-auto md:ml-0 md:block md:flex-1 md:max-w-md">
             <GlobalSearch />
@@ -320,7 +333,6 @@ export default function AdminLayoutClient({
           </div>
           <div className="flex items-center gap-2">
             <RailToggleButton rail={rail} />
-            <ThemeToggle variant="default" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -378,7 +390,7 @@ export default function AdminLayoutClient({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="flex w-56 flex-col p-0">
           <div className="flex h-14 items-center border-b border-border px-4">
-            <SheetTitle className="text-sm font-semibold">Cornerstone</SheetTitle>
+            <SheetTitle className="text-sm font-semibold">Aubrey Law</SheetTitle>
             <SheetDescription className="sr-only">Main navigation</SheetDescription>
           </div>
           <AdminSidebar

@@ -36,6 +36,7 @@ import { requestDeparture } from '@/lib/navigation/departure'
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
   { label: 'Communications', href: '/admin/communications', icon: MessageSquareText },
+  { label: 'Mail Desk', href: '/admin/email-triage', icon: MessageSquareText },
   { label: 'Leads', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters/list', icon: Briefcase },
   { label: 'Contacts', href: '/admin/contacts', icon: User },

@@ -21,8 +21,10 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import type { MatterTab } from '@/lib/matterPageTabs'
-import { ViewSwitch } from '@/components/ViewSwitch'
+import { ViewSwitch, type ViewSwitchOption } from '@/components/ViewSwitch'
+import type { HistoryView } from '@/lib/matterPageTabs'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
+import { ClipboardList, FileSearch, StickyNote } from 'lucide-react'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { RecordTasksTab, TASK_VIEW_OPTIONS } from '@/components/tasks/RecordTasksTab'
@@ -67,6 +69,12 @@ import { useMatterTabs } from './useMatterTabs'
 import { useCollapseOnScroll } from './useCollapseOnScroll'
 import { useLinkedMatterNotes, type LeadNoteRow } from './useLinkedMatterNotes'
 import { MatterWorkspaceNav } from '@/components/matter/MatterWorkspaceNav'
+
+const HISTORY_VIEW_OPTIONS = [
+  { value: 'notes' as const, label: 'Notes', icon: StickyNote },
+  { value: 'activity' as const, label: 'Activity', icon: ClipboardList },
+  { value: 'reviews' as const, label: 'Reviews', icon: FileSearch },
+] satisfies ReadonlyArray<ViewSwitchOption<HistoryView>>
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
@@ -177,8 +185,8 @@ function MatterDetailClientInner({
   const router = useRouter()
   useEffect(() => listenForMatterContacts(matterId, () => router.refresh()), [matterId, router])
   const {
-    activeTab, communicationChannel, taskView, assetView, documentView, documentScope, deepLinkedDocumentId,
-    setActiveTab, setTaskView, setTabView, setDocumentScope,
+    activeTab, communicationChannel, taskView, historyView, assetView, documentView, documentScope, deepLinkedDocumentId,
+    setActiveTab, setTaskView, setHistoryView, setTabView, setDocumentScope,
     detailsOpen: factsRailOpen, setDetailsOpen: setFactsRailOpen,
   } = useMatterTabs()
 
@@ -458,7 +466,7 @@ function MatterDetailClientInner({
               history={initialStageHistory}
             />
           )}
-          navigation={<MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, reviews: reviewBlockerCount, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
+          navigation={<MatterWorkspaceNav matterId={matterId} active={activeTab} counts={{ tasks: taskCounts.open, history: reviewBlockerCount, documents: unreviewedUploadCounts.total, communications: unreadPortalCount }} drafting={!showFiduciaryLedger} onSelect={section => {
             if (section === 'drafting') router.push(draftingHref)
             else setActiveTab(section)
           }} />}
@@ -500,7 +508,7 @@ function MatterDetailClientInner({
                   details={matterDetails} onDates={() => { setDatesRequest(value => value + 1); setFactsRailOpen(true) }} activity={activity}
                   onEngagement={() => void handleSendEngagement()} onUploads={handleReviewUploads}
                   onMessages={() => setActiveTab('communications', undefined, 'portal')}
-                  onActivity={() => setActiveTab('activity')}
+                  onActivity={() => { setHistoryView('activity'); setActiveTab('history') }}
                   onSnooze={handleSnoozeWork}
                   composer={<MatterOverviewComposer
                     matterId={matterId} clientName={matter.client_name ?? 'Client'} clientEmail={matter.client_email ?? null}
@@ -631,50 +639,64 @@ function MatterDetailClientInner({
                 onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
               />
 
-              <MatterNotesTab
-                editingNoteId={editingNoteId}
-                editingNoteText={editingNoteText}
-                editingNoteType={editingNoteType}
-                noteMutatingId={noteMutatingId}
-                noteSaving={noteSaving}
-                noteText={noteText}
-                noteType={noteType}
-                notes={linkedNotes}
-                setEditingNoteText={setEditingNoteText}
-                setEditingNoteType={setEditingNoteType}
-                setNoteText={setNoteText}
-                setNoteType={setNoteType}
-                cancelEditingNote={cancelEditingNote}
-                handleAddNote={handleAddNote}
-                handleDeleteNote={confirmThenDeleteNote}
-                handleUpdateNote={handleUpdateNote}
-                handleDeleteLeadNote={leadNotes.requestDeleteLeadNote}
-                handleUpdateLeadNote={leadNotes.updateLeadNote}
-                startEditingNote={startEditingNote}
-                meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
-              />
-
-              <TabsContent value="reviews" className="space-y-4">
-                <RecordTabHeader
-                  title="Reviews"
-                  description="Playbook reviews of this matter's documents and field audits of its design sheet."
-                />
-                {activeTab === 'reviews' ? <MatterReviewsTab matterId={matterId} /> : null}
-              </TabsContent>
-
-              <TabsContent value="activity" className="space-y-4">
-                <RecordTabHeader
-                  title="Activity"
-                  description="Stage changes, intake, communications, and drafting events, newest first."
-                />
-                <MatterStageHistoryCard entries={initialStageHistory} open={stageHistoryOpen} onOpenChange={setStageHistoryOpen} />
-                <MatterActivityTab
-                  activity={activity}
-                  loading={false}
-                  olderCursor={activityCursor}
-                  loadingOlder={loadingOlderActivity}
-                  onLoadOlder={() => void loadOlderActivity()}
-                />
+              <TabsContent value="history" className="space-y-4">
+                <div className="flex justify-end">
+                  <ViewSwitch
+                    value={historyView}
+                    options={HISTORY_VIEW_OPTIONS}
+                    onChange={setHistoryView}
+                    label="History view"
+                  />
+                </div>
+                {historyView === 'notes' && (
+                  <MatterNotesTab
+                    editingNoteId={editingNoteId}
+                    editingNoteText={editingNoteText}
+                    editingNoteType={editingNoteType}
+                    noteMutatingId={noteMutatingId}
+                    noteSaving={noteSaving}
+                    noteText={noteText}
+                    noteType={noteType}
+                    notes={linkedNotes}
+                    setEditingNoteText={setEditingNoteText}
+                    setEditingNoteType={setEditingNoteType}
+                    setNoteText={setNoteText}
+                    setNoteType={setNoteType}
+                    cancelEditingNote={cancelEditingNote}
+                    handleAddNote={handleAddNote}
+                    handleDeleteNote={confirmThenDeleteNote}
+                    handleUpdateNote={handleUpdateNote}
+                    handleDeleteLeadNote={leadNotes.requestDeleteLeadNote}
+                    handleUpdateLeadNote={leadNotes.updateLeadNote}
+                    startEditingNote={startEditingNote}
+                    meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
+                  />
+                )}
+                {historyView === 'reviews' && (
+                  <>
+                    <RecordTabHeader
+                      title="Reviews"
+                      description="Playbook reviews of this matter's documents and field audits of its design sheet."
+                    />
+                    {activeTab === 'history' ? <MatterReviewsTab matterId={matterId} /> : null}
+                  </>
+                )}
+                {historyView === 'activity' && (
+                  <>
+                    <RecordTabHeader
+                      title="Activity"
+                      description="Stage changes, intake, communications, and drafting events, newest first."
+                    />
+                    <MatterStageHistoryCard entries={initialStageHistory} open={stageHistoryOpen} onOpenChange={setStageHistoryOpen} />
+                    <MatterActivityTab
+                      activity={activity}
+                      loading={false}
+                      olderCursor={activityCursor}
+                      loadingOlder={loadingOlderActivity}
+                      onLoadOlder={() => void loadOlderActivity()}
+                    />
+                  </>
+                )}
               </TabsContent>
             </div>
           </div>
@@ -720,7 +742,11 @@ function MatterDetailClientInner({
               savingField,
               lastSavedAt,
               error: matterDetailsError,
-              onOpenTab: tab => { setFactsRailOpen(false); setActiveTab(tab) },
+              onOpenTab: tab => {
+                setFactsRailOpen(false)
+                if (tab === 'history') setHistoryView('activity')
+                setActiveTab(tab)
+              },
             }}
             admin={{
               matterId,
