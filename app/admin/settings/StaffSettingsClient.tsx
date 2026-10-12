@@ -26,6 +26,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { useConfirm } from '@/components/useConfirm'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
+import { MailDeskSettingsSection } from './MailDeskSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
 import { CalendlyLinksSection } from './CalendlyLinksSection'
 import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
@@ -690,7 +691,12 @@ export function StaffSettingsClient({
 
       {tab === 'google' && <MicrosoftTeamsSection />}
 
-      {tab === 'email' && <EmailSettingsSection />}
+      {tab === 'email' && (
+        <>
+          <MailDeskSettingsSection />
+          <EmailSettingsSection />
+        </>
+      )}
 
       {tab === 'scheduling' && (
         <div className="space-y-6">

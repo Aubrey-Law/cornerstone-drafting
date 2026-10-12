@@ -158,12 +158,17 @@ export function EmailTriageClient({
   const [selectedId, setSelectedId] = useState<string | null>(initialRows[0]?.id ?? null)
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [createdTaskHref, setCreatedTaskHref] = useState<string | null>(null)
   // Read inside reload() to find where the selection sat before the queue
   // changed, without making reload depend on rows.
   const rowsRef = useRef(rows)
   useEffect(() => {
     rowsRef.current = rows
   }, [rows])
+
+  useEffect(() => {
+    setCreatedTaskHref(null)
+  }, [selectedId])
 
   const selected = useMemo(
     () => rows.find(row => row.id === selectedId) ?? null,
@@ -342,32 +347,74 @@ export function EmailTriageClient({
     return patchSelected({ snoozedUntil: null }, 'Snooze cleared')
   }, [patchSelected])
 
-  const followUpSelected = useCallback(async (at: string) => {
-    return patchSelected({ followUpAt: at }, 'Follow-up reminder set')
+  const followUpSelected = useCallback(async (at: string, note?: string) => {
+    const patch: Record<string, unknown> = { followUpAt: at }
+    if (typeof note === 'string') patch.followUpNote = note
+    return patchSelected(patch, 'Follow-up reminder set')
   }, [patchSelected])
 
   const clearFollowUpSelected = useCallback(async () => {
     return patchSelected({ followUpAt: null }, 'Follow-up cleared')
   }, [patchSelected])
 
+  const quietPatchSelected = useCallback(async (patch: Record<string, unknown>) => {
+    if (!selected) return false
+    setBusy(selected.id)
+    try {
+      const res = await fetch(`/api/admin/email-triage/${selected.id}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify(patch),
+      })
+      const body = await res.json().catch(() => ({})) as { error?: string; row?: EmailTriageRow }
+      if (!res.ok) {
+        toast.error(body.error ?? 'Could not update the thread')
+        await reload()
+        return false
+      }
+      if (body.row) {
+        setRows(current => current.map(item => (item.id === body.row!.id ? body.row! : item)))
+      }
+      return true
+    } finally {
+      setBusy(null)
+    }
+  }, [authHeaders, reload, selected])
+
   const createTaskSelected = useCallback(async () => {
     if (!selected) return false
-    return act(
-      selected,
-      '/task',
-      { method: 'POST', body: '{}' },
-      {
-        success: body => {
-          const href = typeof body.href === 'string' ? body.href : '/admin/tasks'
-          toast.message('Task created', {
-            action: { label: 'Open', onClick: () => { window.location.href = href } },
-          })
-          return 'Task created from this email'
+    setBusy(selected.id)
+    try {
+      const res = await fetch(`/api/admin/email-triage/${selected.id}/task`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: '{}',
+      })
+      const body = await res.json().catch(() => ({})) as {
+        error?: string
+        href?: string
+      }
+      if (!res.ok) {
+        toast.error(body.error ?? 'Could not create the task')
+        await reload()
+        return false
+      }
+      const href = typeof body.href === 'string' ? body.href : '/admin/tasks'
+      setCreatedTaskHref(href)
+      toast.success('Task created from this email', {
+        duration: 12_000,
+        description: 'It is on the matter or lead Tasks tab when linked.',
+        action: {
+          label: 'Open task',
+          onClick: () => { window.location.href = href },
         },
-        failure: 'Could not create the task',
-      },
-    )
-  }, [act, selected])
+      })
+      await reload()
+      return true
+    } finally {
+      setBusy(null)
+    }
+  }, [authHeaders, reload, selected])
 
   // Sends exactly what the editor shows — the subject and body travel with the
   // request, so an edit the autosave has not reached yet is the one that goes.
@@ -463,7 +510,12 @@ export function EmailTriageClient({
         <EmptyState
           icon={MailSearch}
           title="Mail Desk is switched off"
-          description="Nothing is reading the mailbox. Turn email triage on in firm settings to start scanning."
+          description="Nothing is reading the mailbox. Turn scanning on in Settings → Email."
+          action={
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/admin/settings?tab=email">Open Settings → Email</Link>
+            </Button>
+          }
         />
       </AdminPageShell>
     )
@@ -594,6 +646,7 @@ export function EmailTriageClient({
                   key={selected.id}
                   row={selected}
                   busy={busy === selected.id}
+                  createdTaskHref={createdTaskHref}
                   onPatch={(patch) => setRows(current => current.map(
                     item => (item.id === selected.id ? { ...item, ...patch } : item),
                   ))}
@@ -603,6 +656,7 @@ export function EmailTriageClient({
                     { method: 'PATCH', body: JSON.stringify(patch) },
                     { success: 'Draft saved', failure: 'Could not save the draft' },
                   )}
+                  onQuietSave={quietPatchSelected}
                   loadThread={loadThread}
                   onDraft={draftSelected}
                   onApprove={() => act(
@@ -693,6 +747,11 @@ function QueueRow({
       </div>
       <p className="mt-0.5 truncate text-sm">{row.subject || '(no subject)'}</p>
       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{row.snippet}</p>
+      {row.thread_note?.trim() && (
+        <p className="mt-0.5 truncate text-xs text-foreground/80">
+          Note · {row.thread_note.trim()}
+        </p>
+      )}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Badge variant={CLASSIFICATION_VARIANT[row.classification]}>
           {CLASSIFICATION_LABEL[row.classification]}
@@ -720,9 +779,11 @@ function QueueRow({
 function DraftPane({
   row,
   busy,
+  createdTaskHref,
   loadThread,
   onPatch,
   onSave,
+  onQuietSave,
   onDraft,
   onApprove,
   onSend,
@@ -735,22 +796,26 @@ function DraftPane({
 }: {
   row: EmailTriageRow
   busy: boolean
+  createdTaskHref: string | null
   loadThread: (id: string) => Promise<ThreadResult>
   onPatch: (patch: Partial<EmailTriageRow>) => void
   onSave: (patch: { draftSubject: string; draftBody: string }) => Promise<boolean>
+  onQuietSave: (patch: Record<string, unknown>) => Promise<boolean>
   onDraft: () => Promise<boolean>
   onApprove: () => Promise<boolean>
   onSend: () => Promise<boolean>
   onDismiss: (scope: 'thread' | 'sender' | 'domain') => Promise<boolean>
   onSnooze: (until: string) => Promise<boolean>
   onClearSnooze: () => Promise<boolean>
-  onFollowUp: (at: string) => Promise<boolean>
+  onFollowUp: (at: string, note?: string) => Promise<boolean>
   onClearFollowUp: () => Promise<boolean>
   onCreateTask: () => Promise<boolean>
 }) {
   const href = recordHref(row)
   const hasDraft = Boolean(row.draft_body?.trim())
   const dirty = useRef(false)
+  const noteDirty = useRef(false)
+  const followUpNoteDirty = useRef(false)
   const snoozed = Boolean(row.snoozed_until && Date.parse(row.snoozed_until) > Date.now())
 
   // Autosave. The attorney edits and clicks away; losing the edit because it
@@ -763,6 +828,24 @@ function DraftPane({
     }, 1200)
     return () => clearTimeout(timer)
   }, [row.draft_subject, row.draft_body, onSave])
+
+  useEffect(() => {
+    if (!noteDirty.current) return
+    const timer = setTimeout(() => {
+      noteDirty.current = false
+      void onQuietSave({ threadNote: row.thread_note ?? '' })
+    }, 900)
+    return () => clearTimeout(timer)
+  }, [row.thread_note, onQuietSave])
+
+  useEffect(() => {
+    if (!followUpNoteDirty.current) return
+    const timer = setTimeout(() => {
+      followUpNoteDirty.current = false
+      void onQuietSave({ followUpNote: row.follow_up_note ?? '' })
+    }, 900)
+    return () => clearTimeout(timer)
+  }, [row.follow_up_note, onQuietSave])
 
   return (
     // Fills the column on desktop: the header and buttons keep their size, the
@@ -796,11 +879,42 @@ function DraftPane({
               : null}
             {row.follow_up_at
               ? <>Follow up {Date.parse(row.follow_up_at) <= Date.now() ? 'due' : 'at'}{' '}
-                {new Date(row.follow_up_at).toLocaleString()}.
+                {new Date(row.follow_up_at).toLocaleString()}
+                {row.follow_up_note?.trim() ? ` — ${row.follow_up_note.trim()}` : ''}.
                 </>
               : null}
           </p>
         )}
+      </div>
+
+      {createdTaskHref && (
+        <p
+          role="status"
+          className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground"
+        >
+          Task created.{' '}
+          <a href={createdTaskHref} className="font-medium underline underline-offset-2">
+            Open task
+          </a>
+        </p>
+      )}
+
+      <div className="shrink-0 space-y-1.5">
+        <label htmlFor="mail-desk-thread-note" className="text-xs font-medium text-muted-foreground">
+          Attorney note
+        </label>
+        <Textarea
+          id="mail-desk-thread-note"
+          value={row.thread_note ?? ''}
+          onChange={event => {
+            noteDirty.current = true
+            onPatch({ thread_note: event.target.value })
+          }}
+          placeholder="Private note on this thread (not sent)"
+          rows={2}
+          className="resize-none text-xs"
+          disabled={busy}
+        />
       </div>
 
       <ThreadView row={row} loadThread={loadThread} />
@@ -904,6 +1018,26 @@ function DraftPane({
           </>
         )}
       </div>
+
+      {row.follow_up_at && (
+        <div className="shrink-0 space-y-1.5">
+          <label htmlFor="mail-desk-follow-up-note" className="text-xs font-medium text-muted-foreground">
+            Follow-up note
+          </label>
+          <Textarea
+            id="mail-desk-follow-up-note"
+            value={row.follow_up_note ?? ''}
+            onChange={event => {
+              followUpNoteDirty.current = true
+              onPatch({ follow_up_note: event.target.value })
+            }}
+            placeholder="Why we are waiting (optional)"
+            rows={2}
+            className="resize-none text-xs"
+            disabled={busy}
+          />
+        </div>
+      )}
 
       {row.status === 'approved' && row.gmail_draft_message_id && (
         <p className="text-xs text-muted-foreground">
