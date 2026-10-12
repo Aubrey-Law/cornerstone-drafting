@@ -27,6 +27,7 @@ import { useConfirm } from '@/components/useConfirm'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
 import { MailDeskSettingsSection } from './MailDeskSettingsSection'
+import { MailDeskIgnoreRulesSection } from './MailDeskIgnoreRulesSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
 import { CalendlyLinksSection } from './CalendlyLinksSection'
 import { LawmaticsSettingsSection } from './LawmaticsSettingsSection'
@@ -694,6 +695,7 @@ export function StaffSettingsClient({
       {tab === 'email' && (
         <>
           <MailDeskSettingsSection />
+          <MailDeskIgnoreRulesSection />
           <EmailSettingsSection />
         </>
       )}
