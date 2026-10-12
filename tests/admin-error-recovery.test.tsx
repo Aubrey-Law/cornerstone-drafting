@@ -54,12 +54,20 @@ describe('admin error boundary', () => {
   })
 
   it('falls back to Today on a top-level page, which has no section above it', () => {
-    for (const pathname of ['/admin', '/admin/tasks', '/admin/calendar']) {
+    for (const pathname of ['/admin/tasks', '/admin/calendar']) {
       cleanup()
       const link = renderAt(pathname)
       expect(link.getAttribute('href'), pathname).toBe('/admin')
       expect(link.textContent, pathname).toBe('Back to Today')
     }
+  })
+
+  it('does not offer Today as the way back from Today', () => {
+    renderAt('/admin')
+    expect(screen.queryByRole('link', { name: 'Back to Today' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    const overview = screen.getByRole('link', { name: 'Open Overview' })
+    expect(overview.getAttribute('href')).toBe('/admin/overview')
   })
 
   it('offers a link rather than only a retry', () => {

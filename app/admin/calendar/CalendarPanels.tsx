@@ -8,15 +8,15 @@ import { LoadIndicator } from './LoadIndicator'
 import type { AttentionItem, CalendarAppointment, ExternalCalendarEvent, PlanData, OpenSlot } from './types'
 import { isBlock } from './eventCategories'
 
-export function WeekStrip({ days, selectedDay, todayKey, counts, onSelect }: {
-  days: PlanData['days']; selectedDay: string; todayKey: string; counts: Map<string, number>; onSelect: (key: string) => void
+export function WeekStrip({ days, selectedDay, todayKey, counts, onSelect, workloadPending = false }: {
+  days: PlanData['days']; selectedDay: string; todayKey: string; counts: Map<string, number>; onSelect: (key: string) => void; workloadPending?: boolean
 }) {
   return <div>
     <nav aria-label="Days this week" className="overflow-x-auto rounded-md">
       <div className="grid min-w-[560px] grid-cols-7 gap-1">{days.map(day => <button key={day.date} type="button" aria-pressed={selectedDay === day.date} onClick={() => onSelect(day.date)} className={cn('min-w-[80px] rounded-md border bg-card p-2 text-center text-xs text-foreground', selectedDay === day.date ? 'border-primary ring-2 ring-primary/30' : day.date === todayKey ? 'border-foreground' : 'border-border')}>
         <span className="block font-medium">{new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}</span>
         {day.date === todayKey && <span className="text-micro">Today</span>}
-        <LoadIndicator day={Number.isFinite(day.targetMinutes) ? day : undefined} count={counts.get(day.date) ?? 0} />
+        <LoadIndicator pending={workloadPending || !Number.isFinite(day.targetMinutes)} day={Number.isFinite(day.targetMinutes) ? day : undefined} count={counts.get(day.date) ?? 0} />
       </button>)}</div>
     </nav>
     <p className="mt-1 text-micro text-muted-foreground lg:hidden">Scroll sideways for the rest of the week.</p>
@@ -46,6 +46,6 @@ export function NextUp({ date, todayKey, now, appointments, visibleAppointments 
     <h3 className="text-sm font-medium text-foreground">{date === todayKey ? 'Later today' : 'Other events'}</h3>
     {later.length ? later.map(item => <div key={item.id} className="text-xs text-foreground">{time(item.start)} · {item.appointment ? <button className="underline" onClick={() => onOpen(item.appointment!)}>{item.label}</button> : item.label}</div>) : <p className="text-xs text-muted-foreground">No other events</p>}
     <h3 className="text-sm font-medium text-foreground">Verified openings</h3>
-    {availabilityState !== 'ready' ? <p className="text-xs text-muted-foreground">{availabilityState === 'loading' ? 'Checking availability…' : 'Availability unavailable'}</p> : slots.length ? slots.slice(0, 5).map(slot => <div key={slot.startIso} className="flex items-center justify-between gap-2 text-xs text-foreground"><span>{time(slot.startIso)}</span><Button size="sm" variant="outline" onClick={() => onBook(slot.startIso)}>Book</Button></div>) : <p className="text-xs text-muted-foreground">No verified slots for the default appointment type</p>}
+    {availabilityState !== 'ready' ? <p className="text-xs text-muted-foreground">{availabilityState === 'loading' ? 'Checking availability…' : <>Connect Google Calendar to see availability. <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">Open settings</Link></>}</p> : slots.length ? slots.slice(0, 5).map(slot => <div key={slot.startIso} className="flex items-center justify-between gap-2 text-xs text-foreground"><span>{time(slot.startIso)}</span><Button size="sm" variant="outline" onClick={() => onBook(slot.startIso)}>Book</Button></div>) : <p className="text-xs text-muted-foreground">No verified slots for the default appointment type</p>}
   </section>
 }

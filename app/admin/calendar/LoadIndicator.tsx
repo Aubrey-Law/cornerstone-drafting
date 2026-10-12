@@ -1,8 +1,10 @@
 import { cn } from '@/lib/utils'
 import type { PlanData } from './types'
 
-export function LoadIndicator({ day, count }: { day?: PlanData['days'][number]; count: number }) {
-  if (!day) return <span className="block text-micro text-muted-foreground">Load unavailable</span>
+export function LoadIndicator({ day, count, pending = false }: { day?: PlanData['days'][number]; count: number; pending?: boolean }) {
+  // A missing day while the week is still loading, or after Google failed, is
+  // one page-level message — not a failure stamped on every column.
+  if (pending || !day) return null
   const total = day.clientMinutes + day.internalMinutes
   const over = day.targetMinutes > 0 && total > day.targetMinutes
   return <div title={`${total} minutes total · ${day.targetMinutes} minute target`}>

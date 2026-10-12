@@ -53,6 +53,7 @@ import { resolveCommandCenterDone } from '@/lib/work/commandCenterDone'
 import { findMidDayCriticalItems } from '@/lib/work/midDayCritical'
 import { ApprovalInbox, type ApprovalProposal } from '@/app/admin/components/ApprovalInbox'
 import { getCalendarConfidence } from '@/lib/work/calendarConfidence'
+import { describeSourceErrors } from '@/lib/work/sourceErrors'
 
 type CommandCenterPlan = {
   id: string
@@ -1262,9 +1263,9 @@ export function CommandCenter({
 
       <CalendarConfidenceNotice state={calendarConfidence.state} message={calendarConfidence.message} />
 
-      {sourceErrors.length > 0 && (
+      {describeSourceErrors(sourceErrors) && (
         <div role="status" className="rounded-lg border border-amber-border bg-amber-bg/50 px-3 py-2 text-xs text-amber-strong">
-          Some sources could not be refreshed: {sourceErrors.join(', ')}. Visible work is still usable, but the plan may be incomplete.
+          {describeSourceErrors(sourceErrors)}
         </div>
       )}
 

@@ -72,6 +72,8 @@ interface TodayQueueProps {
   intakeToSend: TodayMatterItem[]
   overdueTasks: TaskRow[]
   tasksDueToday: TaskRow[]
+  /** When set, the task lists are empty because the read failed. */
+  tasksError?: string | null
 }
 
 type PrimaryDecision =
@@ -354,6 +356,7 @@ export function TodayQueue({
   intakeToSend,
   overdueTasks,
   tasksDueToday,
+  tasksError,
 }: TodayQueueProps) {
   const router = useRouter()
   const token = useAccessToken()
@@ -958,6 +961,11 @@ export function TodayQueue({
 
   return (
     <div>
+      {tasksError && (
+        <p role="alert" className="mb-3 rounded-lg border border-amber-border bg-amber-bg px-3 py-2 text-sm text-foreground">
+          {tasksError}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs
           className="min-w-0 max-w-full overflow-x-auto pb-1"

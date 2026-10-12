@@ -44,6 +44,8 @@ interface Props {
   connected: boolean
   mailbox: string | null
   hasReadScope: boolean
+  /** Set when a connected mailbox's queue could not be read. */
+  queueError?: string | null
 }
 
 const QUEUE_VIEWS: { id: TriageQueueView; label: string }[] = [
@@ -149,6 +151,7 @@ export function EmailTriageClient({
   connected,
   mailbox,
   hasReadScope,
+  queueError = null,
 }: Props) {
   const token = useAccessToken()
   const { confirm, confirmDialog } = useConfirm()
@@ -501,6 +504,16 @@ export function EmailTriageClient({
           Gmail is not connected, so there is nothing to triage.{' '}
           <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">
             Connect Google
+          </Link>
+          .
+        </ConnectionNotice>
+      )}
+
+      {queueError && (
+        <ConnectionNotice>
+          {queueError}{' '}
+          <Link href="/admin/settings?tab=google" className="font-medium underline underline-offset-2">
+            Check the Google connection
           </Link>
           .
         </ConnectionNotice>

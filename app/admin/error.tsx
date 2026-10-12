@@ -25,12 +25,18 @@ export default function AdminError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
-  const pathname = usePathname()
-  const section = adminBreadcrumbs(pathname ?? '/admin')[0]
+  const pathname = usePathname() ?? '/admin'
+  const section = adminBreadcrumbs(pathname)[0]
   const back =
     section?.href !== undefined
       ? { href: section.href, label: `Back to ${section.label}` }
       : { href: '/admin', label: 'Back to Today' }
+  // The way back cannot be the page that just failed. Today has no section
+  // above it, so Overview is the other door.
+  const samePage = back.href === pathname
+  const overview = pathname === '/admin'
+    ? { href: '/admin/overview', label: 'Open Overview' }
+    : null
 
   return (
     <RouteErrorState
@@ -38,8 +44,10 @@ export default function AdminError({
       reset={reset}
       title="Something went wrong"
       description="An unexpected error occurred. Your saved data is usually unaffected — try again, or go back and come at it from there."
-      backHref={back.href}
-      backLabel={back.label}
+      backHref={samePage ? undefined : back.href}
+      backLabel={samePage ? undefined : back.label}
+      secondaryHref={overview?.href}
+      secondaryLabel={overview?.label}
     />
   )
 }

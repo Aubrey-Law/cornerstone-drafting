@@ -17,9 +17,17 @@ describe('Day agenda enhancements', () => {
     expect(props.onBookSlot).toHaveBeenCalledWith('2026-10-07T15:15:00.000Z')
     expect(screen.queryByText('Open time today')).not.toBeInTheDocument()
   })
+  it('points a disconnected calendar at settings instead of a per-day failure', () => {
+    render(<DayAgenda {...props} calendarConnected={false} />)
+    expect(screen.getByText(/Connect Google Calendar to see availability/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open settings' }).getAttribute('href')).toBe('/admin/settings?tab=google')
+    expect(screen.queryByText(/Load unavailable/)).not.toBeInTheDocument()
+  })
+
   it('does not invent openings when availability is unknown', () => {
     render(<DayAgenda {...props} />)
-    expect(screen.getByText(/Availability unavailable/)).toBeInTheDocument()
+    expect(screen.getByText(/Availability could not be checked/)).toBeInTheDocument()
+    expect(screen.queryByText(/totals before category filters/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Book' })).not.toBeInTheDocument()
   })
   it('shows now only on today and historical wording for past days', () => {
