@@ -890,7 +890,7 @@ function DraftPane({
       {createdTaskHref && (
         <p
           role="status"
-          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground"
+          className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground"
         >
           Task created.{' '}
           <a href={createdTaskHref} className="font-medium underline underline-offset-2">
