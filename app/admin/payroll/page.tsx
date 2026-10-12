@@ -16,6 +16,7 @@ export default async function PayrollPage() {
       <AdminPageShell className="mx-auto w-full max-w-3xl">
         <h1 className="text-xl font-semibold">Payroll</h1>
         <p className="text-sm text-muted-foreground">Payroll is limited to administrators.</p>
+        <p className="text-sm text-muted-foreground">Ask a firm operator to grant administrator access. Signed-in staff cannot change their own role.</p>
       </AdminPageShell>
     )
   }

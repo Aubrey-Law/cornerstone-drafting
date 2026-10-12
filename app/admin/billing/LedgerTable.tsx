@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
+import { ledgerChargeLabel, readyForLabel } from '@/lib/billing/ledgerCopy'
 import { billingMoney } from '@/lib/billing/metrics'
 import type { BillingLedgerRow } from '@/lib/billing/types'
 import { cn } from '@/lib/utils'
@@ -126,7 +127,7 @@ export function LedgerTable({
                     aria-label={`Select ${row.clientName} — ${row.label}`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm">{row.label}</p>
+                    <p className="text-sm">{ledgerChargeLabel(row.label, row.amountBilled)}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <BillingStatusBadge row={row} />
                       {row.invoiceId ? (
@@ -141,7 +142,7 @@ export function LedgerTable({
                       )}
                       {row.status !== 'paid' && (
                         <span className={cn(row.overdue && 'font-semibold text-destructive')}>
-                          {row.ageDays} days
+                          {readyForLabel(row.ageDays)}
                         </span>
                       )}
                     </div>

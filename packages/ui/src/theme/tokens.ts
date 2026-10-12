@@ -230,10 +230,9 @@ const darkSemantic: SemanticTokens = {
   },
   border: {
     default: '#2e2e34',
-    // Not decorative: `border-border-strong` draws the not-yet-reached markers
-    // in components/leads/LeadProgress.tsx and the incomplete connector in the
-    // matter stage strip, both of which carry progress state on their own. That
-    // puts them under 1.4.11 too. 4.26:1 on a card.
+    // Not decorative: `border-border-strong` draws the incomplete connector in
+    // the matter stage strip, which carries progress state on its own. That
+    // puts it under 1.4.11 too. 4.26:1 on a card.
     strong: '#7a7a85',
     focus: '#9dbaff',
     // 3.46:1 against the new `elevated`, 3.76:1 against `canvas`. Was #3f3f46
