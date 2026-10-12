@@ -45,7 +45,7 @@ const LEAD_SELECT =
   + 'intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, '
   + 'engagement_fee_quoted, billing_type, lead_urgency, taxable_estate, '
   + 'lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at, '
-  + 'last_activity_at, next_appointment_at, score'
+  + 'last_activity_at, last_activity_type, next_appointment_at, score'
 
 /** How each sort key orders in SQL. Nulls sort last, as `compareNullable` does. */
 const SORT_ORDER: Record<LeadSortKey, { column: string; ascending: boolean }> = {

@@ -42,13 +42,19 @@ export function RecordWorkIndicator({
     return <span className={cn('text-xs text-muted-foreground', className)}>No current action</span>
   }
 
-  const reasons = summary.priorityReasons.map(reason => reason.label).join(' · ')
+  const sla = summary.priorityReasons.filter(reason => reason.code === 'stage_sla')
+  const reasons = summary.priorityReasons.filter(reason => reason.code !== 'stage_sla').map(reason => reason.label).join(' · ')
   return (
     <div className={cn('min-w-0', className)}>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <Badge variant="outline" className={cn('shrink-0 text-micro', BAND_CLASS[summary.priorityBand])}>
           {ownerLabel(summary)}
         </Badge>
+        {sla.map(reason => (
+          <Badge key={reason.code} variant="outline" className={cn('shrink-0 text-micro', BAND_CLASS[summary.priorityBand])}>
+            {reason.label}
+          </Badge>
+        ))}
         <Link href={summary.href} className="min-w-0 truncate text-xs font-medium text-foreground hover:underline">
           {compact ? summary.actionLabel : summary.title}
         </Link>

@@ -736,7 +736,7 @@ export function TasksClient({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {presentation === 'list' && <span className="hidden items-center gap-1.5 text-micro text-muted-foreground lg:inline-flex">
+          {presentation === 'list' && focusId && <span className="hidden items-center gap-1.5 text-micro text-muted-foreground lg:inline-flex">
             <kbd className="rounded border border-border bg-muted px-1">J</kbd>
             <kbd className="rounded border border-border bg-muted px-1">K</kbd>
             move
@@ -758,7 +758,7 @@ export function TasksClient({
       </section>
 
       {pagination && (pagination.total > 0 || pagination.params.showDone) && <nav className="flex flex-wrap items-center gap-3 text-sm" aria-label="Task pages">
-        <span>{pagination.total} matching open tasks · page {pagination.params.page} of {pageCount}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : presentation === 'list' ? 'Groups below show this page.' : 'Showing tasks from this page.'}</span>
+        <span>{pagination.total} matching open tasks{pagination.total > 0 ? ` · page ${pagination.params.page} of ${pageCount}` : ''}. {groupBy === 'matter' ? 'Each matter’s tasks stay together on one page.' : presentation === 'list' ? 'Groups below show this page.' : 'Showing tasks from this page.'}</span>
         <Button variant="outline" size="sm" disabled={pagination.params.page <= 1} onClick={() => navigate({ page: String(pagination.params.page - 1) })}>Previous</Button>
         <Button variant="outline" size="sm" disabled={pagination.params.page >= pageCount} onClick={() => navigate({ page: String(pagination.params.page + 1) })}>Next</Button>
         {pagination.params.showDone && <div className="flex items-center gap-2">

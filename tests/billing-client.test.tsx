@@ -34,7 +34,7 @@ async function chooseRecordAction(
   user: ReturnType<typeof userEvent.setup>,
   name: 'Log payment' | 'Add charge',
 ) {
-  await user.click(screen.getByRole('button', { name: 'Record' }))
+  await user.click(screen.getByRole('button', { name: 'Record payment' }))
   await user.click(await screen.findByRole('menuitem', { name }))
 }
 
@@ -222,7 +222,7 @@ describe('billing workspace', () => {
     const user = userEvent.setup()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    const opener = screen.getByRole('button', { name: 'Record' })
+    const opener = screen.getByRole('button', { name: 'Record payment' })
     await chooseRecordAction(user, 'Log payment')
     expect(screen.getByRole('dialog', { name: 'Log payment' })).toBeTruthy()
 
@@ -325,7 +325,7 @@ describe('billing workspace', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
     expect(screen.getByRole('link', { name: 'New invoice' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Record' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Record payment' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'More billing actions' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Add charge' })).toBeNull()
   })

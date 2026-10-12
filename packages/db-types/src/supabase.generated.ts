@@ -12258,6 +12258,7 @@ export type Database = {
           intake_sent_at: string | null
           is_open: boolean | null
           last_activity_at: string | null
+          last_activity_type: string | null
           last_name: string | null
           lead_next_action_snoozed_until: string | null
           lead_source: string | null

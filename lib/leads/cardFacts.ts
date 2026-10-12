@@ -43,8 +43,28 @@ export function leadWaitingLabel(lead: LeadListRow, now: number = Date.now()): s
   if (!touched) return 'No contact yet'
   const quiet = calendarDayDifference(now, touched)
   if (quiet === null) return null
-  if (quiet <= 0) return 'Touched today'
+  if (quiet <= 0) {
+    const channel = touchChannelLabel(lead.last_activity_type)
+    return channel ? `Updated today · ${channel}` : 'Updated today'
+  }
   return quiet === 1 ? 'Quiet 1 day' : `Quiet ${quiet} days`
+}
+
+/** Communication channel of a recorded touch. Other event types are not a channel. */
+export function touchChannelLabel(eventType: string | null | undefined): string | null {
+  switch (eventType) {
+    case 'email_sent':
+    case 'email_received':
+      return 'email'
+    case 'sms_sent':
+    case 'sms_received':
+      return 'text'
+    case 'call_connected':
+    case 'call_logged':
+      return 'call'
+    default:
+      return null
+  }
 }
 
 const STALE_DAYS = 7

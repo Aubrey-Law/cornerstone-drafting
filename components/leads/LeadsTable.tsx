@@ -144,7 +144,9 @@ export function LeadsTable({
             <TableHead>Email</TableHead>
             <TableHead>Practice</TableHead>
             <TableHead>Fee / plan</TableHead>
-            <TableHead>Score</TableHead>
+            <TableHead title="Score from 0 to 100. It rises with pipeline progress, a quoted fee, estate size, urgency, recent contact, a booked meeting, lead source, and how complete the record is.">
+              Score
+            </TableHead>
             <TableHead>Progress</TableHead>
             <TableHead>Next action</TableHead>
             <TableHead className="w-10" aria-label="More actions" />

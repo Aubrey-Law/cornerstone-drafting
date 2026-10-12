@@ -20,6 +20,8 @@ export interface LeadListRow {
   lead_urgency: string | null
   taxable_estate: number | null
   last_activity_at: string | null
+  /** Latest lead_activity.event_type, when the list view loaded it. */
+  last_activity_type?: string | null
   // Loaded so the index rows can render the same fields as the lead
   // detail rail. Optional because narrower callers still build LeadListRow.
   middle_name?: string | null

@@ -502,7 +502,7 @@ export default function BillingClient({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button ref={recordOpenerRef} type="button" variant="outline" className="min-h-11">
-                  Record
+                  Record payment
                   <ChevronDown className="size-4" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
