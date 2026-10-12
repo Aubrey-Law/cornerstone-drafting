@@ -459,6 +459,24 @@ export function EmailTriageClient({
     return () => window.removeEventListener('keydown', handler)
   }, [busy, dismissSelected, draftSelected, rows, selected, selectedId])
 
+  if (!connected) {
+    return (
+      <AdminPageShell>
+        <PageHeader title="Mail Desk" eyebrow="Daily" icon={MailSearch} />
+        <EmptyState
+          icon={MailSearch}
+          title="Gmail is not connected"
+          description="There is nothing to triage until the mailbox is connected."
+          action={(
+            <Button asChild>
+              <Link href="/admin/settings?tab=google">Connect Google</Link>
+            </Button>
+          )}
+        />
+      </AdminPageShell>
+    )
+  }
+
   if (!enabled) {
     return (
       <AdminPageShell>
