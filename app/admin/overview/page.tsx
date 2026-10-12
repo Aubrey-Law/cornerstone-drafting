@@ -3,12 +3,11 @@ import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
 import { requireStaffPage } from '@/lib/review/staff'
-import { TasksOverviewSection } from './TasksOverviewSection'
-import { LeadsOverviewSection } from './LeadsOverviewSection'
-import { MattersOverviewSection } from './MattersOverviewSection'
+import { FirmDashboard } from './FirmDashboard'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Overview' }
+export const metadata = { title: 'Firm dashboard' }
+
 const worklists = [
   ['/admin/tasks', 'Tasks', 'Assignments, deadlines, and blocked work'],
   ['/admin/drafting', 'Drafting', 'Design sheets and document generation'],
@@ -17,21 +16,31 @@ const worklists = [
   ['/admin/field-audits', 'Field audits', 'Check design-sheet consistency'],
   ['/admin/playbooks', 'Review playbooks', 'Manage review criteria'],
 ] as const
+
+const sections = [
+  ['firm-pulse', 'Pulse'],
+  ['firm-attention', 'Attention'],
+  ['firm-book', 'Book'],
+  ['firm-closeout', 'Close-out'],
+  ['overview-tools', 'Tools'],
+] as const
+
 export default async function OverviewPage() {
-  await requireStaffPage()
+  const { userId } = await requireStaffPage()
   return <div className="space-y-6">
-    <PageHeader title="Overview" description="Firm-wide workload, follow-up, and matters approaching completion."
-      actions={<Button asChild size="sm"><Link href="/admin">Open Today</Link></Button>} />
-    <nav aria-label="Overview sections" className="flex gap-5 overflow-x-auto border-b border-border pb-3 text-sm">
-      {[['tasks', 'Tasks'], ['matters', 'Matters'], ['leads', 'Leads'], ['tools', 'Tools']].map(([id, label]) =>
-        <a key={id} href={`#overview-${id}`} className="shrink-0 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{label}</a>)}
+    <PageHeader
+      title="Firm dashboard"
+      description="Open matters, lead follow-up, task pressure, and close-out across the firm."
+      actions={<Button asChild size="sm"><Link href="/admin">Open Today</Link></Button>}
+    />
+    <nav aria-label="Firm dashboard sections" className="flex gap-5 overflow-x-auto border-b border-border pb-3 text-sm">
+      {sections.map(([id, label]) =>
+        <a key={id} href={`#${id}`} className="shrink-0 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{label}</a>)}
     </nav>
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="min-w-0 space-y-8">
-        <Suspense fallback={<p role="status">Loading tasks…</p>}><TasksOverviewSection /></Suspense>
-        <Suspense fallback={<p role="status">Loading matters…</p>}><MattersOverviewSection /></Suspense>
-        <Suspense fallback={<p role="status">Loading leads…</p>}><LeadsOverviewSection /></Suspense>
-      </div>
+      <Suspense fallback={<p role="status">Loading the firm dashboard…</p>}>
+        <FirmDashboard viewerId={userId} />
+      </Suspense>
       <aside id="overview-tools" aria-label="Worklists" className="scroll-mt-20 rounded-xl border border-border bg-card p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Worklists and tools</h2>
         <div className="mt-3 divide-y divide-border">

@@ -60,7 +60,7 @@ async function LegacyTodayPage() {
       <CommandCenterTelemetry event="legacy_today_opened" />
     <AdminPageShell className="mx-auto w-full max-w-[1240px]">
       <PageHeader
-        actions={<Link href="/admin/overview" className="text-sm font-medium text-primary hover:underline">Firm overview</Link>}
+        actions={<Link href="/admin/overview" className="text-sm font-medium text-primary hover:underline">Firm dashboard</Link>}
         title="Today"
         eyebrow={dateLabel}
         description={
