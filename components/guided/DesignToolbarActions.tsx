@@ -35,6 +35,8 @@ interface DesignToolbarActionsProps {
    * save button — the autosave pill is then the only save affordance.
    */
   collapsed?: boolean
+  /** Renders the import and export entries for a menu the caller owns. */
+  variant?: 'toolbar' | 'items'
 }
 
 export function DesignToolbarActions({
@@ -53,6 +55,7 @@ export function DesignToolbarActions({
   saveDirty,
   showSave = true,
   collapsed = false,
+  variant = 'toolbar',
 }: DesignToolbarActionsProps) {
   const btnStyle = (emphasis = false) => ({
     ...guidedSecondaryButtonStyle,
@@ -65,6 +68,51 @@ export function DesignToolbarActions({
     opacity: pending ? 0.6 : 1,
   })
 
+  const menuItems = (
+    <>
+      {onClonePlan && (
+        <DropdownMenuItem onSelect={onClonePlan} className="text-xs">
+          <Copy size={14} />
+          Clone from another matter
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onSelect={onImport} className="text-xs">
+        <Upload size={14} />
+        Import design sheet
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={onExport} disabled={exporting} className="text-xs">
+        <Download size={14} />
+        Export design sheet
+      </DropdownMenuItem>
+      {onExportJson && (
+        <DropdownMenuItem onSelect={onExportJson} disabled={exporting} className="text-xs">
+          <Braces size={14} />
+          Export generator data (JSON)
+        </DropdownMenuItem>
+      )}
+      {onExportJsonDocx && (
+        <DropdownMenuItem onSelect={onExportJsonDocx} disabled={exporting} className="text-xs">
+          <Braces size={14} />
+          Export generator data for Mike (.docx)
+        </DropdownMenuItem>
+      )}
+      {onExportSummary && (
+        <DropdownMenuItem onSelect={onExportSummary} disabled={exporting} className="text-xs">
+          <FileText size={14} />
+          Export internal summary (.docx)
+        </DropdownMenuItem>
+      )}
+      {onExportStatular && (
+        <DropdownMenuItem onSelect={onExportStatular} disabled={exporting} className="text-xs">
+          <FileText size={14} />
+          Export for Statular (.md)
+        </DropdownMenuItem>
+      )}
+    </>
+  )
+
+  if (variant === 'items') return menuItems
+
   if (collapsed) {
     return (
       <DropdownMenu>
@@ -76,44 +124,7 @@ export function DesignToolbarActions({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
-          {onClonePlan && (
-            <DropdownMenuItem onSelect={onClonePlan} className="text-xs">
-              <Copy size={14} />
-              Clone from another matter
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={onImport} className="text-xs">
-            <Upload size={14} />
-            Import design sheet
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onExport} disabled={exporting} className="text-xs">
-            <Download size={14} />
-            Export design sheet
-          </DropdownMenuItem>
-          {onExportJson && (
-            <DropdownMenuItem onSelect={onExportJson} disabled={exporting} className="text-xs">
-              <Braces size={14} />
-              Export generator data (JSON)
-            </DropdownMenuItem>
-          )}
-          {onExportJsonDocx && (
-            <DropdownMenuItem onSelect={onExportJsonDocx} disabled={exporting} className="text-xs">
-              <Braces size={14} />
-              Export generator data for Mike (.docx)
-            </DropdownMenuItem>
-          )}
-          {onExportSummary && (
-            <DropdownMenuItem onSelect={onExportSummary} disabled={exporting} className="text-xs">
-              <FileText size={14} />
-              Export internal summary (.docx)
-            </DropdownMenuItem>
-          )}
-          {onExportStatular && (
-            <DropdownMenuItem onSelect={onExportStatular} disabled={exporting} className="text-xs">
-              <FileText size={14} />
-              Export for Statular (.md)
-            </DropdownMenuItem>
-          )}
+          {menuItems}
         </DropdownMenuContent>
       </DropdownMenu>
     )

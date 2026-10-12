@@ -111,9 +111,9 @@ export function DesignSectionNav({
             <span className="min-w-0 flex-1">{group.title}</span>
             {group.blockingCount > 0 ? (
               <span
-                title={`${group.blockingCount} blocking${
-                  group.blockingLabels?.length ? `: ${joinLabels(group.blockingLabels)}` : ''
-                }`}
+                title={group.blockingCount === 1
+                  ? '1 blocking decision'
+                  : `${group.blockingCount} blocking decisions`}
                 className="rounded-full bg-warning/10 px-1.5 py-0.5 text-micro font-semibold text-warning"
               >
                 {group.blockingCount}

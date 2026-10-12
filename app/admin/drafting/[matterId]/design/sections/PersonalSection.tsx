@@ -6,7 +6,6 @@ import { isMinorFromDob } from '@/lib/contacts/childMinor'
 import { formatAgeLabel } from '@/lib/dob'
 import {
   AttorneyInput,
-  AttorneyNoteBanner,
   AttorneySelect,
   DesignSectionContent,
   DobAgeHint,
@@ -136,12 +135,6 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
 
   return (
     <DesignSectionContent>
-      <AttorneyNoteBanner>
-        Fields with a gray background were pre-filled from the client intake questionnaire.
-        You can override any value — overridden fields will be highlighted in amber.
-        Blank white fields are attorney-only and were not part of the intake.
-      </AttorneyNoteBanner>
-
       <SectionBlock title="Client" subtitle="Primary grantor">
         <div className={sectionFieldGrid3}>
           <DesignField
@@ -351,13 +344,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
           </Button>
         </div>
         {children.length === 0 && (
-          <div className="rounded-lg border border-dashed border-border bg-muted py-8 text-center">
-            <p className="text-sm text-muted-foreground">No children listed.</p>
-            <Button variant="outline" size="sm" className="mt-3 text-xs gap-1.5" onClick={addChild}>
-              <Plus className="h-3.5 w-3.5" />
-              Add First Child
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">No children listed.</p>
         )}
         <div className="space-y-2">
           {children.map((child, idx) => {

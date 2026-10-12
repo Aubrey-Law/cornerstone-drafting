@@ -129,6 +129,8 @@ describe('sectioned nav rail', () => {
     expect(screen.getByRole('button', { name: /Plan structure/ }).getAttribute('aria-label')).toBe(
       'Plan structure — 1 blocking: plan type — 2 optional: signing date, signing county',
     )
+    expect(screen.getByTitle('1 blocking decision').textContent).toBe('1')
+    expect(screen.getByTitle('2 optional: signing date · signing county').textContent).toBe('2')
     expect(screen.getByRole('button', { name: /Trust terms/ }).getAttribute('aria-label'))
       .toBe('Trust terms — complete')
   })
