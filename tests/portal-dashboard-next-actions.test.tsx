@@ -90,6 +90,84 @@ describe('portal dashboard recorded next actions', () => {
     expect(screen.queryByText('No documents shared yet.')).toBeNull()
   })
 
+  it('tells one story when drafting has started but the questionnaire is still open', async () => {
+    mocks.findIntake.mockResolvedValue({ first_name: 'Morgan', status: 'draft' })
+    mocks.getMatter.mockResolvedValue({ id: 'matter-1', status: 'active', stage: 'drafting' })
+    mocks.fetchMeta.mockResolvedValue({
+      matterName: 'Morgan plan',
+      createdAt: '2026-09-01T00:00:00Z',
+      progress: {
+        heading: 'Your estate plan',
+        nextAction: null,
+        milestones: [
+          { key: 'intake', label: 'Intake received', state: 'pending' },
+          { key: 'drafts', label: 'Drafts sent', state: 'completed' },
+          { key: 'review', label: 'Drafts approved', state: 'pending' },
+          { key: 'signing', label: 'Documents signed', state: 'pending' },
+        ],
+      },
+    })
+    mocks.loadPlanStatusFacts.mockResolvedValue({
+      matter: { id: 'matter-1', stage: 'drafting', status: 'active' },
+      facts: {
+        stage: 'drafting',
+        stageLabel: 'Drafting',
+        track: 'estate-planning',
+        milestones: [
+          { key: 'intake', label: 'Intake received', state: 'pending' },
+          { key: 'drafts', label: 'Drafts sent', state: 'completed' },
+        ],
+        nextAppointment: null,
+        funding: null,
+        clientFollowUp: [],
+        stageChangedAt: null,
+        firmName: 'Aubrey Law',
+        attorneyShortName: 'Scott',
+      },
+    })
+
+    render(await PortalDashboardPage())
+
+    const status = screen.getByTestId('plan-status').textContent ?? ''
+    expect(status).toContain('working from what we have')
+    expect(status).toContain('questionnaire is still open')
+    expect(status.toLowerCase()).not.toContain('settled')
+    expect(status.toLowerCase()).not.toContain('being drafted')
+    expect(screen.getByText(/Finish your intake questionnaire/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Continue intake' }).getAttribute('href')).toBe('/intake')
+    expect(screen.getByRole('listitem', { current: 'step' }).textContent).toContain('Intake received')
+    expect(screen.getByText(/Questions\? Reach us directly/)).toBeTruthy()
+  })
+
+  it('keeps the drafting sentence once intake is complete', async () => {
+    mocks.loadPlanStatusFacts.mockResolvedValue({
+      matter: { id: 'matter-1', stage: 'drafting', status: 'active' },
+      facts: {
+        stage: 'drafting',
+        stageLabel: 'Drafting',
+        track: 'estate-planning',
+        milestones: [
+          { key: 'intake', label: 'Intake received', state: 'completed' },
+          { key: 'drafts', label: 'Drafts sent', state: 'pending' },
+        ],
+        nextAppointment: null,
+        funding: null,
+        clientFollowUp: [],
+        stageChangedAt: null,
+        firmName: 'Aubrey Law',
+        attorneyShortName: 'Scott',
+      },
+    })
+
+    render(await PortalDashboardPage())
+
+    const status = screen.getByTestId('plan-status').textContent ?? ''
+    expect(status).toContain('being drafted')
+    expect(status).toContain('design we settled on')
+    expect(screen.queryByRole('link', { name: 'Continue intake' })).toBeNull()
+    expect(screen.getByText(/No new action is listed for you right now/)).toBeTruthy()
+  })
+
   it('renders the submitted-intake waiting state when no owned matter exists', async () => {
     mocks.getMatter.mockResolvedValue(null)
 

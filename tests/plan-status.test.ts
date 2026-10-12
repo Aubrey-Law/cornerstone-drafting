@@ -83,6 +83,17 @@ describe('the plain status, written from the record alone', () => {
       .toContain('From you we still need: signed engagement letter, Retainer payment and Deed copy.')
     expect(describePlanStatus(facts())).not.toContain('From you')
   })
+
+  it('keeps an open questionnaire as the story when the stage is already drafting', () => {
+    const open = describePlanStatus(facts({ stage: 'drafting', intakeComplete: false }))
+    expect(open).toContain('working from what we have')
+    expect(open).toContain('questionnaire is still open')
+    expect(open.toLowerCase()).not.toContain('settled')
+    expect(open.toLowerCase()).not.toContain('being drafted')
+    expect(describePlanStatus(facts({ stage: 'drafting', intakeComplete: true }))).toContain('being drafted')
+    expect(describePlanStatus(facts({ stage: 'drafting', intakeComplete: true }))).toContain('design we settled on')
+    expect(describePlanStatus(facts({ stage: 'closed', stageLabel: 'Closed', intakeComplete: false }))).toContain('Your matter is complete')
+  })
 })
 
 describe('the fingerprint of what the update would say', () => {
@@ -190,7 +201,7 @@ describe('where the update is offered and shown', () => {
     const dashboard = fs.readFileSync('app/(portal)/dashboard/page.tsx', 'utf8')
     expect(dashboard).toContain('Where your plan stands')
     expect(dashboard).toContain('settled(fetchLatestPlanStatus(matter.id), null)')
-    expect(dashboard).toContain('describePlanStatus(plainStatus.facts)')
+    expect(dashboard).toContain('describePlanStatus(intakeOpen ? { ...plainStatus.facts, intakeComplete: false } : plainStatus.facts)')
   })
 
   it('has its table, with client read access scoped to their own matter, and generated types', () => {

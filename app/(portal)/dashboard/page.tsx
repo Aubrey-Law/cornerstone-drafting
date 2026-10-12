@@ -24,7 +24,7 @@ import {
   fetchUnreadFirmMessageCount,
 } from '@/lib/queries/portal'
 import type { DocumentRequest } from '@/lib/documentRequests/model'
-import { progressFromMatterDetails } from '@/lib/portal/progress'
+import { milestonesForOpenIntake, progressFromMatterDetails } from '@/lib/portal/progress'
 import { computePortalNextAction } from '@/lib/portal/nextActions'
 import { describePlanStatus } from '@/lib/portal/planStatus'
 import { fetchLatestPlanStatus, loadPlanStatusFacts } from '@/lib/portal/planStatusServer'
@@ -150,11 +150,6 @@ export default async function PortalDashboardPage() {
   const plainStatus = matter && !publishedStatus
     ? (await settled(loadPlanStatusFacts(matter.id), null)).value
     : null
-  const planStatus = publishedStatus
-    ? { body: publishedStatus.body, publishedAt: publishedStatus.publishedAt }
-    : plainStatus
-      ? { body: describePlanStatus(plainStatus.facts), publishedAt: null }
-      : null
 
   const meta = metaResult.value
   const documents = documentsResult.value
@@ -188,6 +183,18 @@ export default async function PortalDashboardPage() {
     fundingTodoCount: funding.todo,
     factsAvailable: sharedResult.available && unreadResult.available && appointmentResult.available && accountResult.available,
   })
+  // One story with the hero. While the client still owes intake, the status
+  // and the current milestone say so too. The hero stays the only call to action.
+  const intakeOpen = nextAction.kind === 'intake'
+  const planStatus = publishedStatus
+    ? { body: publishedStatus.body, publishedAt: publishedStatus.publishedAt }
+    : plainStatus
+      ? {
+          body: describePlanStatus(intakeOpen ? { ...plainStatus.facts, intakeComplete: false } : plainStatus.facts),
+          publishedAt: null,
+        }
+      : null
+  const milestones = intakeOpen ? milestonesForOpenIntake(progress.milestones) : progress.milestones
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -206,7 +213,7 @@ export default async function PortalDashboardPage() {
       />
 
       <section className="py-2" aria-label="Where your plan is">
-        <PortalMilestoneTracker milestones={progress.milestones} />
+        <PortalMilestoneTracker milestones={milestones} />
       </section>
 
       {/* ── where your plan stands (supporting copy, not a card) ── */}

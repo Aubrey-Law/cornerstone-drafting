@@ -37,3 +37,16 @@ export function progressFromMatterDetails(details: MatterDetailsRow | null, toda
     nextAction: 'Check Messages for requests and updates from the firm. Contact us if you have questions about your next step.',
   })
 }
+
+/**
+ * While the client still owes the questionnaire, the current dot is the
+ * existing "Intake received" step. A later recorded date must not leave the
+ * track with no current step, and an empty track still shows that milestone.
+ */
+export function milestonesForOpenIntake(milestones: readonly PortalMilestone[]): readonly PortalMilestone[] {
+  const intakeIndex = milestones.findIndex(step => step.key === 'intake')
+  if (intakeIndex < 0) {
+    return [{ key: 'intake', label: 'Intake received', state: 'current' }, ...milestones]
+  }
+  return milestones.map((step, index) => index === intakeIndex ? { ...step, state: 'current' } : step)
+}
