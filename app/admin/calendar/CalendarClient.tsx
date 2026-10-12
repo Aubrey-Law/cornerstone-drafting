@@ -47,7 +47,7 @@ import {
   categorize,
   isBlock,
 } from './eventCategories'
-import { formatPlanHeading, formatSpanHeading, instantDayKey, zonedTimeInput } from './calendarTime'
+import { formatPlanHeading, formatSpanHeading, instantDayKey, monthChipStyle, weekWorkloadFromBody, zonedTimeInput } from './calendarTime'
 import { TimeGrid } from './WeekTimeGrid'
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -201,7 +201,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [previewEvents, setPreviewEvents] = useState<ExternalCalendarEvent[]>([])
   const [planBlock, setPlanBlock] = useState<PlanBlockDraft | null>(null)
   const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
-  const [googleStatus, setGoogleStatus] = useState<'loading' | 'included' | 'unavailable' | 'partial'>('loading')
+  const [googleStatus, setGoogleStatus] = useState<'loading' | 'included' | 'unavailable' | 'partial' | 'failed'>('loading')
   const [planState, setPlanState] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
@@ -497,13 +497,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       .then(response => response.ok ? response.json() : null)
       .then(body => {
         if (controller.signal.aborted) return
-        const status = body?.googleStatus === 'included' || body?.googleStatus === 'unavailable' || body?.googleStatus === 'partial'
-          ? body.googleStatus
-          : body?.connected ? 'included' : 'partial'
-        setGoogleStatus(body ? status : 'unavailable')
-        setWorkload(!body || status === 'partial' ? [] : body.days ?? [])
+        const workload = weekWorkloadFromBody(body)
+        setGoogleStatus(workload.status)
+        setWorkload(workload.days as PlanData['days'])
       })
-      .catch(() => { if (!controller.signal.aborted) setGoogleStatus('unavailable') })
+      .catch(() => { if (!controller.signal.aborted) setGoogleStatus('failed') })
     return () => controller.abort()
   }, [weekFrom, view, authHeaders, navigation.ready, appointments])
 
@@ -1127,9 +1125,10 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   )
 }
 
-function WorkloadNote({ status }: { status: 'loading' | 'included' | 'unavailable' | 'partial' }) {
+function WorkloadNote({ status }: { status: 'loading' | 'included' | 'unavailable' | 'partial' | 'failed' }) {
   if (status === 'unavailable') return <p className="text-xs text-muted-foreground">Load counts Cornerstone appointments. Google Calendar is not included.</p>
   if (status === 'partial') return <p className="text-xs text-muted-foreground">Load is hidden because Google Calendar returned a partial result.</p>
+  if (status === 'failed') return <p className="text-xs text-muted-foreground" role="alert">Could not load workload.</p>
   return null
 }
 
@@ -1204,7 +1203,6 @@ function MonthGrid(props: {
                 </span>
               )}
               {shown.map(a => {
-                const style = CATEGORY_STYLE[categorize(a.typeLabel)]
                 return (
                   <button
                     key={a.id}
@@ -1218,11 +1216,7 @@ function MonthGrid(props: {
                       a.status !== 'scheduled' && 'bg-muted text-muted-foreground',
                       a.status === 'cancelled' && 'line-through',
                     )}
-                    style={
-                      a.status === 'cancelled'
-                        ? undefined
-                        : { background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }
-                    }
+                    style={monthChipStyle(a.status, CATEGORY_STYLE[categorize(a.typeLabel)])}
                     title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
                   >
                     {fmtTime(a.startTime)} {a.attendeeName}

@@ -36,6 +36,26 @@ export function zonedTimeInput(iso: string, timezone: string): string {
   return `${hour === '24' ? '00' : hour}:${minute}`
 }
 
+export type WeekWorkloadStatus = 'included' | 'unavailable' | 'partial' | 'failed'
+
+/** A missing or failed response is not the same as a disconnected Google account. */
+export function weekWorkloadFromBody(body: { googleStatus?: string; connected?: boolean; days?: unknown[] } | null): {
+  status: WeekWorkloadStatus
+  days: unknown[]
+} {
+  if (!body) return { status: 'failed', days: [] }
+  const status: WeekWorkloadStatus = body.googleStatus === 'included' || body.googleStatus === 'unavailable' || body.googleStatus === 'partial'
+    ? body.googleStatus
+    : body.connected ? 'included' : 'partial'
+  return { status, days: status === 'partial' ? [] : body.days ?? [] }
+}
+
+/** Category fill is for scheduled meetings. No-show, cancelled, and rescheduled stay muted. */
+export function monthChipStyle(status: string, category: { bg: string; text: string; dot: string }): { background: string; color: string; borderLeft: string } | undefined {
+  if (status !== 'scheduled') return undefined
+  return { background: category.bg, color: category.text, borderLeft: `3px solid ${category.dot}` }
+}
+
 export function instantDayKey(iso: string, timezone: string): string {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: timezone })
 }

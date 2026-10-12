@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPlanHeading, formatSpanHeading, zonedTimeInput } from '@/app/admin/calendar/calendarTime'
+import { formatPlanHeading, formatSpanHeading, monthChipStyle, weekWorkloadFromBody, zonedTimeInput } from '@/app/admin/calendar/calendarTime'
 
 describe('calendar headings and firm clock', () => {
   it('keeps the month on a same-month week instead of splitting the year and day', () => {
@@ -18,5 +18,21 @@ describe('calendar headings and firm clock', () => {
 
   it('reads appointment times in the firm timezone', () => {
     expect(zonedTimeInput('2026-10-12T14:00:00.000Z', 'America/New_York')).toBe('10:00')
+  })
+
+  it('treats a failed workload response as a failure, not a disconnected Google account', () => {
+    expect(weekWorkloadFromBody(null)).toEqual({ status: 'failed', days: [] })
+    expect(weekWorkloadFromBody({ googleStatus: 'unavailable', connected: false, days: [{ date: '2026-10-12' }] })).toEqual({
+      status: 'unavailable',
+      days: [{ date: '2026-10-12' }],
+    })
+  })
+
+  it('drops category color on no-show and rescheduled month chips', () => {
+    const category = { bg: 'var(--stage-work-bg)', text: 'var(--stage-work-text)', dot: 'var(--stage-work)' }
+    expect(monthChipStyle('scheduled', category)?.background).toBe(category.bg)
+    expect(monthChipStyle('no_show', category)).toBeUndefined()
+    expect(monthChipStyle('rescheduled', category)).toBeUndefined()
+    expect(monthChipStyle('cancelled', category)).toBeUndefined()
   })
 })
