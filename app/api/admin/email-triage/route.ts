@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 const VIEWS: TriageQueueView[] = [
   'all', 'client', 'lead', 'contact', 'possible_lead',
-  'overdue', 'needs_draft', 'drafted', 'failed', 'snoozed', 'follow_up',
+  'overdue', 'needs_draft', 'drafted', 'failed', 'snoozed', 'follow_up', 'mine',
 ]
 
 function parseView(value: string | null): TriageQueueView {
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
   const view = parseView(new URL(req.url).searchParams.get('view'))
   const [rows, scan, enabled, archiveNonClient, conn] = await Promise.all([
-    fetchEmailTriageQueue({ view }),
+    fetchEmailTriageQueue({ view, claimedBy: userId }),
     fetchLastTriageScan(),
     fetchTriageEnabled(),
     fetchTriageArchiveNonClient(),
@@ -45,5 +45,6 @@ export async function GET(req: Request) {
     connected: Boolean(conn),
     mailbox: conn?.email ?? null,
     hasGmailModifyScope: hasGmailModifyScope(conn?.scopes),
+    currentUserId: userId,
   })
 }

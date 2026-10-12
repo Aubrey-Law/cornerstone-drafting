@@ -6,14 +6,18 @@ import {
   AlertTriangle,
   Clock,
   ExternalLink,
+  FileText,
   ListTodo,
   Loader2,
   MailCheck,
   MailSearch,
+  Paperclip,
   RefreshCw,
   Send,
   Sparkles,
   Trash2,
+  UserCheck,
+  UserPlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -26,6 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useConfirm } from '@/components/useConfirm'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_REPLY_SLA_HOURS } from '@/lib/comms/thread'
+import { formatBytes } from '@/lib/email/formatBytes'
 import { triageLabelName } from '@/lib/emailTriage/labels'
 import type {
   EmailTriageRow,
@@ -44,10 +49,12 @@ interface Props {
   connected: boolean
   mailbox: string | null
   hasReadScope: boolean
+  currentUserId: string
 }
 
 const QUEUE_VIEWS: { id: TriageQueueView; label: string }[] = [
   { id: 'all', label: 'All waiting' },
+  { id: 'mine', label: 'Mine' },
   { id: 'client', label: 'Clients' },
   { id: 'lead', label: 'Leads' },
   { id: 'contact', label: 'Contacts' },
@@ -120,6 +127,21 @@ function gmailThreadUrl(threadId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${threadId}`
 }
 
+/** `datetime-local` value in the browser's local zone. */
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function fromDatetimeLocalValue(value: string): string | null {
+  if (!value.trim()) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 const REPLY_BODY_ID = 'triage-reply-body'
 
 function queueRowId(id: string): string {
@@ -127,11 +149,18 @@ function queueRowId(id: string): string {
 }
 
 /** One message of the thread, as the message route returns it. */
+interface ThreadAttachment {
+  filename: string
+  mimeType: string | null
+  size: number | null
+}
+
 interface ThreadMessage {
   id: string
   from: { name: string | null; email: string }
   receivedAt: string
   bodyText: string
+  attachments?: ThreadAttachment[]
   outbound: boolean
 }
 
@@ -149,6 +178,7 @@ export function EmailTriageClient({
   connected,
   mailbox,
   hasReadScope,
+  currentUserId,
 }: Props) {
   const token = useAccessToken()
   const { confirm, confirmDialog } = useConfirm()
@@ -416,6 +446,54 @@ export function EmailTriageClient({
     }
   }, [authHeaders, reload, selected])
 
+  const claimSelected = useCallback(async (claim: boolean) => {
+    return patchSelected(
+      { claimedBy: claim ? true : null },
+      claim ? 'Claimed — shows under Mine' : 'Claim released',
+    )
+  }, [patchSelected])
+
+  const createLeadSelected = useCallback(async () => {
+    if (!selected) return false
+    const confirmed = await confirm({
+      title: 'Create a lead from this sender?',
+      body: `${selected.sender_name || selected.sender_email} becomes a lead and this thread links to them.`,
+      confirmLabel: 'Create lead',
+    })
+    if (!confirmed) return false
+    setBusy(selected.id)
+    try {
+      const res = await fetch(`/api/admin/email-triage/${selected.id}/create-lead`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: '{}',
+      })
+      const body = await res.json().catch(() => ({})) as {
+        error?: string
+        leadId?: string
+        row?: EmailTriageRow
+      }
+      if (!res.ok) {
+        toast.error(body.error ?? 'Could not create the lead')
+        await reload()
+        return false
+      }
+      if (body.row) {
+        setRows(current => current.map(item => (item.id === body.row!.id ? body.row! : item)))
+      }
+      const leadHref = body.leadId ? `/admin/crm/opportunities/${body.leadId}` : null
+      toast.success('Lead created from this email', {
+        duration: 12_000,
+        action: leadHref
+          ? { label: 'Open lead', onClick: () => { window.location.href = leadHref } }
+          : undefined,
+      })
+      return true
+    } finally {
+      setBusy(null)
+    }
+  }, [authHeaders, confirm, reload, selected])
+
   // Sends exactly what the editor shows — the subject and body travel with the
   // request, so an edit the autosave has not reached yet is the one that goes.
   const sendSelected = useCallback(async () => {
@@ -634,6 +712,7 @@ export function EmailTriageClient({
                   row={row}
                   selected={row.id === selectedId}
                   onSelect={() => setSelectedId(row.id)}
+                  currentUserId={currentUserId}
                 />
               </li>
             ))}
@@ -682,6 +761,9 @@ export function EmailTriageClient({
                   onFollowUp={followUpSelected}
                   onClearFollowUp={clearFollowUpSelected}
                   onCreateTask={createTaskSelected}
+                  onClaim={claimSelected}
+                  onCreateLead={createLeadSelected}
+                  currentUserId={currentUserId}
                 />
               )
               : <EmptyState icon={MailSearch} title="Pick a message" />}
@@ -718,14 +800,18 @@ function QueueRow({
   row,
   selected,
   onSelect,
+  currentUserId,
 }: {
   row: EmailTriageRow
   selected: boolean
   onSelect: () => void
+  currentUserId: string
 }) {
   // The firm's own reply SLA, reused rather than a second threshold that could
   // drift from the one the rest of the app enforces.
   const overdue = hoursSince(row.received_at) > DEFAULT_REPLY_SLA_HOURS
+  const claimedByMe = Boolean(row.claimed_by && row.claimed_by === currentUserId)
+  const claimedByOther = Boolean(row.claimed_by && row.claimed_by !== currentUserId)
 
   return (
     <button
@@ -756,6 +842,8 @@ function QueueRow({
         <Badge variant={CLASSIFICATION_VARIANT[row.classification]}>
           {CLASSIFICATION_LABEL[row.classification]}
         </Badge>
+        {claimedByMe && <Badge variant="secondary">Mine</Badge>}
+        {claimedByOther && <Badge variant="outline">Claimed</Badge>}
         {row.status === 'drafted' && <Badge variant="outline">Draft ready</Badge>}
         {row.status === 'approved' && (
           <Badge variant="outline">
@@ -793,6 +881,9 @@ function DraftPane({
   onFollowUp,
   onClearFollowUp,
   onCreateTask,
+  onClaim,
+  onCreateLead,
+  currentUserId,
 }: {
   row: EmailTriageRow
   busy: boolean
@@ -810,6 +901,9 @@ function DraftPane({
   onFollowUp: (at: string, note?: string) => Promise<boolean>
   onClearFollowUp: () => Promise<boolean>
   onCreateTask: () => Promise<boolean>
+  onClaim: (claim: boolean) => Promise<boolean>
+  onCreateLead: () => Promise<boolean>
+  currentUserId: string
 }) {
   const href = recordHref(row)
   const hasDraft = Boolean(row.draft_body?.trim())
@@ -817,6 +911,9 @@ function DraftPane({
   const noteDirty = useRef(false)
   const followUpNoteDirty = useRef(false)
   const snoozed = Boolean(row.snoozed_until && Date.parse(row.snoozed_until) > Date.now())
+  const claimedByMe = Boolean(row.claimed_by && row.claimed_by === currentUserId)
+  const [customSnooze, setCustomSnooze] = useState('')
+  const [customFollowUp, setCustomFollowUp] = useState('')
 
   // Autosave. The attorney edits and clicks away; losing the edit because it
   // was never explicitly saved would be worse than an occasional extra write.
@@ -982,6 +1079,23 @@ function DraftPane({
           <ListTodo className="mr-1.5 size-3.5" />
           Create task
         </Button>
+        {row.classification === 'possible_lead' && !row.client_intake_id && (
+          <Button size="sm" variant="ghost" onClick={() => void onCreateLead()} disabled={busy}>
+            <UserPlus className="mr-1.5 size-3.5" />
+            Create lead
+          </Button>
+        )}
+        {claimedByMe ? (
+          <Button size="sm" variant="ghost" onClick={() => void onClaim(false)} disabled={busy}>
+            <UserCheck className="mr-1.5 size-3.5" />
+            Release claim
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => void onClaim(true)} disabled={busy}>
+            <UserCheck className="mr-1.5 size-3.5" />
+            Claim
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={() => onDismiss('sender')} disabled={busy}>
           Never this sender
         </Button>
@@ -990,33 +1104,83 @@ function DraftPane({
         </Button>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="size-3.5" aria-hidden /> Snooze
-        </span>
-        {snoozed ? (
-          <Button size="sm" variant="outline" onClick={() => void onClearSnooze()} disabled={busy}>
-            Clear snooze
-          </Button>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('1h'))} disabled={busy}>1h</Button>
-            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tonight'))} disabled={busy}>Tonight</Button>
-            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tomorrow'))} disabled={busy}>Tomorrow</Button>
-            <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('week'))} disabled={busy}>Next week</Button>
-          </>
-        )}
-        <span className="ml-2 text-xs text-muted-foreground">Follow-up</span>
-        {row.follow_up_at ? (
-          <Button size="sm" variant="outline" onClick={() => void onClearFollowUp()} disabled={busy}>
-            Clear follow-up
-          </Button>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('2d'))} disabled={busy}>In 2 days</Button>
-            <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('1w'))} disabled={busy}>In 1 week</Button>
-          </>
-        )}
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="size-3.5" aria-hidden /> Snooze
+          </span>
+          {snoozed ? (
+            <Button size="sm" variant="outline" onClick={() => void onClearSnooze()} disabled={busy}>
+              Clear snooze
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('1h'))} disabled={busy}>1h</Button>
+              <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tonight'))} disabled={busy}>Tonight</Button>
+              <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('tomorrow'))} disabled={busy}>Tomorrow</Button>
+              <Button size="sm" variant="outline" onClick={() => void onSnooze(snoozePresetIso('week'))} disabled={busy}>Next week</Button>
+              <Input
+                type="datetime-local"
+                value={customSnooze}
+                onChange={event => setCustomSnooze(event.target.value)}
+                aria-label="Custom snooze date and time"
+                className="h-8 w-auto text-xs"
+                disabled={busy}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !customSnooze}
+                onClick={() => {
+                  const iso = fromDatetimeLocalValue(customSnooze)
+                  if (!iso) {
+                    toast.error('Pick a valid date and time')
+                    return
+                  }
+                  void onSnooze(iso).then(ok => { if (ok) setCustomSnooze('') })
+                }}
+              >
+                Set
+              </Button>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Follow-up</span>
+          {row.follow_up_at ? (
+            <Button size="sm" variant="outline" onClick={() => void onClearFollowUp()} disabled={busy}>
+              Clear follow-up
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('2d'))} disabled={busy}>In 2 days</Button>
+              <Button size="sm" variant="outline" onClick={() => void onFollowUp(followUpPresetIso('1w'))} disabled={busy}>In 1 week</Button>
+              <Input
+                type="datetime-local"
+                value={customFollowUp || toDatetimeLocalValue(row.follow_up_at)}
+                onChange={event => setCustomFollowUp(event.target.value)}
+                aria-label="Custom follow-up date and time"
+                className="h-8 w-auto text-xs"
+                disabled={busy}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !customFollowUp}
+                onClick={() => {
+                  const iso = fromDatetimeLocalValue(customFollowUp)
+                  if (!iso) {
+                    toast.error('Pick a valid date and time')
+                    return
+                  }
+                  void onFollowUp(iso).then(ok => { if (ok) setCustomFollowUp('') })
+                }}
+              >
+                Set
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {row.follow_up_at && (
@@ -1120,7 +1284,7 @@ function ThreadView({
         <article
           key={message.id}
           className={`rounded-md border px-3 py-2 text-xs ${
-            message.outbound ? 'border-border bg-card/60' : 'border-border bg-card'
+            message.outbound ? 'border-border bg-card' : 'border-border bg-card'
           }`}
         >
           <header className="mb-1 flex items-center justify-between gap-2 text-muted-foreground">
@@ -1132,6 +1296,28 @@ function ThreadView({
           <p className="whitespace-pre-wrap break-words">
             {message.bodyText.trim() || '(no text)'}
           </p>
+          {message.attachments && message.attachments.length > 0 && (
+            <ul className="mt-2 space-y-1 border-t border-border pt-2" aria-label="Attachments">
+              {message.attachments.map((file, index) => (
+                <li key={`${message.id}-${file.filename}-${index}`} className="flex items-center gap-2 text-muted-foreground">
+                  <Paperclip className="size-3 shrink-0" aria-hidden />
+                  <FileText className="size-3 shrink-0" aria-hidden />
+                  <span className="min-w-0 truncate text-foreground">{file.filename}</span>
+                  {typeof file.size === 'number' && file.size > 0 && (
+                    <span className="shrink-0 text-micro">{formatBytes(file.size)}</span>
+                  )}
+                  <a
+                    href={gmailThreadUrl(row.gmail_thread_id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-auto shrink-0 font-medium underline underline-offset-2"
+                  >
+                    Open in Gmail
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
       ))}
     </div>

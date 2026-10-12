@@ -45,6 +45,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  // Claim / release for multi-staff: `true` claims for the caller, `null` releases.
+  if (body.claimedBy === null) {
+    patch.claimed_by = null
+  } else if (body.claimedBy === true) {
+    patch.claimed_by = auth.userId ?? null
+  }
+
   if (Object.keys(patch).length === 1) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }

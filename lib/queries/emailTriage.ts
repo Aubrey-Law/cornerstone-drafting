@@ -28,6 +28,7 @@ export type TriageQueueView =
   | 'failed'
   | 'snoozed'
   | 'follow_up'
+  | 'mine'
 
 export interface EmailTriageRow {
   id: string
@@ -83,6 +84,8 @@ const OPEN_STATUSES = ['needs_reply', 'drafting', 'drafted', 'failed', 'approved
 
 export interface FetchEmailTriageQueueOptions {
   view?: TriageQueueView
+  /** Required when `view` is `mine` — filters to rows claimed by this user. */
+  claimedBy?: string | null
 }
 
 /**
@@ -102,6 +105,20 @@ export async function fetchEmailTriageQueue(
   const view = options.view ?? 'all'
   const nowIso = new Date().toISOString()
   const admin = getAdminClient()
+
+  if (view === 'mine') {
+    if (!options.claimedBy) return []
+    const { data, error } = await admin
+      .from('email_triage_threads')
+      .select(ROW_COLUMNS)
+      .in('status', [...OPEN_STATUSES])
+      .eq('claimed_by', options.claimedBy)
+      .or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+      .order('received_at', { ascending: true })
+      .limit(200)
+    if (error) throw error
+    return (data ?? []) as unknown as EmailTriageRow[]
+  }
 
   if (view === 'snoozed') {
     const { data, error } = await admin
