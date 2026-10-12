@@ -17,6 +17,7 @@ import {
   ListChecks,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import { clientSerifClass } from '@/lib/clientFonts'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,48 @@ const navItems = [
 
 /** Primary destinations on the mobile bottom bar; the rest live under More. */
 const MOBILE_PRIMARY = ['/dashboard', '/documents', '/messages'] as const
+
+const navLinkClass = cva(
+  'flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar active:scale-[0.99] motion-reduce:active:scale-100',
+  {
+    variants: {
+      active: {
+        true: 'bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--primary)]',
+        false: 'text-sidebar-foreground hover:bg-sidebar-accent',
+      },
+    },
+  },
+)
+
+function PortalNavLink({
+  item,
+  active,
+  unreadCount,
+  onNavigate,
+}: {
+  item: (typeof navItems)[number]
+  active: boolean
+  unreadCount: number
+  onNavigate?: () => void
+}) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
+      className={navLinkClass({ active })}
+    >
+      <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+      <span className="flex-1">{item.label}</span>
+      {unreadCount > 0 && (
+        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-micro font-semibold tabular-nums text-primary-foreground">
+          {unreadCount}
+          <span className="sr-only"> unread</span>
+        </span>
+      )}
+    </Link>
+  )
+}
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -81,41 +124,31 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     item => pathname === item.href || pathname.startsWith(`${item.href}/`),
   )
 
+  const isCurrent = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+
   // h-dvh, not h-screen: on iOS 100vh is the *large* viewport (toolbar hidden),
   // which pushed the sticky message composer behind Safari's bottom toolbar.
   return (
     <div className={cn('client-root flex h-dvh bg-background', clientSerifClass)}>
       <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
-          <Link href="/dashboard" className="text-sm font-semibold text-sidebar-foreground">
+          <Link
+            href="/dashboard"
+            className="rounded-sm text-sm font-semibold text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {firm.firmName}
           </Link>
         </div>
 
-        <nav className="flex-1 space-y-1 p-2">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{item.label}</span>
-                {item.href === '/messages' && unreadCount > 0 && (
-                  <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-micro font-semibold tabular-nums text-primary-foreground">
-                    {unreadCount}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
+        <nav aria-label="Portal" className="flex-1 space-y-0.5 p-2">
+          {navItems.map((item) => (
+            <PortalNavLink
+              key={item.href}
+              item={item}
+              active={isCurrent(item.href)}
+              unreadCount={item.href === '/messages' ? unreadCount : 0}
+            />
+          ))}
         </nav>
 
         <div className="border-t border-sidebar-border p-2">
@@ -133,7 +166,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-4 md:hidden">
-          <Link href="/dashboard" className="text-sm font-semibold text-foreground">
+          <Link
+            href="/dashboard"
+            className="rounded-sm text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {firm.firmName}
           </Link>
           <Button
@@ -149,45 +185,31 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent
+            id="portal-nav-sheet"
             side="left"
-            className="w-72 gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground md:hidden sm:max-w-none"
+            className="w-72 gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground shadow-xl md:hidden sm:max-w-none"
           >
             <SheetTitle className="sr-only">Client portal navigation</SheetTitle>
             <div className="flex h-full flex-col">
               <div className="flex h-14 items-center border-b border-sidebar-border px-4 pr-12">
                 <Link
                   href="/dashboard"
-                  className="text-sm font-semibold text-sidebar-foreground"
+                  className="rounded-sm text-sm font-semibold text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => setMobileOpen(false)}
                 >
                   {firm.firmName}
                 </Link>
               </div>
-              <nav className="flex-1 space-y-1 p-2">
-                {navItems.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors',
-                        isActive
-                          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
-                      )}
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      <span className="flex-1">{item.label}</span>
-                      {item.href === '/messages' && unreadCount > 0 && (
-                        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-micro font-semibold tabular-nums text-primary-foreground">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </Link>
-                  )
-                })}
+              <nav aria-label="Portal" className="flex-1 space-y-0.5 p-2">
+                {navItems.map((item) => (
+                  <PortalNavLink
+                    key={item.href}
+                    item={item}
+                    active={isCurrent(item.href)}
+                    unreadCount={item.href === '/messages' ? unreadCount : 0}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+                ))}
               </nav>
               <div className="border-t border-sidebar-border p-2">
                 <Button
@@ -213,20 +235,25 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           {primaryMobile.map(item => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const isActive = isCurrent(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-micro font-medium transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground',
+                  'relative flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-micro font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-accent',
+                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
+                {isActive && <span aria-hidden className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-primary" />}
                 <item.icon className="size-5" aria-hidden />
                 {item.label}
                 {item.href === '/messages' && unreadCount > 0 && (
-                  <span className="absolute right-1/4 top-1.5 size-1.5 rounded-full bg-primary" aria-hidden />
+                  <>
+                    <span className="absolute right-[22%] top-2 size-1.5 rounded-full bg-primary" aria-hidden />
+                    <span className="sr-only">{unreadCount} unread</span>
+                  </>
                 )}
               </Link>
             )
@@ -234,11 +261,15 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
+            aria-expanded={mobileOpen}
+            aria-controls="portal-nav-sheet"
+            aria-haspopup="dialog"
             className={cn(
-              'flex flex-1 flex-col items-center gap-0.5 py-2 text-micro font-medium transition-colors',
-              moreActive ? 'text-primary' : 'text-muted-foreground',
+              'relative flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-micro font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-accent',
+              moreActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
             )}
           >
+            {moreActive && <span aria-hidden className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-primary" />}
             <MoreHorizontal className="size-5" aria-hidden />
             More
           </button>
