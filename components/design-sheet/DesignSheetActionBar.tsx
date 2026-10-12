@@ -9,13 +9,13 @@ export interface DesignSheetBlockerRow {
   label: string
   /** First field row is the old "next unresolved" jump, named for assistive tech. */
   nextUnresolved?: boolean
-  onSelect: () => void
 }
 
 interface DesignSheetActionBarProps {
   rows: DesignSheetBlockerRow[]
   saveStatusText: string
   onSaveAndCheck: () => void
+  onSelectRow: (id: string) => void
   complete: ReactNode
   menu: ReactNode
 }
@@ -28,6 +28,7 @@ export function DesignSheetActionBar({
   rows,
   saveStatusText,
   onSaveAndCheck,
+  onSelectRow,
   complete,
   menu,
 }: DesignSheetActionBarProps) {
@@ -87,7 +88,7 @@ export function DesignSheetActionBar({
                   aria-label={row.nextUnresolved ? `Next unresolved decision, ${row.label}` : undefined}
                   onClick={() => {
                     setOpen(false)
-                    row.onSelect()
+                    onSelectRow(row.id)
                   }}
                 >
                   {row.label}

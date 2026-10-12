@@ -428,11 +428,11 @@ function DesignSheetPageContent({
     })
   }, [setContainerScrollTop])
 
-  const lastBlockerKey = useRef<string | null>(null)
+  const [lastBlockerKey, setLastBlockerKey] = useState<string | null>(null)
   const handleBlockerSelect = useCallback((item: { sectionId: string; targetField: string | null }) => {
     const groupId = designSectionAnchorId(item.sectionId)
     if (!groupId) return
-    lastBlockerKey.current = `${item.sectionId}:${item.targetField}`
+    setLastBlockerKey(`${item.sectionId}:${item.targetField}`)
     selectGroup(groupId, { targetField: item.targetField })
     // Fiduciary blockers target a grid role column, not a single input — tint
     // the whole column so the missing assignment is obvious.
@@ -509,7 +509,7 @@ function DesignSheetPageContent({
       targetField: item.targetField,
     }]
   })
-  const blockerCursor = fieldBlockerRows.findIndex(item => `${item.sectionId}:${item.targetField}` === lastBlockerKey.current)
+  const blockerCursor = fieldBlockerRows.findIndex(item => `${item.sectionId}:${item.targetField}` === lastBlockerKey)
   const blockerStart = blockerCursor >= 0 && fieldBlockerRows.length > 0 ? (blockerCursor + 1) % fieldBlockerRows.length : 0
   const orderedFieldBlockers = fieldBlockerRows.length > 0
     ? [...fieldBlockerRows.slice(blockerStart), ...fieldBlockerRows.slice(0, blockerStart)]
@@ -519,15 +519,21 @@ function DesignSheetPageContent({
     ...(matterTypeLabel ? [{
       id: 'matter-type',
       label: MATTER_TYPE_BLOCK,
-      onSelect: () => router.push(`/admin/matters/${matterId}`),
     }] : []),
     ...orderedFieldBlockers.map((item, index) => ({
       id: item.id,
       label: item.label,
       nextUnresolved: index === 0,
-      onSelect: () => handleBlockerSelect(item),
     })),
   ]
+  const onSelectBlockerRow = useCallback((id: string) => {
+    if (id === 'matter-type') {
+      router.push(`/admin/matters/${matterId}`)
+      return
+    }
+    const item = fieldBlockerRows.find(row => row.id === id)
+    if (item) handleBlockerSelect(item)
+  }, [fieldBlockerRows, handleBlockerSelect, matterId, router])
 
   useLayoutEffect(() => {
     if (!embedded) {
@@ -637,6 +643,7 @@ function DesignSheetPageContent({
                     rows={blockerRows}
                     saveStatusText={saveStatusText}
                     onSaveAndCheck={() => void openDrafting()}
+                    onSelectRow={onSelectBlockerRow}
                     complete={completeButton}
                     menu={(
                       <DropdownMenu>

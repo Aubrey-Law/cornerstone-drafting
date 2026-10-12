@@ -13,15 +13,16 @@ afterEach(cleanup)
 describe('design sheet action bar', () => {
   it('opens the blocking checklist and jumps from a row', async () => {
     const user = userEvent.setup()
-    const onSelect = vi.fn()
+    const onSelectRow = vi.fn()
     render(
       <DesignSheetActionBar
         rows={[
-          { id: 'matter-type', label: 'Matter type must be confirmed before drafting', onSelect },
-          { id: 'client-name', label: 'Facts from intake: client name', nextUnresolved: true, onSelect },
+          { id: 'matter-type', label: 'Matter type must be confirmed before drafting' },
+          { id: 'client-name', label: 'Facts from intake: client name', nextUnresolved: true },
         ]}
         saveStatusText="Saved at 3:42 PM"
         onSaveAndCheck={vi.fn()}
+        onSelectRow={onSelectRow}
         complete={<button type="button">Complete sheet</button>}
         menu={<button type="button">More</button>}
       />,
@@ -34,7 +35,7 @@ describe('design sheet action bar', () => {
     const next = screen.getByRole('button', { name: 'Next unresolved decision, Facts from intake: client name' })
     expect(screen.getByRole('list', { name: 'Unresolved decisions' })).toBeTruthy()
     await user.click(next)
-    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelectRow).toHaveBeenCalledWith('client-name')
     expect(screen.queryByRole('list', { name: 'Unresolved decisions' })).toBeNull()
   })
 
