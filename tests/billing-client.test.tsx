@@ -172,7 +172,7 @@ describe('billing workspace', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    navigation.params = new URLSearchParams()
+    navigation.params = new URLSearchParams('tab=ledger')
     vi.stubGlobal('fetch', vi.fn())
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn(() => 'blob:billing'),
@@ -186,7 +186,7 @@ describe('billing workspace', () => {
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open.*1/ }).getAttribute('aria-pressed')).toBe('true')
     // Scoped to the ledger: the client also appears in the recent-payments rail.
-    const ledger = within(screen.getByRole('table'))
+    const ledger = within(screen.getByRole('list', { name: 'Billing ledger' }))
     expect(ledger.getByText('Chen, Marcus & Lily')).toBeTruthy()
     expect(ledger.queryByText("O'Brien, Kathleen")).toBeNull()
     expect(screen.getAllByText('Overdue')).toHaveLength(2)
@@ -198,7 +198,7 @@ describe('billing workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /Paid.*1/ }))
 
-    expect(navigation.replace).toHaveBeenCalledWith('/admin/billing?filter=paid&month=2026-07', { scroll: false })
+    expect(navigation.replace).toHaveBeenCalledWith('/admin/billing?tab=ledger&filter=paid&month=2026-07', { scroll: false })
   })
 
   it('opens an accessible payment dialog and blocks an overpayment', async () => {
@@ -309,12 +309,15 @@ describe('billing workspace', () => {
 
   // ── Phase 3: page shape, filtering and batch billing ──────────────────
 
-  it('opens on billing work and keeps reporting cards in Reports', () => {
+  it('opens on the dashboard and keeps charts on Reports', () => {
+    navigation.params = new URLSearchParams()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    expect(screen.getByRole('link', { name: 'Billing work' }).getAttribute('aria-current')).toBe('page')
-    expect(screen.getByRole('columnheader', { name: 'Client / matter' })).toBeTruthy()
-    expect(screen.queryByText('Collected this month')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: 'Ledger' }).getAttribute('aria-current')).toBeNull()
+    expect(screen.getByText('Collected this month')).toBeTruthy()
+    expect(screen.getByText('This week')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Billing ledger' })).toBeNull()
     expect(screen.queryByText('Collection goal')).toBeNull()
   })
 
@@ -327,12 +330,16 @@ describe('billing workspace', () => {
     expect(screen.queryByRole('button', { name: 'Add charge' })).toBeNull()
   })
 
-  it('turns the work summary into direct filters without loading reporting cards', () => {
+  it('sends the dashboard queues into the ledger', () => {
+    navigation.params = new URLSearchParams()
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ }).getAttribute('aria-current')).toBeNull()
-    expect(screen.getByRole('link', { name: /Open balances.*1/ }).getAttribute('aria-current')).toBe('page')
-    expect(screen.getByRole('link', { name: /Past due.*1/ }).getAttribute('aria-current')).toBeNull()
+    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ }).getAttribute('href')).toContain('tab=ledger')
+    expect(screen.getByRole('link', { name: /Ready to invoice.*1/ }).getAttribute('href')).toContain('filter=to_invoice')
+    const open = screen.getByRole('link', { name: /Open balances.*1/ })
+    expect(open.getAttribute('href')).toContain('tab=ledger')
+    expect(open.getAttribute('href')).not.toContain('filter=')
+    expect(screen.getByRole('link', { name: /Past due.*1/ }).getAttribute('href')).toContain('filter=overdue')
   })
 
   it('debounces ledger search before replacing the URL', () => {
@@ -355,12 +362,11 @@ describe('billing workspace', () => {
   it('shows a compact ledger without duplicate accounting columns', () => {
     render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} invoices={[]} />)
 
-    const ledger = within(screen.getByRole('table'))
-    expect(ledger.getByRole('columnheader', { name: 'Charge / invoice' })).toBeTruthy()
-    expect(ledger.getByRole('columnheader', { name: 'Balance' })).toBeTruthy()
-    expect(ledger.queryByRole('columnheader', { name: 'Billed' })).toBeNull()
-    expect(ledger.queryByRole('columnheader', { name: 'Collected' })).toBeNull()
-    expect(ledger.queryByRole('columnheader', { name: 'Age' })).toBeNull()
+    expect(screen.getByRole('list', { name: 'Billing ledger' })).toBeTruthy()
+    expect(screen.queryByRole('columnheader', { name: 'Billed' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Collected' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Age' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Client / matter' })).toBeNull()
   })
 
   it('offers a To invoice filter for work that still needs billing', async () => {
@@ -533,7 +539,7 @@ describe('billing workspace', () => {
   })
 
   it('sends a multi-row selection to the bulk delete route in one call', async () => {
-    navigation.params = new URLSearchParams('filter=all')
+    navigation.params = new URLSearchParams('tab=ledger&filter=all')
     const user = userEvent.setup()
     const request = vi.fn().mockResolvedValue(Response.json({ ok: true, deleted: 2, requested: 2 }))
     vi.stubGlobal('fetch', request)
