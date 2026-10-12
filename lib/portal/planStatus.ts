@@ -20,6 +20,12 @@ export interface PlanStatusFacts {
   funding: { total: number; funded: number; outstanding: number } | null
   /** Lifecycle requirements still owed by the client, in the registry's words. */
   clientFollowUp: readonly string[]
+  /**
+   * Whether the client has submitted the questionnaire. False keeps the
+   * status on that open questionnaire. Omit when unknown so the stage
+   * sentences stay as they are.
+   */
+  intakeComplete?: boolean
   /** When the matter last changed stage, when known. */
   stageChangedAt: string | null
   /** The firm's name and the attorney's short name, for the sentences. */
@@ -82,17 +88,33 @@ function followUpSentence(facts: PlanStatusFacts): string | null {
 }
 
 /**
+ * An open questionnaire is the story, even after the matter stage has moved
+ * on. A closed matter keeps its own sentence. Unknown intake leaves the
+ * stage sentences untouched.
+ */
+function questionnaireStillOpen(facts: PlanStatusFacts): boolean {
+  return facts.intakeComplete === false && facts.stage !== 'closed'
+}
+
+const OPEN_QUESTIONNAIRE_SENTENCE = 'We are working from what we have, and your questionnaire is still open.'
+
+/**
  * The status in plain words, with no model involved. Where you are, what is
  * next, what is booked, how funding stands, and what we need from you; only
  * the sentences the facts support.
  */
 export function describePlanStatus(facts: PlanStatusFacts): string {
+  const intakeOpen = questionnaireStillOpen(facts)
   const sentences = [
-    STAGE_SENTENCE[facts.stage] ?? `Your matter is in the ${facts.stageLabel.toLowerCase()} stage.`,
+    intakeOpen
+      ? OPEN_QUESTIONNAIRE_SENTENCE
+      : STAGE_SENTENCE[facts.stage] ?? `Your matter is in the ${facts.stageLabel.toLowerCase()} stage.`,
     appointmentSentence(facts),
     facts.stage === 'funding' || facts.stage === 'post_execution' || facts.stage === 'signing_complete' ? fundingSentence(facts) : null,
     followUpSentence(facts),
-    facts.stage === 'closed' ? 'Your documents and messages stay available here.' : NEXT_STEP[facts.stage] ?? null,
+    intakeOpen
+      ? null
+      : facts.stage === 'closed' ? 'Your documents and messages stay available here.' : NEXT_STEP[facts.stage] ?? null,
   ]
   return sentences.filter((sentence): sentence is string => Boolean(sentence)).join(' ')
 }
@@ -110,6 +132,7 @@ export function planStatusDigest(facts: PlanStatusFacts): string {
     facts.funding ? `${facts.funding.funded}/${facts.funding.total}` : '-',
     facts.clientFollowUp.length,
   ]
+  if (facts.intakeComplete === false) parts.push('intake-open')
   return parts.join(':')
 }
 
