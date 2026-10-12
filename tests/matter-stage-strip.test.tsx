@@ -22,15 +22,31 @@ function renderStrip(onStageChange = vi.fn()) {
 }
 
 describe('MatterStageStrip', () => {
-  it('offers work stages without intake and confirms before moving from the tracker', async () => {
+  it('shows the previous, current, and next stage and confirms a change', async () => {
     const onStageChange = renderStrip()
-    expect(screen.queryByRole('button', { name: 'Intake' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Intake Review' })).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'Revision' }))
+    expect(screen.getByRole('list', { name: 'Matter progress' }).textContent).toContain('Design')
+    expect(screen.getByRole('list', { name: 'Matter progress' }).textContent).toContain('Drafting')
+    expect(screen.getByRole('list', { name: 'Matter progress' }).textContent).toContain('Client Review')
+    expect(screen.queryByText('Intake')).toBeNull()
+    expect(screen.queryByText('Funding')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Change stage' }))
     expect(onStageChange).not.toHaveBeenCalled()
-    expect((screen.getByRole('combobox', { name: 'New stage' }) as HTMLSelectElement).value).toBe('revision')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'New stage' }), 'revision')
     await userEvent.click(screen.getByRole('button', { name: 'Confirm stage change' }))
     expect(onStageChange).toHaveBeenCalledWith('revision')
+  })
+
+  it('shows the stage SLA as a count of the allowance', () => {
+    render(
+      <MatterStageStrip
+        stage="drafting"
+        details={null}
+        agingSummary={{ currentStage: 'drafting', stageEnteredAt: '2026-10-01T00:00:00Z', daysInStage: 1, slaDays: 5, health: 'green', isSnoozed: false }}
+        stageSaving={false}
+        onStageChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('1 of 5')).toBeTruthy()
   })
 
   it('keeps the progress rail read-only and changes stage through an explicit confirmation', async () => {
@@ -105,7 +121,7 @@ describe('skipped stages', () => {
     )
     // Intake Review and Design were jumped over, and Revision never happened
     // (approved straight from review); the summary retains the skipped count.
-    expect(screen.getByRole('button', { name: 'Revision (skipped)' }).getAttribute('title')).toBe('Skipped')
+    expect(screen.getByText('Revision (skipped)').getAttribute('title')).toBe('Skipped')
   })
 
   it('strikes through a visible pill for a stage that was skipped', () => {
@@ -124,8 +140,9 @@ describe('skipped stages', () => {
         ]}
       />,
     )
-    const scheduled = screen.getByRole('button', { name: 'Signing Scheduled (skipped)' })
+    const scheduled = screen.getByText('Signing Scheduled (skipped)')
     expect(scheduled.getAttribute('title')).toBe('Skipped')
-    expect(screen.getByRole('button', { name: 'Drafts Approved' }).getAttribute('title')).not.toBe('Skipped')
+    expect(screen.getByText('Signing Complete').getAttribute('title')).not.toBe('Skipped')
+    expect(screen.queryByText('Drafts Approved')).toBeNull()
   })
 })

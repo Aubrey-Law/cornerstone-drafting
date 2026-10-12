@@ -49,6 +49,7 @@ import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageT
 import { MatterOverviewSidebar } from './MatterOverviewSidebar'
 import { MatterFormsCard } from '@/components/forms/MatterFormsCard'
 import { MatterKeyDates } from './MatterKeyDates'
+import { MatterLogCallDialog, MatterTextDialog } from './MatterCommDialogs'
 import { MatterOverviewComposer } from './MatterOverviewComposer'
 import { MatterOverviewWork } from './MatterOverviewWork'
 import { MatterWorkspaceHeader } from '@/components/matter/MatterWorkspaceHeader'
@@ -213,6 +214,8 @@ function MatterDetailClientInner({
   // Header Email/Text open the same composer the lead page uses, AI drafting
   // included, rather than only switching to the communications tab.
   const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
+  const [textOpen, setTextOpen] = useState(false)
+  const [logCallOpen, setLogCallOpen] = useState(false)
 
   const {
     portalDraft,
@@ -441,6 +444,8 @@ function MatterDetailClientInner({
           factsRailOpen={factsRailOpen}
           onToggleFactsRail={() => setFactsRailOpen(open => !open)}
           onEmail={() => setComposerChannel('email')}
+          onText={() => setTextOpen(true)}
+          onLogCall={() => setLogCallOpen(true)}
           onScheduleAppointment={() => setScheduleAppointmentOpen(true)}
           onBookViaPage={() => setBookForClientOpen(true)}
           onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
@@ -511,16 +516,13 @@ function MatterDetailClientInner({
                   onActivity={() => { setHistoryView('activity'); setActiveTab('history') }}
                   onSnooze={handleSnoozeWork}
                   composer={<MatterOverviewComposer
-                    matterId={matterId} clientName={matter.client_name ?? 'Client'} clientEmail={matter.client_email ?? null}
-                    clientPhone={matter.client_phone ?? null} smsEnabled={smsEnabled} emailEnabled={emailSendEnabled}
+                    clientName={matter.client_name ?? 'Client'}
                     noteText={noteText} onNoteChange={setNoteText} noteSaving={noteSaving} onAddNote={() => handleAddNote('Internal')}
                     portalDraft={portalDraft} onPortalChange={setPortalDraft} onSend={sendOnChannel}
-                    smsRecipient={smsRecipient} onSmsRecipientChange={setSmsRecipient}
-                    onLogCall={handleLogCall} onEmailSent={() => { void retryMessages(); router.refresh() }}
                   />}
                   sidebar={<MatterOverviewSidebar
                     matter={matter} details={matterDetails} plan={planMirror} estate={initialEstateSnapshot}
-                    onPeople={() => setActiveTab('people')} onBilling={() => setActiveTab('billing')}
+                    onBilling={() => setActiveTab('billing')}
                     tasks={<><div className="mb-2 flex items-center justify-between"><span>Tasks · {taskCounts.open} open</span><Button variant="link" className="h-auto p-0" onClick={() => setActiveTab('tasks')}>View all</Button></div>{taskPreview.some(task => task.key !== workSummary?.workKey) ? <ul>{taskPreview.filter(task => task.key !== workSummary?.workKey).map(task => <li key={task.key}><Link className="block py-1 underline-offset-4 hover:underline" href={task.href}>{task.title}</Link></li>)}</ul> : currentEngineStageTask && workSummary?.workKey !== `task:${currentEngineStageTask.id}` ? <MatterEngineStageTaskCard compact task={currentEngineStageTask} onUpdated={handleEngineStageTaskUpdated} /> : <p className="text-xs text-muted-foreground">{taskCounts.open ? 'View all tasks for the full list.' : 'No open tasks.'}</p>}</>}
                   >
                     <MatterFormsCard matterId={matterId} />
@@ -804,6 +806,17 @@ function MatterDetailClientInner({
         }}
         composer={{ channel: composerChannel, setChannel: setComposerChannel }}
       />
+      <MatterTextDialog
+        open={textOpen}
+        onOpenChange={setTextOpen}
+        clientName={matter.client_name ?? 'Client'}
+        clientPhone={matter.client_phone ?? null}
+        smsEnabled={smsEnabled}
+        smsRecipient={smsRecipient}
+        onSmsRecipientChange={setSmsRecipient}
+        onSend={sendOnChannel}
+      />
+      <MatterLogCallDialog open={logCallOpen} onOpenChange={setLogCallOpen} onLogCall={handleLogCall} />
       {confirmDialog}
     </div>
   )

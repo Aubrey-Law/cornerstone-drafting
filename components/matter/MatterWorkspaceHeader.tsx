@@ -8,10 +8,12 @@ import {
   CloudUpload,
   Loader as Loader2,
   Mail,
+  MessageSquare,
   MoreHorizontal,
   PanelRight,
   PenLine,
   Phone,
+  PhoneCall,
   Trash2,
   Merge,
   Upload,
@@ -42,6 +44,10 @@ export interface MatterWorkspaceHeaderProps {
   factsRailOpen: boolean
   onToggleFactsRail: () => void
   onEmail: () => void
+  /** Opens the text composer. Hidden when the page has no text action. */
+  onText?: () => void
+  /** Opens the log-call composer. Hidden when the page has no call log. */
+  onLogCall?: () => void
   /** Books in the firm's own scheduler; hidden when not given. */
   onScheduleAppointment?: () => void
   /** Emails or posts a link to the firm's booking page; hidden when not given. */
@@ -85,6 +91,8 @@ export function MatterWorkspaceHeader({
   factsRailOpen,
   onToggleFactsRail,
   onEmail,
+  onText,
+  onLogCall,
   onScheduleAppointment,
   onSendSchedulingLink,
   onBookViaPage,
@@ -174,6 +182,18 @@ export function MatterWorkspaceHeader({
               <Mail className="mr-2 size-3.5" />
               Email client
             </DropdownMenuItem>
+            {onText && (
+              <DropdownMenuItem onClick={onText}>
+                <MessageSquare className="mr-2 size-3.5" />
+                Text client
+              </DropdownMenuItem>
+            )}
+            {onLogCall && (
+              <DropdownMenuItem onClick={onLogCall}>
+                <PhoneCall className="mr-2 size-3.5" />
+                Log call
+              </DropdownMenuItem>
+            )}
             {onScheduleAppointment && (
               <DropdownMenuItem onClick={onScheduleAppointment}>
                 <CalendarDays className="mr-2 size-3.5" />

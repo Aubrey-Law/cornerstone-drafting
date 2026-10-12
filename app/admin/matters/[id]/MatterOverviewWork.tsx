@@ -222,8 +222,8 @@ export function MatterOverviewWork({ matter, nextAction, workSummary, engagement
                 </div>
               </li>
             })}
-          </ul> : <p className="py-6 text-sm text-muted-foreground">{feedFilter === 'all' ? 'No activity recorded yet.' : 'No matching activity in this preview. Open all activity to explore the full history.'}</p>}
-          <Button variant="link" className="h-auto px-0 pt-2.5" onClick={onActivity}>View all activity</Button>
+          </ul> : <p className="py-6 text-sm text-muted-foreground">{activity.length === 0 ? 'No activity recorded yet.' : 'No matching activity in this preview.'}</p>}
+          {activity.length > 0 && <Button variant="link" className="h-auto px-0 pt-2.5" onClick={onActivity}>View all activity</Button>}
         </div>
       </section>
     </div>

@@ -4,9 +4,9 @@ import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 import { MatterOverviewSidebar, overviewPeople } from '@/app/admin/matters/[id]/MatterOverviewSidebar'
-import { EMPTY_PLAN_MIRROR } from '@/lib/matter/planMirror'
+import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import type { PipelineMatter } from '@/types/database'
-import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
+import { EMPTY_MATTER_ESTATE_SNAPSHOT, type MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 
 const matter = {
   matter_id: 'm1', client_name: 'Daniel Whitfield', client_dob: '1961-03-14', client_email: 'dan@example.com', client_phone: '6175550148',
@@ -23,12 +23,11 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function setup(overrides: Partial<PipelineMatter> = {}) {
-  const onPeople = vi.fn()
+function setup(overrides: Partial<PipelineMatter> = {}, planOverride: MatterPlanMirror = plan, estateOverride: MatterEstateSnapshot = estate) {
   const onBilling = vi.fn()
   render(<MatterOverviewSidebar matter={{ ...matter, ...overrides }} details={{ flat_fee_amount: 4500, billing_type: 'flat_fee' }}
-    plan={plan} estate={estate} onPeople={onPeople} onBilling={onBilling} tasks={<p>Task preview</p>} />)
-  return { onPeople, onBilling }
+    plan={planOverride} estate={estateOverride} onBilling={onBilling} tasks={<p>Task preview</p>} />)
+  return { onBilling }
 }
 
 it('renders a card per person with initials, role and DOB, email and phone', () => {
@@ -49,13 +48,20 @@ it('does not show stale spouse details for an unmarried client', () => {
   expect(screen.queryByText('Margaret Whitfield')).toBeNull()
 })
 
-it('summarizes the plan and routes Edit to People', () => {
-  const { onPeople } = setup()
+it('summarizes the plan and opens the design sheet', () => {
+  setup()
   expect(screen.getByText('Whitfield Family Trust')).toBeTruthy()
   expect(screen.getByText('Trustees: Both → Claire Whitfield')).toBeTruthy()
   expect(screen.getByText('Gross estate $2,840,000 · 6 assets')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-  expect(onPeople).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Open design sheet' }).getAttribute('href')).toBe('/admin/drafting/m1?step=design')
+})
+
+it('names the missing plan facts and offers one button to record them', () => {
+  setup({}, EMPTY_PLAN_MIRROR, EMPTY_MATTER_ESTATE_SNAPSHOT)
+  expect(screen.getByText('Trust name, trustees, and assets have not been recorded yet.')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Record plan' }).getAttribute('href')).toBe('/admin/drafting/m1?step=design')
 })
 
 it('shows fee progress from the billing ledger and opens Billing', async () => {

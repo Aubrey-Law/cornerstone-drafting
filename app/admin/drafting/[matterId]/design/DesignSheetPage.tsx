@@ -138,6 +138,7 @@ function DesignSheetPageContent({
   matterId,
   matter,
   intakeSnapshot,
+  embedded = false,
   onOpenDrafting,
   requestedSectionId = null,
   initialFocus = null,
@@ -552,7 +553,7 @@ function DesignSheetPageContent({
           >
             <BrandBar
               saveStatus={saveStatusForHeader(saveStatus)}
-              matterLabel={matterLabel}
+              matterLabel={embedded ? undefined : matterLabel}
               savedLabel={saveStatusText}
               dirtyLabel="Unsaved changes"
               actions={(
