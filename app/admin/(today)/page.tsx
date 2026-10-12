@@ -199,6 +199,7 @@ export default async function AdminTodayPage({
           title="Today"
           description="Your next step, then the rest of the day — client work, deadlines, replies, calendar, and billing."
           actions={<div className="flex items-center gap-3">
+            <Link href="/admin/overview" className="text-sm font-medium text-primary hover:underline">Firm dashboard</Link>
             <Link
               href="/admin/weekly-review"
               className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
