@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { Mail, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
@@ -136,16 +137,14 @@ export function FeeSummaryCard({ details, progress, error, onBilling }: {
   )
 }
 
-export function PlanSummaryCard({ plan, estate, onEdit }: { plan: MatterPlanMirror; estate: MatterEstateSnapshot; onEdit: () => void }) {
+export function PlanSummaryCard({ plan, estate, matterId }: { plan: MatterPlanMirror; estate: MatterEstateSnapshot; matterId: string }) {
   const trustee = plan.fiduciaries.find(item => item.key === 'trustee_slots')
   const trustees = trustee ? [trustee.primary, trustee.successor].filter(Boolean).join(' → ') : ''
   const hasPlan = Boolean(plan.trustName || trustees || estate.assetCount > 0)
+  const editorHref = `/admin/drafting/${matterId}?step=design`
   return (
     <section aria-labelledby="overview-plan-heading" className={CARD}>
-      <div className="mb-2.5 flex items-baseline justify-between gap-2">
-        <h2 id="overview-plan-heading" className={LABEL}>Plan</h2>
-        <Button variant="link" size="sm" className="h-auto p-0" onClick={onEdit}>Edit</Button>
-      </div>
+      <h2 id="overview-plan-heading" className={`mb-2.5 ${LABEL}`}>Plan</h2>
       {hasPlan ? <>
         {plan.trustName && <p className="font-semibold">{plan.trustName}</p>}
         {trustees && <p className="text-compact text-muted-foreground">Trustees: {trustees}</p>}
@@ -154,18 +153,27 @@ export function PlanSummaryCard({ plan, estate, onEdit }: { plan: MatterPlanMirr
             Gross estate {wholeDollars(estate.grossEstateEstimate)} · {estate.assetCount} asset{estate.assetCount === 1 ? '' : 's'}
           </p>
         )}
-      </> : <p className="text-compact text-muted-foreground">Plan details have not been recorded yet.</p>}
+        <Button variant="link" size="sm" className="mt-1 h-auto p-0" asChild>
+          <Link href={editorHref}>Open design sheet</Link>
+        </Button>
+      </> : (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-compact text-muted-foreground">Trust name, trustees, and assets have not been recorded yet.</p>
+          <Button size="sm" asChild>
+            <Link href={editorHref}>Record plan</Link>
+          </Button>
+        </div>
+      )}
     </section>
   )
 }
 
 /** The Overview's right column: people, plan, fee and a task preview. Facts live in the Details panel. */
-export function MatterOverviewSidebar({ matter, details, plan, estate, onPeople, onBilling, tasks, children }: {
+export function MatterOverviewSidebar({ matter, details, plan, estate, onBilling, tasks, children }: {
   matter: PipelineMatter
   details: MatterDetailsRow | null
   plan: MatterPlanMirror
   estate: MatterEstateSnapshot
-  onPeople: () => void
   onBilling: () => void
   tasks?: ReactNode
   children?: ReactNode
@@ -174,7 +182,7 @@ export function MatterOverviewSidebar({ matter, details, plan, estate, onPeople,
   return (
     <div className="flex flex-col gap-4">
       {overviewPeople(matter).map(person => <PersonSummaryCard key={person.role} person={person} />)}
-      <PlanSummaryCard plan={plan} estate={estate} onEdit={onPeople} />
+      <PlanSummaryCard plan={plan} estate={estate} matterId={matter.matter_id} />
       <FeeSummaryCard details={details} progress={fee.progress} error={fee.error} onBilling={onBilling} />
       {tasks && <section aria-label="Tasks preview" className={CARD}>{tasks}</section>}
       {children}

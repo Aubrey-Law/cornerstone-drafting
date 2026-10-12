@@ -84,6 +84,15 @@ export function MatterStageStrip({
   }
 
   const stageSummary = `${STAGES[currentIndex]?.label ?? 'Choose work stage'}${agingSummary ? ` · ${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage` : ''}`
+  const slaDays = agingSummary?.slaDays
+  const slaLabel = slaDays != null && slaDays > 0 && agingSummary
+    ? `${agingSummary.daysInStage} of ${slaDays}`
+    : null
+  const nearby = [
+    currentIndex > 0 ? STAGES[currentIndex - 1] : null,
+    currentIndex >= 0 ? STAGES[currentIndex] : null,
+    currentIndex >= 0 && currentIndex < STAGES.length - 1 ? STAGES[currentIndex + 1] : null,
+  ].filter((entry): entry is (typeof STAGES)[number] => entry != null)
 
   return (
     <>
@@ -100,48 +109,37 @@ export function MatterStageStrip({
           {stageSummary}
         </button>
       ) : (
-      <div className="flex items-center gap-5">
-        <p className="min-w-0 flex-1 text-sm sm:hidden"><span className="block text-xs text-muted-foreground">Current stage</span><strong>{STAGES[currentIndex]?.label ?? 'Choose work stage'}</strong></p>
-        <div className="hidden min-w-0 flex-1 overflow-x-auto sm:block">
-          <ol aria-label="Matter progress" className="grid min-w-[640px] text-micro" style={{ gridTemplateColumns: `repeat(${STAGES.length}, minmax(0, 1fr))` }}>
-            {STAGES.map((entry, index) => {
-              const isCurrent = index === currentIndex
-              const isSkipped = skipped.has(entry.key)
-              const visited = history.some(item => item.stage === entry.key) || seenStages.includes(entry.key)
-              const passed = index < currentIndex && visited
-              return <li key={entry.key} className="min-w-0">
-                <button type="button" aria-current={isCurrent ? 'step' : undefined}
-                  aria-label={`${entry.label}${isSkipped ? ' (skipped)' : ''}`}
-                  title={entry.key === 'closed' ? 'Close from Billing after close-out checks' : isSkipped ? 'Skipped' : `Change stage to ${entry.label}`}
-                  disabled={stageSaving || stage === 'closed' || entry.key === 'closed'}
-                  onClick={() => { setSelectedStage(entry.key); setChangeOpen(true) }}
-                  className={cn('flex w-full flex-col gap-1.5 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default', isCurrent ? 'font-semibold text-selected-foreground' : 'text-muted-foreground')}>
-                  <span aria-hidden className="flex items-center">
-                    <span className={cn(
-                      'size-3 shrink-0 rounded-full',
-                      isCurrent
-                        ? 'border-[3px] border-selected-border bg-card'
-                        : passed
-                          ? 'bg-muted-foreground'
-                          : isSkipped
-                            ? 'border-[1.5px] border-dashed border-input bg-card'
-                            : 'bg-border',
-                    )} />
-                    {index < STAGES.length - 1 && (
-                      <span className={cn('ml-1 h-0.5 flex-1', passed ? 'bg-muted-foreground' : 'bg-border')} />
-                    )}
-                  </span>
-                  <span className={cn('block truncate pr-1', isSkipped && 'line-through decoration-muted-foreground/60')}>{entry.label}</span>
-                </button>
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+        <ol aria-label="Matter progress" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          {nearby.length === 0 ? (
+            <li className="text-muted-foreground">Choose work stage</li>
+          ) : nearby.map((entry, index) => {
+            const isCurrent = entry.key === stage
+            const isSkipped = !isCurrent && skipped.has(entry.key)
+            return (
+              <li key={entry.key} className="flex min-w-0 items-center gap-2" aria-current={isCurrent ? 'step' : undefined}>
+                {index > 0 && <span aria-hidden className="text-muted-foreground">·</span>}
+                <span
+                  title={isSkipped ? 'Skipped' : undefined}
+                  className={cn(
+                    'truncate',
+                    isCurrent ? 'font-semibold text-selected-foreground' : 'text-muted-foreground',
+                    isSkipped && 'line-through decoration-muted-foreground/60',
+                  )}
+                >
+                  {entry.label}{isSkipped ? ' (skipped)' : ''}
+                </span>
               </li>
-            })}
-          </ol>
-        </div>
+            )
+          })}
+        </ol>
         <div className="shrink-0 text-right text-xs leading-snug text-muted-foreground">
           <p>
-            {/* Below sm the "Current stage" text on the left already names it. */}
-            {currentIndex >= 0 && <span className="hidden sm:inline"><strong className="font-semibold text-selected-foreground">{STAGES[currentIndex].label}</strong>{' · '}</span>}
-            {agingSummary ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage` : 'Stage age unavailable'}
+            {slaLabel
+              ? <span title={`${slaLabel} business days in this stage`}>{slaLabel}</span>
+              : agingSummary
+                ? `${agingSummary.daysInStage} business day${agingSummary.daysInStage === 1 ? '' : 's'} in stage`
+                : 'Stage age unavailable'}
           </p>
           <p>
             {targetSigning && <>Target signing {formatDate(targetSigning)}{' · '}</>}
