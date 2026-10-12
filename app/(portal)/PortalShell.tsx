@@ -21,7 +21,7 @@ import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import { clientSerifClass } from '@/lib/clientFonts'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { getFirmConfig } from '@/lib/firmConfig'
 
 const firm = getFirmConfig()
@@ -190,6 +190,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             className="w-72 gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground shadow-xl md:hidden sm:max-w-none"
           >
             <SheetTitle className="sr-only">Client portal navigation</SheetTitle>
+            <SheetDescription className="sr-only">Move between your plan, documents, messages, and billing.</SheetDescription>
             <div className="flex h-full flex-col">
               <div className="flex h-14 items-center border-b border-sidebar-border px-4 pr-12">
                 <Link
@@ -226,12 +227,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
 
-        {/* Mobile bottom bar — primary destinations without opening the sheet. */}
+        {/* In the column, not fixed over the page, so the last section stays readable. */}
         <nav
           aria-label="Primary"
-          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
+          className="z-40 flex shrink-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           {primaryMobile.map(item => {
