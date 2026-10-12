@@ -13,6 +13,17 @@ export function groupDraftHistory<T extends ReviewDraft>(current: T[], history: 
   }))
 }
 
+export function reviewReadthrough(drafts: Array<Pick<ReviewDraft, 'name' | 'reviewedAt'>>): {
+  reviewed: number
+  total: number
+  pct: number
+} {
+  const word = drafts.filter(draft => /\.docx?$/i.test(draft.name))
+  const reviewed = word.filter(draft => draft.reviewedAt).length
+  const total = word.length
+  return { reviewed, total, pct: total === 0 ? 0 : Math.round((reviewed / total) * 100) }
+}
+
 export function nextUnreviewedDraft<T extends ReviewDraft>(drafts: T[], currentId: string | null): T | null {
   const index = drafts.findIndex(d => d.id === currentId)
   const ordered = [...drafts.slice(index + 1), ...drafts.slice(0, index + 1)]

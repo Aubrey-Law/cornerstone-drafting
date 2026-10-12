@@ -10,6 +10,7 @@ import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { collegePrepDraftingBlockers, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { essentialSheetShowsReadinessField, type DesignSheetLayout } from '@/lib/designSheet/sheetLayout'
+import { MATTER_TYPE_REQUIRED_MESSAGE, normalizeMatterType } from '@/lib/matter/matterType'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
@@ -68,7 +69,8 @@ export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Contacts & Fiduciaries',
   [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciary Role Assignment',
   [DESIGN_SECTION_IDS.estatePlanDesign]: 'Estate Plan Design',
-  [DESIGN_SECTION_IDS.trustDetails]: 'Trust Details',
+  [DESIGN_SECTION_IDS.trustDetails]: 'Trust',
+  [DESIGN_SECTION_IDS.trustProvisions]: 'Trust provisions',
   [DESIGN_SECTION_IDS.willDetails]: 'Will Details',
   [DESIGN_SECTION_IDS.financialPoa]: 'Financial Power of Attorney',
   [DESIGN_SECTION_IDS.healthcareDirectives]: 'Health Care & Directives',
@@ -281,6 +283,10 @@ export function computeDesignSheetReadiness({
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const clientBlockers = [
+    // Individual or couple is a matter fact. Generate refuses to run without it,
+    // so the design sheet asks it in the same list as plan type.
+    !collegePrep && normalizeMatterType(sheet.matter_type) == null &&
+      blocker(DESIGN_SECTION_IDS.clientInformation, MATTER_TYPE_REQUIRED_MESSAGE, 'matter_type'),
     // Children live in Client Information — surfacing these under the
     // estate-plan-design pill contradicted the blocker's own section id.
     ...familyBlockers,

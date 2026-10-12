@@ -5,6 +5,7 @@ import { Scale } from 'lucide-react'
 import {
   getDocumentInclusions,
   type DesignDocumentInclusions,
+  type DesignDocumentKey,
 } from '@/lib/designSheetDocumentInclusions'
 import {
   designPlanTypeIncludesRevocableTrust,
@@ -23,6 +24,7 @@ import {
   getAllDesignSectionNavItems,
   getDesignSectionNavItems,
 } from '@/lib/designSheet/designSectionNav'
+import type { MatterType } from '@/lib/matter/matterType'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 import { AccordionBadge, type DesignSheetOnChange } from './sections/shared'
@@ -63,12 +65,10 @@ export interface DesignSheetGroupDef {
 }
 
 /**
- * `tracks` is which plans the tab belongs to at all — distinct from whether the
- * plan happens to include its documents. An estate sheet without a trust still
- * shows a Trust tab reading "Not included in this plan", because the attorney
- * can switch the trust back on; a College Preparation Plan has no trust tab
- * because there is nothing to switch on, and an estate plan has no
- * college-prep tab.
+ * `tracks` is which plans the tab belongs to at all. A document group is hidden
+ * when that document is off, and Asset Transfer Documents (Estate Plan Details)
+ * turns it back on. A College Preparation Plan has no trust tab, and an estate
+ * plan has no college-prep tab.
  */
 const ESSENTIAL_SHEET_GROUPS: Array<{
   id: DesignSheetGroupId
@@ -85,16 +85,19 @@ const DESIGN_SHEET_GROUP_CATALOG: Array<{
   title: string
   subtitle: string
   tracks: DesignPlanTrack[]
+  /** Hidden when this document is off. Asset Transfer Documents turns it back on. */
+  document?: DesignDocumentKey
 }> = [
-  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, family, and asset facts', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, family, and the facts the plan is built on', tracks: ['estate', 'college_prep'] },
   { id: DESIGN_SHEET_GROUP_IDS.collegePlan, title: 'College Preparation Plan', subtitle: 'School, POA scope, HIPAA, and living will', tracks: ['college_prep'] },
-  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians', tracks: ['estate', 'college_prep'] },
-  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Estate Plan Details', subtitle: 'Plan type, documents, and execution mechanics', tracks: ['estate'] },
-  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust', subtitle: 'Trust structure, beneficiaries, and provisions', tracks: ['estate'] },
-  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details', tracks: ['estate'] },
-  { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers', tracks: ['estate', 'college_prep'] },
-  { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives', tracks: ['estate', 'college_prep'] },
-  { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Trustees, personal representatives, agents, and guardians', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Estate Plan Details', subtitle: 'Plan type and the documents this plan generates', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust', subtitle: 'Joint or separate, the trust name, and who receives the residue', tracks: ['estate'], document: 'trust' },
+  { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers', tracks: ['estate', 'college_prep'], document: 'dpoa' },
+  { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives', tracks: ['estate', 'college_prep'], document: 'healthcare' },
+  { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning', tracks: ['estate'], document: 'deed' },
+  { id: DESIGN_SHEET_GROUP_IDS.trustProvisions, title: 'Trust provisions', subtitle: 'Restatement, marital trusts, and administrative provisions', tracks: ['estate'], document: 'trust' },
+  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details', tracks: ['estate'], document: 'will' },
   { id: DESIGN_SHEET_GROUP_IDS.notes, title: 'Attorney notes', subtitle: 'Goals, concerns, and drafting notes', tracks: ['estate', 'college_prep'] },
 ]
 
@@ -102,10 +105,13 @@ export function buildDesignSheetGroups(
   sections: DesignSectionDef[],
   planTrack: DesignPlanTrack = 'estate',
   layout: DesignSheetLayout = planTrack === 'college_prep' ? 'college_prep' : 'full',
+  documentInclusions?: DesignDocumentInclusions | null,
 ): DesignSheetGroupDef[] {
   const catalog = layout === 'essential'
     ? ESSENTIAL_SHEET_GROUPS
-    : DESIGN_SHEET_GROUP_CATALOG.filter(group => group.tracks.includes(planTrack)).map(({ tracks: _tracks, ...group }) => group)
+    : DESIGN_SHEET_GROUP_CATALOG.filter(group => group.tracks.includes(planTrack))
+      .filter(group => !documentInclusions || !group.document || documentInclusions[group.document])
+      .map(({ tracks: _tracks, document: _document, ...group }) => group)
   return catalog.map(group => {
     const groupSections = sections.filter(section => designSectionAnchorId(section.id) === group.id)
     return {
@@ -140,6 +146,7 @@ export interface BuildDesignSectionsArgs {
   documentInclusions: DesignDocumentInclusions
   selectedDocKeysCount: number
   updateField: DesignSheetOnChange
+  onMatterTypeChange?: (value: MatterType) => void
   updateLpPatch: (patch: Record<string, unknown>) => void
   handleAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleUpdateContact: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
@@ -158,9 +165,11 @@ export function designSectionAppliesWhen(sectionId: string, sheet: DesignSheet):
     : inclusions.trust && revocableTrustPlan && !disallowsRevocableTrust
   switch (sectionId) {
     case DESIGN_SECTION_IDS.trustDetails:
+    case DESIGN_SECTION_IDS.trustProvisions:
     case DESIGN_SECTION_IDS.assetSchedules:
       return revocableTrustApplicable
     case DESIGN_SECTION_IDS.willDetails:
+    case DESIGN_SECTION_IDS.familyInformation:
       return inclusions.will
     case DESIGN_SECTION_IDS.financialPoa:
       return inclusions.dpoa
@@ -185,6 +194,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     documentInclusions,
     selectedDocKeysCount,
     updateField,
+    onMatterTypeChange,
     updateLpPatch,
     handleAddContact,
     handleUpdateContact,
@@ -224,7 +234,11 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
 
   const renderers: Record<string, () => ReactNode> = {
     [DESIGN_SECTION_IDS.clientInformation]: () => (
-      <ClientInformationSection sheet={sheet} onChange={updateField} />
+      <ClientInformationSection
+        sheet={sheet}
+        onChange={updateField}
+        onMatterTypeChange={onMatterTypeChange}
+      />
     ),
     [DESIGN_SECTION_IDS.familyInformation]: () => (
       <FamilySection
@@ -262,7 +276,8 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         showInapplicable={Boolean(showInapplicable)}
       />
     ),
-    [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} />,
+    [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} variant="plan" />,
+    [DESIGN_SECTION_IDS.trustProvisions]: () => <TrustDetailsSection {...docCommon} variant="provisions" />,
     [DESIGN_SECTION_IDS.willDetails]: () => (
       <>
         <WillDocumentSection {...docCommon} />

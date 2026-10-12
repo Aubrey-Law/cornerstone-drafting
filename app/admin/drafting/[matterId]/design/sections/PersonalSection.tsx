@@ -4,9 +4,16 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isMinorFromDob } from '@/lib/contacts/childMinor'
 import { formatAgeLabel } from '@/lib/dob'
+import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
+import {
+  MATTER_TYPE_OPTIONS,
+  normalizeMatterType,
+  type MatterType,
+} from '@/lib/matter/matterType'
 import {
   AttorneyInput,
   AttorneySelect,
+  DecisionRow,
   DesignSectionContent,
   DobAgeHint,
   FieldLabel,
@@ -78,7 +85,11 @@ function newChild(): DesignSheetChild {
   }
 }
 
-export function ClientInformationSection({ sheet, onChange }: SectionProps) {
+export function ClientInformationSection({
+  sheet,
+  onChange,
+  onMatterTypeChange,
+}: SectionProps & { onMatterTypeChange?: (value: MatterType) => void }) {
   const facts = getSettlorFacts(sheet)
   const updateFacts = (patch: Parameters<typeof setSettlorFacts>[1]) => {
     onChange('decisions', previous => setSettlorFacts(previous, patch))
@@ -133,8 +144,23 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
     }
   }
 
+  const collegePrep = isCollegePrepDesignSheet(sheet)
+
   return (
     <DesignSectionContent>
+      {!collegePrep && onMatterTypeChange ? (
+        <SectionBlock title="Plan" subtitle="Who this plan is drafted for">
+          <DecisionRow
+            question="Who is this plan for?"
+            help="Individual or couple decides which spouse documents and joint-trust choices this plan can use."
+            fieldName="matter_type"
+            blocking
+            value={normalizeMatterType(sheet.matter_type)}
+            options={MATTER_TYPE_OPTIONS}
+            onChange={value => onMatterTypeChange(value)}
+          />
+        </SectionBlock>
+      ) : null}
       <SectionBlock title="Client" subtitle="Primary grantor">
         <div className={sectionFieldGrid3}>
           <DesignField

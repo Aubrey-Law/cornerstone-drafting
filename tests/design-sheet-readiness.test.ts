@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import { MATTER_TYPE_REQUIRED_MESSAGE } from '@/lib/matter/matterType'
+import { setDesignPlanTrack } from '@/lib/collegePrepDesign'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
@@ -60,6 +62,7 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
     zip: '02108',
     county: 'Suffolk',
     marital_status: 'Single',
+    matter_type: 'individual',
     spouse_name: null,
     spouse_dob: null,
     spouse_phone: null,
@@ -329,6 +332,36 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.complete).toBe(true)
     expect(readiness.blocking).toHaveLength(0)
     expect(readiness.optional.length).toBeGreaterThan(0)
+  })
+
+  it('blocks when matter type is unset and points at that field', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ matter_type: null }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    const item = readiness.blocking.find(blocker => blocker.targetField === 'matter_type')
+    expect(item?.label).toBe(MATTER_TYPE_REQUIRED_MESSAGE)
+    expect(item?.sectionId).toBe(DESIGN_SECTION_IDS.clientInformation)
+    expect(readiness.complete).toBe(false)
+  })
+
+  it('does not block a college preparation plan on matter type', () => {
+    const base = makeSheet({ matter_type: null })
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        matter_type: null,
+        decisions: setDesignPlanTrack(base, 'college_prep'),
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.blocking.map(item => item.targetField)).not.toContain('matter_type')
+    expect(readiness.blockers.map(item => item.label)).not.toContain(MATTER_TYPE_REQUIRED_MESSAGE)
   })
 
   it('does not gate LP drafting on design-sheet approval (now a separate client design review)', () => {

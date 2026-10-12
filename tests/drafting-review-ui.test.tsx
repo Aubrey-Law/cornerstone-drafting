@@ -61,7 +61,7 @@ describe('draft review workspace', () => {
   it('prefers a live clean scan over the old generation missing count', async () => {
     const rows = [{ ...drafts[0], missingCount: 2 }]
     render(<TooltipProvider><ReviewStep matterId="matter" hubMatter={{ recentDrafts: rows, supersededDrafts: [], draftCount: 1 } as unknown as DraftingHubMatter} sharedDrafts={[]} /></TooltipProvider>)
-    fireEvent.click(screen.getByRole('button', { name: 'Review in app' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Review in app' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Load version trust' }))
     await waitFor(() => expect(screen.queryByText('2 unfilled fields · sharing blocked')).toBeNull())
   })

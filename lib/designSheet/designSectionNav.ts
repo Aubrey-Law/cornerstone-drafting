@@ -101,19 +101,24 @@ export function getAllDesignSectionNavItems(args: DesignSectionNavArgs): DesignS
     { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design', applicable: true },
     {
       id: DESIGN_SECTION_IDS.trustDetails,
-      label: 'Trust Details',
+      label: 'Trust',
       applicable: revocableTrustApplicable,
     },
-    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Last Will and Testament', applicable: true },
-    { id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details', applicable: documentInclusions.will },
     { id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney', applicable: documentInclusions.dpoa },
     { id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives', applicable: documentInclusions.healthcare },
+    { id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments', applicable: documentInclusions.deed },
+    {
+      id: DESIGN_SECTION_IDS.trustProvisions,
+      label: 'Trust provisions',
+      applicable: revocableTrustApplicable,
+    },
+    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Last Will and Testament', applicable: documentInclusions.will },
+    { id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details', applicable: documentInclusions.will },
     {
       id: DESIGN_SECTION_IDS.assetSchedules,
       label: 'Asset Schedules',
       applicable: revocableTrustApplicable,
     },
-    { id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments', applicable: documentInclusions.deed },
     { id: DESIGN_SECTION_IDS.attorneyNotes, label: 'Attorney Notes', applicable: true },
   ]
 }

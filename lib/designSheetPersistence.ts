@@ -5,6 +5,8 @@ import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { repairFiduciarySlotOrdering } from '@/lib/designSheet/fiduciarySlotOrdering'
 
 const SYSTEM_COLUMNS = new Set(['id', 'matter_id', 'client_intake_id', 'created_at', 'updated_at'])
+// Owned by the matter, overlaid onto the sheet for the session. Never a design-sheet column or decision.
+const TRANSIENT_SHEET_KEYS = new Set(['matter_type'])
 const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
 
 /**
@@ -299,7 +301,7 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
   const decisions: Record<string, unknown> = isRecord(input.decisions) ? { ...input.decisions } : {}
 
   for (const [key, value] of Object.entries(input)) {
-    if (SYSTEM_COLUMNS.has(key) || key === 'decisions') continue
+    if (SYSTEM_COLUMNS.has(key) || TRANSIENT_SHEET_KEYS.has(key) || key === 'decisions') continue
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
@@ -320,6 +322,7 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
       delete decisions[key]
     }
   }
+  for (const key of TRANSIENT_SHEET_KEYS) delete decisions[key]
 
   // Only write the decisions column when the caller actually had something to say
   // about it. Partial patches list columns only (asset intake sync, intake re-sync),
@@ -367,6 +370,7 @@ export function buildDesignSheetSavePayload(args: {
   if (hasIncomingDecisions) {
     const cleanedDecisions = { ...incomingDecisions }
     for (const key of SYSTEM_COLUMNS) delete cleanedDecisions[key]
+    for (const key of TRANSIENT_SHEET_KEYS) delete cleanedDecisions[key]
     payload.decisions = {
       ...(isRecord(payload.decisions) ? payload.decisions : {}),
       ...cleanedDecisions,
@@ -379,11 +383,15 @@ export function buildDesignSheetSavePayload(args: {
 export function inflateDesignSheetRow(row: Record<string, unknown> | null): DesignSheet | null {
   if (!row) return null
 
-  const decisions = isRecord(row.decisions) ? row.decisions : {}
+  let decisions = isRecord(row.decisions) ? row.decisions : {}
+  if ([...TRANSIENT_SHEET_KEYS].some(key => key in decisions)) {
+    decisions = { ...decisions }
+    for (const key of TRANSIENT_SHEET_KEYS) delete decisions[key]
+  }
   const sheet = { ...row, decisions } as Record<string, unknown>
 
   for (const [key, value] of Object.entries(decisions)) {
-    if (SYSTEM_COLUMNS.has(key) || key === 'decisions') continue
+    if (SYSTEM_COLUMNS.has(key) || TRANSIENT_SHEET_KEYS.has(key) || key === 'decisions') continue
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
     // Decision namespaces (document_inclusions, estate_plan_design, etc.) must stay

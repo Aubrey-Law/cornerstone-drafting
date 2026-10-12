@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { designTargetForMissingField, missingFieldDisplayLabel } from '@/lib/estateGenerator/missingFieldDesignMap'
+import { MATTER_TYPE_REQUIRED_MESSAGE } from '@/lib/matter/matterType'
 import { decodeDraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
 import {
   blobToBase64,
@@ -906,7 +907,22 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
             )}
             {(preflight.error || preflight.warnings.length > 0 || preflight.unsupportedDocumentLabels.length > 0) && (
               <div className="mt-3 space-y-1 rounded border border-warning/20 bg-warning/10 p-3 text-xs text-warning">
-                {preflight.error && <p className="font-semibold">{preflight.error}</p>}
+                {preflight.error && (
+                  <p className="font-semibold">
+                    {preflight.error}
+                    {preflight.error === MATTER_TYPE_REQUIRED_MESSAGE && (
+                      <>
+                        {' '}
+                        <Link
+                          href={`/admin/drafting/${matterId}?step=design&focus=${encodeURIComponent('client-information:matter_type')}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          Fix →
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                )}
                 {preflight.warnings.map(w => <p key={w}>{w}</p>)}
                 {preflight.unsupportedDocumentLabels.map(l => <p key={l}>Not generated yet: {l}</p>)}
               </div>

@@ -13,6 +13,7 @@ import {
   type DesignSectionSummary,
 } from '@/lib/designSheetReadiness'
 import { resolveDesignSheetLayout } from '@/lib/designSheet/sheetLayout'
+import { type MatterType } from '@/lib/matter/matterType'
 import { saveLiDesignSheet, updatePlanCoverage } from '@/app/admin/drafting/[matterId]/design/actions'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { DesignSheetImportProposal } from '@/lib/designSheetImport/shared'
@@ -23,6 +24,7 @@ import {
 } from './buildInitialSheet'
 import { shouldApplyServerSheetProps } from '@/lib/designSheet/shouldApplyServerSheetProps'
 import {
+  clearDesignSheetDraft,
   prepareDesignSheetForSave,
   readDesignSheetDraft,
   resolveInitialDesignSheet,
@@ -123,6 +125,8 @@ export function useDesignSheetState({
   const savedGenerationRef = useRef(0)
   const [exporting, setExporting] = useState(false)
   const [readinessSheet, setReadinessSheet] = useState(sheet)
+  const matterTypeRequestRef = useRef(0)
+  const matterTypeAbortRef = useRef<AbortController | null>(null)
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
@@ -337,6 +341,53 @@ export function useDesignSheetState({
     })
     markDirty(field as string)
   }, [commitSheet, markDirty])
+
+  /**
+   * Individual or couple lives on the matter, not the design sheet. Overlay it
+   * locally so readiness updates immediately, and do not mark the sheet dirty.
+   */
+  const setMatterType = useCallback(async (value: MatterType) => {
+    matterTypeAbortRef.current?.abort()
+    const controller = new AbortController()
+    matterTypeAbortRef.current = controller
+    const requestId = matterTypeRequestRef.current + 1
+    matterTypeRequestRef.current = requestId
+    const previous = sheetRef.current.matter_type ?? null
+    const wasClean = saveStatus === 'saved'
+    const apply = (matterType: DesignSheet['matter_type']) => {
+      const box: { sheet: DesignSheet | null } = { sheet: null }
+      flushSync(() => {
+        commitSheet(prev => {
+          const next = { ...prev, matter_type: matterType }
+          box.sheet = next
+          return next
+        })
+      })
+      if (!box.sheet) return
+      setReadinessSheet(box.sheet)
+      // The overlay is not a design-sheet edit. Drop the draft commitSheet just wrote
+      // when the sheet was already saved, so the next load does not look unsaved.
+      if (wasClean && !conflictRef.current) clearDesignSheetDraft(matterId)
+    }
+    apply(value)
+    try {
+      const response = await fetch(`/api/admin/matters/${matterId}/matter-type`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matterType: value }),
+        signal: controller.signal,
+      })
+      if (matterTypeRequestRef.current !== requestId) return
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(body?.error || 'Could not update matter type')
+      }
+    } catch (error) {
+      if (matterTypeRequestRef.current !== requestId) return
+      apply(previous)
+      toast.error(error instanceof Error ? error.message : 'Could not update matter type')
+    }
+  }, [commitSheet, matterId, saveStatus])
 
   const storeConflict = useCallback((value: DesignSheetConflict) => {
     recoveryReadVersionRef.current += 1
@@ -783,6 +834,7 @@ export function useDesignSheetState({
     exporting,
     // field editing
     updateField,
+    setMatterType,
     validationValue,
     // persistence
     persistSheet,
